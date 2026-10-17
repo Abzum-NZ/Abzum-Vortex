@@ -33,7 +33,7 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
   /** Selection key to the label Studio shows for it. */
   labels: ReadonlyMap<string, string>;
   applications: readonly StudioModuleOwnerApplication[];
-  openFlowsTab: () => Promise<boolean>;
+  openFlowsTab: () => void;
 }>) {
   const { state, source, selected } = draft;
   const disabled = draft.locked;
@@ -120,12 +120,14 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
     if (outcome.kind === "blocked") return outcome.message;
     const result = outcome.result;
     if (result.kind !== "applied") return result.reason;
-    void (async () => { if (await openFlowsTab()) draft.select(result.selection); })();
+    openFlowsTab();
+    draft.select(result.selection);
     return true;
   };
 
   const openFlow = (flow: StudioFlowSelection) => {
-    void (async () => { if (await openFlowsTab()) draft.select(flow); })();
+    openFlowsTab();
+    draft.select(flow);
   };
 
   const owner = flowSelection?.moduleKey === null || flowSelection === null ? undefined

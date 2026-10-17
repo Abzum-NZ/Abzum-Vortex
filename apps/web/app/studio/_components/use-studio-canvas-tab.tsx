@@ -75,7 +75,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
   flowsInspector: ReactNode;
   /** The selected block's workflows, from the Flows tab. */
   placementWorkflows: ReactNode;
-  openTab: (tab: StudioRailKey) => Promise<boolean>;
+  openTab: (tab: StudioRailKey) => void;
 }>) {
   const { organizationId, source, selected, state, view } = draft;
   const rootId = state.rootId;
@@ -292,7 +292,9 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
     }
     setViewAs(roleKey);
     const start = source.body.pages.find((page) => page.key === role.home_page);
-    if (start !== undefined) void openTab("structure").then((changed) => { if (changed) draft.select({ kind: "page", pageAlias: start.id }); });
+    if (start === undefined) return;
+    openTab("structure");
+    draft.select({ kind: "page", pageAlias: start.id });
   };
 
   const pageLabel = (pageAlias: string, fallback: string) => labels.get(studioSemanticSelectionKey({ kind: "page", pageAlias })) ?? fallback;
@@ -353,7 +355,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
       <p className="text-sm text-muted-foreground">Choose a page in Structure to arrange it here.</p>}
     {(canvasPage === undefined ? selected?.kind === "application" : canvasPage.key === source.body.home_page) &&
       source.body.uses.length === 0 && source.body.modules.every((module) => module.record_types.length === 0) &&
-      <FirstRecordTypeEmptyState action={<Button type="button" onClick={() => { void openTab("data"); }}>
+      <FirstRecordTypeEmptyState action={<Button type="button" onClick={() => openTab("data")}>
         <Icon name="database" />Open the Data tab</Button>} />}
     {canvasPage !== undefined && theme.problem.length > 0 && <p role="alert" className="text-sm text-destructive">{theme.problem}</p>}
     {canvasPage !== undefined && viewAsRole !== undefined && viewDecisions !== null && <p role="status" className="text-sm text-muted-foreground">

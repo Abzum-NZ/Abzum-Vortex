@@ -88,10 +88,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   } });
   const [tab, setTab] = useState<StudioRailKey>(isStudioRailKey(props.initialTab) ? props.initialTab : "structure");
   const { source, state } = draft;
-  const changeTab = async (next: StudioRailKey): Promise<boolean> => { setTab(next); return true; };
-  const openIn = (nextTab: StudioRailKey, next: StudioSemanticSelection) => {
-    void changeTab(nextTab).then(() => { draft.select(next); });
-  };
+  const openIn = (nextTab: StudioRailKey, next: StudioSemanticSelection) => { setTab(nextTab); draft.select(next); };
 
   // The one outline of the draft: Structure, Outline and every label Studio shows are views of it.
   const describePlacement = useMemo(() => createStudioPlacementDescriber(catalogue), [catalogue]);
@@ -101,10 +98,10 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   const theme = useStudioDraftTheme({ organizationId, rootId: state.rootId, theme: source.body.theme,
     compiledTheme: draft.view.frames?.theme, compiledSourceTheme: draft.view.source.body.theme });
 
-  const flows = useStudioFlowsTab({ draft, catalogue, labels, applications, openFlowsTab: () => changeTab("flows") });
+  const flows = useStudioFlowsTab({ draft, catalogue, labels, applications, openFlowsTab: () => setTab("flows") });
   const canvas = useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlReleases: props.fieldInputControlReleases,
     platformThemeTokens: props.platformThemeTokens, outline, labels, theme, flowsInspector: flows.inspector,
-    placementWorkflows: flows.placementWorkflows, openTab: changeTab });
+    placementWorkflows: flows.placementWorkflows, openTab: setTab });
 
   // The Access tab's one edit path, the same envelope as every other tab.
   const commandAccess = (command: StudioAccessCommand, merge?: string): StudioAccessResult => {
@@ -121,7 +118,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
       : where.kind === "navigation" ? openIn("menu", { kind: "navigation", navigationItemAlias: where.alias })
         : where.kind === "placement" ? openIn("structure", { kind: "placement", placementAlias: where.placementAlias })
           : openIn("data", { kind: "module", moduleKey: where.moduleKey }) });
-  const openAccessPages = () => { access.showPages(); void changeTab("access"); };
+  const openAccessPages = () => { access.showPages(); setTab("access"); };
   const structure = useStudioStructureTab({ draft, catalogue, describePlacement, outline, hidden: tab !== "structure", openAccessPages });
   const menuTheme = useStudioMenuThemeTabs({ draft, menuHidden: tab !== "menu", themeHidden: tab !== "theme",
     themeOptions: props.themeOptions, theme, openAccessPages });
@@ -138,7 +135,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   return <div aria-busy={draft.isHeld("publication") || draft.isHeld("reopening")}>
     <ApplicationDraftAgentTools draft={draft} catalogue={catalogue} command={canvas.commandComposition}
       readQueries={canvas.readQueries} {...releases.agent} />
-    <StudioFrame tabs={studioRailTabs} activeTab={tab} onTabChange={changeTab}
+    <StudioFrame tabs={studioRailTabs} activeTab={tab} onTabChange={setTab}
       topBar={<StudioTopBar
         location={{ organizationName: place.organizationName, organizationHref: `/studio/${encodeURIComponent(organizationId)}`,
           applicationName: source.body.name, item: canvas.breadcrumbItem,

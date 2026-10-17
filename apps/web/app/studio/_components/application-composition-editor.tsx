@@ -4,8 +4,7 @@ import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { canonicalJson } from "@vortex/platform/schema";
+import { useId, useMemo, useState } from "react";
 import { studioPlacementLabels } from "../_lib/studio-labels";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import {
@@ -28,6 +27,7 @@ import {
   type StudioSemanticSelection,
   type StudioSettingChoices,
 } from "@vortex/ui/studio";
+import { useStudioDraftHeld } from "./use-studio-draft-held";
 
 type Props = Readonly<{
   context: StudioCompositionContext;
@@ -78,7 +78,6 @@ const layoutOf = (inputs: LayoutInputs): Readonly<{ layout: StudioCompositionLay
 type SettingsInputs = Readonly<{ settings: StudioCompositionSettings; query: string | null }>;
 const settingsInputsFor = (model: StudioCompositionSettingsModel): SettingsInputs =>
   model.kind === "available" ? { settings: model.settings, query: model.query } : { settings: {}, query: null };
-const settingsKey = (inputs: SettingsInputs): string => canonicalJson({ settings: inputs.settings, query: inputs.query });
 const fieldClass = "w-full";
 
 /** Stable option key of a move destination: its closed descriptor, not a serialised object. */
@@ -110,36 +109,21 @@ export function ApplicationCompositionEditor(props: Props) {
   const settingsModel = useMemo(() => describeStudioCompositionSettings(props.context, props.selection),
     [props.context, props.selection]);
   const selectionKey = studioSemanticSelectionKey(props.selection);
-  const draftSettings = settingsInputsFor(settingsModel);
-  const draftSettingsKey = settingsKey(draftSettings);
-  const draftLayout = model.kind === "available" ? inputsFor(model.layout) : null;
-  const draftLayoutKey = draftLayout === null ? "" : JSON.stringify(draftLayout);
-  // What the person typed that is not valid yet; null shows the draft's own value.
-  const [settingsInput, setSettingsInput] = useState<Readonly<{ inputs: SettingsInputs; problems: readonly string[] }> | null>(null);
-  const [layoutInput, setLayoutInput] = useState<Readonly<{ inputs: LayoutInputs; problem: string }> | null>(null);
+  // Input that is not valid yet stays in its control; the draft changing under it (Undo, Redo, another
+  // screen size) drops it. The workspace keys this editor by the selected item.
+  const settings = useStudioDraftHeld(settingsInputsFor(settingsModel));
+  const layout = useStudioDraftHeld(model.kind === "available" ? inputsFor(model.layout) : null);
   const [message, setMessage] = useState("");
   const titleId = useId();
   const hintId = useId();
   const settingsId = useId();
-
-  // The draft changing under the input (Undo, Redo, another edit) or another item or screen size drops input that never applied.
-  const shown = useRef({ selectionKey, breakpoint, draftSettingsKey, draftLayoutKey });
-  useEffect(() => {
-    const previous = shown.current;
-    shown.current = { selectionKey, breakpoint, draftSettingsKey, draftLayoutKey };
-    if (previous.selectionKey !== selectionKey || previous.draftSettingsKey !== draftSettingsKey) setSettingsInput(null);
-    if (previous.selectionKey !== selectionKey || previous.breakpoint !== breakpoint || previous.draftLayoutKey !== draftLayoutKey)
-      setLayoutInput(null);
-    if (previous.selectionKey !== selectionKey) setMessage("");
-  }, [selectionKey, breakpoint, draftSettingsKey, draftLayoutKey]);
-
-  const settingsInputs = settingsInput?.inputs ?? draftSettings;
+  const settingsInputs = settings.value;
   // The reference settings point at the fields of the data the block reads, or, for a block that
   // reads none, at the application's own fields.
   const choices = useMemo(() => studioBlockChoices(props.choices, settingsInputs.query),
     [props.choices, settingsInputs.query]);
 
-  if (model.kind !== "available" || draftLayout === null) return <section className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-4">
+  if (model.kind !== "available" || layout.value === null) return <section className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-4">
     <h3 className="font-semibold">Item order and size</h3>
     <p role="status">{model.kind === "unsupported"
       ? "This area uses an item type that cannot be edited here. Nothing was changed."
@@ -147,7 +131,7 @@ export function ApplicationCompositionEditor(props: Props) {
   </section>;
 
   const destinations = moveModel.kind === "available" ? moveModel.destinations : [];
-  const inputs = layoutInput?.inputs ?? draftLayout;
+  const inputs = layout.value;
   const orderEditable = breakpoint === "desktop" || model.responsiveOrder;
   const selectedIndex = model.order.indexOf(model.placementAlias);
   const command = (next: StudioCompositionCommand, merge?: string, done = "Changed."): boolean => {
@@ -157,18 +141,20 @@ export function ApplicationCompositionEditor(props: Props) {
     return result.kind === "applied";
   };
   const changeLayout = (next: LayoutInputs) => {
-    const layout = layoutOf(next);
-    if ("problem" in layout) { setLayoutInput({ inputs: next, problem: layout.problem }); return; }
-    setLayoutInput(null);
-    command({ kind: "resize", breakpoint, layout: layout.layout }, `size:${selectionKey}:${breakpoint}`, "Size changed.");
+    const described = layoutOf(next);
+    if ("problem" in described) { layout.hold(next, described.problem); return; }
+    if (command({ kind: "resize", breakpoint, layout: described.layout }, `size:${selectionKey}:${breakpoint}`, "Size changed."))
+      layout.applied(next);
+    else layout.hold(next, "");
   };
   const changeSettings = (next: SettingsInputs) => {
     if (settingsModel.kind !== "available") return;
     const problems = [...(settingsModel.readsQuery && next.query === null ? ["Choose the data this block shows."] : []),
       ...studioSettingProblems(next.settings, settingsModel.properties)];
-    if (problems.length > 0) { setSettingsInput({ inputs: next, problems }); return; }
-    setSettingsInput(null);
-    command({ kind: "settings", settings: next.settings, query: next.query }, `settings:${selectionKey}`, "Settings changed.");
+    if (problems.length > 0) { settings.hold(next, problems.join(" ")); return; }
+    if (command({ kind: "settings", settings: next.settings, query: next.query }, `settings:${selectionKey}`, "Settings changed."))
+      settings.applied(next);
+    else settings.hold(next, "");
   };
   const move = (direction: -1 | 1) => {
     if (!orderEditable || selectedIndex < 0) return;
@@ -213,8 +199,7 @@ export function ApplicationCompositionEditor(props: Props) {
           onChange={(settings) => changeSettings({ ...settingsInputs, settings })} />
       </fieldset>
       <p className="text-sm">A setting you leave unset uses its default.</p>
-      {settingsInput !== null && <ul role="alert" className="list-disc pl-5 text-sm text-destructive">
-        {settingsInput.problems.map((problem) => <li key={problem}>{problem}</li>)}</ul>}
+      {settings.problem !== "" && <p role="alert" className="text-sm text-destructive">{settings.problem}</p>}
     </section> : <p role="status">{settingsModel.kind === "unsupported"
       ? "This item's settings can't be changed here." : "This item's settings can't be read."}</p>}
     <h3 id={titleId} className="font-semibold">Order and size</h3>
@@ -272,7 +257,7 @@ export function ApplicationCompositionEditor(props: Props) {
         <Input className={fieldClass} type="number" required min={0} step="any" value={inputs.units}
           onChange={(event) => changeLayout({ ...inputs, units: event.target.value })} /></label>}
     </fieldset>
-    {layoutInput !== null && <p role="alert" className="text-sm text-destructive">{layoutInput.problem}</p>}
+    {layout.problem !== "" && <p role="alert" className="text-sm text-destructive">{layout.problem}</p>}
     <p className="text-sm">{model.explicitLayout ? "This size is set for this screen size." : "This size is inherited from the larger screen size."}</p>
     {breakpoint !== "desktop" && <Button type="button" variant="outline" size="sm" disabled={props.disabled || !model.explicitLayout}
       onClick={() => { command({ kind: "resize", breakpoint, layout: null }, undefined, "Size changed."); }}>Use the larger screen&apos;s size</Button>}

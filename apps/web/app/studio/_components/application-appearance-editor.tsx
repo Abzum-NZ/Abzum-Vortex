@@ -114,7 +114,7 @@ export function ApplicationAppearanceEditor(props: Props) {
   const [message, setMessage] = useState("");
   const baselineKey = studioAppearanceValueKey(props.source.body.theme.token_overrides);
 
-  // The draft's own values (after an edit, Undo or Redo) are read and checked once; they are never unapplied input.
+  // The draft's own values (after an edit, Undo or Redo) are read and checked once; they are never held input.
   useEffect(() => {
     active.current = true;
     const ticket = ++generation.current;

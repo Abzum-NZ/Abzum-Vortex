@@ -528,7 +528,7 @@ function ApplicationPageSlotPuckEditor({
   if (data === undefined || shown === undefined)
     return (
       <section className="space-y-3" aria-label="Page canvas">
-        {paletteNote("Blocks can be added once this page has a compiled version. Save the draft to compile it.")}
+        {paletteNote("Blocks can be added once this page has a compiled version, which follows shortly after your latest change is saved.")}
         <p role="status">
           This page needs a current compiled version before it can be arranged on the canvas.
         </p>
