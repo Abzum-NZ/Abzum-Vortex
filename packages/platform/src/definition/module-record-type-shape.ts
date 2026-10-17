@@ -330,14 +330,16 @@ export type InlineRecordTypeReference = Readonly<{
     | Readonly<{ kind: "none" }>;
 }>;
 
-type Path = readonly (string | number)[];
+export type SourcePath = readonly (string | number)[];
+type Path = SourcePath;
 type Visit = (text: string, path: Path, key: string | undefined) => void;
 
-const walk = (value: unknown, path: Path, visit: Visit, key?: string): void => {
+/** Visits every string under a value with its path and the property it sits in. */
+export const walkSourceStrings = (value: unknown, path: Path, visit: Visit, key?: string): void => {
   if (typeof value === "string") visit(value, path, key);
-  else if (Array.isArray(value)) value.forEach((item, index) => walk(item, [...path, index], visit, key));
+  else if (Array.isArray(value)) value.forEach((item, index) => walkSourceStrings(item, [...path, index], visit, key));
   else if (value !== null && typeof value === "object")
-    for (const [childKey, child] of Object.entries(value)) walk(child, [...path, childKey], visit, childKey);
+    for (const [childKey, child] of Object.entries(value)) walkSourceStrings(child, [...path, childKey], visit, childKey);
 };
 
 const at = (value: unknown, path: Path): unknown =>
@@ -354,8 +356,8 @@ const navigationAt = (source: ApplicationSourceDocument, path: Path): { id?: str
   return found;
 };
 
-/** Names the place in the source a reference sits at. */
-const describePlace = (source: ApplicationSourceDocument, path: Path): InlineRecordTypeReference => {
+/** Names the place in the source a reference sits at, with what Studio can open to show it. */
+export const describeSourcePlace = (source: ApplicationSourceDocument, path: Path): InlineRecordTypeReference => {
   const [, section, index] = path;
   const body = source.body;
   if (section === "modules" && typeof index === "number") {
@@ -433,7 +435,7 @@ export const inlineRecordTypeReferences = (
     path[1] === "modules" && path[2] === moduleIndex &&
     ((path[3] === "record_types" && path[4] === recordIndex) ||
       (path[3] === "permissions" && typeof path[4] === "number" && ownPermissionIndexes.has(path[4])));
-  walk(source, [], (text, path, key) => {
+  walkSourceStrings(source, [], (text, path, key) => {
     if (isOwn(path)) return;
     // Access groups list the standard permissions, which are removed with the record type.
     if (path[1] === "roles" && ownPermissions.has(text)) return;
@@ -441,7 +443,7 @@ export const inlineRecordTypeReferences = (
     const uses = text === qualified || text.startsWith(`${qualified}.`) || ownPermissions.has(text) ||
       queryReferences.has(text) || (inOwningModule && key !== undefined && localRecordProperties.has(key) && text === recordKey);
     if (!uses) return;
-    const place = describePlace(source, path);
+    const place = describeSourcePlace(source, path);
     found.set(place.label, place);
   });
   return [...found.values()];

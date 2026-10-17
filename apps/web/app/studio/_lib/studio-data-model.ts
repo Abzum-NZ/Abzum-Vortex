@@ -1,4 +1,11 @@
-import type { ApplicationSourceDocument } from "@vortex/platform/schema";
+import { moduleFieldTypeLabels, type ApplicationSourceDocument, type ModuleFieldType } from "@vortex/platform/schema";
+
+/**
+ * What the current published versions of the application's own modules hold, as qualified
+ * references: record types (`module:record`) and fields (`module:record.field`). Their stored shape
+ * is fixed; null when the draft could not be compiled, and then every saved one counts as published.
+ */
+export type StudioPublishedData = Readonly<{ recordTypes: readonly string[]; fields: readonly string[] }>;
 
 /** One field as the Data tab's schema grid shows it. */
 export type StudioDataField = Readonly<{
@@ -27,8 +34,9 @@ const sentence = (key: string): string => {
   return words.length === 0 ? key : words[0]!.toUpperCase() + words.slice(1);
 };
 
-/** A field type as a person reads it: "reference_number" becomes "Reference number". */
-export const fieldTypeLabel = sentence;
+/** A field type as a person reads it, from the one field type catalogue; an unknown type is named by its key. */
+export const fieldTypeLabel = (type: string): string =>
+  Object.hasOwn(moduleFieldTypeLabels, type) ? moduleFieldTypeLabels[type as ModuleFieldType] : sentence(type);
 
 /** A query's name: its label, else its key in words. */
 export const queryLabel = (query: Readonly<{ key: string; label?: string | undefined }>): string =>
