@@ -47,6 +47,10 @@ type BlockPropertySchemaBase = {
   help?: string | undefined;
   required: boolean;
   defaultValue?: BlockPropertyValueContract | undefined;
+  /** This declaration contains display content whose edits may keep a patch version. */
+  presentation?: true | undefined;
+  /** Stable property of a presentation list's group item, when entries have identities. */
+  presentationIdentity?: string | undefined;
   /**
    * Present only on the `field_reference` property an automatic field input binds its record field
    * to: the compiler then derives that input's name, label, requirement, choices and control from
@@ -100,6 +104,8 @@ const propertySchemaBase = {
   help: sourceProvenanceUnchanged(z.string().min(1).max(1_000).optional()),
   required: sourceProvenanceUnchanged(z.boolean()),
   defaultValue: sourceProvenanceUnchanged(blockPropertyValueSchema.optional()),
+  presentation: sourceProvenanceUnchanged(z.literal(true).optional()),
+  presentationIdentity: sourceProvenanceUnchanged(builderKeySchema.optional()),
   /**
    * Present only on the `field_reference` property an automatic field input binds its record field
    * to: the compiler derives that input's name, label, requirement, choices and control from the
@@ -404,7 +410,9 @@ export const typedSourceSettingValue = (
     }
     case "asset_reference": {
       const parsed = text(platformIdSchema);
-      return parsed === undefined ? undefined : { kind: "asset_reference", asset_id: parsed as never };
+      return parsed === undefined
+        ? undefined
+        : { kind: "asset_reference", asset_id: parsed as never };
     }
     case "icon": {
       const parsed = text(builderKeySchema);
@@ -667,7 +675,9 @@ export const typedSettingValue = (
 ): BlockPropertyValueContract | undefined => {
   const parsed = blockPropertyValueSchema.safeParse(typedSettingCandidate(value, declaration));
   if (!parsed.success) return undefined;
-  return validateComponentSettingValue(parsed.data, declaration).length === 0 ? parsed.data : undefined;
+  return validateComponentSettingValue(parsed.data, declaration).length === 0
+    ? parsed.data
+    : undefined;
 };
 
 /** Kinds naming application-scoped authority, which a platform-owned default cannot choose. */
@@ -846,6 +856,24 @@ export const blockPropertySchema: z.ZodType<BlockPropertySchemaContract> = z.laz
           path: ["derivesFieldInput"],
           message: "Only a field reference can derive an automatic field input",
         });
+      if (value.presentationIdentity !== undefined) {
+        const identity =
+          value.kind === "list" && value.item.kind === "group"
+            ? value.item.properties.find((property) => property.key === value.presentationIdentity)
+            : undefined;
+        if (
+          value.presentation !== true ||
+          identity === undefined ||
+          !identity.required ||
+          (identity.kind !== "text" && identity.kind !== "field_reference")
+        )
+          context.addIssue({
+            code: "custom",
+            path: ["presentationIdentity"],
+            message:
+              "A presentation identity must name a text or field reference in a presentation list's group item",
+          });
+      }
     }),
 );
 
