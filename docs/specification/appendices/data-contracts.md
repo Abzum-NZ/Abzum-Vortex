@@ -844,9 +844,9 @@ Stable safe failures cover invalid commands, root or release absence, stale or m
 
 ## Application, page and block contracts
 
-An application contains root identity and its own release version, exact resolved module/version bindings, application permission declarations and roles, navigation, pages, actions, rules, events, flows, process pipelines, theme settings or platform-theme binding, version-pinned connection bindings, interfaces, public addresses, and default states.
+An application contains root identity and its own release version, exact resolved module/version bindings, application permission declarations and roles, navigation, pages, actions, rules, events, flows, theme settings or platform-theme binding, version-pinned connection bindings, interfaces, public addresses, and default states.
 
-A process pipeline contains one record type and stage field, uniquely keyed stages with labels and explicit entry and exit actions or flows, named transitions with optional permission/action and typed gate, and time targets with a stage, date-time field and escalation event. Every stage, field, action, flow, permission and event reference resolves before publication.
+A record type's process pipeline contains a key, a name, one choice field, its stages (each option of that field exactly once, in board order, with a theme colour role) and its transitions (from and to two different stages, each declared once). A gated stage is the option a named action of the record type owns.
 
 The normative page, shell, slot, setting, theme, responsive and binding contracts are specified in [Page builder contracts](page-builder-contracts.md). The current implementation's flat placements, desktop/phone-only geometry and blanket same-record-type check require the coordinated completion in [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) and [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250).
 
