@@ -1,7 +1,8 @@
 "use client";
 import { useMemo } from "react";
 import {
-  calculationResultTypeLabels, describeTotal, queryTotalAccepts, queryTotalOperationLabels, totalResultType,
+  calculationResultTypeLabels, describeTotal, queryTotalOperationLabels, totalFieldAccepts, totalFilterKeys, totalResultType,
+  typedDecimalPlaces,
   type ModuleField, type TotalOperation, type TotalRelationship, type TotalSettings,
 } from "@vortex/platform/schema";
 import { StudioOptionControl } from "@vortex/ui/studio";
@@ -20,14 +21,14 @@ const operationOptions = (Object.keys(queryTotalOperationLabels) as TotalOperati
 const settled = (settings: TotalSettings, relationship: TotalRelationship | undefined): TotalSettings => {
   const { field: fieldKey, currency, decimal_places: places, ...rest } = settings;
   const field = relationship?.fields.find((item) => item.key === fieldKey);
-  const keptField = settings.operation === "count" || field === undefined || !queryTotalAccepts(settings.operation, field.type) ? undefined : field;
+  const keptField = relationship === undefined || field === undefined || !totalFieldAccepts(settings.operation, field, relationship) ? undefined : field;
   const { filter, ...others } = rest;
   return {
     ...others,
     ...(filter === undefined ? {} : { filter }),
     result_type: totalResultType(settings.operation, keptField) ?? settings.result_type,
     ...(settings.operation === "count" || fieldKey === undefined ? {} : { field: fieldKey }),
-    ...(settings.operation === "sum" && keptField?.type === "money" && currency !== undefined ? { currency } : {}),
+    ...(settings.operation === "sum" && keptField !== undefined && totalResultType("sum", keptField) === "money" && currency !== undefined ? { currency } : {}),
     ...(settings.operation === "average" ? { decimal_places: places ?? 2 } : {}),
   } as TotalSettings;
 };
@@ -48,14 +49,15 @@ export function StudioTotalEditor({ settings, relationships, compiledOf, disable
   onChange: (settings: TotalSettings, filterValid: boolean) => void;
 }>) {
   const relationship = relationships.find((item) => item.reference === settings.relationship);
-  const filterKeys = useMemo(() => new Set((relationship?.fields ?? []).map((field) => field.key)), [relationship]);
+  // The filter compares only fields people can filter by, as publication requires.
+  const filterKeys = useMemo(() => relationship === undefined ? new Set<string>() : totalFilterKeys(relationship), [relationship]);
   const set = (next: Partial<TotalSettings>, filterValid = true) => {
     const nextRelationship = relationships.find((item) => item.reference === (next.relationship ?? settings.relationship));
     onChange(settled({ ...settings, ...next } as TotalSettings, nextRelationship), filterValid);
   };
-  const accepted = (relationship?.fields ?? []).filter((field) => settings.operation !== "count" && queryTotalAccepts(settings.operation, field.type))
-    .map((field) => ({ value: field.key, label: field.label }));
-  const fieldType = relationship?.fields.find((field) => field.key === settings.field)?.type;
+  const accepted = relationship === undefined ? []
+    : relationship.fields.filter((field) => totalFieldAccepts(settings.operation, field, relationship)).map((field) => ({ value: field.key, label: field.label }));
+  const totalsMoney = settings.operation === "sum" && totalResultType("sum", relationship?.fields.find((field) => field.key === settings.field)) === "money";
   // A new total of a record type no link points at has no relationship yet.
   const reference = (settings.relationship as string | undefined) ?? "";
   const recordType = reference.slice(0, Math.max(0, reference.lastIndexOf(".")));
@@ -84,9 +86,9 @@ export function StudioTotalEditor({ settings, relationships, compiledOf, disable
     </StudioField>}
     {settings.operation === "average" && <StudioField label="Decimal places" hint="How many decimal places the average keeps, from 0 to 12.">
       {(control) => <Input {...control} type="number" min={0} max={12} step={1} disabled={disabled} value={settings.decimal_places ?? ""}
-        onChange={(event) => set({ decimal_places: event.target.value === "" ? undefined : Math.trunc(Number(event.target.value)) })} />}
+        onChange={(event) => set({ decimal_places: typedDecimalPlaces(event.target.value) })} />}
     </StudioField>}
-    {settings.operation === "sum" && fieldType === "money" && <StudioField label="Currency"
+    {totalsMoney && <StudioField label="Currency"
       hint="Optional. Three capital letters, for example NZD. With a currency, no related records total 0 in it, and amounts in another currency are refused.">
       {(control) => <Input {...control} maxLength={3} disabled={disabled} value={settings.currency ?? ""}
         onChange={(event) => { const currency = event.target.value.toUpperCase(); set({ currency: currency === "" ? undefined : currency }); }} />}
@@ -95,6 +97,8 @@ export function StudioTotalEditor({ settings, relationships, compiledOf, disable
       <h4 className="text-sm font-semibold">Only related records that match</h4>
       <p className="text-xs text-muted-foreground">Optional. Leave it empty to take every related record.</p>
       {relationship === undefined ? <p className="text-sm text-muted-foreground">Choose the related records first.</p>
+        : filterKeys.size === 0 && settings.filter === undefined
+          ? <p className="text-sm text-muted-foreground">No field of {relationship.recordName} can be filtered by. Tick &ldquo;People can filter by it&rdquo; on one first.</p>
         : <StudioFormulaCondition key={reference} label="Filter of the related records" condition={settings.filter}
           compiled={compiledOf(recordType)} fieldKeys={filterKeys} disabled={disabled}
           onChange={(filter, valid) => set({ filter: filter as TotalSettings["filter"] }, valid)} />}

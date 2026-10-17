@@ -15,7 +15,7 @@ import {
 import {
   calculationProblems, changeInlineModuleField, deleteInlineModuleField, deriveFieldKey, fieldTypeKeys,
   moduleFieldDefaultDeclaration, moduleFieldSettingDeclarations, moduleFieldTypeLabels, moveInlineModuleField,
-  peopleDirectory, readModuleFieldDefault, readModuleFieldSettings, starterModuleFieldSettings, totalProblems, totalRelationships,
+  peopleDirectory, readModuleFieldDefault, readModuleFieldSettings, settledCalculation, starterModuleFieldSettings, totalProblems, totalRelationships,
   writeModuleFieldDefault, writeModuleFieldSettings, type ApplicationSourceDocument, type CalculationSettings,
   type FormulaField, type InlineRecordTypeReference, type LinkCardinality, type ModuleFieldPublication, type ModuleFieldType,
   type PeopleDirectoryOwner, type TotalSettings,
@@ -116,6 +116,7 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
   const totalLinks = useMemo(() => totalRelationships(source, moduleKey, recordKey), [source, moduleKey, recordKey]);
   const formulaFields: readonly FormulaField[] = useMemo(() => (record?.fields ?? []).filter((item) => item.key !== existing?.key)
     .map((item) => ({ key: item.key, label: item.label, type: item.type, settings: item.settings })), [record, existing]);
+  const formulaFieldsByKey = useMemo(() => new Map(formulaFields.map((item) => [item.key, item])), [formulaFields]);
   const otherFields = formulaFields.map(({ key, label, type }) => ({ key, label, type }));
   const declarationsFor = (type: ModuleFieldType) => moduleFieldSettingDeclarations(type, { fields: otherFields });
   const startSettings = (type: ModuleFieldType): Record<string, unknown> => {
@@ -124,6 +125,8 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
       recordTypes: recordTypes.map((item) => item.key), titleField: record?.title_field ?? "",
       relationships: totalLinks.map((item) => item.reference),
     });
+    // A new calculation is settled like every edit of its formula, so it is read-time when it must be.
+    if (type === "calculation") return settledCalculation(start as CalculationSettings, formulaFieldsByKey);
     // A new link reads back from the linked record by this record type's plural name, for example assets.
     const back = type === "link" && record !== undefined ? deriveFieldKey(record.plural_name, new Set()) : undefined;
     return back === undefined ? start : { ...start, reverse_key: back };
@@ -196,7 +199,7 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
       ...(unreadable ? [] : studioSettingProblems(form.settings, declarations).map((problem) => `Settings: ${problem}`)),
       ...(computed && !computedValid ? [`${form.type === "total" ? "Filter" : "Condition"}: complete or remove the comparisons marked above.`] : []),
       ...(form.type === "calculation"
-        ? calculationProblems(form.computed as CalculationSettings, new Map(formulaFields.map((item) => [item.key, item]))) : []),
+        ? calculationProblems(form.computed as CalculationSettings, formulaFieldsByKey, existing?.key) : []),
       ...(form.type === "total" ? totalProblems(form.computed as TotalSettings,
         totalLinks.find((item) => item.reference === (form.computed as TotalSettings).relationship)) : []),
       ...(defaultModel.kind === "declared" ? studioSettingProblems(form.defaultValue, [defaultModel.declaration]) : []),

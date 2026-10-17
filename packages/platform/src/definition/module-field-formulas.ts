@@ -33,7 +33,7 @@ export type TotalSettings = Extract<SourceField, { type: "total" }>["settings"];
 export type TotalOperation = TotalSettings["operation"];
 
 /** A field a formula or total may name, in its authored form. */
-export type FormulaField = Readonly<{ key: string; label: string; type: string; settings: unknown }>;
+export type FormulaField = Readonly<{ key: string; label: string; type: string; settings: unknown; filterable?: boolean }>;
 
 
 export const calculationOperationLabels = {
@@ -59,6 +59,99 @@ export const joinTextAccepts = (field: FormulaField): boolean => ["text", "choic
 export const numberAccepts = (field: FormulaField): boolean => ["whole_number", "decimal_number", "money"].includes(valueType(field) ?? "");
 export const dateAccepts = (field: FormulaField): boolean => ["date", "date_time"].includes(valueType(field) ?? "");
 export const wholeNumberAccepts = (field: FormulaField): boolean => valueType(field) === "whole_number";
+
+/** The keys of the fields an authored condition compares, in its compact or its operand form. */
+export const conditionFieldKeys = (condition: unknown): string[] => {
+  if (condition === null || typeof condition !== "object") return [];
+  const node = condition as Record<string, unknown>;
+  if (Array.isArray(node.all)) return node.all.flatMap(conditionFieldKeys);
+  if (Array.isArray(node.any)) return node.any.flatMap(conditionFieldKeys);
+  if (node.not !== undefined) return conditionFieldKeys(node.not);
+  const operand = (value: unknown): string[] => {
+    const entry = value as { source?: unknown; field?: unknown } | undefined;
+    return entry?.source === "field" && typeof entry.field === "string" ? [entry.field] : [];
+  };
+  if ("left" in node) return [...operand(node.left), ...operand(node.right)];
+  return typeof node.field === "string" ? [node.field] : [];
+};
+
+/** The other fields of its record type a calculation's formula reads, by key. */
+export const calculationDependencies = (expression: CalculationExpression): string[] => {
+  const numbers = (value: CalculationNumber): string[] =>
+    value.source === "field" ? [value.field] : value.source === "numeric" ? value.operands.flatMap(numbers) : [];
+  switch (expression.operation) {
+    case "join_text": return [...expression.fields];
+    case "numeric": return expression.operands.flatMap(numbers);
+    case "condition": return conditionFieldKeys((expression as { condition?: unknown }).condition);
+    case "date_offset": return [expression.date_field, ...(expression.amount.source === "field" ? [expression.amount.field] : [])];
+    case "deadline_passed": return [expression.due_field, ...(expression.status_field === undefined ? [] : [expression.status_field])];
+  }
+};
+
+const calculationOf = (field: FormulaField | undefined): CalculationSettings | undefined =>
+  field?.type === "calculation" ? field.settings as CalculationSettings : undefined;
+
+/**
+ * The calculations among the fields that are worked out each time a record is read: a deadline,
+ * one declared so, and one that reads such a calculation, as publication classifies them. A stored
+ * value never depends on one.
+ */
+export const readTimeCalculations = (fields: ReadonlyMap<string, FormulaField>): ReadonlySet<string> => {
+  const known = new Map<string, boolean>();
+  const readTime = (key: string, visiting: ReadonlySet<string>): boolean => {
+    const cached = known.get(key);
+    if (cached !== undefined) return cached;
+    const settings = calculationOf(fields.get(key));
+    if (settings === undefined || visiting.has(key)) return false;
+    const next = new Set(visiting).add(key);
+    const result = settings.expression.operation === "deadline_passed" || settings.evaluation === "read_time"
+      || calculationDependencies(settings.expression).some((dependency) => readTime(dependency, next));
+    known.set(key, result);
+    return result;
+  };
+  return new Set([...fields.keys()].filter((key) => readTime(key, new Set())));
+};
+
+/** The fields a formula reads that are worked out each time they're read, which makes it read-time too. */
+const readTimeDependencies = (expression: CalculationExpression, fields: ReadonlyMap<string, FormulaField>): FormulaField[] => {
+  const readTime = readTimeCalculations(fields);
+  return [...new Set(calculationDependencies(expression))].filter((key) => readTime.has(key)).map((key) => fields.get(key)!);
+};
+
+/** Whether a calculation is worked out each time it is read whatever is chosen: a deadline, or a formula that reads such a field. */
+export const calculationForcedReadTime = (expression: CalculationExpression, fields: ReadonlyMap<string, FormulaField>): boolean =>
+  expression.operation === "deadline_passed" || readTimeDependencies(expression, fields).length > 0;
+
+/**
+ * A calculation's settings with its result kept to what its formula can give: the result type is
+ * offered only among those, decimal places are kept exactly when the result needs them, and when
+ * it is worked out is always written down: each time it is read when it must be, otherwise the
+ * choice made, when the record is saved by default.
+ */
+export const settledCalculation = (settings: CalculationSettings, fields: ReadonlyMap<string, FormulaField>): CalculationSettings => {
+  const choices = calculationResultChoices(settings.expression, fields);
+  const result_type = choices.length === 0 || choices.includes(settings.result_type) ? settings.result_type : choices[0]!;
+  const precise = result_type === "decimal_number" || result_type === "money";
+  const { decimal_places: places, evaluation, ...rest } = settings;
+  return {
+    ...rest, result_type,
+    evaluation: calculationForcedReadTime(settings.expression, fields) ? "read_time" : evaluation ?? "stored",
+    ...(precise ? { decimal_places: places ?? 2 } : {}),
+  } as CalculationSettings;
+};
+
+/**
+ * Decimal places as typed: undefined when empty or not a number. A fraction or a number outside
+ * 0 to 12 is kept as typed, so the editor refuses it rather than storing another value.
+ */
+export const typedDecimalPlaces = (text: string): number | undefined => {
+  const places = text.trim() === "" ? Number.NaN : Number(text);
+  return Number.isFinite(places) ? places : undefined;
+};
+
+/** Whether decimal places are a whole number from 0 to 12, as the contract keeps them. */
+const decimalPlacesValid = (places: number | undefined): boolean =>
+  places === undefined || (Number.isInteger(places) && places >= 0 && places <= 12);
 
 /** Whether a number of a formula is money or a plain number, through any nesting; undefined when it can't be worked out. */
 export const calculationNumberDimension = (value: CalculationNumber, fields: ReadonlyMap<string, FormulaField>, depth = 1): NumericDimension | undefined => {
@@ -105,9 +198,11 @@ const dimensionProblem = (operation: CalculationNumberOperation, dimensions: rea
 
 /**
  * Why a calculation's settings can't be applied, in the words of the formula editor. `fields` are
- * the other fields of its record type, by key. The schema and the publication checks judge the rest.
+ * the other fields of its record type, by key; `ownKey` is the calculation's own key, absent for a
+ * new field, which nothing reads yet. The schema and the publication checks judge the rest.
  */
-export const calculationProblems = (settings: CalculationSettings, fields: ReadonlyMap<string, FormulaField>): string[] => {
+export const calculationProblems = (settings: CalculationSettings, fields: ReadonlyMap<string, FormulaField>,
+  ownKey: string | undefined): string[] => {
   const problems: string[] = [];
   const known = (where: string, key: string): FormulaField | undefined => {
     const field = fields.get(key);
@@ -175,10 +270,37 @@ export const calculationProblems = (settings: CalculationSettings, fields: Reado
       problems.push(choices.length === 0 ? "Result: the formula can't be worked out yet."
         : `Result: this formula gives ${choices.map((type) => calculationResultTypeLabels[type].toLowerCase()).join(" or ")}.`);
   }
+  if (ownKey !== undefined) {
+    // A formula that reads the field itself through other calculations never settles: refuse the circle.
+    const circle = (key: string, path: readonly string[]): readonly string[] | undefined => {
+      if (key === ownKey) return path;
+      if (path.includes(key)) return undefined;
+      const read = calculationOf(fields.get(key));
+      if (read === undefined) return undefined;
+      for (const dependency of new Set(calculationDependencies(read.expression))) {
+        const found = circle(dependency, [...path, key]);
+        if (found !== undefined) return found;
+      }
+      return undefined;
+    };
+    for (const dependency of new Set(calculationDependencies(expression))) {
+      const found = circle(dependency, []);
+      if (found === undefined || found.length === 0) continue;
+      const chain = found.map((key) => fields.get(key)?.label ?? key).join(", which reads ");
+      problems.push(`Formula: ${chain}${found.length > 1 ? "," : ""} reads this field, so they would work each other out in a circle.`);
+      break;
+    }
+  }
   const precise = settings.result_type === "decimal_number" || settings.result_type === "money";
   if (precise && settings.decimal_places === undefined) problems.push("Decimal places: enter how many decimal places the result keeps.");
+  if (!decimalPlacesValid(settings.decimal_places)) problems.push("Decimal places: enter a whole number from 0 to 12.");
   if (settings.evaluation === "stored" && expression.operation === "deadline_passed")
     problems.push("When it is worked out: a deadline depends on the current time, so it is worked out each time it is read.");
+  else if (settings.evaluation === "stored") {
+    const readTime = readTimeDependencies(expression, fields);
+    if (readTime.length > 0)
+      problems.push(`When it is worked out: it reads ${readTime.map((field) => field.label).join(" and ")}, worked out each time ${readTime.length === 1 ? "it is" : "they are"} read, so it is too.`);
+  }
   return problems;
 };
 
@@ -234,16 +356,34 @@ export const starterCalculationExpression = (operation: CalculationOperation, fi
   }
 };
 
+/** The type of value a total takes of a field: a calculation's or a total's result, otherwise the field's own type. */
+const totalledType = (field: FormulaField): string =>
+  field.type === "calculation" || field.type === "total" ? String((field.settings as { result_type?: unknown }).result_type) : field.type;
+
 /** The result a total produces from its operation and field: one rule, so the editor never asks for it. */
 export const totalResultType = (operation: TotalOperation, field: FormulaField | undefined): CalculationResultType | undefined => {
   if (operation === "count") return "whole_number";
   if (field === undefined) return undefined;
-  if (operation === "average") return field.type === "money" ? "money" : "decimal_number";
-  return field.type as CalculationResultType;
+  if (operation === "average") return totalledType(field) === "money" ? "money" : "decimal_number";
+  return totalledType(field) as CalculationResultType;
 };
 
-/** A relationship a total of this record type can count or add up: a link to it from a record type of its own module. */
-export type TotalRelationship = Readonly<{ reference: string; label: string; recordName: string; fields: readonly FormulaField[] }>;
+/**
+ * A relationship a total of this record type can count or add up: a link to it from a record type
+ * of its own module, with that record type's fields and those of them worked out each time they're
+ * read, which a total can't take.
+ */
+export type TotalRelationship = Readonly<{
+  reference: string; label: string; recordName: string; fields: readonly FormulaField[]; readTime: ReadonlySet<string>;
+}>;
+
+/** Whether a total's operation can be taken of a field of its related records: the query totals' rule, on the value it holds. */
+export const totalFieldAccepts = (operation: TotalOperation, field: FormulaField, relationship: TotalRelationship): boolean =>
+  operation !== "count" && !relationship.readTime.has(field.key) && queryTotalAccepts(operation, totalledType(field));
+
+/** The fields of the related records a total's filter may compare: those people can filter by, and not worked out when read. */
+export const totalFilterKeys = (relationship: TotalRelationship): ReadonlySet<string> =>
+  new Set(relationship.fields.filter((field) => field.filterable === true && !relationship.readTime.has(field.key)).map((field) => field.key));
 
 /**
  * The links of the module's own record types that point at one record type, as totals name them.
@@ -257,8 +397,9 @@ export const totalRelationships = (source: ApplicationSourceDocument, moduleKey:
     .filter((relationship) => reaches(relationship.to_record_type) || (relationship.to_record_types ?? []).some(reaches))
     .map((relationship) => {
       const from = record.fields.find((field) => field.key === relationship.from_field);
+      const fields = record.fields.map(({ key, label, type, settings, filterable }) => ({ key, label, type, settings, filterable }));
       return { reference: `${moduleKey}:${record.key}.${relationship.key}`, label: `${record.plural_name} by ${from?.label ?? relationship.key}`,
-        recordName: record.plural_name, fields: record.fields.map(({ key, label, type, settings }) => ({ key, label, type, settings })) };
+        recordName: record.plural_name, fields, readTime: readTimeCalculations(new Map(fields.map((field) => [field.key, field]))) };
     }));
 };
 
@@ -273,12 +414,22 @@ export const totalProblems = (settings: TotalSettings, relationship: TotalRelati
     if (settings.field !== undefined) problems.push("Field: a number of records counts records, not a field.");
   } else if (settings.field === undefined) problems.push(`Field: choose the field of ${relationship.recordName} to take the ${queryTotalOperationLabels[settings.operation].toLowerCase()} of.`);
   else if (field === undefined) problems.push(`Field: ${settings.field} is not a field of ${relationship.recordName} any more.`);
-  else if (!queryTotalAccepts(settings.operation, field.type))
+  else if (relationship.readTime.has(field.key))
+    problems.push(`Field: ${field.label} is worked out each time it is read, so a total can't take it.`);
+  else if (!totalFieldAccepts(settings.operation, field, relationship))
     problems.push(`Field: the ${queryTotalOperationLabels[settings.operation].toLowerCase()} can't be taken of ${field.label}.`);
-  if (settings.currency !== undefined && (settings.operation !== "sum" || field?.type !== "money"))
+  if (settings.currency !== undefined && (settings.operation !== "sum" || field === undefined || totalledType(field) !== "money"))
     problems.push("Currency: only a sum of money has a currency.");
   if (settings.operation === "average" && settings.decimal_places === undefined)
     problems.push("Decimal places: enter how many decimal places the average keeps.");
+  if (!decimalPlacesValid(settings.decimal_places)) problems.push("Decimal places: enter a whole number from 0 to 12.");
+  const filterable = totalFilterKeys(relationship);
+  for (const key of new Set(conditionFieldKeys(settings.filter))) {
+    if (filterable.has(key)) continue;
+    const label = relationship.fields.find((item) => item.key === key)?.label ?? key;
+    problems.push(relationship.readTime.has(key) ? `Filter: ${label} is worked out each time it is read, so a total can't filter by it.`
+      : `Filter: people can't filter by ${label}. Tick "People can filter by it" on that field first.`);
+  }
   return problems;
 };
 

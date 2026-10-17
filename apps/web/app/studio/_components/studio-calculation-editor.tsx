@@ -1,8 +1,9 @@
 "use client";
 import { useMemo } from "react";
 import {
-  calculationNumberOperationLabels, calculationOperationLabels, calculationResultChoices, calculationResultTypeLabels,
-  dateAccepts, describeCalculation, joinTextAccepts, numberAccepts, starterCalculationExpression, wholeNumberAccepts,
+  calculationForcedReadTime, calculationNumberOperationLabels, calculationOperationLabels, calculationResultChoices,
+  calculationResultTypeLabels, dateAccepts, describeCalculation, joinTextAccepts, numberAccepts, settledCalculation,
+  starterCalculationExpression, typedDecimalPlaces, wholeNumberAccepts,
   type CalculationExpression, type CalculationNumber, type CalculationNumberOperation, type CalculationOperation,
   type CalculationSettings, type FormulaField, type ModuleField,
 } from "@vortex/platform/schema";
@@ -24,24 +25,6 @@ const numberOperationOptions = (Object.keys(calculationNumberOperationLabels) as
   .map((value) => ({ value, label: calculationNumberOperationLabels[value] }));
 const units = [{ value: "days", label: "Days" }, { value: "weeks", label: "Weeks" }, { value: "months", label: "Months" }, { value: "years", label: "Years" }];
 const sources = [{ value: "field", label: "A field" }, { value: "literal", label: "A fixed number" }, { value: "numeric", label: "A part in brackets" }];
-
-/**
- * A calculation's settings with its result kept to what its formula can give: the result type is
- * offered only among those, decimal places are kept exactly when the result needs them, and when
- * it is worked out is always written down.
- */
-const settled = (settings: CalculationSettings, fields: ReadonlyMap<string, FormulaField>): CalculationSettings => {
-  const choices = calculationResultChoices(settings.expression, fields);
-  const result_type = choices.length === 0 || choices.includes(settings.result_type) ? settings.result_type : choices[0]!;
-  const precise = result_type === "decimal_number" || result_type === "money";
-  const { decimal_places: places, evaluation, ...rest } = settings;
-  return {
-    ...rest, result_type,
-    // A deadline uses the current time, so it is read-time; any other formula keeps the choice made, saved by default.
-    evaluation: settings.expression.operation === "deadline_passed" ? "read_time" : evaluation ?? "stored",
-    ...(precise ? { decimal_places: places ?? 2 } : {}),
-  } as CalculationSettings;
-};
 
 /** One value of a number in the formula: a field, a fixed number, or a part in brackets with its own values. */
 function NumberValue({ id, value, fields, depth, disabled, onChange, onRemove }: Readonly<{
@@ -118,7 +101,7 @@ export function StudioCalculationEditor({ idPrefix, settings, fields, compiled, 
   const conditionKeys = useMemo(() => new Set(fields.map((field) => field.key)), [fields]);
   const labelOf = (key: string) => byKey.get(key)?.label ?? key;
   const expression = settings.expression;
-  const set = (next: Partial<CalculationSettings>, conditionValid = true) => onChange(settled({ ...settings, ...next } as CalculationSettings, byKey), conditionValid);
+  const set = (next: Partial<CalculationSettings>, conditionValid = true) => onChange(settledCalculation({ ...settings, ...next } as CalculationSettings, byKey), conditionValid);
   const setExpression = (next: CalculationExpression, conditionValid = true) => set({ expression: next }, conditionValid);
   const choicesOf = (accepts: (field: FormulaField) => boolean) => fields.filter(accepts).map((field) => ({ value: field.key, label: field.label }));
   const results = calculationResultChoices(expression, byKey);
@@ -137,6 +120,9 @@ export function StudioCalculationEditor({ idPrefix, settings, fields, compiled, 
               <Button type="button" size="icon-xs" variant="ghost" aria-label={`Move ${labelOf(key)} earlier`} disabled={disabled || index === 0}
                 onClick={() => { const next = [...joined.fields]; next.splice(index - 1, 0, next.splice(index, 1)[0]!); setExpression({ ...joined, fields: next }); }}>
                 <Icon name="chevron-up" /></Button>
+              <Button type="button" size="icon-xs" variant="ghost" aria-label={`Move ${labelOf(key)} later`} disabled={disabled || index === joined.fields.length - 1}
+                onClick={() => { const next = [...joined.fields]; next.splice(index + 1, 0, next.splice(index, 1)[0]!); setExpression({ ...joined, fields: next }); }}>
+                <Icon name="chevron-down" /></Button>
               <Button type="button" size="icon-xs" variant="ghost" aria-label={`Remove ${labelOf(key)}`} disabled={disabled}
                 onClick={() => setExpression({ ...joined, fields: joined.fields.filter((item) => item !== key) })}><Icon name="close" /></Button>
             </li>)}</ol>
@@ -246,10 +232,12 @@ export function StudioCalculationEditor({ idPrefix, settings, fields, compiled, 
         : "The result is worked out from the formula once it is complete."}</p>}
     {precise && <StudioField label="Decimal places" hint="How many decimal places the result keeps, from 0 to 12.">
       {(control) => <Input {...control} type="number" min={0} max={12} step={1} disabled={disabled} value={settings.decimal_places ?? ""}
-        onChange={(event) => set({ decimal_places: event.target.value === "" ? undefined : Math.trunc(Number(event.target.value)) })} />}
+        onChange={(event) => set({ decimal_places: typedDecimalPlaces(event.target.value) })} />}
     </StudioField>}
     {expression.operation === "deadline_passed"
       ? <p className="text-sm text-muted-foreground">It depends on the current time, so it is worked out each time it is read.</p>
+      : calculationForcedReadTime(expression, byKey)
+        ? <p className="text-sm text-muted-foreground">It reads a field worked out each time it is read, so it is worked out each time it is read too.</p>
       : <StudioField label="When it is worked out" hint="A saved result is kept with the record; a read-time result is worked out afresh each time.">
         {(control) => <StudioOptionControl id={control.id} value={settings.evaluation ?? ""} disabled={disabled}
           options={[{ value: "stored", label: "When the record is saved" }, { value: "read_time", label: "Each time it is read" }]}
