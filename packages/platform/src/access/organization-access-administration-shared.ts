@@ -6,11 +6,10 @@ import {
   sameId,
   type AffectedRoleAssignment,
   type OrganizationRoleChangeCandidate,
-  type PreparedApplicationRoleTemplates,
   type PreparedOrganizationRoleChange,
 } from "../schema";
 import type { DatabaseRow } from "../db/index";
-import { verifyPreparedApplicationRoleTemplates } from "./application-role-template-adapter";
+import { organizationRoleTemplateSourceSchema } from "./organization-role-changes";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
 import type { HumanOrganizationRequestResult } from "./human-organization-request";
 import { prepareOrganizationRoleChangeEvidence } from "./organization-role-change-evidence";
@@ -384,20 +383,13 @@ export const preparationUnavailable = (cause?: unknown): Error => {
 };
 
 /**
- * The read returns the stored permission and template evidence for the caller's organisation. The
- * canonical verifier proves the evidence self-consistent before it is handed to the protected
- * operation.
+ * The read names the Application registration the template role is prepared from: its root,
+ * revision and catalogue fingerprint. The writer reads the role's live permissions from it again.
  */
-export const sealPreparedRoleChangeTemplates = (
-  core: unknown,
-): PreparedApplicationRoleTemplates => {
-  if (typeof core !== "object" || core === null || Array.isArray(core))
-    throw preparationUnavailable();
-  try {
-    return verifyPreparedApplicationRoleTemplates(core);
-  } catch (error) {
-    throw preparationUnavailable(error);
-  }
+export const readRoleTemplateSource = (value: unknown) => {
+  const parsed = organizationRoleTemplateSourceSchema.safeParse(value);
+  if (!parsed.success) throw preparationUnavailable(parsed.error);
+  return parsed.data;
 };
 
 /**

@@ -83,7 +83,7 @@ export const previewProblem = (
     : result.kind === "temporarily_unavailable"
       ? "The preview is temporarily unavailable. Your changes are kept; try again."
       : result.reason === "not_installed"
-        ? "This application has no published version yet, so there is nothing for its preview to run with. Publish it once, then preview."
+        ? "This application is not installed yet, and a preview runs inside its installation. Publish it once and install it from Releases, then preview."
         : result.reason === "permission_refused"
           ? "Previewing needs permission to publish this application. Ask an administrator."
           : "The preview request was not accepted. Reload Studio and try again.";
