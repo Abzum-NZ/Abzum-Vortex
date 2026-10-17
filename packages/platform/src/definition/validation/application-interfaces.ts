@@ -39,8 +39,7 @@ export function applicationInterfaceRules(scope: ApplicationScope): void {
     if (["number", "whole_number"].includes(value)) return "number";
     if (value === "yes_no") return "boolean";
     if (value === "date" || value === "date_time") return value;
-    if (["record_reference", "organization_account_reference"].includes(value))
-      return "record_reference";
+    if (value === "record_reference") return "record_reference";
     return undefined;
   };
   if (

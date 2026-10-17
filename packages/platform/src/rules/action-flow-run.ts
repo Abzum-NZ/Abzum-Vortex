@@ -166,8 +166,6 @@ export const flowRuntimeValueOf = (type: string, value: unknown): FlowRuntimeVal
           ? candidate.recordId
           : undefined,
       );
-    case "organization_account_reference":
-      return mapped("organization_account_reference", text);
     // A calculated or total value carries whichever type its formula or source field has, so it is
     // typed by the shape it was stored with.
     case "calculation":

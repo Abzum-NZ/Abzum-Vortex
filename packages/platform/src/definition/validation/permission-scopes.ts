@@ -97,7 +97,7 @@ export function permissionRecordScopesValid(
         return (
           expected === undefined ||
           (binding.source === "current_organization_account_id"
-            ? !["text", "organization_account_reference"].includes(expected)
+            ? expected !== "text"
             : !(expected === "decimal_number"
                 ? exactDecimalTextSchema.safeParse(binding.value).success
                 : expected === "money"

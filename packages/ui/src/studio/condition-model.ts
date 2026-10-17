@@ -9,7 +9,6 @@ import {
   jsonValueSchema,
   moduleFieldSchema,
   moneyValueSchema,
-  organizationAccountIdSchema,
   recordLinkValueSchema,
   type ConditionNode,
   type JsonValue,
@@ -42,19 +41,11 @@ export type StudioConditionSemanticType =
   | "date_time"
   | "text_collection"
   | "opaque_json"
-  | "record_reference"
-  | "organization_account_reference";
+  | "record_reference";
 
 /** Parameter types accepted by Rule . Host-only values use the same parameter source. */
 export type StudioConditionParameterType =
-  | "text"
-  | "number"
-  | "decimal_number"
-  | "money"
-  | "boolean"
-  | "date"
-  | "date_time"
-  | "organization_account_reference";
+  "text" | "number" | "decimal_number" | "money" | "boolean" | "date" | "date_time";
 
 export type StudioConditionOperandRole =
   | "current_field"
@@ -321,7 +312,6 @@ const contextIssues = (
     "boolean",
     "date",
     "date_time",
-    "organization_account_reference",
   ]);
   const parameterDeclarations = new Map<string, StudioConditionParameterType>();
   for (const [index, declaration] of context.parameterDeclarations.entries()) {
@@ -434,15 +424,12 @@ const contextIssues = (
             "A parameter must match a Rule  declaration",
           ),
         );
-      if (
-        permission.role === "trusted_account_context" &&
-        declaredType !== "organization_account_reference"
-      )
+      if (permission.role === "trusted_account_context" && declaredType !== "text")
         issues.push(
           makeIssue(
             "invalid_context",
             ["allowedOperands", index],
-            "Trusted account context must use its declared account type",
+            "Trusted account context must use a text parameter",
           ),
         );
     }
@@ -550,8 +537,6 @@ export const literalMatchesType = (
       return jsonValueSchema.safeParse(value).success;
     case "record_reference":
       return recordLinkValueSchema.safeParse(value).success;
-    case "organization_account_reference":
-      return organizationAccountIdSchema.safeParse(value).success;
   }
 };
 
@@ -696,7 +681,6 @@ export const defaultLiteralForType = (
     case "text_collection":
       return [];
     case "record_reference":
-    case "organization_account_reference":
     case "opaque_json":
       return null;
     case "text":

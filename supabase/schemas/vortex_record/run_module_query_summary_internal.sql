@@ -675,8 +675,6 @@ begin
              case $13 ->> referenced.id
                when ''record_reference'' then pg_catalog.to_jsonb(
                  pg_catalog.lower(readable.result -> ''values'' -> referenced.id ->> ''recordId''))
-               when ''organization_account_reference'' then pg_catalog.to_jsonb(
-                 pg_catalog.lower(readable.result -> ''values'' -> referenced.id ->> ''organizationAccountId''))
                else readable.result -> ''values'' -> referenced.id
              end), ''{}''::jsonb)
             from pg_catalog.unnest($16::text[]) as referenced(id)),

@@ -5,7 +5,6 @@ import {
   fieldIdSchema,
   jsonValueSchema,
   moduleFieldSchema,
-  organizationAccountIdSchema,
   type ConditionNode,
   type JsonValue,
   type ModuleField,
@@ -24,15 +23,7 @@ import {
 
 export type TypedConditionParameterDeclaration = Readonly<{
   key: string;
-  type:
-    | "text"
-    | "number"
-    | "decimal_number"
-    | "money"
-    | "boolean"
-    | "date"
-    | "date_time"
-    | "organization_account_reference";
+  type: "text" | "number" | "decimal_number" | "money" | "boolean" | "date" | "date_time";
 }>;
 
 export type TypedConditionEvaluationInput = Readonly<{
@@ -52,7 +43,6 @@ const parameterTypes = new Set<TypedConditionParameterDeclaration["type"]>([
   "boolean",
   "date",
   "date_time",
-  "organization_account_reference",
 ]);
 
 const supportedOperators = new Set([
@@ -92,10 +82,7 @@ const containsUnsupportedOperator = (value: unknown): boolean => {
 const valueMatchesParameter = (
   value: JsonValue,
   type: TypedConditionParameterDeclaration["type"],
-): boolean =>
-  type === "organization_account_reference"
-    ? organizationAccountIdSchema.safeParse(value).success
-    : valueMatchesSemanticType(value, type);
+): boolean => valueMatchesSemanticType(value, type);
 
 /** Evaluates canonical Module  conditions without coercing exact values through Number. */
 export function evaluateTypedCondition(input: TypedConditionEvaluationInput): boolean {

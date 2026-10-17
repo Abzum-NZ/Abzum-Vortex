@@ -4,7 +4,6 @@ import { z } from "zod";
 import {
   builderKeySchema,
   fieldIdSchema,
-  organizationAccountIdSchema,
   publishedModuleQueryDescriptorSchema,
   recordIdSchema,
   recordTypeIdSchema,
@@ -44,35 +43,10 @@ export const recordReferenceChoiceCommandSchema = z
   .strict();
 export type RecordReferenceChoiceCommand = z.infer<typeof recordReferenceChoiceCommandSchema>;
 
-/**
- * Choices for one organisation-account reference input: active accounts in
- * the verified current organisation only. The command names no organisation.
- */
-export const organizationAccountReferenceChoiceCommandSchema = z
-  .object({
-    kind: z.literal("organization_account_reference"),
-    /** Narrows choices to accounts whose display name contains this text. */
-    search: choiceSearchSchema.optional(),
-    pageSize: choicePageSizeSchema,
-    /** Opaque continuation issued by the previous page of the same search. */
-    continuationToken: choiceContinuationTokenSchema.optional(),
-  })
-  .strict();
-export type OrganizationAccountReferenceChoiceCommand = z.infer<
-  typeof organizationAccountReferenceChoiceCommandSchema
->;
-
-export const referenceChoiceCommandSchema = z.discriminatedUnion("kind", [
-  recordReferenceChoiceCommandSchema,
-  organizationAccountReferenceChoiceCommandSchema,
-]);
-export type ReferenceChoiceCommand = z.infer<typeof referenceChoiceCommandSchema>;
-
 /** The typed value a choice submits, in the owning input type's exact format. */
-export const referenceChoiceValueSchema = z.union([
-  z.object({ recordTypeId: recordTypeIdSchema, recordId: recordIdSchema }).strict(),
-  z.object({ organizationAccountId: organizationAccountIdSchema }).strict(),
-]);
+export const referenceChoiceValueSchema = z
+  .object({ recordTypeId: recordTypeIdSchema, recordId: recordIdSchema })
+  .strict();
 export type ReferenceChoiceValue = z.infer<typeof referenceChoiceValueSchema>;
 
 /**
@@ -81,7 +55,7 @@ export type ReferenceChoiceValue = z.infer<typeof referenceChoiceValueSchema>;
  */
 export const referenceChoiceOptionSchema = z
   .object({
-    key: z.string().regex(/^[ra]_[0-9a-f]{32}$/),
+    key: z.string().regex(/^r_[0-9a-f]{32}$/),
     label: z.string().min(1).max(200),
     value: referenceChoiceValueSchema,
   })
@@ -110,7 +84,7 @@ export type ReferenceChoiceRefusal = z.infer<typeof referenceChoiceRefusalSchema
 export const referenceChoicePageSchema = z
   .object({
     outcome: z.literal("completed"),
-    kind: z.enum(["record_reference", "organization_account_reference"]),
+    kind: z.literal("record_reference"),
     choices: z.array(referenceChoiceOptionSchema).max(100),
     /** Opaque; present only when a later page may hold further permitted choices. */
     nextContinuationToken: z.string().optional(),

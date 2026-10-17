@@ -157,7 +157,6 @@ const literalMatchesType = (type: string, value: JsonValue): boolean => {
       return recordRichTextDocumentSchema.safeParse(value).success;
     case "choice":
     case "record_reference":
-    case "organization_account_reference":
     case "workflow_run_reference":
     case "relationship_reference":
     case "file_reference":
@@ -529,4 +528,3 @@ export const shorthandReferenceValueSchema = z.string().transform((text, context
  * object kinds are exactly `FlowValue`; map entries and array items recurse through this schema.
  */
 export const flowValueSchema = z.union([shorthandReferenceValueSchema, flowValueObjectSchema]);
-

@@ -3,7 +3,6 @@ import {
   jsonValueSchema,
   moduleFieldValueSchemas,
   moneyValueSchema,
-  organizationAccountIdSchema,
   parseExactDecimal,
   recordLinkValueSchema,
   type ExactDecimal,
@@ -35,8 +34,7 @@ export type SemanticType =
   | "date_time"
   | "text_collection"
   | "opaque_json"
-  | "record_reference"
-  | "organization_account_reference";
+  | "record_reference";
 
 export type ResolvedTypedConditionOperand = CoreResolvedTypedConditionOperand<SemanticType> &
   Readonly<{ missing?: boolean }>;
@@ -107,8 +105,6 @@ export const valueMatchesSemanticType = (value: JsonValue, type: SemanticType): 
       return Array.isArray(value) && value.every(validText);
     case "record_reference":
       return recordLinkValueSchema.safeParse(value).success;
-    case "organization_account_reference":
-      return organizationAccountIdSchema.safeParse(value).success;
     case "opaque_json":
       return jsonValueSchema.safeParse(value).success;
   }
@@ -235,12 +231,6 @@ const recordReferenceIdentity = (value: JsonValue): string | undefined => {
     : undefined;
 };
 
-const organizationAccountIdentity = (value: JsonValue): string | undefined => {
-  const direct = organizationAccountIdSchema.safeParse(value);
-  if (direct.success) return direct.data.toLowerCase();
-  return undefined;
-};
-
 const moneyParts = (
   value: JsonValue,
 ): Readonly<{ amount: ExactDecimal; currency: string }> | undefined => {
@@ -340,9 +330,6 @@ export const evaluateResolvedTypedCondition = <TSourceOperand>(
     else if (type === "record_reference") {
       type = "text";
       if (value !== null) value = recordReferenceIdentity(value) ?? value;
-    } else if (type === "organization_account_reference") {
-      type = "text";
-      if (value !== null) value = organizationAccountIdentity(value) ?? value;
     } else if (type === "boolean") type = "yes_no";
     else if (type === "text_collection") type = "several_choices";
     else if (type === "opaque_json") type = "json";

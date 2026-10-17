@@ -601,9 +601,6 @@ begin
           when semantic_type = 'record_reference' then
             pg_catalog.format('pg_catalog.to_jsonb(pg_catalog.lower(stored.%I ->> ''recordId''))',
               mapping_row.physical_column_token)
-          when semantic_type = 'organization_account_reference' then
-            pg_catalog.format('pg_catalog.to_jsonb(pg_catalog.lower(stored.%I ->> ''organizationAccountId''))',
-              mapping_row.physical_column_token)
           when mapping_row.database_value_type = 'decimal' then
             pg_catalog.format('pg_catalog.to_jsonb(stored.%I::text)', mapping_row.physical_column_token)
           when mapping_row.database_value_type = 'timestamp_with_time_zone' then
@@ -650,13 +647,6 @@ begin
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'input_invalid');
       end if;
       input_value := pg_catalog.to_jsonb(pg_catalog.lower(input_value ->> 'recordId'));
-    elsif input_value <> 'null'::jsonb and input_item ->> 'type' = 'organization_account_reference' then
-      if pg_catalog.jsonb_typeof(input_value) <> 'object'
-        or input_value - array['organizationAccountId']::text[] <> '{}'::jsonb
-        or not coalesce(pg_catalog.lower(input_value ->> 'organizationAccountId') ~ uuid_pattern, false) then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'input_invalid');
-      end if;
-      input_value := pg_catalog.to_jsonb(pg_catalog.lower(input_value ->> 'organizationAccountId'));
     end if;
     parameter_types := parameter_types || pg_catalog.jsonb_build_object(input_key, case input_item ->> 'type'
       when 'formatted_text' then 'opaque_json'

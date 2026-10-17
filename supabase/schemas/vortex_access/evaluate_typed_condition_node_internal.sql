@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.evaluate_typed_condition_node_internal(p_condition jsonb, p_field_types jsonb, p_field_values jsonb, p_parameter_types jsonb, p_parameter_values jsonb, p_validate_only boolean) RETURNS boolean
+CREATE OR REPLACE FUNCTION vortex_access.evaluate_typed_condition_node_internal(p_condition jsonb, p_field_types jsonb, p_field_values jsonb, p_parameter_types jsonb, p_parameter_values jsonb, p_validate_only boolean) RETURNS boolean
     LANGUAGE plpgsql IMMUTABLE
     SET search_path TO ''
     AS $$
@@ -298,7 +298,7 @@ begin
       ) = vortex_access.typed_condition_temporal_value_internal(
         operand_values[2] #>> '{}', 'date_time'
       );
-    elsif shared_type in ('record_reference', 'organization_account_reference') then
+    elsif shared_type = 'record_reference' then
       equal_value := pg_catalog.lower(operand_values[1] #>> '{}')
         = pg_catalog.lower(operand_values[2] #>> '{}');
     else equal_value := operand_values[1] = operand_values[2]; end if;
@@ -323,7 +323,7 @@ begin
             elsif collection_element_type = 'date_time' then
               equal_value := vortex_access.typed_condition_temporal_value_internal(member #>> '{}', 'date_time')
                 = vortex_access.typed_condition_temporal_value_internal(operand_values[2] #>> '{}', 'date_time');
-            elsif collection_element_type in ('record_reference', 'organization_account_reference') then
+            elsif collection_element_type = 'record_reference' then
               equal_value := pg_catalog.lower(member #>> '{}') = pg_catalog.lower(operand_values[2] #>> '{}');
             else equal_value := member = operand_values[2]; end if;
             contains_value := contains_value or (equal_value is true);
@@ -345,7 +345,7 @@ begin
         elsif collection_element_type = 'date_time' then
           equal_value := vortex_access.typed_condition_temporal_value_internal(operand_values[1] #>> '{}', 'date_time')
             = vortex_access.typed_condition_temporal_value_internal(member #>> '{}', 'date_time');
-        elsif collection_element_type in ('record_reference', 'organization_account_reference') then
+        elsif collection_element_type = 'record_reference' then
           equal_value := pg_catalog.lower(operand_values[1] #>> '{}') = pg_catalog.lower(member #>> '{}');
         else equal_value := operand_values[1] = member; end if;
         contains_value := contains_value or (equal_value is true);

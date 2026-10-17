@@ -87,7 +87,7 @@ function actionValueType(
       ? String(field!.type)
       : typedFieldValueType(field);
   }
-  if (reference.source === "execution_actor") return "organization_account_reference";
+  if (reference.source === "execution_actor") return "text";
   if (reference.source === "execution_now") return "date_time";
   return undefined;
 }

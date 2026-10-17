@@ -22,7 +22,6 @@ import {
   fieldIdSchema,
   fingerprintSchema,
   namespacedKeySchema,
-  organizationAccountIdSchema,
   permissionIdSchema,
   queryIdSchema,
   recordTypeIdSchema,
@@ -882,8 +881,6 @@ const sharingParameterValueSchema = (
       return z.iso.date();
     case "date_time":
       return z.iso.datetime({ offset: true });
-    case "organization_account_reference":
-      return organizationAccountIdSchema;
   }
 };
 

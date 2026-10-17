@@ -21,7 +21,6 @@ export function semanticFieldType(type: unknown): string | undefined {
   if (value === "date" || value === "date_time") return value;
   if (["link", "link_to_one_of_several", "record_reference"].includes(value))
     return "record_reference";
-  if (value === "organization_account_reference") return "organization_account_reference";
   if (value === "table" || value === "attachment" || value === "several_choices") return "json";
   if (
     [
@@ -90,7 +89,6 @@ export function typedSemanticFieldType(type: unknown): string | undefined {
       "date",
       "date_time",
       "record_reference",
-      "organization_account_reference",
     ].includes(value)
   )
     return value;
@@ -252,7 +250,6 @@ export function typedValueMatchesType(
     return (dialect === "source" ? sourceMoneyValueSchema : moneyValueSchema).safeParse(value)
       .success;
   if (type === "boolean") return typeof value === "boolean";
-  if (type === "organization_account_reference") return platformIdSchema.safeParse(value).success;
   if (type === "date") return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
   if (type === "date_time") return typeof value === "string" && !Number.isNaN(Date.parse(value));
   if (type === "record_reference")

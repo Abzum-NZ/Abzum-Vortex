@@ -26,7 +26,7 @@ export const moduleFieldTypeLabels: Readonly<Record<ModuleFieldType, string>> = 
   choice: "Choice", several_choices: "Several choices", reference_number: "Reference number",
   email_address: "Email address", phone_number: "Phone number", web_address: "Web address", table: "Table",
   link: "Link to a record", link_to_one_of_several: "Link to one of several record types",
-  link_to_person: "Link to a person", calculation: "Calculation", total: "Total of related records",
+  calculation: "Calculation", total: "Total of related records",
   attachment: "Attachment",
 };
 
@@ -184,18 +184,10 @@ export const moduleFieldSettingDeclarations = (
       return [{ ...base("target", "Linked record type", true), kind: "record_type_reference" },
         text("reverse_key", "Name of the link back", true, 1, 40, "Lowercase words separated by underscores, for example contacts."),
         choice("on_parent_delete", "When the linked record is deleted", true, deleteRules),
-        boolean("application_root_required", "Only records of this application", false),
-        choice("legacy_person_field", "Person field it mirrors", false, fieldChoices(context.fields, ["link_to_person"]))];
+        boolean("application_root_required", "Only records of this application", false)];
     case "link_to_one_of_several":
       return [list("targets", "Record types it may link to", true, 2, 20, { ...base("target", "Record type", true), kind: "record_type_reference" }),
         choice("on_parent_delete", "When the linked record is deleted", true, deleteRules)];
-    case "link_to_person":
-      return [choice("audience", "Who can be chosen", true, [["organisation_accounts", "People in the organisation"],
-        ["application_accounts", "People using this application"],
-        ["organisation_identities_and_external_requesters", "People in the organisation and outside requesters"]]),
-        boolean("application_root_required", "Only people of this application", false),
-        choice("on_person_deactivation", "When the person is deactivated", true, [["retain_reference", "Keep the link"],
-          ["empty_optional", "Clear the link"], ["refuse_deactivation", "Refuse the deactivation"]])];
     case "calculation":
       return [choice("result_type", "Result", true, resultTypes),
         choice("evaluation", "When it is worked out", false, [["read_time", "Each time it is read"], ["stored", "When the record is saved"]]),
@@ -329,7 +321,6 @@ export const starterModuleFieldSettings = (
     case "link": return { ...(start.recordTypes[0] === undefined ? {} : { target: start.recordTypes[0] }),
       reverse_key: `${start.recordKey}_${start.fieldKey}`.slice(0, 40).replace(/_+$/u, ""), on_parent_delete: "empty_optional" };
     case "link_to_one_of_several": return { targets: start.recordTypes.slice(0, 2), on_parent_delete: "empty_optional" };
-    case "link_to_person": return { audience: "organisation_accounts", application_root_required: false, on_person_deactivation: "retain_reference" };
     case "calculation": return { result_type: "text", expression: { operation: "join_text", fields: [start.titleField], separator: " " } };
     case "total": return { ...(start.relationships[0] === undefined ? {} : { relationship: start.relationships[0] }),
       operation: "count", result_type: "whole_number" };
@@ -340,7 +331,7 @@ export const starterModuleFieldSettings = (
 
 /** Field types whose value is produced by the platform or held elsewhere, so they take no default. */
 const noDefault: ReadonlySet<string> = new Set(["reference_number", "calculation", "total", "attachment", "table",
-  "formatted_text", "link_to_person"]);
+  "formatted_text"]);
 
 /** The one typed declaration of a field's default value, or why a default is not set here. */
 export const moduleFieldDefaultDeclaration = (

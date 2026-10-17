@@ -238,7 +238,7 @@ export function sourceTypeCompatibilityRule(
           return (
             expected === undefined ||
             (binding.source === "current_organization_account_id"
-              ? !["text", "organization_account_reference"].includes(expected)
+              ? expected !== "text"
               : !typedValueMatchesType(binding.value, expected, "source"))
           );
         })

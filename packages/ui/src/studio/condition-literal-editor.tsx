@@ -239,7 +239,7 @@ export function LiteralEditor({
       </label>
     );
 
-  if (semanticType === "opaque_json" || semanticType === "record_reference" || semanticType === "organization_account_reference")
+  if (semanticType === "opaque_json" || semanticType === "record_reference")
     return (
       <label>
         {label} (JSON value)

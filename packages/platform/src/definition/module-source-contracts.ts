@@ -3,7 +3,6 @@ import {
   builderKeySchema,
   fingerprintSchema,
   namespacedKeySchema,
-  organizationAccountIdSchema,
   permissionIdSchema,
   recordTypeIdSchema,
   sourceQualifiedRecordTypeSchema,
@@ -617,16 +616,7 @@ const moduleSourceSharingParameterSchema = z
   .object({
     key: sourceProvenanceUnchanged(builderKeySchema),
     type: sourceProvenanceUnchanged(
-      z.enum([
-        "text",
-        "number",
-        "decimal_number",
-        "money",
-        "boolean",
-        "date",
-        "date_time",
-        "organization_account_reference",
-      ]),
+      z.enum(["text", "number", "decimal_number", "money", "boolean", "date", "date_time"]),
     ),
   })
   .strict();
@@ -660,7 +650,6 @@ const sourceSharingParameterValueSchemas: Record<
   boolean: z.boolean(),
   date: z.iso.date(),
   date_time: z.iso.datetime({ offset: true }),
-  organization_account_reference: organizationAccountIdSchema,
 };
 
 const moduleSourceSharingConditionSchema = z

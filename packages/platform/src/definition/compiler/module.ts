@@ -25,7 +25,7 @@ import { isBeforeSaveFlow, lowerBeforeSaveFlow } from "../before-save-flow-rules
 import { flowIssueLocation } from "../flow-validation";
 import { compileActionFlow, platformServiceProtectedOperationReference } from "./action-flows";
 import { dependencyOrder, resolvedDependencies } from "./dependencies";
-import { fieldSettings, validatePersonLinkApplicationAccess } from "./field-settings";
+import { fieldSettings, validateLinkApplicationAccess } from "./field-settings";
 import { compileCheckedFlowSources } from "./flow-sources";
 import {
   compilePermissionFieldPolicy,
@@ -217,7 +217,7 @@ function compileModule(
       ),
     };
   });
-  validatePersonLinkApplicationAccess(
+  validateLinkApplicationAccess(
     source,
     resolution,
     metadata.organizationId,

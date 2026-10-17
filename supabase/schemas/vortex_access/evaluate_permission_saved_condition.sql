@@ -175,7 +175,7 @@ begin
       or parameter_type is null
       or not (
         parameter_type in (
-          'text', 'number', 'boolean', 'date', 'date_time', 'organization_account_reference'
+          'text', 'number', 'boolean', 'date', 'date_time'
         )
         or (exact_values and parameter_type in ('decimal_number', 'money'))
       )
@@ -197,7 +197,7 @@ begin
       raise exception using errcode = '22023', message = 'Typed record condition is invalid';
     end if;
     if binding ->> 'source' = 'current_organization_account_id' then
-      if key_count <> 2 or parameter_type not in ('text', 'organization_account_reference') then
+      if key_count <> 2 or parameter_type <> 'text' then
         raise exception using errcode = '22023', message = 'Typed record condition is invalid';
       end if;
       parameter_values := parameter_values || pg_catalog.jsonb_build_object(

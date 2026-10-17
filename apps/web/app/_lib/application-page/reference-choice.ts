@@ -60,7 +60,9 @@ export const projectReferenceChoicePage = async (
   const selection: OrganizationSelectionCandidate = {
     organizationId: address.read.organizationId,
     applicationRootId: address.application.applicationRootId,
-    ...(address.application.previewInstallationId === undefined ? {} : { previewInstallationId: address.application.previewInstallationId }),
+    ...(address.application.previewInstallationId === undefined
+      ? {}
+      : { previewInstallationId: address.application.previewInstallationId }),
   };
   const loaded = await loadInstalledContext(session, dependencies, selection);
   if (loaded.kind !== "available")
@@ -423,7 +425,6 @@ export const projectSelectedReferenceChoiceEditField = async (
   const matches = (choice: ReferenceChoiceOption): boolean => {
     const choiceValue = choice.value;
     return (
-      !("organizationAccountId" in choiceValue) &&
       sameId(choiceValue.recordTypeId, queryTarget.recordTypeId) &&
       queryAllowedTargets.some((target) => sameId(target.recordTypeId, choiceValue.recordTypeId)) &&
       sameId(choiceValue.recordTypeId, storedValue.recordTypeId) &&
@@ -479,7 +480,6 @@ export const projectInitialReferenceChoice = async (
     return undefined;
   const target = command.source.query.recordType;
   const matches = (choice: ReferenceChoiceOption): boolean =>
-    !("organizationAccountId" in choice.value) &&
     sameId(choice.value.recordTypeId, target.recordTypeId) &&
     sameId(choice.value.recordId, args.recordId);
   const nextPage =

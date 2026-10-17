@@ -15,7 +15,7 @@ import { asObject, fail, type JsonObject } from "./shared";
 import { condition, type ModuleValueContext, normaliseExact } from "./values";
 import { moduleDependencies } from "../module-dependencies";
 
-function personLinkSettingLocation(
+function linkApplicationAccessSettingLocation(
   field: JsonObject,
   qualifiedRecordType: string,
   resolution: Resolution,
@@ -32,7 +32,7 @@ function personLinkSettingLocation(
  * An enabled access requirement belongs only to a resolved organization-account projection. Local
  * records belong to the same compiled Module draft, which is contract-checked before returning.
  */
-export function validatePersonLinkApplicationAccess(
+export function validateLinkApplicationAccess(
   source: JsonObject,
   resolution: Resolution,
   organizationId: unknown,
@@ -47,7 +47,7 @@ export function validatePersonLinkApplicationAccess(
       if (field.type !== "link") continue;
       const settings = asObject(field.settings);
       if (settings.application_root_required !== true) continue;
-      const location = personLinkSettingLocation(field, qualifiedRecordType, resolution);
+      const location = linkApplicationAccessSettingLocation(field, qualifiedRecordType, resolution);
       try {
         const reference = String(settings.target);
         const target = resolution.recordType(reference);
@@ -247,7 +247,7 @@ export function fieldSettings(
         throw new DefinitionCompilationError(
           error.ruleCode,
           error.family,
-          personLinkSettingLocation(field, qualifiedRecordType, resolution),
+          linkApplicationAccessSettingLocation(field, qualifiedRecordType, resolution),
         );
       }
     }
