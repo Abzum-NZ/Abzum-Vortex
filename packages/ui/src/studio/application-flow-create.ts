@@ -100,12 +100,20 @@ const bindControl = (body: ApplicationSourceDocument["body"], controlAlias: stri
   const aliases = new Set([...body.flow_bindings.flatMap((binding) => [binding.id, binding.event_id]),
     ...body.events.map((entry) => entry.id)]);
   const id = keyFrom(`binding_${flowKey}`, aliases);
-  const eventId = keyFrom(`event_${flowKey}`, aliases);
-  if (id === undefined || eventId === undefined) return refuse("No free name could be made for the binding. Choose another name.");
+  if (id === undefined) return refuse("No free name could be made for the binding. Choose another name.");
   const page = body.pages.find((candidate) => sourcePageItems(candidate.composition).some((item) => item.props.id === controlAlias));
-  if (page !== undefined && "record_type" in page && typeof page.record_type === "string") {
+  const recordType = page !== undefined && "record_type" in page && typeof page.record_type === "string" ? page.record_type : undefined;
+  // A binding is unique by its control and event, so every control of one record type raising one
+  // kind of event shares that record type's one declared event of that kind.
+  const declared = new Set(body.events.filter((entry) => entry.record_type === recordType).map((entry) => entry.id));
+  const shared = recordType === undefined ? undefined
+    : body.flow_bindings.find((binding) => binding.event === event && declared.has(binding.event_id))?.event_id;
+  const eventId = shared ?? keyFrom(recordType === undefined ? `event_${flowKey}`
+    : `event_${recordType.slice(recordType.lastIndexOf(":") + 1)}_${event}`, aliases);
+  if (eventId === undefined) return refuse("No free name could be made for the binding's event. Choose another name.");
+  if (recordType !== undefined && shared === undefined) {
     if (body.events.length >= 100) refuse("An application can declare at most 100 events, so no more controls can be bound.");
-    body.events.push({ id: eventId, key: `vortex.app.events.${eventId}`, record_type: page.record_type, carries: [],
+    body.events.push({ id: eventId, key: `vortex.app.events.${eventId}`, record_type: recordType, carries: [],
       personal_or_sensitive_values_allowed: false });
   }
   body.flow_bindings.push({ id, control: controlAlias, event_id: eventId, event, flow: flowKey, inputs });

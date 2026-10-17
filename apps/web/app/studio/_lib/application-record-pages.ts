@@ -15,7 +15,7 @@ import {
   type StudioFlowCreateCommand,
 } from "@vortex/ui/studio";
 import {
-  blockItem, emptyPageData, judged, newestRelease, placeNewPage, quoted, refuse, uniqueKey,
+  blockItem, emptyPageData, judged, newestRelease, placeNewPage, quoted, refuse, StructureRefusal, uniqueKey,
   type Page, type Source, type StructureRelease, type StudioStructureContext, type StudioStructureResult,
 } from "./application-structure-common";
 
@@ -330,7 +330,7 @@ const opensAny = (source: Source, page: Page, targets: readonly string[]): boole
 
 const addList = (context: StudioStructureContext, plan: Plan, resolved: Resolved, command: StudioRecordPageCommand) => {
   const { record, title } = resolved;
-  const wanted = keyColumns(record, title);
+  const wanted = keyColumns(record, title, resolved.readable);
   const query = listQuery(plan, resolved, wanted);
   const columns = wanted.filter((entry) => query.select.includes(entry.key));
   const tableAlias = freshAlias(plan, `table_${record.key}`);
@@ -358,45 +358,62 @@ const addList = (context: StudioStructureContext, plan: Plan, resolved: Resolved
   return placedPage.page;
 };
 
-/** A table of each owned record type that links to this one, on its own query of the linked records. */
+/**
+ * A table of each owned record type that links to this one, on its own query of the linked
+ * records, seen only by people who can open that record type's pages. A record type whose pages
+ * cannot be made (no title field, no read permission, an unreadable link field) or whose module
+ * has no room for one more query is named and left out; the rest of the page is still made.
+ */
 const relatedTables = (context: StudioStructureContext, plan: Plan, resolved: Resolved): SourceItem[] =>
   plan.source.body.modules.flatMap((module) => module.record_types.flatMap((child) => child.relationships
     .filter((relationship) => relationship.to_record_type === resolved.qualified && relationship.cardinality === "many_to_one")
     .flatMap((relationship) => {
+      let childResolved: Resolved;
+      try { childResolved = resolveRecordType(plan.source, `${module.key}:${child.key}`); }
+      catch (error) {
+        if (!(error instanceof StructureRefusal)) throw error;
+        plan.details.push(`${child.plural_name} link here but are not listed: ${error.message}`);
+        return [];
+      }
       const link = child.fields.find((entry) => entry.key === relationship.from_field);
-      const childTitle = child.fields.find((entry) => entry.key === child.title_field);
-      if (link === undefined || childTitle === undefined) {
-        plan.details.push(`${child.plural_name} link here but have no title field, so they are not listed.`);
+      if (link === undefined || !childResolved.readable.has(link.key)) {
+        plan.details.push(`${child.plural_name} link here but are not listed: their link field is not readable under their read permission.`);
         return [];
       }
       const input = resolved.record.key;
-      const select = [...keyColumns(child, childTitle).map((entry) => entry.key).filter((key) => key !== link.key), link.key];
+      const select = [...keyColumns(child, childResolved.title, childResolved.readable).map((entry) => entry.key)
+        .filter((key) => key !== link.key), link.key];
       const existing = module.queries.find((query) => query.record_type === child.key && query.inputs.length === 1 &&
         query.inputs[0]!.key === input && JSON.stringify(query.filter) === JSON.stringify({ field: link.key, operator: "equals", parameter: input }));
       let query = existing;
       if (query === undefined) {
-        if (module.queries.length >= 100) refuse(`${quoted(module.name)} already holds 100 queries, so ${child.plural_name.toLowerCase()} cannot be listed here.`);
+        if (module.queries.length >= 100) {
+          plan.details.push(`${child.plural_name} link here but are not listed: ${quoted(module.name)} already holds 100 queries.`);
+          return [];
+        }
         const key = uniqueKey(`${child.plural_name} of ${resolved.record.name}`, "", new Set(module.queries.map((entry) => entry.key)), 40);
         query = { id: freshAlias(plan, `qry_${key}`), key, label: `${child.plural_name} of one ${lowerFirst(resolved.record.name)}`,
           record_type: child.key, inputs: [{ key: input, label: resolved.record.name, required: true, type: "record_reference",
             record_types: [resolved.qualified] }], select, filter: { field: link.key, operator: "equals", parameter: input },
-          group_by: [], aggregates: [], sort: [{ field: childTitle.key, direction: "ascending" }], page_size: pageSize,
+          group_by: [], aggregates: [], sort: [{ field: childResolved.title.key, direction: "ascending" }], page_size: pageSize,
           relationship_hops: 0 } as unknown as Query;
         module.queries.push(query);
       }
-      const shown = child.fields.filter((entry) => query.select.includes(entry.key) && entry.key !== link.key);
-      plan.details.push(`A table of the ${child.plural_name.toLowerCase()} whose ${link.label} is this ${lowerFirst(resolved.record.name)}, showing ${listing(shown.map((entry) => entry.label))}${existing === undefined ? ` (a new query ${quoted(query.label ?? query.key)})` : ""}.`);
+      const shown = child.fields.filter((entry) => query.select.includes(entry.key) && entry.key !== link.key &&
+        childResolved.readable.has(entry.key));
+      const viewPermission = childResolved.permission(plan.source, "read", plan.details);
+      plan.details.push(`A table of the ${child.plural_name.toLowerCase()} whose ${link.label} is this ${lowerFirst(resolved.record.name)}, showing ${listing(shown.map((entry) => entry.label))}, seen only by people who can open ${child.plural_name.toLowerCase()}${existing === undefined ? ` (a new query ${quoted(query.label ?? query.key)})` : ""}.`);
       return [blockItem(release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE, "records table"),
         freshAlias(plan, `table_${child.key}_of_${resolved.record.key}`), {
           title: child.plural_name, empty_message: `No ${child.plural_name.toLowerCase()} link to this ${lowerFirst(resolved.record.name)} yet.`,
           columns: shown.map((entry) => ({ field: `${module.key}:${child.key}.${entry.key}`, label: entry.label })),
           query_parameters: [{ input, source: "page", page_parameter: "record_id" }],
-        }, {}, { query: `${module.key}:${query.key}` })];
+        }, {}, { query: `${module.key}:${query.key}`, view_permission: viewPermission })];
     })));
 
 const addDetail = (context: StudioStructureContext, plan: Plan, resolved: Resolved, command: StudioRecordPageCommand) => {
   const { record } = resolved;
-  const shown = record.fields.filter((entry) => entry.type !== "attachment");
+  const shown = record.fields.filter((entry) => entry.type !== "attachment" && resolved.readable.has(entry.key));
   const detailAlias = freshAlias(plan, `detail_${record.key}`);
   const detail = blockItem(release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE, "record detail"), detailAlias, {
     title: record.name, detail_fields: shown.map((entry) => ({ field: field(resolved, entry), label: entry.label })),
@@ -415,7 +432,8 @@ const addDetail = (context: StudioStructureContext, plan: Plan, resolved: Resolv
     openButton(context, plan, "Edit", resolved.permission(plan.source, "update", plan.details), found.edit, resolved, { beside: detailAlias });
     plan.details.push(`An ${quoted("Edit")} button opens ${quoted(found.edit.name)} with this ${lowerFirst(record.name)}.`);
   } else plan.details.push(`No Edit button yet: ${record.plural_name.toLowerCase()} have no edit form. Adding one puts the button here.`);
-  for (const list of found.list) {
+  for (const listId of found.list.map((entry) => entry.id)) {
+    const list = plan.source.body.pages.find((entry) => entry.id === listId)!;
     const table = recordTable(plan.source, list, resolved);
     if (table === undefined || table.props.row_click !== undefined) continue;
     const tableRelease = context.catalogue.releases.find((entry) => String(entry.blockId) === table.props.vortex.block.block_id &&
@@ -430,16 +448,27 @@ const addDetail = (context: StudioStructureContext, plan: Plan, resolved: Resolv
   return page;
 };
 
-/** The fields a form of the record type asks for; a required field no input can draw refuses the form. */
-const formFields = (resolved: Resolved): Field[] => {
+/**
+ * The fields a form of the record type asks for: those people change (not produced by the
+ * platform), that the create or update permission lets them change, and that a form input draws.
+ * A required field left out by either rule refuses the form, naming the field and the rule.
+ */
+const formFields = (resolved: Resolved, mode: "create" | "update"): Readonly<{ fields: Field[]; left: string[] }> => {
+  const changeable = resolved.fieldAccess(mode, "changeable_fields");
   const editable = resolved.record.fields.filter((entry) => changeableByPeople(entry));
-  const missing = editable.filter((entry) => !inputTypes.has(entry.type));
-  const required = missing.find((entry) => entry.required);
-  if (required !== undefined)
-    refuse(`${quoted(required.label)} is required, and no form input exists for ${required.type.replaceAll("_", " ")} fields, so a form cannot save a ${lowerFirst(resolved.record.name)}. Make it optional or change its type in Data first.`);
-  const fields = editable.filter((entry) => inputTypes.has(entry.type));
-  if (fields.length === 0) refuse(`${resolved.record.plural_name} have no field a person can fill in, so a form has nothing to ask.`);
-  return fields;
+  for (const entry of editable.filter((candidate) => candidate.required)) {
+    if (!changeable.has(entry.key))
+      refuse(`${quoted(entry.label)} is required, and the ${mode} permission of ${quoted(resolved.record.name)} does not let people change it, so a form cannot save ${resolved.record.plural_name.toLowerCase()}. Add it to that permission's changeable fields in Access first.`);
+    if (!inputTypes.has(entry.type))
+      refuse(`${quoted(entry.label)} is required, and no form input exists for ${entry.type.replaceAll("_", " ")} fields, so a form cannot save ${resolved.record.plural_name.toLowerCase()}. Make it optional or change its type in Data first.`);
+  }
+  const fields = editable.filter((entry) => changeable.has(entry.key) && inputTypes.has(entry.type));
+  if (fields.length === 0) refuse(`${resolved.record.plural_name} have no field people can fill in under the ${mode} permission, so a form has nothing to ask.`);
+  const left = [
+    ...editable.filter((entry) => !changeable.has(entry.key)).map((entry) => `${entry.label} (not changeable under the ${mode} permission)`),
+    ...editable.filter((entry) => changeable.has(entry.key) && !inputTypes.has(entry.type)).map((entry) => `${entry.label} (no form input draws it)`),
+  ];
+  return { fields, left };
 };
 
 /** The Save flow of a form: the one default `record.save` step, then opening the saved record's detail or the list. */
@@ -475,7 +504,7 @@ const formBlock = (context: StudioStructureContext, plan: Plan, resolved: Resolv
 
 const addForm = (context: StudioStructureContext, plan: Plan, resolved: Resolved, command: StudioRecordPageCommand, mode: "create" | "update") => {
   const { record } = resolved;
-  const fields = formFields(resolved);
+  const { fields, left } = formFields(resolved, mode);
   const name = `${mode === "create" ? "New" : "Edit"} ${lowerFirst(record.name)}`.slice(0, 60);
   const { frame, formAlias } = formBlock(context, plan, resolved, name, fields, "Save");
   const placedPage = placeNewPage(plan.source, name, { type: "form", record_type: resolved.qualified,
@@ -484,12 +513,11 @@ const addForm = (context: StudioStructureContext, plan: Plan, resolved: Resolved
   plan.source = judged(placedPage.source);
   plan.details.unshift(`A page ${quoted(name)}, for people who can ${mode === "create" ? "create" : "change"} ${record.plural_name.toLowerCase()}${command.addToMenu ? ", with a menu entry" : ""}.`);
   plan.details.push(`A form asks for ${listing(fields.map((entry) => entry.label))}, with a Save button.`);
-  const left = record.fields.filter((entry) => changeableByPeople(entry) && !fields.includes(entry));
-  if (left.length > 0) plan.details.push(`Left out, as no form input draws them: ${listing(left.map((entry) => entry.label))}.`);
+  if (left.length > 0) plan.details.push(`Left out: ${listing(left)}.`);
   const flowName = mode === "create" ? `Save new ${lowerFirst(record.name)}` : `Save ${lowerFirst(record.name)} changes`;
   const parts = saveFlowParts(plan, resolved, mode);
   flowCreate(plan, { kind: "control", controlAlias: formAlias, event: "form_submit", name: flowName,
-    description: mode === "create" ? `Saves a new ${lowerFirst(record.name)} from ${quoted(name)}.` : `Saves the changes to a ${lowerFirst(record.name)} from ${quoted(name)}.`,
+    description: mode === "create" ? `Saves a new ${lowerFirst(record.name)} from ${quoted(name)}.` : `Saves the changes to one ${lowerFirst(record.name)} from ${quoted(name)}.`,
     inputs: parts.inputs, tasks: parts.tasks, outputs: parts.outputs, bindingInputs: parts.bindingInputs }, `The flow ${quoted(flowName)}`);
   plan.details.push(`Submitting the form runs the flow ${quoted(flowName)}: one Save record step${parts.tasks.length > 1 ? " and one Open page step" : ""}.`);
   linkFormBack(context, plan, resolved, placedPage.page, mode);
@@ -500,7 +528,9 @@ const addForm = (context: StudioStructureContext, plan: Plan, resolved: Resolved
 const linkFormBack = (context: StudioStructureContext, plan: Plan, resolved: Resolved, page: Page, mode: "create" | "update") => {
   const found = companions(plan.source, resolved.qualified);
   if (mode === "create") {
-    for (const list of found.list) {
+    for (const listId of found.list.map((entry) => entry.id)) {
+      // Each button's flow-create replaces the draft, so the list page is read again from the current one.
+      const list = plan.source.body.pages.find((entry) => entry.id === listId)!;
       if (opensAny(plan.source, list, plan.source.body.pages.filter((entry) => entry.id !== page.id &&
         (entry.type === "form" || entry.type === "guided_form") && "record_type" in entry && entry.record_type === resolved.qualified).map((entry) => entry.key)))
         continue;
@@ -530,7 +560,8 @@ const linkFormBack = (context: StudioStructureContext, plan: Plan, resolved: Res
 
 const addGuided = (context: StudioStructureContext, plan: Plan, resolved: Resolved, command: StudioRecordPageCommand) => {
   const { record } = resolved;
-  const fields = formFields(resolved);
+  const { fields, left } = formFields(resolved, "create");
+  if (left.length > 0) plan.details.push(`Left out: ${listing(left)}.`);
   const name = `New ${lowerFirst(record.name)} step by step`.slice(0, 60);
   const chunks: Field[][] = [];
   for (let index = 0; index < fields.length; index += fieldsPerStep) chunks.push(fields.slice(index, index + fieldsPerStep));
@@ -582,6 +613,14 @@ export const addRecordPage = (context: StudioStructureContext, candidate: Source
   command: StudioRecordPageCommand): StudioStructureResult => {
   const resolved = resolveRecordType(candidate, command.recordType);
   if (!studioRecordPageKinds.some((entry) => entry.kind === command.type)) return refuse("Choose which page to add.");
+  if (command.addToMenu && (command.type === "detail" || command.type === "form_edit"))
+    refuse(`${command.type === "detail" ? "A detail page" : "An edit form"} opens one ${lowerFirst(resolved.record.name)}, so it cannot be a menu entry. Add it without one.`);
+  const found = companions(candidate, resolved.qualified);
+  const existing = command.type === "list" ? found.list[0] : command.type === "detail" ? found.detail
+    : command.type === "form_create" ? found.create : command.type === "form_edit" ? found.edit
+      : candidate.body.pages.find((entry) => entry.type === "guided_form" && "record_type" in entry && entry.record_type === resolved.qualified);
+  if (existing !== undefined)
+    refuse(`${resolved.record.plural_name} already have ${/^[aeiou]/.test(kindWords[command.type]) ? "an" : "a"} ${kindWords[command.type]}: ${quoted(existing.name)}. Open it in Structure and change it there.`);
   const plan: Plan = { source: candidate, details: [], taken: takenIds(candidate) };
   const page = command.type === "list" ? addList(context, plan, resolved, command)
     : command.type === "detail" ? addDetail(context, plan, resolved, command)

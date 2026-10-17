@@ -49,7 +49,7 @@ import {
   validateStoredZone,
   storedZoneAliases,
   withCopiedFlowBindings,
-  withoutFlowBindingsOf,
+  removeFlowBindingsOf,
   syncStoredBlockDependencies,
 } from "./stored-composition";
 import {
@@ -483,8 +483,8 @@ function ApplicationPageSlotPuckEditor({
         throw new TypeError("The selected page is unavailable.");
       const kept = storedZoneAliases(editedSlot);
       const removed = new Set([...storedZoneAliases(targetSlot)].filter((alias) => !kept.has(alias)));
-      next.body.flow_bindings = withoutFlowBindingsOf(
-        withCopiedFlowBindings(next.body.flow_bindings, copies), removed);
+      next.body.flow_bindings = withCopiedFlowBindings(next.body.flow_bindings, copies);
+      removeFlowBindingsOf(next.body, removed);
       syncStoredBlockDependencies(next);
       const parsed = applicationSourceDocumentSchema.safeParse(next);
       if (!parsed.success) throw parsed.error;

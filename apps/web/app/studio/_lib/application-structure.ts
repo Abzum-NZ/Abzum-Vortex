@@ -10,6 +10,7 @@ import {
 } from "@vortex/platform/schema";
 import {
   StoredCompositionRefusal,
+  removeFlowBindingsOf,
   studioPlacementRemovalReference,
   validateStoredShell,
   type StudioCompositionRemovalReason,
@@ -107,7 +108,7 @@ const flowReferenceWords: Readonly<Record<StudioCompositionRemovalReason, string
 const removeBlocks = (context: StudioStructureContext, source: Source, leaving: readonly SourceItem[], what: string): void => {
   const aliases = new Set(placementsOf(context.source).map(({ item }) => item.props.id));
   const removed = new Set(leaving.map((item) => item.props.id));
-  source.body.flow_bindings = source.body.flow_bindings.filter((binding) => !removed.has(binding.control));
+  removeFlowBindingsOf(source.body, removed);
   for (const item of leaving) {
     const reason = studioPlacementRemovalReference(source, item.props.id, aliases);
     if (reason !== undefined) {

@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
@@ -32,11 +32,22 @@ export function StudioRecordPageForm({ source, disabled, onPreview, onCommand, o
   const [kind, setKind] = useState<StudioRecordPageKind>("list");
   const [shellChoice, setShellChoice] = useState(studioStructureDefaultShell(source) ?? "");
   const [addToMenu, setAddToMenu] = useState(true);
+  // A detail page or edit form opens one record, so it is never a menu entry; a list starts in the menu.
+  const menuAllowed = kind === "list" || kind === "form_create" || kind === "guided";
+  const chooseKind = (next: StudioRecordPageKind) => { setKind(next); setAddToMenu(next === "list"); };
   const effectiveRecordType = recordTypes.some((entry) => entry.recordType === recordType) ? recordType : recordTypes[0]?.recordType ?? "";
   const command = useMemo((): StudioRecordPageCommand => ({ kind: "add_record_page", recordType: effectiveRecordType, type: kind,
-    shellAlias: shellChoice === "" ? null : shellChoice, addToMenu }), [effectiveRecordType, kind, shellChoice, addToMenu]);
-  // The preview follows the choices and the draft (an edited draft is a new source), not the callback's identity.
-  const preview = useMemo(() => effectiveRecordType === "" ? undefined : onPreview(command), [source, command]);
+    shellAlias: shellChoice === "" ? null : shellChoice, addToMenu: menuAllowed && addToMenu }),
+  [effectiveRecordType, kind, shellChoice, addToMenu, menuAllowed]);
+  // The preview runs the generator on the draft a moment after the choices settle (an edited draft
+  // is a new source), not on every change, and not on the callback's identity.
+  const [preview, setPreview] = useState<Readonly<{ command: StudioRecordPageCommand; result: StudioStructureResult }> | undefined>();
+  useEffect(() => {
+    if (effectiveRecordType === "") return;
+    const timer = setTimeout(() => setPreview({ command, result: onPreview(command) }), 250);
+    return () => clearTimeout(timer);
+  }, [source, command, effectiveRecordType]);
+  const current = preview?.command === command ? preview.result : undefined;
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (onCommand(command)) onClose();
@@ -57,7 +68,7 @@ export function StudioRecordPageForm({ source, disabled, onPreview, onCommand, o
     </StudioField>
     <StudioField label="Page" hint={studioRecordPageKinds.find((entry) => entry.kind === kind)?.hint}>
       {(control) => <NativeSelect {...control} value={kind} disabled={disabled}
-        onChange={(event) => setKind(event.target.value as StudioRecordPageKind)}>
+        onChange={(event) => chooseKind(event.target.value as StudioRecordPageKind)}>
         {studioRecordPageKinds.map((entry) => <NativeSelectOption key={entry.kind} value={entry.kind}>{entry.label}</NativeSelectOption>)}
       </NativeSelect>}
     </StudioField>
@@ -68,20 +79,22 @@ export function StudioRecordPageForm({ source, disabled, onPreview, onCommand, o
           {choice.label}</NativeSelectOption>)}
       </NativeSelect>}
     </StudioField>
-    <label className="flex items-center gap-2 text-sm">
-      <Checkbox checked={addToMenu} disabled={disabled} onCheckedChange={(checked) => setAddToMenu(checked === true)} />
-      Show it in the menu
-    </label>
-    <section aria-label="What will be added" className="space-y-1 rounded-md bg-muted p-2">
+    {menuAllowed
+      ? <label className="flex items-center gap-2 text-sm">
+        <Checkbox checked={addToMenu} disabled={disabled} onCheckedChange={(checked) => setAddToMenu(checked === true)} />
+        Show it in the menu
+      </label>
+      : <p className="text-sm text-muted-foreground">It opens one record, so it is reached from the list, not the menu.</p>}
+    <section aria-label="What will be added" aria-busy={current === undefined} className="space-y-1 rounded-md bg-muted p-2">
       <p className="text-sm font-medium">What will be added</p>
-      {preview === undefined ? null : preview.kind === "refused"
-        ? <p role="alert" className="text-sm text-destructive">{preview.message}</p>
+      {current === undefined ? <p className="text-sm text-muted-foreground">Working it out…</p> : current.kind === "refused"
+        ? <p role="alert" className="text-sm text-destructive">{current.message}</p>
         : <ul className="list-disc space-y-1 pl-4 text-sm text-muted-foreground">
-          {preview.details.map((detail, index) => <li key={index}>{detail}</li>)}
+          {current.details.map((detail, index) => <li key={index}>{detail}</li>)}
         </ul>}
     </section>
     <div className="flex gap-2">
-      <Button type="submit" size="sm" disabled={disabled || preview?.kind !== "applied"}>Add page</Button>
+      <Button type="submit" size="sm" disabled={disabled || current?.kind !== "applied"}>Add page</Button>
       <Button type="button" size="sm" variant="ghost" onClick={onClose}>Cancel</Button>
     </div>
   </form>;
