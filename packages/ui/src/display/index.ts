@@ -74,7 +74,7 @@ export { SummaryValuesDisplay } from "./summary-values";
 export { type DisplayRenderProps } from "./context";
 
 // Display Registrations & Registry
-export { DISPLAY_COMPONENT_REGISTRATIONS, createDisplayComponentRegistry } from "./registrations";
+export { DISPLAY_COMPONENT_REGISTRATIONS } from "./registrations";
 
 export {
   QueryNoticeDisplay,
