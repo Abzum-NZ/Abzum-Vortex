@@ -6,7 +6,9 @@ security definer
 set search_path = ''
 as $function$
   select person.record_id, person.attribute_values ->> 'display_name'
-  from vortex_access.list_organization_accounts_projection(null, null, p_record_ids) as person
+  from vortex_access.list_organization_accounts_projection(
+    p_record_ids, 'record_id', 'ascending', null, null
+  ) as person
   where person.record_id = any(p_record_ids)
     and pg_catalog.length(pg_catalog.btrim(person.attribute_values ->> 'display_name')) > 0
 $function$;
