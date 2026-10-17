@@ -21,6 +21,7 @@ import {
   type SourcePageZone,
   type StoredDefinitionDraft,
   type ModuleField,
+  type PeopleDirectoryOwner,
 } from "@vortex/platform/schema";
 import type { DatabaseRow } from "@vortex/platform/server";
 import {
@@ -79,7 +80,7 @@ const loadFailure = (operation: string, error: unknown): StudioApplicationFailur
 };
 
 type StudioApplicationLoadResult =
-  | Readonly<{ kind: "available"; organizationId: OrganizationId; draft: StoredApplicationDefinitionDraft; compiledFields: StudioCompiledFields | null; borrowedChoices: StudioBorrowedChoices | null; usedModules: readonly StudioDataModule[] | null; published: StudioPublishedData | null; pageCompiledSlots: StudioApplicationCompiledPageSlots | null; canvasFrames: StudioApplicationCanvasFrames | null; compileFailure: StudioCompileFailure | null }>
+  | Readonly<{ kind: "available"; organizationId: OrganizationId; draft: StoredApplicationDefinitionDraft; compiledFields: StudioCompiledFields | null; borrowedChoices: StudioBorrowedChoices | null; usedModules: readonly StudioDataModule[] | null; published: StudioPublishedData | null; peopleDirectory: PeopleDirectoryOwner | null; pageCompiledSlots: StudioApplicationCompiledPageSlots | null; canvasFrames: StudioApplicationCanvasFrames | null; compileFailure: StudioCompileFailure | null }>
   | StudioApplicationFailure;
 
 type SourcePage = StoredApplicationDefinitionDraft["source"]["body"]["pages"][number];
@@ -288,6 +289,7 @@ export const loadStudioApplicationDraft = async (
         borrowedChoices: StudioBorrowedChoices | null;
         usedModules: readonly StudioDataModule[] | null;
         published: StudioPublishedData | null;
+        peopleDirectory: PeopleDirectoryOwner | null;
       }>>> => {
         const authority = createBuilderAuthority({ transaction, scope, targetFacts: studioDraftTargetFacts, permissions: platformPermissionSource });
         try {
@@ -309,6 +311,7 @@ export const loadStudioApplicationDraft = async (
         let borrowedChoices: StudioBorrowedChoices | null = null;
         let usedModules: StudioDataModule[] | null = null;
         let published: StudioPublishedData | null = null;
+        let peopleDirectory: PeopleDirectoryOwner | null = null;
         if (options.compile !== false) try {
           const context = await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt });
           const compiled = await createDatabaseDefinitionPublicationService(installedReleaseCatalogue, transaction, authority)
@@ -401,6 +404,7 @@ export const loadStudioApplicationDraft = async (
             actions: borrowedActions, relationships: borrowedRelationships };
           usedModules = used;
           published = compiled.published;
+          peopleDirectory = compiled.peopleDirectory;
           compiledFields = { draftRevision: draft.draftRevision, recordTypes: fieldsByRecord };
         } catch (error) {
           // A failed metadata refresh never makes old choices authoritative or changes the draft.
@@ -409,7 +413,7 @@ export const loadStudioApplicationDraft = async (
           console.error("STUDIO_DRAFT_COMPILE_FAILED", compileFailure.reasonCode, compileFailure.family, error);
           compiledFields = null;
         }
-        return { kind: "available", value: { organizationId: scope.organizationId, draft, compiledFields, borrowedChoices, usedModules, published, pageCompiledSlots, canvasFrames, compileFailure } };
+        return { kind: "available", value: { organizationId: scope.organizationId, draft, compiledFields, borrowedChoices, usedModules, published, peopleDirectory, pageCompiledSlots, canvasFrames, compileFailure } };
       },
     );
     if (result.kind === "available")
