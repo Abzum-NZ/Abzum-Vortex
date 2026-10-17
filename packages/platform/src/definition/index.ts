@@ -31,6 +31,7 @@ export {
   readCurrentFirstInstallCandidate,
   type FirstInstallEnvironment,
   type FirstInstallFlowEnvironment,
+  type FirstInstallHistoryReads,
 } from "./installation-first-install-app";
 export {
   createFirstInstallCoordinator,
@@ -43,6 +44,11 @@ export {
   type FirstInstallMemberRoleChoice,
 } from "./installation-first-install-member-role";
 export { classifyInstallationFailure } from "./installation-failure";
+export {
+  createApplicationStoreService,
+  type ApplicationStoreEnvironment,
+  type ApplicationStoreService,
+} from "./installation-application-store";
 export {
   activateUpgradeRelease,
   readUpgradeActiveObservation,

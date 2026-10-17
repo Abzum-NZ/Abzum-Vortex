@@ -107,6 +107,8 @@ export type StudioWorkspacePlace = Readonly<{
   organizationName: string;
   /** The running application, for Back to app; absent when the organisation's address is unknown. */
   applicationHref: string | undefined;
+  /** The App Store, where a published version is installed or upgraded to; absent like the above. */
+  appStoreHref: string | undefined;
 }>;
 
 type WorkspaceProps = Readonly<{
@@ -1325,7 +1327,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       hasUnsavedChanges={state.isDirty} saving={state.isSaving} onSave={() => { void save(); }}
       canPrepare={canPrepare} preparing={preparing} publishing={busy.isRendered("publication") && !preparing}
       prepared={preparedPublication} note={publicationNote} onNoteChange={setPublicationNote}
-      problem={publicationProblem} published={publishedPublication}
+      problem={publicationProblem} published={publishedPublication} appStoreHref={place.appStoreHref}
       onPrepare={() => { void requestPublication("prepare"); }}
       onPublish={() => { void requestPublication("publish"); }} />
     <StudioBlockSetupDialog request={blockSetup} choices={draftChoices} onClose={() => setBlockSetup(null)} />

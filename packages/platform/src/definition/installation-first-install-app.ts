@@ -131,7 +131,7 @@ type FirstInstallHistoryFailure = Readonly<{
  * The draft-history reads a first install is anchored to. History is owned by the Studio
  * application; the first install only asks it for the draft identity and one release's metadata.
  */
-type FirstInstallHistoryReads = Readonly<{
+export type FirstInstallHistoryReads = Readonly<{
   readAccess: (
     organizationId: OrganizationId,
     rootId: ApplicationRootId,
@@ -144,7 +144,7 @@ type FirstInstallHistoryReads = Readonly<{
     | Readonly<{
         kind: "available";
         snapshot: Readonly<{ definitionKey: string }>;
-        metadata: Readonly<{ releaseRevision: number; releaseVersion: string }>;
+        metadata: Readonly<{ releaseRevision: number; releaseVersion: string; releaseNote: string }>;
       }>
   >;
 }>;

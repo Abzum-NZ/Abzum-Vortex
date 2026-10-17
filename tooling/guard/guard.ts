@@ -102,9 +102,26 @@ function violatesLayering(file: string, specifier: string): boolean {
         (target === "ui" && fileArea === "definitions")))
   );
 }
+// Platform system applications (IAM, the App Store and the other administration applications) are
+// part of the platform, which links to them; only business applications are kept out of engines.
+// Their source directories are the ones shipped-sources.ts registers as platform system applications.
+const shippedSources = read(`${paths.applicationSources}shipped-sources.ts`);
+const sourceDirectories = new Map(
+  [...shippedSources.matchAll(/import \{ (\w+) \} from "\.\/([\w-]+)";/g)].map(
+    ([, name, directory]) => [name, directory] as const,
+  ),
+);
+const systemApplicationFiles = new Set(
+  [...shippedSources.matchAll(/source: (\w+),\s*applicationOriginKind: "platform_system_application"/g)].map(
+    ([, name]) => `${paths.applicationSources}${sourceDirectories.get(name ?? "") ?? "?"}/application.json`,
+  ),
+);
 const names = new Set<string>();
 for (const file of files.filter(
-  (file) => file.startsWith(paths.applicationSources) && /\/application\.json$/.test(file),
+  (file) =>
+    file.startsWith(paths.applicationSources) &&
+    /\/application\.json$/.test(file) &&
+    !systemApplicationFiles.has(file),
 )) {
   const source = JSON.parse(read(file)) as { key?: string; body?: { name?: string } };
   if (source.key) names.add(source.key);

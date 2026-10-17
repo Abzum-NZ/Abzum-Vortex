@@ -14,7 +14,13 @@ import {
 
 export const dynamic = "force-dynamic";
 
-/** The organisation's name and the running application's address, for the top bar's breadcrumb and Back to app. */
+/** The App Store, the one place an organisation installs and upgrades its applications. */
+const appStoreKey = "vortex.app.app_store";
+
+/**
+ * The organisation's name and addresses: the running application, for the breadcrumb and Back to app,
+ * and the App Store, which a publish points to for installing or upgrading.
+ */
 const loadWorkspacePlace = async (organizationId: string, applicationKey: string): Promise<StudioWorkspacePlace> => {
   const resolved = await resolveIdentitySession();
   const launcher = resolved.kind === "active" ? await loadOrganizationLauncher(resolved.session) : undefined;
@@ -22,11 +28,13 @@ const loadWorkspacePlace = async (organizationId: string, applicationKey: string
     ? launcher.entries.find((candidate) => candidate.organizationId === organizationId) : undefined;
   if (entry === undefined) {
     console.error(`[studio] workspace place unavailable: session ${resolved.kind}, launcher ${launcher?.kind ?? "not read"}`);
-    return { organizationName: "Organisation", applicationHref: undefined };
+    return { organizationName: "Organisation", applicationHref: undefined, appStoreHref: undefined };
   }
+  const organizationPath = organizationAddressPath(entry.tenantShortName, entry.organizationShortName);
   return {
     organizationName: entry.organizationDisplayName,
-    applicationHref: `${organizationAddressPath(entry.tenantShortName, entry.organizationShortName)}/${encodeURIComponent(applicationKey)}`,
+    applicationHref: `${organizationPath}/${encodeURIComponent(applicationKey)}`,
+    appStoreHref: `${organizationPath}/${encodeURIComponent(appStoreKey)}`,
   };
 };
 

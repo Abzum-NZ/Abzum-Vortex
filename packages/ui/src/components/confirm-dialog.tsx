@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { Button } from "./button";
-import { Checkbox } from "./checkbox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,11 +27,6 @@ type ConfirmPrompt = Readonly<{
   destructive?: boolean;
   /** What the decision covers in detail, shown under the message. */
   details?: ReactNode;
-  /**
-   * One explicit opt-in that goes with a yes, such as accepting role changes with an upgrade.
-   * It starts unticked for every prompt; `onChange` reports each change to the caller.
-   */
-  choice?: Readonly<{ label: string; onChange: (checked: boolean) => void }>;
 }>;
 
 type PendingPrompt = {
@@ -102,8 +96,6 @@ export function useConfirm(): readonly [(prompt: ConfirmPrompt) => Promise<boole
   }, []);
 
   const prompt = open?.prompt;
-  const [choiceChecked, setChoiceChecked] = useState(false);
-  useEffect(() => { setChoiceChecked(false); }, [open]);
   const dialog: ReactElement = <AlertDialog
     open={open !== null}
     onOpenChange={(nextOpen) => { if (!nextOpen) requestDismiss(); }}>
@@ -113,13 +105,6 @@ export function useConfirm(): readonly [(prompt: ConfirmPrompt) => Promise<boole
         <AlertDialogDescription>{prompt?.description ?? ""}</AlertDialogDescription>
       </AlertDialogHeader>
       {prompt?.details !== undefined && <div className="max-h-80 space-y-2 overflow-y-auto text-sm">{prompt.details}</div>}
-      {prompt?.choice !== undefined && <label className="flex items-center gap-2 text-sm">
-        <Checkbox checked={choiceChecked} onCheckedChange={(checked) => {
-          setChoiceChecked(checked);
-          prompt.choice?.onChange(checked);
-        }} />
-        <span>{prompt.choice.label}</span>
-      </label>}
       <AlertDialogFooter>
         <AlertDialogCancel onClick={() => answerByPress(false)}>{prompt?.cancelLabel ?? "Cancel"}</AlertDialogCancel>
         <AlertDialogAction

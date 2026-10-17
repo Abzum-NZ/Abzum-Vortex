@@ -391,6 +391,7 @@ export {
   type BrowserFlowResult,
   type FlowApplicationAddress,
   type FlowBindingReference,
+  type FlowConfirmAnswer,
   type FlowConfirmIntent,
   type FlowDispatchResult,
   type FormBlockRuntime,

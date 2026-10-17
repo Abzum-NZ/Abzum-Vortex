@@ -53,6 +53,7 @@ import { flowReadFieldsScalarTypeForField } from "./flow-compilation";
 import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
 import { installedNamedActionDescriptors, installedNamedActions } from "./installed-named-actions";
 import { createProtectedOperationExecutor } from "./protected-operation-executor";
+import type { ApplicationStoreService } from "./installation-application-store";
 import { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";
 import type { QueryContinuationKey } from "../queries/continuation-token";
 import {
@@ -98,6 +99,8 @@ type GuidedInvocationPage = Readonly<{
 
 type InvocationDependencies = Readonly<{
   authorityId: IdentityAuthorityId;
+  /** The application catalogue's install and upgrade journeys, run under the initiator's authority. */
+  applicationStore: ApplicationStoreService;
   channel: ProtectedOperationChannel;
   telemetry: NonNullable<Parameters<typeof createRecordSaveService>[0]["telemetry"]>;
   releaseCatalogue: Parameters<typeof createDatabaseApplicationBoundReleaseSetService>[0];
@@ -550,6 +553,7 @@ export async function invokeInstalledFlow(
   });
   const executor = createProtectedOperationExecutor({
     accessAdministration: createOrganizationAccessAdministrationService(requestDependencies),
+    applicationStore: dependencies.applicationStore,
     tenantGovernance: {
       run: (session, selection, operation) =>
         requests.runChange(session, selection, (transaction, scope) =>

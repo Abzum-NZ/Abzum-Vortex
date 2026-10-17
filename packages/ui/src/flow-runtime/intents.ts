@@ -27,7 +27,19 @@ export const FLOW_INTENT_KINDS: readonly FlowIntentKind[] = Object.freeze([
 export type FlowFormAnswer = Extract<FormContinuationAnswer, { kind: "submit" | "cancel" }>;
 
 export type FlowMessageIntent = Readonly<{ text: string; tone: string | undefined }>;
-export type FlowConfirmIntent = Readonly<{ title: string | undefined; message: string }>;
+/**
+ * A confirmation: its question, what it covers line by line, and one optional opt-in that goes with
+ * a yes. `confirmLabel` names the answering button.
+ */
+export type FlowConfirmIntent = Readonly<{
+  title: string | undefined;
+  message: string;
+  details: readonly string[];
+  choice: string | undefined;
+  confirmLabel: string | undefined;
+}>;
+/** The person's answer to a confirmation; `choice` is set only when one was offered. */
+export type FlowConfirmAnswer = Readonly<{ confirmed: boolean; choice?: boolean }>;
 export type FlowFormIntent = Readonly<{
   taskId: string;
   formId: string;
@@ -62,10 +74,40 @@ export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undef
   return message === undefined ? undefined : { text: message, tone: text(intent.properties.tone) };
 };
 
+const maximumDetailLines = 100;
+
+/** The detail lines of a confirmation: a list of bounded texts, or none. */
+const detailLines = (candidate: JsonValue | undefined): readonly string[] | undefined => {
+  if (candidate === undefined || candidate === null) return [];
+  if (!Array.isArray(candidate) || candidate.length > maximumDetailLines) return undefined;
+  const lines = candidate.map((line) => text(line ?? undefined));
+  return lines.every((line): line is string => line !== undefined) ? lines : undefined;
+};
+
+/** Undefined when the message is missing or the detail lines are not a bounded list of texts. */
 export const readConfirmIntent = (intent: FlowIntent): FlowConfirmIntent | undefined => {
   const message = text(intent.properties.message);
-  return message === undefined ? undefined : { title: text(intent.properties.title), message };
+  const details = detailLines(intent.properties.details);
+  return message === undefined || details === undefined
+    ? undefined
+    : {
+        title: text(intent.properties.title),
+        message,
+        details,
+        choice: text(intent.properties.choice),
+        confirmLabel: text(intent.properties.confirm_label),
+      };
 };
+
+/** The resume answer for a confirmation, carrying the opt-in only when one was offered. */
+export const confirmAnswer = (
+  confirmation: FlowConfirmIntent,
+  answer: FlowConfirmAnswer,
+): Extract<FormContinuationAnswer, { kind: "confirm" }> => ({
+  kind: "confirm",
+  confirmed: answer.confirmed,
+  ...(confirmation.choice === undefined ? {} : { choice: answer.confirmed && answer.choice === true }),
+});
 
 export const readFormIntent = (intent: FlowIntent): FlowFormIntent | undefined => {
   const formId = text(intent.properties.form);
@@ -82,7 +124,7 @@ export type FlowIntentHost = Readonly<{
   showMessage: (message: FlowMessageIntent, signal?: AbortSignal) => void | Promise<void>;
   /** Resolves with the person's answer; a rejection abandons the run without answering. */
   showForm: (form: FlowFormIntent, signal?: AbortSignal) => Promise<FlowFormAnswer>;
-  confirm: (confirmation: FlowConfirmIntent, signal?: AbortSignal) => Promise<boolean>;
+  confirm: (confirmation: FlowConfirmIntent, signal?: AbortSignal) => Promise<FlowConfirmAnswer>;
   navigate: (intent: FlowIntent) => boolean | Promise<boolean>;
   refresh?: (component: string | undefined) => void | Promise<void>;
   setPanel?: (panel: string, state: string) => void | Promise<void>;
