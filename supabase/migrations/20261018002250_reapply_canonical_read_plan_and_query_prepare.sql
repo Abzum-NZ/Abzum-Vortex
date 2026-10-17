@@ -1,5 +1,8 @@
 -- #2826 and #2814 both rewrote these two functions, and #2814's migration sorts after #2826's, so a reset
 -- left #2814's older bodies live. This re-applies the canonical bodies (supabase/schemas) above both.
+set local role vortex_owner;
+
+set local role vortex_record_adapter;
 
 create or replace function vortex_record.plan_record_read_scan_internal(
   p_record_type_id uuid
@@ -1231,3 +1234,5 @@ grant execute on function vortex_record.prepare_module_query_internal(uuid, uuid
 
 comment on function vortex_record.prepare_module_query_internal(uuid, uuid, bigint, jsonb, jsonb, jsonb, text, jsonb) is
   'Shared owner-only Module query preparation for list and summary reads: derives organisation and application authority from validated_human_request_context(), resolves one installed query or the exact current human-owned preview pins, revalidates preview prior plans, exact active field mappings and preview catalogue/field bounds without using the installed read-scan routes, validates declared inputs and the published filter narrowed by the declared user filter, and returns the exact access predicate, pushed filter and residual per-row condition with bound inputs; it never accepts authority or identity from caller values.';
+
+reset role;
