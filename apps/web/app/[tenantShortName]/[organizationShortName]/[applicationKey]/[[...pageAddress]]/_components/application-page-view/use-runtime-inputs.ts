@@ -41,6 +41,7 @@ import type {
 } from "./types";
 import { bindingFor, suppliedValues, bindingOfEvent, asComponentBinding } from "./event-values";
 import { cancelledMoveNotice, unavailableNotice } from "./notices";
+import { requestRecordChoices } from "./record-choices";
 
 export function useRuntimeInputs({
   currentData,
@@ -150,6 +151,7 @@ export function useRuntimeInputs({
       ...guidedActiveFormIds,
       ...model.referenceChoiceInputs.filter((field) => field.dependency !== undefined)
         .map((field) => field.formId),
+      ...model.linkInputPlacementIds,
     ]);
     if (guidedActivePlacementIds !== undefined)
       for (const placementId of placementIds)
@@ -306,6 +308,12 @@ export function useRuntimeInputs({
         };
       if (model.referenceChoiceInputs.some((field) => field.placementId === placementId))
         events.field_changed = (event: ControlSemanticEvent) => changeChoiceField(placementId, event);
+      // A link field's picker asks for its records; the page reads them under the person's access.
+      if (model.linkInputPlacementIds.includes(placementId))
+        events.records_requested = (event: ControlSemanticEvent) => {
+          if (event.event !== "records_requested") return;
+          return requestRecordChoices(model, placementId, event, () => router.refresh());
+        };
       // An action button runs its bound flow through the same path as a display event. Inside a
       // form it reports the form's current values. A record page also supplies its verified page
       // subject for declared navigation bindings; the binding receives only the inputs it declares.
@@ -558,6 +566,7 @@ export function useRuntimeInputs({
     changeChoiceField,
     initializeChoiceForm,
     activeChoicePages,
+    model,
     model.referenceChoiceInputs,
     currentData,
     application,

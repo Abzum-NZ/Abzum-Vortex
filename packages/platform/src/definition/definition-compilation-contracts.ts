@@ -2,7 +2,10 @@ import { z } from "zod";
 import { applicationDraftSchema } from "./application-contracts";
 import { applicationCompositionCatalogueSnapshotSchema } from "./application-composition/catalogue-snapshot";
 import { applicationSourceDocumentSchema } from "./application-source-contracts";
-import { applicationSourceContractVersion } from "./application-contract-versions";
+import {
+  applicationSourceContractVersion,
+  applicationValidationContractVersion,
+} from "./application-contract-versions";
 import {
   applicationActionInputDefinitionSchema,
   publishedApplicationDefinitionSchema,
@@ -14,6 +17,7 @@ import {
   actionInputDefinitionSchema,
   moduleContractVersionPairSchema,
   moduleDraftSchema,
+  moduleValidationContractVersion,
 } from "./module-contracts";
 import { moduleSourceDocumentSchema } from "./definition-source";
 import { descriptionSchema } from "../catalogue/common";
@@ -175,7 +179,7 @@ export const moduleCompilationRequestSchema = z
 export const applicationCompilationRequestSchema = z
   .object({
     sourceContractVersion: z.literal(applicationSourceContractVersion),
-    validationContractVersion: z.literal("3.0.0"),
+    validationContractVersion: z.literal(applicationValidationContractVersion),
     source: applicationSourceDocumentSchema,
     resolution: definitionResolutionSnapshotSchema,
     catalogueSnapshot: applicationCompositionCatalogueSnapshotSchema,
@@ -359,35 +363,8 @@ export const applicationToolBundleSchema = z
 export const applicationCompilationOutputSchema = z
   .object({
     kind: z.literal("application"),
-    validationContractVersion: z.literal("3.0.0"),
+    validationContractVersion: z.literal(applicationValidationContractVersion),
     platformCompatibilityVersion: applicationPlatformCompatibilityVersionSchema,
-    canonical: applicationDraftSchema,
-    artifact: compiledApplicationArtifactSchema,
-    provenance: z.array(definitionProvenanceEntrySchema),
-    dependencyOrder: z.array(namespacedKeySchema),
-    resolvedDependencies: z.array(resolvedDefinitionSchema),
-    resolutionFingerprint: fingerprintSchema,
-    toolBundle: applicationToolBundleSchema,
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if (value.toolBundle.applicationKey !== value.canonical.envelope.key)
-      context.addIssue({
-        code: "custom",
-        path: ["toolBundle", "applicationKey"],
-        message: "A release's tool bundle belongs to the application it was compiled from",
-      });
-  });
-
-/**
- * Persisted Application releases can predate platform compatibility metadata. New compilation
- * uses the required-field schema above; immutable historical output remains readable as stored.
- */
-export const storedApplicationCompilationOutputSchema = z
-  .object({
-    kind: z.literal("application"),
-    validationContractVersion: z.literal("3.0.0"),
-    platformCompatibilityVersion: applicationPlatformCompatibilityVersionSchema.optional(),
     canonical: applicationDraftSchema,
     artifact: compiledApplicationArtifactSchema,
     provenance: z.array(definitionProvenanceEntrySchema),
@@ -409,7 +386,7 @@ export const storedApplicationCompilationOutputSchema = z
 export const moduleCompilationOutputSchema = z
     .object({
       kind: z.literal("module"),
-      validationContractVersion: z.literal("3.0.0"),
+      validationContractVersion: z.literal(moduleValidationContractVersion),
       canonical: moduleDraftSchema,
       artifact: compiledModuleArtifactSchema,
       provenance: z.array(definitionProvenanceEntrySchema),
@@ -419,38 +396,21 @@ export const moduleCompilationOutputSchema = z
     })
     .strict();
 
-const createDefinitionCompilationOutputSchema = <ApplicationSchema extends z.ZodTypeAny>(
-  moduleSchema: typeof moduleCompilationOutputSchema,
-  applicationSchema: ApplicationSchema,
-) =>
-  z.union([
-    moduleSchema,
-    applicationSchema,
-    z
-      .object({
-        kind: z.literal("connection_type"),
-        canonical: connectionTypeSchema,
-        artifact: compiledConnectionArtifactSchema,
-        provenance: z.array(definitionProvenanceEntrySchema),
-        dependencyOrder: z.array(namespacedKeySchema),
-        resolvedDependencies: z.array(resolvedDefinitionSchema),
-        resolutionFingerprint: fingerprintSchema,
-      })
-      .strict(),
-  ]);
-
-export const definitionCompilationOutputSchema = createDefinitionCompilationOutputSchema(
+export const definitionCompilationOutputSchema = z.union([
   moduleCompilationOutputSchema,
   applicationCompilationOutputSchema,
-);
-/** Stored contract dispatch only; new compilation and dependency selection stay current-only. */
-export const storedDefinitionCompilationOutputSchema = createDefinitionCompilationOutputSchema(
-  moduleCompilationOutputSchema,
-  storedApplicationCompilationOutputSchema,
-);
-export type StoredDefinitionCompilationOutput = z.infer<
-  typeof storedDefinitionCompilationOutputSchema
->;
+  z
+    .object({
+      kind: z.literal("connection_type"),
+      canonical: connectionTypeSchema,
+      artifact: compiledConnectionArtifactSchema,
+      provenance: z.array(definitionProvenanceEntrySchema),
+      dependencyOrder: z.array(namespacedKeySchema),
+      resolvedDependencies: z.array(resolvedDefinitionSchema),
+      resolutionFingerprint: fingerprintSchema,
+    })
+    .strict(),
+]);
 
 const publishedModuleHistoryEntrySchema = moduleVersionImpactHistoryEntrySchema;
 

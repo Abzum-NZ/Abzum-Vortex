@@ -91,17 +91,3 @@ export function StudioBlockOutlinePanel({ outline, selectedKey, choose, disabled
       </>}
   </StudioPanelShell>;
 }
-
-function ComingNextNote({ children }: Readonly<{ children: ReactNode }>) {
-  return <p className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">{children}</p>;
-}
-
-/** A rail tab whose editor is not built yet says so plainly, and what to use meanwhile. */
-export function StudioComingNextPanel({ title, description, hidden, children }: Readonly<{
-  title: string; description: string; hidden: boolean; children: ReactNode;
-}>) {
-  return <StudioPanelShell title={title} description={description} hidden={hidden}>
-    <p className="text-sm font-medium">Coming next</p>
-    <ComingNextNote>{children}</ComingNextNote>
-  </StudioPanelShell>;
-}

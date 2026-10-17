@@ -233,7 +233,6 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
       [array(content.pages), "pageId", "key"],
       [array(content.roles), "roleId", "key"],
       [array(content.queries), "queryId", "key"],
-      [array(content.pipelines), "pipelineId", "key"],
       [array(content.permissions), "permissionId", "key"],
       [array(content.actions), "actionId", "key"],
       [array(content.events), "eventId", "key"],
@@ -369,70 +368,6 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
         );
     }
     applicationPageRules(scope);
-    for (const pipeline of array(content.pipelines)) {
-      const record = records.get(String(object(pipeline.recordType).recordTypeId));
-      const moduleBound = boundRecordTypeIds.has(String(object(pipeline.recordType).recordTypeId));
-      const stageField =
-        record && array(record.fields).find((field) => field.fieldId === pipeline.stageFieldId);
-      if (!stageField || stageField.type !== "choice")
-        failures.push(
-          failure(output, "vortex.definition.application_pipeline_stage", "broken_reference"),
-        );
-      const stageOptions = new Set(
-        stageField?.type === "choice"
-          ? array(object(stageField.settings).options).map((option) => String(option.value))
-          : [],
-      );
-      if (array(pipeline.stages).some((stage) => !stageOptions.has(String(stage.key))))
-        failures.push(
-          failure(output, "vortex.definition.application_pipeline_stage", "broken_reference"),
-        );
-      for (const stage of array(pipeline.stages)) {
-        if (
-          [...(stage.entryActionKeys as string[]), ...(stage.exitActionKeys as string[])].some(
-            (key) => !executableActionKeys.has(key),
-          )
-        )
-          failures.push(
-            failure(
-              output,
-              "vortex.definition.application_pipeline_references",
-              "broken_reference",
-            ),
-          );
-      }
-      const pipelineFields = new Map(
-        record ? array(record.fields).map((field) => [String(field.fieldId), field]) : [],
-      );
-      for (const transition of array(pipeline.transitions))
-        if (
-          (transition.permissionKey && !permissions.has(String(transition.permissionKey))) ||
-          (transition.actionKey && !executableActionKeys.has(String(transition.actionKey))) ||
-          (transition.gate !== undefined &&
-            !applicationConditionTypesValid(transition.gate, pipelineFields, moduleBound))
-        )
-          failures.push(
-            failure(
-              output,
-              "vortex.definition.application_pipeline_references",
-              "broken_reference",
-            ),
-          );
-      for (const target of array(pipeline.timeTargets))
-        if (
-          !events.has(String(target.escalationEventKey)) ||
-          !record ||
-          array(record.fields).find((field) => field.fieldId === target.dateTimeFieldId)?.type !==
-            "date_time"
-        )
-          failures.push(
-            failure(
-              output,
-              "vortex.definition.application_pipeline_references",
-              "broken_reference",
-            ),
-          );
-    }
     for (const binding of connectionBindingEntries) {
       const connection = connectionMap.get(String(binding.connectionTypeId));
       const available = request?.resolution.definitions.find(

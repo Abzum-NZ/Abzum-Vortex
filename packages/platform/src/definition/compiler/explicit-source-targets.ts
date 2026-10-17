@@ -209,46 +209,6 @@ export function explicitSourceTargets(
   if (
     source.kind === "application" &&
     sourcePath[0] === "body" &&
-    sourcePath[1] === "pipelines" &&
-    typeof sourcePath[2] === "number"
-  ) {
-    const pipelineBase: Path = ["content", "pipelines", sourcePath[2]];
-    if (sourcePath[3] === "record_type" && sourcePath.length === 4) {
-      const recordTypePath = [...pipelineBase, "recordType"];
-      return leafPaths(valueAtPath(canonical, recordTypePath), recordTypePath);
-    }
-    if (sourcePath[3] === "stage_field" && sourcePath.length === 4)
-      return [[...pipelineBase, "stageFieldId"]];
-    if (
-      sourcePath[3] === "stages" &&
-      typeof sourcePath[4] === "number" &&
-      typeof sourcePath[5] === "string" &&
-      typeof sourcePath[6] === "number"
-    ) {
-      const targetCollection: Readonly<Record<string, string>> = {
-        entry_actions: "entryActionKeys",
-        exit_actions: "exitActionKeys",
-      };
-      const target = targetCollection[sourcePath[5]];
-      if (target) return [[...pipelineBase, "stages", sourcePath[4], target, sourcePath[6]]];
-    }
-    if (
-      sourcePath[3] === "time_targets" &&
-      typeof sourcePath[4] === "number" &&
-      typeof sourcePath[5] === "string"
-    ) {
-      const targetKey: Readonly<Record<string, string>> = {
-        stage: "stageKey",
-        field: "dateTimeFieldId",
-        escalation_event: "escalationEventKey",
-      };
-      const target = targetKey[sourcePath[5]];
-      if (target) return [[...pipelineBase, "timeTargets", sourcePath[4], target]];
-    }
-  }
-  if (
-    source.kind === "application" &&
-    sourcePath[0] === "body" &&
     sourcePath[1] === "pages" &&
     typeof sourcePath[2] === "number"
   ) {

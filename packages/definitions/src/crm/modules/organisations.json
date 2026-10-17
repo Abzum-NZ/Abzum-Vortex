@@ -11,7 +11,7 @@
       "plural_name": "Companies",
       "title_field": "name",
       "storage_contract_id": "srt_00000001",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "group",
       "standard_actions": [
         "create",
@@ -143,7 +143,7 @@
           "public_display": "refused",
           "type": "money",
           "settings": {
-            "currency_mode": "organisation_default",
+            "currency_mode": "organization_default",
             "minimum": "0"
           }
         },
@@ -267,6 +267,7 @@
           "settings": {}
         }
       ],
+      "pipelines": [],
       "relationships": [
         {
           "id": "fld_company_parent_relationship",
@@ -668,6 +669,7 @@
     {
       "id": "qry_crm_companies",
       "key": "crm_companies",
+      "label": "Companies",
       "record_type": "company",
       "inputs": [],
       "select": [
