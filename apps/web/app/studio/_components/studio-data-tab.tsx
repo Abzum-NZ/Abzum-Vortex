@@ -19,6 +19,7 @@ import { StudioReferencesAlert } from "./studio-references-alert";
 import { StudioNewQueryForm, StudioQueryEditor } from "./studio-query-editor";
 import { StudioRecordTypeSearch, StudioSearchOverview } from "./studio-search-settings";
 import { StudioRelationshipsSection } from "./studio-relationships-section";
+import { StudioModuleActions } from "./studio-module-actions";
 import {
   ModuleFieldsEditor, studioFieldPublication, type ModuleFieldEditorContext, type StudioLinkTarget,
   type StudioModuleOwnerApplication,
@@ -177,6 +178,8 @@ function RecordTypeInspector({ source, saved, moduleKey, recordKey, disabled, fi
         disabled={disabled} context={fieldContext} onPendingChange={onFieldPending} onApply={applyField}
         onApplied={(fieldKey) => onSelect({ kind: "field", moduleKey, recordKey, fieldKey })} onShow={onShow} />
     </section>}
+    <StudioModuleActions source={source} moduleKey={moduleKey} recordKey={recordKey} disabled={disabled} onShow={onShow}
+      apply={(next, message) => apply(next, message)} />
     <section className="space-y-2 border-t border-border pt-3" aria-label="Delete">
       <Button type="button" size="sm" variant="destructive" disabled={disabled} onClick={() => { void remove(); }}>Delete record type</Button>
       <StudioReferencesAlert key={refusals} name={record.name} action="deleted" references={references} onShow={onShow} />
