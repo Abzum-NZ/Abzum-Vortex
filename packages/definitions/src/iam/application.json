@@ -324,8 +324,7 @@
           "vortex.iam.core.access_request.update_own",
           "vortex.iam.core.access_request.soft_delete_own",
           "vortex.iam.core.access_request_item.create_own",
-          "vortex.iam.core.access_request_item.read_own",
-          "vortex.system_directory.person.reference_read"
+          "vortex.iam.core.access_request_item.read_own"
         ]
       },
       {

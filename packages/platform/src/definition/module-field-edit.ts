@@ -256,7 +256,7 @@ export const changeInlineModuleField = (
   syncLinkRelationship(module, record, field, change.cardinality);
   syncInlinePipelineStages(record, field.key);
   if (isPersonLink(field)) {
-    const refused = enablePeopleDirectoryLinks(source, module, record, context.peopleDirectory);
+    const refused = enablePeopleDirectoryLinks(source, context.peopleDirectory);
     if (refused !== undefined) return { kind: "invalid", issues: [refused] };
   } else if (wasPersonLink) retirePeopleDirectoryLinks(source);
   const parsed = applicationSourceDocumentSchema.safeParse(source);
