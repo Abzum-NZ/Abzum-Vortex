@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@vortex/ui/components/button";
 import { Label } from "@vortex/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
@@ -19,10 +19,16 @@ import { StudioFlowStartEditor } from "./studio-flow-start-editor";
  * The Flows tab's inspector. With a step selected: the step's settings form, generated from the
  * step catalogue with one typed control per setting, and the step's place in the flow (move,
  * remove, add a step after it, add a branch). With the Start node (or nothing) selected: how the
- * flow starts. Every change is one flow command, judged by the flow commands and taken by the draft.
+ * flow starts. Every change is one flow command, judged by the flow commands and taken by the draft
+ * as it is made; the draft saves it by itself.
  */
 
-export type StudioFlowRun = (expected: StudioFlowContext, selection: StudioFlowSelection, command: StudioFlowCommand) => StudioFlowEditResult;
+/**
+ * Runs one flow command on the draft. `merge` makes consecutive edits with the same key one Undo
+ * step; an applied result carries the source the draft holds afterwards.
+ */
+type StudioFlowRun = (expected: StudioFlowContext, selection: StudioFlowSelection, command: StudioFlowCommand,
+  merge?: string) => StudioFlowEditResult;
 
 const findStep = (lists: readonly StudioFlowTaskListOutline[], path: StudioFlowPath): StudioFlowTaskOutline | undefined => {
   for (const list of lists) for (const task of list.tasks) {
@@ -64,7 +70,7 @@ function StepTypePicker({ id, label, types, disabled, onAdd, action }: Readonly<
 }
 
 export function StudioFlowInspector({ context, selection, lists, stepPath, ownerNote, choices, start, controlLabel, disabled,
-  onCommand, onStart, onSelectStep, onPendingChange }: Readonly<{
+  onCommand, onStart, onSelectStep }: Readonly<{
   context: StudioFlowContext;
   selection: StudioFlowSelection;
   lists: readonly StudioFlowTaskListOutline[];
@@ -77,9 +83,8 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
   controlLabel: (alias: string) => string;
   disabled: boolean;
   onCommand: StudioFlowRun;
-  onStart: (expected: StudioFlowContext, draft: StudioFlowStartDraft) => StudioFlowEditResult;
+  onStart: (expected: StudioFlowContext, draft: StudioFlowStartDraft, merge?: string) => StudioFlowEditResult;
   onSelectStep: (path: StudioFlowPath | null) => void;
-  onPendingChange: (pending: boolean) => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const step = stepPath === null ? undefined : findStep(lists, stepPath);
@@ -96,14 +101,17 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
     : studioFlowReferenceChoices(context.source, outline.flow, outline.siblings, selection.moduleKey, step.path),
   [context.source, outline, selection.moduleKey, step]);
   const condition = useMemo(() => studioFlowConditionContext(references), [references]);
-  // Unapplied input, bound to the draft snapshot it was started from.
-  const [edits, setEdits] = useState<Readonly<{ expected: StudioFlowContext; draft: StudioFlowStepDraft; problem: string | null }> | null>(null);
+  /**
+   * The settings as typed, on the draft snapshot they stand on: what the draft took (which it may
+   * hold trimmed, so the typing is shown as typed), or input it refused, shown with its problem and
+   * kept out of the draft. A change from elsewhere (Undo, Redo, a reload) drops it.
+   */
+  const [edits, setEdits] = useState<Readonly<{ base: unknown; draft: StudioFlowStepDraft; problem: string | null }> | null>(null);
+  if (edits !== null && edits.base !== context.source) setEdits(null);
+  const local = edits !== null && edits.base === context.source ? edits : null;
   const [problem, setProblem] = useState("");
   const [status, setStatus] = useState("");
   const [focusId, setFocusId] = useState<string | null>(null);
-  const pending = useRef(false);
-  const report = (next: boolean) => { if (pending.current !== next) { pending.current = next; onPendingChange(next); } };
-  useEffect(() => () => onPendingChange(false), [onPendingChange]);
 
   useEffect(() => {
     if (form?.kind === "unavailable") console.error("[studio] flow step refused", { flow: selection.flowAlias, step: step?.id }, form.reason);
@@ -116,17 +124,18 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
     if (added !== undefined) { onSelectStep(added.path); setFocusId(null); }
   }, [focusId, lists, onSelectStep]);
 
-  const run = (command: StudioFlowCommand, done: string): boolean => {
-    const result = onCommand(edits?.expected ?? context, selection, command);
-    if (result.kind === "applied") { setProblem(""); setStatus(`${done} Save to keep it.`); return true; }
-    setStatus("");
-    setProblem(result.reason);
-    return false;
+  // A move, a removal or an added step: one explicit command. Settings being typed stay as typed on the new snapshot.
+  const run = (command: StudioFlowCommand, done: string): StudioFlowEditResult => {
+    const result = onCommand(context, selection, command);
+    if (result.kind === "applied") {
+      setProblem(""); setStatus(done);
+      if (local !== null) setEdits({ ...local, base: result.source });
+    } else { setStatus(""); setProblem(result.reason); }
+    return result;
   };
   const add = (command: Extract<StudioFlowCommand, { kind: "insert_task" | "add_branch" }>, done: string) => {
-    const result = onCommand(context, selection, command);
-    if (result.kind === "applied") { setProblem(""); setStatus(`${done} Save to keep it.`); setFocusId(result.taskId); }
-    else { setStatus(""); setProblem(result.reason); }
+    const result = run(command, done);
+    if (result.kind === "applied") setFocusId(result.taskId);
   };
 
   const messages = <>
@@ -142,8 +151,12 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
           // A module's own flow names its own record types by their bare key, as its triggers do.
           : choices.recordTypes.filter((entry) => entry.key.startsWith(`${selection.moduleKey}:`))
             .map((entry) => ({ key: entry.key.slice(entry.key.indexOf(":") + 1), label: entry.label }))}
-        controlLabel={controlLabel} disabled={disabled} onPendingChange={report}
-        onApply={(draft) => { const result = onStart(context, draft); return result.kind === "applied" ? true : result.reason; }} />
+        controlLabel={controlLabel} disabled={disabled}
+        onApply={(draft, setting) => {
+          const result = onStart(context, draft,
+            setting === undefined ? undefined : `flow-start:${selection.moduleKey ?? ""}:${selection.flowAlias}:${setting}`);
+          return result.kind === "applied" ? true : result.reason;
+        }} />
       {ownerNote === undefined ? null : <p className="text-sm text-muted-foreground">{ownerNote}</p>}
       <p className="text-sm text-muted-foreground">Select a step on the canvas to change its settings, move it or add a step after it.</p>
       {main !== undefined && <StepTypePicker id="flow-add-last" label="Add a step at the end" types={actions.stepTypes} disabled={disabled}
@@ -155,7 +168,16 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
 
   const index = step.path[step.path.length - 1] as number;
   const listPath = step.path.slice(0, -1);
-  const draft = edits?.draft ?? (form?.kind === "available" ? form.draft : null);
+  const draft = local?.draft ?? (form?.kind === "available" ? form.draft : null);
+  // Each change goes to the draft at once; typing into one setting is one Undo step.
+  const change = (next: StudioFlowStepDraft, blocked: string | null, setting: string) => {
+    setStatus("");
+    if (blocked !== null) { setEdits({ base: context.source, draft: next, problem: blocked }); return; }
+    const result = onCommand(context, selection, { kind: "set_step", taskId: step.id, taskPath: step.path, draft: next },
+      `flow-step:${selection.moduleKey ?? ""}:${selection.flowAlias}:${step.id}:${setting}`);
+    if (result.kind === "applied") { setProblem(""); setEdits({ base: result.source, draft: next, problem: null }); }
+    else setEdits({ base: context.source, draft: next, problem: result.reason });
+  };
   const fields = form?.kind !== "available" || task === undefined || outline === null || draft === null ? []
     : refreshStudioFlowStepFields(context.source, outline.flow, selection.moduleKey, task, draft, choices, form.fields);
   const siblings: readonly SourceFlow[] = (outline?.siblings ?? []).filter((flow) => flow.id !== selection.flowAlias);
@@ -166,17 +188,17 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
       <p className="text-sm text-muted-foreground">{step.caption}</p>
     </div>
     <div className="flex flex-wrap gap-2">
-      <Button type="button" variant="outline" size="sm" disabled={disabled || edits !== null || !actions.canMoveUp}
+      <Button type="button" variant="outline" size="sm" disabled={disabled || !actions.canMoveUp}
         onClick={() => { run({ kind: "move_task", taskId: step.id, taskPath: step.path, direction: "up" }, "Step moved up."); }}>Move up</Button>
-      <Button type="button" variant="outline" size="sm" disabled={disabled || edits !== null || !actions.canMoveDown}
+      <Button type="button" variant="outline" size="sm" disabled={disabled || !actions.canMoveDown}
         onClick={() => { run({ kind: "move_task", taskId: step.id, taskPath: step.path, direction: "down" }, "Step moved down."); }}>Move down</Button>
-      <Button type="button" variant="outline" size="sm" disabled={disabled || edits !== null} onClick={() => {
+      <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => {
         void (async () => {
           if (!await confirm({ title: `Remove ${step.title}?`, confirmLabel: "Remove step",
             description: step.children.some((child) => child.tasks.length > 0)
-              ? "This step and the steps in its branches are removed from the draft. You can undo this before you save."
-              : "This step is removed from the draft. You can undo this before you save." })) return;
-          if (run({ kind: "remove_task", taskId: step.id, taskPath: step.path }, "Step removed.")) onSelectStep(null);
+              ? "This step and the steps in its branches are removed from the flow. Undo restores them."
+              : "This step is removed from the flow. Undo restores it." })) return;
+          if (run({ kind: "remove_task", taskId: step.id, taskPath: step.path }, "Step removed.").kind === "applied") onSelectStep(null);
         })();
       }}>Remove</Button>
     </div>
@@ -187,32 +209,19 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
       {form?.kind === "available" && draft !== null && <>
         <StudioFlowStepForm id={`flow-step-${step.id}`} fields={fields} draft={draft} controlEntries={form.controlEntries}
           calculationReferences={form.calculationReferences} references={references} condition={condition} choices={choices}
-          flows={siblings} disabled={disabled}
-          onChange={(next, blocked) => {
-            setEdits((previous) => ({ expected: previous?.expected ?? context, draft: next, problem: blocked }));
-            report(true); setProblem(""); setStatus("");
-          }} />
-        {edits?.problem == null ? null : <p role="alert" className="text-sm text-destructive">{edits.problem}</p>}
-        <div className="flex gap-2">
-          <Button type="button" size="sm" disabled={disabled || edits === null || edits.problem !== null} onClick={() => {
-            if (edits === null) return;
-            if (run({ kind: "set_step", taskId: step.id, taskPath: step.path, draft: edits.draft }, "Step changed.")) {
-              setEdits(null); report(false);
-            }
-          }}>Apply</Button>
-          <Button type="button" variant="outline" size="sm" disabled={disabled || edits === null}
-            onClick={() => { setEdits(null); report(false); setProblem(""); }}>Discard</Button>
-        </div>
+          flows={siblings} disabled={disabled} onChange={change} />
+        {local?.problem == null ? null : <p role="alert" className="text-sm text-destructive">
+          {local.problem} The step keeps its last valid settings until this is fixed.</p>}
       </>}
     </section>
     <section className="space-y-3" aria-label="Add steps">
-      <StepTypePicker id="flow-add-after" label="Add a step after this one" types={actions.stepTypes} disabled={disabled || edits !== null}
+      <StepTypePicker id="flow-add-after" label="Add a step after this one" types={actions.stepTypes} disabled={disabled}
         action="Add" onAdd={(taskType) => add({ kind: "insert_task", taskType, listPath, index: index + 1 }, "Step added.")} />
       {step.children.map((child) => <StepTypePicker key={JSON.stringify(child.path)} id={`flow-add-in-${JSON.stringify(child.path)}`}
-        label={`Add a step to ${child.label}`} types={actions.stepTypes} disabled={disabled || edits !== null} action="Add"
+        label={`Add a step to ${child.label}`} types={actions.stepTypes} disabled={disabled} action="Add"
         onAdd={(taskType) => add({ kind: "insert_task", taskType, listPath: child.path, index: child.tasks.length }, `Step added to ${child.label}.`)} />)}
       {actions.branch !== null && <StepTypePicker id="flow-add-branch" label={`Add the ${actions.branch} branch, starting with`}
-        types={actions.stepTypes} disabled={disabled || edits !== null} action="Add branch"
+        types={actions.stepTypes} disabled={disabled} action="Add branch"
         onAdd={(taskType) => add({ kind: "add_branch", taskId: step.id, taskPath: step.path, taskType }, `${actions.branch} branch added.`)} />}
     </section>
     {messages}

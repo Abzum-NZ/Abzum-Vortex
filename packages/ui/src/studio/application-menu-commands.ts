@@ -122,7 +122,7 @@ const addEntry = (candidate: Source, command: Extract<StudioMenuCommand, { kind:
     (place.item as Heading).children.push(entry);
   }
   return { kind: "applied", source: judged(candidate), select: entry.id,
-    message: `Menu entry ${quoted(entry.label)} added. Save to keep it.` };
+    message: `Menu entry ${quoted(entry.label)} added.` };
 };
 
 const addHeading = (candidate: Source, command: Extract<StudioMenuCommand, { kind: "add_heading" }>): StudioMenuResult => {
@@ -132,7 +132,7 @@ const addHeading = (candidate: Source, command: Extract<StudioMenuCommand, { kin
   const heading: Heading = { id: newAlias(candidate, label), type: "heading", label, icon: "grid", children: [place.item] };
   place.list.splice(place.index, 1, heading);
   return { kind: "applied", source: judged(candidate), select: heading.id,
-    message: `Heading ${quoted(label)} added with ${quoted(place.item.label)} under it. Save to keep it.` };
+    message: `Heading ${quoted(label)} added with ${quoted(place.item.label)} under it.` };
 };
 
 const change = (candidate: Source, command: Extract<StudioMenuCommand, { kind: "change" }>): StudioMenuResult => {
@@ -156,7 +156,7 @@ const change = (candidate: Source, command: Extract<StudioMenuCommand, { kind: "
   }
   place.list[place.index] = next as StudioMenuItem;
   return { kind: "applied", source: judged(candidate), select: item.id,
-    message: `Menu entry ${quoted(String(next.label))} changed. Save to keep it.` };
+    message: `Menu entry ${quoted(String(next.label))} changed.` };
 };
 
 const move = (candidate: Source, command: Extract<StudioMenuCommand, { kind: "move" }>): StudioMenuResult => {
@@ -172,7 +172,7 @@ const move = (candidate: Source, command: Extract<StudioMenuCommand, { kind: "mo
   list.splice(index, 0, place.item);
   const where = target === undefined ? "the menu" : `the heading ${quoted(target.item.label)}`;
   return { kind: "applied", source: judged(candidate), select: place.item.id,
-    message: `${quoted(place.item.label)} moved to position ${index + 1} in ${where}. Save to keep it.` };
+    message: `${quoted(place.item.label)} moved to position ${index + 1} in ${where}.` };
 };
 
 const remove = (candidate: Source, alias: string): StudioMenuResult => {
@@ -181,8 +181,8 @@ const remove = (candidate: Source, alias: string): StudioMenuResult => {
   place.list.splice(place.index, 1, ...(place.item.type === "heading" ? place.item.children : []));
   return { kind: "applied", source: judged(candidate), select: null,
     message: place.item.type === "heading"
-      ? `Heading ${quoted(place.item.label)} removed; its entries stay in the menu. Save to keep it.`
-      : `Menu entry ${quoted(place.item.label)} removed. Save to keep it.` };
+      ? `Heading ${quoted(place.item.label)} removed; its entries stay in the menu.`
+      : `Menu entry ${quoted(place.item.label)} removed.` };
 };
 
 /** Applies one Menu edit to the draft, or refuses it with a located message. */

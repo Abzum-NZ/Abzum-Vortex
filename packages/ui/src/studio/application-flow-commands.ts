@@ -292,8 +292,7 @@ export const applyStudioFlowCommand = (
         const built = applyStudioFlowStepDraft(current.source, original.flow, expectedSelection.moduleKey, list[index]!,
           command.taskPath, command.draft);
         if (!built.ok) return { kind: "invalid", reason: built.reason };
-        if (JSON.stringify(built.value) === JSON.stringify(list[index]))
-          return { kind: "invalid", reason: "This step already has these settings. Nothing was changed." };
+        // Settings that come out as the step already has them apply as no change.
         list[index] = built.value;
         return done(command.taskId);
       }

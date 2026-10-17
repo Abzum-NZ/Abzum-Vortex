@@ -11,19 +11,19 @@ import type { StudioDataModule, StudioDataRecordType } from "../_lib/studio-data
 const sameSelection = (left: StudioDataSelection | null, right: StudioDataSelection): boolean =>
   left !== null && JSON.stringify(left) === JSON.stringify(right);
 
-function TreeButton({ label, detail, selected, disabled, onClick }: Readonly<{
-  label: string; detail?: string | undefined; selected: boolean; disabled: boolean; onClick: () => void;
+function TreeButton({ label, detail, selected, onClick }: Readonly<{
+  label: string; detail?: string | undefined; selected: boolean; onClick: () => void;
 }>) {
-  return <Button type="button" variant={selected ? "secondary" : "ghost"} size="sm" disabled={disabled} aria-pressed={selected}
+  return <Button type="button" variant={selected ? "secondary" : "ghost"} size="sm" aria-pressed={selected}
     className="h-auto min-w-0 flex-1 justify-start whitespace-normal py-1 text-left" onClick={onClick}>
     <span className="min-w-0 break-words">{label}</span>
     {detail === undefined ? null : <span className="ml-auto shrink-0 text-xs text-muted-foreground">{detail}</span>}
   </Button>;
 }
 
-function RecordTypeNode({ module, record, selected, expanded, onToggle, onSelect, disabled }: Readonly<{
+function RecordTypeNode({ module, record, selected, expanded, onToggle, onSelect }: Readonly<{
   module: StudioDataModule; record: StudioDataRecordType; selected: StudioDataSelection | null;
-  expanded: boolean; onToggle: () => void; onSelect: (selection: StudioDataSelection) => void; disabled: boolean;
+  expanded: boolean; onToggle: () => void; onSelect: (selection: StudioDataSelection) => void;
 }>) {
   const queries = module.queries.filter((query) => query.recordKey === record.key);
   return <li className="space-y-1">
@@ -32,18 +32,18 @@ function RecordTypeNode({ module, record, selected, expanded, onToggle, onSelect
         aria-label={`${expanded ? "Hide" : "Show"} the fields of ${record.name}`} onClick={onToggle}>
         <Icon name={expanded ? "chevron-down" : "chevron-right"} />
       </Button>
-      <TreeButton label={record.pluralName} detail={`${record.fields.length} fields`} disabled={disabled}
+      <TreeButton label={record.pluralName} detail={`${record.fields.length} fields`}
         selected={sameSelection(selected, { kind: "record_type", moduleKey: module.key, recordKey: record.key })}
         onClick={() => onSelect({ kind: "record_type", moduleKey: module.key, recordKey: record.key })} />
     </div>
     {expanded && <ul className="ml-3 list-none space-y-1 border-l border-border pl-3" aria-label={`Fields and queries of ${record.name}`}>
       {record.fields.map((field) => <li key={field.key} className="flex">
-        <TreeButton label={field.label} detail={field.key === record.titleFieldKey ? "Title" : undefined} disabled={disabled}
+        <TreeButton label={field.label} detail={field.key === record.titleFieldKey ? "Title" : undefined}
           selected={sameSelection(selected, { kind: "field", moduleKey: module.key, recordKey: record.key, fieldKey: field.key })}
           onClick={() => onSelect({ kind: "field", moduleKey: module.key, recordKey: record.key, fieldKey: field.key })} />
       </li>)}
       {queries.map((query) => <li key={`query:${query.key}`} className="flex">
-        <TreeButton label={query.label} detail="Query" disabled={disabled}
+        <TreeButton label={query.label} detail="Query"
           selected={sameSelection(selected, { kind: "query", moduleKey: module.key, queryKey: query.key })}
           onClick={() => onSelect({ kind: "query", moduleKey: module.key, queryKey: query.key })} />
       </li>)}
@@ -51,14 +51,13 @@ function RecordTypeNode({ module, record, selected, expanded, onToggle, onSelect
   </li>;
 }
 
-function ModuleNode({ module, owner, selected, expanded, onToggle, onSelect, disabled }: Readonly<{
+function ModuleNode({ module, owner, selected, expanded, onToggle, onSelect }: Readonly<{
   module: StudioDataModule; owner: string | undefined; selected: StudioDataSelection | null;
   expanded: ReadonlySet<string>; onToggle: (key: string) => void; onSelect: (selection: StudioDataSelection) => void;
-  disabled: boolean;
 }>) {
   return <li className="space-y-1">
     <div className="flex flex-wrap items-center gap-1">
-      <TreeButton label={module.name} disabled={disabled}
+      <TreeButton label={module.name}
         selected={sameSelection(selected, { kind: "module", moduleKey: module.key })}
         onClick={() => onSelect({ kind: "module", moduleKey: module.key })} />
       {owner === undefined ? null : <Badge variant="outline">Read-only</Badge>}
@@ -67,7 +66,7 @@ function ModuleNode({ module, owner, selected, expanded, onToggle, onSelect, dis
     <ul className="list-none space-y-1 border-l border-border pl-2" aria-label={`Record types of ${module.name}`}>
       {module.recordTypes.map((record) => {
         const key = `${module.key}:${record.key}`;
-        return <RecordTypeNode key={record.key} module={module} record={record} selected={selected} disabled={disabled}
+        return <RecordTypeNode key={record.key} module={module} record={record} selected={selected}
           expanded={expanded.has(key)} onToggle={() => onToggle(key)} onSelect={onSelect} />;
       })}
     </ul>
@@ -142,7 +141,7 @@ export function StudioDataPanel({ hidden, owned, used, applications, selected, o
     {ownedShown.length === 0 ? null : <section aria-label="Owned by this application" className="space-y-2">
       <h3 className="text-xs font-semibold uppercase text-muted-foreground">Owned by this application</h3>
       <ul className="list-none space-y-3">{ownedShown.map((module) => <ModuleNode key={module.key} module={module} owner={undefined}
-        selected={selected} expanded={expandedShown} onToggle={toggle} onSelect={choose} disabled={disabled} />)}</ul>
+        selected={selected} expanded={expandedShown} onToggle={toggle} onSelect={choose} />)}</ul>
     </section>}
     {used === null && !searching ? <p className="text-sm text-muted-foreground">
       The modules this application uses are listed after the draft is compiled.</p> : null}
@@ -150,7 +149,7 @@ export function StudioDataPanel({ hidden, owned, used, applications, selected, o
       <h3 className="text-xs font-semibold uppercase text-muted-foreground">Used from other applications</h3>
       <ul className="list-none space-y-3">{usedShown.map((module) => <ModuleNode key={module.key} module={module}
         owner={ownerName(module.ownerApplication) ?? "another application"}
-        selected={selected} expanded={expandedShown} onToggle={toggle} onSelect={choose} disabled={disabled} />)}</ul>
+        selected={selected} expanded={expandedShown} onToggle={toggle} onSelect={choose} />)}</ul>
     </section>}
     {searching && ownedShown.length === 0 && usedShown.length === 0 ? <p className="text-sm text-muted-foreground">Nothing matches.</p> : null}
     <section aria-label="Search" className="space-y-2 border-t border-border pt-3">{search}</section>

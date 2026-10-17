@@ -621,6 +621,9 @@ export const createStudioSemanticSelectionStore = (
           // A removed step leaves its flow selected.
           const flow = studioFlowOfSelection(selection);
           next = flow !== null && containsSelection(index, flow) ? flow : applicationSelection(index.applicationRootId);
+        } else if (selection.kind === "role") {
+          // A removed role leaves the application selected.
+          next = applicationSelection(index.applicationRootId);
         } else {
           // A Data item that left the draft selects what held it, when that is still there.
           let parent = dataParent(selection);
