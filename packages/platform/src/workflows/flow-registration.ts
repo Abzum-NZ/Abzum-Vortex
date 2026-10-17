@@ -60,8 +60,8 @@ export const protectedRunRegisteredReleaseSchema = z
 /**
  * #947: inactive workflow flow registrations, stored through Postgres.
  *
- * A part A candidate is compiled by `compileKestraFlow` from one exact published
- * durable flow and its installation identity. This module persists
+ * `compileKestraFlow` compiles one exact published durable flow and its
+ * installation identity into an inactive candidate. This module persists
  * that candidate through the protected `register_workflow_flow_candidate`
  * function, which derives nothing from the candidate's diagnostic labels: the
  * namespace and flow id must equal the ones derived from the permanent identity,
@@ -102,7 +102,7 @@ export type KestraFlowRegistrationResult =
   | Readonly<{ outcome: "existing"; registration: KestraFlowRegistration }>
   | Readonly<{ outcome: "refused"; reasonCode: KestraFlowRegistrationRefusalReason }>;
 
-/** The part A candidate together with the exact identity it was compiled from. */
+/** The compiled inactive candidate together with the exact identity it was compiled from. */
 export type KestraFlowRegistrationCommand = Readonly<{
   identity: KestraFlowIdentity;
   flow: KestraFlowCandidate;
@@ -310,7 +310,7 @@ const mapStorageFailure = (error: unknown): KestraFlowRegistrationError => {
 };
 
 /**
- * Persists one part A candidate through the protected registration function in
+ * Persists one compiled inactive candidate through the protected registration function in
  * the caller's private flow-preparation transaction. It returns the stored
  * inactive mapping, reports an exact retry as `existing`, and refuses a changed
  * candidate for an existing identity. It never enables, calls or deploys a flow.

@@ -114,7 +114,6 @@ const propertyDisplayValue = (value: BlockPropertyValueContract): string => {
     case "action_reference":
     case "page_reference":
     case "query_reference":
-    case "pipeline_reference":
     case "record_type_reference":
     case "record_reference":
       return `${value.kind.replaceAll("_", " ")} (reference omitted)`;

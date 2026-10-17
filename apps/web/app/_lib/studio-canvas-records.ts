@@ -154,7 +154,7 @@ export const readStudioCanvasRecords = async (
     const input = {
       pageDefinition: value.compiledPage, pageSubjectRecordTypeId: undefined, data, page, context,
       referenceChoiceInputs: [], referenceChoices: services.referenceChoices, session, selection,
-      referenceChoiceFirstPages: new Map(), address: { application: { key: value.key }, pageKey: value.pageKey },
+      address: { application: { key: value.key }, pageKey: value.pageKey },
       subjectType: undefined, parameters: {}, dependencies, subjectId: noSubject,
       readSubject: async () => ({ kind: "refused" } as const), linkTiles: services.linkTiles,
       queryNotices: services.queryNotices, boardContinuation: undefined, permittedApplicationKeys: undefined,

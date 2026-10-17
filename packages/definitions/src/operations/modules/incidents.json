@@ -429,6 +429,7 @@
           }
         }
       ],
+      "pipelines": [],
       "relationships": []
     }
   ],
@@ -1066,6 +1067,7 @@
     {
       "id": "qry_operations_open_incidents",
       "key": "operations_open_incidents",
+      "label": "Open incidents",
       "record_type": "incident",
       "inputs": [],
       "select": [

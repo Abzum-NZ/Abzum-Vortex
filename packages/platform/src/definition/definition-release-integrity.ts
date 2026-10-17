@@ -1,8 +1,8 @@
 import {
   assertModuleContractPair,
   selectApplicationContractPair,
-  storedApplicationCompilationOutputSchema,
-  type StoredDefinitionCompilationOutput,
+  applicationCompilationOutputSchema,
+  type DefinitionCompilationOutput,
   type ApplicationDraft,
   type DefinitionResolutionSnapshot,
   type ExactDefinitionDependency,
@@ -15,17 +15,17 @@ import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-defin
 import { flowOperationNodeDescriptors, platformOperationsCalledBy } from "./flow-operation-calls";
 
 type CustomerDefinitionOutput = Exclude<
-  StoredDefinitionCompilationOutput,
+  DefinitionCompilationOutput,
   { kind: "connection_type" }
 >;
 type CustomerDefinitionResolution = DefinitionResolutionSnapshot;
 
 export const applicationDraftFromStoredRelease = (
-  output: Extract<StoredDefinitionCompilationOutput, { kind: "application" }>,
+  output: Extract<DefinitionCompilationOutput, { kind: "application" }>,
 ): ApplicationDraft => {
   // No compatibility decoding: there is no released product, so stored releases always use the
   // current contract (target architecture rule 6). Reset local databases after contract changes.
-  return storedApplicationCompilationOutputSchema.parse(output).canonical;
+  return applicationCompilationOutputSchema.parse(output).canonical;
 };
 
 type StoredCustomerDefinitionReleaseEvidence = Readonly<{

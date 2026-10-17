@@ -285,6 +285,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             settings: { display_time_zone: "organization" },
           },
         ],
+        pipelines: [],
         relationships: [],
       },
       {
@@ -398,6 +399,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             settings: { display_time_zone: "organization" },
           },
         ],
+        pipelines: [],
         relationships: [],
       },
       {
@@ -558,6 +560,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             settings: {},
           },
         ],
+        pipelines: [],
         relationships: [],
       },
       {
@@ -692,6 +695,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             settings: { max_length: 36 },
           },
         ],
+        pipelines: [],
         relationships: [],
       },
       {
@@ -780,6 +784,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             settings: {},
           },
         ],
+        pipelines: [],
         relationships: [],
       },
       {
@@ -894,6 +899,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             settings: {},
           },
         ],
+        pipelines: [],
         relationships: [],
       },
       activityRecordType,
@@ -1339,6 +1345,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
       {
         "id": "qry_organisation_notices",
         "key": "organisation_notices",
+        "label": "Notices",
         "record_type": "organisation_notice",
         "inputs": [],
         "select": [
@@ -1362,6 +1369,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
       {
         "id": "qry_privacy_request_cases",
         "key": "privacy_request_cases",
+        "label": "Privacy requests",
         "record_type": "privacy_request_case",
         "inputs": [],
         "select": [
@@ -1386,6 +1394,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
       {
         "id": "qry_organization_settings",
         "key": "organization_settings",
+        "label": "Organisation settings",
         "record_type": "organization_settings",
         "inputs": [],
         "select": [
@@ -1411,6 +1420,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
       {
         "id": "qry_installed_applications",
         "key": "installed_applications",
+        "label": "Installed applications",
         "record_type": "installed_application",
         "inputs": [],
         "select": [
@@ -1433,6 +1443,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
       {
         id: "qry_application_role_templates",
         key: "application_role_templates",
+        label: "Application role templates",
         record_type: "application_role_template",
         inputs: [
           {

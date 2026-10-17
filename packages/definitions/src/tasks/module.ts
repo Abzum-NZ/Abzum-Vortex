@@ -63,6 +63,7 @@ export const tasksModule: SourceApplicationModule = sourceApplicationModuleSchem
           settings: { max_length: 500 },
         },
       ],
+      pipelines: [],
       relationships: [],
     },
   ],
@@ -76,6 +77,7 @@ export const tasksModule: SourceApplicationModule = sourceApplicationModuleSchem
     {
       id: "qry_tasks",
       key: "tasks",
+      label: "Tasks",
       record_type: "task",
       inputs: [],
       select: [...fields],

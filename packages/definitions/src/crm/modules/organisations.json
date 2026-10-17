@@ -267,6 +267,7 @@
           "settings": {}
         }
       ],
+      "pipelines": [],
       "relationships": [
         {
           "id": "fld_company_parent_relationship",
@@ -668,6 +669,7 @@
     {
       "id": "qry_crm_companies",
       "key": "crm_companies",
+      "label": "Companies",
       "record_type": "company",
       "inputs": [],
       "select": [

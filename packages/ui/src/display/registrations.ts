@@ -1,19 +1,16 @@
 import {
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
-  type PlatformBlockRelease,
 } from "@vortex/platform/schema";
 import {
   createPayloadParser,
-  createPlatformComponentRegistry,
   noRuntimeInputs,
   type PlatformComponentPayloadParser,
   type PlatformComponentRegistration,
-  type PlatformComponentRegistry,
 } from "../registry";
 import type { DefinitionRenderErrorLocation } from "../definition-error";
+import { parseBoardPayload } from "./board-payload";
 import {
   parseCalendarPayload,
-  parseBoardPayload,
   parseDisplayData,
   parseDisplayEventHandlers,
   parseGroupedPayload,
@@ -166,10 +163,3 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       parsePayload: BOARD_PAYLOAD_PARSER,
     }),
   ]);
-
-/** Creates an immutable PlatformComponentRegistry populated with every display block release. */
-export function createDisplayComponentRegistry(
-  platformReleases: readonly PlatformBlockRelease[],
-): PlatformComponentRegistry {
-  return createPlatformComponentRegistry(DISPLAY_COMPONENT_REGISTRATIONS, platformReleases);
-}

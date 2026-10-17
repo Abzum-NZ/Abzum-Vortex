@@ -23,7 +23,6 @@ export const blockReferencePropertyKinds = [
   "action_reference",
   "page_reference",
   "query_reference",
-  "pipeline_reference",
   "record_type_reference",
   "record_reference",
   "asset_reference",

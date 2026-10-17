@@ -219,19 +219,19 @@ export function compileCheckedFlowSources(
       issue.family,
       flowIssueLocation(resolution.location("flow", issue.flowKey), { taskId: issue.taskId }),
     );
-  // The named action that owns each option, by record type, field and option, for Save record
-  // tasks that supply the action's inputs.
+  // The named action that owns each option, by record type, field key and option, for Save record
+  // tasks that supply the action's inputs (a Save record task names its fields by key).
   const optionActions = new Map<string, Map<string, { required: boolean; type: string }>>();
-  const optionKey = (recordTypeId: string, fieldId: string, option: string) =>
-    `${recordTypeId.toLowerCase()} ${fieldId.toLowerCase()} ${option}`;
+  const optionKey = (recordTypeId: string, fieldKey: string, option: string) =>
+    `${recordTypeId.toLowerCase()} ${fieldKey.toLowerCase()} ${option}`;
   const rememberOption = (
     recordTypeId: string,
-    fieldId: string,
+    fieldKey: string,
     option: string,
     inputs: unknown,
   ) =>
     optionActions.set(
-      optionKey(recordTypeId, fieldId, option),
+      optionKey(recordTypeId, fieldKey, option),
       new Map(
         (Array.isArray(inputs) ? (inputs as JsonObject[]) : []).map((input) => [
           String(input.key),
@@ -245,23 +245,36 @@ export function compileCheckedFlowSources(
       const record = `${String(source.key)}:${String(action.record_type)}`;
       rememberOption(
         resolution.recordType(record).recordTypeId,
-        resolution.field(record, String(action.sets_choice_field)),
+        String(action.sets_choice_field),
         String(action.sets_choice_option),
         action.inputs,
       );
     }
   for (const output of dependencyOutputs)
-    if (output.kind === "module")
-      for (const action of output.canonical.content.actions as unknown as JsonObject[])
-        if (action.setsChoiceFieldId !== undefined)
+    if (output.kind === "module") {
+      const fieldKeys = new Map(
+        (output.canonical.content.recordTypes as unknown as JsonObject[]).flatMap((recordType) =>
+          (recordType.fields as JsonObject[]).map(
+            (field) => [String(field.fieldId).toLowerCase(), String(field.key)] as const,
+          ),
+        ),
+      );
+      for (const action of output.canonical.content.actions as unknown as JsonObject[]) {
+        const fieldKey =
+          action.setsChoiceFieldId === undefined
+            ? undefined
+            : fieldKeys.get(String(action.setsChoiceFieldId).toLowerCase());
+        if (fieldKey !== undefined)
           rememberOption(
             String(action.subjectRecordTypeId),
-            String(action.setsChoiceFieldId),
+            fieldKey,
             String(action.setsChoiceOption),
             action.inputs,
           );
-  const actionInputsIssue = findActionInputsIssue(flowSet.flows, (recordTypeId, fieldId, option) =>
-    optionActions.get(optionKey(recordTypeId, fieldId, option)),
+      }
+    }
+  const actionInputsIssue = findActionInputsIssue(flowSet.flows, (recordTypeId, fieldKey, option) =>
+    optionActions.get(optionKey(recordTypeId, fieldKey, option)),
   );
   if (actionInputsIssue !== undefined)
     throw new DefinitionCompilationError(

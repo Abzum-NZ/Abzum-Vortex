@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   activeApplicationInstallationEvidenceSchema,
   correlationIdSchema,
+  recordTypeIdSchema,
   revisionSchema,
   sameId,
   systemApplicationBoundReleaseSetResultSchema,
@@ -35,14 +36,25 @@ const previewRuntimeSourceSchema = z
     expiresAt: timestampSchema,
     correlationId: correlationIdSchema,
     releaseSet: z.unknown(),
+    seedBoundedRecordTypeIds: z.array(recordTypeIdSchema).max(201),
   })
   .strict();
 
-/** What marks a runtime context as a preview: its address, draft revision and expiry. */
+/**
+ * The deliberate preview bound: a preview's storage holds at most this many records of one record
+ * type, the first the builder can read live. The database seed applies the same number.
+ */
+export const PREVIEW_SEED_RECORD_BOUND = 2000;
+
+/**
+ * What marks a runtime context as a preview: its address, draft revision and expiry, and the
+ * record types whose seed reached the preview bound.
+ */
 export type RuntimePreview = Readonly<{
   previewInstallationId: string;
   draftRevision: number;
   expiresAt: string;
+  seedBoundedRecordTypeIds: readonly string[];
 }>;
 
 const deepFreeze = <Value>(value: Value): Value => {
@@ -119,6 +131,7 @@ export const loadHumanPreviewRuntimeContext = async (
     previewInstallationId: installation.previewInstallationId,
     draftRevision: source.data.draftRevision,
     expiresAt: source.data.expiresAt,
+    seedBoundedRecordTypeIds: Object.freeze([...source.data.seedBoundedRecordTypeIds]),
   });
   return context;
 };

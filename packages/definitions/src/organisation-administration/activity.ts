@@ -54,6 +54,7 @@ export const activityRecordType = {
     type: field.type,
     settings: field.settings,
   })),
+  pipelines: [],
   relationships: [],
 };
 
@@ -76,6 +77,7 @@ export const activityReadPermission = {
 export const activityQuery = {
   id: "qry_activity_entries",
   key: "activity_entries",
+  label: "Activity",
   record_type: "activity_entry",
   inputs: [],
   select: [

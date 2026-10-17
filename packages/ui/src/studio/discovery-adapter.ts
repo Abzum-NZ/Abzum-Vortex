@@ -42,7 +42,6 @@ export type StudioDiscoveryContext = Readonly<{
     key: string;
     name: string;
   }>[];
-  pipelines?: readonly Readonly<{ pipelineId: string; key: string; name: string }>[];
   assets?: readonly Readonly<{ assetId: string; name: string }>[];
 }>;
 
@@ -138,7 +137,6 @@ const publicRefusedReferenceKinds: ReadonlySet<BlockReferencePropertyKind> = new
 >([
   "relationship_reference",
   "record_reference",
-  "pipeline_reference",
 ]);
 
 const option = (id: string, key: string, name: string): StudioReferenceOption =>
@@ -197,10 +195,6 @@ export function createStudioDiscoveryAdapter(
         for (const relationship of context.relationships ?? [])
           if (recordTypeId === undefined || relationship.recordTypeId === recordTypeId)
             choices.push(option(relationship.relationshipId, relationship.key, relationship.name));
-        break;
-      case "pipeline_reference":
-        for (const pipeline of context.pipelines ?? [])
-          choices.push(option(pipeline.pipelineId, pipeline.key, pipeline.name));
         break;
       case "asset_reference":
         for (const asset of context.assets ?? [])

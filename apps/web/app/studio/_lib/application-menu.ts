@@ -7,8 +7,8 @@ import {
 
 /**
  * The Menu tab's edits of the application's one navigation definition (`body.navigation`): add a
- * page entry, group entries under a heading, rename, choose the icon, the page and who can see an
- * entry, move it (by drag or keyboard) and remove it. Each edit is applied to a copy of the draft
+ * page entry, group entries under a heading, rename, choose the icon and the page of an entry, move
+ * it (by drag or keyboard) and remove it. Who can see an entry is set in the Access tab. Each edit is applied to a copy of the draft
  * and judged by the source schema before it reaches the draft history; a refusal says where the
  * problem is and changes nothing. A page's removal already takes its entries with it (Structure).
  */
@@ -22,8 +22,6 @@ export type StudioMenuChanges = Readonly<{
   icon?: VortexIconName;
   /** The key of the page a page entry opens. */
   page?: string;
-  /** The permission a person must hold to see the entry. */
-  permission?: string;
   /** The https address an external entry opens. */
   address?: string;
 }>;
@@ -93,14 +91,6 @@ export const studioMenuPageChoices = (source: Source) =>
   source.body.pages.filter((page) => page.type !== "detail" && page.type !== "public")
     .map((page) => ({ key: page.key, label: page.name }));
 
-/** Who can see an entry: the application's own permissions, each with the roles that hold it. */
-export const studioMenuPermissionChoices = (source: Source) =>
-  source.body.permissions.map((permission) => ({
-    key: permission.key,
-    label: permission.label,
-    roles: source.body.roles.filter((role) => role.permissions.includes(permission.key)).map((role) => role.name),
-  }));
-
 const requirePage = (source: Source, key: string) => {
   const page = studioMenuPageChoices(source).find((choice) => choice.key === key);
   if (page === undefined)
@@ -108,10 +98,6 @@ const requirePage = (source: Source, key: string) => {
       ? "That page opens a single record, so it cannot be a menu entry. Choose a list, dashboard or form page."
       : "That page is no longer in this application. Choose another page.");
   return page!;
-};
-const requirePermission = (source: Source, key: string): void => {
-  if (!source.body.permissions.some((permission) => permission.key === key))
-    refuse("That permission is not one of this application's permissions. Choose who can see the entry again.");
 };
 
 const judged = (candidate: Source): Source => {
@@ -153,7 +139,7 @@ const change = (candidate: Source, command: Extract<StudioMenuCommand, { kind: "
   const place = requirePlace(candidate.body.navigation, command.alias);
   const item = place.item;
   const next: Record<string, unknown> = { ...item };
-  const { label, icon, page, permission, address } = command.changes;
+  const { label, icon, page, address } = command.changes;
   if (label !== undefined) next.label = cleanLabel(label);
   if (icon !== undefined) {
     if (!(VORTEX_ICON_NAMES as readonly string[]).includes(icon)) refuse("That icon is not in the icon set. Choose another.");
@@ -162,11 +148,6 @@ const change = (candidate: Source, command: Extract<StudioMenuCommand, { kind: "
   if (page !== undefined) {
     if (item.type !== "page") refuse("Only a page entry opens a page.");
     next.page = requirePage(candidate, page).key;
-  }
-  if (permission !== undefined) {
-    if (item.type === "heading") refuse("A heading is shown when any entry under it is; choose who can see each entry instead.");
-    requirePermission(candidate, permission);
-    next.permission = permission;
   }
   if (address !== undefined) {
     if (item.type !== "external") refuse("Only a link entry opens an address.");

@@ -211,6 +211,7 @@
           }
         }
       ],
+      "pipelines": [],
       "relationships": [
         {
           "id": "fld_contact_company_relationship",
@@ -459,6 +460,7 @@
           "settings": {}
         }
       ],
+      "pipelines": [],
       "relationships": []
     }
   ],
@@ -1089,6 +1091,7 @@
     {
       "id": "qry_crm_contacts",
       "key": "crm_contacts",
+      "label": "Contacts",
       "record_type": "contact",
       "inputs": [],
       "select": [
@@ -1151,6 +1154,7 @@
     {
       "id": "qry_crm_leads",
       "key": "crm_leads",
+      "label": "Leads",
       "record_type": "lead",
       "inputs": [],
       "select": [

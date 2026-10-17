@@ -171,6 +171,7 @@
           }
         }
       ],
+      "pipelines": [],
       "relationships": []
     },
     {
@@ -273,6 +274,7 @@
           "default": true
         }
       ],
+      "pipelines": [],
       "relationships": [
         {
           "id": "fld_sla_calendar_relationship",
@@ -683,6 +685,7 @@
     {
       "id": "qry_sd_sla",
       "key": "service_desk_service_levels",
+      "label": "Service levels",
       "record_type": "service_level",
       "inputs": [],
       "select": [
@@ -707,6 +710,7 @@
     {
       "id": "qry_sd_business_calendars",
       "key": "service_desk_business_calendars",
+      "label": "Business calendars",
       "record_type": "business_calendar",
       "inputs": [],
       "select": [

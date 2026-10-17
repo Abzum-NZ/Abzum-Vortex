@@ -38,8 +38,8 @@ import {
   projectBoardPlacement,
   readCalendarPlacementContract,
 } from "@vortex/platform/server";
+import type { recordIdSchema } from "@vortex/platform/schema";
 import {
-  recordIdSchema,
   type BlockPropertyValueContract,
   readRecordsTableContract,
   readRecordDetailContract,
@@ -87,7 +87,6 @@ import type {
   BoardContinuationTarget,
   TableContinuationTarget,
 } from "./types";
-import { projectInitialReferenceChoice, type ReferenceChoiceFirstPage } from "./reference-choice";
 import { readAttachmentListPlacement } from "./attachment-placement";
 
 /** The labels of the linked records the rows carry, read once; undefined when none or unreadable. */
@@ -206,7 +205,6 @@ export const readPlacement = async (
     referenceChoices: ReturnType<typeof createReferenceChoiceService>;
     session: IdentitySession;
     selection: OrganizationSelectionCandidate;
-    referenceChoiceFirstPages: Map<string, ReferenceChoiceFirstPage>;
     address: PlacementLogPlace;
     subjectType: PageSubjectType | undefined;
     parameters: SearchParameters;
@@ -239,7 +237,6 @@ export const readPlacement = async (
     referenceChoices,
     session,
     selection,
-    referenceChoiceFirstPages,
     address,
     subjectType,
     parameters,
@@ -345,13 +342,6 @@ export const readPlacement = async (
       data[placementId] = { status: "disabled", reason: "Choices unavailable" };
       return;
     }
-    referenceChoiceFirstPages.set(placementId, {
-      field,
-      choices: result.value.choices,
-      ...(result.value.nextContinuationToken === undefined
-        ? {}
-        : { nextContinuationToken: result.value.nextContinuationToken }),
-    });
     data[placementId] = {
       status: "ready",
       values: projectReferenceChoiceInputValues(
@@ -363,27 +353,6 @@ export const readPlacement = async (
           : { nextContinuationToken: result.value.nextContinuationToken },
       ),
     };
-    const initialRaw =
-      field.initialValue === undefined
-        ? undefined
-        : first(parameters[field.initialValue.pageParameter]);
-    if (initialRaw !== undefined) {
-      const initialRecordId = recordIdSchema.safeParse(initialRaw);
-      if (!initialRecordId.success) {
-        logPlacementFailure(address, placementId, "choice_initial_value_invalid");
-        return;
-      }
-      const initial = await projectInitialReferenceChoice({
-        firstPage: referenceChoiceFirstPages.get(placementId)!,
-        recordId: initialRecordId.data,
-        service: referenceChoices,
-        session,
-        selection,
-      });
-      if (initial === undefined)
-        logPlacementFailure(address, placementId, "choice_initial_value_unavailable");
-      else data[placementId] = initial;
-    }
     return;
   }
   if (isAttachmentListBlock) {
