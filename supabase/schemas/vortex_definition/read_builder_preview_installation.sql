@@ -15,7 +15,9 @@ begin
     raise exception using errcode = '22023', message = 'Preview installation identity is invalid';
   end if;
   checked_context := vortex_definition.assert_preview_installation_authority_internal();
-  -- A builder has at most one preview of an Application; the newest is the current one.
+  -- A builder has at most one preview of an Application; the newest is the current one. A
+  -- preview whose provisioning stopped before it wrote the release set it runs never runs, so it
+  -- is not a current preview: the next request provisions one that replaces it.
   select pg_catalog.jsonb_build_object(
     'previewInstallationId', preview.preview_installation_id,
     'organizationId', preview.organization_id,
@@ -32,6 +34,7 @@ begin
     and preview.previewer_organization_account_id =
       (checked_context ->> 'organizationAccountId')::uuid
     and preview.expires_at > pg_catalog.statement_timestamp()
+    and preview.runtime_release_set is not null
     and root.kind = 'application'
     and root.organization_id = preview.organization_id
   order by preview.created_at desc, preview.preview_installation_id desc
