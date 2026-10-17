@@ -29,8 +29,9 @@ declare
 begin
   -- A preview request decides the permissions of the previewed Application and its own Modules
   -- from the preview's registration alone: the builder who opened the preview holds the draft's
-  -- roles there. Every other permission, a used Module's included, is decided by the builder's
-  -- own live access below; the preview's roles never apply to it.
+  -- roles there. Every other permission, a used Module's included, and every permission on a
+  -- system projection, the platform's live read model, is decided by the builder's own live
+  -- access below; the preview's roles never apply to it.
   if permission_owner_kind_value in ('application', 'module')
     and nullif(
       pg_catalog.current_setting('vortex_record.preview_installation_id', true), ''
@@ -44,7 +45,10 @@ begin
     if preview_registration.registration_kind is distinct from 'preview' then
       return;
     end if;
-    if permission_owner_value = any(preview_registration.owned_owner_ids) then
+    if permission_owner_value = any(preview_registration.owned_owner_ids)
+      and not coalesce(
+        p_record_type_id = any(preview_registration.system_projection_record_type_ids), false
+      ) then
       return query
       select preview_entry.entry,
         case when preview_entry.held

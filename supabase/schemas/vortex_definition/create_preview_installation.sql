@@ -230,10 +230,11 @@ begin
   -- builder who opened the preview holds. A used Module's permissions are not part of it.
   insert into vortex_access.preview_permission_registrations (
     preview_installation_id, organization_id, application_root_id, organization_account_id,
-    owned_owner_ids, role_ids
+    system_projection_record_type_ids, owned_owner_ids, role_ids
   )
   select preview_installation_id_value, organization_id_value, p_application_root_id,
     organization_account_id_value,
+    array[]::uuid[],
     pg_catalog.array_append(
       coalesce(pg_catalog.array_agg(owned.module_root_id order by owned.module_root_id), array[]::uuid[]),
       p_application_root_id
@@ -286,14 +287,6 @@ begin
     if owned_release.owner_kind = 'application' then
       application_content_value := owned_release.release #> '{compilation_output,canonical,content}';
     end if;
-    -- A system projection is the platform's own live read model: no preview role reaches it.
-    system_projection_ids_value := system_projection_ids_value || coalesce((
-      select pg_catalog.array_agg((record_type.value ->> 'recordTypeId')::uuid)
-      from pg_catalog.jsonb_array_elements(
-        coalesce(owned_release.release #> '{compilation_output,canonical,content,recordTypes}', '[]'::jsonb)
-      ) as record_type(value)
-      where record_type.value ? 'systemProjection'
-    ), array[]::uuid[]);
     insert into vortex_access.preview_permission_entries (
       preview_installation_id, entry, held
     )
@@ -338,6 +331,31 @@ begin
     raise exception using errcode = '23514',
       message = 'Previewed permission declarations are unavailable';
   end if;
+
+  -- A system projection, of an own Module or a used one, is the platform's live read model: every
+  -- permission on it is decided by the builder's own live access, never by a preview role.
+  select coalesce(pg_catalog.array_agg(distinct (record_type.value ->> 'recordTypeId')::uuid), array[]::uuid[])
+  into system_projection_ids_value
+  from pg_catalog.jsonb_array_elements(resolved_modules_value) as pin(value)
+  left join vortex_definition.preview_releases as preview
+    on preview.preview_installation_id = preview_installation_id_value
+    and preview.root_id = (pin.value ->> 'moduleRootId')::uuid
+    and preview.release_revision = (pin.value ->> 'moduleReleaseRevision')::bigint
+  left join vortex_definition.releases as stored
+    on preview.root_id is null
+    and stored.root_id = (pin.value ->> 'moduleRootId')::uuid
+    and stored.release_revision = (pin.value ->> 'moduleReleaseRevision')::bigint
+  cross join lateral pg_catalog.jsonb_array_elements(
+    coalesce(
+      coalesce(preview.release -> 'compilation_output', stored.compilation_output)
+        #> '{canonical,content,recordTypes}',
+      '[]'::jsonb
+    )
+  ) as record_type(value)
+  where record_type.value ? 'systemProjection';
+  update vortex_access.preview_permission_registrations as registration
+  set system_projection_record_type_ids = system_projection_ids_value
+  where registration.preview_installation_id = preview_installation_id_value;
 
   -- The builder holds every role of the draft: a permission is held when a role selects it, an
   -- Application-wide selection taking only the Application's ordinary permissions, as it does

@@ -25,6 +25,13 @@ begin
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
       end if;
       resolved := vortex_record.resolve_preview_module_query_internal(p_module_root_id, p_query_id);
+      -- A system projection has no preview copy: a preview reads it on the live path.
+      if resolved is null then
+        resolved := vortex_record.resolve_installed_module_query_internal(p_module_root_id, p_query_id);
+        if not coalesce(resolved -> 'recordType' ? 'systemProjection', false) then
+          resolved := null;
+        end if;
+      end if;
     exception when others then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
     end;

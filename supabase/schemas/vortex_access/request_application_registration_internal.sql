@@ -8,6 +8,7 @@ returns table (
   preview_installation_id uuid,
   source_revision bigint,
   owned_owner_ids uuid[],
+  system_projection_record_type_ids uuid[],
   role_ids uuid[],
   valid_until timestamptz
 )
@@ -34,7 +35,7 @@ begin
   if preview_address is null then
     return query
     select 'installed'::text, null::uuid, registration.source_revision, null::uuid[],
-      null::uuid[], null::timestamptz
+      null::uuid[], null::uuid[], null::timestamptz
     from vortex_access.permission_registrations as registration
     where registration.organization_id = p_organization_id
       and registration.registration_kind = 'application'
@@ -48,7 +49,7 @@ begin
   return query
   select 'preview'::text, preview.preview_installation_id,
     preview.application_release_revision, registration.owned_owner_ids,
-    registration.role_ids, preview.expires_at
+    registration.system_projection_record_type_ids, registration.role_ids, preview.expires_at
   from vortex_access.preview_permission_registrations as registration
   join vortex_definition.preview_installations as preview
     on preview.preview_installation_id = registration.preview_installation_id

@@ -83,7 +83,8 @@ begin
       record_type_value := candidate_record_type_value;
       release_storage_contract_id := (record_type_value ->> 'storageContractId')::uuid;
       target_storage_contract_id := release_storage_contract_id;
-      if preview_installation_id_value is not null then
+      if preview_installation_id_value is not null
+        and not (record_type_value ? 'systemProjection') then
         select (binding.value ->> 'previewStorageContractId')::uuid
         into strict target_storage_contract_id
         from pg_catalog.jsonb_array_elements(installation -> 'storageIdentities')
@@ -119,6 +120,11 @@ begin
   if target_module_root_id is null then
     raise exception using errcode = '55000',
       message = 'Record type is not part of the active installation';
+  end if;
+  -- A system projection is the platform's live read model and has no preview copy: a preview
+  -- reads it on the live path, under the reader's own live access, never as the preview's owner.
+  if record_type_value ? 'systemProjection' then
+    preview_installation_id_value := null;
   end if;
 
   select catalogue.* into catalogue_row

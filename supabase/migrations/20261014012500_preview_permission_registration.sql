@@ -6,7 +6,9 @@
 -- installed one, or for a preview request only the preview's own. The scope gates, the address
 -- check, the permission role path, the launcher's roles and the record-link check all take it from
 -- there. A used Module's permissions are still decided by the builder's own live access, and no
--- preview role reaches a system projection. A preview's installation is only its builder's.
+-- preview role reaches a system projection: a preview reads every system projection, of its own
+-- Modules or a used one, on the live path under the builder's own live access. A preview's
+-- installation is only its builder's.
 -- A preview is provisioned in the organisation's context, so an Application with no installation
 -- can be previewed. Its storage is created empty and then seeded, under the builder's own live
 -- access in the installed Application, with only the records and fields the builder reads there.
@@ -21,6 +23,7 @@ create table vortex_access.preview_permission_registrations (
   organization_id uuid not null,
   application_root_id uuid not null,
   organization_account_id uuid not null,
+  system_projection_record_type_ids uuid[] not null,
   owned_owner_ids uuid[] not null
     constraint preview_permission_registrations_owners_check
     check (pg_catalog.cardinality(owned_owner_ids) between 1 and 201),
@@ -85,6 +88,7 @@ returns table (
   preview_installation_id uuid,
   source_revision bigint,
   owned_owner_ids uuid[],
+  system_projection_record_type_ids uuid[],
   role_ids uuid[],
   valid_until timestamptz
 )
@@ -111,7 +115,7 @@ begin
   if preview_address is null then
     return query
     select 'installed'::text, null::uuid, registration.source_revision, null::uuid[],
-      null::uuid[], null::timestamptz
+      null::uuid[], null::uuid[], null::timestamptz
     from vortex_access.permission_registrations as registration
     where registration.organization_id = p_organization_id
       and registration.registration_kind = 'application'
@@ -125,7 +129,7 @@ begin
   return query
   select 'preview'::text, preview.preview_installation_id,
     preview.application_release_revision, registration.owned_owner_ids,
-    registration.role_ids, preview.expires_at
+    registration.system_projection_record_type_ids, registration.role_ids, preview.expires_at
   from vortex_access.preview_permission_registrations as registration
   join vortex_definition.preview_installations as preview
     on preview.preview_installation_id = registration.preview_installation_id
@@ -283,8 +287,9 @@ declare
 begin
   -- A preview request decides the permissions of the previewed Application and its own Modules
   -- from the preview's registration alone: the builder who opened the preview holds the draft's
-  -- roles there. Every other permission, a used Module's included, is decided by the builder's
-  -- own live access below; the preview's roles never apply to it.
+  -- roles there. Every other permission, a used Module's included, and every permission on a
+  -- system projection, the platform's live read model, is decided by the builder's own live
+  -- access below; the preview's roles never apply to it.
   if permission_owner_kind_value in ('application', 'module')
     and nullif(
       pg_catalog.current_setting('vortex_record.preview_installation_id', true), ''
@@ -298,7 +303,10 @@ begin
     if preview_registration.registration_kind is distinct from 'preview' then
       return;
     end if;
-    if permission_owner_value = any(preview_registration.owned_owner_ids) then
+    if permission_owner_value = any(preview_registration.owned_owner_ids)
+      and not coalesce(
+        p_record_type_id = any(preview_registration.system_projection_record_type_ids), false
+      ) then
       return query
       select preview_entry.entry,
         case when preview_entry.held
@@ -1264,6 +1272,1691 @@ grant execute on function vortex_record.copy_live_records_to_preview_internal(uu
 comment on function vortex_record.copy_live_records_to_preview_internal(uuid, uuid, uuid, uuid) is
   'Seeds one preview record table with the live records of the same record type that the request''s builder reads in the installed Application, each with only the fields they read there, and the reference counters; at most 2,000 records.';
 
+create or replace function vortex_record.load_record_access_facts_from_installation_internal(
+  p_record_type_id uuid,
+  p_action_kind text,
+  p_record_id uuid,
+  p_expected_concurrency_number bigint,
+  p_installation jsonb,
+  p_projection_row jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
+  context_value jsonb;
+  context_organization_id uuid;
+  context_application_root_id uuid;
+  plan jsonb;
+  type_meta jsonb := '{}'::jsonb;
+  relationship_by_id jsonb := '{}'::jsonb;
+  condition_list jsonb := '[]'::jsonb;
+  permission_by_id jsonb := '{}'::jsonb;
+  required_permissions jsonb;
+  declaration jsonb;
+  target_meta jsonb;
+  target_table text;
+  target_scope text;
+  target_module_root_id uuid;
+  target_release_revision bigint;
+  target_is_system_projection boolean;
+  preview_target boolean;
+  target_source_sql text;
+  target_projection_definition jsonb;
+  target_projection_sort_key text;
+  projection_reader_sql text;
+  records_by_id jsonb := '{}'::jsonb;
+  candidate_edges jsonb := '[]'::jsonb;
+  load_contracts uuid[] := array[]::uuid[];
+  load_records uuid[] := array[]::uuid[];
+  pair_records uuid[] := array[]::uuid[];
+  pair_permissions uuid[] := array[]::uuid[];
+  seen_pairs text[] := array[]::text[];
+  pair_identity text;
+  current_contract uuid;
+  current_record uuid;
+  current_permission uuid;
+  batch_record_ids uuid[];
+  loaded_row record;
+  current_meta jsonb;
+  current_scope jsonb;
+  route_item jsonb;
+  edge_row vortex_record.relationship_edges%rowtype;
+  load_sql text;
+  record_fact jsonb;
+  target_fact jsonb;
+  target_concurrency_number bigint;
+  target_definition_revision bigint;
+  facts jsonb;
+begin
+  if p_record_type_id is null or p_record_type_id = nil_uuid
+    or p_record_id is null or p_record_id = nil_uuid
+    or p_action_kind is null
+    or p_action_kind not in ('create', 'read', 'update', 'delete', 'restore', 'transfer')
+    or (p_expected_concurrency_number is not null
+      and p_expected_concurrency_number not between 1 and 9007199254740991) then
+    raise exception using errcode = '22023',
+      message = 'Record adapter selector is invalid';
+  end if;
+
+  -- Step 1: the verified request context. The adapter never reads
+  -- `current_user`, which is its own owner inside a definer function.
+  context_value := vortex_access.validated_human_request_context();
+  context_organization_id := (context_value ->> 'organizationId')::uuid;
+  context_application_root_id := case
+    when context_value ? 'applicationRootId'
+      then (context_value ->> 'applicationRootId')::uuid
+    else null
+  end;
+  if context_application_root_id is null then
+    raise exception using errcode = '42501',
+      message = 'Record adapter requires an application context';
+  end if;
+
+  -- Step 2: the exact installation supplied by the trusted caller. Its reader
+  -- owns the pin-set rules; this adapter consumes them and adds none.
+  -- Step 3: the cached access plan. Definitions, column maps, permission
+  -- alternatives and saved conditions are resolved once per installation
+  -- binding revision and reused by every load below.
+  plan := vortex_record.resolve_installation_access_plan_internal(p_installation);
+  if (plan ->> 'organizationId')::uuid is distinct from context_organization_id
+    or (plan ->> 'applicationRootId')::uuid is distinct from context_application_root_id then
+    raise exception using errcode = '42501',
+      message = 'Record adapter requires an application context';
+  end if;
+  type_meta := plan -> 'recordTypes';
+  relationship_by_id := plan -> 'relationships';
+  condition_list := plan -> 'sharingConditions';
+  permission_by_id := plan -> 'permissions';
+
+  target_meta := type_meta -> pg_catalog.lower(p_record_type_id::text);
+  if target_meta is null then
+    raise exception using errcode = '55000',
+      message = 'Record type is not part of the active installation';
+  end if;
+  target_table := target_meta ->> 'table';
+  target_scope := target_meta ->> 'storageScope';
+  target_module_root_id := (target_meta ->> 'moduleRootId')::uuid;
+  target_release_revision := (target_meta ->> 'releaseRevision')::bigint;
+  if pg_catalog.jsonb_typeof(target_meta -> 'isSystemProjection')
+    is distinct from 'boolean' then
+    raise exception using errcode = '55000',
+      message = 'Installed Module definition is unavailable';
+  end if;
+  target_is_system_projection := (target_meta ->> 'isSystemProjection')::boolean;
+
+  target_source_sql := pg_catalog.format('record_data.%I as stored', target_table);
+  if target_is_system_projection then
+    select storage.record_type_definition into target_projection_definition
+    from vortex_record.storage_catalogue as storage
+    where storage.storage_contract_id = (target_meta ->> 'storageContractId')::uuid
+      and storage.physical_schema_token = 'system_projection'
+      and storage.state = 'active';
+    if not found then
+      raise exception using errcode = '55000',
+        message = 'Protected projection reader is unavailable';
+    end if;
+    if pg_catalog.jsonb_typeof(target_projection_definition -> 'fields') is distinct from 'array'
+      or pg_catalog.jsonb_typeof(target_projection_definition -> 'systemProjection')
+        is distinct from 'object' then
+      raise exception using errcode = '55000',
+        message = 'Protected projection definition is invalid';
+    end if;
+    select field.value ->> 'key' into target_projection_sort_key
+    from pg_catalog.jsonb_array_elements(target_projection_definition -> 'fields')
+      as field(value)
+    where field.value ->> 'fieldId'
+      = target_projection_definition #>> '{systemProjection,sortableFieldIds,0}';
+    if target_projection_definition #> '{systemProjection,sortableFieldIds,0}' is not null
+      and target_projection_sort_key is null then
+      raise exception using errcode = '55000',
+        message = 'Protected projection sort field is invalid';
+    end if;
+    target_projection_sort_key := coalesce(target_projection_sort_key, 'record_id');
+    -- Shape each protected reader row as the existing view's composite type.
+    -- The view supplies the type only: its unbounded reader is never scanned.
+    projection_reader_sql := case when p_projection_row is null then pg_catalog.format(
+      'vortex_record.read_system_projection_rows_internal(%L::uuid, array[$2]::uuid[], %L, ''ascending'', null::jsonb, 1) as projection',
+      (target_meta ->> 'storageContractId')::uuid, target_projection_sort_key
+    ) else
+      'pg_catalog.jsonb_to_record($3) as projection(organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb)'
+    end;
+    target_source_sql := pg_catalog.format($source$
+      %s
+      cross join lateral pg_catalog.jsonb_populate_record(
+        null::record_data.%I,
+        pg_catalog.jsonb_build_object(
+          'organisation_id', projection.organization_id,
+          'module_root_id', %L::uuid,
+          'record_type_id', %L::uuid,
+          'storage_contract_id', %L::uuid,
+          'record_id', projection.record_id,
+          'definition_revision', %L::bigint,
+          'lifecycle_state', 'active',
+          'concurrency_number', projection.revision
+        ) || coalesce((
+          select pg_catalog.jsonb_object_agg(
+            'f_' || pg_catalog.replace(pg_catalog.lower(field.value ->> 'fieldId'), '-', ''),
+            case
+              when field.value ->> 'fieldId' = %L
+                then pg_catalog.to_jsonb(projection.organization_id::text)
+              when field.value ->> 'fieldId' = %L
+                then pg_catalog.to_jsonb(projection.revision)
+              else projection.attribute_values -> (field.value ->> 'key')
+            end
+          )
+          from pg_catalog.jsonb_array_elements(%L::jsonb -> 'fields') as field(value)
+        ), '{}'::jsonb)
+      ) as stored$source$,
+      projection_reader_sql, target_table, target_module_root_id, p_record_type_id,
+      (target_meta ->> 'storageContractId')::uuid, target_release_revision,
+      target_projection_definition #>> '{systemProjection,organizationFieldId}',
+      target_projection_definition #>> '{systemProjection,revisionFieldId}',
+      target_projection_definition
+    );
+  end if;
+
+  -- A preview reads its own copy of every record type except a system projection: that is the
+  -- platform's live read model, which a preview reads on the live path under the reader's own
+  -- live access, never as the preview's owner.
+  preview_target := p_installation ? 'previewInstallationId' and not target_is_system_projection;
+
+  -- Step 4: the declaration. Every record-scoped permission of this action
+  -- kind declared for this exact record type, owned by the context Application
+  -- or by the record type's own Module, in the canonical order the eligibility
+  -- core requires.
+  select pg_catalog.jsonb_agg(
+    pg_catalog.jsonb_build_object(
+      'applicationRootId', context_application_root_id,
+      'ownerKind', declared.value ->> 'ownerKind',
+      'ownerId', (declared.value ->> 'ownerId')::uuid,
+      'permissionId', declared.key::uuid
+    )
+    order by declared.value ->> 'ownerKind' collate "C", declared.key collate "C"
+  )
+  into required_permissions
+  from pg_catalog.jsonb_each(permission_by_id) as declared(key, value)
+  where pg_catalog.lower(declared.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text)
+    and declared.value ->> 'actionKind' = p_action_kind
+    -- `->>` and not `->`: a permission that declares no named action is stored
+    -- here as JSON null, which `-> 'namedAction' is null` would never match, so
+    -- that test would leave every declaration empty and refuse every record.
+    and (declared.value ->> 'namedAction') is null
+    and (
+      (declared.value ->> 'ownerKind') = 'application'
+      or (declared.value ->> 'ownerId')::uuid = target_module_root_id
+    );
+
+  declaration := case
+    when required_permissions is null
+      and not preview_target then null
+    else pg_catalog.jsonb_build_object(
+      'operationKey', 'record.' || p_action_kind,
+      'action', pg_catalog.jsonb_build_object('actionKind', p_action_kind),
+      'target', pg_catalog.jsonb_build_object(
+        'kind', 'application', 'applicationRootId', context_application_root_id
+      ),
+      'requiredPermissions', coalesce(required_permissions, '[]'::jsonb),
+      'recordBinding', pg_catalog.jsonb_build_object(
+        'moduleRootId', target_module_root_id,
+        'recordTypeId', p_record_type_id,
+        'storageContractId', (target_meta ->> 'storageContractId')::uuid,
+        'storageScope', target_scope
+      ),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object(
+        'kind', case when preview_target
+          then 'preview_owner' else 'permission' end
+      )
+    )
+  end;
+
+  -- Step 5: the target row. The change path locks it here, before any other
+  -- row is read, and refuses a stale number without doing the closure work.
+  -- Organisation and application isolation is the scope policy's, which is what
+  -- makes a foreign row indistinguishable from a missing one.
+  load_sql := pg_catalog.format(
+    'select pg_catalog.jsonb_build_object(
+       ''recordScope'', pg_catalog.jsonb_build_object(
+         ''storageScope'', %L,
+         ''organizationId'', stored.organisation_id,
+         ''moduleRootId'', %L::uuid,
+         ''recordTypeId'', %L::uuid,
+         ''storageContractId'', %L::uuid,
+         ''recordId'', stored.record_id
+       ) || case when %L = ''application_contained''
+         then pg_catalog.jsonb_build_object(''applicationRootId'', stored.application_root_id)
+         else ''{}''::jsonb end,
+       ''lifecycleState'', stored.lifecycle_state,
+       ''fieldValues'', pg_catalog.jsonb_build_object(%s)
+     ) || case
+       when stored.owner_organisation_account_id is not null
+         then pg_catalog.jsonb_build_object(
+           ''ownerOrganizationAccountId'', stored.owner_organisation_account_id)
+       when stored.owner_group_id is not null
+         then pg_catalog.jsonb_build_object(''ownerGroupId'', stored.owner_group_id)
+       else ''{}''::jsonb end,
+     stored.concurrency_number, stored.definition_revision
+     from %s
+     where stored.organisation_id = $1 and stored.record_id = $2%s',
+    target_scope, target_module_root_id, p_record_type_id,
+    (target_meta ->> 'storageContractId')::uuid, target_scope,
+    target_meta ->> 'valueExpression', target_source_sql,
+    case when p_expected_concurrency_number is null then '' else ' for update' end
+  );
+
+  execute load_sql
+  into record_fact, target_concurrency_number, target_definition_revision
+  using context_organization_id, p_record_id, p_projection_row;
+
+  if record_fact is null then
+    return pg_catalog.jsonb_build_object('outcome', 'missing');
+  end if;
+
+  if p_expected_concurrency_number is not null
+    and target_concurrency_number <> p_expected_concurrency_number then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'conflict', 'concurrencyNumber', target_concurrency_number
+    );
+  end if;
+
+  -- A compatible reprovision can advance the shared projection view while an
+  -- older release remains installed. Report that exact projection definition;
+  -- generated records keep their persisted last-written definition revision.
+  if target_is_system_projection then
+    target_definition_revision := target_release_revision;
+  end if;
+
+  records_by_id := pg_catalog.jsonb_build_object(
+    pg_catalog.lower(p_record_id::text), record_fact
+  );
+  target_fact := record_fact;
+
+  -- Step 6: the fact closure. Two queues drain into one loop: rows still to
+  -- load, and (record, permission) pairs still to expand. A pair is expanded at
+  -- most once, which bounds the walk; an inherited-ownership chain is expanded
+  -- by pushing the parent under the same permission, so the chase and the
+  -- relationship routes use the same mechanism.
+  if declaration is not null then
+    for route_item in
+      select item.value from pg_catalog.jsonb_array_elements(required_permissions) as item(value)
+    loop
+      pair_records := pg_catalog.array_append(pair_records, p_record_id);
+      pair_permissions := pg_catalog.array_append(
+        pair_permissions, (route_item ->> 'permissionId')::uuid
+      );
+    end loop;
+  end if;
+
+  while coalesce(pg_catalog.array_length(load_records, 1), 0) > 0
+    or coalesce(pg_catalog.array_length(pair_records, 1), 0) > 0
+  loop
+    if coalesce(pg_catalog.array_length(load_records, 1), 0) > 0 then
+      current_contract := load_contracts[pg_catalog.array_length(load_contracts, 1)];
+      select coalesce(pg_catalog.array_agg(distinct queued.record_id), array[]::uuid[])
+      into batch_record_ids
+      from pg_catalog.unnest(load_contracts, load_records)
+        as queued(contract_id, record_id)
+      where queued.contract_id = current_contract
+        and not records_by_id ? pg_catalog.lower(queued.record_id::text);
+
+      select coalesce(pg_catalog.array_agg(queued.contract_id order by queued.ordinality), array[]::uuid[]),
+        coalesce(pg_catalog.array_agg(queued.record_id order by queued.ordinality), array[]::uuid[])
+      into load_contracts, load_records
+      from pg_catalog.unnest(load_contracts, load_records) with ordinality
+        as queued(contract_id, record_id, ordinality)
+      where queued.contract_id <> current_contract;
+
+      if pg_catalog.array_length(batch_record_ids, 1) is null then
+        continue;
+      end if;
+
+      select meta.value into current_meta
+      from pg_catalog.jsonb_each(type_meta) as meta(key, value)
+      where (meta.value ->> 'storageContractId')::uuid = current_contract
+      limit 1;
+      if current_meta is null then
+        continue;
+      end if;
+
+      load_sql := pg_catalog.format(
+        'select stored.record_id, pg_catalog.jsonb_build_object(
+           ''recordScope'', pg_catalog.jsonb_build_object(
+             ''storageScope'', %L,
+             ''organizationId'', stored.organisation_id,
+             ''moduleRootId'', %L::uuid,
+             ''recordTypeId'', %L::uuid,
+             ''storageContractId'', %L::uuid,
+             ''recordId'', stored.record_id
+           ) || case when %L = ''application_contained''
+             then pg_catalog.jsonb_build_object(''applicationRootId'', stored.application_root_id)
+             else ''{}''::jsonb end,
+           ''lifecycleState'', stored.lifecycle_state,
+           ''fieldValues'', pg_catalog.jsonb_build_object(%s)
+         ) || case
+           when stored.owner_organisation_account_id is not null
+             then pg_catalog.jsonb_build_object(
+               ''ownerOrganizationAccountId'', stored.owner_organisation_account_id)
+           when stored.owner_group_id is not null
+             then pg_catalog.jsonb_build_object(''ownerGroupId'', stored.owner_group_id)
+           else ''{}''::jsonb end as fact
+         from record_data.%I as stored
+         where stored.organisation_id = $1 and stored.record_id = any($2)',
+        current_meta ->> 'storageScope', (current_meta ->> 'moduleRootId')::uuid,
+        (current_meta ->> 'recordTypeId')::uuid, current_contract,
+        current_meta ->> 'storageScope', current_meta ->> 'valueExpression',
+        current_meta ->> 'table'
+      );
+
+      for loaded_row in execute load_sql using context_organization_id, batch_record_ids loop
+        records_by_id := records_by_id || pg_catalog.jsonb_build_object(
+          pg_catalog.lower(loaded_row.record_id::text), loaded_row.fact
+        );
+      end loop;
+      continue;
+    end if;
+
+    current_record := pair_records[pg_catalog.array_length(pair_records, 1)];
+    current_permission := pair_permissions[pg_catalog.array_length(pair_permissions, 1)];
+    pair_records := pair_records[1:pg_catalog.array_length(pair_records, 1) - 1];
+    pair_permissions := pair_permissions[1:pg_catalog.array_length(pair_permissions, 1) - 1];
+
+    pair_identity := pg_catalog.lower(current_record::text) || ':'
+      || pg_catalog.lower(current_permission::text);
+    if pair_identity = any (seen_pairs) then
+      continue;
+    end if;
+    seen_pairs := pg_catalog.array_append(seen_pairs, pair_identity);
+
+    record_fact := records_by_id -> pg_catalog.lower(current_record::text);
+    if record_fact is null then
+      continue;
+    end if;
+    current_meta := type_meta -> pg_catalog.lower(
+      record_fact -> 'recordScope' ->> 'recordTypeId'
+    );
+    current_scope := permission_by_id -> pg_catalog.lower(current_permission::text)
+      -> 'recordScope';
+    if current_meta is null or current_scope is null then
+      continue;
+    end if;
+
+    -- Inherited ownership: push the declared parent under the same permission,
+    -- which repeats for the grandparent when that pair is expanded.
+    if current_meta ->> 'ownershipMode' = 'inherited'
+      and current_meta ? 'ownershipRelationshipId'
+      and exists (
+        select 1 from pg_catalog.jsonb_array_elements(current_scope -> 'routes') as route(value)
+        where route.value ->> 'kind' = 'ownership'
+      ) then
+      for edge_row in
+        select edge.* from vortex_record.relationship_edges as edge
+        where edge.relationship_id = (current_meta ->> 'ownershipRelationshipId')::uuid
+          and edge.from_storage_contract_id = (current_meta ->> 'storageContractId')::uuid
+          and edge.from_record_id = current_record
+      loop
+        load_contracts := pg_catalog.array_append(load_contracts, edge_row.to_storage_contract_id);
+        load_records := pg_catalog.array_append(load_records, edge_row.to_record_id);
+        pair_records := pg_catalog.array_append(pair_records, edge_row.to_record_id);
+        pair_permissions := pg_catalog.array_append(pair_permissions, current_permission);
+        candidate_edges := candidate_edges || pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'relationshipId', edge_row.relationship_id,
+            'fromRecordId', edge_row.from_record_id,
+            'toRecordId', edge_row.to_record_id
+          )
+        );
+      end loop;
+    end if;
+
+    -- Relationship routes: the target is always the `to` endpoint, so the
+    -- sources this permission can reach it through are the `from` rows of that
+    -- relationship's edges, each expanded under its own source permission.
+    for route_item in
+      select route.value
+      from pg_catalog.jsonb_array_elements(current_scope -> 'routes') as route(value)
+      where route.value ->> 'kind' = 'relationship'
+    loop
+      if not (relationship_by_id ? pg_catalog.lower(route_item ->> 'relationshipId')) then
+        continue;
+      end if;
+      for edge_row in
+        select edge.* from vortex_record.relationship_edges as edge
+        where edge.relationship_id = (route_item ->> 'relationshipId')::uuid
+          and edge.to_storage_contract_id = (current_meta ->> 'storageContractId')::uuid
+          and edge.to_record_id = current_record
+      loop
+        load_contracts := pg_catalog.array_append(
+          load_contracts, edge_row.from_storage_contract_id
+        );
+        load_records := pg_catalog.array_append(load_records, edge_row.from_record_id);
+        pair_records := pg_catalog.array_append(pair_records, edge_row.from_record_id);
+        pair_permissions := pg_catalog.array_append(
+          pair_permissions, (route_item ->> 'sourcePermissionId')::uuid
+        );
+        candidate_edges := candidate_edges || pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'relationshipId', edge_row.relationship_id,
+            'fromRecordId', edge_row.from_record_id,
+            'toRecordId', edge_row.to_record_id
+          )
+        );
+      end loop;
+    end loop;
+  end loop;
+
+  -- Step 7: the facts. Every record type, relationship and saved condition of
+  -- the installed definitions; the records the closure reached; and exactly the
+  -- edges whose endpoints are both present, deduplicated.
+  facts := pg_catalog.jsonb_build_object(
+    'binding', declaration -> 'recordBinding',
+    'recordTypes', coalesce((
+      select pg_catalog.jsonb_agg(
+        pg_catalog.jsonb_build_object(
+          'moduleRootId', meta.value -> 'moduleRootId',
+          'recordTypeId', meta.value -> 'recordTypeId',
+          'storageContractId', meta.value -> 'storageContractId',
+          'storageScope', meta.value -> 'storageScope',
+          'ownershipMode', meta.value -> 'ownershipMode',
+          'validationContractVersion', meta.value -> 'validationContractVersion',
+          'fields', meta.value -> 'fields'
+        ) || case
+          when meta.value ? 'ownershipRelationshipId'
+            then pg_catalog.jsonb_build_object(
+              'ownershipRelationshipId', meta.value -> 'ownershipRelationshipId'
+            )
+          else '{}'::jsonb
+        end
+        order by meta.key collate "C"
+      )
+      from pg_catalog.jsonb_each(type_meta) as meta(key, value)
+    ), '[]'::jsonb),
+    'relationships', coalesce((
+      select pg_catalog.jsonb_agg(declared.value order by declared.key collate "C")
+      from pg_catalog.jsonb_each(relationship_by_id) as declared(key, value)
+    ), '[]'::jsonb),
+    'sharingConditions', condition_list,
+    'records', coalesce((
+      select pg_catalog.jsonb_agg(stored.value order by stored.key collate "C")
+      from pg_catalog.jsonb_each(records_by_id) as stored(key, value)
+    ), '[]'::jsonb),
+    'edges', coalesce((
+      select pg_catalog.jsonb_agg(distinct edge.value)
+      from pg_catalog.jsonb_array_elements(candidate_edges) as edge(value)
+      where records_by_id ? pg_catalog.lower(edge.value ->> 'fromRecordId')
+        and records_by_id ? pg_catalog.lower(edge.value ->> 'toRecordId')
+    ), '[]'::jsonb)
+  );
+
+  return pg_catalog.jsonb_build_object(
+    'outcome', 'loaded',
+    'context', context_value,
+    'declaration', declaration,
+    'facts', facts,
+    'accessPermissions', permission_by_id,
+    'recordTypeMeta', target_meta - 'isSystemProjection',
+    'isSystemProjection', target_is_system_projection,
+    'table', target_table,
+    'columns', target_meta -> 'columns',
+    'concurrencyNumber', target_concurrency_number,
+    'definitionRevision', target_definition_revision,
+    'moduleReleaseRevision', target_release_revision,
+    'fieldValues', target_fact -> 'fieldValues'
+  ) || case when preview_target
+    then pg_catalog.jsonb_build_object(
+      'previewInstallationId', p_installation -> 'previewInstallationId'
+    )
+    else '{}'::jsonb end;
+exception
+  when no_data_found then
+    raise exception using errcode = '55000',
+      message = 'Installed Module definition is unavailable';
+  when too_many_rows then
+    raise exception using errcode = '55000',
+      message = 'Installed Module definition is ambiguous';
+end
+$function$;
+
+create or replace function vortex_record.load_record_access_facts_from_installation_internal(
+  p_record_type_id uuid,
+  p_action_kind text,
+  p_record_id uuid,
+  p_expected_concurrency_number bigint,
+  p_installation jsonb
+)
+returns jsonb
+language sql volatile security invoker set search_path = ''
+as $function$
+  select vortex_record.load_record_access_facts_from_installation_internal(
+    p_record_type_id, p_action_kind, p_record_id, p_expected_concurrency_number,
+    p_installation, null::jsonb
+  )
+$function$;
+
+alter function vortex_record.load_record_access_facts_from_installation_internal(uuid,text,uuid,bigint,jsonb,jsonb) owner to vortex_record_adapter;
+alter function vortex_record.load_record_access_facts_from_installation_internal(uuid,text,uuid,bigint,jsonb) owner to vortex_record_adapter;
+
+revoke all on function vortex_record.load_record_access_facts_from_installation_internal(
+  uuid, text, uuid, bigint, jsonb, jsonb
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+revoke all on function vortex_record.load_record_access_facts_from_installation_internal(
+  uuid, text, uuid, bigint, jsonb
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.load_record_access_facts_from_installation_internal(
+  uuid, text, uuid, bigint, jsonb
+) to vortex_record_adapter;
+
+comment on function vortex_record.load_record_access_facts_from_installation_internal(
+  uuid, text, uuid, bigint, jsonb
+) is
+  'Private adapter fact loader over one exact trusted installation or owner-validated preview, resolving definitions from the cached installation access plan.';
+
+create or replace function vortex_record.prepare_module_query_internal(
+  p_module_root_id uuid,
+  p_query_id uuid,
+  p_expected_release_revision bigint,
+  p_input_values jsonb,
+  p_user_filter jsonb,
+  p_declared_filterable_field_ids jsonb,
+  p_stage text default 'complete',
+  p_prior_plan jsonb default null
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  uuid_pattern constant text :=
+    '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+  trivial_condition constant jsonb :=
+    '{"kind":"comparison","operator":"is_empty","left":{"source":"value","value":null}}'::jsonb;
+  context_value jsonb;
+  context_organization_id uuid;
+  context_application_root_id uuid;
+  resolved jsonb;
+  query_item jsonb;
+  record_type_item jsonb;
+  record_type_id_value uuid;
+  catalogue_row vortex_record.storage_catalogue%rowtype;
+  mapping_row vortex_record.field_storage_mappings%rowtype;
+  field_item jsonb;
+  fields_by_id jsonb := '{}'::jsonb;
+  field_key text;
+  field_kind text;
+  semantic_type text;
+  filter_condition jsonb;
+  filter_exact boolean := false;
+  filter_ids text[] := array[]::text[];
+  filter_types jsonb := '{}'::jsonb;
+  filter_nulls jsonb := '{}'::jsonb;
+  filter_expressions text[] := array[]::text[];
+  filter_field_columns jsonb := '{}'::jsonb;
+  filter_field_database_types jsonb := '{}'::jsonb;
+  filter_read_time_expressions jsonb := '{}'::jsonb;
+  filter_plan jsonb;
+  filter_predicate text;
+  filter_parameters jsonb := '[]'::jsonb;
+  user_filter jsonb;
+  user_filter_ids text[] := array[]::text[];
+  input_item jsonb;
+  input_key text;
+  input_value jsonb;
+  parameter_types jsonb := '{}'::jsonb;
+  parameter_values jsonb := '{}'::jsonb;
+  read_time_field boolean;
+  read_time_clock jsonb;
+  read_time_sql text;
+  access_plan record;
+  readable_field_ids text[] := array[]::text[];
+  declared_filterable_ids text[] := array[]::text[];
+  parsed_ids text[] := array[]::text[];
+  filterable_item jsonb;
+  prepared_plan jsonb;
+  preview_address text;
+  preview_context jsonb;
+  preview_installation_id uuid;
+  preview_candidate_revision bigint;
+  preview_candidate_revision_text text;
+  preview_storage_contract_id uuid;
+  preview_field_bounds jsonb;
+  preview_field_mappings jsonb := '{}'::jsonb;
+  preview_mode boolean := false;
+  failure_sqlstate text;
+  failure_message text;
+begin
+  if p_stage not in ('resolution', 'storage', 'complete') then
+    raise exception using errcode = '22023', message = 'Invalid query preparation stage';
+  end if;
+  preview_address := nullif(
+    pg_catalog.current_setting('vortex_record.preview_installation_id', true), ''
+  );
+  preview_mode := preview_address is not null;
+  if preview_mode then
+    begin
+      preview_context := vortex_record.read_current_preview_installation_internal();
+    exception
+      -- A refused access context or a stale preview is the expected refusal; any
+      -- other failure is logged with its cause before the same safe refusal.
+      when sqlstate '42501' or sqlstate '40001' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+      when others then
+        get stacked diagnostics failure_sqlstate = returned_sqlstate,
+          failure_message = message_text;
+        raise warning 'Query preview preparation failed (preview installation): SQLSTATE %, %',
+          failure_sqlstate, failure_message;
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+    end;
+    preview_candidate_revision_text := preview_context ->> 'applicationReleaseRevision';
+    if preview_context is null
+      or pg_catalog.jsonb_typeof(preview_context) is distinct from 'object'
+      or preview_context ? 'outcome'
+      or not vortex_platform.is_non_nil_uuid(preview_context ->> 'previewInstallationId')
+      or not coalesce(pg_catalog.pg_input_is_valid(preview_candidate_revision_text, 'bigint'), false) then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+    end if;
+    preview_installation_id := (preview_context ->> 'previewInstallationId')::uuid;
+    preview_candidate_revision := preview_candidate_revision_text::bigint;
+    if preview_candidate_revision not between 1 and 9007199254740991 then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+    end if;
+  end if;
+  if p_prior_plan is not null then
+    prepared_plan := p_prior_plan;
+    -- A plan for a system projection is a live plan, in a preview too: see below.
+    if preview_mode and not (prepared_plan ? 'preview')
+      and prepared_plan -> 'recordType' ? 'systemProjection' then
+      preview_mode := false;
+    end if;
+    if preview_mode then
+      if pg_catalog.jsonb_typeof(prepared_plan) is distinct from 'object'
+        or prepared_plan ->> 'outcome' is distinct from 'prepared'
+        or not (prepared_plan ? 'preview') then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+      end if;
+      begin
+        context_value := vortex_access.validated_human_request_context();
+        resolved := vortex_record.resolve_preview_module_query_internal(p_module_root_id, p_query_id);
+      exception
+        -- A refused access context or a stale preview is the expected refusal; any
+        -- other failure is logged with its cause before the same safe refusal.
+        when sqlstate '42501' or sqlstate '40001' then
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+        when others then
+          get stacked diagnostics failure_sqlstate = returned_sqlstate,
+            failure_message = message_text;
+          raise warning 'Query preview preparation failed (preview context): SQLSTATE %, %',
+            failure_sqlstate, failure_message;
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+      end;
+      if context_value is null or not (context_value ? 'applicationRootId') or resolved is null then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+      end if;
+      context_organization_id := (context_value ->> 'organizationId')::uuid;
+      context_application_root_id := (context_value ->> 'applicationRootId')::uuid;
+      if p_expected_release_revision is not null
+        and (resolved ->> 'moduleReleaseRevision')::bigint <> p_expected_release_revision then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'cursor_stale');
+      end if;
+      if preview_context ->> 'organizationId' is distinct from context_organization_id::text
+        or preview_context ->> 'applicationRootId' is distinct from context_application_root_id::text
+        or prepared_plan #>> '{scope,organizationId}' is distinct from context_organization_id::text
+        or prepared_plan #>> '{scope,applicationRootId}' is distinct from context_application_root_id::text
+        or prepared_plan -> 'preview' is distinct from pg_catalog.jsonb_build_object(
+          'previewInstallationId', preview_installation_id,
+          'candidateRevision', preview_candidate_revision
+        )
+        or prepared_plan -> 'resolved' is distinct from resolved
+        or prepared_plan -> 'query' is distinct from resolved -> 'query'
+        or prepared_plan -> 'recordType' is distinct from resolved -> 'recordType'
+        or prepared_plan ->> 'recordTypeId' is distinct from resolved ->> 'recordTypeId' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+      end if;
+      prepared_plan := prepared_plan || pg_catalog.jsonb_build_object(
+        'resolved', resolved,
+        'query', resolved -> 'query',
+        'recordType', resolved -> 'recordType',
+        'recordTypeId', resolved -> 'recordTypeId',
+        'scope', pg_catalog.jsonb_build_object(
+          'organizationId', context_organization_id,
+          'applicationRootId', context_application_root_id
+        )
+      );
+      -- A previous stage's physical tokens and field bounds are reusable only
+      -- after this invocation re-reads the exact preview catalogue and bounds.
+      prepared_plan := prepared_plan - 'storage' - 'readableFieldIds' - 'access'
+        - 'filterFieldIds' - 'filter';
+    elsif prepared_plan ? 'preview' then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+    else
+      resolved := prepared_plan -> 'resolved';
+      context_organization_id := (prepared_plan #>> '{scope,organizationId}')::uuid;
+      context_application_root_id := (prepared_plan #>> '{scope,applicationRootId}')::uuid;
+    end if;
+    user_filter := prepared_plan -> 'userFilter';
+    if user_filter = 'null'::jsonb then
+      user_filter := null;
+    end if;
+    select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
+    into declared_filterable_ids
+    from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'declaredFilterableIds') as item(value);
+  else
+  if p_input_values is null or pg_catalog.jsonb_typeof(p_input_values) <> 'object'
+    or (p_expected_release_revision is not null
+      and p_expected_release_revision not between 1 and 9007199254740991) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+  if p_declared_filterable_field_ids is null then
+    p_declared_filterable_field_ids := '[]'::jsonb;
+  end if;
+  if pg_catalog.jsonb_typeof(p_declared_filterable_field_ids) <> 'array'
+    or pg_catalog.jsonb_array_length(p_declared_filterable_field_ids) > 200 then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+  for filterable_item in
+    select item.value
+    from pg_catalog.jsonb_array_elements(p_declared_filterable_field_ids) as item(value)
+  loop
+    if pg_catalog.jsonb_typeof(filterable_item) <> 'string'
+      or pg_catalog.lower(filterable_item #>> '{}') !~ uuid_pattern
+      or pg_catalog.lower(filterable_item #>> '{}') = any (parsed_ids) then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+    end if;
+    parsed_ids := pg_catalog.array_append(parsed_ids, pg_catalog.lower(filterable_item #>> '{}'));
+  end loop;
+  declared_filterable_ids := parsed_ids;
+
+  if p_user_filter = 'null'::jsonb then
+    p_user_filter := null;
+  end if;
+  if p_user_filter is not null
+    and pg_catalog.jsonb_typeof(p_user_filter) is distinct from 'object' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+  user_filter := p_user_filter;
+  -- The verified organisation and Application; never a caller value.
+  if preview_mode then
+    begin
+      context_value := vortex_access.validated_human_request_context();
+    exception
+      -- A refused access context or a stale preview is the expected refusal; any
+      -- other failure is logged with its cause before the same safe refusal.
+      when sqlstate '42501' or sqlstate '40001' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+      when others then
+        get stacked diagnostics failure_sqlstate = returned_sqlstate,
+          failure_message = message_text;
+        raise warning 'Query preview preparation failed (preview context): SQLSTATE %, %',
+          failure_sqlstate, failure_message;
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+    end;
+    if context_value is null or not (context_value ? 'applicationRootId') then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+    end if;
+  else
+    context_value := vortex_access.validated_human_request_context();
+    if not (context_value ? 'applicationRootId') then
+      raise exception using errcode = '42501', message = 'Query requires an application context';
+    end if;
+  end if;
+  context_organization_id := (context_value ->> 'organizationId')::uuid;
+  context_application_root_id := (context_value ->> 'applicationRootId')::uuid;
+  if preview_mode and (
+    preview_context ->> 'organizationId' is distinct from context_organization_id::text
+    or preview_context ->> 'applicationRootId' is distinct from context_application_root_id::text
+  ) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+  end if;
+
+  if preview_mode then
+    begin
+      resolved := vortex_record.resolve_preview_module_query_internal(p_module_root_id, p_query_id);
+      -- A system projection has no preview copy: it is the platform's live read model, which a
+      -- preview reads on the live path, under the reader's own live access and never under the
+      -- preview's roles.
+      if resolved is null then
+        resolved := vortex_record.resolve_installed_module_query_internal(p_module_root_id, p_query_id);
+        if resolved -> 'recordType' ? 'systemProjection' then
+          preview_mode := false;
+        else
+          resolved := null;
+        end if;
+      end if;
+    exception
+      -- A refused access context or a stale preview is the expected refusal; any
+      -- other failure is logged with its cause before the same safe refusal.
+      when sqlstate '42501' or sqlstate '40001' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+      when others then
+        get stacked diagnostics failure_sqlstate = returned_sqlstate,
+          failure_message = message_text;
+        raise warning 'Query preview preparation failed (preview query): SQLSTATE %, %',
+          failure_sqlstate, failure_message;
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+    end;
+  else
+    resolved := vortex_record.resolve_installed_module_query_internal(p_module_root_id, p_query_id);
+  end if;
+  if resolved is null then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+  end if;
+  if p_expected_release_revision is not null
+    and (resolved ->> 'moduleReleaseRevision')::bigint <> p_expected_release_revision then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'cursor_stale');
+  end if;
+  end if;
+  query_item := resolved -> 'query';
+  record_type_item := resolved -> 'recordType';
+  record_type_id_value := (resolved ->> 'recordTypeId')::uuid;
+  -- A preview reads its copy of the records with their stored totals and calculations; a system
+  -- projection is read only through its protected reader, never from a preview.
+  if preview_mode and record_type_item ? 'systemProjection' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+  end if;
+  if prepared_plan is null then
+    prepared_plan := pg_catalog.jsonb_build_object(
+      'outcome', 'prepared',
+      'resolved', resolved,
+      'query', query_item,
+      'recordType', record_type_item,
+      'recordTypeId', record_type_id_value,
+      'userFilter', user_filter,
+      'declaredFilterableIds', pg_catalog.to_jsonb(declared_filterable_ids),
+      'scope', pg_catalog.jsonb_build_object(
+        'organizationId', context_organization_id,
+        'applicationRootId', context_application_root_id
+      )
+    );
+    if preview_mode then
+      prepared_plan := prepared_plan || pg_catalog.jsonb_build_object(
+        'preview', pg_catalog.jsonb_build_object(
+          'previewInstallationId', preview_installation_id,
+          'candidateRevision', preview_candidate_revision
+        )
+      );
+    end if;
+  end if;
+  if p_stage = 'resolution' then
+    return prepared_plan;
+  end if;
+
+  if prepared_plan ? 'storage' and not preview_mode then
+    catalogue_row.storage_contract_id := (prepared_plan #>> '{storage,storageContractId}')::uuid;
+    select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
+    into readable_field_ids
+    from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'readableFieldIds') as item(value);
+  else
+    if preview_mode then
+      preview_storage_contract_id := (resolved ->> 'previewStorageContractId')::uuid;
+      select catalogue.* into catalogue_row
+      from vortex_record.storage_catalogue as catalogue
+      where catalogue.storage_contract_id = preview_storage_contract_id;
+      if not found
+        or catalogue_row.state is distinct from 'active'
+        or catalogue_row.physical_schema_token is distinct from 'record_data'
+        or catalogue_row.module_root_id is distinct from (resolved ->> 'recordTypeModuleRootId')::uuid
+        or catalogue_row.record_type_id is distinct from record_type_id_value
+        or catalogue_row.storage_scope is distinct from (resolved ->> 'storageScope')
+        or catalogue_row.first_compatible_release_revision is distinct from
+          (resolved ->> 'recordTypeModuleReleaseRevision')::bigint
+        or catalogue_row.last_compatible_release_revision is distinct from
+          (resolved ->> 'recordTypeModuleReleaseRevision')::bigint
+        or catalogue_row.record_type_definition ->> 'storageContractId'
+          is distinct from preview_storage_contract_id::text
+        or pg_catalog.lower(catalogue_row.record_type_definition ->> 'recordTypeId')
+          is distinct from record_type_id_value::text
+        or catalogue_row.record_type_definition ->> 'storageScope'
+          is distinct from (resolved ->> 'storageScope') then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+      end if;
+
+      preview_field_bounds := vortex_record.preview_record_field_bounds_internal(
+        record_type_id_value, preview_storage_contract_id, record_type_item
+      );
+      if preview_field_bounds is null
+        or pg_catalog.jsonb_typeof(preview_field_bounds -> 'readableFieldIds') is distinct from 'array' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+      end if;
+      if exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(record_type_item -> 'fields') as field(value)
+        where not exists (
+          select 1
+          from vortex_record.field_storage_mappings as mapping
+          where mapping.storage_contract_id = preview_storage_contract_id
+            and mapping.field_id = pg_catalog.lower(field.value ->> 'fieldId')::uuid
+            and mapping.state is not distinct from 'active'
+            and mapping.field_definition is not distinct from field.value
+            and mapping.physical_column_token is not distinct from
+              ('f_' || pg_catalog.replace(pg_catalog.lower(field.value ->> 'fieldId'), '-', ''))
+            and mapping.database_value_type is not distinct from
+              vortex_record.database_value_type(field.value)
+            and mapping.introduced_by_module_root_id is not distinct from
+              (resolved ->> 'recordTypeModuleRootId')::uuid
+            and mapping.introduced_at_release_revision is not distinct from
+              (resolved ->> 'recordTypeModuleReleaseRevision')::bigint
+        )
+      ) then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+      end if;
+      select coalesce(pg_catalog.jsonb_object_agg(
+        pg_catalog.lower(field.value ->> 'fieldId'),
+        pg_catalog.to_jsonb(mapping)
+        order by pg_catalog.lower(field.value ->> 'fieldId') collate "C"
+      ), '{}'::jsonb)
+      into preview_field_mappings
+      from pg_catalog.jsonb_array_elements(record_type_item -> 'fields') as field(value)
+      join vortex_record.field_storage_mappings as mapping
+        on mapping.storage_contract_id = preview_storage_contract_id
+        and mapping.field_id = pg_catalog.lower(field.value ->> 'fieldId')::uuid
+        and mapping.state is not distinct from 'active';
+      if prepared_plan ? 'fieldMappings'
+        and prepared_plan -> 'fieldMappings' is distinct from preview_field_mappings then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+      end if;
+
+      for field_item in
+        select item.value from pg_catalog.jsonb_array_elements(record_type_item -> 'fields') as item(value)
+      loop
+        fields_by_id := fields_by_id || pg_catalog.jsonb_build_object(
+          pg_catalog.lower(field_item ->> 'fieldId'), field_item
+        );
+      end loop;
+      select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
+      into readable_field_ids
+      from pg_catalog.jsonb_array_elements_text(preview_field_bounds -> 'readableFieldIds') as item(value);
+      prepared_plan := prepared_plan || pg_catalog.jsonb_build_object(
+        'storage', pg_catalog.jsonb_build_object(
+          'storageContractId', catalogue_row.storage_contract_id,
+          'storageScope', catalogue_row.storage_scope,
+          'moduleRootId', catalogue_row.module_root_id,
+          'recordTypeId', catalogue_row.record_type_id,
+          'physicalSchemaToken', catalogue_row.physical_schema_token,
+          'physicalTableToken', catalogue_row.physical_table_token,
+          'protectedReadModelKey', catalogue_row.protected_read_model_key
+        ),
+        'fieldMappings', preview_field_mappings,
+        'readableFieldIds', pg_catalog.to_jsonb(readable_field_ids),
+        'access', pg_catalog.jsonb_build_object(
+          'predicate', 'true',
+          'parameters', '[]'::jsonb,
+          'ownerAccountId', null,
+          'ownerGroupIds', '[]'::jsonb,
+          'sharedRecordIds', '[]'::jsonb
+        )
+      );
+    else
+      -- The installed physical table for this exact record type.
+      select catalogue.* into catalogue_row
+      from vortex_record.storage_catalogue as catalogue
+      where catalogue.storage_contract_id = (record_type_item ->> 'storageContractId')::uuid;
+      if not found
+        or catalogue_row.state <> 'active'
+        or catalogue_row.module_root_id <> (resolved ->> 'recordTypeModuleRootId')::uuid
+        or catalogue_row.record_type_id <> record_type_id_value
+        or catalogue_row.storage_scope is distinct from (record_type_item ->> 'storageScope')
+        or catalogue_row.physical_schema_token not in ('record_data', 'system_projection')
+        or (catalogue_row.physical_schema_token = 'system_projection')
+          is distinct from (record_type_item ? 'systemProjection')
+        or (catalogue_row.physical_schema_token = 'system_projection'
+          and catalogue_row.protected_read_model_key
+            is distinct from (record_type_item #>> '{systemProjection,protectedView}')) then
+        raise exception using errcode = '55000',
+          message = 'Record storage disagrees with the installed definition';
+      end if;
+
+      for field_item in
+        select item.value from pg_catalog.jsonb_array_elements(record_type_item -> 'fields') as item(value)
+      loop
+        fields_by_id := fields_by_id || pg_catalog.jsonb_build_object(
+          pg_catalog.lower(field_item ->> 'fieldId'), field_item
+        );
+      end loop;
+
+      -- The read-scan plan. Its access routes narrow candidate rows before the
+      -- budget is spent; its readable fields are the fields this reader is
+      -- guaranteed to see on every row the scan examines, and none when the scan
+      -- can examine a row the reader cannot read. Only those fields may drive the
+      -- scan order, the pushed filter or the keyset cursor, because any other
+      -- field could be withheld and its value must not influence which rows are
+      -- examined. A planning failure propagates; it never widens the scan.
+      select plan.* into access_plan
+      from vortex_record.plan_record_read_scan_internal(record_type_id_value) as plan;
+      readable_field_ids := coalesce(access_plan.readable_field_ids, array[]::text[]);
+      prepared_plan := prepared_plan || pg_catalog.jsonb_build_object(
+        'storage', pg_catalog.jsonb_build_object(
+          'storageContractId', catalogue_row.storage_contract_id,
+          'storageScope', catalogue_row.storage_scope,
+          'moduleRootId', catalogue_row.module_root_id,
+          'recordTypeId', catalogue_row.record_type_id,
+          'physicalSchemaToken', catalogue_row.physical_schema_token,
+          'physicalTableToken', catalogue_row.physical_table_token,
+          'protectedReadModelKey', catalogue_row.protected_read_model_key
+        ),
+        'readableFieldIds', pg_catalog.to_jsonb(readable_field_ids),
+        'access', pg_catalog.jsonb_build_object(
+          'predicate', access_plan.access_predicate,
+          'parameters', coalesce(access_plan.access_parameters, '[]'::jsonb),
+          'ownerAccountId', access_plan.owner_account_id,
+          'ownerGroupIds', pg_catalog.to_jsonb(coalesce(access_plan.owner_group_ids, array[]::uuid[])),
+          'sharedRecordIds', pg_catalog.to_jsonb(coalesce(access_plan.shared_record_ids, array[]::uuid[]))
+        )
+      );
+    end if;
+  end if;
+  if p_stage = 'storage' then
+    return prepared_plan;
+  end if;
+
+  if fields_by_id = '{}'::jsonb then
+    for field_item in
+      select item.value from pg_catalog.jsonb_array_elements(record_type_item -> 'fields') as item(value)
+    loop
+      fields_by_id := fields_by_id || pg_catalog.jsonb_build_object(
+        pg_catalog.lower(field_item ->> 'fieldId'), field_item
+      );
+    end loop;
+  end if;
+  -- Filter: the published condition tree over this record type's own fields, and,
+  -- when supplied, the user's typed filter ANDed with it so it can only narrow.
+  -- Every field the user's tree reads must be one the component declares
+  -- filterable; the record type's own filterable flag is checked below for both.
+  filter_condition := query_item -> 'filter';
+  if filter_condition is not null and filter_condition = 'null'::jsonb then
+    filter_condition := null;
+  end if;
+  if user_filter is not null then
+    select coalesce(pg_catalog.array_agg(distinct referenced.value #>> '{}'), array[]::text[])
+    into user_filter_ids
+    from pg_catalog.jsonb_path_query(
+      user_filter, 'lax $.**?(@.source == "field").fieldId'
+    ) as referenced(value);
+    if exists (
+      select 1 from pg_catalog.unnest(user_filter_ids) as referenced(id)
+      where referenced.id <> pg_catalog.lower(referenced.id)
+        or referenced.id <> all (declared_filterable_ids)
+    ) then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
+    end if;
+    filter_condition := case
+      when filter_condition is null then user_filter
+      else pg_catalog.jsonb_build_object(
+        'kind', 'all',
+        'conditions', pg_catalog.jsonb_build_array(filter_condition, user_filter)
+      )
+    end;
+  end if;
+  if filter_condition is not null then
+    select coalesce(pg_catalog.array_agg(distinct referenced.value #>> '{}'), array[]::text[])
+    into filter_ids
+    from pg_catalog.jsonb_path_query(
+      filter_condition, 'lax $.**?(@.source == "field").fieldId'
+    ) as referenced(value);
+    foreach field_key in array filter_ids loop
+      -- Field values are keyed by lowercase identifier; so must the tree be.
+      if field_key <> pg_catalog.lower(field_key) or not (fields_by_id ? field_key)
+        or coalesce((fields_by_id -> field_key ->> 'filterable')::boolean, false) is not true then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
+      end if;
+      field_kind := fields_by_id -> field_key ->> 'type';
+      if field_kind in ('calculation', 'total') then
+        field_kind := fields_by_id -> field_key #>> '{settings,resultType}';
+      end if;
+      -- The exact (current Module contract) semantics of the saved-condition
+      -- evaluator, so Query and database-backed conditions agree.
+      semantic_type := case
+        when field_kind = 'decimal_number' then 'decimal_number'
+        when field_kind = 'money' then 'money'
+        when field_kind = 'whole_number' then 'number'
+        when field_kind = 'yes_no' then 'boolean'
+        when field_kind = 'date' then 'date'
+        when field_kind = 'date_time' then 'date_time'
+        when field_kind = 'several_choices' then 'text_collection'
+        when field_kind in ('table', 'attachment', 'formatted_text') then 'opaque_json'
+        when field_kind in ('link', 'link_to_one_of_several') then 'record_reference'
+        when field_kind = 'link_to_person' then 'organization_account_reference'
+        when field_kind in (
+          'text', 'long_text', 'choice', 'reference_number',
+          'email_address', 'phone_number', 'web_address'
+        ) then 'text'
+        else null end;
+      if semantic_type is null then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
+      end if;
+      select mapping.* into mapping_row
+      from vortex_record.field_storage_mappings as mapping
+      where mapping.storage_contract_id = catalogue_row.storage_contract_id
+        and mapping.field_id = field_key::uuid;
+      if not found or mapping_row.state is distinct from 'active' then
+        if preview_mode then
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+        end if;
+        raise exception using errcode = '55000',
+          message = 'Record storage disagrees with the installed definition';
+      end if;
+      filter_field_columns := filter_field_columns || pg_catalog.jsonb_build_object(
+        field_key, mapping_row.physical_column_token
+      );
+      filter_field_database_types := filter_field_database_types || pg_catalog.jsonb_build_object(
+        field_key, mapping_row.database_value_type
+      );
+      filter_types := filter_types || pg_catalog.jsonb_build_object(field_key, semantic_type);
+      filter_nulls := filter_nulls || pg_catalog.jsonb_build_object(field_key, null::jsonb);
+      read_time_field := fields_by_id -> field_key ->> 'type' = 'calculation'
+        and (fields_by_id -> field_key #>> '{settings,evaluation}' = 'read_time'
+          or fields_by_id -> field_key #>> '{settings,expression,kind}' = 'deadline_passed');
+      if read_time_field then
+        read_time_clock := coalesce(read_time_clock, vortex_record.read_time_clock_internal());
+        read_time_sql := vortex_record.read_time_deadline_expression_internal(
+          catalogue_row.storage_contract_id, fields_by_id -> field_key #> '{settings,expression}',
+          read_time_clock
+        );
+        if read_time_sql is null then
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
+        end if;
+        filter_read_time_expressions := filter_read_time_expressions || pg_catalog.jsonb_build_object(
+          field_key, read_time_sql
+        );
+        filter_expressions := pg_catalog.array_append(filter_expressions, pg_catalog.format(
+          '%L, %s', field_key, pg_catalog.format('pg_catalog.to_jsonb(%s)', read_time_sql)
+        ));
+        continue;
+      end if;
+      -- The same canonical value text the record reader projects; references
+      -- are compared by their identifier, as the condition engine defines.
+      filter_expressions := pg_catalog.array_append(filter_expressions, pg_catalog.format(
+        '%L, %s', field_key,
+        case
+          when semantic_type = 'record_reference' then
+            pg_catalog.format('pg_catalog.to_jsonb(pg_catalog.lower(stored.%I ->> ''recordId''))',
+              mapping_row.physical_column_token)
+          when semantic_type = 'organization_account_reference' then
+            pg_catalog.format('pg_catalog.to_jsonb(pg_catalog.lower(stored.%I ->> ''organizationAccountId''))',
+              mapping_row.physical_column_token)
+          when mapping_row.database_value_type = 'decimal' then
+            pg_catalog.format('pg_catalog.to_jsonb(stored.%I::text)', mapping_row.physical_column_token)
+          when mapping_row.database_value_type = 'timestamp_with_time_zone' then
+            pg_catalog.format(
+              'pg_catalog.to_jsonb(vortex_platform.format_timestamp_utc(stored.%I))',
+              mapping_row.physical_column_token)
+          when mapping_row.database_value_type = 'date' then
+            pg_catalog.format('pg_catalog.to_jsonb(pg_catalog.to_char(stored.%I, ''YYYY-MM-DD''))',
+              mapping_row.physical_column_token)
+          else pg_catalog.format('pg_catalog.to_jsonb(stored.%I)', mapping_row.physical_column_token)
+        end
+      ));
+    end loop;
+  end if;
+
+  -- Inputs: exactly the declared keys, required ones present, references
+  -- reduced to their identifier. Types are checked by the condition bridge.
+  for input_key in select supplied.key from pg_catalog.jsonb_object_keys(p_input_values) as supplied(key) loop
+    if not exists (
+      select 1 from pg_catalog.jsonb_array_elements(coalesce(query_item -> 'inputs', '[]'::jsonb)) as item(value)
+      where item.value ->> 'key' = input_key
+    ) then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'input_invalid');
+    end if;
+  end loop;
+  for input_item in
+    select item.value from pg_catalog.jsonb_array_elements(coalesce(query_item -> 'inputs', '[]'::jsonb)) as item(value)
+  loop
+    input_key := input_item ->> 'key';
+    input_value := coalesce(p_input_values -> input_key, 'null'::jsonb);
+    if input_value = 'null'::jsonb and (input_item ->> 'required')::boolean then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'input_invalid');
+    end if;
+    if input_value <> 'null'::jsonb and input_item ->> 'type' = 'record_reference' then
+      if pg_catalog.jsonb_typeof(input_value) <> 'object'
+        or input_value - array['recordTypeId', 'recordId']::text[] <> '{}'::jsonb
+        or not coalesce(pg_catalog.lower(input_value ->> 'recordId') ~ uuid_pattern, false)
+        or not exists (
+          select 1 from pg_catalog.jsonb_array_elements(input_item -> 'recordTypes') as allowed(value)
+          where allowed.value ->> 'state' = 'resolved'
+            and pg_catalog.lower(allowed.value ->> 'recordTypeId')
+              = pg_catalog.lower(input_value ->> 'recordTypeId')
+        ) then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'input_invalid');
+      end if;
+      input_value := pg_catalog.to_jsonb(pg_catalog.lower(input_value ->> 'recordId'));
+    elsif input_value <> 'null'::jsonb and input_item ->> 'type' = 'organization_account_reference' then
+      if pg_catalog.jsonb_typeof(input_value) <> 'object'
+        or input_value - array['organizationAccountId']::text[] <> '{}'::jsonb
+        or not coalesce(pg_catalog.lower(input_value ->> 'organizationAccountId') ~ uuid_pattern, false) then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'input_invalid');
+      end if;
+      input_value := pg_catalog.to_jsonb(pg_catalog.lower(input_value ->> 'organizationAccountId'));
+    end if;
+    parameter_types := parameter_types || pg_catalog.jsonb_build_object(input_key, case input_item ->> 'type'
+      when 'formatted_text' then 'opaque_json'
+      else input_item ->> 'type' end);
+    parameter_values := parameter_values || pg_catalog.jsonb_build_object(input_key, input_value);
+  end loop;
+  begin
+    perform vortex_access.evaluate_query_condition_internal(
+      trivial_condition, '{}'::jsonb, '{}'::jsonb, parameter_types, parameter_values, true
+    );
+  exception when invalid_parameter_value then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'input_invalid');
+  end;
+  if filter_condition is not null then
+    begin
+      perform vortex_access.evaluate_query_condition_internal(
+        filter_condition, filter_types, filter_nulls, parameter_types, parameter_values, true
+      );
+    exception when invalid_parameter_value then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
+    end;
+  end if;
+
+  -- The published filter is pushed into the candidate scan only when every
+  -- field it reads is one the reader is guaranteed to see; otherwise it is
+  -- evaluated per row, so which rows the budget examines can never depend on a
+  -- value the reader cannot see.
+  filter_predicate := 'true';
+  if filter_condition is not null
+    and not exists (
+      select 1 from pg_catalog.unnest(filter_ids) as referenced(id)
+      where referenced.id <> all (readable_field_ids)
+    ) then
+    begin
+      filter_plan := vortex_record.compile_query_filter_internal(
+        filter_condition,
+        filter_types,
+        filter_field_columns,
+        filter_field_database_types,
+        fields_by_id,
+        filter_read_time_expressions,
+        parameter_types,
+        parameter_values,
+        9,
+        0
+      );
+      filter_predicate := coalesce(filter_plan ->> 'predicate', 'true');
+      filter_parameters := coalesce(filter_plan -> 'parameters', '[]'::jsonb);
+      -- An incomplete compiled predicate remains a candidate narrowing step.
+      filter_exact := filter_plan ->> 'predicate' is not null
+        and (filter_plan ->> 'exact')::boolean is true;
+    exception when invalid_parameter_value then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
+    end;
+  end if;
+  return prepared_plan || pg_catalog.jsonb_build_object(
+    'filterFieldIds', pg_catalog.to_jsonb(filter_ids),
+    'filter', pg_catalog.jsonb_build_object(
+      'residualCondition', filter_condition,
+      'residualFieldTypes', filter_types,
+      'residualNullValues', filter_nulls,
+      'residualInputTypes', parameter_types,
+      'residualInputs', parameter_values,
+      'expressions', pg_catalog.to_jsonb(filter_expressions),
+      'pushedPredicate', filter_predicate,
+      'pushedExact', filter_exact,
+      'pushedParameters', filter_parameters
+    )
+  );
+end
+$function$;
+
+alter function vortex_record.prepare_module_query_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb,text,jsonb) owner to vortex_record_adapter;
+
+revoke all on function vortex_record.prepare_module_query_internal(uuid, uuid, bigint, jsonb, jsonb, jsonb, text, jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.prepare_module_query_internal(uuid, uuid, bigint, jsonb, jsonb, jsonb, text, jsonb)
+  to vortex_owner;
+
+comment on function vortex_record.prepare_module_query_internal(uuid, uuid, bigint, jsonb, jsonb, jsonb, text, jsonb) is
+  'Shared owner-only Module query preparation for list and summary reads: derives organisation and application authority from validated_human_request_context(), resolves one installed query or the exact current human-owned preview pins, revalidates preview prior plans, exact active field mappings and preview catalogue/field bounds without using the installed read-scan routes, validates declared inputs and the published filter narrowed by the declared user filter, and returns the exact access predicate, pushed filter and residual per-row condition with bound inputs; it never accepts authority or identity from caller values.';
+
+create or replace function vortex_record.read_module_query_inputs(
+  p_module_root_id uuid,
+  p_query_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  preview_address text;
+  preview_context jsonb;
+  resolved jsonb;
+begin
+  preview_address := nullif(
+    pg_catalog.current_setting('vortex_record.preview_installation_id', true), ''
+  );
+  if preview_address is not null then
+    begin
+      preview_context := vortex_record.read_current_preview_installation_internal();
+      if preview_context is null
+        or pg_catalog.jsonb_typeof(preview_context) is distinct from 'object'
+        or preview_context ? 'outcome' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+      end if;
+      resolved := vortex_record.resolve_preview_module_query_internal(p_module_root_id, p_query_id);
+      -- A system projection has no preview copy: a preview reads it on the live path.
+      if resolved is null then
+        resolved := vortex_record.resolve_installed_module_query_internal(p_module_root_id, p_query_id);
+        if not coalesce(resolved -> 'recordType' ? 'systemProjection', false) then
+          resolved := null;
+        end if;
+      end if;
+    exception when others then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+    end;
+  else
+    resolved := vortex_record.resolve_installed_module_query_internal(p_module_root_id, p_query_id);
+  end if;
+  if resolved is null then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+  end if;
+  return pg_catalog.jsonb_build_object(
+    'outcome', 'resolved',
+    'moduleReleaseRevision', resolved -> 'moduleReleaseRevision',
+    'moduleReleaseVersion', resolved -> 'moduleReleaseVersion',
+    'inputs', coalesce(resolved #> '{query,inputs}', '[]'::jsonb)
+  );
+end
+$function$;
+alter function vortex_record.read_module_query_inputs(uuid,uuid) owner to vortex_record_adapter;
+
+
+alter function vortex_record.read_module_query_inputs(uuid, uuid)
+  owner to vortex_record_adapter;
+
+revoke all on function vortex_record.read_module_query_inputs(uuid, uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.read_module_query_inputs(uuid, uuid)
+  to vortex_request;
+
+comment on function vortex_record.read_module_query_inputs(uuid, uuid) is
+  'The typed input contract of one installed or exact current human-owned preview Module query, or one refusal.';
+
+create or replace function vortex_record.resolve_record_action_context_internal(
+  p_record_type_id uuid,
+  p_action_kind text
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  application_root_id_value uuid;
+  installation jsonb;
+  preview_installation jsonb;
+  preview_installation_id_value uuid;
+  binding_item jsonb;
+  module_content jsonb;
+  application_content jsonb;
+  module_root_id_value uuid;
+  module_release_revision_value bigint;
+  record_type_value jsonb;
+  candidate_record_type_value jsonb;
+  release_storage_contract_id uuid;
+  target_module_root_id uuid;
+  target_release_revision bigint;
+  target_storage_contract_id uuid;
+  catalogue_row vortex_record.storage_catalogue%rowtype;
+  field_item jsonb;
+  field_mapping vortex_record.field_storage_mappings%rowtype;
+  columns_value jsonb := '{}'::jsonb;
+  required_permissions jsonb := '[]'::jsonb;
+  permission_item jsonb;
+begin
+  if p_record_type_id is null
+    or p_record_type_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_action_kind is null
+    or p_action_kind not in ('create', 'read', 'update', 'delete', 'restore') then
+    raise exception using errcode = '22023', message = 'Record action selector is invalid';
+  end if;
+
+  context_value := vortex_access.validated_human_request_context();
+  if not context_value ? 'applicationRootId' then
+    raise exception using errcode = '42501',
+      message = 'Record action requires an application context';
+  end if;
+  application_root_id_value := (context_value ->> 'applicationRootId')::uuid;
+  preview_installation :=
+    vortex_record.read_current_preview_installation_internal();
+  if preview_installation is not null then
+    if preview_installation ->> 'outcome' = 'refused'
+      or p_action_kind not in ('create', 'read', 'update') then
+      return pg_catalog.jsonb_build_object('outcome', 'refused');
+    end if;
+    installation := preview_installation;
+    preview_installation_id_value :=
+      (preview_installation ->> 'previewInstallationId')::uuid;
+  else
+    installation := vortex_definition.read_current_active_installation();
+  end if;
+
+  for binding_item in
+    select item.value
+    from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as item(value)
+  loop
+    module_root_id_value := (binding_item ->> 'moduleRootId')::uuid;
+    module_release_revision_value := (binding_item ->> 'moduleReleaseRevision')::bigint;
+    select release.record_content into strict module_content
+    from vortex_definition.runtime_releases as release
+    where release.root_id = module_root_id_value
+      and release.release_revision = module_release_revision_value;
+
+    select item.value into candidate_record_type_value
+    from pg_catalog.jsonb_array_elements(module_content -> 'recordTypes') as item(value)
+    where (item.value ->> 'recordTypeId')::uuid = p_record_type_id;
+    if found then
+      if target_module_root_id is not null then
+        raise exception using errcode = '55000',
+          message = 'Installed record type identity is ambiguous';
+      end if;
+      target_module_root_id := module_root_id_value;
+      target_release_revision := module_release_revision_value;
+      record_type_value := candidate_record_type_value;
+      release_storage_contract_id := (record_type_value ->> 'storageContractId')::uuid;
+      target_storage_contract_id := release_storage_contract_id;
+      if preview_installation_id_value is not null
+        and not (record_type_value ? 'systemProjection') then
+        select (binding.value ->> 'previewStorageContractId')::uuid
+        into strict target_storage_contract_id
+        from pg_catalog.jsonb_array_elements(installation -> 'storageIdentities')
+          as binding(value)
+        where (binding.value ->> 'moduleRootId')::uuid = target_module_root_id
+          and (binding.value ->> 'moduleReleaseRevision')::bigint = target_release_revision
+          and (binding.value ->> 'recordTypeId')::uuid = p_record_type_id
+          and (binding.value ->> 'releaseStorageContractId')::uuid = release_storage_contract_id;
+        if not found then
+          return pg_catalog.jsonb_build_object('outcome', 'refused');
+        end if;
+      end if;
+      for permission_item in
+        select item.value
+        from pg_catalog.jsonb_array_elements(
+          coalesce(module_content -> 'permissions', '[]'::jsonb)
+        ) as item(value)
+        where (item.value ->> 'recordTypeId')::uuid = p_record_type_id
+          and item.value ->> 'actionKind' = p_action_kind
+          and (item.value ->> 'namedAction') is null
+      loop
+        required_permissions := required_permissions || pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'applicationRootId', application_root_id_value,
+            'ownerKind', 'module', 'ownerId', target_module_root_id,
+            'permissionId', (permission_item ->> 'permissionId')::uuid
+          )
+        );
+      end loop;
+    end if;
+  end loop;
+
+  if target_module_root_id is null then
+    raise exception using errcode = '55000',
+      message = 'Record type is not part of the active installation';
+  end if;
+  -- A system projection is the platform's live read model and has no preview copy: a preview
+  -- reads it on the live path, under the reader's own live access, never as the preview's owner.
+  if record_type_value ? 'systemProjection' then
+    preview_installation_id_value := null;
+  end if;
+
+  select catalogue.* into catalogue_row
+  from vortex_record.storage_catalogue as catalogue
+  where catalogue.storage_contract_id = target_storage_contract_id;
+  if not found or catalogue_row.state <> 'active'
+    or catalogue_row.module_root_id <> target_module_root_id
+    or catalogue_row.record_type_id <> p_record_type_id
+    or catalogue_row.storage_scope is distinct from (record_type_value ->> 'storageScope')
+    or (preview_installation_id_value is null
+      and catalogue_row.physical_schema_token not in ('record_data', 'system_projection'))
+    or (preview_installation_id_value is not null
+      and catalogue_row.physical_schema_token <> 'record_data')
+    or (catalogue_row.physical_schema_token = 'system_projection')
+      is distinct from (record_type_value ? 'systemProjection')
+    or (catalogue_row.physical_schema_token = 'system_projection'
+      and catalogue_row.protected_read_model_key
+        is distinct from (record_type_value #>> '{systemProjection,protectedView}'))
+    or (catalogue_row.physical_schema_token = 'system_projection'
+      and not coalesce(
+        (record_type_value #> '{standardActions}') ? p_action_kind,
+        false
+      ))
+    or (preview_installation_id_value is null and not exists (
+      select 1 from vortex_record.release_provisions as provision
+      where provision.module_root_id = target_module_root_id
+        and provision.release_revision = target_release_revision
+        and release_storage_contract_id = any (provision.storage_contract_ids)
+    )) then
+    raise exception using errcode = '55000',
+      message = 'Record storage disagrees with the active installation';
+  end if;
+
+  for field_item in
+    select item.value from pg_catalog.jsonb_array_elements(record_type_value -> 'fields') as item(value)
+  loop
+    select mapping.* into field_mapping
+    from vortex_record.field_storage_mappings as mapping
+    where mapping.storage_contract_id = target_storage_contract_id
+      and mapping.field_id = (field_item ->> 'fieldId')::uuid;
+    if not found or field_mapping.state <> 'active' then
+      raise exception using errcode = '55000',
+        message = 'Record field storage disagrees with the active installation';
+    end if;
+    columns_value := columns_value || pg_catalog.jsonb_build_object(
+      pg_catalog.lower(field_item ->> 'fieldId'),
+      pg_catalog.jsonb_build_object(
+        'token', field_mapping.physical_column_token,
+        'databaseValueType', field_mapping.database_value_type,
+        'type', field_item ->> 'type',
+        'required', field_item -> 'required',
+        'settings', field_item -> 'settings'
+      )
+    );
+  end loop;
+
+  select release.record_content into strict application_content
+  from vortex_definition.runtime_releases as release
+  where release.root_id = application_root_id_value
+    and release.release_revision = (installation ->> 'applicationReleaseRevision')::bigint;
+  for permission_item in
+    select item.value
+    from pg_catalog.jsonb_array_elements(
+      coalesce(application_content -> 'permissions', '[]'::jsonb)
+    ) as item(value)
+    where (item.value ->> 'recordTypeId')::uuid = p_record_type_id
+      and item.value ->> 'actionKind' = p_action_kind
+      and (item.value ->> 'namedAction') is null
+  loop
+    required_permissions := required_permissions || pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'applicationRootId', application_root_id_value,
+        'ownerKind', 'application', 'ownerId', application_root_id_value,
+        'permissionId', (permission_item ->> 'permissionId')::uuid
+      )
+    );
+  end loop;
+
+  required_permissions := coalesce((
+    select pg_catalog.jsonb_agg(item.value order by
+      item.value ->> 'ownerKind' collate "C", item.value ->> 'permissionId' collate "C")
+    from pg_catalog.jsonb_array_elements(required_permissions) as item(value)
+  ), '[]'::jsonb);
+
+  return pg_catalog.jsonb_build_object(
+    'context', context_value,
+    'recordType', record_type_value,
+    'moduleRootId', target_module_root_id,
+    'moduleReleaseRevision', target_release_revision,
+    'storageContractId', target_storage_contract_id,
+    'storageScope', record_type_value ->> 'storageScope',
+    'table', catalogue_row.physical_table_token,
+    'columns', columns_value,
+    'declaration', case when preview_installation_id_value is not null
+      then pg_catalog.jsonb_build_object(
+        'operationKey', 'record.' || p_action_kind,
+        'action', pg_catalog.jsonb_build_object('actionKind', p_action_kind),
+        'target', pg_catalog.jsonb_build_object(
+          'kind', 'application', 'applicationRootId', application_root_id_value
+        ),
+        'requiredPermissions', required_permissions,
+        'recordBinding', pg_catalog.jsonb_build_object(
+          'moduleRootId', target_module_root_id,
+          'recordTypeId', p_record_type_id,
+          'storageContractId', target_storage_contract_id,
+          'storageScope', record_type_value ->> 'storageScope'
+        ),
+        'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+        'authority', pg_catalog.jsonb_build_object('kind', 'preview_owner')
+      )
+      when pg_catalog.jsonb_array_length(required_permissions) = 0 then null
+      else pg_catalog.jsonb_build_object(
+        'operationKey', 'record.' || p_action_kind,
+        'action', pg_catalog.jsonb_build_object('actionKind', p_action_kind),
+        'target', pg_catalog.jsonb_build_object(
+          'kind', 'application', 'applicationRootId', application_root_id_value
+        ),
+        'requiredPermissions', required_permissions,
+        'recordBinding', pg_catalog.jsonb_build_object(
+          'moduleRootId', target_module_root_id,
+          'recordTypeId', p_record_type_id,
+          'storageContractId', target_storage_contract_id,
+          'storageScope', record_type_value ->> 'storageScope'
+        ),
+        'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+        'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+      ) end
+  ) || case when preview_installation_id_value is not null
+    then pg_catalog.jsonb_build_object(
+      'previewInstallationId', preview_installation_id_value
+    )
+    else '{}'::jsonb end;
+exception
+  when no_data_found then
+    raise exception using errcode = '55000',
+      message = 'Installed definition evidence is unavailable';
+  when too_many_rows then
+    raise exception using errcode = '55000',
+      message = 'Installed definition evidence is ambiguous';
+end
+$function$;
+alter function vortex_record.resolve_record_action_context_internal(uuid,text) owner to vortex_record_adapter;
+
+
+alter function vortex_record.resolve_record_action_context_internal(uuid, text)
+  owner to vortex_record_adapter;
+
+revoke all on function vortex_record.resolve_record_action_context_internal(uuid, text)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+comment on function vortex_record.resolve_record_action_context_internal(uuid, text) is
+  'Private Record metadata resolver over one exact live installation or an owner-validated, unexpired preview storage binding; preview contexts support only reads and base record changes.';
+
 set local role vortex_owner;
 
 create or replace function vortex_record.provision_preview_module_storage(
@@ -1734,10 +3427,11 @@ begin
   -- builder who opened the preview holds. A used Module's permissions are not part of it.
   insert into vortex_access.preview_permission_registrations (
     preview_installation_id, organization_id, application_root_id, organization_account_id,
-    owned_owner_ids, role_ids
+    system_projection_record_type_ids, owned_owner_ids, role_ids
   )
   select preview_installation_id_value, organization_id_value, p_application_root_id,
     organization_account_id_value,
+    array[]::uuid[],
     pg_catalog.array_append(
       coalesce(pg_catalog.array_agg(owned.module_root_id order by owned.module_root_id), array[]::uuid[]),
       p_application_root_id
@@ -1790,14 +3484,6 @@ begin
     if owned_release.owner_kind = 'application' then
       application_content_value := owned_release.release #> '{compilation_output,canonical,content}';
     end if;
-    -- A system projection is the platform's own live read model: no preview role reaches it.
-    system_projection_ids_value := system_projection_ids_value || coalesce((
-      select pg_catalog.array_agg((record_type.value ->> 'recordTypeId')::uuid)
-      from pg_catalog.jsonb_array_elements(
-        coalesce(owned_release.release #> '{compilation_output,canonical,content,recordTypes}', '[]'::jsonb)
-      ) as record_type(value)
-      where record_type.value ? 'systemProjection'
-    ), array[]::uuid[]);
     insert into vortex_access.preview_permission_entries (
       preview_installation_id, entry, held
     )
@@ -1842,6 +3528,31 @@ begin
     raise exception using errcode = '23514',
       message = 'Previewed permission declarations are unavailable';
   end if;
+
+  -- A system projection, of an own Module or a used one, is the platform's live read model: every
+  -- permission on it is decided by the builder's own live access, never by a preview role.
+  select coalesce(pg_catalog.array_agg(distinct (record_type.value ->> 'recordTypeId')::uuid), array[]::uuid[])
+  into system_projection_ids_value
+  from pg_catalog.jsonb_array_elements(resolved_modules_value) as pin(value)
+  left join vortex_definition.preview_releases as preview
+    on preview.preview_installation_id = preview_installation_id_value
+    and preview.root_id = (pin.value ->> 'moduleRootId')::uuid
+    and preview.release_revision = (pin.value ->> 'moduleReleaseRevision')::bigint
+  left join vortex_definition.releases as stored
+    on preview.root_id is null
+    and stored.root_id = (pin.value ->> 'moduleRootId')::uuid
+    and stored.release_revision = (pin.value ->> 'moduleReleaseRevision')::bigint
+  cross join lateral pg_catalog.jsonb_array_elements(
+    coalesce(
+      coalesce(preview.release -> 'compilation_output', stored.compilation_output)
+        #> '{canonical,content,recordTypes}',
+      '[]'::jsonb
+    )
+  ) as record_type(value)
+  where record_type.value ? 'systemProjection';
+  update vortex_access.preview_permission_registrations as registration
+  set system_projection_record_type_ids = system_projection_ids_value
+  where registration.preview_installation_id = preview_installation_id_value;
 
   -- The builder holds every role of the draft: a permission is held when a role selects it, an
   -- Application-wide selection taking only the Application's ordinary permissions, as it does
