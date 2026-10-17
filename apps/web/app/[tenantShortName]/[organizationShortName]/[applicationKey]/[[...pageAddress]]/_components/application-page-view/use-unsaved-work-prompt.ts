@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { useRouter } from "next/navigation";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { useUnsavedWorkGuard, useUnsavedWorkRegistry } from "@vortex/ui";
@@ -16,15 +16,24 @@ export function useUnsavedWorkPrompt({
   const [confirm, confirmDialog] = useConfirm();
   const unsavedWorkRegistry = useUnsavedWorkRegistry();
 
+  // One leave question at a time: a second navigation while it is open stays on the page, so a
+  // queued prompt never asks again after the first answer has already discarded the work.
+  const asking = useRef(false);
   const confirmDiscardUnsavedWork = useCallback(async (): Promise<boolean> => {
-    const leave = await confirm({
-      title: "Leave this page?",
-      description: "Your unsaved changes will be lost.",
-      confirmLabel: "Leave",
-      cancelLabel: "Stay",
-    });
-    if (leave) unsavedWorkRegistry?.clearAll();
-    return leave;
+    if (asking.current) return false;
+    asking.current = true;
+    try {
+      const leave = await confirm({
+        title: "Leave this page?",
+        description: "Your unsaved changes will be lost.",
+        confirmLabel: "Leave",
+        cancelLabel: "Stay",
+      });
+      if (leave) unsavedWorkRegistry?.clearAll();
+      return leave;
+    } finally {
+      asking.current = false;
+    }
   }, [confirm, unsavedWorkRegistry]);
   const { hasUnsavedWork, guard: unsavedWork } = useUnsavedWorkGuard(confirmDiscardUnsavedWork);
 
