@@ -11,7 +11,7 @@ export function StudioReleasesPanel({ hidden, section, onSection, savedStateLabe
   savedStateLabel: string;
 }>) {
   return <StudioPanelShell title="Releases" hidden={hidden}
-    description="Published versions of this application, and how they reach organisations.">
+    description="Published versions of this application. Organisations install and upgrade them from the App Store.">
     <ul className="list-none space-y-1" aria-label="Release tools">
       {studioReleasesSections.map((entry) => <li key={entry.value}>
         <Item size="sm" variant={section === entry.value ? "muted" : "default"}
