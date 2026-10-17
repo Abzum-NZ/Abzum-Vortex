@@ -75,10 +75,25 @@ begin
     raise exception using errcode = '42501', message = 'Delegation grant is unavailable';
   end if;
 
+  if p_holder_kind = 'organization_account' and p_holder_id = context_account_id then
+    activity_result := vortex_record.append_organization_activity_entry(
+      context_organization_id, p_activity_id, pg_catalog.clock_timestamp(),
+      'organization_account', context_account_id, 'grant_delegation',
+      array[context_organization_id]::uuid[], array[]::uuid[], vortex_platform.channel(),
+      context_correlation_id, 'refused'
+    );
+    if activity_result is distinct from 'inserted' then
+      raise exception using errcode = '40001', message = 'Delegation grant refusal Activity is stale';
+    end if;
+    return query select 'refused'::text, context_organization_id, null::jsonb, context_access_version;
+    return;
+  end if;
   if p_holder_kind = 'organization_account' then
     select account.revision into holder_revision from vortex_identity.organization_accounts as account
+    join vortex_identity.identity_projections as identity on identity.identity_id = account.identity_id
     where account.organization_id = context_organization_id
-      and account.organization_account_id = p_holder_id and account.state = 'active' for update;
+      and account.organization_account_id = p_holder_id and account.state = 'active'
+      and identity.state = 'active' for update of account, identity;
   else
     select organization_group.revision into holder_revision from vortex_access.organization_groups as organization_group
     where organization_group.organization_id = context_organization_id

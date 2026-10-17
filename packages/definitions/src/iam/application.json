@@ -6644,7 +6644,7 @@
                                 "kind": "literal",
                                 "literal": {
                                   "type": "text",
-                                  "value": "The grant was refused. You need assignment management permission and current organisation-catalogue delegation."
+                                  "value": "The grant was refused. You need assignment management permission and current organisation-catalogue delegation, and you cannot grant it to yourself."
                                 }
                               }
                             }
