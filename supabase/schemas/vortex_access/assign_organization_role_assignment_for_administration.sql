@@ -111,11 +111,14 @@ begin
     and revision.role_id = p_role_id
     and revision.revision = role_fact.live_revision;
   if revision_fact.lifecycle not in ('active', 'acceptance_required')
-    or not (
-      (p_assignment_kind = 'standing' and revision_fact.assignment_policy = 'standing')
-      or (
-        p_assignment_kind = 'eligible'
-        and revision_fact.assignment_policy = 'activation_required'
+    or (
+      revision_fact.lifecycle = 'active'
+      and not (
+        (p_assignment_kind = 'standing' and revision_fact.assignment_policy = 'standing')
+        or (
+          p_assignment_kind = 'eligible'
+          and revision_fact.assignment_policy = 'activation_required'
+        )
       )
     ) then
     raise exception using errcode = '40001',
