@@ -81,11 +81,13 @@ const runningFlows = (source: ApplicationSourceDocument, module: Module, action:
   ];
 };
 
-function ActionDialog({ source, module, record, action, open, onOpenChange, onSave }: Readonly<{
+function ActionDialog({ source, module, record, action, open, onOpenChange, onSave, onShow }: Readonly<{
   source: ApplicationSourceDocument; module: Module; record: RecordType; action: Action | undefined; open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (next: ApplicationSourceDocument, message: string) => boolean;
+  onShow: (reference: InlineRecordTypeReference) => void;
 }>) {
+  const [where, setWhere] = useState<readonly InlineRecordTypeReference[]>([]);
   const projected = useMemo(() => projectStudioActionCondition(action?.precondition), [action]);
   const context = useMemo(() => studioActionConditionContext(record), [record]);
   const [label, setLabel] = useState(action?.label ?? "");
@@ -115,7 +117,9 @@ function ActionDialog({ source, module, record, action, open, onOpenChange, onSa
       permission: permission === "own" ? { kind: "own" } : { kind: "existing", key: permission },
       ownsChoice: ownsChoice && setsChoice,
     });
+    setWhere([]);
     if (result.kind === "invalid") { setIssues(result.issues); return; }
+    if (result.kind === "referenced") { setIssues([result.issue]); setWhere(result.references); return; }
     if (onSave(result.source, `Action ${label.trim()} ${action === undefined ? "added" : "changed"}. Save to keep it.`)) onOpenChange(false);
     else setIssues(["The draft changed or is busy, so nothing was changed. Try again in a moment."]);
   };
@@ -189,6 +193,12 @@ function ActionDialog({ source, module, record, action, open, onOpenChange, onSa
           <p className="text-xs text-muted-foreground">Only people whose access groups hold this permission can run the action.</p></div>
         {issues.length === 0 ? null : <ul role="alert" className="space-y-1 text-sm text-destructive">
           {issues.map((issue, index) => <li key={index} className="break-words">{issue}</li>)}</ul>}
+        {where.length === 0 ? null : <div className="space-y-1 text-sm">
+          <p className="font-medium">Show me where</p>
+          <ul className="list-disc space-y-1 pl-5" aria-label="Where the permission is used">{where.map((reference) => <li key={reference.label}>
+            {reference.open.kind === "none" ? reference.label : <Button type="button" variant="link" size="sm" className="h-auto whitespace-normal p-0 text-left"
+              onClick={() => { onOpenChange(false); onShow(reference); }}>{reference.label}</Button>}</li>)}</ul>
+        </div>}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button type="submit">{action === undefined ? "Add action" : "Apply"}</Button>
@@ -262,7 +272,7 @@ export function StudioModuleActions({ source, moduleKey, recordKey, disabled, ap
     {issues.length === 0 ? null : <ul role="alert" className="space-y-1 text-sm text-destructive">
       {issues.map((issue, index) => <li key={index}>{issue}</li>)}</ul>}
     {editing !== null && <ActionDialog key={editing} source={source} module={module} record={record} action={chosen} open
-      onOpenChange={(open) => { if (!open) setEditing(null); }} onSave={apply} />}
+      onOpenChange={(open) => { if (!open) setEditing(null); }} onSave={apply} onShow={onShow} />}
     {confirmDialog}
   </section>;
 }

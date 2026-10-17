@@ -43,7 +43,9 @@ export type InlineModuleActionChange = Readonly<{
 
 export type InlineModuleActionResult =
   | Readonly<{ kind: "changed"; source: ApplicationSourceDocument; actionKey: string }>
-  | Readonly<{ kind: "invalid"; issues: readonly string[] }>;
+  | Readonly<{ kind: "invalid"; issues: readonly string[] }>
+  /** A permission the change would leave behind is still used elsewhere; nothing was changed. */
+  | Readonly<{ kind: "referenced"; issue: string; references: readonly InlineRecordTypeReference[] }>;
 
 const effectTaskId = "set_fields";
 
@@ -181,6 +183,18 @@ export const saveInlineModuleAction = (
   if (issues.length > 0) return { kind: "invalid", issues };
 
   const actionKey = existing?.key ?? `${module.key}.${record.key}.${newName}`;
+  // No orphan permissions: an action that moves off its own permission takes it away, unless
+  // something else still uses it, which refuses the change with where.
+  const ownBefore = module.permissions.find((permission) => permission.key === actionKey);
+  if (change.permission.kind === "existing" && existing !== undefined && existing.permission === actionKey && ownBefore !== undefined) {
+    const references = permissionReferences(source, module, actionKey, existing);
+    if (references.length > 0)
+      return { kind: "referenced", references,
+        issue: `Permission: the action's own permission is still used in ${references.length === 1 ? "one place" : `${references.length} places`}, so it cannot be left behind. Remove those uses first.` };
+    module.permissions = module.permissions.filter((permission) => permission !== ownBefore);
+    for (const role of source.body.roles)
+      (role as { permissions: string[] }).permissions = (role.permissions as string[]).filter((entry) => entry !== actionKey);
+  }
   const values = Object.fromEntries(change.effects.map((effect) => [effect.field, structuredClone(effect.value)]));
   const effectTask = { id: uniqueAlias(effectTaskId, new Set(otherTasks.map((task) => task.id))), type: "record.set_fields",
     properties: { values } } as unknown as ActionTask;
@@ -226,6 +240,23 @@ export const saveInlineModuleAction = (
     } else (own as { field_policy?: unknown }).field_policy = policy;
   }
   return parsed(source, actionKey);
+};
+
+/** Every place that uses a permission besides its own entry, the access groups that hold it and one action. */
+const permissionReferences = (source: ApplicationSourceDocument, module: InlineModule, key: string,
+  action: ModuleAction): InlineRecordTypeReference[] => {
+  const moduleIndex = source.body.modules.indexOf(module);
+  const actionIndex = module.actions.indexOf(action);
+  const found = new Map<string, InlineRecordTypeReference>();
+  // An action and its own permission share one key, so only a permission setting counts here.
+  walkSourceStrings(source, [], (text, path, property) => {
+    if (text !== key || path[1] === "roles" || property?.includes("permission") !== true) return;
+    if (path[1] === "modules" && path[2] === moduleIndex &&
+      (path[3] === "permissions" || (path[3] === "actions" && path[4] === actionIndex))) return;
+    const place = describeSourcePlace(source, path);
+    found.set(place.label, place);
+  });
+  return [...found.values()];
 };
 
 /** Every place in the Application source that uses one named action, except the action and its own permission. */

@@ -105,7 +105,7 @@ export function StudioFlowStartEditor({ projection, recordTypes, controlLabel, d
   const change = (next: StudioFlowStartDraft) => { setDraft(next); onPendingChange(true); setProblem(""); setStatus(""); };
   const setInputs = (inputs: readonly StudioFlowInputDraft[]) => change({ ...shown, inputs,
     bindings: shown.bindings.map((binding) => ({ ...binding, inputs: Object.fromEntries(inputs.map((input) =>
-      [input.name, binding.inputs[input.name] ?? { kind: "none" as const }])) })) });
+      [input.id, binding.inputs[input.id] ?? { kind: "none" as const }])) })) });
   return <section className="space-y-4" aria-label="How it starts">
     <h3 className="text-sm font-medium">How it starts</h3>
     <div className="space-y-1.5"><Label htmlFor="flow-start-name">Name</Label>
@@ -124,10 +124,10 @@ export function StudioFlowStartEditor({ projection, recordTypes, controlLabel, d
       <legend className="text-sm font-medium">When {controlLabel(binding.control)} is used</legend>
       {shown.inputs.length === 0 && <p className="text-sm text-muted-foreground">The flow declares no inputs, so the control passes nothing.</p>}
       {shown.inputs.map((input) => {
-        const value = binding.inputs[input.name] ?? { kind: "none" };
+        const value = binding.inputs[input.id] ?? { kind: "none" };
         const supplied = projection.callerNames[binding.id] ?? [];
         const id = `flow-start-${binding.id}-${input.name}`;
-        return <div key={input.name} className="space-y-1.5">
+        return <div key={input.id} className="space-y-1.5">
           <Label htmlFor={id}>{studioWords(input.name)}{input.required ? " (required)" : ""} comes from</Label>
           <NativeSelect id={id} className="w-full" disabled={disabled} value={sourceToken(value)}
             onChange={(event) => {
@@ -135,7 +135,7 @@ export function StudioFlowStartEditor({ projection, recordTypes, controlLabel, d
                 : event.target.value === "fixed" ? { kind: "fixed", literal: { type: "text", value: "" } }
                   : { kind: "caller", name: event.target.value.slice("caller:".length) };
               change({ ...shown, bindings: shown.bindings.map((entry) => entry === binding
-                ? { ...entry, inputs: { ...entry.inputs, [input.name]: next } } : entry) });
+                ? { ...entry, inputs: { ...entry.inputs, [input.id]: next } } : entry) });
             }}>
             <NativeSelectOption value="">Nothing</NativeSelectOption>
             {supplied.map((entry) => <NativeSelectOption key={entry.name} value={`caller:${entry.name}`}>{entry.label}</NativeSelectOption>)}
@@ -146,18 +146,24 @@ export function StudioFlowStartEditor({ projection, recordTypes, controlLabel, d
           {value.kind === "fixed" && <Input aria-label={`${studioWords(input.name)} fixed text`} disabled={disabled}
             value={typeof value.literal.value === "string" ? value.literal.value : ""} onChange={(event) =>
               change({ ...shown, bindings: shown.bindings.map((entry) => entry === binding
-                ? { ...entry, inputs: { ...entry.inputs, [input.name]: { kind: "fixed", literal: { type: "text", value: event.target.value } } } } : entry) })} />}
+                ? { ...entry, inputs: { ...entry.inputs, [input.id]: { kind: "fixed", literal: { type: "text", value: event.target.value } } } } : entry) })} />}
         </div>;
       })}
     </fieldset>)}
     <fieldset className="space-y-2">
       <legend className="text-sm font-medium">Inputs</legend>
       <p className="text-xs text-muted-foreground">The values the flow is given when it starts. Its steps read them.</p>
-      {shown.inputs.map((input, index) => <InputRow key={index} id={`flow-start-input-${index}`} input={input} recordTypes={recordTypes}
+      {shown.inputs.map((input, index) => <InputRow key={input.id} id={`flow-start-input-${index}`} input={input} recordTypes={recordTypes}
         disabled={disabled} onRemove={() => setInputs(shown.inputs.filter((_, at) => at !== index))}
         onChange={(next) => setInputs(shown.inputs.map((entry, at) => at === index ? next : entry))} />)}
       <Button type="button" variant="outline" size="sm" disabled={disabled}
-        onClick={() => setInputs([...shown.inputs, { name: `input_${shown.inputs.length + 1}`, type: "text", required: false, recordType: null }])}>
+        onClick={() => {
+          const taken = new Set(shown.inputs.flatMap((input) => [input.id, input.name]));
+          let n = shown.inputs.length + 1;
+          while (taken.has(`input_${n}`) || taken.has(`+${n}`)) n += 1;
+          // A new input's identity is never a stored name, so it can never read as a rename.
+          setInputs([...shown.inputs, { id: `+${n}`, name: `input_${n}`, type: "text", required: false, recordType: null }]);
+        }}>
         Add an input</Button>
     </fieldset>
     <div className="flex gap-2">
