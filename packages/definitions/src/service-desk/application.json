@@ -4099,7 +4099,8 @@
         },
         "inputs": {
           "owner": {
-            "type": "organization_account_reference",
+            "type": "record_reference",
+            "recordTypeIds": ["vortex.system_directory:person"],
             "required": true
           }
         },

@@ -5,7 +5,6 @@ import {
   moneyValueSchema,
   organizationAccountIdSchema,
   parseExactDecimal,
-  personLinkValueSchema,
   recordLinkValueSchema,
   type ExactDecimal,
   type FlowFormula,
@@ -69,8 +68,6 @@ export const semanticTypeForField = (field: ModuleField): SemanticType => {
     case "link":
     case "link_to_one_of_several":
       return "record_reference";
-    case "link_to_person":
-      return "organization_account_reference";
     case "calculation":
     case "total": {
       const resultType = field.settings.resultType;
@@ -111,10 +108,7 @@ export const valueMatchesSemanticType = (value: JsonValue, type: SemanticType): 
     case "record_reference":
       return recordLinkValueSchema.safeParse(value).success;
     case "organization_account_reference":
-      return (
-        organizationAccountIdSchema.safeParse(value).success ||
-        personLinkValueSchema.safeParse(value).success
-      );
+      return organizationAccountIdSchema.safeParse(value).success;
     case "opaque_json":
       return jsonValueSchema.safeParse(value).success;
   }
@@ -244,8 +238,7 @@ const recordReferenceIdentity = (value: JsonValue): string | undefined => {
 const organizationAccountIdentity = (value: JsonValue): string | undefined => {
   const direct = organizationAccountIdSchema.safeParse(value);
   if (direct.success) return direct.data.toLowerCase();
-  const linked = personLinkValueSchema.safeParse(value);
-  return linked.success ? linked.data.organizationAccountId.toLowerCase() : undefined;
+  return undefined;
 };
 
 const moneyParts = (

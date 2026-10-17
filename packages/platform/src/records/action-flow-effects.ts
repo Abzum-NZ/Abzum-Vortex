@@ -8,7 +8,6 @@ import {
   jsonValueSchema,
   moneyValueSchema,
   normalizeExactDecimal,
-  organizationAccountIdSchema,
   parseExactDecimal,
   recordLinkValueSchema,
   type recordTypeDefinitionSchema,
@@ -202,10 +201,6 @@ const inputValue = (
       ? (candidate as string)
       : undefined;
   }
-  if (input.type === "organization_account_reference")
-    return organizationAccountIdSchema.safeParse(candidate).success
-      ? (candidate as string)
-      : undefined;
   if (input.type === "record_reference") {
     const parsed = recordLinkValueSchema.safeParse(candidate);
     if (!parsed.success) return undefined;
@@ -331,9 +326,7 @@ const writtenValue = (
         ? prepared.existingValues[subjectField.fieldId]
         : null;
     } else if (reference.source === "execution_actor") {
-      if (field.type === "link_to_person")
-        value = { organizationAccountId: prepared.actorOrganizationAccountId };
-      else if (field.type === "link") {
+      if (field.type === "link") {
         if (field.settings.target.state !== "resolved")
           throw new Error("Named action actor link target is unresolved");
         value = {

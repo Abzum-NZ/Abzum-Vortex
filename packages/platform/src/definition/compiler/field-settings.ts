@@ -229,15 +229,6 @@ export function fieldSettings(
         maximumRows: settings.maximum_rows,
       };
     case "link": {
-      if (settings.legacy_person_field !== undefined) {
-        const recordKey = qualifiedRecordType.slice(qualifiedRecordType.lastIndexOf(":") + 1);
-        const location = resolution.location("field", String(field.key), `record:${recordKey}`);
-        if (String(settings.target) !== "vortex.system_directory:person")
-          fail("vortex.definition.invalid_object", "invalid_value", {
-            ...location,
-            segments: [...location.segments, { kind: "setting", key: "legacy_person_field" }],
-          });
-      }
       try {
         return {
           target: resolution.recordType(String(settings.target)),
@@ -246,14 +237,6 @@ export function fieldSettings(
           ...(settings.application_root_required === undefined
             ? {}
             : { applicationRootIdRequired: settings.application_root_required }),
-          ...(settings.legacy_person_field === undefined
-            ? {}
-            : {
-                legacyPersonFieldId: resolution.field(
-                  qualifiedRecordType,
-                  String(settings.legacy_person_field),
-                ),
-              }),
         };
       } catch (error) {
         if (
@@ -272,12 +255,6 @@ export function fieldSettings(
       return {
         targets: (settings.targets as string[]).map((target) => resolution.recordType(target)),
         onParentDelete: settings.on_parent_delete,
-      };
-    case "link_to_person":
-      return {
-        audience: String(settings.audience).replace("organisation", "organization"),
-        applicationRootIdRequired: settings.application_root_required,
-        onPersonDeactivation: settings.on_person_deactivation,
       };
     case "calculation": {
       const expression = asObject(settings.expression);

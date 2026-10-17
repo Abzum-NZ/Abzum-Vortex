@@ -57,17 +57,6 @@ export type RecordFieldValuePendingCheck =
       recordId: string;
     }>
   | Readonly<{
-      kind: "person_reference";
-      fieldId: string;
-      path: ValuePath;
-      organizationAccountId: string;
-      audience:
-        | "organization_accounts"
-        | "application_accounts"
-        | "organization_identities_and_external_requesters";
-      applicationRootIdRequired: boolean;
-    }>
-  | Readonly<{
       kind: "file_reference";
       fieldId: string;
       path: ValuePath;
@@ -593,19 +582,6 @@ const normalizeValue = (
           path,
           recordTypeId: link.recordTypeId,
           recordId: link.recordId,
-        });
-      break;
-    }
-    case "link_to_person": {
-      const person = normalized as { organizationAccountId: string };
-      if (collectPending)
-        context.pendingChecks.push({
-          kind: "person_reference",
-          fieldId: field.fieldId,
-          path,
-          organizationAccountId: person.organizationAccountId,
-          audience: field.settings.audience,
-          applicationRootIdRequired: field.settings.applicationRootIdRequired,
         });
       break;
     }

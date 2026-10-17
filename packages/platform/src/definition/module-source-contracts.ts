@@ -356,14 +356,12 @@ const moduleSourceSystemProjectionSchema = z
   });
 
 /**
- * Field types whose values come from generated record storage (counters, relationship edges,
- * relationship totals, stored files or child rows) rather than a column of a protected view, so a
- * system projection record type cannot declare them.
+ * Field types whose values cannot be supplied by a protected view. A read-only
+ * typed link can be projected as a value without writing a relationship edge.
  */
 const systemProjectionRefusedFieldTypes: ReadonlySet<string> = new Set([
   "reference_number",
   "table",
-  "link",
   "link_to_one_of_several",
   "total",
   "attachment",

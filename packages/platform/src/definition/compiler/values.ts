@@ -1,7 +1,13 @@
 import { normalizeExactDecimal, type DefinitionCompilationOutput } from "../../schema";
 import { fingerprintCanonicalValue } from "../canonical-json-definition";
 import type { Resolution } from "./resolution";
-import { applicationModuleKeysOf, asObject, fail, type JsonObject, objectFromUniqueEntries } from "./shared";
+import {
+  applicationModuleKeysOf,
+  asObject,
+  fail,
+  type JsonObject,
+  objectFromUniqueEntries,
+} from "./shared";
 
 export type ModuleValueContext = Readonly<{
   field: (reference: string, alias?: string) => JsonObject | undefined;
@@ -48,13 +54,6 @@ export function normaliseModuleFieldValue(
         recordTypeId: context.resolution.recordType(link.record_type).recordTypeId,
         recordId: link.record_id,
       };
-    }
-    case "link_to_person": {
-      if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
-      const person = value as JsonObject;
-      return "organization_account_id" in person
-        ? { organizationAccountId: person.organization_account_id }
-        : value;
     }
     case "table": {
       if (!Array.isArray(value)) return value;
@@ -254,10 +253,7 @@ export function actionInput(
     key: input.key,
     label: input.label,
     required: input.required,
-    type:
-      input.type === "organisation_account_reference"
-        ? "organization_account_reference"
-        : input.type,
+    type: input.type,
     ...(compiledValidation ? { validation: compiledValidation } : {}),
     ...(input.record_types
       ? {

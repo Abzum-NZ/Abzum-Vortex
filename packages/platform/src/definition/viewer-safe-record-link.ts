@@ -56,11 +56,8 @@ type ViewerSafeRecordLinkServiceDependencies = HumanOrganizationRequestDependenc
     ) => Promise<OrganizationSelectionCandidate | undefined>;
   }>;
 
-
 /** One linked record as a stored link value names it. */
-export type RecordLinkReference =
-  | Readonly<{ recordTypeId: string; recordId: string }>
-  | Readonly<{ organizationAccountId: string }>;
+export type RecordLinkReference = Readonly<{ recordTypeId: string; recordId: string }>;
 
 /**
  * What the viewer may see of one linked record: its display label and, when the viewer may open the
@@ -112,9 +109,7 @@ const readVisibleGroupLabels = async (
 
 /** The key a link's label is held under in a `RecordLinkLabelsResult`. */
 export const recordLinkLabelKey = (link: RecordLinkReference): string =>
-  "organizationAccountId" in link
-    ? `person:${link.organizationAccountId.toLowerCase()}`
-    : `${link.recordTypeId.toLowerCase()}:${link.recordId.toLowerCase()}`;
+  `${link.recordTypeId.toLowerCase()}:${link.recordId.toLowerCase()}`;
 
 const MAXIMUM_LABEL_LENGTH = 200;
 const titleReadBatchSize = 1_000;
@@ -281,26 +276,38 @@ export const createViewerSafeRecordLinkService = (
       const source = organizationSelectionCandidateSchema.safeParse(sourceSelectionCandidate);
       const selector = viewerSafeRecordPinSelectorSchema.safeParse(selectorCandidate);
       if (
-        !source.success || source.data.applicationRootId === undefined || !selector.success ||
+        !source.success ||
+        source.data.applicationRootId === undefined ||
+        !selector.success ||
         dependencies.resolveTargetApplication === undefined
-      ) return pinUnavailable;
+      )
+        return pinUnavailable;
       const sourceRoot = source.data.applicationRootId;
 
       try {
         // Verify the source human request before resolving a target in that same organisation.
-        const verifiedSource = await requests.run(session, source.data, async (_transaction, scope) =>
-          sameId(scope.organizationId, source.data.organizationId) &&
-          scope.applicationRootId !== undefined &&
-          sameId(scope.applicationRootId, sourceRoot)
+        const verifiedSource = await requests.run(
+          session,
+          source.data,
+          async (_transaction, scope) =>
+            sameId(scope.organizationId, source.data.organizationId) &&
+            scope.applicationRootId !== undefined &&
+            sameId(scope.applicationRootId, sourceRoot),
         );
         if (verifiedSource.kind !== "available" || !verifiedSource.value) return pinUnavailable;
         const target = organizationSelectionCandidateSchema.safeParse(
-          await dependencies.resolveTargetApplication(session, source.data, selector.data.applicationKey),
+          await dependencies.resolveTargetApplication(
+            session,
+            source.data,
+            selector.data.applicationKey,
+          ),
         );
         if (
-          !target.success || target.data.applicationRootId === undefined ||
+          !target.success ||
+          target.data.applicationRootId === undefined ||
           !sameId(target.data.organizationId, source.data.organizationId)
-        ) return pinUnavailable;
+        )
+          return pinUnavailable;
         const targetRoot = target.data.applicationRootId;
         const [moduleKey, recordTypeKey] = selector.data.recordTypeKey.split(":");
         const request = await requests.run(
@@ -309,17 +316,23 @@ export const createViewerSafeRecordLinkService = (
           async (transaction, scope): Promise<ViewerSafeRecordPinAcquisitionResult> => {
             if (
               !sameId(scope.organizationId, source.data.organizationId) ||
-              scope.applicationRootId === undefined || !sameId(scope.applicationRootId, targetRoot)
-            ) return pinUnavailable;
+              scope.applicationRootId === undefined ||
+              !sameId(scope.applicationRootId, targetRoot)
+            )
+              return pinUnavailable;
             const context = requireInstalledRuntimeContext(
               await dependencies.createInstalledContextLoader(transaction, scope).load(),
             );
             if (context.releaseSet.application.definitionKey !== selector.data.applicationKey)
               return pinUnavailable;
-            const modules = context.releaseSet.modules.filter((module) => module.definitionKey === moduleKey);
+            const modules = context.releaseSet.modules.filter(
+              (module) => module.definitionKey === moduleKey,
+            );
             const module = modules[0];
             if (modules.length !== 1 || module === undefined) return pinUnavailable;
-            const recordTypes = module.content.recordTypes.filter((record) => record.key === recordTypeKey);
+            const recordTypes = module.content.recordTypes.filter(
+              (record) => record.key === recordTypeKey,
+            );
             const recordType = recordTypes[0];
             if (recordTypes.length !== 1 || recordType === undefined) return pinUnavailable;
             const identity = viewerSafeRecordLinkIdentitySchema.parse({
@@ -333,7 +346,16 @@ export const createViewerSafeRecordLinkService = (
             });
             if (!currentContextMatches(context, identity)) return pinUnavailable;
             const page = matchingDetailPage(context, identity);
-            if (page === undefined || !(await canOpenDetailPage(dependencies.permissions, transaction, scope, context, page)))
+            if (
+              page === undefined ||
+              !(await canOpenDetailPage(
+                dependencies.permissions,
+                transaction,
+                scope,
+                context,
+                page,
+              ))
+            )
               return pinUnavailable;
             const titleRead = await records.read(transaction, scope, {
               identity,
@@ -370,12 +392,7 @@ export const createViewerSafeRecordLinkService = (
       if (links.length === 0) return { outcome: "read", labels };
       try {
         const byType = new Map<string, Map<string, RecordId>>();
-        const people = new Map<string, RecordId>();
         for (const link of links) {
-          if ("organizationAccountId" in link) {
-            people.set(link.organizationAccountId.toLowerCase(), recordIdSchema.parse(link.organizationAccountId));
-            continue;
-          }
           const typeKey = link.recordTypeId.toLowerCase();
           const ids = byType.get(typeKey) ?? new Map<string, RecordId>();
           ids.set(link.recordId.toLowerCase(), recordIdSchema.parse(link.recordId));
@@ -391,20 +408,14 @@ export const createViewerSafeRecordLinkService = (
               !sameId(scope.applicationRootId, context.applicationRootId)
             )
               throw new Error("RECORD_LINK_SCOPE_MISMATCH");
-            const personIds = [...people.values()];
-            for (let start = 0; start < personIds.length; start += titleReadBatchSize) {
-              const batch = personIds.slice(start, start + titleReadBatchSize);
-              const visible = await readVisiblePersonLabels(transaction, batch);
-              for (const id of batch)
-                labels.set(`person:${id.toLowerCase()}`, visible.has(id.toLowerCase())
-                  ? { outcome: "available", label: visible.get(id.toLowerCase())! }
-                  : { outcome: "restricted" });
-            }
             for (const [typeKey, ids] of byType) {
               const target = locateLinkTarget(context, typeKey);
               if (target === undefined) {
-                console.error("[page] record link target is not installed: RECORD_LINK_TARGET_NOT_INSTALLED");
-                for (const id of ids.keys()) labels.set(`${typeKey}:${id}`, { outcome: "restricted" });
+                console.error(
+                  "[page] record link target is not installed: RECORD_LINK_TARGET_NOT_INSTALLED",
+                );
+                for (const id of ids.keys())
+                  labels.set(`${typeKey}:${id}`, { outcome: "restricted" });
                 continue;
               }
               const { module, recordType } = target;
@@ -420,10 +431,22 @@ export const createViewerSafeRecordLinkService = (
               const page = matchingDetailPage(context, { ...identity, recordId: recordIds[0]! });
               const openable =
                 page !== undefined &&
-                (await canOpenDetailPage(dependencies.permissions, transaction, scope, context, page));
-              if (recordType.systemProjection?.protectedView === "groups") {
+                (await canOpenDetailPage(
+                  dependencies.permissions,
+                  transaction,
+                  scope,
+                  context,
+                  page,
+                ));
+              if (
+                recordType.systemProjection?.protectedView === "groups" ||
+                recordType.systemProjection?.protectedView === "organization_accounts"
+              ) {
+                const isPerson =
+                  recordType.systemProjection.protectedView === "organization_accounts";
                 const titleIsGroupName = recordType.fields.some(
-                  (field) => sameId(field.fieldId, recordType.titleFieldId) && field.key === "label",
+                  (field) =>
+                    sameId(field.fieldId, recordType.titleFieldId) && field.key === "label",
                 );
                 for (let start = 0; start < recordIds.length; start += titleReadBatchSize) {
                   const batch = recordIds.slice(start, start + titleReadBatchSize);
@@ -434,16 +457,18 @@ export const createViewerSafeRecordLinkService = (
                     recordIds: batch,
                   });
                   if (read.outcome !== "read") throw new Error("RECORD_LINK_INSTALLATION_MISMATCH");
-                  const visible = await readVisibleGroupLabels(transaction, batch);
+                  const visible = isPerson
+                    ? await readVisiblePersonLabels(transaction, batch)
+                    : await readVisibleGroupLabels(transaction, batch);
                   for (const recordId of batch) {
                     const title = read.titles.get(recordId.toLowerCase());
                     const titleText = title === undefined ? undefined : labelText(title);
                     if (title !== undefined && titleText === undefined)
                       console.error("[page] record link title is empty: RECORD_LINK_TITLE_EMPTY");
-                    const groupName = visible.get(recordId.toLowerCase());
+                    const directoryName = visible.get(recordId.toLowerCase());
                     let label: string | undefined;
-                    if (groupName !== undefined && titleText !== undefined)
-                      label = titleIsGroupName ? groupName : titleText;
+                    if (directoryName !== undefined && titleText !== undefined)
+                      label = isPerson || titleIsGroupName ? directoryName : titleText;
                     labels.set(
                       `${typeKey}:${recordId.toLowerCase()}`,
                       label === undefined
@@ -505,10 +530,14 @@ export const createViewerSafeRecordLinkService = (
           },
         );
         if (request.kind === "available") return request.value;
-        console.error(`[page] record link labels unavailable: RECORD_LINK_LABELS_${request.kind.toUpperCase()}`);
+        console.error(
+          `[page] record link labels unavailable: RECORD_LINK_LABELS_${request.kind.toUpperCase()}`,
+        );
         return labelsUnavailable;
       } catch (error) {
-        console.error(`[page] record link labels unavailable: RECORD_LINK_LABELS_READ_FAILED ${describeFailure(error)}`);
+        console.error(
+          `[page] record link labels unavailable: RECORD_LINK_LABELS_READ_FAILED ${describeFailure(error)}`,
+        );
         return labelsUnavailable;
       }
     },
@@ -542,7 +571,16 @@ export const createViewerSafeRecordLinkService = (
             const recordType = matchingRecordType(context, identity.data);
             const page = matchingDetailPage(context, identity.data);
             if (recordType === undefined || page === undefined) return unavailable;
-            if (!(await canOpenDetailPage(dependencies.permissions, transaction, scope, context, page))) return unavailable;
+            if (
+              !(await canOpenDetailPage(
+                dependencies.permissions,
+                transaction,
+                scope,
+                context,
+                page,
+              ))
+            )
+              return unavailable;
 
             const titleRead = await records.read(transaction, scope, {
               identity: identity.data,

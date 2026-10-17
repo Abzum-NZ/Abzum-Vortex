@@ -93,8 +93,6 @@ const formulaTypeOf = (field: ModuleField): string => {
     case "link":
     case "link_to_one_of_several":
       return "record_reference";
-    case "link_to_person":
-      return "organization_account_reference";
     case "table":
     case "attachment":
       return "json";
@@ -174,10 +172,14 @@ const relationshipReaches = (
 };
 
 const evaluateFormula = (formula: FlowFormula) =>
-  evaluateFlowFormula(formula, {
-    now: "1970-01-01T00:00:00.000Z",
-    reference: () => undefined,
-  }, { preserveExactArithmetic: true });
+  evaluateFlowFormula(
+    formula,
+    {
+      now: "1970-01-01T00:00:00.000Z",
+      reference: () => undefined,
+    },
+    { preserveExactArithmetic: true },
+  );
 
 const sumFormula = (operands: readonly FlowFormula[], scale: number): FlowFormula => {
   if (operands.length === 1) return operands[0]!;
@@ -253,7 +255,8 @@ const totalResult = (
         (operation === "minimum"
           ? compareFlowText(candidate, selected) < 0
           : compareFlowText(candidate, selected) > 0)
-      ) selected = candidate;
+      )
+        selected = candidate;
     }
     return { value: selected };
   }
@@ -268,7 +271,9 @@ const totalResult = (
               sourceType,
               sourceType === "money"
                 ? { amount: "0", currency: currencies[0]! }
-                : sourceType === "whole_number" ? 0 : "0",
+                : sourceType === "whole_number"
+                  ? 0
+                  : "0",
             ),
           ],
           sumScale,

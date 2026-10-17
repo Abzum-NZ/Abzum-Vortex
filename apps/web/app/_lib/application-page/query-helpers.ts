@@ -5,7 +5,10 @@ import type {
 } from "@vortex/platform/server";
 
 /** Where a placement read is logged from: the application and the page, never a value. */
-export type PlacementLogPlace = Readonly<{ application: Readonly<{ key: string }>; pageKey: string }>;
+export type PlacementLogPlace = Readonly<{
+  application: Readonly<{ key: string }>;
+  pageKey: string;
+}>;
 import type { DisplayCellValue } from "@vortex/ui";
 import {
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
@@ -65,12 +68,12 @@ export const coerceInput = (raw: string, declared: ModuleQueryInput): JsonValue 
 };
 
 /** Structured Notice-query inputs are plain JSON; the Query service validates their declared type. */
-export const noticeQueryInput = (raw: string, declared: ModuleQueryInput): JsonValue | undefined => {
+export const noticeQueryInput = (
+  raw: string,
+  declared: ModuleQueryInput,
+): JsonValue | undefined => {
   const type = declared.type;
-  if (
-    type === "formatted_text" || type === "money" ||
-    type === "record_reference" || type === "organization_account_reference"
-  ) {
+  if (type === "formatted_text" || type === "money" || type === "record_reference") {
     try {
       const parsed = jsonValueSchema.safeParse(JSON.parse(raw));
       return parsed.success ? parsed.data : undefined;
@@ -145,9 +148,7 @@ export const summaryAggregateCellValue = (
     }
     case "date":
     case "date_time":
-      return typeof result.value === "string"
-        ? { kind: "date", iso: result.value }
-        : undefined;
+      return typeof result.value === "string" ? { kind: "date", iso: result.value } : undefined;
     default:
       return undefined;
   }
@@ -181,9 +182,7 @@ export const fieldLabelsOf = (module: ModuleRelease): Record<string, string> =>
     ),
   );
 
-export const fieldDateTypesOf = (
-  module: ModuleRelease,
-): Record<string, "date" | "date_time"> =>
+export const fieldDateTypesOf = (module: ModuleRelease): Record<string, "date" | "date_time"> =>
   Object.fromEntries(
     module.content.recordTypes.flatMap((recordType) =>
       recordType.fields.flatMap((field) => {

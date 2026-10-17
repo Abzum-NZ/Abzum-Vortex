@@ -11,7 +11,6 @@ import {
 import {
   builderKeySchema,
   fileIdSchema,
-  organizationAccountIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
   sourceQualifiedRecordTypeSchema,
@@ -48,14 +47,6 @@ export const sourceRecordLinkValueSchema = z
 
 export const recordLinkValueSchema = z
   .object({ recordTypeId: recordTypeIdSchema, recordId: recordIdSchema })
-  .strict();
-
-export const sourcePersonLinkValueSchema = z
-  .object({ organization_account_id: organizationAccountIdSchema })
-  .strict();
-
-export const personLinkValueSchema = z
-  .object({ organizationAccountId: organizationAccountIdSchema })
   .strict();
 
 /** Attachment order is meaningful for both single-file and multiple-file fields. */
@@ -211,7 +202,6 @@ export const sourceModuleFieldValueSchemas = {
   table: sourceTableValueSchema,
   link: sourceRecordLinkValueSchema,
   link_to_one_of_several: sourceRecordLinkValueSchema,
-  link_to_person: sourcePersonLinkValueSchema,
   calculation: calculatedValueSchema,
   total: calculatedValueSchema,
   attachment: attachmentValueSchema,
@@ -224,7 +214,6 @@ export const moduleFieldValueSchemas = {
   table: tableValueSchema,
   link: recordLinkValueSchema,
   link_to_one_of_several: recordLinkValueSchema,
-  link_to_person: personLinkValueSchema,
 } as const satisfies Record<(typeof fieldTypeKeys)[number], z.ZodType>;
 
 /** Cell types already supported by the  table field; values reuse the maps above. */

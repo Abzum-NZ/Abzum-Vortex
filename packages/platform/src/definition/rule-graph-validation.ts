@@ -114,7 +114,6 @@ const semanticType = (type: ValueDeclaration["type"]): string => {
   if (type === "yes_no") return "boolean";
   if (type === "several_choices") return "text_collection";
   if (type === "link" || type === "link_to_one_of_several") return "record_reference";
-  if (type === "link_to_person") return "organization_account_reference";
   if (type === "formatted_text" || type === "table" || type === "attachment") return "opaque_json";
   return type;
 };

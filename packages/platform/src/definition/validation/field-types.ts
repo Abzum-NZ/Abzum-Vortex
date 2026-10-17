@@ -21,12 +21,7 @@ export function semanticFieldType(type: unknown): string | undefined {
   if (value === "date" || value === "date_time") return value;
   if (["link", "link_to_one_of_several", "record_reference"].includes(value))
     return "record_reference";
-  if (
-    ["link_to_person", "organization_account_reference", "organisation_account_reference"].includes(
-      value,
-    )
-  )
-    return "organization_account_reference";
+  if (value === "organization_account_reference") return "organization_account_reference";
   if (value === "table" || value === "attachment" || value === "several_choices") return "json";
   if (
     [
@@ -72,7 +67,6 @@ function fieldValueType(field: JsonObject | undefined): string | undefined {
   if (type === "yes_no") return "boolean";
   if (type === "date" || type === "date_time") return type;
   if (["link", "link_to_one_of_several"].includes(type)) return "record_reference";
-  if (type === "link_to_person") return "organization_account_reference";
   if (type === "table" || type === "attachment" || type === "several_choices") return "json";
   return "text";
 }
@@ -102,8 +96,6 @@ export function typedSemanticFieldType(type: unknown): string | undefined {
     return value;
   if (value === "yes_no") return "boolean";
   if (["link", "link_to_one_of_several"].includes(value)) return "record_reference";
-  if (["link_to_person", "organisation_account_reference"].includes(value))
-    return "organization_account_reference";
   if (value === "several_choices") return "text_collection";
   if (["table", "attachment", "formatted_text"].includes(value)) return "opaque_json";
   if (

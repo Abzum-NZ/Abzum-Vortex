@@ -9,6 +9,10 @@ type InstalledNamedActionDescriptor = Readonly<{
   setsChoice: Readonly<{ fieldId: string; option: string }> | undefined;
 }>;
 
+type InstalledActionInput =
+  | InstalledRuntimeContext["releaseSet"]["application"]["content"]["actions"][number]["inputs"][number]
+  | ActionInputDefinition;
+
 /** Every installed named action of one release set, with the choice option it declares it sets. */
 export const installedNamedActionDescriptors = (
   application: InstalledRuntimeContext["releaseSet"]["application"],
@@ -25,7 +29,7 @@ export const installedNamedActionDescriptors = (
       actionId: string;
       key: string;
       subjectRecordTypeId: string;
-      inputs: readonly ActionInputDefinition[];
+      inputs: readonly InstalledActionInput[];
       setsChoiceFieldId?: string | undefined;
       setsChoiceOption?: string | undefined;
     }>[],
