@@ -56,12 +56,14 @@ export function StudioTotalEditor({ settings, relationships, compiledOf, disable
   const accepted = (relationship?.fields ?? []).filter((field) => settings.operation !== "count" && totalAccepts(settings.operation, field))
     .map((field) => ({ value: field.key, label: field.label }));
   const fieldType = relationship?.fields.find((field) => field.key === settings.field)?.type;
-  const recordType = settings.relationship.slice(0, Math.max(0, settings.relationship.lastIndexOf(".")));
+  // A new total of a record type no link points at has no relationship yet.
+  const reference = (settings.relationship as string | undefined) ?? "";
+  const recordType = reference.slice(0, Math.max(0, reference.lastIndexOf(".")));
 
   return <div className="space-y-3">
     <StudioField label="Related records" hint={relationships.length === 0
       ? "No record type links to this one yet. Add a link field to another record type first." : "The records that link to this one."}>
-      {(control) => <StudioOptionControl id={control.id} value={settings.relationship} unset="Choose the related records…" disabled={disabled}
+      {(control) => <StudioOptionControl id={control.id} value={reference} unset="Choose the related records…" disabled={disabled}
         options={relationships.map((item) => ({ value: item.reference, label: item.label }))}
         onChange={(reference) => {
           // Another link brings other fields: the field and filter start again.
@@ -93,7 +95,7 @@ export function StudioTotalEditor({ settings, relationships, compiledOf, disable
       <h4 className="text-sm font-semibold">Only related records that match</h4>
       <p className="text-xs text-muted-foreground">Optional. Leave it empty to take every related record.</p>
       {relationship === undefined ? <p className="text-sm text-muted-foreground">Choose the related records first.</p>
-        : <StudioFormulaCondition key={settings.relationship} label="Filter of the related records" condition={settings.filter}
+        : <StudioFormulaCondition key={reference} label="Filter of the related records" condition={settings.filter}
           compiled={compiledOf(recordType)} fieldKeys={filterKeys} disabled={disabled}
           onChange={(filter, valid) => set({ filter: filter as TotalSettings["filter"] }, valid)} />}
     </section>

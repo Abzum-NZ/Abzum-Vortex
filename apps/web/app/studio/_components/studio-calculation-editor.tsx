@@ -229,7 +229,7 @@ export function StudioCalculationEditor({ idPrefix, settings, fields, compiled, 
         onChange={(operation) => {
           if (operation === expression.operation) return;
           const next = starterCalculationExpression(operation as CalculationOperation, fields);
-          set({ expression: next, result_type: calculationResultChoices(next, byKey)[0] ?? settings.result_type }, operation !== "condition");
+          set({ expression: next, result_type: calculationResultChoices(next, byKey)[0] ?? settings.result_type });
         }} />}
     </StudioField>
     <section className="space-y-2" aria-label="Formula">{body}</section>

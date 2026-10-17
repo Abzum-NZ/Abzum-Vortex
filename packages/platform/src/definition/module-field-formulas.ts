@@ -268,7 +268,9 @@ export const totalRelationships = (source: ApplicationSourceDocument, moduleKey:
 
 /** Why a total's settings can't be applied, in the words of the total editor. */
 export const totalProblems = (settings: TotalSettings, relationship: TotalRelationship | undefined): string[] => {
-  if (relationship === undefined) return ["Related records: choose the link whose records are totalled."];
+  if (relationship === undefined)
+    return [(settings.relationship as string | undefined) === undefined ? "Related records: choose the link whose records are totalled."
+      : `Related records: ${settings.relationship} is not a link to this record type any more.`];
   const problems: string[] = [];
   const field = settings.field === undefined ? undefined : relationship.fields.find((item) => item.key === settings.field);
   if (settings.operation === "count") {
@@ -286,7 +288,7 @@ export const totalProblems = (settings: TotalSettings, relationship: TotalRelati
 
 /** A total as one line a person reads, for example "Number of Record tags" or "Sum of Amount of Line items". */
 export const describeTotal = (settings: TotalSettings, relationship: TotalRelationship | undefined): string => {
-  const records = relationship?.recordName ?? settings.relationship;
+  const records = relationship?.recordName ?? (settings.relationship as string | undefined) ?? "the related records";
   const field = settings.field === undefined ? undefined : relationship?.fields.find((item) => item.key === settings.field)?.label ?? settings.field;
   const what = settings.operation === "count" ? `${totalOperationLabels.count} of ${records}`
     : `${totalOperationLabels[settings.operation]} of ${field ?? "a field"} of ${records}`;
