@@ -127,9 +127,9 @@ export type InlineRecordTypeCreation = Readonly<{
 /**
  * The Application source with one new record type in an owned inline Module. A record type is
  * created in its minimum valid shape: a reference number that identifies each record, a required
- * title field, every standard action with its standard permission (granted to every access group
- * of the Application), and organisation-shared storage of its own. When the Application owns no
- * Module yet, its first Module is created with it.
+ * title field, every standard action with its standard permission (granted only to roles holding
+ * every existing record permission in the Application's owned Modules), and organisation-shared
+ * storage of its own. When the Application owns no Module yet, its first Module is created with it.
  */
 export const createInlineRecordType = (
   current: ApplicationSourceDocument,
@@ -161,6 +161,17 @@ export const createInlineRecordType = (
     issues.push(`This module already has a record type with the key "${key}".`);
   if (issues.length > 0 || module === undefined) return { kind: "invalid", issues };
 
+  // Determine full access before adding the new type's permissions, across all owned Modules.
+  const ownedRecordTypes = new Set(current.body.modules.flatMap((owned) =>
+    owned.record_types.map((record) => `${owned.key}:${record.key}`)));
+  const existingRecordPermissions = [
+    ...current.body.modules.flatMap((owned) => owned.permissions
+      .filter((permission) => permission.record_type !== undefined)
+      .map((permission) => permission.key)),
+    ...current.body.permissions
+      .filter((permission) => permission.record_type !== undefined && ownedRecordTypes.has(permission.record_type))
+      .map((permission) => permission.key),
+  ];
   const taken = moduleAliases(module);
   const numberKey = key.length <= 33 ? `${key}_number` : "number";
   const titleKey = deriveFieldKey(titleLabel, new Set([numberKey])) ?? "name";
@@ -204,6 +215,7 @@ export const createInlineRecordType = (
   for (const role of source.body.roles) {
     const entries = role.permissions as string[];
     if (entries.includes("*")) continue;
+    if (!existingRecordPermissions.every((permission) => entries.includes(permission))) continue;
     for (const permission of granted) if (!entries.includes(permission)) entries.push(permission);
   }
   return parsedResult(source, module.key, key);
