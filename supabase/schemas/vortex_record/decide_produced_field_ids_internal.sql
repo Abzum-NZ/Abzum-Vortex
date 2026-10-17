@@ -24,6 +24,7 @@ declare
   source_type_key text;
   source_bounds jsonb;
   source_bounds_by_type jsonb := '{}'::jsonb;
+  required_field_ids jsonb;
   dependencies_allowed boolean;
   changed boolean := true;
 begin
@@ -64,8 +65,9 @@ begin
 
   -- A total is readable only when the reader can read every record it adds
   -- up and every field it uses there: an unconditioned all-records read of
-  -- the child record type that guarantees the summed field and every filter
-  -- field, each decided by this same rule. Any narrowing record scope, a
+  -- the child record type that guarantees the summed field, every filter
+  -- field and the link fields that point here, each decided by this same
+  -- rule. Any narrowing record scope, a
   -- refused or undeclared read, an unknown relationship or a cycle back to a
   -- record type still being decided leaves it Restricted.
   for field_value in
@@ -102,10 +104,32 @@ begin
       source_bounds_by_type := source_bounds_by_type
         || pg_catalog.jsonb_build_object(source_type_key, source_bounds);
     end if;
+    -- Which child records a total covers is decided by their link to this
+    -- record type, so every link field of the child record type that can
+    -- point here is an input too. A child record type without one is an
+    -- unknown relationship.
+    select pg_catalog.jsonb_agg(pg_catalog.lower(field.value ->> 'fieldId'))
+    into required_field_ids
+    from pg_catalog.jsonb_array_elements(
+      p_plan -> 'recordTypes' -> source_type_key -> 'fields'
+    ) as field(value)
+    where (field.value ->> 'type' = 'link'
+        and pg_catalog.lower(field.value #>> '{settings,target,recordTypeId}') = type_key)
+      or (field.value ->> 'type' = 'link_to_one_of_several'
+        and pg_catalog.jsonb_typeof(field.value #> '{settings,targets}') = 'array'
+        and exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(field.value #> '{settings,targets}') as target(value)
+          where pg_catalog.lower(target.value ->> 'recordTypeId') = type_key
+        ));
+    if required_field_ids is null then
+      continue;
+    end if;
+    required_field_ids := required_field_ids || (contract_value -> 'sourceFieldIds');
     if (source_bounds -> 'coversAllRecords') = 'true'::jsonb
       and not exists (
         select 1
-        from pg_catalog.jsonb_array_elements_text(contract_value -> 'sourceFieldIds') as required(value)
+        from pg_catalog.jsonb_array_elements_text(required_field_ids) as required(value)
         where not exists (
           select 1
           from pg_catalog.jsonb_array_elements_text(source_bounds -> 'readableFieldIds') as guaranteed(value)
@@ -166,4 +190,4 @@ revoke all on function vortex_record.decide_produced_field_ids_internal(jsonb, u
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_record.decide_produced_field_ids_internal(jsonb, uuid, jsonb, jsonb) is
-  'Private field-read decision for produced fields, applied to the fields a reader''s field policy allows on one record type of one installation access plan: a total stays readable only when an unconditioned all-records read of its child record type guarantees the reader its summed and filter fields, and a calculation only when every dependency is readable, transitively; anything else is withheld and shown as Restricted. Fails closed on an unknown relationship, a refused child read and a cycle of totals.';
+  'Private field-read decision for produced fields, applied to the fields a reader''s field policy allows on one record type of one installation access plan: a total stays readable only when an unconditioned all-records read of its child record type guarantees the reader its summed and filter fields and the link fields that point to the total''s record type, and a calculation only when every dependency is readable, transitively; anything else is withheld and shown as Restricted. Fails closed on an unknown relationship, a refused child read and a cycle of totals.';
