@@ -6,9 +6,9 @@ import {
   DEFAULT_PLATFORM_THEME_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
   runtimePreviewOf,
-  type ProjectedNavigation,
 } from "@vortex/platform/server";
 import {
+  type ProjectedNavigation,
   sameId,
   compiledPageShellId,
   splitProjectedPage,

@@ -1,12 +1,12 @@
 import type {
   InstalledRuntimeContext,
-  ProjectedNavigation,
   PrivateFormDraftFieldValidation,
   PermittedApplicationsRead,
   PermittedApplication,
 } from "@vortex/platform/server";
 import type {
   ApplicationShell,
+  ProjectedNavigation,
   JsonValue,
   BoardColumnContinuationRequest,
   PageDefinition,
