@@ -27,7 +27,7 @@ import { StudioFlowStartEditor } from "./studio-flow-start-editor";
  * Runs one flow command on the draft. `merge` makes consecutive edits with the same key one Undo
  * step; an applied result carries the source the draft holds afterwards.
  */
-export type StudioFlowRun = (expected: StudioFlowContext, selection: StudioFlowSelection, command: StudioFlowCommand,
+type StudioFlowRun = (expected: StudioFlowContext, selection: StudioFlowSelection, command: StudioFlowCommand,
   merge?: string) => StudioFlowEditResult;
 
 const findStep = (lists: readonly StudioFlowTaskListOutline[], path: StudioFlowPath): StudioFlowTaskOutline | undefined => {

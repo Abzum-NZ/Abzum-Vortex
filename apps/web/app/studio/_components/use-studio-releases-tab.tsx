@@ -83,8 +83,8 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, blocked }:
     const current = latest.current;
     const state = history.getState();
     if (!current.isActive() || current.blockedReason() !== undefined || state.isDirty || state.isSaving ||
-      current.saved.rootId !== state.rootId || current.saved.draftRevision !== state.draftRevision) return null;
-    return { rootId: state.rootId, draftRevision: state.draftRevision, sourceFingerprint: current.saved.sourceFingerprint,
+      current.readSaved().rootId !== state.rootId || current.readSaved().draftRevision !== state.draftRevision) return null;
+    return { rootId: state.rootId, draftRevision: state.draftRevision, sourceFingerprint: current.readSaved().sourceFingerprint,
       source: state.source, lifetime: current.lifetime };
   }, [history]);
 
@@ -232,9 +232,9 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, blocked }:
     const current = latest.current;
     const state = history.getState();
     if (!current.isActive() || current.blockedReason() !== undefined || state.isSaving ||
-      current.saved.draftRevision !== state.draftRevision) return null;
-    return { organizationId, rootId: state.rootId, key: current.saved.key, rootAlias: state.source.root_alias,
-      draftRevision: state.draftRevision, savedSourceFingerprint: current.saved.sourceFingerprint,
+      current.readSaved().draftRevision !== state.draftRevision) return null;
+    return { organizationId, rootId: state.rootId, key: current.readSaved().key, rootAlias: state.source.root_alias,
+      draftRevision: state.draftRevision, savedSourceFingerprint: current.readSaved().sourceFingerprint,
       source: state.source, localLifetime: current.lifetime };
   };
   const applyImport: Parameters<typeof ApplicationSourceImport>[0]["onApply"] = (expected, candidate) => {
@@ -257,11 +257,13 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, blocked }:
   const centre: ReactNode = <>
     {!hidden && section === "history" &&
       <StudioHistoryTab organizationId={organizationId} rootId={draft.state.rootId} savedRevision={draft.saved.draftRevision}
-        restoreBlocked={restoreBlocked}
-        onRestored={(restored) => { void draft.reload().then(() => setNotice(restored)); }} />}
+        restoreBlocked={restoreBlocked} hold={(on) => draft.hold("restoring", on)}
+        onRestored={(restored) => { void draft.reload().then((loaded) => setNotice(loaded ? restored
+          : "The version was restored, but the restored draft could not be loaded here. Reload Studio to see it.")); }} />}
     {!hidden && section === "page-adoption" &&
       <StandardPageAdoption organizationId={organizationId} rootId={draft.state.rootId}
-        disabledReason={restoreBlocked} onSaved={() => { void draft.reload(); }} />}
+        disabledReason={restoreBlocked} hold={(on) => draft.hold("restoring", on)}
+        onSaved={() => { void draft.reload().then((loaded) => { if (!loaded) setNotice("Your choice was saved, but the draft could not be loaded here. Reload Studio to see it."); }); }} />}
     {/* The import keeps what was pasted while another section or tab is open. */}
     <section hidden={section !== "import"} aria-label="Import from source" className="space-y-3">
       <p className="text-sm text-muted-foreground">Replace the draft with a source document. This is for advanced use; the change is checked before it reaches your draft.</p>

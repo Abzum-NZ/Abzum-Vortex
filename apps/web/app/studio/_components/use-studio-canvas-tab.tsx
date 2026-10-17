@@ -21,7 +21,7 @@ import { studioDraftNavigation } from "../_lib/studio-draft-navigation";
 import type { StudioApplicationCanvasFrames } from "../../_lib/studio-application-draft";
 import { studioMenuPosition } from "@vortex/ui/studio";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
-import { ApplicationVisibilityConditionEditor, type StudioVisibilityWorkspaceSnapshot } from "./application-visibility-condition-editor";
+import { ApplicationVisibilityConditionEditor } from "./application-visibility-condition-editor";
 import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
 import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-toolbar";
 import { StudioPanelShell } from "./studio-frame";
@@ -251,23 +251,15 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
     return { state: result.kind === "not_installed" ? "not_installed" as const : "unavailable" as const, records: {}, notInstalled: [] };
   }, [organizationId, rootId, view.draftRevision, view.sourceFingerprint]);
 
-  const readVisibilitySnapshot = useCallback((): StudioVisibilityWorkspaceSnapshot | null => {
-    const current = draft.history.getState();
-    const currentSelection = draft.selection.getSelection();
-    if (draft.blockedReason() !== undefined || current.isSaving || currentSelection?.kind !== "placement") return null;
-    return { context: { organizationId, rootId: current.rootId, key, draftRevision: current.draftRevision,
-      localLifetime: draft.lifetime, catalogue, source: current.source },
-    selection: currentSelection, saved: draft.saved };
-  }, [draft, organizationId, key, catalogue]);
   const commandVisibility: Parameters<typeof ApplicationVisibilityConditionEditor>[0]["onCommand"] =
-    (expected, expectedSelection, metadata, condition, isCurrentResponse) => {
+    (expected, expectedSelection, metadata, condition) => {
       const currentSelection = draft.selection.getSelection();
       if (currentSelection?.kind !== "placement" || expectedSelection.kind !== "placement" ||
-        currentSelection.placementAlias !== expectedSelection.placementAlias || !isCurrentResponse()) return { kind: "stale" };
+        currentSelection.placementAlias !== expectedSelection.placementAlias) return { kind: "stale" };
       const outcome = draft.run((): { kind: "edit"; source: ApplicationSourceDocument; result: ReturnType<typeof applyStudioVisibilityCondition> }
         | { kind: "keep"; result: ReturnType<typeof applyStudioVisibilityCondition> } => {
         const result = applyStudioVisibilityCondition(expected, liveContext(), currentSelection, metadata, condition);
-        return result.kind === "applied" && isCurrentResponse() ? { kind: "edit", source: result.source, result } : { kind: "keep", result };
+        return result.kind === "applied" ? { kind: "edit", source: result.source, result } : { kind: "keep", result };
       }, { merge: `visibility:${currentSelection.placementAlias}` });
       return outcome.kind === "done" ? outcome.result : { kind: "stale" };
     };
@@ -340,8 +332,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
         disabled={draft.locked} choices={draftChoices} onCommand={commandComposition} />}
     {selected?.kind === "placement" && inspector.status === "resolved" &&
       <ApplicationVisibilityConditionEditor key={`${draft.lifetime}:${selectionKey}`} context={compositionContext}
-        selection={selected} saved={draft.saved} busy={draft.locked || state.isSaving} disabled={draft.locked}
-        readSnapshot={readVisibilitySnapshot} onCommand={commandVisibility} />}
+        selection={selected} saved={draft.saved} disabled={draft.locked} onCommand={commandVisibility} />}
     {inspector.status === "resolved" && placementWorkflows}
   </StudioInspector>;
 

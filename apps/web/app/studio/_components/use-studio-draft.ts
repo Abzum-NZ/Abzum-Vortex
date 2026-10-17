@@ -17,8 +17,10 @@ import { conflictMessage, refusalMessage } from "./studio-refusal-messages";
 
 /** How long Studio waits after the last edit of a batch before it saves the batch. */
 const autosaveDelayMs = 600;
-/** How long Studio waits before it tries a save again that the platform did not confirm. */
+/** How long Studio waits before it tries again a save the platform did not confirm, doubling each time. */
 const retryDelayMs = 4000;
+/** After this many unconfirmed saves in a row, Studio waits for the next edit instead of trying again. */
+const maximumRetries = 5;
 
 /**
  * What the canvas and the Data tab draw from: the compile of one saved revision, with what the
@@ -70,7 +72,7 @@ export type StudioRunOptions = Readonly<{
 }>;
 
 /** A request that holds the whole draft while it runs: nothing else may edit it meanwhile. */
-export type StudioDraftHold = "publication" | "reopening";
+export type StudioDraftHold = "publication" | "reopening" | "restoring";
 
 /**
  * The one draft of a Studio workspace: its history (Undo and Redo), its one selection store, the
@@ -87,6 +89,11 @@ export type StudioDraft = Readonly<{
   selected: StudioSemanticSelection | null;
   /** The saved draft the current history extends. */
   saved: StudioStoredApplicationDraft;
+  /**
+   * Live: the saved draft at this moment, for requests that run before the next render (a flush
+   * followed by Publish, Preview or an agent call). It changes once per saved edit batch.
+   */
+  readSaved: () => StudioStoredApplicationDraft;
   view: StudioCompiledView;
   /** The canvas draws an older revision than the saved one (or the draft is not saved yet). */
   updatingCanvas: boolean;
@@ -123,11 +130,17 @@ class StudioSaveError extends Error {
 }
 
 type LoadedResult = Extract<Awaited<ReturnType<typeof reopenStudioApplication>>, { kind: "available" }>;
-const viewOf = (result: LoadedResult, generation: number): StudioCompiledView => ({
+/**
+ * The view of a new compile. What was read alongside an earlier compile (the modules used, what is
+ * published, borrowed choices, the people directory) is kept when this read did not return it, so a
+ * draft that does not compile for a moment never makes saved fields look published.
+ */
+const viewOf = (result: LoadedResult, generation: number, previous: StudioCompiledView): StudioCompiledView => ({
   source: result.draft.source, draftRevision: result.draft.draftRevision, sourceFingerprint: result.draft.sourceFingerprint,
   slots: result.pageCompiledSlots, frames: result.canvasFrames, failure: result.compileFailure, generation,
-  compiledFields: result.compiledFields, borrowedChoices: result.borrowedChoices, usedModules: result.usedModules,
-  published: result.published, peopleDirectory: result.peopleDirectory,
+  compiledFields: result.compiledFields, borrowedChoices: result.borrowedChoices ?? previous.borrowedChoices,
+  usedModules: result.usedModules ?? previous.usedModules, published: result.published ?? previous.published,
+  peopleDirectory: result.peopleDirectory ?? previous.peopleDirectory,
 });
 
 const personWords = (label: StudioDraftChangedElsewhere["changedBy"]): string | null =>
@@ -142,6 +155,10 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
 }>): StudioDraft {
   const active = useRef(false);
   const savedRef = useRef(draft);
+  // The draft a save returned, taken as saved only once the history accepts it.
+  const returned = useRef<StudioStoredApplicationDraft | null>(null);
+  const readReturned = () => returned.current;
+  const retries = useRef(0);
   const elsewhere = useRef<StudioDraftChangedElsewhere | null>(null);
   const readElsewhere = () => elsewhere.current;
   const holds = useRef(new Set<StudioDraftHold>());
@@ -161,8 +178,9 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
   const [history] = useState(() => createStudioApplicationDraftHistoryController(draft, {
     saveDraft: async (command) => {
       const result = await saveStudioApplication(organizationId, command);
+      // A save sent as the workspace closes (leaving Studio within a batch) still completes on the server.
+      if (result.kind === "available") { returned.current = result.draft; return result.draft; }
       if (!active.current) throw new StudioSaveError("STUDIO_WORKSPACE_CLOSED");
-      if (result.kind === "available") { savedRef.current = result.draft; return result.draft; }
       if (result.kind === "conflict") elsewhere.current = "elsewhere" in result ? result.elsewhere : null;
       throw new StudioSaveError(result.kind === "conflict"
         ? "DEFINITION_DRAFT_STALE_OR_MISSING"
@@ -198,12 +216,21 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
           if (result.kind !== "available" || result.organizationId !== organizationId ||
             result.draft.draftRevision !== savedRef.current.draftRevision ||
             result.draft.sourceFingerprint !== savedRef.current.sourceFingerprint) {
+            if (result.kind === "available" && result.draft.draftRevision > savedRef.current.draftRevision &&
+              statusRef.current.kind !== "conflict") {
+              // Another window or person saved since: say so now rather than at the next edit.
+              setStatus({ kind: "conflict", changedBy: null, changedAt: result.draft.updatedAt,
+                changes: summarizeSourceChange(applicationSourceDocumentSchema.parse(savedRef.current.source),
+                  applicationSourceDocumentSchema.parse(result.draft.source)),
+                message: "A newer version of this draft was saved in another window or by someone else." });
+              return;
+            }
             if (result.kind !== "available" || result.draft.draftRevision < savedRef.current.draftRevision)
               console.error(`[studio] the saved draft's compile did not answer for revision ${savedRef.current.draftRevision}: STUDIO_COMPILE_REFRESH_${result.kind.toUpperCase()}`);
             continue;
           }
           generation.current += 1;
-          setView(viewOf(result, generation.current));
+          setView((previous) => viewOf(result, generation.current, previous));
         } catch (error) {
           console.error("[studio] compiling the saved draft for the canvas failed", describeFailure(error));
         }
@@ -226,16 +253,21 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
     if (!active.current || !before.isDirty || holds.current.has("reopening") || statusRef.current.kind === "conflict") return;
     const run = (async () => {
       elsewhere.current = null;
+      returned.current = null;
       const outcome = await history.save();
       if (!active.current) return;
       const after = history.getState();
+      if (outcome.kind !== "failed") retries.current = 0;
       switch (outcome.kind) {
-        case "saved":
+        case "saved": {
+          const accepted = readReturned();
+          if (accepted !== null) savedRef.current = accepted;
           setSaved(savedRef.current);
           setStatus(after.isDirty ? { kind: "saving" } : { kind: "saved" });
           if (after.isDirty) scheduleSave(autosaveDelayMs);
           else void refreshCompiled();
           return;
+        }
         case "conflict": {
           // Read through a function: TypeScript would otherwise narrow the ref to the null assigned before the awaited save.
           const latest = readElsewhere();
@@ -253,10 +285,17 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
         }
         case "refused":
           setStatus({ kind: "refused", message: refusalMessage(outcome.reason, "Your latest change was not saved; Undo it or change it, and Studio saves again.") });
+          // An edit made while the refused save ran is a new attempt.
+          if (after.isDirty && after.source !== before.source) scheduleSave(autosaveDelayMs);
           return;
         case "failed":
+          retries.current += 1;
+          if (retries.current > maximumRetries) {
+            setStatus({ kind: "refused", message: "The platform did not confirm several saves in a row. Your changes are kept on screen; Studio tries again with your next edit." });
+            return;
+          }
           setStatus({ kind: "failed", message: "The platform did not confirm the save. Studio tries again in a moment; your changes are kept." });
-          scheduleSave(retryDelayMs);
+          scheduleSave(retryDelayMs * 2 ** (retries.current - 1));
           return;
         case "busy":
           scheduleSave(autosaveDelayMs);
@@ -279,13 +318,15 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
       if (next.isDirty && statusRef.current.kind !== "conflict") {
         if (statusRef.current.kind !== "saving") setStatus({ kind: "saving" });
         if (saving.current === null) scheduleSave(autosaveDelayMs);
-      } else if (!next.isDirty && statusRef.current.kind === "saving") setStatus({ kind: "saved" });
+      } else if (!next.isDirty && statusRef.current.kind !== "saved" && statusRef.current.kind !== "conflict") setStatus({ kind: "saved" });
     });
     const unsubscribeSelection = selection.subscribe(setSelected);
     return () => {
+      clearTimeout(saveTimer.current);
+      const pending = history.getState();
+      if (pending.isDirty && !pending.isSaving && statusRef.current.kind !== "conflict") void history.save();
       active.current = false;
       lifetimeRef.current += 1;
-      clearTimeout(saveTimer.current);
       unsubscribeHistory();
       unsubscribeSelection();
     };
@@ -310,6 +351,7 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
     if (!active.current) return "The workspace is closing.";
     if (holds.current.has("reopening")) return "The saved draft is loading. Try again in a moment.";
     if (holds.current.has("publication")) return "The draft is being published. Try again when it finishes.";
+    if (holds.current.has("restoring")) return "A published version is being restored into the draft. Try again when it finishes.";
     if (statusRef.current.kind === "conflict") return "This draft was changed elsewhere. Load the latest draft before you change it.";
     return undefined;
   }, []);
@@ -357,7 +399,7 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
       savedRef.current = result.draft;
       setSaved(result.draft);
       generation.current += 1;
-      setView(viewOf(result, generation.current));
+      setView((previous) => viewOf(result, generation.current, previous));
       lifetimeRef.current += 1;
       setLifetime(lifetimeRef.current);
       setStatus({ kind: "saved" });
@@ -378,7 +420,7 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
   const locked = renderedHolds.size > 0 || status.kind === "conflict" || lifetime === 0;
 
   return useMemo<StudioDraft>(() => ({
-    organizationId, history, selection, state, source, selected, saved, view, updatingCanvas, status, chip, lifetime, locked,
+    organizationId, history, selection, state, source, selected, saved, readSaved: () => savedRef.current, view, updatingCanvas, status, chip, lifetime, locked,
     isHeld: (key) => renderedHolds.has(key), hold, blockedReason, parsed, run,
     select: (next) => selection.select(next),
     undo: () => { if (blockedReason() === undefined) history.undo(); },

@@ -19,8 +19,6 @@ import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 const StudioFlowCanvas = dynamic(
   () => import("@vortex/ui/studio/flow-canvas").then((module) => module.StudioFlowCanvas), { ssr: false });
 
-/** A step draft that writes exactly the stored step: nothing to change (typing a trailing space, say). */
-
 /**
  * The Flows tab of the one Studio: its panel (the flows), its centre (the workflow canvas), its
  * inspector (the selected step) and the placement inspector's Workflow section. Every change is one

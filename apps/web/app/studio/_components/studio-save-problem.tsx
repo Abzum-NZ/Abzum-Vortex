@@ -12,9 +12,11 @@ const shownChanges = 6;
  * when, and what they changed, and offers to load it: this workspace never overwrites it. A refused
  * save says why; a save the platform did not confirm is retried by itself.
  */
-export function StudioSaveProblem({ status, loading, onLoadLatest }: Readonly<{
+export function StudioSaveProblem({ status, loading, loadFailed, onLoadLatest }: Readonly<{
   status: StudioSaveStatus;
   loading: boolean;
+  /** The last Load the latest draft did not load it. */
+  loadFailed: boolean;
   onLoadLatest: () => void;
 }>) {
   if (status.kind === "saved" || status.kind === "saving") return null;
@@ -39,6 +41,7 @@ export function StudioSaveProblem({ status, loading, onLoadLatest }: Readonly<{
         </ul>
       </>}
       <p>Load their version to keep working. Your change that was not saved is not kept.</p>
+      {loadFailed && <p>The latest draft could not be loaded. Try again, or reload Studio.</p>}
       <Button type="button" size="sm" disabled={loading} onClick={onLoadLatest}>{loading ? "Loading…" : "Load the latest draft"}</Button>
     </AlertDescription>
   </Alert>;

@@ -114,12 +114,15 @@ export function ApplicationAppearanceEditor(props: Props) {
   const [message, setMessage] = useState("");
   const baselineKey = studioAppearanceValueKey(props.source.body.theme.token_overrides);
 
-  // The draft's own values (after an edit, Undo or Redo) are read and checked once; they are never held input.
+  // The draft's values changed by Undo, Redo or another edit are read and checked once; this
+  // editor's own applied values (and what is being typed meanwhile) are kept as they are.
+  const appliedKey = useRef<string | null>(null);
   useEffect(() => {
     active.current = true;
-    const ticket = ++generation.current;
     const initial = structuredClone(props.source.body.theme.token_overrides);
-    if (studioAppearanceValueKey(valuesRef.current) === studioAppearanceValueKey(initial) && descriptors !== undefined) return;
+    if (descriptors !== undefined && (baselineKey === appliedKey.current ||
+      studioAppearanceValueKey(valuesRef.current) === studioAppearanceValueKey(initial))) return;
+    const ticket = ++generation.current;
     valuesRef.current = initial;
     setValues(initial);
     setBusy(true);
@@ -139,10 +142,10 @@ export function ApplicationAppearanceEditor(props: Props) {
     }).finally(() => {
       if (active.current && ticket === generation.current) setBusy(false);
     });
-  }, [props.organizationId, props.rootId, props.draftRevision, baselineKey]);
+  }, [props.organizationId, props.rootId, baselineKey]);
   useEffect(() => () => { active.current = false; generation.current += 1; clearTimeout(timer.current); }, []);
 
-  const checkAndApply = async (next: Record<string, StudioThemeTokenValue>) => {
+  const checkAndApply = async (next: Record<string, StudioThemeTokenValue>, attempt = 0): Promise<void> => {
     const current = latest.current;
     const request = parseStudioAppearanceRequest({ rootId: current.rootId,
       expectedDraftRevision: current.draftRevision, tokenOverrides: next });
@@ -159,6 +162,8 @@ export function ApplicationAppearanceEditor(props: Props) {
           studioAppearanceValueKey(result.theme.base) !== studioAppearanceValueKey(source.body.theme.base) ||
           studioAppearanceValueKey(result.theme.selection) !== studioAppearanceValueKey(source.body.theme.selection) ||
           studioAppearanceValueKey(result.theme.token_overrides) !== studioAppearanceValueKey(request.tokenOverrides)) {
+        // A save that landed during the check: check once more against the new saved revision.
+        if (result.kind === "conflict" && attempt === 0) { void checkAndApply(next, 1); return; }
         setMessage(result.kind === "conflict" ? "The draft was saved while the values were checked. Change a value again."
           : "This draft, your access or the theme was refused, so nothing was changed.");
         return;
@@ -167,8 +172,9 @@ export function ApplicationAppearanceEditor(props: Props) {
       setFeedback(result);
       if (!result.valid) { setMessage("Some values are not allowed, so they are not in your draft. See below."); return; }
       const applied = applyStudioAppearance(source, current.rootId, request.expectedDraftRevision, request, result);
-      setMessage(applied !== undefined && latest.current.onApply(source, applied, "appearance")
-        ? "Appearance changed." : "The draft changed while the values were checked. Change a value again.");
+      const accepted = applied !== undefined && latest.current.onApply(source, applied, "appearance");
+      if (accepted) appliedKey.current = studioAppearanceValueKey(applied.body.theme.token_overrides);
+      setMessage(accepted ? "Appearance changed." : "The draft changed while the values were checked. Change a value again.");
     } catch (error) {
       console.error("[studio] checking the appearance failed", error);
       if (active.current && ticket === generation.current) setMessage("The check could not be completed. Change a value again.");

@@ -131,6 +131,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   const centreTitle = tab === "data" ? data.title : tab === "access" ? access.title : tab === "releases" ? releases.title : canvas.title;
   const canvasShown = railShowsCanvas(tab);
   const conflictLoading = draft.isHeld("reopening");
+  const [loadFailed, setLoadFailed] = useState(false);
 
   return <div aria-busy={draft.isHeld("publication") || draft.isHeld("reopening")}>
     <ApplicationDraftAgentTools draft={draft} catalogue={catalogue} command={canvas.commandComposition}
@@ -142,7 +143,8 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
           onApplication: () => { draft.select({ kind: "application", applicationRootId: state.rootId }); } }}
         chip={draft.chip} chipAlert={draft.status.kind === "conflict" || draft.status.kind === "refused"}
         status={releases.notice}
-        problem={<StudioSaveProblem status={draft.status} loading={conflictLoading} onLoadLatest={() => { void draft.reload(); }} />}
+        problem={<StudioSaveProblem status={draft.status} loading={conflictLoading} loadFailed={loadFailed}
+          onLoadLatest={() => { setLoadFailed(false); void draft.reload().then((loaded) => setLoadFailed(!loaded)); }} />}
         canUndo={state.canUndo} canRedo={state.canRedo} undoDisabled={draft.locked}
         onUndo={draft.undo} onRedo={draft.redo}
         backToAppHref={place.applicationHref}

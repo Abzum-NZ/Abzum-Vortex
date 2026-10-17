@@ -44,10 +44,12 @@ const restoreFailureMessage = (result: Exclude<StudioApplicationRestoreCommandRe
  * that version's source as a new draft revision, through the platform's one restore operation; it
  * never publishes or installs anything. Organisations install and upgrade from the App Store.
  */
-export function ApplicationReleaseHistory({ initialPage, restoreBlocked, onRestored }: {
+export function ApplicationReleaseHistory({ initialPage, restoreBlocked, hold, onRestored }: {
   initialPage: StudioApplicationHistoryPage;
   /** Why restoring cannot start now (unsaved or pending edits in the workspace), or nothing. */
   restoreBlocked: string | undefined;
+  /** Holds the workspace's draft while a restore writes the saved draft, so nothing else edits it. */
+  hold: (on: boolean) => void;
   /** Loads the restored saved draft into the workspace and says what happened. */
   onRestored: (message: string) => void;
 }) {
@@ -131,6 +133,7 @@ export function ApplicationReleaseHistory({ initialPage, restoreBlocked, onResto
     if (pageRef.current !== sourcePage || pendingRef.current !== null) return;
     const token = begin("restore");
     setMessage(`Restoring version ${entry.releaseVersion} into the draft…`);
+    hold(true);
     try {
       const result = await restoreApplicationRelease(snapshot.organizationId, {
         selector: { organizationId: snapshot.organizationId, rootId: snapshot.rootId, releaseRevision: entry.releaseRevision },
@@ -148,7 +151,7 @@ export function ApplicationReleaseHistory({ initialPage, restoreBlocked, onResto
       console.error("[studio] restoring a release failed", error);
       if (mounted.current && generation.current === token)
         setMessage(restoreFailureMessage({ kind: "temporarily_unavailable", stateMayHaveChanged: "unknown" }));
-    } finally { finish(token); }
+    } finally { hold(false); finish(token); }
   };
 
   const snapshot = page?.snapshot ?? initialPage.snapshot;
