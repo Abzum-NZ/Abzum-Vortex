@@ -6,7 +6,7 @@ import {
   type ApplicationSourceDocument, type ConditionNode, type InlineQuery, type InlineQueryAggregate, type InlineQueryInput,
   type InlineQuerySort, type InlineRecordTypeReference,
 } from "@vortex/platform/schema";
-import { StudioConditionControls, StudioOptionControl } from "@vortex/ui/studio";
+import { StudioConditionControls, StudioOptionControl, validateStudioCondition } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
@@ -26,6 +26,7 @@ type InputType = InlineQueryInput["type"];
 /** The input types a query offers, with the words the editor uses for them. */
 const inputTypes: readonly Readonly<{ value: InputType; label: string }>[] = [
   { value: "text", label: "Text" }, { value: "number", label: "Number" }, { value: "decimal_number", label: "Decimal number" },
+  { value: "money", label: "Amount of money" },
   { value: "boolean", label: "Yes or no" }, { value: "date", label: "Date" }, { value: "date_time", label: "Date and time" },
   { value: "record_reference", label: "A record" }, { value: "organisation_account_reference", label: "A person's account" },
 ];
@@ -42,6 +43,22 @@ const formOf = (query: InlineQuery): Form => ({
   label: query.label ?? "", description: query.description ?? "", select: query.select, sort: query.sort,
   group_by: query.group_by, aggregates: query.aggregates, pageSize: String(query.page_size), inputs: query.inputs,
 });
+
+/** The input keys a filter compares a field with. */
+const filterParameters = (filter: unknown): Set<string> => {
+  const found = new Set<string>();
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) { value.forEach(visit); return; }
+    if (value === null || typeof value !== "object") return;
+    for (const [key, child] of Object.entries(value)) {
+      if (key === "value") continue;
+      if (key === "parameter" && typeof child === "string") found.add(child);
+      else visit(child);
+    }
+  };
+  visit(filter);
+  return found;
+};
 
 const moved = <T,>(items: readonly T[], index: number, by: -1 | 1): T[] => {
   const next = [...items];
@@ -143,6 +160,21 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
       .map((option) => `${option.value} (${option.label})`).join(", ")}`);
 
   const filterValue = filterEdit === null ? reading?.kind === "read" ? reading.condition : undefined : filterEdit.condition;
+  const retainedFilterProblems = (): string[] => {
+    if (reading?.kind === "read" && reading.condition !== undefined && context !== undefined) {
+      const validation = validateStudioCondition(reading.condition, context);
+      return validation.isValid ? []
+        : validation.issues.map((issue) => `Filter${issue.pointer === "" ? "" : ` (${issue.pointer})`}: ${issue.message}.`);
+    }
+    // Without the saved fields the filter can't be read here, so a changed input it uses is refused.
+    const before = new Map(query.inputs.map((input) => [input.key, input.type] as const));
+    return [...filterParameters(query.filter)].flatMap((key) => {
+      const now = form.inputs.find((input) => input.key === key);
+      return now !== undefined && before.get(key) !== undefined && before.get(key) !== now.type
+        ? [`Filter: it compares a field with the input ${now.label}, whose type changed. Save the draft to edit the filter, or put the type back.`]
+        : [];
+    });
+  };
   const reset = () => { setForm(initial); setFilterEdit(null); setFilterEpoch((value) => value + 1); setIssues([]); setMessage(""); };
   const apply = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -155,6 +187,14 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
     const filter = filterEdit === null ? query.filter
       : writeStudioQueryFilter(filterEdit.condition, (fieldId) => compiled?.find((field) => field.fieldId === fieldId)?.key);
     if (filter === undefined) { setIssues(["Filter: it names a field that is not in this record type any more."]); return; }
+    // A filter kept as it was is checked again against the inputs as they are now: an input whose
+    // type changed can leave a comparison with it that no longer fits.
+    const retained = filterEdit === null && query.filter !== null ? retainedFilterProblems() : [];
+    if (retained.length > 0) {
+      setIssues(retained);
+      setMessage("The query was not changed. Your entries are kept; change the filter or the input, or clear the filter.");
+      return;
+    }
     const result = changeInlineQuery(source, moduleKey, queryKey, {
       label: form.label, description: form.description, select: [...form.select], sort: [...form.sort],
       group_by: [...form.group_by], aggregates: [...form.aggregates], inputs: [...form.inputs], filter,
