@@ -22,24 +22,26 @@ import {
   readInstallationDatabaseTime,
   readInstallationHumanContext,
   readInstallationOrdinaryRoot,
-  readInstallationPermissionDeadline,
   requireInstallationAuthority,
 } from "./installation-authority";
 import { readInstallationBindings, type InstallationBindings } from "./installation-binding-reader";
 import {
-  firstInstallHistory,
-  firstInstallHistoryMatchesDraft,
+  firstInstallLatestReleaseMatches,
   firstInstallSelectedIdentity,
-  firstInstallSetMatchesHistory,
+  firstInstallSetMatchesLatest,
   firstInstallState,
   firstInstallUnavailable,
+  readApplicationLatestRelease,
   readFirstInstallReleaseSet,
-  type FirstInstallHistory,
+  type ApplicationLatestRelease,
   type FirstInstallRegistrationState,
   type FirstInstallSelector,
 } from "./installation-first-install";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
-import { firstInstallMemberRole, type FirstInstallMemberRole } from "./installation-first-install-member-role";
+import {
+  firstInstallMemberRole,
+  type FirstInstallMemberRole,
+} from "./installation-first-install-member-role";
 
 /** What a first-install read needs from the application: the catalogue, the permissions, and the custom-component rule. */
 export type FirstInstallEnvironment = Readonly<{
@@ -51,7 +53,10 @@ export type FirstInstallEnvironment = Readonly<{
 const sameContent = (left: unknown, right: unknown): boolean =>
   canonicalJson(left) === canonicalJson(right);
 
-/** The first-install release set and bindings a draft-change caller may install, with its authority proved. */
+/**
+ * The first-install release set and bindings the caller may install, with the installation
+ * authority proved. It needs only that authority: no right on the application's draft.
+ */
 const readFirstInstallCandidateInTransaction = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
@@ -59,45 +64,78 @@ const readFirstInstallCandidateInTransaction = async (
   issuedAt: string,
   environment: FirstInstallEnvironment,
   selector: FirstInstallSelector,
-  history: FirstInstallHistory,
-  inspected: Readonly<{
-    definitionKey: string;
-    metadata: Readonly<{ releaseRevision: number; releaseVersion: string }>;
-  }>,
-): Promise<Readonly<{ releaseSet: SystemApplicationBoundReleaseSetResult; bindings: InstallationBindings }>> => {
+): Promise<
+  Readonly<{
+    latest: ApplicationLatestRelease;
+    releaseSet: SystemApplicationBoundReleaseSetResult;
+    bindings: InstallationBindings;
+  }>
+> => {
   const { permissions } = environment;
   const expected = { organizationId: selector.organizationId };
-  const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, expected);
+  const context = await readInstallationHumanContext(
+    transaction,
+    scope,
+    session,
+    issuedAt,
+    expected,
+  );
   if (scope.applicationRootId !== undefined)
     installationProblem("first_install_scope_not_organization", "refused");
   await readInstallationOrdinaryRoot(transaction, selector.rootId);
-  await requireInstallationAuthority(transaction, scope, permissions, { kind: "draft_change", rootId: selector.rootId });
-  await firstInstallHistoryMatchesDraft(transaction, scope, selector, history, inspected.definitionKey);
-  const releaseSet = await readFirstInstallReleaseSet(transaction, environment.catalogue, selector, context);
-  if (!firstInstallSetMatchesHistory(releaseSet, inspected.metadata, selector) ||
-    releaseSet.application.definitionKey !== inspected.definitionKey)
-    installationProblem("first_install_release_set_history_mismatch", "conflict");
+  const latest = await readApplicationLatestRelease(transaction, selector.rootId);
+  if (selector.releaseRevision > latest.releaseRevision)
+    firstInstallUnavailable("release_not_published");
+  const releaseSet = await readFirstInstallReleaseSet(
+    transaction,
+    environment.catalogue,
+    selector,
+    context,
+  );
+  if (!firstInstallSetMatchesLatest(releaseSet, latest, selector))
+    installationProblem("first_install_release_set_latest_mismatch", "conflict");
   const customComponents = environment.containsCustomComponents(releaseSet);
-  await requireInstallationAuthority(transaction, scope, permissions, installationOperation(selector.rootId, customComponents));
-  await firstInstallHistoryMatchesDraft(transaction, scope, selector, history, inspected.definitionKey);
+  await requireInstallationAuthority(
+    transaction,
+    scope,
+    permissions,
+    installationOperation(selector.rootId, customComponents),
+  );
   const bindings = await readInstallationBindings(transaction, selector.rootId);
-  const finalContext = await readInstallationHumanContext(transaction, scope, session, issuedAt, expected);
+  await firstInstallLatestReleaseMatches(transaction, selector, latest);
+  const finalContext = await readInstallationHumanContext(
+    transaction,
+    scope,
+    session,
+    issuedAt,
+    expected,
+  );
   if (!sameContent(context, finalContext))
     installationProblem("first_install_context_changed", "refused");
-  await requireInstallationAuthority(transaction, scope, permissions, { kind: "draft_change", rootId: selector.rootId });
-  await requireInstallationAuthority(transaction, scope, permissions, installationOperation(selector.rootId, customComponents));
-  const draftDeadline = await readInstallationPermissionDeadline(
-    transaction, scope, finalContext, permissions, "platform.organization.definition_drafts.manage",
+  await requireInstallationAuthority(
+    transaction,
+    scope,
+    permissions,
+    installationOperation(selector.rootId, customComponents),
   );
   const installationDeadlines = await readInstallationAuthorityDeadlines(
-    transaction, scope, finalContext, permissions, selector.rootId, customComponents,
+    transaction,
+    scope,
+    finalContext,
+    permissions,
+    selector.rootId,
+    customComponents,
   );
   const checkedAt = await readInstallationDatabaseTime(transaction);
-  if (Date.parse(checkedAt) >= Math.min(
-    Date.parse(finalContext.expiresAt), Date.parse(draftDeadline),
-    ...installationDeadlines.map((deadline) => Date.parse(deadline)),
-  )) installationProblem("first_install_authority_lapsed", "refused");
-  return { releaseSet, bindings };
+  if (
+    Date.parse(checkedAt) >=
+    Math.min(
+      Date.parse(finalContext.expiresAt),
+      ...installationDeadlines.map((deadline) => Date.parse(deadline)),
+    )
+  )
+    installationProblem("first_install_authority_lapsed", "refused");
+  return { latest, releaseSet, bindings };
 };
 
 /** What a first-install caller is shown, and later sends back to prove what it saw is still true. */
@@ -113,7 +151,8 @@ type FirstInstallSnapshot = Readonly<{
     resolutionFingerprint: string;
     moduleSetFingerprint: string;
   }>;
-  history: FirstInstallHistory;
+  /** The latest published version the install is anchored to, with its release note. */
+  latest: ApplicationLatestRelease;
   registrationState: FirstInstallRegistrationState;
   registeredReleaseRevision: number | null;
   moduleBindings: InstallationBindings["moduleBindings"];
@@ -121,39 +160,10 @@ type FirstInstallSnapshot = Readonly<{
   memberRole: FirstInstallMemberRole;
 }>;
 
-/** Why a draft-history read did not produce a snapshot; `reason` is the stable code it logged. */
-type FirstInstallHistoryFailure = Readonly<{
-  kind: "refused" | "conflict" | "temporarily_unavailable";
-  reason: string;
-}>;
-
-/**
- * The draft-history reads a first install is anchored to. History is owned by the Studio
- * application; the first install only asks it for the draft identity and one release's metadata.
- */
-type FirstInstallHistoryReads = Readonly<{
-  readAccess: (
-    organizationId: OrganizationId,
-    rootId: ApplicationRootId,
-  ) => Promise<FirstInstallHistoryFailure | Readonly<{ kind: "available"; snapshot: FirstInstallHistory }>>;
-  inspectRelease: (
-    organizationId: OrganizationId,
-    request: Readonly<{ rootId: ApplicationRootId; expected: FirstInstallHistory; releaseRevision: number }>,
-  ) => Promise<
-    | FirstInstallHistoryFailure
-    | Readonly<{
-        kind: "available";
-        snapshot: Readonly<{ definitionKey: string }>;
-        metadata: Readonly<{ releaseRevision: number; releaseVersion: string }>;
-      }>
-  >;
-}>;
-
 /** What the first-install reads and commands need from the application beyond the release reads. */
 export type FirstInstallFlowEnvironment = FirstInstallEnvironment &
   Readonly<{
     requests: ReturnType<typeof createHumanOrganizationRequestService>;
-    history: FirstInstallHistoryReads;
     /** The Access operations that accept and assign the default member role for the installer. */
     accessAdministration: ReturnType<typeof createOrganizationAccessAdministrationService>;
   }>;
@@ -161,7 +171,6 @@ export type FirstInstallFlowEnvironment = FirstInstallEnvironment &
 /** The current first-install state, proved for one session: the release set, the snapshot and who proved it. */
 export type FirstInstallCandidate = Readonly<{
   selector: FirstInstallSelector;
-  history: FirstInstallHistory;
   releaseSet: SystemApplicationBoundReleaseSetResult;
   snapshot: FirstInstallSnapshot;
   session: IdentitySession;
@@ -169,7 +178,7 @@ export type FirstInstallCandidate = Readonly<{
 
 const firstInstallSnapshot = (
   selector: FirstInstallSelector,
-  history: FirstInstallHistory,
+  latest: ApplicationLatestRelease,
   releaseSet: SystemApplicationBoundReleaseSetResult,
   bindings: InstallationBindings,
   registrationState: FirstInstallRegistrationState,
@@ -177,7 +186,7 @@ const firstInstallSnapshot = (
   organizationId: selector.organizationId,
   rootId: selector.rootId,
   selected: firstInstallSelectedIdentity(releaseSet),
-  history,
+  latest,
   registrationState,
   registeredReleaseRevision: bindings.registeredReleaseRevision,
   moduleBindings: bindings.moduleBindings,
@@ -189,7 +198,7 @@ const firstInstallSnapshot = (
  * own cause; only a request the service itself declined becomes a refusal or an unavailability.
  */
 const runFirstInstallChange = async <Value>(
-  environment: FirstInstallFlowEnvironment,
+  environment: Pick<FirstInstallFlowEnvironment, "requests">,
   session: IdentitySession,
   selection: OrganizationSelectionCandidate,
   operation: (
@@ -213,14 +222,26 @@ const runFirstInstallChange = async <Value>(
   );
   if (result.kind === "available") return result.value;
   if (callbackFailure !== undefined) throw callbackFailure;
-  if (result.kind === "unavailable") return installationProblem("first_install_request_refused", "refused");
+  if (result.kind === "unavailable")
+    return installationProblem("first_install_request_refused", "refused");
   return installationProblem("first_install_request_unavailable", "temporarily_unavailable");
 };
 
+/** The application's latest published version, read under the installation authority in its own request. */
+export const readCurrentApplicationLatestRelease = (
+  environment: Pick<FirstInstallFlowEnvironment, "requests">,
+  session: IdentitySession,
+  organizationId: OrganizationId,
+  rootId: ApplicationRootId,
+): Promise<ApplicationLatestRelease> =>
+  runFirstInstallChange(environment, session, { organizationId }, (transaction) =>
+    readApplicationLatestRelease(transaction, rootId),
+  );
+
 /**
- * Reads the first-install state for `selector` as `session` may see it: the draft history, the
- * selected release and its bindings. With `expected`, the state must be exactly what the caller
- * saw, otherwise the read is a conflict.
+ * Reads the first-install state for `selector` as `session` may see it: the latest published
+ * version, the selected release and its bindings. With `expected`, the state must be exactly what
+ * the caller saw, otherwise the read is a conflict.
  */
 export const readCurrentFirstInstallCandidate = async (
   environment: FirstInstallFlowEnvironment,
@@ -228,31 +249,23 @@ export const readCurrentFirstInstallCandidate = async (
   selector: FirstInstallSelector,
   expected?: FirstInstallSnapshot,
 ): Promise<FirstInstallCandidate> => {
-  const access = await environment.history.readAccess(selector.organizationId, selector.rootId);
-  if (access.kind !== "available") return installationProblem(access.reason, access.kind);
-  const history = firstInstallHistory(access.snapshot);
-  if (history.anchorReleaseRevision === null || selector.releaseRevision > history.anchorReleaseRevision)
-    return firstInstallUnavailable("release_not_published");
-  const inspected = await environment.history.inspectRelease(selector.organizationId, {
-    rootId: selector.rootId,
-    expected: history,
-    releaseRevision: selector.releaseRevision,
-  });
-  if (inspected.kind === "refused") return firstInstallUnavailable("release_not_published");
-  if (inspected.kind !== "available") return installationProblem(inspected.reason, inspected.kind);
-  const { releaseSet, bindings } = await runFirstInstallChange(
+  const { latest, releaseSet, bindings } = await runFirstInstallChange(
     environment,
     session,
     { organizationId: selector.organizationId },
     (transaction, scope, issuedAt) =>
       readFirstInstallCandidateInTransaction(
-        transaction, scope, session, issuedAt, environment, selector, history,
-        { definitionKey: inspected.snapshot.definitionKey, metadata: inspected.metadata },
+        transaction,
+        scope,
+        session,
+        issuedAt,
+        environment,
+        selector,
       ),
   );
   const registrationState = firstInstallState(selector, releaseSet, bindings);
-  const snapshot = firstInstallSnapshot(selector, history, releaseSet, bindings, registrationState);
+  const snapshot = firstInstallSnapshot(selector, latest, releaseSet, bindings, registrationState);
   if (expected !== undefined && !sameContent(expected, snapshot))
     return installationProblem("first_install_snapshot_changed", "conflict");
-  return { selector, history, releaseSet, snapshot, session };
+  return { selector, releaseSet, snapshot, session };
 };

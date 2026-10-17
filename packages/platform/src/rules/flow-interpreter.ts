@@ -1259,7 +1259,11 @@ export const resumeFlowRun = (
   if (resume.kind !== "confirm") return mismatch();
   replaceTop(
     machine,
-    storeTaskOutputs(activation, awaiting.taskId, { confirmed: typed("yes_no", resume.confirmed) }),
+    storeTaskOutputs(activation, awaiting.taskId, {
+      confirmed: typed("yes_no", resume.confirmed),
+      // The opt-in counts only with a yes; a declined confirmation never carries it.
+      choice: typed("yes_no", resume.confirmed && resume.choice === true),
+    }),
   );
   return drive(machine, observer);
 };

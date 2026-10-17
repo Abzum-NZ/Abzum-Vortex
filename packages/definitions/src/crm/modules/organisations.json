@@ -267,6 +267,7 @@
           "settings": {}
         }
       ],
+      "pipelines": [],
       "relationships": [
         {
           "id": "fld_company_parent_relationship",

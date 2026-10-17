@@ -1,6 +1,7 @@
 import { describeFailure, type JsonValue } from "@vortex/platform/schema";
 import {
   performPresentationIntent,
+  confirmAnswer,
   readConfirmIntent,
   readFormIntent,
   type FlowIntent,
@@ -115,13 +116,13 @@ export async function driveServerFlow(
             if (confirmation === undefined)
               return refuseInvalidServerFlowState("confirmation_intent");
             awaitingSurface = true;
-            const confirmed = await host.confirm(confirmation, signal);
+            const answer = await host.confirm(confirmation, signal);
             awaitingSurface = false;
             if (signal?.aborted) return { kind: "abandoned" };
             response = await client.resume(
               flowId,
               continuation,
-              { kind: "confirm", confirmed },
+              confirmAnswer(confirmation, answer),
               evidence,
               signal,
             );

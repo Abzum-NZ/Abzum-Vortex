@@ -1,7 +1,6 @@
 import type { ApplicationContent, VersionImpactReason } from "../../schema";
 import {
   type RecordValue,
-  compareUnknownText,
   asRecord,
   same,
   makeReason,
@@ -146,15 +145,6 @@ export const compareApplicationSharedContent = (
     "queryId",
     "query",
     (left, right) => compareSimpleComponent(reasons, "query", right.queryId, left, right),
-  );
-  compareKeyed(
-    reasons,
-    previous.pipelines as RecordValue[],
-    candidate.pipelines as RecordValue[],
-    "pipelineId",
-    "pipeline",
-    (left, right) => comparePipeline(reasons, left, right),
-    () => "major",
   );
   compareKeyed(
     reasons,
@@ -464,62 +454,6 @@ export const comparePermissions = (
         id,
       );
   });
-};
-
-const comparePipeline = (
-  reasons: VersionImpactReason[],
-  previous: RecordValue,
-  candidate: RecordValue,
-): void => {
-  const id = candidate.pipelineId;
-  pushChange(
-    reasons,
-    previous.name,
-    candidate.name,
-    "patch",
-    "presentation_changed",
-    "pipeline",
-    "name",
-    id,
-  );
-  pushChange(
-    reasons,
-    previous.key,
-    candidate.key,
-    "major",
-    "component_key_changed",
-    "pipeline",
-    "key",
-    id,
-  );
-  for (const key of ["recordType", "stageFieldId", "transitions", "timeTargets"])
-    pushChange(
-      reasons,
-      previous[key],
-      candidate[key],
-      "major",
-      "existing_behavior_changed",
-      "pipeline",
-      "behavior",
-      id,
-    );
-  compareKeyed(
-    reasons,
-    previous.stages as RecordValue[],
-    candidate.stages as RecordValue[],
-    "key",
-    "pipeline_stage",
-    (left, right) => compareSimpleComponent(reasons, "pipeline_stage", id, left, right, ["label"]),
-    () => "major",
-    () => id,
-  );
-  const beforeOrder = (previous.stages as RecordValue[]).map((stage) => stage.key);
-  const afterOrder = (candidate.stages as RecordValue[]).map((stage) => stage.key);
-  if (
-    same([...beforeOrder].sort(compareUnknownText), [...afterOrder].sort(compareUnknownText)) &&
-    !same(beforeOrder, afterOrder)
-  )
-    reasons.push(makeReason("patch", "presentation_changed", "pipeline", "order", id));
 };
 
 const compareInterface = (

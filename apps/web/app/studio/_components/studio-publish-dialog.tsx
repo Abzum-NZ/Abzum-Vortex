@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useRef } from "react";
 import type { DefinitionPublicationConfirmation, PublishDefinitionResult } from "@vortex/platform/schema";
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
@@ -30,6 +31,8 @@ export type StudioPublishDialogProps = Readonly<{
   /** Why publishing cannot go ahead, in business words; empty when there is nothing to report. */
   problem: string;
   published: PublishDefinitionResult | null;
+  /** The App Store, offered once a version is published; absent when its address is unknown. */
+  appStoreHref: string | undefined;
   onPrepare: () => void;
   onPublish: () => void;
 }>;
@@ -52,7 +55,7 @@ export function StudioPublishDialog(props: StudioPublishDialogProps) {
       <DialogHeader>
         <DialogTitle>Publish this application</DialogTitle>
         <DialogDescription>
-          Publishing makes the saved draft a new version. Installing it in an organization is a separate step.
+          Publishing makes the saved draft a new version. Organisations install it, or upgrade to it, from the App Store.
         </DialogDescription>
       </DialogHeader>
       {published !== null
@@ -102,7 +105,12 @@ export function StudioPublishDialog(props: StudioPublishDialogProps) {
           </div>}
       <DialogFooter>
         {published !== null
-          ? <Button type="button" onClick={() => props.onOpenChange(false)}>Done</Button>
+          ? <>
+            {props.appStoreHref === undefined ? null
+              : <Button variant="outline" nativeButton={false} render={<Link href={props.appStoreHref} />}>
+                Open in App Store to install or upgrade</Button>}
+            <Button type="button" onClick={() => props.onOpenChange(false)}>Done</Button>
+          </>
           : <>
             <Button type="button" variant="outline" disabled={publishing} onClick={() => props.onOpenChange(false)}>Cancel</Button>
             {!hasUnsavedChanges && prepared === null && !preparing && props.problem !== ""

@@ -368,12 +368,6 @@ const compilePropertyValue = (
     case "query_reference":
       compiled = { kind: authored.kind, queryId: resolution.moduleQuery(authored.query) };
       break;
-    case "pipeline_reference":
-      compiled = {
-        kind: authored.kind,
-        pipelineId: resolution.identity("pipeline", authored.pipeline),
-      };
-      break;
     case "record_type_reference":
       compiled = { kind: authored.kind, recordType: resolution.recordType(authored.record_type) };
       break;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { Button } from "./button";
 import {
   AlertDialog,
@@ -25,6 +25,8 @@ type ConfirmPrompt = Readonly<{
   cancelLabel?: string;
   /** Draws the answering button in the destructive variant. */
   destructive?: boolean;
+  /** What the decision covers in detail, shown under the message. */
+  details?: ReactNode;
 }>;
 
 type PendingPrompt = {
@@ -102,6 +104,7 @@ export function useConfirm(): readonly [(prompt: ConfirmPrompt) => Promise<boole
         <AlertDialogTitle>{prompt?.title ?? ""}</AlertDialogTitle>
         <AlertDialogDescription>{prompt?.description ?? ""}</AlertDialogDescription>
       </AlertDialogHeader>
+      {prompt?.details !== undefined && <div className="max-h-80 space-y-2 overflow-y-auto text-sm">{prompt.details}</div>}
       <AlertDialogFooter>
         <AlertDialogCancel onClick={() => answerByPress(false)}>{prompt?.cancelLabel ?? "Cancel"}</AlertDialogCancel>
         <AlertDialogAction

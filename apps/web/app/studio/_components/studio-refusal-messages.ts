@@ -82,8 +82,6 @@ export const previewProblem = (
     ? "The saved draft changed while the preview was being prepared. Choose Revert to saved, then preview again."
     : result.kind === "temporarily_unavailable"
       ? "The preview is temporarily unavailable. Your changes are kept; try again."
-      : result.reason === "not_installed"
-        ? "This application is not installed yet, and a preview runs inside its installation. Publish it once and install it from Releases, then preview."
-        : result.reason === "permission_refused"
-          ? "Previewing needs permission to publish this application. Ask an administrator."
-          : "The preview request was not accepted. Reload Studio and try again.";
+      : result.reason === "permission_refused"
+        ? "Previewing needs permission to publish this application. Ask an administrator."
+        : "The preview request was not accepted. Reload Studio and try again.";
