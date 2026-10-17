@@ -41,15 +41,17 @@ type Read = Readonly<{ request: string; result: StudioDataRecordsResult }>;
 const notReadable = (result: StudioDataRecordsResult, plural: string, query: boolean): string | undefined => {
   switch (result.kind) {
     case "available": case "summary": return undefined;
-    case "not_installed": return query ? "Preview or publish to see results. The running application does not have this query yet."
-      : "Preview or publish to see records. The running application does not have this yet.";
+    case "not_saved": return query ? "Save to see results. The saved draft does not have this query yet."
+      : "Save to see records. The saved draft does not have this yet.";
+    case "conflict": return "The saved draft changed. Its records follow in a moment.";
+    case "following": return "Your preview is catching up with the saved draft. Its records follow in a moment.";
     case "no_query": return `No list of ${plural.toLowerCase()} exists yet. Add a query that lists ${plural.toLowerCase()} to see their records here.`;
     case "query_refused": return result.reason === "input_invalid"
       ? `This query lists records for one chosen record at a time. Select ${plural} in the Data panel to see all of them.`
       : result.reason === "continuation_invalid"
         ? "The groups changed while you were paging through them. Choose another number per page to start again from the first page."
       : `Your access does not let you see these ${plural.toLowerCase()}. Ask an administrator for access to see them.`;
-    case "refused": return `Your access does not let you see these ${plural.toLowerCase()}. Ask an administrator for access to see them.`;
+    case "refused": return `Seeing these ${plural.toLowerCase()} here needs permission to preview this application. Ask an administrator for access.`;
     case "temporarily_unavailable": return "The records could not be read just now. Try again in a moment.";
   }
 };
@@ -103,26 +105,44 @@ function SummaryResults({ result, onPage }: Readonly<{
 }
 
 /**
- * The live records of the selected record type or query, read with the builder's own access through
- * the running application. Paging is keyset paging: next and previous pages, never a page count.
+ * The records of the selected record type or query, read from the builder's preview of the saved
+ * draft revision with their preview access. Paging is keyset paging: next and previous pages,
+ * never a page count.
  */
-function LiveResults({ organizationId, rootId, moduleKey, recordKey, plural, queryKey, refresh }: Readonly<{
+function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, queryKey, draftRevision }: Readonly<{
   organizationId: string; rootId: string; moduleKey: string; recordKey: string; plural: string; queryKey: string | undefined;
-  /** Changes when the saved draft or the installation may have changed. */
-  refresh: number;
+  /** The saved, compiled draft revision whose preview the records are read from. */
+  draftRevision: number;
 }>) {
   const [pageSize, setPageSize] = useState<number>(40);
-  const [page, setPage] = useState<Page>({});
+  // A page token belongs to one record type or query, page size and saved revision: any other
+  // starts on its first page.
+  const scope = JSON.stringify({ rootId, moduleKey, recordKey, queryKey, pageSize, draftRevision });
+  const [paged, setPaged] = useState<Page & { scope?: string }>({});
+  const page: Page = paged.scope === scope ? paged : {};
+  const setPage = (next: Page) => setPaged({ ...next, scope });
   const [read, setRead] = useState<Read | null>(null);
   const latest = useRef("");
-  const request = JSON.stringify({ rootId, moduleKey, recordKey, queryKey, pageSize, page, refresh });
+  const request = JSON.stringify({ scope, page });
+  // A preview still moving to this revision is read again shortly; what it showed stays meanwhile.
+  const [followed, setFollowed] = useState<Readonly<{ request: string; count: number }>>({ request: "", count: 0 });
+  const followUp = followed.request === request ? followed.count : 0;
+  useEffect(() => {
+    if (read?.request !== request) return;
+    const result = read.result;
+    const behind = result.kind === "following" ||
+      ((result.kind === "available" || result.kind === "summary") && result.behind);
+    if (!behind || followUp >= 30) return;
+    const timer = setTimeout(() => setFollowed({ request, count: followUp + 1 }), 1500);
+    return () => clearTimeout(timer);
+  }, [read, request, followUp]);
   useEffect(() => {
     latest.current = request;
     void (async () => {
       let result: StudioDataRecordsResult;
       try {
         result = await readStudioDataRecords(organizationId, {
-          rootId, moduleKey, recordKey, ...(queryKey === undefined ? {} : { queryKey }), pageSize,
+          rootId, draftRevision, moduleKey, recordKey, ...(queryKey === undefined ? {} : { queryKey }), pageSize,
           ...(page.token === undefined ? {} : { continuationToken: page.token, pageDirection: page.direction }),
         });
       } catch (error) {
@@ -131,9 +151,7 @@ function LiveResults({ organizationId, rootId, moduleKey, recordKey, plural, que
       }
       if (latest.current === request) setRead({ request, result });
     })();
-  }, [organizationId, rootId, moduleKey, recordKey, queryKey, pageSize, page, request]);
-  // A new record type or query starts on its first page.
-  useEffect(() => { setPage({}); }, [moduleKey, recordKey, queryKey]);
+  }, [organizationId, rootId, draftRevision, moduleKey, recordKey, queryKey, pageSize, page.token, page.direction, request, followUp]);
   const current = read?.request === request ? read.result : null;
   const problem = current === null ? undefined : notReadable(current, plural, queryKey !== undefined);
   return <section aria-labelledby="studio-data-results" className="space-y-2">
@@ -141,8 +159,8 @@ function LiveResults({ organizationId, rootId, moduleKey, recordKey, plural, que
       <div>
         <h3 id="studio-data-results" className="text-sm font-semibold">Records</h3>
         <p className="text-xs text-muted-foreground">{current?.kind === "available" || current?.kind === "summary"
-          ? `From the running application, through its published query ${current.queryLabel}, with your access.`
-          : "From the running application, with your access."}</p>
+          ? `From your preview of the saved draft, through its query ${current.queryLabel}, with your preview access.`
+          : "From your preview of the saved draft, with your preview access."}</p>
       </div>
       <div className="flex items-center gap-2">
         <Label htmlFor="studio-data-page-size" className="text-xs">Per page</Label>
@@ -175,15 +193,16 @@ function LiveResults({ organizationId, rootId, moduleKey, recordKey, plural, que
   </section>;
 }
 
-/** The Data tab's centre: the selected record type's schema grid and its live records. */
-export function StudioDataCentre({ organizationId, rootId, modules, selection, draftOnly, refresh }: Readonly<{
+/** The Data tab's centre: the selected record type's schema grid and its records in the builder's preview. */
+export function StudioDataCentre({ organizationId, rootId, modules, selection, unsaved, draftRevision }: Readonly<{
   organizationId: string; rootId: string;
   /** Owned and used modules, as the tree shows them. */
   modules: readonly StudioDataModule[];
   selection: StudioDataSelection | null;
-  /** Whether the selected record type or query exists only in the unsaved or unpublished draft. */
-  draftOnly: boolean;
-  refresh: number;
+  /** Whether the selected record type or query is not in the saved draft yet. */
+  unsaved: boolean;
+  /** The saved, compiled draft revision whose preview the records are read from. */
+  draftRevision: number;
 }>) {
   const module = selection === null ? undefined : modules.find((item) => item.key === selection.moduleKey);
   if (selection === null || module === undefined)
@@ -207,11 +226,11 @@ export function StudioDataCentre({ organizationId, rootId, modules, selection, d
       <h2 id="studio-data-schema" className="text-lg font-semibold">{query === undefined ? record.pluralName : `${query.label} (${record.pluralName})`}</h2>
       <SchemaGrid record={record} selectedField={selection.kind === "field" ? selection.fieldKey : undefined} />
     </section>
-    {draftOnly
+    {unsaved
       ? <p role="status" className="text-sm">{query === undefined
-        ? "Preview or publish to see records. This record type is only in the draft so far."
-        : "Preview or publish to see results. This query is only in the draft so far."}</p>
-      : <LiveResults organizationId={organizationId} rootId={rootId} moduleKey={module.key} recordKey={record.key} plural={record.pluralName}
-        queryKey={query?.key} refresh={refresh} />}
+        ? "Save to see records. This record type is not saved yet."
+        : "Save to see results. This query is not saved yet."}</p>
+      : <PreviewResults organizationId={organizationId} rootId={rootId} moduleKey={module.key} recordKey={record.key} plural={record.pluralName}
+        queryKey={query?.key} draftRevision={draftRevision} />}
   </div>;
 }

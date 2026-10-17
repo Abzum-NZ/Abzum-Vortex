@@ -8,14 +8,14 @@ import { NativeSelect, NativeSelectOption } from "../components/native-select";
 export type StudioRecordChoice = Readonly<{ recordId: string; label: string }>;
 
 /**
- * One page of the records of a record type, read from the installed application with the person's
- * own access, or why none can be read.
+ * One page of the records of a record type, read from the builder's preview of the saved draft
+ * with their preview access, or why none can be read.
  */
 export type StudioRecordPage =
   | Readonly<{ kind: "available"; records: readonly StudioRecordChoice[]; next?: string }>
-  /** The record type is in the draft but not in the installed application yet. */
-  | Readonly<{ kind: "not_installed" }>
-  /** The installed application has no query that lists these records by their title. */
+  /** The record type is not in the saved draft yet. */
+  | Readonly<{ kind: "not_saved" }>
+  /** The saved draft has no query that lists these records by their title. */
   | Readonly<{ kind: "no_list" }>
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
@@ -39,7 +39,7 @@ type Loaded =
 const pageNote = (page: StudioRecordPage): string | undefined => {
   switch (page.kind) {
     case "available": return page.records.length === 0 ? "There are no records of this type you may read yet." : undefined;
-    case "not_installed": return "These records are not in the installed application yet. Publish and upgrade, then pick a record.";
+    case "not_saved": return "These records are not in the saved draft yet. Save, then pick a record.";
     case "no_list": return "No list of these records can be read: the record type needs a query with no inputs and no grouping.";
     case "refused": return "You may not read these records.";
     case "temporarily_unavailable": return "The records could not be read just now.";
@@ -48,7 +48,7 @@ const pageNote = (page: StudioRecordPage): string | undefined => {
 
 /**
  * A record reference: the record type first, from the draft, then one of its records, read page
- * by page (40 at a time) from the installed application with the person's own access.
+ * by page (40 at a time) from the builder's preview of the saved draft with their preview access.
  */
 export function StudioRecordReferenceControl({ id, value, onChange, recordTypes, read, disabled }: Readonly<{
   id: string;

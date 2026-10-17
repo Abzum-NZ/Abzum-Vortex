@@ -258,7 +258,7 @@ const describeSelection = (modules: readonly StudioDataModule[], selection: Stud
  * edit of the application draft, saved and published with it.
  */
 export function useStudioDataTab({ organizationId, rootId, source, saved, used, published, peopleDirectory, compiledFields, applications,
-  initialModule, selection, hidden, disabled, refresh, apply, choose, selectAfterEdit, onFieldPending, onSearchPending, openInTab,
+  initialModule, selection, hidden, disabled, draftRevision, apply, choose, selectAfterEdit, onFieldPending, onSearchPending, openInTab,
   compositionContext, readRecords }: Readonly<{
   organizationId: string; rootId: string;
   source: ApplicationSourceDocument;
@@ -273,14 +273,15 @@ export function useStudioDataTab({ organizationId, rootId, source, saved, used, 
   peopleDirectory: PeopleDirectoryOwner | null;
   /** The composition context the "Also show it on" placements are applied through. */
   compositionContext: StudioCompositionContext;
-  /** Reads records of the installed application, for a link field's default. */
+  /** Reads records of the builder's preview of the saved draft, for a link field's default. */
   readRecords: StudioRecordReader | null;
   applications: readonly StudioModuleOwnerApplication[];
   /** The workspace's selection, when it is a Data item. */
   selection: StudioDataSelection | null;
   hidden: boolean;
   disabled: boolean;
-  refresh: number;
+  /** The saved, compiled draft revision whose preview the records are read from. */
+  draftRevision: number;
   apply: ApplyDataChange;
   /** Selects an item, asking before unapplied input is discarded. */
   choose: (selection: StudioDataSelection) => void;
@@ -354,7 +355,7 @@ export function useStudioDataTab({ organizationId, rootId, source, saved, used, 
   const recordTypes = useMemo(() => [...owned.flatMap((item) => item.recordTypes.map((record) =>
     ({ key: `${item.key}:${record.key}`, label: record.name }))), ...usedRecordTypes], [owned, usedRecordTypes]);
   const isOwned = current !== null && owned.some((module) => module.key === current.moduleKey);
-  const draftOnly = current !== null && isOwned && !selectionExists(savedOwned, current.kind === "field"
+  const unsaved = current !== null && isOwned && !selectionExists(savedOwned, current.kind === "field"
     ? { kind: "record_type", moduleKey: current.moduleKey, recordKey: current.recordKey } : current);
   const module = current === null ? undefined : modules.find((item) => item.key === current.moduleKey);
 
@@ -362,7 +363,7 @@ export function useStudioDataTab({ organizationId, rootId, source, saved, used, 
     selected={current} onSelect={choose} onCreate={() => setCreating(true)} disabled={disabled}
     search={<StudioSearchOverview source={source} modules={modules} disabled={disabled} onApply={applyChange} onSelect={choose} />} />;
   const centre = <StudioDataCentre organizationId={organizationId} rootId={rootId} modules={modules}
-    selection={current} draftOnly={draftOnly} refresh={refresh} />;
+    selection={current} unsaved={unsaved} draftRevision={draftRevision} />;
   const inspectorBody = current === null || module === undefined
     ? <p className="text-sm text-muted-foreground">Select a module, record type, field or query in the Data panel.</p>
     : !isOwned
