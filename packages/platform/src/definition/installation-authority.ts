@@ -43,9 +43,17 @@ export type InstallationUnavailableReason =
   | "registration_misaligned"
   | "unsupported_root";
 
+/** What an installer lacks when accepting the default member role on a first install is refused. */
+export type InstallationMissingAuthority =
+  | "installation_authority"
+  | "member_role_delegation"
+  | "roles_manage"
+  | "assignments_manage";
+
 export type InstallationProblemShape = Readonly<{
   kind: InstallationProblemKind;
   unavailableReason?: InstallationUnavailableReason;
+  missingAuthority?: InstallationMissingAuthority;
 }>;
 
 /**

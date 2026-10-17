@@ -269,6 +269,9 @@ const firstInstallCommandFailure = (
   return studioApplicationFirstInstallCommandResultSchema.parse({
     kind: failure.kind,
     stateMayHaveChanged,
+    ...("missingAuthority" in failure && failure.missingAuthority !== undefined
+      ? { missingAuthority: failure.missingAuthority }
+      : {}),
   });
 };
 

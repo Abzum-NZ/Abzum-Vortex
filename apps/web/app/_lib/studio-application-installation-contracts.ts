@@ -239,6 +239,13 @@ export const studioApplicationFirstInstallCommandResultSchema = z.union([
   z.object({
     kind: z.enum(["conflict", "refused", "authentication_required", "temporarily_unavailable", "failed"]),
     stateMayHaveChanged: z.union([z.boolean(), z.literal("unknown")]),
+    /** What the installer lacks when accepting the member role was refused. */
+    missingAuthority: z.enum([
+      "installation_authority",
+      "member_role_delegation",
+      "roles_manage",
+      "assignments_manage",
+    ]).optional(),
   }).strict(),
 ]);
 
