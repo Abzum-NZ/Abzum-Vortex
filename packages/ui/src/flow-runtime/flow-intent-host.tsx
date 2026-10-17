@@ -141,7 +141,11 @@ function ConfirmSurface({
           <Button
             type="button"
             onClick={() =>
-              settle(confirmation.choice === undefined ? { confirmed: true } : { confirmed: true, choice })
+              settle(
+                confirmation.choice === undefined
+                  ? { confirmed: true }
+                  : { confirmed: true, choice },
+              )
             }
           >
             {confirmation.confirmLabel ?? "Confirm"}
@@ -266,7 +270,13 @@ export function useFlowIntentHost(
       </FlowDialog>
     );
   } else if (current?.kind === "confirm") {
-    element = <ConfirmSurface key={current.id} confirmation={current.confirmation} settle={current.settle} />;
+    element = (
+      <ConfirmSurface
+        key={current.id}
+        confirmation={current.confirmation}
+        settle={current.settle}
+      />
+    );
   } else if (current?.kind === "form") {
     const { form, settle } = current;
     element = (

@@ -13,18 +13,14 @@
       "storage_contract_id": "srt_app_store_store_application",
       "storage_scope": "organisation_shared",
       "ownership_mode": "none",
-      "standard_actions": [
-        "read"
-      ],
+      "standard_actions": ["read"],
       "custom_actions": [],
       "system_projection": {
         "protected_view": "application_store_entries",
         "organization_field": "organization_id",
         "revision_field": "revision",
         "filterable_fields": [],
-        "sortable_fields": [
-          "key"
-        ]
+        "sortable_fields": ["key"]
       },
       "fields": [
         {

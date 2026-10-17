@@ -67,20 +67,23 @@ const applicationRootInput = (candidate: unknown) => applicationRootIdSchema.saf
 const organizationOf = (selection: OrganizationSelectionCandidate) =>
   organizationIdSchema.parse(selection.organizationId);
 
-const reviewOutputs = (values: Partial<Record<string, JsonValue>> & Readonly<{ change: string }>): Outputs => ({
-  reason: "",
-  application_name: "",
-  release_version: "",
-  installed_version: "",
-  release_note: "",
-  member_role_name: "",
-  member_role_permissions: [],
-  role_changes: [],
-  role_change_count: 0,
-  role_ids: [],
-  expected: {},
-  ...values,
-} as Outputs);
+const reviewOutputs = (
+  values: Partial<Record<string, JsonValue>> & Readonly<{ change: string }>,
+): Outputs =>
+  ({
+    reason: "",
+    application_name: "",
+    release_version: "",
+    installed_version: "",
+    release_note: "",
+    member_role_name: "",
+    member_role_permissions: [],
+    role_changes: [],
+    role_change_count: 0,
+    role_ids: [],
+    expected: {},
+    ...values,
+  }) as Outputs;
 
 /** A review that names why neither an install nor an upgrade is possible; the flow explains it. */
 const unavailable = (reason: UnavailableReason): ApplicationStoreResult => ({
@@ -116,7 +119,10 @@ const reviewFailure = (error: unknown): ApplicationStoreResult => {
     default:
       break;
   }
-  return commandFailure(problem);
+  // A review changes nothing, so a state that moved while it read is a failure to read, not a conflict.
+  return problem.kind === "conflict"
+    ? { kind: "temporarily_unavailable" }
+    : commandFailure(problem);
 };
 
 /** A command's failure: a conflict, a refusal (permission or eligibility) or a temporary failure. */
@@ -143,9 +149,18 @@ const readLatest = async (
 ) => {
   const access = await environment.history.readAccess(organizationId, rootId);
   if (access.kind !== "available")
-    throw new InstallationProblem({ kind: access.kind }, `history_${access.reason}`);
+    throw new InstallationProblem(
+      {
+        kind:
+          access.reason === "recent_authentication_required"
+            ? "authentication_required"
+            : access.kind,
+      },
+      `history_${access.reason}`,
+    );
   const history = firstInstallHistory(access.snapshot);
-  if (history.anchorReleaseRevision === null) throw new FirstInstallUnavailable("release_not_published");
+  if (history.anchorReleaseRevision === null)
+    throw new FirstInstallUnavailable("release_not_published");
   const inspected = await environment.history.inspectRelease(organizationId, {
     rootId,
     expected: history,
@@ -153,7 +168,10 @@ const readLatest = async (
   });
   if (inspected.kind !== "available")
     throw new InstallationProblem({ kind: inspected.kind }, `history_release_${inspected.reason}`);
-  return { releaseRevision: history.anchorReleaseRevision, releaseNote: inspected.metadata.releaseNote };
+  return {
+    releaseRevision: history.anchorReleaseRevision,
+    releaseNote: inspected.metadata.releaseNote,
+  };
 };
 
 const installReview = (candidate: FirstInstallCandidate, releaseNote: string): Outputs => {
@@ -163,10 +181,14 @@ const installReview = (candidate: FirstInstallCandidate, releaseNote: string): O
     application_name: candidate.releaseSet.application.content.name,
     release_version: candidate.snapshot.selected.releaseVersion,
     installed_version:
-      candidate.snapshot.registrationState === "active_exact" ? candidate.snapshot.selected.releaseVersion : "",
+      candidate.snapshot.registrationState === "active_exact"
+        ? candidate.snapshot.selected.releaseVersion
+        : "",
     release_note: releaseNote,
     member_role_name: role.name,
-    member_role_permissions: role.permissions.slice(0, maximumRoleChangeLines).map((permission) => permission.label),
+    member_role_permissions: role.permissions
+      .slice(0, maximumRoleChangeLines)
+      .map((permission) => permission.label),
     expected: JSON.parse(canonicalJson(candidate.snapshot)) as JsonValue,
   });
 };
@@ -187,13 +209,18 @@ const review = async (
   const organizationId = organizationOf(selection);
   try {
     const latest = await readLatest(environment, organizationId, rootId.data);
-    const selector = { organizationId, rootId: rootId.data, releaseRevision: latest.releaseRevision };
+    const selector = {
+      organizationId,
+      rootId: rootId.data,
+      releaseRevision: latest.releaseRevision,
+    };
     try {
       const candidate = await readCurrentFirstInstallCandidate(environment, session, selector);
       return { kind: "available", value: installReview(candidate, latest.releaseNote) };
     } catch (error) {
       // Installed at an earlier version: the latest one is an upgrade.
-      if (!(error instanceof FirstInstallUnavailable) || error.reason !== "already_installed") throw error;
+      if (!(error instanceof FirstInstallUnavailable) || error.reason !== "already_installed")
+        throw error;
     }
     const authorized = await readUpgradeAuthorizedState(environment, selector, session, true);
     const application = authorized.state.selectedReleaseSet.application;
@@ -208,7 +235,12 @@ const review = async (
           release_note: latest.releaseNote,
         }),
       };
-    const revisions = await readUpgradeRoleRevisions(environment, session, selector, authorized.state);
+    const revisions = await readUpgradeRoleRevisions(
+      environment,
+      session,
+      selector,
+      authorized.state,
+    );
     return {
       kind: "available",
       value: reviewOutputs({
@@ -258,19 +290,30 @@ const install = async (
   };
   try {
     const reviewed = expected.data as unknown as FirstInstallCandidate["snapshot"];
-    let candidate = await readCurrentFirstInstallCandidate(environment, session, selector, reviewed);
+    let candidate = await readCurrentFirstInstallCandidate(
+      environment,
+      session,
+      selector,
+      reviewed,
+    );
     const state = candidate.snapshot.registrationState;
     if (state === "unprepared" || state === "registration_aligned_partial") {
       await createFirstInstallCoordinator(
-        environment, candidate.selector, candidate.snapshot, candidate.releaseSet, "prepare",
+        environment,
+        candidate.selector,
+        candidate.snapshot,
+        candidate.releaseSet,
+        "prepare",
       ).prepare(session, {
         organizationId,
         applicationRootId: rootId.data,
         applicationReleaseRevision: selector.releaseRevision,
       });
       candidate = await readCurrentFirstInstallCandidate(environment, session, selector);
-      if (canonicalJson(candidate.snapshot.selected) !== canonicalJson(reviewed.selected) ||
-        canonicalJson(candidate.snapshot.memberRole) !== canonicalJson(reviewed.memberRole))
+      if (
+        canonicalJson(candidate.snapshot.selected) !== canonicalJson(reviewed.selected) ||
+        canonicalJson(candidate.snapshot.memberRole) !== canonicalJson(reviewed.memberRole)
+      )
         return "conflict";
     }
     if (candidate.snapshot.registrationState !== "provisioned_inactive") return "conflict";
@@ -326,12 +369,20 @@ const upgrade = async (
     const reviewed = expected.data as unknown as UpgradeSnapshot;
     const current = await readUpgradeAuthorizedState(environment, selector, session, false);
     const now = Date.parse(current.checkedAt);
-    if (!Number.isFinite(now) || Date.parse(reviewed.validUntil) <= now ||
-      Date.parse(current.snapshot.validUntil) <= now || !sameUpgradeSnapshotState(reviewed, current.snapshot))
+    if (
+      !Number.isFinite(now) ||
+      Date.parse(reviewed.validUntil) <= now ||
+      Date.parse(current.snapshot.validUntil) <= now ||
+      !sameUpgradeSnapshotState(reviewed, current.snapshot)
+    )
       return "conflict";
     const acceptRoleIds = yes(inputs.accept_role_changes) ? roleIds.data : [];
     const { acceptedRoleIds } = await upgradeWithRoleRevisions(
-      environment, selector, current.state, session, acceptRoleIds,
+      environment,
+      selector,
+      current.state,
+      session,
+      acceptRoleIds,
     );
     return {
       kind: "available",
@@ -349,12 +400,21 @@ const upgrade = async (
 
 /** The application catalogue's three journeys, bound to the application's installation environment. */
 export const createApplicationStoreService = (environment: ApplicationStoreEnvironment) => ({
-  review: (session: IdentitySession, selection: OrganizationSelectionCandidate, inputs: Readonly<Record<string, unknown>>) =>
-    review(environment, session, selection, inputs),
-  install: (session: IdentitySession, selection: OrganizationSelectionCandidate, inputs: Readonly<Record<string, unknown>>) =>
-    install(environment, session, selection, inputs),
-  upgrade: (session: IdentitySession, selection: OrganizationSelectionCandidate, inputs: Readonly<Record<string, unknown>>) =>
-    upgrade(environment, session, selection, inputs),
+  review: (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    inputs: Readonly<Record<string, unknown>>,
+  ) => review(environment, session, selection, inputs),
+  install: (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    inputs: Readonly<Record<string, unknown>>,
+  ) => install(environment, session, selection, inputs),
+  upgrade: (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    inputs: Readonly<Record<string, unknown>>,
+  ) => upgrade(environment, session, selection, inputs),
 });
 
 export type ApplicationStoreService = ReturnType<typeof createApplicationStoreService>;

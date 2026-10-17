@@ -106,7 +106,9 @@ export const confirmAnswer = (
 ): Extract<FormContinuationAnswer, { kind: "confirm" }> => ({
   kind: "confirm",
   confirmed: answer.confirmed,
-  ...(confirmation.choice === undefined ? {} : { choice: answer.confirmed && answer.choice === true }),
+  ...(confirmation.choice === undefined
+    ? {}
+    : { choice: answer.confirmed && answer.choice === true }),
 });
 
 export const readFormIntent = (intent: FlowIntent): FlowFormIntent | undefined => {

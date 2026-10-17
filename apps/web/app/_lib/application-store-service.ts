@@ -5,9 +5,15 @@ import {
   createOrganizationAccessAdministrationService,
   type ApplicationStoreService,
 } from "@vortex/platform/server";
-import { installedReleaseCatalogue, releaseSetContainsCustomComponents } from "./definition-catalogue";
+import {
+  installedReleaseCatalogue,
+  releaseSetContainsCustomComponents,
+} from "./definition-catalogue";
 import { platformPermissionSource } from "./platform-permission-source";
-import { humanOrganizationRequestDependencies, humanOrganizationRequests } from "./server-composition";
+import {
+  humanOrganizationRequestDependencies,
+  humanOrganizationRequests,
+} from "./server-composition";
 import {
   inspectStudioApplicationReleaseHistory,
   loadStudioApplicationHistoryAccess,

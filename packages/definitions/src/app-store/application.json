@@ -35,10 +35,7 @@
         "default_member": true,
         "name": "App Store user",
         "home_page": "app_store_catalogue",
-        "permissions": [
-          "application.app_store.open",
-          "vortex.app_store.store_application.read"
-        ]
+        "permissions": ["application.app_store.open", "vortex.app_store.store_application.read"]
       }
     ],
     "navigation": [
@@ -423,9 +420,7 @@
           "application_root_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.app_store:store_application"
-            ]
+            "recordTypeIds": ["vortex.app_store:store_application"]
           }
         },
         "variables": {},
@@ -486,9 +481,7 @@
                         "source": "task_output",
                         "task": "review",
                         "key": "result",
-                        "path": [
-                          "change"
-                        ]
+                        "path": ["change"]
                       }
                     },
                     "cases": [
@@ -520,9 +513,7 @@
                                         "source": "task_output",
                                         "task": "review",
                                         "key": "result",
-                                        "path": [
-                                          "application_name"
-                                        ]
+                                        "path": ["application_name"]
                                       }
                                     },
                                     {
@@ -536,9 +527,7 @@
                                         "source": "task_output",
                                         "task": "review",
                                         "key": "result",
-                                        "path": [
-                                          "release_version"
-                                        ]
+                                        "path": ["release_version"]
                                       }
                                     },
                                     {
@@ -565,9 +554,7 @@
                                         "source": "task_output",
                                         "task": "review",
                                         "key": "result",
-                                        "path": [
-                                          "release_note"
-                                        ]
+                                        "path": ["release_note"]
                                       }
                                     },
                                     {
@@ -581,9 +568,7 @@
                                         "source": "task_output",
                                         "task": "review",
                                         "key": "result",
-                                        "path": [
-                                          "member_role_name"
-                                        ]
+                                        "path": ["member_role_name"]
                                       }
                                     },
                                     {
@@ -600,9 +585,7 @@
                                   "source": "task_output",
                                   "task": "review",
                                   "key": "result",
-                                  "path": [
-                                    "member_role_permissions"
-                                  ]
+                                  "path": ["member_role_permissions"]
                                 }
                               },
                               "choice": {
@@ -621,9 +604,7 @@
                                         "source": "task_output",
                                         "task": "review",
                                         "key": "result",
-                                        "path": [
-                                          "member_role_name"
-                                        ]
+                                        "path": ["member_role_name"]
                                       }
                                     },
                                     {
@@ -694,9 +675,7 @@
                                       "source": "task_output",
                                       "task": "review",
                                       "key": "result",
-                                      "path": [
-                                        "expected"
-                                      ]
+                                      "path": ["expected"]
                                     }
                                   },
                                   "accept_member_role": {
@@ -746,9 +725,7 @@
                                                 "source": "task_output",
                                                 "task": "install",
                                                 "key": "result",
-                                                "path": [
-                                                  "application_name"
-                                                ]
+                                                "path": ["application_name"]
                                               }
                                             },
                                             {
@@ -762,9 +739,7 @@
                                                 "source": "task_output",
                                                 "task": "install",
                                                 "key": "result",
-                                                "path": [
-                                                  "release_version"
-                                                ]
+                                                "path": ["release_version"]
                                               }
                                             },
                                             {
@@ -863,9 +838,7 @@
                                   "source": "task_output",
                                   "task": "review",
                                   "key": "result",
-                                  "path": [
-                                    "role_ids"
-                                  ]
+                                  "path": ["role_ids"]
                                 }
                               }
                             },
@@ -891,9 +864,7 @@
                                             "source": "task_output",
                                             "task": "review",
                                             "key": "result",
-                                            "path": [
-                                              "application_name"
-                                            ]
+                                            "path": ["application_name"]
                                           }
                                         },
                                         {
@@ -907,9 +878,7 @@
                                             "source": "task_output",
                                             "task": "review",
                                             "key": "result",
-                                            "path": [
-                                              "release_version"
-                                            ]
+                                            "path": ["release_version"]
                                           }
                                         },
                                         {
@@ -936,9 +905,7 @@
                                             "source": "task_output",
                                             "task": "review",
                                             "key": "result",
-                                            "path": [
-                                              "installed_version"
-                                            ]
+                                            "path": ["installed_version"]
                                           }
                                         },
                                         {
@@ -952,9 +919,7 @@
                                             "source": "task_output",
                                             "task": "review",
                                             "key": "result",
-                                            "path": [
-                                              "release_note"
-                                            ]
+                                            "path": ["release_note"]
                                           }
                                         },
                                         {
@@ -971,9 +936,7 @@
                                       "source": "task_output",
                                       "task": "review",
                                       "key": "result",
-                                      "path": [
-                                        "role_changes"
-                                      ]
+                                      "path": ["role_changes"]
                                     }
                                   },
                                   "choice": {
@@ -1043,9 +1006,7 @@
                                           "source": "task_output",
                                           "task": "review",
                                           "key": "result",
-                                          "path": [
-                                            "expected"
-                                          ]
+                                          "path": ["expected"]
                                         }
                                       },
                                       "role_ids": {
@@ -1054,9 +1015,7 @@
                                           "source": "task_output",
                                           "task": "review",
                                           "key": "result",
-                                          "path": [
-                                            "role_ids"
-                                          ]
+                                          "path": ["role_ids"]
                                         }
                                       },
                                       "accept_role_changes": {
@@ -1106,9 +1065,7 @@
                                                     "source": "task_output",
                                                     "task": "upgrade_with_roles",
                                                     "key": "result",
-                                                    "path": [
-                                                      "application_name"
-                                                    ]
+                                                    "path": ["application_name"]
                                                   }
                                                 },
                                                 {
@@ -1122,9 +1079,7 @@
                                                     "source": "task_output",
                                                     "task": "upgrade_with_roles",
                                                     "key": "result",
-                                                    "path": [
-                                                      "release_version"
-                                                    ]
+                                                    "path": ["release_version"]
                                                   }
                                                 },
                                                 {
@@ -1138,9 +1093,7 @@
                                                     "source": "task_output",
                                                     "task": "upgrade_with_roles",
                                                     "key": "result",
-                                                    "path": [
-                                                      "accepted_role_count"
-                                                    ]
+                                                    "path": ["accepted_role_count"]
                                                   }
                                                 },
                                                 {
@@ -1154,9 +1107,7 @@
                                                     "source": "task_output",
                                                     "task": "upgrade_with_roles",
                                                     "key": "result",
-                                                    "path": [
-                                                      "waiting_role_count"
-                                                    ]
+                                                    "path": ["waiting_role_count"]
                                                   }
                                                 },
                                                 {
@@ -1258,9 +1209,7 @@
                                             "source": "task_output",
                                             "task": "review",
                                             "key": "result",
-                                            "path": [
-                                              "application_name"
-                                            ]
+                                            "path": ["application_name"]
                                           }
                                         },
                                         {
@@ -1274,9 +1223,7 @@
                                             "source": "task_output",
                                             "task": "review",
                                             "key": "result",
-                                            "path": [
-                                              "release_version"
-                                            ]
+                                            "path": ["release_version"]
                                           }
                                         },
                                         {
@@ -1303,9 +1250,7 @@
                                             "source": "task_output",
                                             "task": "review",
                                             "key": "result",
-                                            "path": [
-                                              "installed_version"
-                                            ]
+                                            "path": ["installed_version"]
                                           }
                                         },
                                         {
@@ -1319,9 +1264,7 @@
                                             "source": "task_output",
                                             "task": "review",
                                             "key": "result",
-                                            "path": [
-                                              "release_note"
-                                            ]
+                                            "path": ["release_note"]
                                           }
                                         }
                                       ]
@@ -1387,9 +1330,7 @@
                                           "source": "task_output",
                                           "task": "review",
                                           "key": "result",
-                                          "path": [
-                                            "expected"
-                                          ]
+                                          "path": ["expected"]
                                         }
                                       },
                                       "role_ids": {
@@ -1398,9 +1339,7 @@
                                           "source": "task_output",
                                           "task": "review",
                                           "key": "result",
-                                          "path": [
-                                            "role_ids"
-                                          ]
+                                          "path": ["role_ids"]
                                         }
                                       },
                                       "accept_role_changes": {
@@ -1449,9 +1388,7 @@
                                                     "source": "task_output",
                                                     "task": "upgrade",
                                                     "key": "result",
-                                                    "path": [
-                                                      "application_name"
-                                                    ]
+                                                    "path": ["application_name"]
                                                   }
                                                 },
                                                 {
@@ -1465,9 +1402,7 @@
                                                     "source": "task_output",
                                                     "task": "upgrade",
                                                     "key": "result",
-                                                    "path": [
-                                                      "release_version"
-                                                    ]
+                                                    "path": ["release_version"]
                                                   }
                                                 },
                                                 {
@@ -1573,9 +1508,7 @@
                                         "source": "task_output",
                                         "task": "review",
                                         "key": "result",
-                                        "path": [
-                                          "application_name"
-                                        ]
+                                        "path": ["application_name"]
                                       }
                                     },
                                     {
@@ -1589,9 +1522,7 @@
                                         "source": "task_output",
                                         "task": "review",
                                         "key": "result",
-                                        "path": [
-                                          "installed_version"
-                                        ]
+                                        "path": ["installed_version"]
                                       }
                                     },
                                     {
@@ -1622,9 +1553,7 @@
                                 "source": "task_output",
                                 "task": "review",
                                 "key": "result",
-                                "path": [
-                                  "reason"
-                                ]
+                                "path": ["reason"]
                               }
                             },
                             "cases": [
@@ -1844,9 +1773,7 @@
           "application_root_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.app_store:store_application"
-            ]
+            "recordTypeIds": ["vortex.app_store:store_application"]
           }
         },
         "variables": {},
