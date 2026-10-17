@@ -11,7 +11,7 @@
       "plural_name": "People",
       "title_field": "display_name",
       "storage_contract_id": "srt_system_directory_person",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -143,7 +143,7 @@
       "plural_name": "Organisation invitations",
       "title_field": "invited_email",
       "storage_contract_id": "srt_system_directory_invitation",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -250,7 +250,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -265,7 +265,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         }
       ],
@@ -279,7 +279,7 @@
       "plural_name": "Groups",
       "title_field": "label",
       "storage_contract_id": "srt_system_directory_group",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -394,7 +394,7 @@
       "plural_name": "Group memberships",
       "title_field": "account_display_name",
       "storage_contract_id": "srt_system_directory_group_membership",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -503,7 +503,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -518,7 +518,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -588,7 +588,7 @@
       "plural_name": "Roles",
       "title_field": "label",
       "storage_contract_id": "srt_system_directory_role",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -799,7 +799,7 @@
       "plural_name": "Role assignments",
       "title_field": "role_label",
       "storage_contract_id": "srt_system_directory_role_assignment",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -990,7 +990,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -1005,7 +1005,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -1075,7 +1075,7 @@
       "plural_name": "Role activations",
       "title_field": "account_display_name",
       "storage_contract_id": "srt_system_directory_role_activation",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -1240,7 +1240,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -1255,7 +1255,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -1321,7 +1321,7 @@
       "plural_name": "Delegations",
       "title_field": "scope_kind",
       "storage_contract_id": "srt_system_directory_delegation",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -1465,7 +1465,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -1480,7 +1480,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -1550,7 +1550,7 @@
       "plural_name": "Organisations",
       "title_field": "display_name",
       "storage_contract_id": "srt_system_directory_organization",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -1706,7 +1706,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -1721,7 +1721,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         }
       ],
@@ -1735,7 +1735,7 @@
       "plural_name": "Tenant administrators",
       "title_field": "identity_id",
       "storage_contract_id": "srt_system_directory_tenant_administrator",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -1877,7 +1877,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -1892,7 +1892,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -2019,6 +2019,7 @@
     {
       "id": "qry_people",
       "key": "people",
+      "label": "People",
       "record_type": "person",
       "inputs": [],
       "select": [
@@ -2042,6 +2043,7 @@
     {
       "id": "qry_organization_invitations",
       "key": "organization_invitations",
+      "label": "Organisation invitations",
       "record_type": "organization_invitation",
       "inputs": [],
       "select": [
@@ -2065,6 +2067,7 @@
     {
       "id": "qry_roles",
       "key": "roles",
+      "label": "Roles",
       "record_type": "role",
       "inputs": [],
       "select": [
@@ -2092,6 +2095,7 @@
     {
       "id": "qry_groups",
       "key": "groups",
+      "label": "Groups",
       "record_type": "group",
       "inputs": [],
       "select": [
@@ -2114,6 +2118,7 @@
     {
       "id": "qry_role_assignments",
       "key": "role_assignments",
+      "label": "Role assignments",
       "record_type": "role_assignment",
       "inputs": [],
       "select": [
@@ -2145,6 +2150,7 @@
     {
       "id": "qry_group_memberships",
       "key": "group_memberships",
+      "label": "Group memberships",
       "record_type": "group_membership",
       "inputs": [],
       "select": [
@@ -2170,6 +2176,7 @@
     {
       "id": "qry_role_activations",
       "key": "role_activations",
+      "label": "Role activations",
       "record_type": "role_activation",
       "inputs": [],
       "select": [
@@ -2196,6 +2203,7 @@
     {
       "id": "qry_delegations",
       "key": "delegations",
+      "label": "Delegations",
       "record_type": "delegation",
       "inputs": [],
       "select": [
@@ -2222,6 +2230,7 @@
     {
       "id": "qry_organizations",
       "key": "organizations",
+      "label": "Organisations",
       "record_type": "organization",
       "inputs": [],
       "select": [
@@ -2246,6 +2255,7 @@
     {
       "id": "qry_tenant_administrators",
       "key": "tenant_administrators",
+      "label": "Tenant administrators",
       "record_type": "tenant_administrator",
       "inputs": [],
       "select": [

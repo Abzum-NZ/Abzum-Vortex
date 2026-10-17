@@ -375,7 +375,7 @@ flowchart TD
 
 ### Between applications in one organisation
 
-For `organisation_shared` storage, each application must bind the module and grant its own roles the required permissions; a separate sharing grant is unnecessary. For `application_contained` storage, another application also needs an active inter-application grant. The recipient application must bind a compatible version of the module so it can validate and display the records.
+For `organization_shared` storage, each application must bind the module and grant its own roles the required permissions; a separate sharing grant is unnecessary. For `application_contained` storage, another application also needs an active inter-application grant. The recipient application must bind a compatible version of the module so it can validate and display the records.
 
 An inter-application grant may provide collaborative access when the use case requires it. The grant names the readable fields, the smaller or equal set of changeable fields, and any published shareable actions. The recipient uses ordinary record components, but those components expose only the granted capabilities. The record remains owned and saved by its source application; collaboration does not create a recipient copy or permit ownership, deletion, restoration, permission administration, or re-sharing.
 
