@@ -2,7 +2,7 @@ import {
   getAccessibleName,
   placementSettings,
   type FieldInputControlReleaseMap,
-  type createFullPlatformComponentRegistry,
+  type createPlatformComponentRegistryForReleases,
   type RenderedPage,
 } from "@vortex/ui";
 import {
@@ -23,7 +23,7 @@ export type FormSurfacePlacement = Readonly<{
 
 /** A placement's typed settings, read by the declaration of its registered block release. */
 const surfacePlacement = (
-  registry: ReturnType<typeof createFullPlatformComponentRegistry>,
+  registry: ReturnType<typeof createPlatformComponentRegistryForReleases>,
   placementId: string,
   props: Record<string, unknown>,
   vortex: Record<string, unknown>,
@@ -39,7 +39,7 @@ const surfacePlacement = (
 
 /** Finds the form ancestor that owns each placement in the rendered page tree. */
 export const isPlatformRelease = (
-  registry: ReturnType<typeof createFullPlatformComponentRegistry>,
+  registry: ReturnType<typeof createPlatformComponentRegistryForReleases>,
   block: unknown,
   identity: Readonly<{ key: string; releaseVersion: string }>,
 ): boolean => {
@@ -51,7 +51,7 @@ export const isPlatformRelease = (
 
 export const formOwnersByPlacement = (
   page: Readonly<Record<string, unknown>>,
-  registry: ReturnType<typeof createFullPlatformComponentRegistry>,
+  registry: ReturnType<typeof createPlatformComponentRegistryForReleases>,
 ): Readonly<Record<string, string>> => {
   const owners: Record<string, string> = {};
   walkPageComposition(
@@ -74,7 +74,7 @@ export const formSurfaceComposition = (
   page: Readonly<Record<string, unknown>>,
   pageId: string,
   formId: string,
-  registry: ReturnType<typeof createFullPlatformComponentRegistry>,
+  registry: ReturnType<typeof createPlatformComponentRegistryForReleases>,
 ): Readonly<{
   composition: RenderedPage;
   placementIds: readonly string[];
@@ -184,7 +184,7 @@ export const visibleOwningFormFieldLabel = (
   pageId: string,
   formId: string,
   fieldKey: string,
-  registry: ReturnType<typeof createFullPlatformComponentRegistry>,
+  registry: ReturnType<typeof createPlatformComponentRegistryForReleases>,
 ): string | undefined => {
   if (typeof document === "undefined") return undefined;
   const surface = formSurfaceComposition(page, pageId, formId, registry);
@@ -243,7 +243,7 @@ export const runtimeInputWithFormDefault = (
   input: Record<string, unknown>,
   placement: FormSurfacePlacement,
   value: unknown,
-  registry: ReturnType<typeof createFullPlatformComponentRegistry>,
+  registry: ReturnType<typeof createPlatformComponentRegistryForReleases>,
   fieldInputControlReleases: FieldInputControlReleaseMap,
 ): Record<string, unknown> => {
   const block = placement.vortex.block;

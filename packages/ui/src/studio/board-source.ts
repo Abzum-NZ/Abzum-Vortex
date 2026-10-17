@@ -47,6 +47,11 @@ export const studioBoardSourceProblem = (
   const record = module.record_types.find((candidate) => candidate.key === query?.record_type);
   if (query === undefined || record === undefined) return "Its data is not a query of this application";
   const fieldId = (field: string) => identity(`${module.key}:${record.key}.${field}`);
+  const choice = record.fields.find((field) => fieldId(field.key) === contract.choiceField);
+  // A board's columns and moves come from the pipeline of its choice field.
+  if (choice !== undefined && !record.pipelines.some((pipeline) => pipeline.stage_field === choice.key))
+    return `${choice.label} has no pipeline yet. Create one in the Data tab, on ${record.plural_name}, ` +
+      "to give the board its columns and the moves between them";
   const supported = boardBlockSourceIsSupported(
     {
       selectedFieldIds: (query.select.length === 0 ? record.fields.map((field) => field.key) : query.select).map(fieldId),
@@ -56,10 +61,10 @@ export const studioBoardSourceProblem = (
       pageSize: query.page_size,
     },
     record.fields.map((field) => ({ ...field, fieldId: fieldId(field.key) })),
+    record.pipelines.map((pipeline) => ({ stageFieldId: fieldId(pipeline.stage_field) })),
     contract,
   );
   if (supported) return undefined;
-  const choice = record.fields.find((field) => fieldId(field.key) === contract.choiceField);
   return `Its data, ${query.label ?? query.key}, must be grouped by ${choice?.label ?? "its choice field"} ` +
     "(a filterable choice field with 1 to 12 options) and select the card title and detail fields";
 };
