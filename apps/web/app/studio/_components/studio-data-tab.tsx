@@ -20,6 +20,7 @@ import { StudioNewQueryForm, StudioQueryEditor } from "./studio-query-editor";
 import { StudioRecordTypeSearch, StudioSearchOverview } from "./studio-search-settings";
 import { StudioRelationshipsSection } from "./studio-relationships-section";
 import { StudioModuleActions } from "./studio-module-actions";
+import { StudioRecordPipelines } from "./studio-record-pipelines";
 import {
   ModuleFieldsEditor, studioFieldPublication, type ModuleFieldEditorContext, type StudioLinkTarget,
   type StudioModuleOwnerApplication,
@@ -72,8 +73,8 @@ function ModuleInspector({ source, saved, moduleKey, disabled, apply }: Readonly
 }
 
 /** The owned record type's names, its key while unsaved, and Delete, refused with where it is used. */
-function RecordTypeInspector({ source, saved, moduleKey, recordKey, disabled, fieldContext, dataModule, targetLabel, apply, applyField,
-  applyChange, onFieldPending, onSearchPending, onSelect, onChoose, onShow }: Readonly<{
+function RecordTypeInspector({ source, saved, moduleKey, recordKey, disabled, fieldContext, dataModule, targetLabel, apply, applyInPlace,
+  applyField, applyChange, onFieldPending, onSearchPending, onSelect, onChoose, onShow }: Readonly<{
   source: ApplicationSourceDocument; saved: ApplicationSourceDocument; moduleKey: string; recordKey: string; disabled: boolean;
   fieldContext: ModuleFieldEditorContext;
   /** The module as the Data tab shows it, for the record type's search settings. */
@@ -83,6 +84,8 @@ function RecordTypeInspector({ source, saved, moduleKey, recordKey, disabled, fi
   /** Applies a query or search edit as one draft edit. */
   applyChange: ApplyDataChange;
   apply: (next: ApplicationSourceDocument, message: string, select?: StudioDataSelection | null) => boolean;
+  /** Applies an edit while the inspector's open forms keep what the person has set. */
+  applyInPlace: (next: ApplicationSourceDocument, message: string) => boolean;
   applyField: (expected: ApplicationSourceDocument, next: ApplicationSourceDocument) => boolean;
   onFieldPending: (pending: boolean) => void;
   onSearchPending: (pending: boolean) => void;
@@ -180,6 +183,8 @@ function RecordTypeInspector({ source, saved, moduleKey, recordKey, disabled, fi
     </section>}
     <StudioModuleActions source={source} moduleKey={moduleKey} recordKey={recordKey} disabled={disabled} onShow={onShow}
       apply={(next, message) => apply(next, message)} />
+    <StudioRecordPipelines source={source} moduleKey={moduleKey} recordKey={recordKey} publication={fieldContext.publication}
+      disabled={disabled} onShow={onShow} apply={(next, message) => apply(next, message)} applyAction={applyInPlace} />
     <section className="space-y-2 border-t border-border pt-3" aria-label="Delete">
       <Button type="button" size="sm" variant="destructive" disabled={disabled} onClick={() => { void remove(); }}>Delete record type</Button>
       <StudioReferencesAlert key={refusals} name={record.name} action="deleted" references={references} onShow={onShow} />
@@ -375,8 +380,9 @@ export function useStudioDataTab({ organizationId, rootId, source, saved, used, 
         : current.kind === "record_type"
           ? <RecordTypeInspector key={`${epoch}:${current.moduleKey}:${current.recordKey}`} source={source} saved={saved}
             moduleKey={current.moduleKey} recordKey={current.recordKey} disabled={disabled} fieldContext={fieldContext}
-            dataModule={module} targetLabel={targetLabel} apply={applyAndSelect} applyChange={applyChange} applyField={applyField}
-            onFieldPending={onFieldPending} onSearchPending={onSearchPending} onSelect={selectAfterEdit} onChoose={choose} onShow={onShow} />
+            dataModule={module} targetLabel={targetLabel} apply={applyAndSelect} applyInPlace={(next, message) => apply(source, next, message)}
+            applyChange={applyChange} applyField={applyField} onFieldPending={onFieldPending} onSearchPending={onSearchPending}
+            onSelect={selectAfterEdit} onChoose={choose} onShow={onShow} />
           : <ModuleFieldsEditor key={`${epoch}:${current.moduleKey}:${current.recordKey}:${current.fieldKey}`}
             source={source} moduleKey={current.moduleKey} recordKey={current.recordKey} fieldKey={current.fieldKey}
             disabled={disabled} context={fieldContext} onPendingChange={onFieldPending} onApply={applyField}

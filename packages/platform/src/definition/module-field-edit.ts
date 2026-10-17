@@ -27,6 +27,7 @@ import {
   type LinkCardinality,
   type PeopleDirectoryOwner,
 } from "./module-links";
+import { inlineChoiceOptionReferences, syncInlinePipelineStages } from "./module-pipeline-shape";
 
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
@@ -233,6 +234,17 @@ export const changeInlineModuleField = (
             : `To hold ${moduleFieldTypeLabels[change.type as ModuleFieldType].toLowerCase()} values, add a new field. `}` +
           "Its label, help text and default can still change."] };
     }
+    // An option something still uses (an action, a flow step, a condition) is not removed.
+    if (field.type === "choice") {
+      const before = (field.settings as { options: { value: string; label: string }[] }).options;
+      const after = change.type === "choice" ? ((change.settings as { options?: { value: string }[] }).options ?? []) : [];
+      for (const option of before.filter((entry) => !after.some((kept) => kept.value === entry.value))) {
+        const references = inlineChoiceOptionReferences(current, module.key, record.key, field.key, option.value);
+        if (references.length > 0)
+          return { kind: "invalid", issues: [`${label}: the option ${option.label} is used by ${references.map((reference) => reference.label).join(", ")}. ` +
+            "Remove those uses before removing it."] };
+      }
+    }
     const destination = field as Record<string, unknown>;
     destination.label = label;
     if (helpText === "") delete destination.help_text;
@@ -242,6 +254,7 @@ export const changeInlineModuleField = (
     else destination.default = change.defaultValue;
   }
   syncLinkRelationship(module, record, field, change.cardinality);
+  syncInlinePipelineStages(record, field.key);
   if (isPersonLink(field)) {
     const refused = enablePeopleDirectoryLinks(source, module, record, context.peopleDirectory);
     if (refused !== undefined) return { kind: "invalid", issues: [refused] };
@@ -324,7 +337,7 @@ export const inlineFieldReferences = (
     ...(["permissions", "actions", "events", "flows", "extension_points", "sharing_conditions", "queries"] as const)
       .flatMap((section) => (module[section] as unknown[]).flatMap((item, index) =>
         componentScoped(item, recordKey, qualifiedRecord) ? [{ value: item, path: ["body", "modules", moduleIndex, section, index] }] : [])),
-    ...(["pages", "pipelines", "flows"] as const).flatMap((section) => (source.body[section] as unknown[]).flatMap((item, index) =>
+    ...(["pages", "flows"] as const).flatMap((section) => (source.body[section] as unknown[]).flatMap((item, index) =>
       componentScoped(item, undefined, qualifiedRecord) ? [{ value: item, path: ["body", section, index] }] : [])),
     ...(source.body.search?.record_types ?? []).flatMap((item, index) =>
       componentScoped(item, undefined, qualifiedRecord) ? [{ value: item, path: ["body", "search", "record_types", index] }] : []),
