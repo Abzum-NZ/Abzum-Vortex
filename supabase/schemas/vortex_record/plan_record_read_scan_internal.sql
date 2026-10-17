@@ -120,7 +120,7 @@ begin
 
   if required_permissions is null then
     return query select false, null::uuid, array[]::uuid[], array[]::uuid[],
-      array[]::text[], 'true'::text, '[]'::jsonb;
+      array[]::text[], 'false'::text, '[]'::jsonb;
     return;
   end if;
 
