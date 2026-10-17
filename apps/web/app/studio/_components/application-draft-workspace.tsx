@@ -7,7 +7,8 @@ import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-e
 import { applicationSourceDocumentSchema, canonicalJson, describeFailure,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
   type ApplicationSourceDocument, type DefinitionPublicationConfirmation,
-  applicationModuleKeys, type PublishDefinitionResult, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
+  applicationModuleKeys, type PublishDefinitionResult, type ImmutablePlatformBlockCatalogue,
+  type PeopleDirectoryOwner } from "@vortex/platform/schema";
 import {
   applyStudioCompositionCommand,
   applyStudioVisibilityCondition,
@@ -130,6 +131,8 @@ type WorkspaceProps = Readonly<{
       usedModules?: readonly StudioDataModule[] | null;
       /** What the published versions of its own modules hold, whose stored shape is fixed. */
       published?: StudioPublishedData | null;
+      /** The organisation's people directory, which a Person link points at. */
+      peopleDirectory?: PeopleDirectoryOwner | null;
       pageCompiledSlots?: StudioApplicationCompiledPageSlots | null;
       canvasFrames?: StudioApplicationCanvasFrames | null;
       compileFailure?: StudioCompileFailure | null }>);
@@ -203,6 +206,7 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
         initialBorrowedChoices={props.borrowedChoices ?? null}
         initialUsedModules={props.usedModules ?? null}
         initialPublished={props.published ?? null}
+        initialPeopleDirectory={props.peopleDirectory ?? null}
         pageCompiledSlots={props.pageCompiledSlots ?? null}
         canvasFrames={props.canvasFrames ?? null}
         compileFailure={props.compileFailure ?? null}
@@ -212,8 +216,8 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
 }
 
 function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab, initialSection, initialModule, applications,
-  initialSearchMetadata, initialBorrowedChoices, initialUsedModules, initialPublished, pageCompiledSlots, canvasFrames, compileFailure, platformBlockCatalogue, fieldInputControlReleases,
-  platformThemeTokens, themeOptions }: {
+  initialSearchMetadata, initialBorrowedChoices, initialUsedModules, initialPublished, initialPeopleDirectory, pageCompiledSlots, canvasFrames, compileFailure, platformBlockCatalogue,
+  fieldInputControlReleases, platformThemeTokens, themeOptions }: {
   organizationId: string; draft: StudioStoredApplicationDraft; place: StudioWorkspacePlace;
   themeOptions: StudioThemeOptions;
   initialTab: StudioRailKey; initialSection: StudioReleasesSection; initialModule: string | null;
@@ -222,6 +226,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   initialBorrowedChoices: StudioBorrowedChoices | null;
   initialUsedModules: readonly StudioDataModule[] | null;
   initialPublished: StudioPublishedData | null;
+  initialPeopleDirectory: PeopleDirectoryOwner | null;
   pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
   canvasFrames: StudioApplicationCanvasFrames | null;
   compileFailure: StudioCompileFailure | null;
@@ -243,6 +248,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const [releasesSection, setReleasesSection] = useState<StudioReleasesSection>(initialSection);
   const [usedModules, setUsedModules] = useState<readonly StudioDataModule[] | null>(initialUsedModules);
   const [published, setPublished] = useState<StudioPublishedData | null>(initialPublished);
+  const [peopleDirectory, setPeopleDirectory] = useState<PeopleDirectoryOwner | null>(initialPeopleDirectory);
   const [previewPending, setPreviewPending] = useState(false);
   const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>(100);
   const [canvasBreakpoint, setCanvasBreakpoint] = useState<StudioCanvasBreakpoint>("desktop");
@@ -645,6 +651,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       setBorrowedChoices((previous) => result.borrowedChoices ?? previous);
       setUsedModules((previous) => result.usedModules ?? previous);
       setPublished((previous) => result.published ?? previous);
+      setPeopleDirectory((previous) => result.peopleDirectory ?? previous);
       searchRefresh.current += 1;
       setSearchMetadata(result.searchMetadata);
     } catch (error) {
@@ -718,6 +725,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       setBorrowedChoices((previous) => result.borrowedChoices ?? previous);
       setUsedModules((previous) => result.usedModules ?? previous);
       setPublished((previous) => result.published ?? previous);
+      setPeopleDirectory((previous) => result.peopleDirectory ?? previous);
       searchRefresh.current += 1;
       discardSourceImport();
       lifetime.current += 1;
@@ -1065,7 +1073,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     return true;
   };
   const data = useStudioDataTab({ organizationId, rootId: state.rootId, source, saved: savedPreviewDraft.current.source,
-    used: usedModules, published, applications, initialModule, hidden: tab !== "data",
+    used: usedModules, published, peopleDirectory, applications, initialModule, hidden: tab !== "data",
     compositionContext, readRecords: readRecordChoices,
     selection: isStudioDataSelection(selected) ? selected : null,
     disabled: noEdit || busy.anyOfRendered("publication", "reopening"), refresh: compiled.generation,

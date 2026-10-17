@@ -19,3 +19,4 @@ export * from "./definition/module-field-shape";
 export * from "./definition/module-record-type-shape";
 export * from "./definition/module-field-settings";
 export * from "./definition/module-field-edit";
+export * from "./definition/module-links";
