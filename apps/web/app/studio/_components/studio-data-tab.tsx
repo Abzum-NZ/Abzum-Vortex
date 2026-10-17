@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import type { StudioDataSelection, StudioSemanticSelection } from "@vortex/ui/studio";
+import type { StudioCompositionContext, StudioDataSelection, StudioRecordReader, StudioSemanticSelection } from "@vortex/ui/studio";
 import {
   deleteInlineRecordType, rekeyUnsavedInlineModule, rekeyUnsavedInlineRecordType, renameInlineModule,
   renameInlineRecordType, type ApplicationSourceDocument, type InlineRecordTypeReference,
@@ -15,8 +15,10 @@ import { StudioField } from "./studio-field";
 import { StudioDataPanel } from "./studio-data-panel";
 import { StudioDataCentre } from "./studio-data-centre";
 import { StudioRecordTypeDialog } from "./studio-record-type-dialog";
-import { ModuleFieldsEditor, type StudioModuleOwnerApplication } from "./module-fields-editor";
-import { fieldTypeLabel, ownedDataModules, type StudioDataModule } from "../_lib/studio-data-model";
+import {
+  ModuleFieldsEditor, studioFieldPublication, type ModuleFieldEditorContext, type StudioModuleOwnerApplication,
+} from "./module-fields-editor";
+import { fieldTypeLabel, ownedDataModules, type StudioDataModule, type StudioPublishedData } from "../_lib/studio-data-model";
 
 /** Applies a changed source to the draft history as one edit; false when the draft moved on or is busy. */
 type ApplyDataChange = (expected: ApplicationSourceDocument, next: ApplicationSourceDocument, message: string) => boolean;
@@ -62,8 +64,9 @@ function ModuleInspector({ source, saved, moduleKey, disabled, apply }: Readonly
 }
 
 /** The owned record type's names, its key while unsaved, and Delete, refused with where it is used. */
-function RecordTypeInspector({ source, saved, moduleKey, recordKey, disabled, apply, applyField, onFieldPending, onSelect, onShow }: Readonly<{
+function RecordTypeInspector({ source, saved, moduleKey, recordKey, disabled, fieldContext, apply, applyField, onFieldPending, onSelect, onShow }: Readonly<{
   source: ApplicationSourceDocument; saved: ApplicationSourceDocument; moduleKey: string; recordKey: string; disabled: boolean;
+  fieldContext: ModuleFieldEditorContext;
   apply: (next: ApplicationSourceDocument, message: string, select?: StudioDataSelection | null) => boolean;
   applyField: (expected: ApplicationSourceDocument, next: ApplicationSourceDocument) => boolean;
   onFieldPending: (pending: boolean) => void;
@@ -134,8 +137,8 @@ function RecordTypeInspector({ source, saved, moduleKey, recordKey, disabled, ap
     {adding && <section className="space-y-2 border-t border-border pt-3" aria-label={`New field of ${record.name}`}>
       <h3 className="text-sm font-semibold">New field</h3>
       <ModuleFieldsEditor source={source} moduleKey={moduleKey} recordKey={recordKey} fieldKey={undefined}
-        disabled={disabled} onPendingChange={onFieldPending} onApply={applyField}
-        onApplied={(fieldKey) => onSelect({ kind: "field", moduleKey, recordKey, fieldKey })} />
+        disabled={disabled} context={fieldContext} onPendingChange={onFieldPending} onApply={applyField}
+        onApplied={(fieldKey) => onSelect({ kind: "field", moduleKey, recordKey, fieldKey })} onShow={onShow} />
     </section>}
     <section className="space-y-2 border-t border-border pt-3" aria-label="Delete">
       <Button type="button" size="sm" variant="destructive" disabled={disabled} onClick={() => { void remove(); }}>Delete record type</Button>
@@ -211,13 +214,19 @@ const describeSelection = (modules: readonly StudioDataModule[], selection: Stud
  * types and edits fields. What is selected is the workspace's one selection; every change is one
  * edit of the application draft, saved and published with it.
  */
-export function useStudioDataTab({ organizationId, rootId, source, saved, used, applications, initialModule, selection, hidden,
-  disabled, refresh, search, apply, choose, selectAfterEdit, onFieldPending, openInTab }: Readonly<{
+export function useStudioDataTab({ organizationId, rootId, source, saved, used, published, applications, initialModule, selection, hidden,
+  disabled, refresh, search, apply, choose, selectAfterEdit, onFieldPending, openInTab, compositionContext, readRecords }: Readonly<{
   organizationId: string; rootId: string;
   source: ApplicationSourceDocument;
   /** The saved draft: a key is permanent once it is saved. */
   saved: ApplicationSourceDocument;
   used: readonly StudioDataModule[] | null;
+  /** What the published versions of its own modules hold; null when the draft did not compile. */
+  published: StudioPublishedData | null;
+  /** The composition context the "Also show it on" placements are applied through. */
+  compositionContext: StudioCompositionContext;
+  /** Reads records of the installed application, for a link field's default. */
+  readRecords: StudioRecordReader | null;
   applications: readonly StudioModuleOwnerApplication[];
   /** The workspace's selection, when it is a Data item. */
   selection: StudioDataSelection | null;
@@ -253,6 +262,10 @@ export function useStudioDataTab({ organizationId, rootId, source, saved, used, 
     else if (open.kind === "menu") openInTab("menu", { kind: "navigation", navigationItemAlias: open.navigationAlias });
   };
   const owned = useMemo(() => ownedDataModules(source), [source]);
+  const publication = useMemo(() => studioFieldPublication(published, saved), [published, saved]);
+  const usedRecordTypes = useMemo(() => (used ?? []).flatMap((module) => module.recordTypes.map((record) =>
+    ({ key: `${module.key}:${record.key}`, label: `${record.name} (${module.name})` }))), [used]);
+  const fieldContext: ModuleFieldEditorContext = { publication, composition: compositionContext, usedRecordTypes, readRecords };
   const savedOwned = useMemo(() => ownedDataModules(saved), [saved]);
   const modules = useMemo(() => [...owned, ...(used ?? [])], [owned, used]);
   const [creating, setCreating] = useState(false);
@@ -286,12 +299,13 @@ export function useStudioDataTab({ organizationId, rootId, source, saved, used, 
           disabled={disabled} apply={applyAndSelect} />
         : current.kind === "record_type"
           ? <RecordTypeInspector key={`${epoch}:${current.moduleKey}:${current.recordKey}`} source={source} saved={saved}
-            moduleKey={current.moduleKey} recordKey={current.recordKey} disabled={disabled} apply={applyAndSelect}
+            moduleKey={current.moduleKey} recordKey={current.recordKey} disabled={disabled} fieldContext={fieldContext} apply={applyAndSelect}
             applyField={applyField} onFieldPending={onFieldPending} onSelect={selectAfterEdit} onShow={onShow} />
           : <ModuleFieldsEditor key={`${epoch}:${current.moduleKey}:${current.recordKey}:${current.fieldKey}`}
             source={source} moduleKey={current.moduleKey} recordKey={current.recordKey} fieldKey={current.fieldKey}
-            disabled={disabled} onPendingChange={onFieldPending} onApply={applyField}
-            onApplied={() => setEpoch((value) => value + 1)} />;
+            disabled={disabled} context={fieldContext} onPendingChange={onFieldPending} onApply={applyField}
+            onApplied={() => setEpoch((value) => value + 1)} onShow={onShow}
+            onRemoved={() => { selectAfterEdit({ kind: "record_type", moduleKey: current.moduleKey, recordKey: current.recordKey }); setEpoch((value) => value + 1); }} />;
   const inspector = <StudioPanelShell title="Inspector"
     description={current === null ? "Select an item to change it." : describeSelection(modules, current)}>
     {inspectorBody}

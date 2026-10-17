@@ -2,6 +2,8 @@
 import dynamic from "next/dynamic";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
+import { Button } from "@vortex/ui/components/button";
+import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-empty-state";
 import { applicationSourceDocumentSchema, canonicalJson, describeFailure,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
   type ApplicationSourceDocument, type DefinitionPublicationConfirmation,
@@ -11,7 +13,8 @@ import {
   applyStudioVisibilityCondition,
   describeStudioCompositionAddTargets,
   studioDraftChoices,
-  type StudioBorrowedQueries,
+  type StudioBorrowedChoices,
+  type StudioRecordReader,
   type StudioCompositionOutcome,
   createStudioApplicationDraftHistoryController,
   createStudioSemanticSelectionStore,
@@ -28,9 +31,9 @@ import {
   type StudioSemanticSelection,
   type StudioSemanticOutlineNode,
 } from "@vortex/ui/studio";
-import { createAppearanceRootProps, type FieldInputControlReleaseMap, type PlatformThemeTokens } from "@vortex/ui";
+import { createAppearanceRootProps, Icon, type FieldInputControlReleaseMap, type PlatformThemeTokens } from "@vortex/ui";
 import type { StudioCanvasAddRequest, StudioCanvasBreakpoint, StudioCanvasFrame } from "@vortex/ui/studio/page-puck-editor";
-import { readStudioCanvasRecords, reopenStudioApplication, saveStudioApplication,
+import { readStudioCanvasRecords, readStudioDataRecords, reopenStudioApplication, saveStudioApplication,
   prepareStudioApplicationPublication, publishStudioApplication, validateStudioPlacementThemeOverrides } from "../actions";
 import { applyStudioItemLabels } from "../_lib/application-item-labels";
 import { createStudioPlacementDescriber, studioOutlineLabels } from "../_lib/studio-labels";
@@ -49,7 +52,7 @@ import { StudioHistoryTab } from "./studio-history-tab";
 import { StandardPageAdoption } from "./standard-page-adoption";
 import { useStudioDataTab } from "./studio-data-tab";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
-import type { StudioDataModule } from "../_lib/studio-data-model";
+import type { StudioDataModule, StudioPublishedData } from "../_lib/studio-data-model";
 import { StudioTopBar } from "./studio-top-bar";
 import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-toolbar";
 import { StudioInspector } from "./studio-inspector";
@@ -122,9 +125,11 @@ type WorkspaceProps = Readonly<{
       /** The organisation's applications, to name and link the owner of a used module. */
       applications: readonly StudioModuleOwnerApplication[];
       searchMetadata?: StudioApplicationSearchMetadata | null;
-      borrowedQueries?: StudioBorrowedQueries | null;
+      borrowedChoices?: StudioBorrowedChoices | null;
       /** The modules the application uses, read-only in the Data tab. */
       usedModules?: readonly StudioDataModule[] | null;
+      /** What the published versions of its own modules hold, whose stored shape is fixed. */
+      published?: StudioPublishedData | null;
       pageCompiledSlots?: StudioApplicationCompiledPageSlots | null;
       canvasFrames?: StudioApplicationCanvasFrames | null;
       compileFailure?: StudioCompileFailure | null }>);
@@ -195,8 +200,9 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
         initialModule={props.initialModule ?? null}
         applications={props.applications}
         initialSearchMetadata={props.searchMetadata ?? null}
-        initialBorrowedQueries={props.borrowedQueries ?? null}
+        initialBorrowedChoices={props.borrowedChoices ?? null}
         initialUsedModules={props.usedModules ?? null}
+        initialPublished={props.published ?? null}
         pageCompiledSlots={props.pageCompiledSlots ?? null}
         canvasFrames={props.canvasFrames ?? null}
         compileFailure={props.compileFailure ?? null}
@@ -206,15 +212,16 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
 }
 
 function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab, initialSection, initialModule, applications,
-  initialSearchMetadata, initialBorrowedQueries, initialUsedModules, pageCompiledSlots, canvasFrames, compileFailure, platformBlockCatalogue, fieldInputControlReleases,
+  initialSearchMetadata, initialBorrowedChoices, initialUsedModules, initialPublished, pageCompiledSlots, canvasFrames, compileFailure, platformBlockCatalogue, fieldInputControlReleases,
   platformThemeTokens, themeOptions }: {
   organizationId: string; draft: StudioStoredApplicationDraft; place: StudioWorkspacePlace;
   themeOptions: StudioThemeOptions;
   initialTab: StudioRailKey; initialSection: StudioReleasesSection; initialModule: string | null;
   applications: readonly StudioModuleOwnerApplication[];
   initialSearchMetadata: StudioApplicationSearchMetadata | null;
-  initialBorrowedQueries: StudioBorrowedQueries | null;
+  initialBorrowedChoices: StudioBorrowedChoices | null;
   initialUsedModules: readonly StudioDataModule[] | null;
+  initialPublished: StudioPublishedData | null;
   pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
   canvasFrames: StudioApplicationCanvasFrames | null;
   compileFailure: StudioCompileFailure | null;
@@ -235,6 +242,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const [tab, setTab] = useState<StudioRailKey>(initialTab);
   const [releasesSection, setReleasesSection] = useState<StudioReleasesSection>(initialSection);
   const [usedModules, setUsedModules] = useState<readonly StudioDataModule[] | null>(initialUsedModules);
+  const [published, setPublished] = useState<StudioPublishedData | null>(initialPublished);
   const [previewPending, setPreviewPending] = useState(false);
   const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>(100);
   const [canvasBreakpoint, setCanvasBreakpoint] = useState<StudioCanvasBreakpoint>("desktop");
@@ -276,7 +284,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const [compiled, setCompiled] = useState<CompiledView>(() =>
     ({ source: draft.source, draftRevision: draft.draftRevision, sourceFingerprint: draft.sourceFingerprint,
       slots: pageCompiledSlots, frames: canvasFrames, failure: compileFailure, generation: 0 }));
-  const [borrowedQueries, setBorrowedQueries] = useState<StudioBorrowedQueries | null>(initialBorrowedQueries);
+  const [borrowedChoices, setBorrowedChoices] = useState<StudioBorrowedChoices | null>(initialBorrowedChoices);
   // A saved revision whose compile is still on its way: the canvas keeps the last compiled one meanwhile.
   const compileEpoch = useRef(0);
   const [compiling, setCompiling] = useState(false);
@@ -634,8 +642,9 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       setCompiled((previous) => ({ source: result.draft.source, draftRevision: result.draft.draftRevision,
         sourceFingerprint: result.draft.sourceFingerprint, slots: result.pageCompiledSlots, frames: result.canvasFrames,
         failure: result.compileFailure, generation: previous.generation + 1 }));
-      setBorrowedQueries((previous) => result.borrowedQueries ?? previous);
+      setBorrowedChoices((previous) => result.borrowedChoices ?? previous);
       setUsedModules((previous) => result.usedModules ?? previous);
+      setPublished((previous) => result.published ?? previous);
       searchRefresh.current += 1;
       setSearchMetadata(result.searchMetadata);
     } catch (error) {
@@ -706,8 +715,9 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       setCompiled((previous) => ({ source: result.draft.source, draftRevision: result.draft.draftRevision,
         sourceFingerprint: result.draft.sourceFingerprint, slots: result.pageCompiledSlots,
         frames: result.canvasFrames, failure: result.compileFailure, generation: previous.generation + 1 }));
-      setBorrowedQueries((previous) => result.borrowedQueries ?? previous);
+      setBorrowedChoices((previous) => result.borrowedChoices ?? previous);
       setUsedModules((previous) => result.usedModules ?? previous);
+      setPublished((previous) => result.published ?? previous);
       searchRefresh.current += 1;
       discardSourceImport();
       lifetime.current += 1;
@@ -786,7 +796,31 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const addTargets = useMemo(() => canvasPage === undefined ? null
     : describeStudioCompositionAddTargets(compositionContext, canvasPage.id), [compositionContext, canvasPage?.id]);
   // What reference settings and the query picker offer: queries that already exist (own, then borrowed), fields and pages.
-  const draftChoices = useMemo(() => studioDraftChoices(source, borrowedQueries), [source, borrowedQueries]);
+  // A record reference picks a record of the installed application, read 40 at a time with the
+  // builder's own access through the same reader as the Data tab's results.
+  const readRecordChoices = useCallback<StudioRecordReader>(async ({ recordType, after }) => {
+    const separator = recordType.indexOf(":");
+    const result = await readStudioDataRecords(organizationId, { rootId: draft.rootId,
+      moduleKey: recordType.slice(0, separator), recordKey: recordType.slice(separator + 1), pageSize: 40,
+      ...(after === undefined ? {} : { continuationToken: after }) });
+    switch (result.kind) {
+      case "available": {
+        const title = result.titleColumn;
+        return { kind: "available", records: result.rows.map((row) => ({ recordId: row.id,
+          label: (title === undefined ? undefined : row.cells[title]) || "Untitled record" })),
+          ...(result.next === undefined ? {} : { next: result.next }) };
+      }
+      case "not_installed": return { kind: "not_installed" };
+      case "no_query": return { kind: "no_list" };
+      case "query_refused":
+        console.error(`[studio] record choices were refused: STUDIO_RECORD_CHOICES_REFUSED reason=${result.reason}`);
+        return { kind: "refused" };
+      case "refused": return { kind: "refused" };
+      case "temporarily_unavailable": return { kind: "temporarily_unavailable" };
+    }
+  }, [organizationId, draft.rootId]);
+  const draftChoices = useMemo(() => studioDraftChoices(source, borrowedChoices, readRecordChoices),
+    [source, borrowedChoices, readRecordChoices]);
   // The records of the canvas's data blocks, read for the compiled saved revision only.
   const readCanvasRecords = useCallback(async (area: string) => {
     const pageAlias = canvasPageRef.current;
@@ -1031,7 +1065,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     return true;
   };
   const data = useStudioDataTab({ organizationId, rootId: state.rootId, source, saved: savedPreviewDraft.current.source,
-    used: usedModules, applications, initialModule, hidden: tab !== "data",
+    used: usedModules, published, applications, initialModule, hidden: tab !== "data",
+    compositionContext, readRecords: readRecordChoices,
     selection: isStudioDataSelection(selected) ? selected : null,
     disabled: noEdit || busy.anyOfRendered("publication", "reopening"), refresh: compiled.generation,
     search: <ApplicationSearchEditor source={source} metadata={currentSearchMetadata}
@@ -1195,6 +1230,11 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     {canvasPage === undefined && selected?.kind !== "flow" && selected?.kind !== "placement" &&
       <p className="text-sm text-muted-foreground">Choose a page in Structure to arrange it here.</p>}
     {/* The canvas measures its container, so it is drawn only while it is showing; its edits live in the draft history. */}
+    {(canvasPage === undefined ? selected?.kind === "application" : canvasPage.key === source.body.home_page) &&
+      source.body.uses.length === 0 &&
+      source.body.modules.every((module) => module.record_types.length === 0) &&
+      <FirstRecordTypeEmptyState action={<Button type="button" onClick={() => { void changeTab("data"); }}>
+        <Icon name="database" />Open the Data tab</Button>} />}
     {canvasPage !== undefined && draftTheme.problem.length > 0 && <p role="alert" className="text-sm text-destructive">{draftTheme.problem}</p>}
     {canvasPage !== undefined && (inspector.status === "resolved" || selected === null) &&
       // The canvas previews the application in light or dark: the appearance is set on the canvas only, never on Studio's frame.
@@ -1228,7 +1268,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     <ApplicationDraftAgentTools organizationId={organizationId} history={history}
       catalogue={platformBlockCatalogue} readLifetime={() => lifetime.current} blockedReason={agentBlockedReason}
       select={changeSelection} command={commandComposition} save={save}
-      readQueries={() => studioDraftChoices(applicationSourceDocumentSchema.parse(history.getState().source), borrowedQueries).queries}
+      readQueries={() => studioDraftChoices(applicationSourceDocumentSchema.parse(history.getState().source), borrowedChoices, null).queries}
       readPreparedConfirmation={() => preparedRef.current?.confirmation}
       prepare={() => requestPublication("prepare")} publish={(releaseNote) => requestPublication("publish", releaseNote)}
       readSavedDraft={readSavedDraftContext} />

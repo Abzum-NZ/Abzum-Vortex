@@ -119,6 +119,84 @@ export const comparePresentationSet = (
     reasons.push(makeReason("patch", "presentation_changed", componentKind, "order", componentId));
 };
 
+/**
+ * The one allowlist of presentation-only setting value kinds. A value of any other kind (an action,
+ * query, page, pipeline, relationship, record type or record reference) carries behaviour.
+ */
+const presentationKinds: ReadonlySet<unknown> = new Set([
+  "text",
+  "number",
+  "boolean",
+  "choice",
+  "rich_text",
+  "url",
+  "asset_reference",
+  "icon",
+  "field_reference",
+]);
+
+/** Whether a compiled setting value holds only presentation-only kinds, nested groups and lists included. */
+export const presentationOnlyValue = (value: unknown): boolean => {
+  const property = asRecord(value);
+  if (property.kind === "group")
+    return Object.values(asRecord(property.properties)).every(presentationOnlyValue);
+  if (property.kind === "list") return (property.items as unknown[]).every(presentationOnlyValue);
+  return presentationKinds.has(property.kind);
+};
+
+const holdsFieldReference = (value: unknown): boolean => {
+  const property = asRecord(value);
+  if (property.kind === "group")
+    return Object.values(asRecord(property.properties)).some(holdsFieldReference);
+  return property.kind === "field_reference";
+};
+
+/**
+ * Whether one list entry only shows a field: it names a field and holds nothing but
+ * presentation-only values. A row action, bulk action or query parameter names no field, so
+ * appending one is a behaviour change.
+ */
+export const fieldDisplayEntry = (value: unknown): boolean =>
+  presentationOnlyValue(value) && holdsFieldReference(value);
+
+/**
+ * An ordered list of entries (a block's fields or columns, a query's selected fields). Appending
+ * entries that `additive` accepts is minor, and reordering keeps every entry, so it is minor too.
+ * Appending any other entry, or removing or replacing an entry, changes what existing consumers
+ * get, so it is major.
+ */
+export const compareOrderedEntries = (
+  reasons: VersionImpactReason[],
+  previous: readonly unknown[],
+  candidate: readonly unknown[],
+  componentKind: ComponentKind,
+  componentId: unknown,
+  property: Property,
+  additive: (entry: unknown) => boolean,
+): void => {
+  if (same(previous, candidate)) return;
+  const remaining = candidate.map((entry) => canonicalJson(entry));
+  const kept: number[] = [];
+  for (const entry of previous) {
+    const at = remaining.indexOf(canonicalJson(entry));
+    if (at < 0) {
+      reasons.push(makeReason("major", "existing_behavior_changed", componentKind, property, componentId));
+      return;
+    }
+    kept.push(at);
+    remaining[at] = "";
+  }
+  const appended = candidate.filter((_, index) => !kept.includes(index));
+  if (appended.some((entry) => !additive(entry)))
+    reasons.push(
+      makeReason("major", "existing_behavior_changed", componentKind, property, componentId),
+    );
+  else if (appended.length > 0)
+    reasons.push(makeReason("minor", "component_added", componentKind, property, componentId));
+  if (kept.some((position, index) => index > 0 && position < kept[index - 1]!))
+    reasons.push(makeReason("minor", "meaningful_order_changed", componentKind, "order", componentId));
+};
+
 export const compareBound = (
   reasons: VersionImpactReason[],
   previous: unknown,

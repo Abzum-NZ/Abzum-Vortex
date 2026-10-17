@@ -52,9 +52,14 @@ const newer = (left: string, right: string): boolean => {
   return false;
 };
 
+/**
+ * Every declared kind Studio's typed controls edit. `asset_reference` is the one kind left out:
+ * Vortex has no asset library yet, so there is nothing to pick and the control refuses it.
+ */
 const editableKinds = new Set<BlockPropertySchemaContract["kind"]>([
-  "text", "url", "number", "boolean", "choice", "icon", "field_reference", "query_reference", "page_reference",
-  "record_type_reference",
+  "text", "url", "number", "boolean", "choice", "rich_text", "icon", "field_reference", "query_reference",
+  "page_reference", "record_type_reference", "action_reference", "pipeline_reference", "relationship_reference",
+  "record_reference",
 ]);
 
 /** Whether Studio's typed setting controls edit a setting of this declaration, nested settings included. */
@@ -158,6 +163,8 @@ export type StudioQueryChoice = Readonly<{
   /** The qualified query reference a block stores: `<module>:<query>`. */
   reference: string;
   label: string;
+  /** The record type the query reads, as `<module>:<record>`. */
+  recordType: string;
   fields: readonly StudioQueryField[];
   /**
    * For a query of a Module the application only uses, the application that owns it. Such a query
@@ -166,12 +173,38 @@ export type StudioQueryChoice = Readonly<{
   borrowedFrom?: string;
 }>;
 
+/** A module action a button or command can run, as the action key a block stores. */
+export type StudioActionChoice = Readonly<{
+  reference: string;
+  label: string;
+  /** For an action of a Module the application only uses, the application that owns it. */
+  borrowedFrom?: string;
+}>;
+
+/** A relationship of a record type, as the qualified reference a block stores: `<module>:<record>.<relationship>`. */
+export type StudioRelationshipChoice = Readonly<{
+  reference: string;
+  label: string;
+  /** The record type the relationship starts from, as `<module>:<record>`. */
+  recordType: string;
+  borrowedFrom?: string;
+}>;
+
 /**
- * The queries of the Modules an application uses, read on the server from the exact Module
- * releases its saved draft compiled against. They hold for as long as the draft uses the same
- * Modules (`usesSignature`).
+ * The queries, actions and relationships of the Modules an application uses, read on the server
+ * from the exact Module releases its saved draft compiled against. They hold for as long as the
+ * draft uses the same Modules (`usesSignature`).
  */
-export type StudioBorrowedQueries = Readonly<{ usesSignature: string; queries: readonly StudioQueryChoice[] }>;
+export type StudioBorrowedChoices = Readonly<{
+  usesSignature: string;
+  queries: readonly StudioQueryChoice[];
+  actions: readonly StudioActionChoice[];
+  relationships: readonly StudioRelationshipChoice[];
+}>;
+
+/** What the draft's used Modules offer while the draft still uses exactly those Modules. */
+const borrowedFor = (source: ApplicationSourceDocument, borrowed: StudioBorrowedChoices | null): StudioBorrowedChoices | null =>
+  borrowed !== null && borrowed.usesSignature === studioUsesSignature(source) ? borrowed : null;
 
 /** The Modules an application uses from other applications, in one comparable spelling. */
 export const studioUsesSignature = (source: ApplicationSourceDocument): string =>
@@ -189,7 +222,7 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
       })];
     });
     return Object.freeze({ reference: `${module.key}:${query.key}`, label: query.label ?? query.key,
-      fields: Object.freeze(fields) });
+      recordType: `${module.key}:${query.record_type}`, fields: Object.freeze(fields) });
   }));
 
 /** The record types of the application's own Modules in the draft, as `<module>:<record>`. */
@@ -212,11 +245,41 @@ export const studioSourceFields = (source: ApplicationSourceDocument): readonly 
  */
 export function studioQueryChoices(
   source: ApplicationSourceDocument,
-  borrowed: StudioBorrowedQueries | null,
+  borrowed: StudioBorrowedChoices | null,
 ): readonly StudioQueryChoice[] {
-  const used = borrowed !== null && borrowed.usesSignature === studioUsesSignature(source) ? borrowed.queries : [];
-  return Object.freeze([...ownQueries(source), ...used]);
+  return Object.freeze([...ownQueries(source), ...borrowedFor(source, borrowed)?.queries ?? []]);
 }
+
+/**
+ * The module actions a block can run: those of the application's own Modules in the draft, then
+ * those of the Modules it uses, which are run as they are and changed in their own application.
+ */
+export function studioActionChoices(
+  source: ApplicationSourceDocument,
+  borrowed: StudioBorrowedChoices | null,
+): readonly StudioActionChoice[] {
+  const own = (source.body.modules ?? []).flatMap((module) => module.actions.map((action) =>
+    Object.freeze({ reference: action.key, label: action.label })));
+  return Object.freeze([...own, ...borrowedFor(source, borrowed)?.actions ?? []]);
+}
+
+/** The relationships of every record type in the draft, then those of the Modules it uses. */
+export function studioRelationshipChoices(
+  source: ApplicationSourceDocument,
+  borrowed: StudioBorrowedChoices | null,
+): readonly StudioRelationshipChoice[] {
+  const own = (source.body.modules ?? []).flatMap((module) => module.record_types.flatMap((record) =>
+    record.relationships.map((relationship) => {
+      const from = record.fields.find((field) => field.key === relationship.from_field);
+      return Object.freeze({ reference: `${module.key}:${record.key}.${relationship.key}`,
+        label: `${record.name}: ${from?.label ?? relationship.key}`, recordType: `${module.key}:${record.key}` });
+    })));
+  return Object.freeze([...own, ...borrowedFor(source, borrowed)?.relationships ?? []]);
+}
+
+/** The application's pipelines in the draft, by key. */
+export const studioSourcePipelines = (source: ApplicationSourceDocument): readonly Readonly<{ key: string; label: string }>[] =>
+  Object.freeze(source.body.pipelines.map((pipeline) => Object.freeze({ key: pipeline.key, label: pipeline.name })));
 
 /**
  * Whether a block may store this query reference: a query of one of the application's own

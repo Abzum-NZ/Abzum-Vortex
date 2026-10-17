@@ -13,16 +13,22 @@ import { Checkbox } from "../components/checkbox";
 import { Input } from "../components/input";
 import { Item, ItemActions, ItemContent, ItemHeader, ItemTitle } from "../components/item";
 import { Label } from "../components/label";
-import { NativeSelect, NativeSelectOption } from "../components/native-select";
+import { NativeSelect, NativeSelectOptGroup, NativeSelectOption } from "../components/native-select";
 import { Textarea } from "../components/textarea";
 import {
+  studioActionChoices,
   studioQueryChoices,
+  studioRelationshipChoices,
   studioSourceFields,
+  studioSourcePipelines,
   studioSourceRecordTypes,
-  type StudioBorrowedQueries,
+  type StudioActionChoice,
+  type StudioBorrowedChoices,
   type StudioQueryChoice,
   type StudioQueryField,
+  type StudioRelationshipChoice,
 } from "./contextual-palette";
+import { StudioRecordReferenceControl, type StudioRecordReader } from "./studio-record-reference-control";
 
 /**
  * Studio's one set of typed setting controls: one control per declared block property, chosen by
@@ -37,32 +43,47 @@ export type StudioSettingValues = Readonly<Record<string, SourceBlockPropertyVal
 
 /**
  * What reference settings can point at, all read from the draft being edited: the fields of the
- * block's data (or every field of its record types), its queries, pages and record types.
+ * block's data (or every field of its record types), its queries, pages, record types, module
+ * actions, pipelines and relationships. Records are not part of a draft: `records` reads them from
+ * the installed application with the person's own access, or is null where none can be read.
  */
 export type StudioSettingChoices = Readonly<{
   fields: readonly StudioQueryField[];
   queries: readonly StudioQueryChoice[];
   pages: readonly Readonly<{ key: string; label: string }>[];
   recordTypes: readonly Readonly<{ key: string; label: string }>[];
+  actions: readonly StudioActionChoice[];
+  pipelines: readonly Readonly<{ key: string; label: string }>[];
+  relationships: readonly StudioRelationshipChoice[];
+  records: StudioRecordReader | null;
 }>;
 
 /**
  * The one source of every reference picker: the draft being edited, never the installed release.
- * Its own Modules' queries, fields and record types, its pages, and the queries of the Modules it
- * uses (read from their releases, as nothing of theirs is in this draft).
+ * Its own Modules' queries, fields, record types, actions and relationships, its pages and
+ * pipelines, and what the Modules it uses offer (read from their releases, as nothing of theirs is
+ * in this draft).
  */
-export const studioDraftChoices = (source: ApplicationSourceDocument, borrowed: StudioBorrowedQueries | null):
-  StudioSettingChoices => ({
+export const studioDraftChoices = (source: ApplicationSourceDocument, borrowed: StudioBorrowedChoices | null,
+  records: StudioRecordReader | null): StudioSettingChoices => ({
   queries: studioQueryChoices(source, borrowed),
   fields: studioSourceFields(source),
   pages: source.body.pages.map((page) => ({ key: page.key, label: page.name })),
   recordTypes: studioSourceRecordTypes(source),
+  actions: studioActionChoices(source, borrowed),
+  pipelines: studioSourcePipelines(source),
+  relationships: studioRelationshipChoices(source, borrowed),
+  records,
 });
 
-/** The choices of one block: a block that reads a query picks only that query's fields. */
+/**
+ * The choices of one block: a block that reads a query picks only that query's fields, and only
+ * the relationships of the record type that query reads.
+ */
 export const studioBlockChoices = (draft: StudioSettingChoices, query: string | null): StudioSettingChoices => {
   const chosen = query === null ? undefined : draft.queries.find((candidate) => candidate.reference === query);
-  return chosen === undefined ? draft : { ...draft, fields: chosen.fields };
+  return chosen === undefined ? draft : { ...draft, fields: chosen.fields,
+    relationships: draft.relationships.filter((relationship) => relationship.recordType === chosen.recordType) };
 };
 
 const familyText: Readonly<Record<ComponentSettingFailure["family"], string>> = {
@@ -117,7 +138,18 @@ const initialValue = (property: BlockPropertySchemaContract, choices: StudioSett
     case "page_reference": return choices.pages[0] === undefined ? undefined : { kind: "page_reference", page: choices.pages[0].key };
     case "record_type_reference": return choices.recordTypes[0] === undefined ? undefined
       : { kind: "record_type_reference", record_type: choices.recordTypes[0].key };
-    default: return undefined;
+    case "action_reference": return choices.actions[0] === undefined ? undefined
+      : { kind: "action_reference", action: choices.actions[0].reference };
+    case "pipeline_reference": return choices.pipelines[0] === undefined ? undefined
+      : { kind: "pipeline_reference", pipeline: choices.pipelines[0].key };
+    case "relationship_reference": return choices.relationships[0] === undefined ? undefined
+      : { kind: "relationship_reference", relationship: choices.relationships[0].reference };
+    // A new entry of these starts only once the person writes its text or picks its record.
+    case "rich_text":
+    case "icon":
+    case "record_reference":
+    case "asset_reference":
+      return undefined;
   }
 };
 
@@ -219,15 +251,101 @@ function SettingControl(props: ControlProps): ReactElement {
         unset={unsetLabel(property, undefined)}
         options={choices.recordTypes.map((recordType) => ({ value: recordType.key, label: recordType.label }))}
         onChange={(next) => onChange(next === "" ? undefined : { kind: "record_type_reference", record_type: next })} />;
+    case "action_reference":
+      return <BorrowableReferenceControl id={id} disabled={disabled} choices={choices.actions}
+        value={value?.kind === "action_reference" ? value.action : ""}
+        unset={choices.actions.length === 0 ? "This application has no actions yet" : unsetLabel(property, undefined)}
+        onChange={(next) => onChange(next === "" ? undefined : { kind: "action_reference", action: next })} />;
+    case "pipeline_reference":
+      return <StudioOptionControl id={id} disabled={disabled} value={value?.kind === "pipeline_reference" ? value.pipeline : ""}
+        unset={choices.pipelines.length === 0 ? "This application has no pipelines yet" : unsetLabel(property, undefined)}
+        options={choices.pipelines.map((pipeline) => ({ value: pipeline.key, label: pipeline.label }))}
+        onChange={(next) => onChange(next === "" ? undefined : { kind: "pipeline_reference", pipeline: next })} />;
+    case "relationship_reference":
+      return <BorrowableReferenceControl id={id} disabled={disabled} choices={choices.relationships}
+        value={value?.kind === "relationship_reference" ? value.relationship : ""}
+        unset={choices.relationships.length === 0 ? "Its records have no relationships" : unsetLabel(property, undefined)}
+        onChange={(next) => onChange(next === "" ? undefined : { kind: "relationship_reference", relationship: next })} />;
+    case "record_reference":
+      return <StudioRecordReferenceControl id={id} disabled={disabled} recordTypes={choices.recordTypes} read={choices.records}
+        value={value?.kind === "record_reference" ? { recordType: value.record_type, recordId: value.record_id } : undefined}
+        onChange={(next) => onChange(next === undefined ? undefined
+          : { kind: "record_reference", record_type: next.recordType, record_id: next.recordId })} />;
+    case "rich_text":
+      return <RichTextControl {...props} />;
     case "group":
       return <GroupControl {...props} />;
     case "list":
       return <ListControl {...props} />;
-    default:
-      return <p className="text-sm text-muted-foreground" id={id}>
-        {value === undefined ? "Not set." : "Set."} This kind of setting is changed in the source (Releases, Import from source).
+    case "asset_reference":
+      // Vortex has no asset library to pick from, so this kind is refused where it is declared.
+      return <p role="alert" className="text-sm text-destructive" id={id} data-vortex-setting-refused={property.key}>
+        {property.label} points at an asset, and Vortex has no asset library yet, so it can't be set here.
       </p>;
+    default: {
+      // A kind outside the closed contract fails closed, named by where it is declared.
+      const kind = (property as { kind: unknown }).kind;
+      console.error(`[studio] setting control refused: setting=${id} kind=${String(kind)} reason=unknown_kind`);
+      return <p role="alert" className="text-sm text-destructive" id={id} data-vortex-setting-refused={id}>
+        {`${(property as { label?: string }).label ?? id} has a kind of setting Studio does not know, so it can't be edited.`}
+      </p>;
+    }
   }
+}
+
+type RichTextDocument = Extract<SourceBlockPropertyValueContract, { kind: "rich_text" }>["value"];
+type RichTextInline = Extract<RichTextDocument["blocks"][number], { kind: "paragraph" }>["children"][number];
+
+const inlineWords = (inline: RichTextInline): string =>
+  inline.kind === "text" ? inline.text : inline.children.map(inlineWords).join("");
+
+/** The plain words of a rich-text document, one line per paragraph, heading or list item. */
+const richTextWords = (document: RichTextDocument): string =>
+  document.blocks.map((block) => block.kind === "paragraph" || block.kind === "heading"
+    ? block.children.map(inlineWords).join("")
+    : block.items.map((item) => item.map(inlineWords).join("")).join("\n")).join("\n");
+
+/**
+ * Formatted text written as plain paragraphs. The stored document is kept as it is until the
+ * person changes the words; an edit stores one paragraph per non-blank line.
+ */
+function RichTextControl({ id, value, onChange, disabled }: ControlProps): ReactElement {
+  const current = value?.kind === "rich_text" ? richTextWords(value.value) : "";
+  const [draft, setDraft] = useState(current);
+  const [seen, setSeen] = useState(current);
+  if (current !== seen) { setSeen(current); setDraft(current); }
+  return <Textarea id={id} disabled={disabled} value={draft} onChange={(event) => {
+    const text = event.target.value;
+    setDraft(text);
+    const paragraphs = text.split(/\r?\n/u).map((line) => line.trim()).filter((line) => line.length > 0);
+    onChange(paragraphs.length === 0 ? undefined : { kind: "rich_text", value: { blocks: paragraphs.map((line) =>
+      ({ kind: "paragraph" as const, children: [{ kind: "text" as const, text: line }] })) } });
+  }} />;
+}
+
+/**
+ * A reference to something of this application or of a Module it uses: its own first, then the
+ * borrowed ones, which are chosen as they are and changed in their own application.
+ */
+function BorrowableReferenceControl({ id, value, choices, unset, disabled, onChange }: Readonly<{
+  id: string; value: string; choices: readonly Readonly<{ reference: string; label: string; borrowedFrom?: string }>[];
+  unset: string; disabled: boolean; onChange: (value: string) => void;
+}>): ReactElement {
+  const own = choices.filter((choice) => choice.borrowedFrom === undefined);
+  const borrowed = choices.filter((choice) => choice.borrowedFrom !== undefined);
+  const known = value === "" || choices.some((choice) => choice.reference === value);
+  return <NativeSelect id={id} className="w-full" disabled={disabled} value={value} aria-invalid={!known}
+    onChange={(event) => onChange(event.target.value)}>
+    <NativeSelectOption value="">{unset}</NativeSelectOption>
+    {known ? null : <NativeSelectOption value={value}>{`${value} (not offered here)`}</NativeSelectOption>}
+    {own.length > 0 && <NativeSelectOptGroup label="This application">
+      {own.map((choice) => <NativeSelectOption key={choice.reference} value={choice.reference}>{choice.label}</NativeSelectOption>)}
+    </NativeSelectOptGroup>}
+    {borrowed.length > 0 && <NativeSelectOptGroup label="Used from other applications (read-only)">
+      {borrowed.map((choice) => <NativeSelectOption key={choice.reference} value={choice.reference}>
+        {`${choice.label} (from ${choice.borrowedFrom ?? ""}, read-only)`}</NativeSelectOption>)}
+    </NativeSelectOptGroup>}
+  </NativeSelect>;
 }
 
 /** The label a query choice shows: its own, and for a borrowed one where it comes from. */

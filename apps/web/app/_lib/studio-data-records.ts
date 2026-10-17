@@ -50,6 +50,8 @@ export type StudioDataRecordsResult =
       /** The query the records were read through, by its label. */
       queryLabel: string;
       columns: readonly StudioDataColumn[];
+      /** The column holding each record's title, when the query returns it: a record picker shows it. */
+      titleColumn?: string;
       rows: readonly Readonly<{ id: string; cells: Readonly<Record<string, string>> }>[];
       next?: string;
       previous?: string;
@@ -174,10 +176,12 @@ export const readStudioDataRecords = async (
       : await services.recordLinkResolver(context)(collectRecordLinks(page.rows));
     const valueOf = (values: Readonly<Record<string, JsonValue>>, field: ModuleField): JsonValue | undefined =>
       Object.entries(values).find(([fieldId]) => sameId(fieldId, String(field.fieldId)))?.[1];
+    const title = fields.find((field) => sameId(String(field.fieldId), String(queryRecord.titleFieldId)));
     return {
       kind: "available",
       queryLabel: sentence(query.key),
       columns: fields.map((field) => ({ key: field.key, label: field.label })),
+      ...(title === undefined ? {} : { titleColumn: title.key }),
       rows: page.rows.map((row) => ({
         id: String(row.recordId),
         cells: Object.fromEntries(fields.map((field) => [field.key, cellText(field, valueOf(row.values, field), links)])),

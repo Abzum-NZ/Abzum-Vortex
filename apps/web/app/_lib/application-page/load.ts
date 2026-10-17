@@ -272,6 +272,15 @@ const loadApplicationPageJoined = async (
     pageDefinition.type === "guided_form"
       ? undefined
       : projectedBodyContentAvailable(pageDefinition, application.content.shells, page);
+  // A draft preview of an application with no record types leads its builder to the Data tab
+  // from the empty home page; an installed application never does.
+  const firstRecordTypeHref =
+    bodyContentAvailable === false &&
+    address.pageKey === address.application.homePageKey &&
+    runtimePreviewOf(context) !== undefined &&
+    context.releaseSet.modules.every((module) => module.content.recordTypes.length === 0)
+      ? `/studio/${encodeURIComponent(context.organizationId)}/${encodeURIComponent(context.applicationRootId)}?tab=data`
+      : undefined;
   const allPlacements = collectPlacements(page);
   if (boardContinuation !== undefined) {
     const targets = allPlacements.filter(({ placementId }) =>
@@ -955,6 +964,7 @@ const loadApplicationPageJoined = async (
     theme: application.content.theme,
     navigation: navigation.value,
     ...(bodyContentAvailable === undefined ? {} : { bodyContentAvailable }),
+    ...(firstRecordTypeHref === undefined ? {} : { firstRecordTypeHref }),
     accessVersion: page.accessVersion,
     webMcpTools: projectPageWebMcpTools({
       page,
