@@ -56,6 +56,7 @@ export {
   type UpgradeState,
 } from "./installation-upgrade";
 export {
+  acceptUpgradeRoleRevisions,
   readUpgradeRoleRevisions,
   upgradeWithRoleRevisions,
   type UpgradeRoleEnvironment,

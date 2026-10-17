@@ -314,13 +314,7 @@ begin
       and continuity.continuity_revision = 9007199254740991
       and (
         (target.permission_id is null and continuity.state <> 'unavailable')
-        or (
-          target.permission_id is not null
-          and (
-            continuity.state <> 'available'
-            or continuity.meaning_fingerprint <> target.meaning_fingerprint
-          )
-        )
+        or (target.permission_id is not null and continuity.state <> 'available')
       )
   ) then
     raise exception using errcode = '22003',
@@ -353,10 +347,13 @@ begin
         when transition.target_permission_id is null then 'unavailable'
         else 'available'
       end,
+      -- The continuity revision is the permission's availability lineage: it advances only
+      -- when the permission is withdrawn or registered again. A meaning change while it stays
+      -- registered keeps the lineage; roles keep the meaning they accepted until they accept
+      -- the new one.
       continuity_revision = case
         when transition.target_permission_id is not null
           and continuity.state = 'available'
-          and continuity.meaning_fingerprint = transition.target_meaning_fingerprint
           then continuity.continuity_revision
         when transition.target_permission_id is null
           and continuity.state = 'unavailable'
@@ -546,6 +543,7 @@ begin
         and continuity.owner_id = permission.owner_id
         and continuity.permission_id = permission.permission_id
         and continuity.state = 'available'
+        and continuity.continuity_revision = permission.continuity_revision
       where permission.organization_id = p_organization_id
         and permission.role_id = role_record.role_id
         and permission.role_revision = role_record.live_revision
@@ -657,6 +655,7 @@ begin
         and continuity.owner_id = permission.owner_id
         and continuity.permission_id = permission.permission_id
         and continuity.state = 'available'
+        and continuity.continuity_revision = permission.continuity_revision
       where permission.organization_id = p_organization_id
         and permission.role_id = role_record.role_id
         and permission.role_revision = role_record.live_revision

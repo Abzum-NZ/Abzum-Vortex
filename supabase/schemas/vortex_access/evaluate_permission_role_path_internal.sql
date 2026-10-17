@@ -31,7 +31,12 @@ begin
     select catalogue.application_root_id, catalogue.owner_kind,
       catalogue.owner_id, catalogue.permission_id,
       catalogue.registration_kind, catalogue.registration_owner_id,
-      catalogue.registration_revision, catalogue as permission_entry
+      catalogue.registration_revision, continuity.continuity_revision,
+      catalogue as permission_entry,
+      catalogue.record_type_id is not distinct from p_record_type_id
+        and catalogue.action_kind = action_kind_value
+        and catalogue.named_action is not distinct from named_action_value
+        as matches_request
     from vortex_access.permission_registrations as registration
     join vortex_access.permission_catalogue_entries as catalogue
       on catalogue.organization_id = registration.organization_id
@@ -56,15 +61,13 @@ begin
       and catalogue.owner_kind = permission_owner_kind_value
       and catalogue.owner_id = permission_owner_value
       and catalogue.permission_id = permission_value
-      and catalogue.record_type_id is not distinct from p_record_type_id
-      and catalogue.action_kind = action_kind_value
-      and catalogue.named_action is not distinct from named_action_value
   ), current_role_permission as materialized (
     -- A role keeps exactly the meaning it was accepted under: the catalogue entry of the
-    -- registration revision named by its permission entry. A later registration that changes the
-    -- meaning neither widens nor removes it; only accepting the role revision moves it. The
-    -- permission must still be registered and available now; a registration that stops granting
-    -- it removes it from the role's next revision, so it is never regained without acceptance.
+    -- registration revision named by its permission entry, whatever a later registration changed
+    -- in it (fields, scope, action or record type); only accepting the role revision moves it. The
+    -- permission must still be registered in the same continuity lineage it was accepted in: a
+    -- permission that was withdrawn and registered again starts a new lineage, so no role kind
+    -- regains it without acceptance.
     select role.role_id, role.live_revision,
       revision.assignment_policy, revision.authority_continuity_revision,
       revision.policy_continuity_revision, revision.activation_policy_id,
@@ -89,6 +92,7 @@ begin
       and available.registration_kind = permission.registration_kind
       and available.registration_owner_id is not distinct from
         permission.registration_owner_id
+      and permission.continuity_revision = available.continuity_revision
       and permission.accepted_registration_revision <= available.registration_revision
     join vortex_access.permission_catalogue_entries as accepted
       on accepted.organization_id = permission.organization_id
@@ -267,30 +271,34 @@ begin
         or membership.expires_at > decision_checked_at
       )
     where permission.assignment_policy = 'activation_required'
-  ), selected_route as materialized (
-    -- The most recently accepted meaning wins when several roles grant the permission; a super
-    -- administrator is evaluated with the registered meaning.
-    select route.accepted_entry as permission_entry,
-      route.accepted_registration_revision as registration_revision,
-      route.path_valid_until
+  ), granted as materialized (
+    -- Every accepted meaning the caller holds through a live path is granted: a caller holding
+    -- two roles with different accepted meanings of the permission has both, each with the
+    -- earliest deadline of the paths that carry it.
+    select distinct on (route.accepted_registration_revision)
+      route.accepted_entry as permission_entry, route.path_valid_until
     from route_candidates as route
-
-    union all
-
-    select available.permission_entry, available.registration_revision,
-      context_expires_value
+    order by route.accepted_registration_revision, route.path_valid_until
+  ), administered as materialized (
+    -- A super administrator is evaluated with the registered meaning.
+    select available.permission_entry, context_expires_value as path_valid_until
     from current_permission as available
-    where vortex_identity.resolve_active_vortex_super_administrator_assignment_internal(
-      (p_context ->> 'identityId')::uuid, decision_checked_at
-    ) is not null
-
-    order by registration_revision desc, path_valid_until
-    limit 1
+    where available.matches_request
+      and vortex_identity.resolve_active_vortex_super_administrator_assignment_internal(
+        (p_context ->> 'identityId')::uuid, decision_checked_at
+      ) is not null
   )
-  select coalesce(selected.permission_entry, available.permission_entry),
-    selected.path_valid_until
+  select granted.permission_entry, granted.path_valid_until from granted
+  union all
+  select administered.permission_entry, administered.path_valid_until from administered
+  union all
+  -- Without a live path the registered permission is returned with no deadline, so callers
+  -- can tell an unavailable permission from one that is not effective.
+  select available.permission_entry, null::timestamptz
   from current_permission as available
-  left join selected_route as selected on true;
+  where available.matches_request
+    and not exists (select 1 from granted)
+    and not exists (select 1 from administered);
 end
 $function$;
 
@@ -309,7 +317,7 @@ comment on function
   vortex_access.evaluate_permission_role_path_internal(
     jsonb, timestamptz, jsonb, jsonb, uuid
   ) is
-  'Private current-permission and role-path evidence; null record type selects only non-record permissions. A role path returns the permission meaning its role accepted, never a later registered one. No row authority.';
+  'Private current-permission and role-path evidence; null record type selects only non-record permissions. It returns one row per accepted meaning the caller holds through a live role path (never a later registered meaning), the registered meaning for a super administrator, or the registered permission without a deadline when no path is live. No row authority.';
 
 alter function vortex_access.evaluate_permission_role_path_internal(p_context jsonb, p_checked_at timestamp with time zone, p_permission jsonb, p_action jsonb, p_record_type_id uuid) owner to vortex_owner;
 

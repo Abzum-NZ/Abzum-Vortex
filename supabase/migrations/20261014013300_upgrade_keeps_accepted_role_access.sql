@@ -3,14 +3,63 @@
 -- permissions' field lists) dropped that permission from every role's next revision, and role
 -- evaluation required the role's meaning to equal the registered one, so every holder lost the
 -- permission entirely: the Contacts list showed no record for anyone until the role was accepted.
--- A role now keeps exactly the meaning it was accepted under. The upgrade carries each permission
--- the template still grants with its accepted meaning (it still requires acceptance, whatever the
--- release's version class), role evaluation reads the catalogue entry of the role's accepted
--- registration revision, and the field-bound resolvers and share authority read that same entry.
--- New fields stay hidden and old fields stay readable and changeable until the role revision is
--- accepted. Nothing is accepted or widened automatically.
+-- A role now keeps exactly the meaning it was accepted under:
+-- * A permission's continuity revision is its availability lineage: it advances only when the
+--   permission is withdrawn or registered again, and a meaning change keeps it. A withdrawn and
+--   re-registered permission is therefore a new grant for every role kind.
+-- * The upgrade carries each permission the template still grants, in the same lineage, with its
+--   accepted meaning; any meaning change still requires acceptance, whatever the release's version
+--   class. The current-state check mirrors that carry-over exactly.
+-- * Role evaluation returns every accepted meaning the caller holds through a live path (fields,
+--   scope, action or record type as accepted); the field-bound resolvers and the share authority
+--   read those same entries. Nothing is accepted or widened automatically.
+-- * Role detail shows the accepted meaning (record scope and field policy), so the upgrade screen
+--   can show every change accepting would apply.
 set local role vortex_owner;
 
+CREATE OR REPLACE FUNCTION vortex_access.protect_permission_continuity() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+begin
+  if tg_op = 'DELETE' then
+    raise exception using errcode = '23514', message = 'Permission continuity cannot be deleted';
+  end if;
+
+  if new.organization_id is distinct from old.organization_id
+    or new.application_root_id is distinct from old.application_root_id
+    or new.owner_kind is distinct from old.owner_kind
+    or new.owner_id is distinct from old.owner_id
+    or new.permission_id is distinct from old.permission_id
+    or new.registration_kind is distinct from old.registration_kind
+    or new.registration_owner_id is distinct from old.registration_owner_id
+    or old.last_processed_registration_revision = 9007199254740991
+    or new.last_processed_registration_revision <= old.last_processed_registration_revision
+    -- The continuity revision is an availability lineage: it advances exactly when the
+    -- permission is withdrawn or registered again. Its meaning may change only while it stays
+    -- registered, within the lineage.
+    or new.continuity_revision not in (
+      old.continuity_revision,
+      old.continuity_revision + 1
+    )
+    or (new.continuity_revision = old.continuity_revision + 1) = (new.state is not distinct from old.state)
+    or (
+      new.meaning_fingerprint is distinct from old.meaning_fingerprint
+      and new.state is distinct from 'available'
+    ) then
+    raise exception using errcode = '23514',
+      message = 'Permission continuity transition is invalid';
+  end if;
+
+  return new;
+end;
+$$;
+
+alter function vortex_access.protect_permission_continuity() owner to vortex_owner;
+
+REVOKE ALL ON FUNCTION vortex_access.protect_permission_continuity() FROM PUBLIC;
+
+grant execute on function vortex_access.protect_permission_continuity() to postgres;
 create or replace function vortex_access.evaluate_permission_role_path_internal(
   p_context jsonb,
   p_checked_at timestamptz,
@@ -44,7 +93,12 @@ begin
     select catalogue.application_root_id, catalogue.owner_kind,
       catalogue.owner_id, catalogue.permission_id,
       catalogue.registration_kind, catalogue.registration_owner_id,
-      catalogue.registration_revision, catalogue as permission_entry
+      catalogue.registration_revision, continuity.continuity_revision,
+      catalogue as permission_entry,
+      catalogue.record_type_id is not distinct from p_record_type_id
+        and catalogue.action_kind = action_kind_value
+        and catalogue.named_action is not distinct from named_action_value
+        as matches_request
     from vortex_access.permission_registrations as registration
     join vortex_access.permission_catalogue_entries as catalogue
       on catalogue.organization_id = registration.organization_id
@@ -69,15 +123,13 @@ begin
       and catalogue.owner_kind = permission_owner_kind_value
       and catalogue.owner_id = permission_owner_value
       and catalogue.permission_id = permission_value
-      and catalogue.record_type_id is not distinct from p_record_type_id
-      and catalogue.action_kind = action_kind_value
-      and catalogue.named_action is not distinct from named_action_value
   ), current_role_permission as materialized (
     -- A role keeps exactly the meaning it was accepted under: the catalogue entry of the
-    -- registration revision named by its permission entry. A later registration that changes the
-    -- meaning neither widens nor removes it; only accepting the role revision moves it. The
-    -- permission must still be registered and available now; a registration that stops granting
-    -- it removes it from the role's next revision, so it is never regained without acceptance.
+    -- registration revision named by its permission entry, whatever a later registration changed
+    -- in it (fields, scope, action or record type); only accepting the role revision moves it. The
+    -- permission must still be registered in the same continuity lineage it was accepted in: a
+    -- permission that was withdrawn and registered again starts a new lineage, so no role kind
+    -- regains it without acceptance.
     select role.role_id, role.live_revision,
       revision.assignment_policy, revision.authority_continuity_revision,
       revision.policy_continuity_revision, revision.activation_policy_id,
@@ -102,6 +154,7 @@ begin
       and available.registration_kind = permission.registration_kind
       and available.registration_owner_id is not distinct from
         permission.registration_owner_id
+      and permission.continuity_revision = available.continuity_revision
       and permission.accepted_registration_revision <= available.registration_revision
     join vortex_access.permission_catalogue_entries as accepted
       on accepted.organization_id = permission.organization_id
@@ -280,30 +333,34 @@ begin
         or membership.expires_at > decision_checked_at
       )
     where permission.assignment_policy = 'activation_required'
-  ), selected_route as materialized (
-    -- The most recently accepted meaning wins when several roles grant the permission; a super
-    -- administrator is evaluated with the registered meaning.
-    select route.accepted_entry as permission_entry,
-      route.accepted_registration_revision as registration_revision,
-      route.path_valid_until
+  ), granted as materialized (
+    -- Every accepted meaning the caller holds through a live path is granted: a caller holding
+    -- two roles with different accepted meanings of the permission has both, each with the
+    -- earliest deadline of the paths that carry it.
+    select distinct on (route.accepted_registration_revision)
+      route.accepted_entry as permission_entry, route.path_valid_until
     from route_candidates as route
-
-    union all
-
-    select available.permission_entry, available.registration_revision,
-      context_expires_value
+    order by route.accepted_registration_revision, route.path_valid_until
+  ), administered as materialized (
+    -- A super administrator is evaluated with the registered meaning.
+    select available.permission_entry, context_expires_value as path_valid_until
     from current_permission as available
-    where vortex_identity.resolve_active_vortex_super_administrator_assignment_internal(
-      (p_context ->> 'identityId')::uuid, decision_checked_at
-    ) is not null
-
-    order by registration_revision desc, path_valid_until
-    limit 1
+    where available.matches_request
+      and vortex_identity.resolve_active_vortex_super_administrator_assignment_internal(
+        (p_context ->> 'identityId')::uuid, decision_checked_at
+      ) is not null
   )
-  select coalesce(selected.permission_entry, available.permission_entry),
-    selected.path_valid_until
+  select granted.permission_entry, granted.path_valid_until from granted
+  union all
+  select administered.permission_entry, administered.path_valid_until from administered
+  union all
+  -- Without a live path the registered permission is returned with no deadline, so callers
+  -- can tell an unavailable permission from one that is not effective.
+  select available.permission_entry, null::timestamptz
   from current_permission as available
-  left join selected_route as selected on true;
+  where available.matches_request
+    and not exists (select 1 from granted)
+    and not exists (select 1 from administered);
 end
 $function$;
 
@@ -322,11 +379,194 @@ comment on function
   vortex_access.evaluate_permission_role_path_internal(
     jsonb, timestamptz, jsonb, jsonb, uuid
   ) is
-  'Private current-permission and role-path evidence; null record type selects only non-record permissions. A role path returns the permission meaning its role accepted, never a later registered one. No row authority.';
+  'Private current-permission and role-path evidence; null record type selects only non-record permissions. It returns one row per accepted meaning the caller holds through a live role path (never a later registered meaning), the registered meaning for a super administrator, or the registered permission without a deadline when no path is live. No row authority.';
 
 alter function vortex_access.evaluate_permission_role_path_internal(p_context jsonb, p_checked_at timestamp with time zone, p_permission jsonb, p_action jsonb, p_record_type_id uuid) owner to vortex_owner;
 
 grant execute on function vortex_access.evaluate_permission_role_path_internal(p_context jsonb, p_checked_at timestamp with time zone, p_permission jsonb, p_action jsonb, p_record_type_id uuid) to postgres;
+CREATE OR REPLACE FUNCTION vortex_access.application_access_current_state_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_prepared_templates jsonb) RETURNS boolean
+    LANGUAGE plpgsql STABLE
+    SET search_path TO ''
+    AS $$
+declare
+  role_record record;
+  target_template jsonb;
+  current_permission_count bigint;
+  retained_permission_count bigint;
+  unchanged_permission_count bigint;
+  target_permission_count bigint;
+  target_lifecycle text;
+  target_template_continuity_revision bigint;
+begin
+  if not vortex_access.application_permission_registration_matches_candidate(
+    p_organization_id, p_application_root_id, p_registration_revision,
+    p_prepared_templates -> 'permissionRegistration'
+  ) then
+    return false;
+  end if;
+
+  if exists (
+    select 1
+    from vortex_access.application_role_template_continuities as continuity
+    where continuity.organization_id = p_organization_id
+      and continuity.application_root_id = p_application_root_id
+      and continuity.last_processed_registration_revision <> p_registration_revision
+  ) or exists (
+    select 1
+    from pg_catalog.jsonb_array_elements(p_prepared_templates -> 'templates') as item(value)
+    where not exists (
+      select 1
+      from vortex_access.application_role_template_continuities as continuity
+      where continuity.organization_id = p_organization_id
+        and continuity.application_root_id = p_application_root_id
+        and continuity.source_role_id = (item.value #>> '{template,roleId}')::uuid
+        and continuity.state = 'available'
+        and continuity.last_processed_registration_revision = p_registration_revision
+    )
+  ) or exists (
+    select 1
+    from vortex_access.application_role_template_continuities as continuity
+    where continuity.organization_id = p_organization_id
+      and continuity.application_root_id = p_application_root_id
+      and continuity.state = 'available'
+      and not exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(p_prepared_templates -> 'templates') as item(value)
+        where (item.value #>> '{template,roleId}')::uuid = continuity.source_role_id
+      )
+  ) then
+    return false;
+  end if;
+
+  for role_record in
+    select role.role_id, role.source_role_id, revision.lifecycle,
+      revision.revision as role_revision,
+      revision.template_continuity_revision
+    from vortex_access.organization_roles as role
+    join vortex_access.organization_role_revisions as revision
+      on revision.organization_id = role.organization_id
+      and revision.role_id = role.role_id
+      and revision.revision = role.live_revision
+    where role.organization_id = p_organization_id
+      and role.role_kind = 'application'
+      and role.application_root_id = p_application_root_id
+    order by role.role_id
+  loop
+    if role_record.lifecycle = 'retired' then
+      continue;
+    end if;
+
+    target_template := null;
+    target_template_continuity_revision := null;
+    select item.value, continuity.continuity_revision
+    into target_template, target_template_continuity_revision
+    from pg_catalog.jsonb_array_elements(p_prepared_templates -> 'templates') as item(value)
+    join vortex_access.application_role_template_continuities as continuity
+      on continuity.organization_id = p_organization_id
+      and continuity.application_root_id = p_application_root_id
+      and continuity.source_role_id = (item.value #>> '{template,roleId}')::uuid
+      and continuity.state = 'available'
+    where (item.value #>> '{template,roleId}')::uuid = role_record.source_role_id;
+
+    select pg_catalog.count(*) into current_permission_count
+    from vortex_access.organization_role_permission_entries as permission
+    where permission.organization_id = p_organization_id
+      and permission.role_id = role_record.role_id
+      and permission.role_revision = role_record.role_revision;
+
+    if target_template is null then
+      retained_permission_count := 0;
+      target_permission_count := 0;
+      target_lifecycle := 'unavailable';
+    else
+      -- Exactly the coordinator's carry-over: a permission the template still grants stays in
+      -- its availability lineage with the meaning the role accepted.
+      select pg_catalog.count(*) into retained_permission_count
+      from vortex_access.organization_role_permission_entries as permission
+      join vortex_access.permission_continuities as continuity
+        on continuity.organization_id = permission.organization_id
+        and continuity.application_root_id = permission.application_root_id
+        and continuity.owner_kind = permission.owner_kind
+        and continuity.owner_id = permission.owner_id
+        and continuity.permission_id = permission.permission_id
+        and continuity.state = 'available'
+        and continuity.continuity_revision = permission.continuity_revision
+      where permission.organization_id = p_organization_id
+        and permission.role_id = role_record.role_id
+        and permission.role_revision = role_record.role_revision
+        and exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(
+            target_template -> 'livePermissions'
+          ) as candidate(value)
+          where (candidate.value ->> 'applicationRootId')::uuid =
+              permission.application_root_id
+            and candidate.value ->> 'ownerKind' = permission.owner_kind
+            and (candidate.value ->> 'ownerId')::uuid = permission.owner_id
+            and (candidate.value #>> '{permission,permissionId}')::uuid =
+              permission.permission_id
+        );
+      select pg_catalog.count(*) into unchanged_permission_count
+      from vortex_access.organization_role_permission_entries as permission
+      join vortex_access.permission_continuities as continuity
+        on continuity.organization_id = permission.organization_id
+        and continuity.application_root_id = permission.application_root_id
+        and continuity.owner_kind = permission.owner_kind
+        and continuity.owner_id = permission.owner_id
+        and continuity.permission_id = permission.permission_id
+        and continuity.state = 'available'
+        and continuity.continuity_revision = permission.continuity_revision
+        and continuity.meaning_fingerprint = permission.meaning_fingerprint
+      where permission.organization_id = p_organization_id
+        and permission.role_id = role_record.role_id
+        and permission.role_revision = role_record.role_revision
+        and exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(
+            target_template -> 'livePermissions'
+          ) as candidate(value)
+          where (candidate.value ->> 'applicationRootId')::uuid =
+              permission.application_root_id
+            and candidate.value ->> 'ownerKind' = permission.owner_kind
+            and (candidate.value ->> 'ownerId')::uuid = permission.owner_id
+            and (candidate.value #>> '{permission,permissionId}')::uuid =
+              permission.permission_id
+            and candidate.value ->> 'meaningFingerprint' =
+              permission.meaning_fingerprint
+        );
+      target_permission_count := pg_catalog.jsonb_array_length(
+        target_template -> 'livePermissions'
+      );
+      if role_record.lifecycle = 'active'
+        and unchanged_permission_count > 0
+        and unchanged_permission_count = target_permission_count
+        and retained_permission_count = target_permission_count
+        and role_record.template_continuity_revision =
+          target_template_continuity_revision then
+        target_lifecycle := 'active';
+      else
+        target_lifecycle := 'acceptance_required';
+      end if;
+    end if;
+
+    if role_record.lifecycle <> target_lifecycle
+      or current_permission_count <> retained_permission_count then
+      return false;
+    end if;
+  end loop;
+
+  return true;
+exception
+  when invalid_text_representation or numeric_value_out_of_range then
+    return false;
+end
+$$;
+
+alter function vortex_access.application_access_current_state_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_prepared_templates jsonb) owner to vortex_owner;
+
+REVOKE ALL ON FUNCTION vortex_access.application_access_current_state_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_prepared_templates jsonb) FROM PUBLIC;
+
+grant execute on function vortex_access.application_access_current_state_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_prepared_templates jsonb) to postgres;
 CREATE OR REPLACE FUNCTION vortex_access.coordinate_application_access_without_stewardship_v1_internal(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) RETURNS TABLE(outcome text, operation text, organization_id uuid, application_root_id uuid, registration_state text, registration_revision bigint, access_version bigint, correlation_id uuid)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
@@ -643,13 +883,7 @@ begin
       and continuity.continuity_revision = 9007199254740991
       and (
         (target.permission_id is null and continuity.state <> 'unavailable')
-        or (
-          target.permission_id is not null
-          and (
-            continuity.state <> 'available'
-            or continuity.meaning_fingerprint <> target.meaning_fingerprint
-          )
-        )
+        or (target.permission_id is not null and continuity.state <> 'available')
       )
   ) then
     raise exception using errcode = '22003',
@@ -682,10 +916,13 @@ begin
         when transition.target_permission_id is null then 'unavailable'
         else 'available'
       end,
+      -- The continuity revision is the permission's availability lineage: it advances only
+      -- when the permission is withdrawn or registered again. A meaning change while it stays
+      -- registered keeps the lineage; roles keep the meaning they accepted until they accept
+      -- the new one.
       continuity_revision = case
         when transition.target_permission_id is not null
           and continuity.state = 'available'
-          and continuity.meaning_fingerprint = transition.target_meaning_fingerprint
           then continuity.continuity_revision
         when transition.target_permission_id is null
           and continuity.state = 'unavailable'
@@ -875,6 +1112,7 @@ begin
         and continuity.owner_id = permission.owner_id
         and continuity.permission_id = permission.permission_id
         and continuity.state = 'available'
+        and continuity.continuity_revision = permission.continuity_revision
       where permission.organization_id = p_organization_id
         and permission.role_id = role_record.role_id
         and permission.role_revision = role_record.live_revision
@@ -986,6 +1224,7 @@ begin
         and continuity.owner_id = permission.owner_id
         and continuity.permission_id = permission.permission_id
         and continuity.state = 'available'
+        and continuity.continuity_revision = permission.continuity_revision
       where permission.organization_id = p_organization_id
         and permission.role_id = role_record.role_id
         and permission.role_revision = role_record.live_revision
@@ -1626,5 +1865,152 @@ alter function vortex_access.record_share_grant_source_authority_internal(p_cont
 REVOKE ALL ON FUNCTION vortex_access.record_share_grant_source_authority_internal(p_context jsonb, p_module_root_id uuid, p_record_type_id uuid) FROM PUBLIC;
 
 grant execute on function vortex_access.record_share_grant_source_authority_internal(p_context jsonb, p_module_root_id uuid, p_record_type_id uuid) to postgres;
+create or replace function vortex_access.read_organization_role_for_administration(
+  p_role_id uuid
+)
+returns table (
+  organization_id uuid,
+  outcome text,
+  role_summary jsonb,
+  access_version bigint
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  scope record;
+  role_value jsonb;
+begin
+  if p_role_id is null
+    or p_role_id = '00000000-0000-0000-0000-000000000000'::uuid then
+    raise exception using errcode = '22023',
+      message = 'Organization role detail input is invalid';
+  end if;
+
+  select authorized.* into strict scope
+  from vortex_access.organization_roles_administration_scope() as authorized;
+
+  select pg_catalog.jsonb_build_object(
+    'roleId', role.role_id,
+    'key', revision.role_key,
+    'label', revision.label,
+    'description', revision.description,
+    'roleKind', role.role_kind,
+    'lifecycle', revision.lifecycle,
+    'liveRevision', revision.revision,
+    'privilegeClassification', revision.privilege_classification,
+    'assignmentPolicy', case revision.assignment_policy
+      when 'standing' then pg_catalog.jsonb_build_object('kind', 'standing')
+      else pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
+        'kind', 'activation_required',
+        'maximumActivationDurationSeconds', policy.maximum_activation_duration_seconds,
+        'reasonRequired', policy.reason_required,
+        'recentAuthentication', case policy.authentication_requirement
+          when 'none' then pg_catalog.jsonb_build_object('kind', 'none')
+          else pg_catalog.jsonb_build_object(
+            'kind', policy.authentication_requirement,
+            'maximumAgeSeconds', policy.authentication_maximum_age_seconds
+          )
+        end,
+        'requiredCallerExecutionBindingId', policy.required_caller_execution_binding_id
+      ))
+    end,
+    'source', case role.role_kind
+      when 'custom' then pg_catalog.jsonb_build_object('kind', 'custom')
+      else pg_catalog.jsonb_build_object(
+        'kind', 'application',
+        'applicationRootId', role.application_root_id,
+        'sourceRoleId', role.source_role_id
+      )
+    end,
+    'acceptedPermissionCount', (
+      select pg_catalog.count(*)
+      from vortex_access.organization_role_permission_entries as permission
+      where permission.organization_id = revision.organization_id
+        and permission.role_id = revision.role_id
+        and permission.role_revision = revision.revision
+    ),
+    'acceptedPermissions', (
+      select coalesce(
+        pg_catalog.jsonb_agg(
+          pg_catalog.jsonb_strip_nulls(
+            pg_catalog.jsonb_build_object(
+              'reference', pg_catalog.jsonb_strip_nulls(
+                pg_catalog.jsonb_build_object(
+                  'applicationRootId', permission.application_root_id,
+                  'ownerKind', permission.owner_kind,
+                  'ownerId', permission.owner_id,
+                  'permissionId', permission.permission_id
+                )
+              ),
+              'key', catalogue.permission_key,
+              'label', catalogue.label,
+              'description', catalogue.description,
+              'recordTypeId', catalogue.record_type_id,
+              'action', pg_catalog.jsonb_strip_nulls(
+                pg_catalog.jsonb_build_object(
+                  'actionKind', catalogue.action_kind,
+                  'namedAction', catalogue.named_action
+                )
+              ),
+              'administrative', catalogue.administrative,
+              -- The meaning the role accepted, which may be older than the registered one.
+              'recordScope', catalogue.record_scope,
+              'fieldPolicy', catalogue.field_policy
+            )
+          ) order by permission.entry_ordinal
+        ),
+        '[]'::jsonb
+      )
+      from vortex_access.organization_role_permission_entries as permission
+      join vortex_access.permission_catalogue_entries as catalogue
+        on catalogue.organization_id = permission.organization_id
+        and catalogue.registration_kind = permission.registration_kind
+        and catalogue.registration_owner_id = permission.registration_owner_id
+        and catalogue.registration_revision = permission.accepted_registration_revision
+        and catalogue.owner_kind = permission.owner_kind
+        and catalogue.owner_id = permission.owner_id
+        and catalogue.permission_id = permission.permission_id
+      where permission.organization_id = revision.organization_id
+        and permission.role_id = revision.role_id
+        and permission.role_revision = revision.revision
+    )
+  )
+  into role_value
+  from vortex_access.organization_roles as role
+  join vortex_access.organization_role_revisions as revision
+    on revision.organization_id = role.organization_id
+    and revision.role_id = role.role_id
+    and revision.revision = role.live_revision
+  left join vortex_access.organization_role_activation_policy_revisions as policy
+    on policy.organization_id = revision.organization_id
+    and policy.role_id = revision.role_id
+    and policy.activation_policy_id = revision.activation_policy_id
+    and policy.revision = revision.activation_policy_revision
+  where role.organization_id = scope.organization_id
+    and role.role_id = p_role_id;
+
+  return query select scope.organization_id,
+    case when role_value is null then 'unavailable' else 'available' end,
+    role_value, scope.access_version;
+end
+$function$;
+
+revoke execute on function
+  vortex_access.read_organization_role_for_administration(uuid)
+from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+grant execute on function
+  vortex_access.read_organization_role_for_administration(uuid)
+to vortex_request;
+
+comment on function vortex_access.read_organization_role_for_administration(uuid) is
+  'Returns one current local role and its accepted configuration without assignment evidence.';
+
+alter function vortex_access.read_organization_role_for_administration(p_role_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.read_organization_role_for_administration(p_role_id uuid) to postgres;
 
 reset role;
