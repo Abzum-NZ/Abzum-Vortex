@@ -6,9 +6,12 @@ import type { ComponentConfig, Config, Field } from "@puckeditor/core";
 import {
   canonicalResponsivePlacement,
   findFieldInputBinding,
+  holdsPermission,
+  placementViewShown,
   plainSettingValue,
   releaseSettingDeclarations,
   typedSettingValue,
+  type NavigationPermissionDecisions,
   type PlatformBlockRelease,
 } from "@vortex/platform/schema";
 import type { PlatformComponentRegistry } from "../registry";
@@ -68,6 +71,22 @@ export function StudioCanvasRecordsProvider({
   children,
 }: Readonly<{ records: StudioCanvasRecords; children: ReactNode }>): ReactElement {
   return <CanvasRecordsContext.Provider value={records}>{children}</CanvasRecordsContext.Provider>;
+}
+
+/**
+ * Studio's "who can see this" preview: the role whose view the canvas shows and the permissions it
+ * holds. A block is judged with the page projection's own view rule, so the canvas hides exactly the
+ * blocks the running application drops for that role; `null` is the design view, where all show.
+ */
+export type StudioCanvasViewer = Readonly<{ roleName: string; decisions: NavigationPermissionDecisions }>;
+const CanvasViewerContext = createContext<StudioCanvasViewer | null>(null);
+
+/** Supplies the role the canvas previews, or `null` for the design view. */
+export function StudioCanvasViewerProvider({
+  viewer,
+  children,
+}: Readonly<{ viewer: StudioCanvasViewer | null; children: ReactNode }>): ReactElement {
+  return <CanvasViewerContext.Provider value={viewer}>{children}</CanvasViewerContext.Provider>;
 }
 
 /** What the canvas says in place of a current data block's records, or nothing when it has them. */
@@ -149,6 +168,7 @@ function CanvasBlock({
 }>): ReactElement {
   const compiled = useContext(CompiledSettingsContext);
   const records = useContext(CanvasRecordsContext);
+  const viewer = useContext(CanvasViewerContext);
   const id = typeof props.id === "string" ? props.id : "";
   // A block just dropped from the palette is shown as a placeholder until Studio adds it.
   if (props.vortex === undefined)
@@ -159,6 +179,14 @@ function CanvasBlock({
         </ItemContent>
       </Item>
     );
+  const viewKey = (props.vortex as { view_permission?: unknown }).view_permission;
+  if (viewer !== null && !placementViewShown(viewKey,
+    typeof viewKey === "string" && holdsPermission(viewer.decisions, viewKey)))
+    return <Item variant="outline" size="sm" className="border-dashed opacity-60" data-vortex-canvas-hidden={id}>
+      <ItemContent>
+        <ItemDescription>Hidden from {viewer.roleName}</ItemDescription>
+      </ItemContent>
+    </Item>;
   const render = component.render as (props: Record<string, unknown>) => ReactElement;
   const release = releaseOf(registry, props);
   // A block whose drawing needs what the compiler derives (an automatic field input's control, a

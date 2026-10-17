@@ -24,7 +24,8 @@ begin
     'draftRevision', preview_row.draft_revision,
     'expiresAt', preview_row.expires_at,
     'correlationId', vortex_access.validated_human_request_context() ->> 'correlationId',
-    'releaseSet', preview_row.runtime_release_set
+    'releaseSet', preview_row.runtime_release_set,
+    'seedBoundedRecordTypeIds', pg_catalog.to_jsonb(preview_row.seed_bounded_record_type_ids)
   );
 end
 $function$;

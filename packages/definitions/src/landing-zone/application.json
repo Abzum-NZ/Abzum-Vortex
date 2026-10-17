@@ -88,7 +88,6 @@
         "permission": "application.landing_zone.open"
       }
     ],
-    "pipelines": [],
     "connection_bindings": [],
     "interfaces": [],
     "events": [

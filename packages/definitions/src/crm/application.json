@@ -1630,22 +1630,15 @@
                               }
                             },
                             {
-                              "type": "platform.renderer.choice_input",
+                              "type": "platform.renderer.field_input",
                               "props": {
                                 "id": "input_crm_contact_create_company",
-                                "name": "company",
-                                "label": "Company",
-                                "choice_source": {
-                                  "query": "vortex.crm.organisations:crm_companies",
-                                  "label_field": "vortex.crm.organisations:company.name"
-                                },
-                                "initial_value": {
-                                  "page_parameter": "company"
-                                },
+                                "field": "vortex.crm.people:contact.company",
+                                "initial_record_parameter": "company",
                                 "vortex": {
                                   "block": {
-                                    "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                                    "release_version": "1.3.0"
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
                                   },
                                   "responsive": {
                                     "desktop": {
@@ -3219,20 +3212,14 @@
                               }
                             },
                             {
-                              "type": "platform.renderer.choice_input",
+                              "type": "platform.renderer.field_input",
                               "props": {
                                 "id": "input_crm_opportunity_edit_company",
-                                "name": "company",
-                                "label": "Company",
-                                "required": true,
-                                "choice_source": {
-                                  "query": "vortex.crm.organisations:crm_companies",
-                                  "label_field": "vortex.crm.organisations:company.name"
-                                },
+                                "field": "vortex.crm.opportunities:opportunity.company",
                                 "vortex": {
                                   "block": {
-                                    "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                                    "release_version": "1.1.0"
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
                                   },
                                   "responsive": {
                                     "desktop": {
@@ -3249,20 +3236,14 @@
                               }
                             },
                             {
-                              "type": "platform.renderer.choice_input",
+                              "type": "platform.renderer.field_input",
                               "props": {
                                 "id": "input_crm_opportunity_edit_primary_contact",
-                                "name": "primary_contact",
-                                "label": "Primary contact",
-                                "required": false,
-                                "choice_source": {
-                                  "query": "vortex.crm.people:crm_contacts",
-                                  "label_field": "vortex.crm.people:contact.full_name"
-                                },
+                                "field": "vortex.crm.opportunities:opportunity.primary_contact",
                                 "vortex": {
                                   "block": {
-                                    "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                                    "release_version": "1.1.0"
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
                                   },
                                   "responsive": {
                                     "desktop": {
@@ -3452,20 +3433,14 @@
                               }
                             },
                             {
-                              "type": "platform.renderer.choice_input",
+                              "type": "platform.renderer.field_input",
                               "props": {
                                 "id": "input_crm_opportunity_create_company",
-                                "name": "company",
-                                "label": "Company",
-                                "required": true,
-                                "choice_source": {
-                                  "query": "vortex.crm.organisations:crm_companies",
-                                  "label_field": "vortex.crm.organisations:company.name"
-                                },
+                                "field": "vortex.crm.opportunities:opportunity.company",
                                 "vortex": {
                                   "block": {
-                                    "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                                    "release_version": "1.1.0"
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
                                   },
                                   "responsive": {
                                     "desktop": {
@@ -3506,20 +3481,14 @@
                               }
                             },
                             {
-                              "type": "platform.renderer.choice_input",
+                              "type": "platform.renderer.field_input",
                               "props": {
                                 "id": "input_crm_opportunity_create_primary_contact",
-                                "name": "primary_contact",
-                                "label": "Primary contact",
-                                "required": false,
-                                "choice_source": {
-                                  "query": "vortex.crm.people:crm_contacts",
-                                  "label_field": "vortex.crm.people:contact.full_name"
-                                },
+                                "field": "vortex.crm.opportunities:opportunity.primary_contact",
                                 "vortex": {
                                   "block": {
-                                    "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                                    "release_version": "1.1.0"
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
                                   },
                                   "responsive": {
                                     "desktop": {
@@ -3803,96 +3772,6 @@
           },
           "content": []
         }
-      }
-    ],
-    "pipelines": [
-      {
-        "id": "pipe_crm_opportunity",
-        "key": "crm_opportunity_pipeline",
-        "name": "Opportunity pipeline",
-        "record_type": "vortex.crm.opportunities:opportunity",
-        "stage_field": "stage",
-        "stages": [
-          {
-            "key": "discovery",
-            "label": "Discovery",
-            "entry_actions": [],
-            "exit_actions": []
-          },
-          {
-            "key": "qualified",
-            "label": "Qualified",
-            "entry_actions": [],
-            "exit_actions": []
-          },
-          {
-            "key": "proposal",
-            "label": "Proposal",
-            "entry_actions": [],
-            "exit_actions": []
-          },
-          {
-            "key": "negotiation",
-            "label": "Negotiation",
-            "entry_actions": [],
-            "exit_actions": []
-          },
-          {
-            "key": "won",
-            "label": "Won",
-            "entry_actions": [],
-            "exit_actions": []
-          },
-          {
-            "key": "lost",
-            "label": "Lost",
-            "entry_actions": [],
-            "exit_actions": []
-          }
-        ],
-        "transitions": [
-          {
-            "from": "discovery",
-            "to": "qualified",
-            "permission": "vortex.crm.opportunities.opportunity.update"
-          },
-          {
-            "from": "qualified",
-            "to": "proposal",
-            "permission": "vortex.crm.opportunities.opportunity.update"
-          },
-          {
-            "from": "proposal",
-            "to": "negotiation",
-            "permission": "vortex.crm.opportunities.opportunity.update"
-          },
-          {
-            "from": "negotiation",
-            "to": "won",
-            "action": "vortex.crm.opportunities.opportunity.mark_won"
-          },
-          {
-            "from": "discovery",
-            "to": "lost",
-            "action": "vortex.crm.opportunities.opportunity.mark_lost"
-          },
-          {
-            "from": "qualified",
-            "to": "lost",
-            "action": "vortex.crm.opportunities.opportunity.mark_lost"
-          },
-          {
-            "from": "proposal",
-            "to": "lost",
-            "action": "vortex.crm.opportunities.opportunity.mark_lost"
-          },
-          {
-            "from": "negotiation",
-            "to": "lost",
-            "action": "vortex.crm.opportunities.opportunity.mark_lost"
-          }
-        ],
-        "time_targets": []
       }
     ],
     "connection_bindings": [],
@@ -5174,11 +5053,14 @@
                     }
                   },
                   "values": {
-                    "kind": "literal",
-                    "literal": {
-                      "type": "json",
-                      "value": {
-                        "stage": "lost"
+                    "kind": "map",
+                    "entries": {
+                      "stage": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "choice",
+                          "value": "lost"
+                        }
                       }
                     }
                   },

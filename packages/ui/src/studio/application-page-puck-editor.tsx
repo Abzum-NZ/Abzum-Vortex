@@ -23,7 +23,7 @@ import type {
 } from "@vortex/platform/schema";
 import type { FieldInputControlReleaseMap } from "../registry";
 import type { PlatformThemeTokens } from "../theme";
-import { createFullPlatformComponentRegistry } from "../combined-registry";
+import { createPlatformComponentRegistryForReleases } from "../combined-registry";
 import { getVortexPuckConfig } from "../puck-config";
 import { contentConfigFor } from "../shell-outlet";
 import type { Breakpoint } from "../definition-error";
@@ -40,20 +40,23 @@ import {
   validateStoredZone,
   storedZoneAliases,
   withCopiedFlowBindings,
-  withoutFlowBindingsOf,
+  removeFlowBindingsOf,
   syncStoredBlockDependencies,
 } from "./stored-composition";
 import {
   StudioCanvasCompiledSettings,
   studioCanvasConfig,
   StudioCanvasRecordsProvider,
+  StudioCanvasViewerProvider,
   type StudioCanvasRecords,
+  type StudioCanvasViewer,
 } from "./studio-canvas-render";
 import { puckDataForBreakpoint, StudioCanvasBridge, type StudioCanvasFrame } from "./studio-canvas-bridge";
 import { StudioBlockPalette, type StudioCanvasAddRequest } from "./studio-block-palette";
 import type { StudioCompositionAddTargetsModel, StudioCompositionDestination } from "./application-composition-commands";
 
 export type { StudioCanvasFrame } from "./studio-canvas-bridge";
+export type { StudioCanvasViewer } from "./studio-canvas-render";
 export type { StudioCanvasAddRequest } from "./studio-block-palette";
 
 /** Studio's block palette: drawn in the Blocks panel, inside this editor so its blocks drag with Puck. */
@@ -172,6 +175,8 @@ export type ApplicationPagePuckEditorProps = Readonly<{
   readRecords?: ((area: string) => Promise<StudioCanvasRecordsRead>) | undefined;
   /** A newer saved revision than `compiledSource` is being compiled. */
   updating?: boolean | undefined;
+  /** The role the canvas previews, hiding what it may not see; `null` or absent is the design view. */
+  viewer?: StudioCanvasViewer | null | undefined;
 }>;
 
 /** Edits one content slot of a page; a page with several slots or guided steps lets the person pick. */
@@ -294,9 +299,10 @@ function ApplicationPageSlotPuckEditor({
   palette,
   readRecords,
   updating,
+  viewer,
 }: ApplicationPagePuckEditorProps & { at: PageSlotAddress }) {
   const registry = useMemo(
-    () => createFullPlatformComponentRegistry(platformBlockCatalogue.releases),
+    () => createPlatformComponentRegistryForReleases(platformBlockCatalogue.releases),
     [platformBlockCatalogue],
   );
   const catalogue = useMemo(() => registry.toPlatformBlockCatalogue(), [registry]);
@@ -399,8 +405,8 @@ function ApplicationPageSlotPuckEditor({
         throw new TypeError("The selected page is unavailable.");
       const kept = storedZoneAliases(editedSlot);
       const removed = new Set([...storedZoneAliases(targetSlot)].filter((alias) => !kept.has(alias)));
-      next.body.flow_bindings = withoutFlowBindingsOf(
-        withCopiedFlowBindings(next.body.flow_bindings, copies), removed);
+      next.body.flow_bindings = withCopiedFlowBindings(next.body.flow_bindings, copies);
+      removeFlowBindingsOf(next.body, removed);
       syncStoredBlockDependencies(next);
       const parsed = applicationSourceDocumentSchema.safeParse(next);
       if (!parsed.success) throw parsed.error;
@@ -469,6 +475,7 @@ function ApplicationPageSlotPuckEditor({
         <div className="mx-auto overflow-hidden bg-background" style={{ width, maxWidth: "100%" }}>
           <StudioCanvasCompiledSettings settings={compiled.settings ?? {}}>
           <StudioCanvasRecordsProvider records={canvasRecords}>
+          <StudioCanvasViewerProvider viewer={viewer ?? null}>
           <Puck
             config={config}
             data={shown}
@@ -504,6 +511,7 @@ function ApplicationPageSlotPuckEditor({
               platformThemeTokens={platformThemeTokens}
             />
           </Puck>
+          </StudioCanvasViewerProvider>
           </StudioCanvasRecordsProvider>
           </StudioCanvasCompiledSettings>
         </div>

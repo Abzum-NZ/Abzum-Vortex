@@ -3,25 +3,26 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
 
 /*
- * One severity treatment per variant: a left rule, title and surface read from the resolved theme
- * roles. Tailwind only emits utilities it finds as complete strings in source, so each variant
- * spells its own classes out.
+ * One severity treatment per variant: a left rule and title in the severity's semantic text role
+ * (success, warning, info, destructive) on the resolved theme's surface; never a chart colour.
+ * Tailwind only emits utilities it finds as complete strings in source, so each variant spells its
+ * own classes out.
  */
 const infoVariant =
-  "border-l-4 bg-background border-l-primary " +
-  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-foreground " +
+  "border-l-4 bg-background border-l-info " +
+  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-info " +
   "[&_[data-slot=alert-description]]:text-foreground";
 const successVariant =
-  "border-l-4 bg-background border-l-[var(--chart-2)] " +
-  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-foreground " +
+  "border-l-4 bg-background border-l-success " +
+  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-success " +
   "[&_[data-slot=alert-description]]:text-foreground";
 const warningVariant =
-  "border-l-4 bg-background border-l-[var(--chart-3)] " +
-  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-foreground " +
+  "border-l-4 bg-background border-l-warning " +
+  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-warning " +
   "[&_[data-slot=alert-description]]:text-foreground";
 const dangerVariant =
   "border-l-4 bg-background border-l-destructive " +
-  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-foreground " +
+  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-destructive " +
   "[&_[data-slot=alert-description]]:text-foreground";
 
 const alertVariants = cva(

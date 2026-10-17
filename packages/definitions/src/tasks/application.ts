@@ -212,7 +212,6 @@ export const tasksApplication: ApplicationSourceDocument = loadApplicationSource
           permission: createPage,
         },
       ],
-      pipelines: [],
       connection_bindings: [],
       interfaces: [],
       events: [

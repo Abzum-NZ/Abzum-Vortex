@@ -20,15 +20,14 @@ begin
   return (installation_value ->> 'applicationReleaseRevision')::bigint = p_release_revision
     and exists (
     select 1
-    from vortex_access.permission_registrations as registration
-    where registration.organization_id = (context_value ->> 'organizationId')::uuid
-      and registration.registration_kind = 'application'
-      and registration.registration_owner_id =
-        (context_value ->> 'applicationRootId')::uuid
-      and registration.state = 'active'
-      -- A preview runs the draft under the permissions the installed release registered.
-      and (installation_value ? 'previewInstallationId'
-        or registration.source_revision = p_release_revision)
+    from vortex_access.request_application_registration_internal(
+      (context_value ->> 'organizationId')::uuid,
+      (context_value ->> 'applicationRootId')::uuid,
+      (context_value ->> 'organizationAccountId')::uuid
+    ) as registration
+    where registration.source_revision = p_release_revision
+      and (registration.registration_kind = 'preview')
+        = (installation_value ? 'previewInstallationId')
   );
 exception
   when sqlstate 'P0002' or sqlstate '55000' or sqlstate '23514' then
@@ -42,6 +41,6 @@ grant execute on function vortex_definition.is_current_application_address_relea
   to vortex_request;
 
 comment on function vortex_definition.is_current_application_address_release(bigint) is
-  'Checks an internal candidate release against the exact active registration and binding in the validated human application context, or against the pins of the preview installation the context runs.';
+  'Checks an internal candidate release against the registration the validated human application context runs under and its binding: the installed registration, or the preview''s own registration and pins.';
 
 alter function vortex_definition.is_current_application_address_release(p_release_revision bigint) owner to vortex_owner;

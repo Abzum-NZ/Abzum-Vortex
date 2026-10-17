@@ -474,7 +474,6 @@
         ]
       }
     ],
-    "pipelines": [],
     "connection_bindings": [],
     "interfaces": [],
     "events": [
@@ -3159,19 +3158,14 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "iam_request_new_group_record",
-                          "name": "target_group",
-                          "label": "Target group record",
-                          "choice_source": {
-                            "query": "vortex.system_directory:groups",
-                            "label_field": "vortex.system_directory:group.label"
-                          },
+                          "field": "vortex.iam.core:access_request.target_group",
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.3.0"
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
                             },
                             "responsive": {
                               "desktop": {
@@ -3454,19 +3448,14 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "iam_request_edit_group_record",
-                          "name": "target_group",
-                          "label": "Target group record",
-                          "choice_source": {
-                            "query": "vortex.system_directory:groups",
-                            "label_field": "vortex.system_directory:group.label"
-                          },
+                          "field": "vortex.iam.core:access_request.target_group",
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.3.0"
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
                             },
                             "responsive": {
                               "desktop": {

@@ -20,12 +20,9 @@ import {
   type RuleGraphValueType,
 } from "./rule-graph-contracts";
 
-// Removal point (#1007): this source node-and-edge shape is no longer authored. #986 converted
-// every shipped definition to flows, so it now exists only as the private intermediate that
-// `before-save-flow-rules.ts` lowers a `BeforeSave` flow into before `rule-graph-compilation.ts`
-// resolves it to the canonical rule in `content.rules`. It stays until #1007 replaces the
-// rule-graph evaluator and the database read of `content.rules`; deleting it now would stop every
-// shipped save rule from compiling. #988 removed the unused authored type aliases only.
+// The source node-and-edge shape that `before-save-flow-rules.ts` produces when it lowers a
+// `BeforeSave` flow, which `rule-graph-compilation.ts` then resolves to the canonical rule in
+// `content.rules`. Every shipped save rule compiles through it.
 
 const sourceTypedValueBranches = ruleGraphValueTypeKeys.map((type) =>
   z

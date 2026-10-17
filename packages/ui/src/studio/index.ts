@@ -26,13 +26,14 @@ export * from "./field-placement";
 export * from "./application-flow-model";
 export * from "./application-flow-commands";
 export * from "./application-flow-create";
+export * from "./application-flow-values";
+export * from "./application-flow-step-form";
+export * from "./application-flow-condition";
+export * from "./application-flow-start";
+export * from "./module-action-condition";
 export * from "./application-visibility-condition-commands";
 export type { StudioCompileFailure } from "./compile-failure";
 export * from "./studio-setting-controls";
 export * from "./studio-record-reference-control";
 export * from "./theme-preset";
-export {
-  StoredCompositionRefusal,
-  syncStoredBlockDependencies,
-  validateStoredShell,
-} from "./stored-composition";
+export { removeFlowBindingsOf, StoredCompositionRefusal, syncStoredBlockDependencies, validateStoredShell, validateStoredZone } from "./stored-composition";

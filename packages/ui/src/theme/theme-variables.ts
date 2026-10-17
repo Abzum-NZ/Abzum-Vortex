@@ -68,6 +68,9 @@ type ThemeVariableName =
   | "--accent"
   | "--accent-foreground"
   | "--destructive"
+  | "--success"
+  | "--warning"
+  | "--info"
   | "--border"
   | "--input"
   | "--ring"
@@ -274,7 +277,8 @@ function filledPair(tokens: ThemeTokens, key: string): readonly [ColorPair, Colo
  * Every shadcn CSS variable the shared components read is set from the same resolved theme:
  * `--background`/`--foreground` from the validated surface and text; `--card`, `--popover`,
  * `--muted`, `--accent`, `--chart-1`..`--chart-5`, `--sidebar*`, `--input`, `--ring` and
- * `--destructive` from the matching colour role; `--radius` from `radius_base`. A fill and its
+ * `--destructive` from the matching colour role; `--success`, `--warning` and `--info` from
+ * `success_text`, `warning_text` and `info_text` on the validated surface; `--radius` from `radius_base`. A fill and its
  * `<role>_foreground` (card, popover, accent, sidebar, sidebar_primary, sidebar_accent) change
  * together. `--font-sans-family` and `--font-heading-family` carry the `body` and `heading`
  * typography families through their self-hosted `next/font` variables. A theme without a body token
@@ -429,6 +433,11 @@ function generateThemeCssVariables(
     "--accent": accent,
     "--accent-foreground": accentForeground,
     "--destructive": colorValue(danger?.[0] ?? PLATFORM_DEFAULTS.danger),
+    // Status text and rules paint the semantic roles #594 judged against the surface; chart
+    // colours are for charts only.
+    "--success": onSurface("success_text", platformColor(platformTokens, "success_text")),
+    "--warning": onSurface("warning_text", platformColor(platformTokens, "warning_text")),
+    "--info": onSurface("info_text", platformColor(platformTokens, "info_text")),
     "--border": colorValue(borderColor ?? PLATFORM_DEFAULTS.border),
     "--input": shadcnColour("input"),
     // The ring paints visible focus, so it is the focus token's colour that #594 checked.

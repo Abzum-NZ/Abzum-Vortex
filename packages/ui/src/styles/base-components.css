@@ -17,7 +17,9 @@
     margin: 0;
     padding: 0;
     border: 0 solid;
-    @apply border-border outline-ring/50;
+    /* The outline colour is the validated focus colour at full strength, so visible focus (and its
+     * transition) never paints a half-strength ring. */
+    @apply border-border outline-ring;
   }
 
   [data-vortex-style] :where(button, input, select, textarea):where([data-slot], [data-slot] *) {
