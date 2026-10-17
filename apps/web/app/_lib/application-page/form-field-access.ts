@@ -1,15 +1,15 @@
 import {
   type InstalledRuntimeContext,
   type ProtectedQueryRow,
-  decideOrganizationAccessBatch,
+  evaluateOrganizationRecordPermissionAvailability,
   runtimePreviewOf,
 } from "@vortex/platform/server";
 import {
   type FlowTask,
   type IdentitySession,
   type JsonValue,
-  type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
+  organizationRecordAccessDeclarationSchema,
   flowTaskChildLists,
   isRecord,
   sameId,
@@ -122,30 +122,56 @@ export const readCreatableFieldIds = async (
       entry.permission.recordTypeId !== undefined &&
       sameId(String(entry.permission.recordTypeId), recordTypeId),
   );
-  if (entries.length === 0) return { kind: "available", fieldIds: new Set() };
-  const decided = await humanOrganizationRequests().run(session, selection, (transaction, scope) =>
-    decideOrganizationAccessBatch(
-      transaction,
-      scope,
-      entries.map((entry): OrganizationAccessDeclaration => ({
-        operationKey: "application.page.form_field.create",
-        action: { actionKind: "create" },
-        target: { kind: "application", applicationRootId: context.applicationRootId },
-        requiredPermission: {
-          applicationRootId: entry.applicationRootId,
-          ownerKind: entry.ownerKind,
-          ownerId: entry.ownerId,
-          permissionId: entry.permission.permissionId,
-        },
-        recentAuthentication: { kind: "none" },
-        authority: { kind: "permission" },
-      })),
-    ),
+  const targets = context.releaseSet.modules.flatMap((module) =>
+    module.content.recordTypes
+      .filter((record) => sameId(String(record.recordTypeId), recordTypeId))
+      .map((record) => ({ module, record })),
+  );
+  const target = targets.length === 1 ? targets[0] : undefined;
+  if (entries.length === 0 || target === undefined)
+    return { kind: "available", fieldIds: new Set() };
+  // Each create permission is decided on its own, without a row, through the record permission
+  // availability that the record writer's own decision starts from.
+  const decided = await humanOrganizationRequests().run(
+    session,
+    selection,
+    async (transaction, scope) => {
+      const eligible: boolean[] = [];
+      for (const entry of entries) {
+        const availability = await evaluateOrganizationRecordPermissionAvailability(
+          transaction,
+          scope,
+          organizationRecordAccessDeclarationSchema.parse({
+            operationKey: "application.page.form_field.create",
+            action: { actionKind: "create" },
+            target: { kind: "application", applicationRootId: context.applicationRootId },
+            requiredPermissions: [
+              {
+                applicationRootId: entry.applicationRootId,
+                ownerKind: entry.ownerKind,
+                ownerId: entry.ownerId,
+                permissionId: entry.permission.permissionId,
+              },
+            ],
+            recordBinding: {
+              moduleRootId: target.module.rootId,
+              recordTypeId: target.record.recordTypeId,
+              storageContractId: target.record.storageContractId,
+              storageScope: target.record.storageScope,
+            },
+            recentAuthentication: { kind: "none" },
+            authority: { kind: "permission" },
+          }),
+        );
+        eligible.push(availability.outcome === "eligible");
+      }
+      return eligible;
+    },
   );
   if (decided.kind !== "available") return decided;
   const fieldIds = new Set<string>();
   entries.forEach((entry, index) => {
-    if (decided.value[index]?.allowed !== true) return;
+    if (decided.value[index] !== true) return;
     for (const fieldId of entry.permission.fieldPolicy?.changeableFieldIds ?? [])
       fieldIds.add(String(fieldId).toLowerCase());
   });
