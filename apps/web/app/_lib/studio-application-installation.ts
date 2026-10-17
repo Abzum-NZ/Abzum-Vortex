@@ -310,7 +310,10 @@ const firstInstallLoadFailure = (error: unknown): StudioApplicationFirstInstallL
   if (failure.kind === "conflict")
     return studioApplicationFirstInstallLoadResultSchema.parse({ kind: "conflict" });
   if (failure.kind === "refused" || failure.kind === "authentication_required")
-    return studioApplicationFirstInstallLoadResultSchema.parse({ kind: "refused" });
+    return studioApplicationFirstInstallLoadResultSchema.parse({
+      kind: "refused",
+      ...(failure.memberRoleRefusal === "installation_authority" ? { reason: "installation_authority" } : {}),
+    });
   return studioApplicationFirstInstallLoadResultSchema.parse({ kind: "temporarily_unavailable" });
 };
 
@@ -326,6 +329,9 @@ const firstInstallCommandFailure = (
   return studioApplicationFirstInstallCommandResultSchema.parse({
     kind: failure.kind,
     stateMayHaveChanged,
+    ...("memberRoleRefusal" in failure && failure.memberRoleRefusal !== undefined
+      ? { memberRoleRefusal: failure.memberRoleRefusal }
+      : {}),
   });
 };
 

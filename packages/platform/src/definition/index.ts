@@ -22,6 +22,7 @@ export {
   readInstallationPermissionDeadline,
   requireInstallationAuthority,
   type InstallationHumanContext,
+  type InstallationMemberRoleRefusal,
   type InstallationProblemShape,
   type InstallationUnavailableReason,
 } from "./installation-authority";

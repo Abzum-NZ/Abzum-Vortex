@@ -230,7 +230,11 @@ export const studioApplicationFirstInstallLoadResultSchema = z.discriminatedUnio
     ]),
   }).strict(),
   z.object({ kind: z.literal("conflict") }).strict(),
-  z.object({ kind: z.literal("refused") }).strict(),
+  z.object({
+    kind: z.literal("refused"),
+    /** Set when the refusal is the installer lacking the installation authority. */
+    reason: z.literal("installation_authority").optional(),
+  }).strict(),
   z.object({ kind: z.literal("temporarily_unavailable") }).strict(),
 ]);
 
@@ -270,6 +274,15 @@ export const studioApplicationFirstInstallCommandResultSchema = z.union([
   z.object({
     kind: z.enum(["conflict", "refused", "authentication_required", "temporarily_unavailable", "failed"]),
     stateMayHaveChanged: z.union([z.boolean(), z.literal("unknown")]),
+    /** Why the installer's member role choice was refused, named on the install screen. */
+    memberRoleRefusal: z.enum([
+      "installation_authority",
+      "member_role_delegation",
+      "roles_manage",
+      "assignments_manage",
+      "role_unavailable",
+      "access_changed",
+    ]).optional(),
   }).strict(),
 ]);
 
