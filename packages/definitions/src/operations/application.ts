@@ -128,7 +128,6 @@ const placement = (
     vortex: {
       block: { block_id: release.blockId, release_version: release.releaseVersion },
       ...bindings,
-      theme_overrides: {},
       responsive: { desktop: placementLayout },
     },
   },
@@ -471,7 +470,6 @@ const theme = {
     release_version: DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY.releaseVersion,
   },
   selection: DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
-  token_overrides: {},
 };
 
 /**
@@ -552,6 +550,7 @@ export const operationsApplication: ApplicationSourceDocument =
         {
           id: "role_operations_operator",
           key: "operations_operator",
+          default_member: true,
           name: "Operations operator",
           home_page: "operations_signals",
           permissions: [
@@ -621,7 +620,6 @@ export const operationsApplication: ApplicationSourceDocument =
           })),
         },
       ],
-      pipelines: [],
       connection_bindings: [],
       interfaces: [],
       events: [

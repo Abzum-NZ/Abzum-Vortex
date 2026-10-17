@@ -1,8 +1,9 @@
 "use server";
 
-import { inspectStudioApplicationReleaseHistory, listStudioApplicationReleaseHistory,
-  type StudioApplicationHistoryInspectResult, type StudioApplicationHistoryListResult,
+import { listStudioApplicationReleaseHistory, type StudioApplicationHistoryListResult,
 } from "../../../../_lib/studio-application-history";
+import { restoreStudioApplicationDraft } from "../../../../_lib/studio-application-restore";
+import type { StudioApplicationRestoreCommandResult } from "../../../../_lib/studio-application-restore-contracts";
 
 /** Each command resolves its own actor, organization, root and saved revision on the server. */
 export async function listApplicationReleaseHistory(
@@ -11,8 +12,9 @@ export async function listApplicationReleaseHistory(
   return listStudioApplicationReleaseHistory(organizationId, candidate);
 }
 
-export async function inspectApplicationReleaseHistory(
-  organizationId: string, candidate: unknown,
-): Promise<StudioApplicationHistoryInspectResult> {
-  return inspectStudioApplicationReleaseHistory(organizationId, candidate);
+/** Restores one published version into the draft as a new saved draft revision; nothing is published or installed. */
+export async function restoreApplicationRelease(
+  organizationId: string, command: unknown,
+): Promise<StudioApplicationRestoreCommandResult> {
+  return restoreStudioApplicationDraft(organizationId, command);
 }

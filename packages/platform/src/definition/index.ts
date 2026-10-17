@@ -22,6 +22,7 @@ export {
   readInstallationPermissionDeadline,
   requireInstallationAuthority,
   type InstallationHumanContext,
+  type InstallationMemberRoleRefusal,
   type InstallationProblemShape,
   type InstallationUnavailableReason,
 } from "./installation-authority";
@@ -33,9 +34,14 @@ export {
 } from "./installation-first-install-app";
 export {
   createFirstInstallCoordinator,
-  verifyFirstInstallActivation,
   type FirstInstallCoordinatorEnvironment,
 } from "./installation-first-install-coordinator";
+export {
+  acceptedApplicationRoleKey,
+  activateFirstInstall,
+  type FirstInstallMemberRole,
+  type FirstInstallMemberRoleChoice,
+} from "./installation-first-install-member-role";
 export { classifyInstallationFailure } from "./installation-failure";
 export {
   activateUpgradeRelease,
@@ -50,6 +56,13 @@ export {
   type UpgradeSnapshot,
   type UpgradeState,
 } from "./installation-upgrade";
+export {
+  acceptUpgradeRoleRevisions,
+  readUpgradeRoleRevisions,
+  upgradeWithRoleRevisions,
+  type UpgradeRoleEnvironment,
+  type UpgradeRoleRevision,
+} from "./installation-upgrade-role-revisions";
 export type { OfflineSourceFailure } from "./offline-source-validation";
 export { applicationModuleSources } from "./application-module-lowering";
 export { validateApplicationsOffline } from "./offline-application-validation";

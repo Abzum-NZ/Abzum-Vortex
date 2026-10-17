@@ -107,7 +107,7 @@
           "public_display": "refused",
           "type": "money",
           "settings": {
-            "currency_mode": "organisation_default",
+            "currency_mode": "organization_default",
             "minimum": "0"
           }
         },
@@ -344,6 +344,74 @@
           }
         }
       ],
+      "pipelines": [
+        {
+          "id": "pipe_crm_opportunity",
+          "key": "opportunity_pipeline",
+          "name": "Opportunity pipeline",
+          "stage_field": "stage",
+          "stages": [
+            {
+              "option": "discovery",
+              "tone": "chart_1"
+            },
+            {
+              "option": "qualified",
+              "tone": "chart_2"
+            },
+            {
+              "option": "proposal",
+              "tone": "chart_3"
+            },
+            {
+              "option": "negotiation",
+              "tone": "chart_4"
+            },
+            {
+              "option": "won",
+              "tone": "primary"
+            },
+            {
+              "option": "lost",
+              "tone": "destructive"
+            }
+          ],
+          "transitions": [
+            {
+              "from": "discovery",
+              "to": "qualified"
+            },
+            {
+              "from": "qualified",
+              "to": "proposal"
+            },
+            {
+              "from": "proposal",
+              "to": "negotiation"
+            },
+            {
+              "from": "negotiation",
+              "to": "won"
+            },
+            {
+              "from": "discovery",
+              "to": "lost"
+            },
+            {
+              "from": "qualified",
+              "to": "lost"
+            },
+            {
+              "from": "proposal",
+              "to": "lost"
+            },
+            {
+              "from": "negotiation",
+              "to": "lost"
+            }
+          ]
+        }
+      ],
       "relationships": [
         {
           "id": "fld_opp_company_relationship",
@@ -452,6 +520,7 @@
           }
         }
       ],
+      "pipelines": [],
       "relationships": [
         {
           "id": "fld_oc_opp_relationship",
@@ -1191,6 +1260,7 @@
     {
       "id": "qry_crm_pipeline",
       "key": "crm_pipeline",
+      "label": "Opportunities",
       "record_type": "opportunity",
       "inputs": [],
       "select": [

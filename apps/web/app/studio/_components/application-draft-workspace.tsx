@@ -7,7 +7,8 @@ import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-e
 import { applicationSourceDocumentSchema, canonicalJson, describeFailure,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
   type ApplicationSourceDocument, type DefinitionPublicationConfirmation,
-  applicationModuleKeys, type PublishDefinitionResult, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
+  holdsPermission, type NavigationPermissionDecisions, type PublishDefinitionResult, type ImmutablePlatformBlockCatalogue,
+  type PeopleDirectoryOwner } from "@vortex/platform/schema";
 import {
   applyStudioCompositionCommand,
   applyStudioVisibilityCondition,
@@ -34,32 +35,30 @@ import {
 import { createAppearanceRootProps, Icon, type FieldInputControlReleaseMap, type PlatformThemeTokens } from "@vortex/ui";
 import type { StudioCanvasAddRequest, StudioCanvasBreakpoint, StudioCanvasFrame } from "@vortex/ui/studio/page-puck-editor";
 import { readStudioCanvasRecords, readStudioDataRecords, reopenStudioApplication, saveStudioApplication,
-  prepareStudioApplicationPublication, publishStudioApplication, validateStudioPlacementThemeOverrides } from "../actions";
+  prepareStudioApplicationPublication, publishStudioApplication } from "../actions";
 import { applyStudioItemLabels } from "../_lib/application-item-labels";
 import { createStudioPlacementDescriber, studioOutlineLabels } from "../_lib/studio-labels";
 import { ApplicationDraftAgentTools, type StudioPublicationOutcome } from "./application-draft-agent-tools";
-import { ApplicationAppearanceEditor } from "./application-appearance-editor";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
 import { ApplicationVisibilityConditionEditor, type StudioVisibilityWorkspaceSnapshot } from "./application-visibility-condition-editor";
 import { useStudioFlowsTab } from "./use-studio-flows-tab";
 import { previewStudioApplication } from "../preview-actions";
 import type { SavedDraftContext } from "./application-draft-agent-tools";
 import { ApplicationSourceImport } from "./application-source-import";
-import { ApplicationSearchEditor } from "./application-search-editor";
 import { StudioPublishDialog } from "./studio-publish-dialog";
 import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
 import { StudioHistoryTab } from "./studio-history-tab";
 import { StandardPageAdoption } from "./standard-page-adoption";
 import { useStudioDataTab } from "./studio-data-tab";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
-import type { StudioDataModule, StudioPublishedData } from "../_lib/studio-data-model";
+import type { StudioCompiledFields, StudioDataModule, StudioPublishedData } from "../_lib/studio-data-model";
 import { StudioTopBar } from "./studio-top-bar";
 import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-toolbar";
 import { StudioInspector } from "./studio-inspector";
 import { StudioReleasesPanel } from "./studio-releases-panel";
-import {
-  StudioBlockOutlinePanel, StudioComingNextPanel, StudioStructurePanel,
-} from "./studio-outline-panels";
+import { StudioBlockOutlinePanel, StudioStructurePanel } from "./studio-outline-panels";
+import { useStudioAccessTab } from "./studio-access-tab";
+import { applyStudioAccessCommand, type StudioAccessCommand, type StudioAccessResult } from "../_lib/application-access";
 import { StudioMenuPanel } from "./studio-menu-panel";
 import { StudioThemePanel, type StudioThemeChangeOutcome } from "./studio-theme-panel";
 import { useStudioDraftTheme } from "./use-studio-draft-theme";
@@ -72,7 +71,6 @@ import {
 } from "./studio-rail-tabs";
 import { StudioFrame, StudioPanelShell } from "./studio-frame";
 import { useStudioBusy } from "./use-studio-busy";
-import type { StudioApplicationSearchMetadata } from "../../_lib/studio-application-draft";
 import type { StudioApplicationCanvasFrames, StudioApplicationCompiledPageSlots } from "../../_lib/studio-application-draft";
 import {
   sameStudioApplicationSourceImportSnapshot,
@@ -90,14 +88,16 @@ const ApplicationPagePuckEditor = dynamic(
 
 /**
  * The application frame the canvas draws the page inside: the compiled draft's shell, with the
- * draft's menu and theme as they are edited, so Menu and Theme changes show before a save.
+ * draft's menu and theme as they are edited, so Menu and Theme changes show before a save. The menu
+ * is the one a previewed role sees, or every entry in the design view (`decisions` null).
  */
 const canvasFrameFor = (frames: StudioApplicationCanvasFrames | null, pageAlias: string,
-  source: ApplicationSourceDocument, theme: StudioCanvasFrame["theme"] | undefined): StudioCanvasFrame | undefined => {
+  source: ApplicationSourceDocument, theme: StudioCanvasFrame["theme"] | undefined,
+  decisions: NavigationPermissionDecisions | null): StudioCanvasFrame | undefined => {
   const page = frames?.pages[pageAlias];
   return frames === null || page === undefined || theme === undefined ? undefined : {
     applicationName: frames.applicationName, shells: frames.shells,
-    theme, navigation: studioDraftNavigation(source, frames.pages), ...page,
+    theme, navigation: studioDraftNavigation(source, frames.pages, decisions), ...page,
   };
 };
 
@@ -124,12 +124,15 @@ type WorkspaceProps = Readonly<{
       initialModule?: string | undefined;
       /** The organisation's applications, to name and link the owner of a used module. */
       applications: readonly StudioModuleOwnerApplication[];
-      searchMetadata?: StudioApplicationSearchMetadata | null;
+      /** The compiled fields of the saved draft, for a query filter's typed controls. */
+      compiledFields?: StudioCompiledFields | null;
       borrowedChoices?: StudioBorrowedChoices | null;
       /** The modules the application uses, read-only in the Data tab. */
       usedModules?: readonly StudioDataModule[] | null;
       /** What the published versions of its own modules hold, whose stored shape is fixed. */
       published?: StudioPublishedData | null;
+      /** The organisation's people directory, which a Person link points at. */
+      peopleDirectory?: PeopleDirectoryOwner | null;
       pageCompiledSlots?: StudioApplicationCompiledPageSlots | null;
       canvasFrames?: StudioApplicationCanvasFrames | null;
       compileFailure?: StudioCompileFailure | null }>);
@@ -199,10 +202,11 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
         initialSection={isStudioReleasesSection(props.initialSection) ? props.initialSection : "history"}
         initialModule={props.initialModule ?? null}
         applications={props.applications}
-        initialSearchMetadata={props.searchMetadata ?? null}
+        initialCompiledFields={props.compiledFields ?? null}
         initialBorrowedChoices={props.borrowedChoices ?? null}
         initialUsedModules={props.usedModules ?? null}
         initialPublished={props.published ?? null}
+        initialPeopleDirectory={props.peopleDirectory ?? null}
         pageCompiledSlots={props.pageCompiledSlots ?? null}
         canvasFrames={props.canvasFrames ?? null}
         compileFailure={props.compileFailure ?? null}
@@ -212,16 +216,17 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
 }
 
 function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab, initialSection, initialModule, applications,
-  initialSearchMetadata, initialBorrowedChoices, initialUsedModules, initialPublished, pageCompiledSlots, canvasFrames, compileFailure, platformBlockCatalogue, fieldInputControlReleases,
-  platformThemeTokens, themeOptions }: {
+  initialCompiledFields, initialBorrowedChoices, initialUsedModules, initialPublished, initialPeopleDirectory, pageCompiledSlots, canvasFrames, compileFailure, platformBlockCatalogue,
+  fieldInputControlReleases, platformThemeTokens, themeOptions }: {
   organizationId: string; draft: StudioStoredApplicationDraft; place: StudioWorkspacePlace;
   themeOptions: StudioThemeOptions;
   initialTab: StudioRailKey; initialSection: StudioReleasesSection; initialModule: string | null;
   applications: readonly StudioModuleOwnerApplication[];
-  initialSearchMetadata: StudioApplicationSearchMetadata | null;
+  initialCompiledFields: StudioCompiledFields | null;
   initialBorrowedChoices: StudioBorrowedChoices | null;
   initialUsedModules: readonly StudioDataModule[] | null;
   initialPublished: StudioPublishedData | null;
+  initialPeopleDirectory: PeopleDirectoryOwner | null;
   pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
   canvasFrames: StudioApplicationCanvasFrames | null;
   compileFailure: StudioCompileFailure | null;
@@ -243,11 +248,14 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const [releasesSection, setReleasesSection] = useState<StudioReleasesSection>(initialSection);
   const [usedModules, setUsedModules] = useState<readonly StudioDataModule[] | null>(initialUsedModules);
   const [published, setPublished] = useState<StudioPublishedData | null>(initialPublished);
+  const [peopleDirectory, setPeopleDirectory] = useState<PeopleDirectoryOwner | null>(initialPeopleDirectory);
   const [previewPending, setPreviewPending] = useState(false);
   const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>(100);
   const [canvasBreakpoint, setCanvasBreakpoint] = useState<StudioCanvasBreakpoint>("desktop");
   // The canvas previews the application in light or dark; the running application keeps its own toggle.
   const [canvasAppearance, setCanvasAppearance] = useState<"light" | "dark">("light");
+  // "Who can see this": the role the canvas and its menu are previewed as; null is the builder's view.
+  const [viewAs, setViewAs] = useState<string | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
   const [publicationNote, setPublicationNote] = useState("");
   const [publicationProblem, setPublicationProblem] = useState("");
@@ -280,7 +288,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const [selection] = useState(() => createStudioSemanticSelectionStore({ rootId: draft.rootId, source: draft.source, catalogue: platformBlockCatalogue }));
   const [state, setState] = useState(() => history.getState());
   const [selected, setSelected] = useState(() => selection.getSelection());
-  const [searchMetadata, setSearchMetadata] = useState<StudioApplicationSearchMetadata | null>(initialSearchMetadata);
+  const [compiledFields, setCompiledFields] = useState<StudioCompiledFields | null>(initialCompiledFields);
   const [compiled, setCompiled] = useState<CompiledView>(() =>
     ({ source: draft.source, draftRevision: draft.draftRevision, sourceFingerprint: draft.sourceFingerprint,
       slots: pageCompiledSlots, frames: canvasFrames, failure: compileFailure, generation: 0 }));
@@ -288,19 +296,14 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   // A saved revision whose compile is still on its way: the canvas keeps the last compiled one meanwhile.
   const compileEpoch = useRef(0);
   const [compiling, setCompiling] = useState(false);
-  const searchRefresh = useRef(0);
-  const [refreshingSearch, setRefreshingSearch] = useState(false);
   const [message, setMessage] = useState("");
   const [label, setLabel] = useState("");
   // The selection the name and description fields were loaded for; a field loaded for another item is never an unapplied edit.
   const [labelKey, setLabelKey] = useState("");
   const [description, setDescription] = useState("");
-  const [themeOverrideProblems, setThemeOverrideProblems] = useState(false);
   const [paletteHost, setPaletteHost] = useState<HTMLElement | null>(null);
   const [paletteMessage, setPaletteMessage] = useState("");
   const [blockSetup, setBlockSetup] = useState<StudioBlockSetupRequest | null>(null);
-  const [appearanceEpoch, setAppearanceEpoch] = useState(0);
-  const [appearanceValidationEpoch, setAppearanceValidationEpoch] = useState(0);
   const [compositionEpoch, setCompositionEpoch] = useState(0);
   const [conditionEpoch, setConditionEpoch] = useState(0);
   const [flowEpoch, setFlowEpoch] = useState(0);
@@ -339,6 +342,11 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         : tab === "menu" || tab === "theme" ? pageAliasOfKey(source.body.home_page) : undefined;
   const canvasPage = canvasPageAlias === undefined ? undefined
     : source.body.pages.find((page) => page.id === canvasPageAlias);
+  // A previewed role holds what the compiled saved draft grants it, which is what the running application installs.
+  const viewAsGrants = viewAs === null ? undefined : compiled.frames?.roles[viewAs];
+  const viewAsRole = viewAsGrants === undefined ? undefined : source.body.roles.find((role) => role.key === viewAs);
+  const viewDecisions = useMemo<NavigationPermissionDecisions | null>(() => viewAsGrants === undefined ? null
+    : Object.fromEntries(viewAsGrants.map((key) => [key, true])), [viewAsGrants]);
   const canvasPageRef = useRef(canvasPage?.id);
   canvasPageRef.current = canvasPage?.id;
   useEffect(() => { setLabel(currentLabel); setDescription(source.body.description); setLabelKey(selectionKey); },
@@ -371,7 +379,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   };
   const reportSearchPending = useCallback((pending: boolean) => { busy.report("search", pending); }, [busy]);
   const reportModuleFieldPending = useCallback((pending: boolean) => { busy.report("moduleField", pending); }, [busy]);
-  const reportAppearancePending = useCallback((pending: boolean) => { busy.report("appearance", pending); }, [busy]);
   const reportCompositionPending = useCallback((pending: boolean) => { busy.report("composition", pending); }, [busy]);
   const reportConditionPending = useCallback((pending: boolean) => { busy.report("condition", pending); }, [busy]);
   const resetFlowPending = () => busy.clear("flowStep");
@@ -414,38 +421,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     return () => window.removeEventListener("beforeunload", warn);
   }, [unsavedWork]);
 
-  const refreshSearchMetadata = async () => {
-    const current = history.getState();
-    if (!active.current || current.isDirty || current.isSaving || busy.any()) return;
-    const expectedSource = current.source;
-    const expectedLifetime = lifetime.current;
-    const epoch = ++searchRefresh.current;
-    const saved = savedPreviewDraft.current;
-    setSearchMetadata(null); setRefreshingSearch(true);
-    try {
-      const result = await reopenStudioApplication(organizationId, current.rootId);
-      const latest = history.getState();
-      if (!active.current || lifetime.current !== expectedLifetime || epoch !== searchRefresh.current ||
-          latest.source !== expectedSource || latest.draftRevision !== current.draftRevision || latest.isDirty || latest.isSaving ||
-          busy.any() ||
-          result.kind !== "available" || result.searchMetadata === null || result.organizationId !== organizationId ||
-          result.draft.rootId !== current.rootId || result.draft.key !== draft.key || result.draft.draftRevision !== current.draftRevision ||
-          result.draft.sourceFingerprint !== saved.sourceFingerprint || canonicalJson(result.draft.source) !== canonicalJson(expectedSource)) return;
-      const metadata = result.searchMetadata;
-      if (metadata.organizationId !== organizationId || metadata.rootId !== current.rootId || metadata.draftRevision !== current.draftRevision ||
-          metadata.sourceFingerprint !== saved.sourceFingerprint || metadata.bindingsSignature !== JSON.stringify(applicationModuleKeys(expectedSource))) return;
-      setSearchMetadata(metadata);
-    } catch (error) {
-      console.error("[studio] refreshing the module list failed", describeFailure(error));
-      if (active.current && lifetime.current === expectedLifetime && epoch === searchRefresh.current) setSearchMetadata(null);
-    }
-    finally { if (active.current && epoch === searchRefresh.current) setRefreshingSearch(false); }
-  };
-  const currentSearchMetadata = searchMetadata !== null && searchMetadata.organizationId === organizationId &&
-    searchMetadata.rootId === state.rootId &&
-    searchMetadata.draftRevision === state.draftRevision && searchMetadata.sourceFingerprint === savedPreviewDraft.current.sourceFingerprint &&
-    searchMetadata.bindingsSignature === JSON.stringify(applicationModuleKeys(source)) &&
-    canonicalJson(state.source) === canonicalJson(savedPreviewDraft.current.source) ? searchMetadata : null;
   const compositionContext = useMemo<StudioCompositionContext>(() => ({
     organizationId, rootId: state.rootId, key: draft.key, draftRevision: state.draftRevision,
     localLifetime: workspaceLifetime, catalogue: platformBlockCatalogue, source: state.source,
@@ -645,8 +620,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       setBorrowedChoices((previous) => result.borrowedChoices ?? previous);
       setUsedModules((previous) => result.usedModules ?? previous);
       setPublished((previous) => result.published ?? previous);
-      searchRefresh.current += 1;
-      setSearchMetadata(result.searchMetadata);
+      setPeopleDirectory((previous) => result.peopleDirectory ?? previous);
+      setCompiledFields(result.compiledFields);
     } catch (error) {
       console.error("[studio] compiling the saved draft for the canvas failed", describeFailure(error));
       if (active.current && epoch === compileEpoch.current)
@@ -657,7 +632,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   };
 
   const save = async () => {
-    if (themeOverrideProblems || busy.any() || history.getState().isSaving) return;
+    if (busy.any() || history.getState().isSaving) return;
     publicationEpoch.current += 1;
     setPreparedPublication(null);
     const requestLifetime = lifetime.current;
@@ -699,7 +674,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     busy.report("reopening", true);
     sourceImportGeneration.current += 1;
     previewGeneration.current += 1;
-    setAppearanceValidationEpoch((value) => value + 1);
     setMessage("Reading the saved draft…");
     try {
       const result = await reopenStudioApplication(organizationId, draft.rootId);
@@ -709,7 +683,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         return;
       }
       savedPreviewDraft.current = result.draft;
-      setSearchMetadata(result.searchMetadata);
+      setCompiledFields(result.compiledFields);
       compileEpoch.current += 1;
       setCompiling(false);
       setCompiled((previous) => ({ source: result.draft.source, draftRevision: result.draft.draftRevision,
@@ -718,7 +692,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       setBorrowedChoices((previous) => result.borrowedChoices ?? previous);
       setUsedModules((previous) => result.usedModules ?? previous);
       setPublished((previous) => result.published ?? previous);
-      searchRefresh.current += 1;
+      setPeopleDirectory((previous) => result.peopleDirectory ?? previous);
       discardSourceImport();
       lifetime.current += 1;
       setWorkspaceLifetime(lifetime.current);
@@ -812,6 +786,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       }
       case "not_installed": return { kind: "not_installed" };
       case "no_query": return { kind: "no_list" };
+      // A record type is read through a plain query, never a summary.
+      case "summary": return { kind: "no_list" };
       case "query_refused":
         console.error(`[studio] record choices were refused: STUDIO_RECORD_CHOICES_REFUSED reason=${result.reason}`);
         return { kind: "refused" };
@@ -873,13 +849,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     discardSourceImport();
     setConditionEpoch((value) => value + 1);
     reportConditionPending(false);
-    // The Theme editor is the whole application's, not the selection's: it is reset only when it
-    // holds input to discard. Remounting it on every selection re-ran its theme check, which held
-    // the inspector busy for seconds after each click.
-    if (busy.is("appearance")) {
-      setAppearanceEpoch((value) => value + 1);
-      reportAppearancePending(false);
-    }
     setCompositionEpoch((value) => value + 1);
     reportCompositionPending(false);
     setFlowEpoch((value) => value + 1);
@@ -948,7 +917,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const canPrepare = readPublicationSnapshot() !== null;
   const noEdit = state.isSaving || workspaceLifetime === 0;
   const flows = useStudioFlowsTab({ organizationId, draftKey: draft.key, rootId: draft.rootId, history, selectionStore: selection,
-    busy, active, lifetime, workspaceLifetime, source, selected, catalogue: platformBlockCatalogue, labels, applications, pages: draftChoices.pages,
+    busy, active, lifetime, workspaceLifetime, source, selected, catalogue: platformBlockCatalogue, labels, applications,
     disabled: noEdit || busy.anyRendered("flowStep"), epoch: flowEpoch, setMessage, choose: chooseSelection, select: changeSelection,
     openFlowsTab: () => changeTab("flows") });
 
@@ -990,9 +959,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     discardSourceImport();
     setConditionEpoch((value) => value + 1);
     reportConditionPending(false);
-    setAppearanceEpoch((value) => value + 1);
-    setAppearanceValidationEpoch((value) => value + 1);
-    reportAppearancePending(false);
     setCompositionEpoch((value) => value + 1);
     reportCompositionPending(false);
     setFlowEpoch((value) => value + 1);
@@ -1004,21 +970,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     setDescription(parsed.data.body.description);
     setMessage("Imported changes are in your draft. Save to keep them.");
     return "applied";
-  };
-
-  const applySearch: Parameters<typeof ApplicationSearchEditor>[0]["onApply"] = (expected, search) => {
-    const current = history.getState();
-    if (!active.current || lifetime.current !== workspaceLifetime || current.isSaving || current.isDirty ||
-        busy.any("search") || canonicalJson(expected) !== canonicalJson(current.source) ||
-        (search !== undefined && currentSearchMetadata === null)) return false;
-    const candidate = structuredClone(expected);
-    if (search === undefined) delete candidate.body.search;
-    else candidate.body.search = search;
-    const parsed = applicationSourceDocumentSchema.safeParse(candidate);
-    if (!parsed.success || !history.edit(parsed.data)) return false;
-    setSearchMetadata(null); searchRefresh.current += 1;
-    setPreparedPublication(null); previewGeneration.current += 1;
-    return true;
   };
 
   // Preview runs the saved draft as its own Application in a new tab, so it saves first. The tab is
@@ -1065,18 +1016,45 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     return true;
   };
   const data = useStudioDataTab({ organizationId, rootId: state.rootId, source, saved: savedPreviewDraft.current.source,
-    used: usedModules, published, applications, initialModule, hidden: tab !== "data",
+    used: usedModules, published, peopleDirectory, compiledFields, applications, initialModule, hidden: tab !== "data",
     compositionContext, readRecords: readRecordChoices,
     selection: isStudioDataSelection(selected) ? selected : null,
     disabled: noEdit || busy.anyOfRendered("publication", "reopening"), refresh: compiled.generation,
-    search: <ApplicationSearchEditor source={source} metadata={currentSearchMetadata}
-      disabled={busy.anyRendered("search") || state.isSaving || refreshingSearch || state.isDirty || workspaceLifetime === 0}
-      onPendingChange={reportSearchPending} onRefresh={refreshSearchMetadata} onApply={applySearch} />,
-    apply: applyDataChange, onFieldPending: reportModuleFieldPending,
+    apply: applyDataChange, onFieldPending: reportModuleFieldPending, onSearchPending: reportSearchPending,
     choose: (next) => { void chooseSelection(next); }, selectAfterEdit: (next) => { changeSelection(next); },
     openInTab: (nextTab, next) => { void changeTab(nextTab).then((changed) => { if (changed) void chooseSelection(next); }); },
   });
 
+  // The Access tab's one edit path, the same as Structure's and Menu's.
+  const commandAccess = (command: StudioAccessCommand): StudioAccessResult => {
+    if (!active.current || busy.any() || history.getState().isSaving)
+      return { kind: "refused", message: "Apply or discard the change that is waiting, or let the save finish, then try again." };
+    const result = applyStudioAccessCommand(history.getState().source, command);
+    if (result.kind !== "applied") return result;
+    if (!history.edit(result.source))
+      return { kind: "refused", message: "The draft history did not accept this change, so nothing was changed." };
+    setMessage(result.message);
+    return result;
+  };
+  const openIn = (nextTab: StudioRailKey, next: StudioSemanticSelection) => {
+    void changeTab(nextTab).then((changed) => { if (changed) void chooseSelection(next); });
+  };
+  const previewAs = (roleKey: string) => {
+    const role = source.body.roles.find((entry) => entry.key === roleKey);
+    if (role === undefined || compiled.frames?.roles[roleKey] === undefined) {
+      setMessage("Save the draft first: the preview shows a role as the saved draft grants it.");
+      return;
+    }
+    setViewAs(roleKey);
+    const start = source.body.pages.find((page) => page.key === role.home_page);
+    if (start !== undefined) openIn("structure", { kind: "page", pageAlias: start.id });
+  };
+  const access = useStudioAccessTab({ source, compiledRoles: compiled.frames?.roles, hidden: tab !== "access",
+    disabled: busy.anyRendered() || state.isSaving || workspaceLifetime === 0, onCommand: commandAccess, onPreview: previewAs,
+    goTo: (place) => place.kind === "page" ? openIn("structure", { kind: "page", pageAlias: place.pageAlias })
+      : place.kind === "navigation" ? openIn("menu", { kind: "navigation", navigationItemAlias: place.alias })
+        : place.kind === "placement" ? openIn("structure", { kind: "placement", placementAlias: place.placementAlias })
+          : openIn("data", { kind: "module", moduleKey: place.moduleKey }) });
   const pageLabel = (pageAlias: string, fallback: string) =>
     labels.get(studioSemanticSelectionKey({ kind: "page", pageAlias })) ?? fallback;
   // The layout open in Outline: selected directly, or the layout that holds the selected block.
@@ -1086,7 +1064,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     : ownerShellKey === undefined ? undefined : labels.get(ownerShellKey);
   const outlineOwnerKey = canvasPage !== undefined ? studioSemanticSelectionKey({ kind: "page", pageAlias: canvasPage.id })
     : ownerShellKey;
-  const centreTitle = tab === "data" ? data.title
+  const centreTitle = tab === "data" ? data.title : tab === "access" ? access.title
       : tab === "releases" ? studioReleasesSections.find((entry) => entry.value === releasesSection)!.label
         : canvasPage !== undefined ? pageLabel(canvasPage.id, canvasPage.name)
           : inspector.status === "resolved" ? selectedName ?? inspector.descriptor.label : "Select an item";
@@ -1104,6 +1082,9 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     setMessage(result.message);
     return result;
   };
+  // What a Structure command would do to the current draft, for its preview; nothing is kept.
+  const previewStructure = (command: StudioStructureCommand): StudioStructureResult =>
+    applyStudioStructureCommand({ source: history.getState().source, catalogue: platformBlockCatalogue, describePlacement }, command);
   const homePage = source.body.pages.find((page) => page.key === source.body.home_page);
   // The Menu tab's one edit path, the same as Structure's: a checked command taken by the draft history.
   const commandMenu = (command: StudioMenuCommand): StudioMenuResult => {
@@ -1122,7 +1103,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     Promise<StudioThemeChangeOutcome & Readonly<{ problems?: readonly string[] }>> => {
     const waiting = { kind: "refused", message: "Apply or discard the change that is waiting, or let the save finish, then try again." } as const;
     const before = history.getState();
-    if (!active.current || busy.any("appearance") || before.isSaving) return waiting;
+    if (!active.current || busy.any() || before.isSaving) return waiting;
     const candidate = applicationSourceDocumentSchema.parse(structuredClone(before.source));
     candidate.body.theme.selection = next;
     const result = await draftTheme.resolve(candidate.body.theme);
@@ -1132,7 +1113,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         : "The theme could not be checked just now, so nothing was changed. Try again." };
     if (!result.valid) return { kind: "refused", message: `${what}: refused, so nothing was changed.`, problems: result.problems };
     // The check is asynchronous: the change applies only to the draft it was checked against.
-    if (!active.current || history.getState().source !== before.source || busy.any("appearance") || history.getState().isSaving)
+    if (!active.current || history.getState().source !== before.source || busy.any() || history.getState().isSaving)
       return { kind: "refused", message: "The draft changed while the theme was checked, so nothing was changed. Try again." };
     if (!history.edit(candidate)) return { kind: "refused", message: "The draft history did not accept this change, so nothing was changed." };
     setMessage(`${what}. Save to keep it.`);
@@ -1142,7 +1123,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const panels = <>
     <StudioStructurePanel {...outlinePanelProps} hidden={tab !== "structure"}
       homePageKey={homePage === undefined ? undefined : studioSemanticSelectionKey({ kind: "page", pageAlias: homePage.id })}
-      editor={<StudioStructureEditor source={source} selected={selected} onCommand={commandStructure}
+      editor={<StudioStructureEditor source={source} selected={selected} onCommand={commandStructure} onPreview={previewStructure}
+        onOpenAccess={() => { access.showPages(); void changeTab("access"); }}
         disabled={busy.anyRendered() || state.isSaving || workspaceLifetime === 0} />} />
     <StudioBlockOutlinePanel {...outlinePanelProps} hidden={tab !== "outline"} ownerKey={outlineOwnerKey} />
     <StudioPanelShell title="Blocks" description="Blocks to add to the page on the canvas." hidden={tab !== "blocks"}>
@@ -1153,28 +1135,13 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     <StudioMenuPanel source={source} hidden={tab !== "menu"}
       selectedAlias={selected?.kind === "navigation" ? selected.navigationItemAlias : null}
       onSelect={(alias) => { void chooseSelection(alias === null ? null : { kind: "navigation", navigationItemAlias: alias }); }}
-      onCommand={commandMenu} disabled={busy.anyRendered() || state.isSaving || workspaceLifetime === 0} />
+      onCommand={commandMenu} onOpenAccess={() => { access.showPages(); void changeTab("access"); }}
+      disabled={busy.anyRendered() || state.isSaving || workspaceLifetime === 0} />
     {data.panel}
     {flows.panel(tab !== "flows")}
     <StudioThemePanel hidden={tab !== "theme"} selection={source.body.theme.selection} options={themeOptions}
-      disabled={busy.anyRendered("appearance") || state.isSaving || workspaceLifetime === 0} onChange={changeThemeSelection}
-      advanced={<ApplicationAppearanceEditor key={appearanceEpoch} organizationId={organizationId}
-        rootId={state.rootId} draftRevision={state.draftRevision} source={source}
-        validationEpoch={appearanceValidationEpoch}
-        disabled={busy.anyRendered("appearance") || state.isSaving} onPendingChange={reportAppearancePending}
-        onApply={(expected, next) => {
-          const current = history.getState();
-          if (!active.current || lifetime.current !== workspaceLifetime || current.isSaving || busy.any("appearance") ||
-              current.rootId !== state.rootId || current.draftRevision !== state.draftRevision ||
-              current.source !== state.source || expected !== source) return false;
-          const applied = history.edit(next);
-          if (applied) setMessage("Appearance changed. Save to keep it.");
-          return applied;
-        }} />} />
-    <StudioComingNextPanel title="Access" description="Who can see each page and block." hidden={tab !== "access"}>
-      Roles, their permissions and each role&apos;s home page will be set here next. Today a selected block&apos;s
-      visibility rule is set in the inspector.
-    </StudioComingNextPanel>
+      disabled={busy.anyRendered() || state.isSaving || workspaceLifetime === 0} onChange={changeThemeSelection} />
+    {access.panel}
     <StudioReleasesPanel hidden={tab !== "releases"} section={releasesSection} onSection={setReleasesSection}
       savedStateLabel={savedStateLabel} />
   </>;
@@ -1236,6 +1203,9 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       <FirstRecordTypeEmptyState action={<Button type="button" onClick={() => { void changeTab("data"); }}>
         <Icon name="database" />Open the Data tab</Button>} />}
     {canvasPage !== undefined && draftTheme.problem.length > 0 && <p role="alert" className="text-sm text-destructive">{draftTheme.problem}</p>}
+    {canvasPage !== undefined && viewAsRole !== undefined && viewDecisions !== null && <p role="status" className="text-sm text-muted-foreground">
+      {holdsPermission(viewDecisions, canvasPage.permission) ? `Showing what ${viewAsRole.name} sees` : `${viewAsRole.name} cannot open this page; it is shown so you can keep working on it`}
+      {state.isDirty ? ", as the saved draft grants it. Save to include your latest changes." : "."}</p>}
     {canvasPage !== undefined && (inspector.status === "resolved" || selected === null) &&
       // The canvas previews the application in light or dark: the appearance is set on the canvas only, never on Studio's frame.
       <div {...createAppearanceRootProps(canvasAppearance)} style={{ ...createAppearanceRootProps(canvasAppearance).style, zoom: canvasZoom / 100 }}>
@@ -1247,15 +1217,13 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
           fieldInputControlReleases={fieldInputControlReleases}
           platformThemeTokens={platformThemeTokens}
           pageAlias={canvasPage.id} compiledSlots={compiled.slots?.[canvasPage.id]}
-          frame={canvasFrameFor(compiled.frames, canvasPage.id, source, draftTheme.theme)}
+          frame={canvasFrameFor(compiled.frames, canvasPage.id, source, draftTheme.theme, viewDecisions)}
+          viewer={viewAsRole === undefined || viewDecisions === null ? null : { roleName: viewAsRole.name, decisions: viewDecisions }}
           selectedPlacementAlias={selected?.kind === "placement" ? selected.placementAlias : null}
           onSelectPlacement={selectFromCanvas}
           breakpoint={canvasBreakpoint}
           disabled={locked || noEdit}
           compileFailure={compiled.failure}
-          validateThemeOverrides={(theme, placements) => validateStudioPlacementThemeOverrides(organizationId, {
-            rootId: draft.rootId, expectedDraftRevision: history.getState().draftRevision, theme, placements })}
-          onThemeOverrideProblems={setThemeOverrideProblems}
           onChange={applyPuckPageEdit}
           readRecords={readCanvasRecords} updating={compiling}
           palette={addTargets === null ? undefined
@@ -1281,10 +1249,10 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         canUndo={state.canUndo} canRedo={state.canRedo} undoDisabled={locked}
         onUndo={() => { if (!busy.any()) history.undo(); }} onRedo={() => { if (!busy.any()) history.redo(); }}
         onRevert={() => { void reopen(); }} revertDisabled={busy.anyOfRendered("publication", "reopening") || state.isSaving}
-        onSave={() => { void save(); }} saveDisabled={!state.isDirty || themeOverrideProblems || state.isSaving || locked}
+        onSave={() => { void save(); }} saveDisabled={!state.isDirty || state.isSaving || locked}
         backToAppHref={place.applicationHref}
         onPreview={() => { void openPreview(); }} previewPending={previewPending}
-        previewDisabled={state.isSaving || locked || themeOverrideProblems}
+        previewDisabled={state.isSaving || locked}
         onPublish={openPublish} publishDisabled={busy.isRendered("reopening") || state.isSaving || locked} />}
       panel={panels}
       inspector={tab === "data" ? data.inspector : inspectorPanel}
@@ -1292,14 +1260,19 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         <StudioCanvasToolbar title={centreTitle} breakpoint={canvasBreakpoint} onBreakpoint={setCanvasBreakpoint}
           zoom={canvasZoom} onZoom={setCanvasZoom} showsCanvas={canvasShown && canvasPage !== undefined}
           appearance={canvasAppearance} onAppearance={setCanvasAppearance}
+          viewAs={{ value: viewAsRole === undefined ? null : viewAs, onChange: (roleKey) => setViewAs(roleKey),
+            roles: source.body.roles.filter((role) => compiled.frames?.roles[role.key] !== undefined) }}
           inspectorOpen={inspectorOpen} onToggleInspector={toggleInspector} />
         <div className="min-h-0 flex-1 overflow-auto p-4">
           {canvasCentre}
           {tab === "flows" && flows.centre}
           {/* The Data tab's field editor keeps its unapplied input while another tab is open. */}
           <div hidden={tab !== "data"}>{data.centre}</div>
+          {tab === "access" && access.centre}
           {tab === "releases" && releasesSection === "history" &&
-            <StudioHistoryTab organizationId={organizationId} rootId={state.rootId} savedRevision={savedPreviewDraft.current.draftRevision} />}
+            <StudioHistoryTab organizationId={organizationId} rootId={state.rootId} savedRevision={savedPreviewDraft.current.draftRevision}
+              restoreBlocked={state.isDirty || locked || state.isSaving ? "Save or undo your changes first: restoring replaces the saved draft." : undefined}
+              onRestored={(restored) => { void reopen().then(() => setMessage(restored)); }} />}
           {tab === "releases" && releasesSection === "page-adoption" &&
             <StandardPageAdoption organizationId={organizationId} rootId={state.rootId}
               disabledReason={state.isDirty || locked ? "Save your changes first; a choice here changes the saved draft." : undefined}

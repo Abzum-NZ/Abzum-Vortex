@@ -13,7 +13,6 @@ import {
   fieldIdSchema,
   namespacedKeySchema,
   pageIdSchema,
-  pipelineIdSchema,
   platformIdSchema,
   queryIdSchema,
   recordIdSchema,
@@ -40,7 +39,6 @@ export type BlockPropertyValueContract =
   | { kind: "action_reference"; actionKey: z.infer<typeof namespacedKeySchema> }
   | { kind: "page_reference"; pageId: z.infer<typeof pageIdSchema> }
   | { kind: "query_reference"; queryId: z.infer<typeof queryIdSchema> }
-  | { kind: "pipeline_reference"; pipelineId: z.infer<typeof pipelineIdSchema> }
   | { kind: "record_type_reference"; recordType: z.infer<typeof recordTypeReferenceSchema> }
   | {
       kind: "record_reference";
@@ -133,12 +131,6 @@ export const blockPropertyValueSchema: z.ZodType<BlockPropertyValueContract> = z
       .strict(),
     z
       .object({
-        kind: sourceProvenanceUnchanged(z.literal("pipeline_reference")),
-        pipelineId: sourceProvenanceUnchanged(pipelineIdSchema),
-      })
-      .strict(),
-    z
-      .object({
         kind: sourceProvenanceUnchanged(z.literal("record_type_reference")),
         recordType: sourceProvenanceUnchanged(recordTypeReferenceSchema),
       })
@@ -187,7 +179,6 @@ export type SourceBlockPropertyValueContract =
   | { kind: "action_reference"; action: z.infer<typeof namespacedKeySchema> }
   | { kind: "page_reference"; page: z.infer<typeof builderKeySchema> }
   | { kind: "query_reference"; query: z.infer<typeof sourceQualifiedQueryReferenceSchema> }
-  | { kind: "pipeline_reference"; pipeline: z.infer<typeof builderKeySchema> }
   | {
       kind: "record_type_reference";
       record_type: z.infer<typeof sourceQualifiedRecordTypeSchema>;

@@ -385,48 +385,12 @@ function compileApplication(
                 catalogueFingerprint: wildcardCatalogueFingerprint,
               }
             : { kind: "exact" },
+          ...(role.default_member === true ? { defaultMember: true } : {}),
         };
       }),
       queries,
       platformBlockDependencies: composition.platformBlockDependencies,
       shells: composition.shells,
-      pipelines: (body.pipelines as JsonObject[]).map((pipeline) => {
-        const record = String(pipeline.record_type);
-        const valueContext = valueIndex.record(record) ? valueIndex.context(record) : undefined;
-        return {
-          pipelineId: resolution.id(definitionKey, "pipeline", String(pipeline.id), "content"),
-          key: pipeline.key,
-          name: pipeline.name,
-          recordType: resolution.recordType(record),
-          stageFieldId: resolution.field(record, String(pipeline.stage_field)),
-          stages: (pipeline.stages as JsonObject[]).map((stage) => ({
-            key: stage.key,
-            label: stage.label,
-            entryActionKeys: stage.entry_actions,
-            exitActionKeys: stage.exit_actions,
-          })),
-          transitions: (pipeline.transitions as JsonObject[]).map((transition) => ({
-            from: transition.from,
-            to: transition.to,
-            ...(transition.permission ? { permissionKey: transition.permission } : {}),
-            ...(transition.action ? { actionKey: transition.action } : {}),
-            ...(transition.gate
-              ? {
-                  gate: condition(
-                    transition.gate,
-                    (alias) => resolution.field(record, alias),
-                    valueContext,
-                  ),
-                }
-              : {}),
-          })),
-          timeTargets: (pipeline.time_targets as JsonObject[]).map((target) => ({
-            stageKey: target.stage,
-            dateTimeFieldId: resolution.field(record, String(target.field)),
-            escalationEventKey: target.escalation_event,
-          })),
-        };
-      }),
       permissions,
       // Every action belongs to a Module; an Application declares none of its own.
       actions: [],
@@ -527,9 +491,9 @@ function compileApplication(
               ];
             }),
           ),
-          authentication: String(operation.authentication).replace("organisation", "organization"),
+          authentication: operation.authentication,
           permissionKey: operation.permission,
-          visibility: String(operation.visibility).replace("organisation", "organization"),
+          visibility: operation.visibility,
           rateLimitPerMinute: operation.rate_limit_per_minute,
           maximumRequestBytes: operation.maximum_request_bytes,
           duplicateProtection: operation.duplicate_protection,

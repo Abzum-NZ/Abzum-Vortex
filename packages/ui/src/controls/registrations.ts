@@ -4,15 +4,12 @@ import {
   flowRuleRefusalSchema,
   labelSchema,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
-  type PlatformBlockRelease,
   isRecord,
 } from "@vortex/platform/schema";
 import {
   createPayloadParser,
-  createPlatformComponentRegistry,
   type PlatformComponentPayloadParser,
   type PlatformComponentRegistration,
-  type PlatformComponentRegistry,
 } from "../registry";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import {
@@ -362,10 +359,6 @@ export const CONTROL_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       parsePayload: controlPayloadParser<ChoiceInputPayload>(parseDependentChoiceInputPayload),
     }),
     Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CHOICE_INPUT_BLOCK_RELEASE_1_3_0,
-      parsePayload: controlPayloadParser<ChoiceInputPayload>(parseDependentChoiceInputPayload),
-    }),
-    Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.FIELD_INPUT_BLOCK_RELEASE,
       parsePayload: controlPayloadParser<FieldInputPayload>(parseFieldInputPayload),
     }),
@@ -398,10 +391,3 @@ export const CONTROL_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       parsePayload: FORM_PAYLOAD_PARSER,
     }),
   ]);
-
-/** Creates an immutable PlatformComponentRegistry populated with all control components. */
-export function createControlComponentRegistry(
-  platformReleases: readonly PlatformBlockRelease[],
-): PlatformComponentRegistry {
-  return createPlatformComponentRegistry(CONTROL_COMPONENT_REGISTRATIONS, platformReleases);
-}

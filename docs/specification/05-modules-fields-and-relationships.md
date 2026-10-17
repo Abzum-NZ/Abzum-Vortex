@@ -71,7 +71,7 @@ flowchart TD
 The rules are:
 
 - Installing the same signed definition package in several organisations preserves its storage-contract identities. The installations use the same physical tables, while `organisation_id` separates their rows.
-- Binding the same record type into several applications does not create another table. For `organisation_shared` storage, authorised applications in the same organisation can use the same record. For `application_contained` storage, `application_root_id` separates each application's records inside the table.
+- Binding the same record type into several applications does not create another table. For `organization_shared` storage, authorised applications in the same organisation can use the same record. For `application_contained` storage, `application_root_id` separates each application's records inside the table.
 - Two independently created definitions never share storage merely because their application, module, record type, or field names match. They have different root and storage-contract identities and therefore different tables.
 - Copying or editing presentation, pages, roles, workflows, and application bindings does not fork storage. A definition change that creates independently evolving stored meaning creates a new storage-contract lineage before publication.
 - Compatible releases in one storage lineage use the same table and an explicit migration. Incompatible stored meaning uses add, migrate, switch, and retire or a new lineage; it never silently reuses a similar-looking table.
@@ -158,7 +158,7 @@ claim that Record execution is already delivered.
   default to an installation's currency; record creation resolves and stores the
   currency once. The same rule applies to money cells in table defaults. Submitted
   and persisted money values carry both amount and currency.
-  `organisation_default` supplies the currency for an omitted amount-only default;
+  `organization_default` supplies the currency for an omitted amount-only default;
   it is not a permanent restriction to today's organisation currency. Explicitly
   submitted amount-and-currency pairs retain their stated currency on create and
   update. Fixed-currency fields require their declared currency. Editing an old
