@@ -28,12 +28,30 @@ export type PreviewInstallationRepositoryErrorCode =
 
 type PreviewRow = DatabaseRow & { readonly preview_installation: unknown };
 type IdentityRow = DatabaseRow & { readonly preview_identity: unknown };
+type SeedRow = DatabaseRow & { readonly seeded: unknown };
+
+/** A new preview, and whether its builder reads live records it can be seeded with. */
+export type CreatedPreviewInstallation = Readonly<{
+  installation: PreviewInstallation;
+  seedable: boolean;
+}>;
 
 export type PreviewInstallationRepository = Readonly<{
+  /** In the organisation's context: the preview, its registration and its empty storage. */
   create(
     request: PreviewInstallationCreateRequest,
     releases: readonly RehearsedPreviewRelease[],
-  ): Promise<PreviewInstallation>;
+  ): Promise<CreatedPreviewInstallation>;
+  /**
+   * In the installed Application's own context: seeds the preview with the live records, and
+   * only the fields of them, that its builder reads there.
+   */
+  seed(previewInstallationId: string): Promise<void>;
+  /**
+   * In the installed Application's own context: decides the preview's copied records again by
+   * the builder's current live access, removing what they can no longer read.
+   */
+  reconcile(previewInstallationId: string): Promise<void>;
   readApplicationIdentity(
     previewInstallationId: string,
   ): Promise<PreviewApplicationIdentity | undefined>;
@@ -74,16 +92,45 @@ export const createPreviewInstallationRepository = (
             ${JSON.stringify(releases)}::text::jsonb
           ) as preview_installation
         `;
-        const parsed = previewInstallationSchema.safeParse(
-          rows.length === 1 ? rows[0]?.preview_installation : undefined,
-        );
-        if (!parsed.success)
+        const value = rows.length === 1 ? rows[0]?.preview_installation : undefined;
+        const { seedable, ...installation } =
+          typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+        const parsed = previewInstallationSchema.safeParse(installation);
+        if (!parsed.success || typeof seedable !== "boolean")
           throw unexpectedDefinitionFailure(
             "PREVIEW_INSTALLATION_FAILED",
-            parsed.error,
+            parsed.error ?? new Error("Preview seed availability is missing"),
             "preview-installation-repository",
           );
-        return parsed.data;
+        return { installation: parsed.data, seedable };
+      } catch (error) {
+        throw mapFailure(error);
+      }
+    },
+
+    async seed(previewInstallationId) {
+      try {
+        const rows = await transaction.query<SeedRow>`
+          select vortex_definition.seed_preview_installation(
+            ${previewInstallationId}::uuid
+          ) as seeded
+        `;
+        if (rows.length !== 1 || rows[0]?.seeded === null || rows[0]?.seeded === undefined)
+          throw new DefinitionError("PREVIEW_INSTALLATION_FAILED");
+      } catch (error) {
+        throw mapFailure(error);
+      }
+    },
+
+    async reconcile(previewInstallationId) {
+      try {
+        const rows = await transaction.query<DatabaseRow & { readonly reconciled: unknown }>`
+          select vortex_definition.reconcile_preview_installation(
+            ${previewInstallationId}::uuid
+          ) as reconciled
+        `;
+        if (rows.length !== 1 || typeof rows[0]?.reconciled !== "boolean")
+          throw new DefinitionError("PREVIEW_INSTALLATION_FAILED");
       } catch (error) {
         throw mapFailure(error);
       }

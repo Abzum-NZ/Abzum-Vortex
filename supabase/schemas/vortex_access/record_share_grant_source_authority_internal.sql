@@ -8,9 +8,14 @@ declare
   checked_at timestamptz := pg_catalog.clock_timestamp();
   authority jsonb;
 begin
+  -- A preview never grants share authority: its draft roles must not reach live records, so a
+  -- request that runs a preview has none.
   if p_context ? 'delegatedContext' or p_context ? 'supportContext'
     or context_organization_id is null or context_application_root_id is null
-    or p_module_root_id is null then
+    or p_module_root_id is null
+    or nullif(
+      pg_catalog.current_setting('vortex_record.preview_installation_id', true), ''
+    ) is not null then
     return pg_catalog.jsonb_build_object(
       'recordTypeIds', '[]'::jsonb,
       'readableFieldIds', '[]'::jsonb,

@@ -28,7 +28,12 @@ export {
 } from "./installation-coordinator-contracts";
 
 export { createPreviewInstallationCoordinator } from "./preview-installation-coordinator";
-export { runtimeContextSelection, runtimePreviewOf, type RuntimePreview } from "./preview-runtime-context";
+export {
+  PREVIEW_SEED_RECORD_BOUND,
+  runtimeContextSelection,
+  runtimePreviewOf,
+  type RuntimePreview,
+} from "./preview-runtime-context";
 export { previewApplicationKey } from "./preview-application-key";
 
 export { createProtectedOperationExecutor } from "./protected-operation-executor";
