@@ -64,15 +64,19 @@ const deepFreeze = <Value>(value: Value): Value => {
   return value;
 };
 
-/** A preview's release set is written once, so it is parsed once per preview and then shared. */
+/**
+ * A preview's release set is written once for each draft revision it follows, so it is parsed once
+ * per preview and draft revision and then shared.
+ */
 const previewReleaseSetCacheSize = 16;
 const previewReleaseSets = new Map<string, SystemApplicationBoundReleaseSetResult>();
 
 const previewReleaseSet = (
   previewInstallationId: string,
+  draftRevision: number,
   candidate: unknown,
 ): SystemApplicationBoundReleaseSetResult => {
-  const key = previewInstallationId.toLowerCase();
+  const key = `${previewInstallationId.toLowerCase()}@${draftRevision}`;
   const cached = previewReleaseSets.get(key);
   if (cached !== undefined) {
     previewReleaseSets.delete(key);
@@ -118,7 +122,11 @@ export const loadHumanPreviewRuntimeContext = async (
     !sameId(installation.applicationRootId, scope.applicationRootId)
   )
     throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
-  const releaseSet = previewReleaseSet(installation.previewInstallationId, source.data.releaseSet);
+  const releaseSet = previewReleaseSet(
+    installation.previewInstallationId,
+    source.data.draftRevision,
+    source.data.releaseSet,
+  );
   const context = assembleHumanInstalledRuntimeContext(
     installation,
     {

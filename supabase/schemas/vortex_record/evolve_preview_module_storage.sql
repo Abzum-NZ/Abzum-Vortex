@@ -112,8 +112,12 @@ begin
           raise exception using errcode = 'V3201', message = 'Preview record storage cannot follow this change';
         end if;
         column_token := mapping_row.physical_column_token;
+        -- Preview storage serves exactly the one Module release the preview runs, so each mapping
+        -- is that release's.
         update vortex_record.field_storage_mappings as mapping
         set field_definition = field_value,
+            introduced_by_module_root_id = p_module_root_id,
+            introduced_at_release_revision = p_module_release_revision,
             state = 'active',
             retired_by_module_root_id = null,
             retired_at_release_revision = null
@@ -191,9 +195,9 @@ begin
     update vortex_record.storage_catalogue as catalogue
     set record_type_definition = evolved_definition,
         content_fingerprint = vortex_record.storage_meaning_fingerprint(evolved_definition),
-        last_compatible_release_revision = pg_catalog.greatest(
-          p_module_release_revision, catalogue.first_compatible_release_revision
-        ),
+        -- Preview storage serves exactly the one Module release the preview runs.
+        first_compatible_release_revision = p_module_release_revision,
+        last_compatible_release_revision = p_module_release_revision,
         changed_at = pg_catalog.statement_timestamp()
     where catalogue.storage_contract_id = binding_row.storage_contract_id;
     update vortex_record.preview_storage_bindings as binding
