@@ -96,6 +96,7 @@ export const minimumApplicationSource = (
         name: "Members",
         home_page: "home",
         permissions: [permissionKey],
+        default_member: true,
       }],
       pages: [{
         id: "page_home",
@@ -109,7 +110,6 @@ export const minimumApplicationSource = (
         },
       }],
       navigation: [],
-      pipelines: [],
       connection_bindings: [],
       interfaces: [],
       events: [],

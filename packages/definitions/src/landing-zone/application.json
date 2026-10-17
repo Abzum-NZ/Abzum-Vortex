@@ -24,6 +24,7 @@
       {
         "id": "role_landing_zone_user",
         "key": "landing_zone_user",
+        "default_member": true,
         "name": "Landing Zone user",
         "home_page": "home",
         "permissions": [
@@ -87,7 +88,6 @@
         "permission": "application.landing_zone.open"
       }
     ],
-    "pipelines": [],
     "connection_bindings": [],
     "interfaces": [],
     "events": [

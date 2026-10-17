@@ -21,12 +21,15 @@ begin
     'applicationRootId', preview.application_root_id,
     'definitionKey', root.key,
     'draftRevision', preview.draft_revision,
-    'expiresAt', preview.expires_at
+    'expiresAt', preview.expires_at,
+    'seeded', preview.seeded_at is not null
   ) into identity_value
   from vortex_definition.preview_installations as preview
   join vortex_definition.roots as root on root.root_id = preview.application_root_id
   where preview.preview_installation_id = p_preview_installation_id
     and preview.organization_id = (checked_context ->> 'organizationId')::uuid
+    and preview.previewer_organization_account_id =
+      (checked_context ->> 'organizationAccountId')::uuid
     and preview.expires_at > pg_catalog.statement_timestamp()
     and root.kind = 'application';
   return identity_value;
@@ -40,4 +43,4 @@ revoke all on function vortex_definition.read_preview_application_identity(uuid)
 grant execute on function vortex_definition.read_preview_application_identity(uuid)
   to vortex_request;
 comment on function vortex_definition.read_preview_application_identity(uuid) is
-  'The Application, key and draft revision of one unexpired preview, for a builder of the validated human organisation context; null when there is no such preview.';
+  'The Application, key and draft revision of one unexpired preview, and whether it holds copied live records, for the builder of the validated human organisation context who opened it; null when there is no such preview.';

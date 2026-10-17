@@ -22,7 +22,6 @@ import { humanOrganizationRequests } from "./server-composition";
 import { platformPermissionSource } from "./platform-permission-source";
 import { loadOrganizationLauncher } from "./organization-context";
 import { organizationAddressPath } from "./address-paths";
-import { loadInstalledContext, requestDependencies } from "./application-page/load";
 
 const previewRequestSchema = z
   .object({
@@ -36,7 +35,7 @@ export type StudioApplicationPreviewResult =
   | Readonly<{ kind: "provisioned"; href: string; draftRevision: number; expiresAt: string }>
   | Readonly<{
       kind: "refused";
-      reason: "invalid_request" | "permission_refused" | "not_installed";
+      reason: "invalid_request" | "permission_refused";
     }>
   | Readonly<{ kind: "conflict" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
@@ -110,14 +109,6 @@ export const provisionStudioApplicationPreview = async (
   const request = previewRequestSchema.safeParse(candidate);
   if (!organization.success || !request.success)
     return { kind: "refused", reason: "invalid_request" };
-  // A preview runs inside the Application's installation (its access and the records it copies),
-  // so an Application that was never installed has nothing to preview in yet.
-  const installed = await loadInstalledContext(session, requestDependencies(), {
-    organizationId: organization.data,
-    applicationRootId: request.data.rootId,
-  });
-  if (installed.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
-  if (installed.kind !== "available") return { kind: "refused", reason: "not_installed" };
   let preview;
   try {
     preview = await coordinator().create(session, {

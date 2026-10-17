@@ -14,7 +14,12 @@ import {
   type StoredDefinitionDraft,
 } from "../schema";
 import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "./platform-compatibility";
-import { applicationSourceContractVersion } from "./application-contract-versions";
+import {
+  applicationSourceContractVersion,
+  applicationValidationContractVersion,
+} from "./application-contract-versions";
+import { moduleSourceContractVersion } from "./module-source-contracts";
+import { moduleValidationContractVersion } from "./module-contracts";
 import type { z } from "zod";
 import { fingerprintCanonicalValue } from "./canonical-json-definition";
 import { compileParsedDefinition } from "./compiler";
@@ -143,8 +148,8 @@ const compileModuleCandidate = (
     ...dependencies.connections.map((release) => release.compilationOutput),
   ].map((output) => definitionCompilationOutputSchema.parse(output));
   const common = {
-    sourceContractVersion: "3.0.0" as const,
-    validationContractVersion: "3.0.0" as const,
+    sourceContractVersion: moduleSourceContractVersion,
+    validationContractVersion: moduleValidationContractVersion,
     source: candidate.draft.source,
     resolution,
     draftMetadata: draftMetadata(candidate.draft),
@@ -160,7 +165,7 @@ const compileModuleCandidate = (
   if (
     provisional.kind !== "module" ||
     !("validationContractVersion" in provisional) ||
-    provisional.validationContractVersion !== "3.0.0"
+    provisional.validationContractVersion !== moduleValidationContractVersion
   )
     return refuse("DEFINITION_COMPILATION_REFUSED");
   const savedConditionRevisions = deriveSavedConditionRevisionsFromHistory(
@@ -176,7 +181,7 @@ const compileModuleCandidate = (
     output === undefined ||
     output.kind !== "module" ||
     !("validationContractVersion" in output) ||
-    output.validationContractVersion !== "3.0.0"
+    output.validationContractVersion !== moduleValidationContractVersion
   )
     return refuse("DEFINITION_COMPILATION_REFUSED");
   return { request, output, dependencyOutputs };
@@ -208,7 +213,7 @@ export const compileApplicationCandidate = (
   ].map((output) => definitionCompilationOutputSchema.parse(output));
   const request = parsedCompilationRequest(applicationCompilationRequestSchema, {
     sourceContractVersion: applicationSourceContractVersion,
-    validationContractVersion: "3.0.0" as const,
+    validationContractVersion: applicationValidationContractVersion,
     source: candidate.draft.source,
     resolution,
     catalogueSnapshot: dependencies.composition,
@@ -261,8 +266,8 @@ export const compileCandidate = (
     }
     if (resolution.contractVersion !== "3.0.0") return refuse("DEFINITION_COMPILATION_REFUSED");
     const common = {
-      sourceContractVersion: "3.0.0" as const,
-      validationContractVersion: "3.0.0" as const,
+      sourceContractVersion: moduleSourceContractVersion,
+      validationContractVersion: moduleValidationContractVersion,
       source: candidate.draft.source,
       resolution,
       draftMetadata: draftMetadata(candidate.draft),
@@ -278,7 +283,7 @@ export const compileCandidate = (
     if (
       provisional.kind !== "module" ||
       !("validationContractVersion" in provisional) ||
-      provisional.validationContractVersion !== "3.0.0"
+      provisional.validationContractVersion !== moduleValidationContractVersion
     )
       return refuse("DEFINITION_COMPILATION_REFUSED");
     const savedConditionRevisions = deriveSavedConditionRevisionsFromHistory(

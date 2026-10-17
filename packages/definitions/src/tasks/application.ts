@@ -189,6 +189,7 @@ export const tasksApplication: ApplicationSourceDocument = loadApplicationSource
         {
           id: "role_tasks_user",
           key: "tasks_user",
+          default_member: true,
           name: "Tasks user",
           home_page: "tasks",
           permissions: [readPage, createPage, "vortex.tasks.task.create", "vortex.tasks.task.read"],
@@ -212,7 +213,6 @@ export const tasksApplication: ApplicationSourceDocument = loadApplicationSource
           permission: createPage,
         },
       ],
-      pipelines: [],
       connection_bindings: [],
       interfaces: [],
       events: [

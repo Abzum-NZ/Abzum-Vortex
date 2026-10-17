@@ -152,6 +152,8 @@ begin
     permission_value := candidate -> 'permission';
     source_value := candidate -> 'source';
 
+    -- The meaning the caller's role accepted, at the registration revision the
+    -- eligibility names; its registration must still be active.
     select entry.*
     into catalogue_entry
     from vortex_access.permission_catalogue_entries as entry
@@ -159,9 +161,10 @@ begin
       on registration.organization_id = entry.organization_id
       and registration.registration_kind = entry.registration_kind
       and registration.registration_owner_id = entry.registration_owner_id
-      and registration.revision = entry.registration_revision
+      and entry.registration_revision <= registration.revision
       and registration.state = 'active'
     where entry.organization_id = decision_organization_id
+      and entry.registration_revision = (candidate ->> 'registrationRevision')::bigint
       and entry.application_root_id = (permission_value ->> 'applicationRootId')::uuid
       and entry.owner_kind = permission_value ->> 'ownerKind'
       and entry.owner_id = (permission_value ->> 'ownerId')::uuid
