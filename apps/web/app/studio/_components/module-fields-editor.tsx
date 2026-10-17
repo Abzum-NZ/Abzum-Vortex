@@ -15,11 +15,13 @@ import {
 import {
   changeInlineModuleField, deleteInlineModuleField, deriveFieldKey, fieldTypeKeys, moduleFieldDefaultDeclaration,
   moduleFieldKeptSettings, moduleFieldSettingDeclarations, moduleFieldTypeLabels, moveInlineModuleField,
-  readModuleFieldDefault, readModuleFieldSettings, starterModuleFieldSettings, writeModuleFieldDefault,
-  writeModuleFieldSettings, type ApplicationSourceDocument, type InlineRecordTypeReference,
-  type ModuleFieldPublication, type ModuleFieldType,
+  peopleDirectory, readModuleFieldDefault, readModuleFieldSettings, starterModuleFieldSettings, writeModuleFieldDefault,
+  writeModuleFieldSettings, type ApplicationSourceDocument, type ApplicationUsePlace, type LinkCardinality,
+  type ModuleFieldPublication, type ModuleFieldType, type PeopleDirectoryOwner,
 } from "@vortex/platform/schema";
 import { StudioField } from "./studio-field";
+import { StudioReferencesAlert } from "./studio-used-in";
+import { StudioLinkSection } from "./studio-link-section";
 
 /** An application in this organisation, for the link to the owner of a used module. */
 export type StudioModuleOwnerApplication = Readonly<{ key: string; rootId: string; name: string }>;
@@ -28,12 +30,19 @@ type Source = ApplicationSourceDocument;
 type SourceRecord = Source["body"]["modules"][number]["record_types"][number];
 type SourceField = SourceRecord["fields"][number];
 
+/** A record type a link may point at: its qualified key, its name, and the label each record is shown by. */
+export type StudioLinkTarget = Readonly<{ key: string; label: string; titleLabel: string | undefined }>;
+
 /** What the field editor reads besides the draft: where it can link, and what is published. */
 export type ModuleFieldEditorContext = Readonly<{
   publication: ModuleFieldPublication;
   composition: StudioCompositionContext;
-  /** Record types of the modules the application uses, which a link may point at. */
-  usedRecordTypes: readonly Readonly<{ key: string; label: string }>[];
+  /**
+   * Record types outside the application's own modules a link may point at: those of the modules
+   * it uses, and the people directory's Person, which a link adds to the modules it uses.
+   */
+  usedRecordTypes: readonly StudioLinkTarget[];
+  peopleDirectory: PeopleDirectoryOwner | null;
   readRecords: StudioRecordReader | null;
 }>;
 
@@ -41,7 +50,13 @@ type FormState = Readonly<{
   label: string; helpText: string; type: ModuleFieldType;
   required: boolean; unique: boolean; filterable: boolean; sortable: boolean;
   settings: StudioSettingValues; defaultValue: StudioSettingValues;
+  /** How many records may link to one linked record; read only for a link. */
+  cardinality: LinkCardinality;
 }>;
+
+const linkTypes: ReadonlySet<string> = new Set(["link", "link_to_one_of_several"]);
+/** A person is linked with a Link to a record whose target is the people directory's Person, not this older type. */
+const replacedFieldTypes: ReadonlySet<string> = new Set(["link_to_person"]);
 
 
 /**
@@ -51,13 +66,15 @@ type FormState = Readonly<{
  * edit. A field can be moved or removed; removal is refused while anything uses it. Each change is
  * one edit of the application draft. A field in a published version keeps its stored shape.
  */
-export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, disabled, context, onPendingChange, onApply,
-  onApplied, onRemoved, onShow }: Readonly<{
+export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, initialType = "text", disabled, context,
+  onPendingChange, onApply, onApplied, onRemoved }: Readonly<{
   source: Source;
   moduleKey: string;
   recordKey: string;
   /** The field to change; absent to add a new field. */
   fieldKey: string | undefined;
+  /** The type a new field starts as. */
+  initialType?: ModuleFieldType;
   disabled: boolean;
   context: ModuleFieldEditorContext;
   /** Whether the form holds input that is not applied to the draft yet. */
@@ -68,8 +85,6 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, dis
   onApplied?: (fieldKey: string) => void;
   /** Called after the field is removed from the draft. */
   onRemoved?: () => void;
-  /** Opens a place that uses the field, for "Show me where". */
-  onShow?: (reference: InlineRecordTypeReference) => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const module = source.body.modules.find((item) => item.key === moduleKey);
@@ -80,7 +95,11 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, dis
   const published = existing !== undefined && context.publication.fields.has(`${qualifiedRecord}.${existing.key}`);
   const recordPublished = context.publication.recordTypes.has(qualifiedRecord);
 
-  const recordTypes = useMemo(() => [...studioSourceRecordTypes(source), ...context.usedRecordTypes], [source, context.usedRecordTypes]);
+  const recordTypes = useMemo((): readonly StudioLinkTarget[] => [...studioSourceRecordTypes(source).map((item) => {
+    const [owner, local] = item.key.split(":");
+    const target = source.body.modules.find((candidate) => candidate.key === owner)?.record_types.find((candidate) => candidate.key === local);
+    return { ...item, titleLabel: target?.fields.find((field) => field.key === target.title_field)?.label };
+  }), ...context.usedRecordTypes], [source, context.usedRecordTypes]);
   const relationships = useMemo(() => studioRelationshipChoices(source, null), [source]);
   const otherFields = (record?.fields ?? []).filter((item) => item.key !== existing?.key)
     .map((item) => ({ key: item.key, label: item.label, type: item.type }));
@@ -95,11 +114,16 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, dis
     const relationship = settings.relationship?.kind === "relationship_reference" ? settings.relationship.relationship : undefined;
     return moduleFieldSettingDeclarations(type, { fields: otherFields, relatedFields: fieldsOf(relationship) }, plain);
   };
-  const startSettings = (type: ModuleFieldType): Record<string, unknown> => starterModuleFieldSettings(type, {
-    fieldKey: deriveFieldKey(existing?.label ?? "field", new Set()) ?? "field", recordKey,
-    recordTypes: recordTypes.map((item) => item.key), titleField: record?.title_field ?? "",
-    relationships: relationships.map((item) => item.reference),
-  });
+  const startSettings = (type: ModuleFieldType): Record<string, unknown> => {
+    const start = starterModuleFieldSettings(type, {
+      fieldKey: deriveFieldKey(existing?.label ?? "field", new Set()) ?? "field", recordKey,
+      recordTypes: recordTypes.map((item) => item.key), titleField: record?.title_field ?? "",
+      relationships: relationships.map((item) => item.reference),
+    });
+    // A new link reads back from the linked record by this record type's plural name, for example assets.
+    const back = type === "link" && record !== undefined ? deriveFieldKey(record.plural_name, new Set()) : undefined;
+    return back === undefined ? start : { ...start, reverse_key: back };
+  };
   const read = (type: ModuleFieldType, plain: Readonly<Record<string, unknown>>, stored: unknown) => {
     const first = readModuleFieldSettings(type, plain, moduleFieldSettingDeclarations(type, { fields: otherFields, relatedFields: [] }, plain));
     const declarations = declarationsFor(type, first.values, plain);
@@ -108,14 +132,16 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, dis
     const typedDefault = defaultDeclaration.kind === "declared" ? readModuleFieldDefault(type, stored, defaultDeclaration.declaration) : undefined;
     return { reading, defaultValue: typedDefault === undefined ? {} : { default: typedDefault } };
   };
-  const initialType = (existing?.type ?? "text") as ModuleFieldType;
-  const initialPlain = (existing?.settings ?? startSettings(initialType)) as Record<string, unknown>;
-  const initialRead = read(initialType, initialPlain, (existing as { default?: unknown } | undefined)?.default);
+  const firstType = (existing?.type ?? initialType) as ModuleFieldType;
+  const relationship = existing === undefined ? undefined : record?.relationships.find((item) => item.from_field === existing.key);
+  const initialPlain = (existing?.settings ?? startSettings(firstType)) as Record<string, unknown>;
+  const initialRead = read(firstType, initialPlain, (existing as { default?: unknown } | undefined)?.default);
   const initial: FormState = {
-    label: existing?.label ?? "", helpText: existing?.help_text ?? "", type: initialType,
+    label: existing?.label ?? "", helpText: existing?.help_text ?? "", type: firstType,
     required: existing?.required ?? false, unique: existing?.unique ?? false,
     filterable: existing?.filterable ?? false, sortable: existing?.sortable ?? false,
     settings: initialRead.reading.values, defaultValue: initialRead.defaultValue,
+    cardinality: relationship?.cardinality === "one_to_one" ? "one_to_one" : "many_to_one",
   };
   const [form, setForm] = useState<FormState>(initial);
   const [plainBase, setPlainBase] = useState<Readonly<Record<string, unknown>>>(initialPlain);
@@ -123,13 +149,12 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, dis
   const [placements, setPlacements] = useState<ReadonlySet<string>>(new Set());
   const [message, setMessage] = useState("");
   const [issues, setIssues] = useState<readonly string[]>([]);
-  const [references, setReferences] = useState<readonly InlineRecordTypeReference[]>([]);
-  const [showing, setShowing] = useState(false);
+  const [references, setReferences] = useState<readonly ApplicationUsePlace[]>([]);
 
   const declarations = declarationsFor(form.type, form.settings, plainBase);
   const defaultModel = moduleFieldDefaultDeclaration(form.type, writeModuleFieldSettings(form.type, form.settings, declarations, plainBase));
   const kept = moduleFieldKeptSettings(form.type, plainBase);
-  const choices: StudioSettingChoices = { fields: [], queries: [], pages: [], recordTypes, actions: [], pipelines: [],
+  const choices: StudioSettingChoices = { fields: [], queries: [], pages: [], recordTypes, actions: [],
     relationships, records: context.readRecords };
   const offered = adding ? studioFieldPlacements({ ...context.composition, source }, moduleKey, recordKey, form.type) : [];
   const nextKey = adding && record !== undefined && form.label.trim() !== ""
@@ -172,7 +197,8 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, dis
       filterable: form.filterable, sortable: form.sortable, type: form.type, settings,
       defaultValue: defaultModel.kind === "declared" ? writeModuleFieldDefault(form.type, form.defaultValue.default)
         : (existing as { default?: unknown } | undefined)?.default,
-    }, context.publication);
+      cardinality: linkTypes.has(form.type) ? form.cardinality : undefined,
+    }, { publication: context.publication, peopleDirectory: context.peopleDirectory });
     if (result.kind === "invalid") {
       setIssues(result.issues);
       setMessage("The field was not changed. Your entries are kept; correct them using the reasons below.");
@@ -208,7 +234,7 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, dis
     if (existing === undefined) return;
     setIssues([]); setReferences([]);
     const result = deleteInlineModuleField(source, moduleKey, recordKey, existing.key, context.publication);
-    if (result.kind === "referenced") { setReferences(result.references); setShowing(false); return; }
+    if (result.kind === "referenced") { setReferences(result.references); return; }
     if (result.kind === "invalid") { setIssues(result.issues); return; }
     if (!await confirm({
       title: `Remove ${existing.label}?`,
@@ -246,14 +272,14 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, dis
       : existing !== undefined && existing.type !== form.type
         ? "Changing the type starts this field's settings and default afresh. No stored value is converted." : undefined}>
       {(control) => <StudioOptionControl id={control.id} value={form.type} disabled={disabled || shapeLocked}
-        options={fieldTypeKeys.map((item) => ({ value: item, label: moduleFieldTypeLabels[item] }))}
+        options={fieldTypeKeys.filter((item) => !replacedFieldTypes.has(item)).map((item) => ({ value: item, label: moduleFieldTypeLabels[item] }))}
         onChange={(next) => changeType(next as ModuleFieldType)} />}
     </StudioField>
     <fieldset className="space-y-2">
       <legend className="text-sm font-semibold">Rules</legend>
       {flag("required", adding && recordPublished ? "A value is required (not for a new field of a published record type)" : "A value is required",
         adding && recordPublished)}
-      {flag("unique", "Each record has a different value")}
+      {flag("unique", "Each record has a different value", linkTypes.has(form.type) && form.cardinality === "one_to_one")}
       {flag("filterable", "People can filter by it")}
       {flag("sortable", "People can sort by it")}
     </fieldset>
@@ -270,6 +296,10 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, dis
             choices={choices} disabled={disabled || shapeLocked} onChange={(settings) => change({ settings })} />}
       {kept.map((note) => <p key={note} className="text-sm text-muted-foreground" role="note">{note}</p>)}
     </section>
+    {linkTypes.has(form.type) && <StudioLinkSection settings={form.settings} cardinality={form.cardinality} label={form.label}
+      recordName={record.name} recordPlural={record.plural_name} targets={recordTypes} disabled={disabled || shapeLocked}
+      usesDirectory={source.body.uses.some((use) => use.module === peopleDirectory.module)}
+      onCardinality={(cardinality) => change(cardinality === "one_to_one" ? { cardinality, unique: true } : { cardinality })} />}
     <section className="space-y-2" aria-label="Default value">
       {defaultModel.kind === "declared"
         ? <StudioSettingFields idPrefix="module-field-default" properties={[defaultModel.declaration]} values={form.defaultValue}
@@ -309,21 +339,7 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, dis
         <Button type="button" size="sm" variant="destructive" disabled={disabled || pending}
           onClick={() => { void remove(); }}>Remove field</Button>
       </div>
-      {references.length === 0 ? null : <Alert variant="destructive" role="alert">
-        <AlertTitle>{existing.label} cannot be removed</AlertTitle>
-        <AlertDescription className="space-y-2">
-          <p>It is used in {references.length} {references.length === 1 ? "place" : "places"}. Remove those uses first.</p>
-          <Button type="button" size="xs" variant="outline" aria-expanded={showing} onClick={() => setShowing(!showing)}>
-            {showing ? "Hide where" : "Show me where"}</Button>
-          {showing && <ul className="list-disc space-y-1 pl-5" aria-label={`Where ${existing.label} is used`}>
-            {references.map((reference) => <li key={reference.label} className="break-words">
-              {reference.open.kind === "none" || onShow === undefined ? reference.label
-                : <Button type="button" variant="link" size="sm" className="h-auto whitespace-normal p-0 text-left"
-                  onClick={() => onShow(reference)}>{reference.label}</Button>}
-            </li>)}
-          </ul>}
-        </AlertDescription>
-      </Alert>}
+      <StudioReferencesAlert name={existing.label} action="removed" references={references} />
     </section>}
     {confirmDialog}
   </form>;

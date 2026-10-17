@@ -21,6 +21,7 @@ export const studioKindLabel = (kind: StudioSemanticSelection["kind"] | "section
     case "record_type": return "Record type";
     case "field": return "Field";
     case "query": return "Query";
+    case "role": return "Role";
   }
 };
 

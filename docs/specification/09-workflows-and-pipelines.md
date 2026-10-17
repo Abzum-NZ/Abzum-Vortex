@@ -200,7 +200,7 @@ The [IAM application](appendices/iam-application.md) uses this same human-input 
 
 ## Process pipelines
 
-A pipeline belongs to an application and one record type. Each stage has a stable key, a user-facing label, and explicit entry and exit action and flow lists. Each transition names source and target stages, an optional permission and action, and an optional typed gate. A time target names its stage, date-time field, and escalation event. Publication resolves every reference and refuses duplicate or missing stages.
+A pipeline belongs to a record type and follows one of its choice fields. Its stages are that field's options, each exactly once, in the order a board shows them, and each has a colour role from the theme tokens. Its transitions are the only moves between two stages that a save accepts. The record write path enforces them for a person's save, a `BeforeSave` flow's output and a named action alike. A stage is gated when a named action owns its option (the action's `sets_choice_field` and `sets_choice_option`). Saving that option anywhere then runs the action, with its permission, condition and inputs. A board over the choice field takes its columns, colours and drag rules from the pipeline, and a board whose choice field has no pipeline is refused at publication.
 
 ```mermaid
 stateDiagram-v2
@@ -233,7 +233,7 @@ The record's current stage is Vortex business data. Stage movement is a named [a
 - A flow cannot call an unapproved connection, arbitrary address, SQL statement, or uploaded script.
 - A run started under one application version remains explainable after a newer version is published.
 - Vortex displays Kestra's current completed, waiting, cancelled, or failed state and labels status unavailable during a Kestra outage.
-- Moving a pipeline stage without its transition permission or gate is refused even if a flow tries to request it.
+- A move between two pipeline stages that is not a declared transition is refused, and a move into a gated stage runs its owning action with that action's permission, even if a flow tries to save the stage directly.
 
 ## External outcome uncertainty
 

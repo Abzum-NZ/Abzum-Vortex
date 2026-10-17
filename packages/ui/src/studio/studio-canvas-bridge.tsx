@@ -105,7 +105,11 @@ export function StudioCanvasBridge({
   selectedRef.current = selectedAlias;
   // The selection the canvas and the workspace last agreed on. Each side reacts only to a change
   // away from it, so neither echoes the other's change back while that change is on its way.
-  const agreed = useRef<string | null>(selectedAlias);
+  // It starts empty: a canvas opened with a block already selected (from another tab, a "Used in"
+  // entry or "Show me where") selects that block on its first render.
+  const agreed = useRef<string | null>(null);
+  // The canvas's own empty selection before it ever selected a block is not a click, so it is not reported.
+  const everSelected = useRef(false);
 
   const puckSelection = (): string | null => {
     const id = getPuck().selectedItem?.props.id;
@@ -138,6 +142,8 @@ export function StudioCanvasBridge({
 
   // A click on the canvas selects the block in the outline and the inspector.
   useEffect(() => {
+    if (puckSelected !== null) everSelected.current = true;
+    else if (!everSelected.current) return;
     if (puckSelected === agreed.current) return;
     agreed.current = puckSelected;
     void onSelect(puckSelected).then((accepted) => {

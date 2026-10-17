@@ -1,41 +1,42 @@
 import {
   applicationSourceDocumentSchema,
+  applicationUses,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
-  readSourceItem,
   sourceItemTree,
   sourcePageItems,
   sourcePageShell,
-  type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
   type SourceItem,
 } from "@vortex/platform/schema";
 import {
   StoredCompositionRefusal,
+  removeFlowBindingsOf,
   studioPlacementRemovalReference,
-  syncStoredBlockDependencies,
   validateStoredShell,
   type StudioCompositionRemovalReason,
-  type StudioPlacementDescriber,
   type StudioSemanticSelection,
 } from "@vortex/ui/studio";
 import { applyStudioItemLabels } from "./application-item-labels";
-import { tokenName } from "./studio-labels";
+import {
+  blockItem, cleanName, emptyPageData, judged, newestRelease, placeNewPage, quoted, refuse, StructureRefusal, uniqueKey,
+  type Navigation, type Page, type Shell, type Source, type StudioStructureContext, type StudioStructureResult,
+} from "./application-structure-common";
+import { addRecordPage, type StudioRecordPageCommand } from "./application-record-pages";
 
 /**
- * The Structure tab's edits: add, rename and remove pages and layouts, and choose the home page.
+ * The Structure tab's edits: add, rename and remove pages and layouts, add the pages of a record
+ * type (application-record-pages.ts), and choose the home page.
  * Each edit is applied to a copy of the draft, keeps every reference intact (a removed page takes
  * its menu entries and its blocks' flow bindings with it) and is judged by the source schema
  * before it reaches the draft history. A refusal says where the problem is, in words a builder
  * reads, and changes nothing.
  */
 
-type Source = ApplicationSourceDocument;
-type Page = Source["body"]["pages"][number];
-type Shell = Source["body"]["shells"][number];
-type Navigation = Source["body"]["navigation"];
+export type { StudioStructureContext, StudioStructureResult } from "./application-structure-common";
 
 export type StudioStructureCommand =
   | Readonly<{ kind: "add_page"; name: string; shellAlias: string | null; addToMenu: boolean }>
+  | StudioRecordPageCommand
   | Readonly<{ kind: "add_shell"; name: string }>
   | Readonly<{ kind: "rename"; selection: Extract<StudioSemanticSelection, { kind: "page" | "shell" }>; name: string }>
   | Readonly<{ kind: "remove_page"; pageAlias: string }>
@@ -43,54 +44,8 @@ export type StudioStructureCommand =
   | Readonly<{ kind: "set_home_page"; pageAlias: string }>
   | Readonly<{ kind: "move_page"; pageAlias: string; shellAlias: string | null }>;
 
-export type StudioStructureResult =
-  | Readonly<{ kind: "applied"; source: Source; message: string; select: StudioSemanticSelection | null }>
-  | Readonly<{ kind: "refused"; message: string }>;
-
 /** A layout a page can use. */
 export type StudioStructureShellChoice = Readonly<{ shellAlias: string | null; label: string }>;
-
-export type StudioStructureContext = Readonly<{
-  source: Source;
-  catalogue: ImmutablePlatformBlockCatalogue;
-  describePlacement: StudioPlacementDescriber;
-}>;
-
-class StructureRefusal extends Error {}
-const refuse = (message: string): never => { throw new StructureRefusal(message); };
-
-const quoted = (name: string) => `“${name}”`;
-const nameLimit = 60;
-
-const cleanName = (name: string, what: string): string => {
-  const trimmed = name.trim().replace(/\s+/g, " ");
-  if (trimmed.length === 0) refuse(`Give the ${what} a name.`);
-  if (trimmed.length > nameLimit) refuse(`A ${what} name can be at most ${nameLimit} characters.`);
-  return trimmed;
-};
-
-/** A lowercase key from a name, unique among `taken`, within `limit` characters. */
-const uniqueKey = (name: string, prefix: string, taken: ReadonlySet<string>, limit: number): string => {
-  const words = name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-  const stem = `${prefix}${/^[a-z]/.test(words) ? "" : "item_"}${words || "item"}`.slice(0, limit).replace(/_+$/g, "");
-  let key = stem;
-  for (let suffix = 2; taken.has(key); suffix += 1) {
-    const ending = `_${suffix}`;
-    key = `${stem.slice(0, limit - ending.length).replace(/_+$/g, "")}${ending}`;
-  }
-  return key;
-};
-
-const navigationIds = (items: Navigation, into = new Set<string>()): Set<string> => {
-  for (const item of items) {
-    into.add(item.id);
-    if (item.type === "heading") navigationIds(item.children, into);
-  }
-  return into;
-};
-
-const navigationCount = (items: Navigation): number =>
-  items.reduce((count, item) => count + 1 + (item.type === "heading" ? navigationCount(item.children) : 0), 0);
 
 /** The menu without the page's entries; a heading left with no entries goes too. */
 const withoutPageEntries = (items: Navigation, pageKey: string): Navigation =>
@@ -113,29 +68,6 @@ const releaseOf = (catalogue: ImmutablePlatformBlockCatalogue, item: SourceItem)
   catalogue.releases.find((release) => String(release.blockId) === item.props.vortex.block.block_id &&
     String(release.releaseVersion) === item.props.vortex.block.release_version);
 
-/** Whether a typed setting value (at any depth of a group or list) links to the page. */
-const linksTo = (value: unknown, pageKey: string): boolean => {
-  if (Array.isArray(value)) return value.some((entry) => linksTo(entry, pageKey));
-  if (value === null || typeof value !== "object") return false;
-  const record = value as Record<string, unknown>;
-  if (record.kind === "page_reference") return record.page === pageKey;
-  return Object.values(record).some((entry) => linksTo(entry, pageKey));
-};
-
-/** Whether a flow task anywhere in the flow opens the page. */
-const navigatesTo = (value: unknown, pageKey: string): boolean => {
-  if (Array.isArray(value)) return value.some((entry) => navigatesTo(entry, pageKey));
-  if (value === null || typeof value !== "object") return false;
-  const record = value as Record<string, unknown>;
-  if (record.type === "interface.navigate") {
-    const page = (record.properties as Record<string, unknown> | undefined)?.page as Record<string, unknown> | undefined;
-    const literal = page?.literal as Record<string, unknown> | undefined;
-    const target = typeof literal?.value === "string" ? literal.value : undefined;
-    if (target === pageKey || target?.endsWith(`:${pageKey}`)) return true;
-  }
-  return Object.values(record).some((entry) => navigatesTo(entry, pageKey));
-};
-
 const flowReferenceWords: Readonly<Record<StudioCompositionRemovalReason, string>> = {
   flow_control: "is bound to a flow",
   flow_form: "is the form a flow waits for",
@@ -152,7 +84,7 @@ const flowReferenceWords: Readonly<Record<StudioCompositionRemovalReason, string
 const removeBlocks = (context: StudioStructureContext, source: Source, leaving: readonly SourceItem[], what: string): void => {
   const aliases = new Set(placementsOf(context.source).map(({ item }) => item.props.id));
   const removed = new Set(leaving.map((item) => item.props.id));
-  source.body.flow_bindings = source.body.flow_bindings.filter((binding) => !removed.has(binding.control));
+  removeFlowBindingsOf(source.body, removed);
   for (const item of leaving) {
     const reason = studioPlacementRemovalReference(source, item.props.id, aliases);
     if (reason !== undefined) {
@@ -166,55 +98,6 @@ const removeBlocks = (context: StudioStructureContext, source: Source, leaving: 
 const settingsOf = (item: SourceItem): Record<string, unknown> =>
   Object.fromEntries(Object.entries(item.props).filter(([key, value]) => key !== "id" && key !== "vortex" && !Array.isArray(value)));
 
-/** Everything outside the page that still names it; the first one found refuses the removal. */
-const pageReferences = (context: StudioStructureContext, page: Page): string | undefined => {
-  const { body } = context.source;
-  const subject = `The page ${quoted(page.name)}`;
-  if (body.home_page === page.key)
-    return `${subject} is the application's home page. Make another page the home page first.`;
-  const role = body.roles.find((candidate) => candidate.home_page === page.key);
-  if (role !== undefined) return `${subject} is where the role ${quoted(role.name)} starts. Give that role another start page first.`;
-  if ((body.experiences ?? []).some((experience) => experience.page === page.key))
-    return `${subject} is shown when a page cannot be opened. Choose another page for that first.`;
-  if (body.public_addresses.some((address) => address.page === page.key))
-    return `${subject} has a public address. Remove that address first.`;
-  const search = body.search?.record_types.find((entry) => entry.target_page === page.key);
-  if (search !== undefined)
-    return `${subject} opens search results for ${tokenName(search.record_type.slice(search.record_type.lastIndexOf(":") + 1))}. Change the search settings in Data first.`;
-  const replacing = body.pages.find((candidate) => candidate.replaces_page === page.id);
-  if (replacing !== undefined) return `${subject} is replaced by the page ${quoted(replacing.name)}. Remove that page first.`;
-  for (const { item, where, page: owner } of placementsOf(context.source)) {
-    if (owner === page.id) continue;
-    const release = releaseOf(context.catalogue, item);
-    if (release === undefined || !linksTo(readSourceItem(item, release).settings, page.key)) continue;
-    const block = context.describePlacement({ block: item.props.vortex.block, settings: settingsOf(item) }) ?? release.name;
-    return `${subject} is linked from the block ${quoted(String(block))} on ${where}. Change that link first.`;
-  }
-  const flow = body.flows.find((candidate) => navigatesTo(candidate, page.key));
-  if (flow !== undefined) return `${subject} is opened by the flow ${quoted(tokenName(flow.key))}. Change that flow first.`;
-  return undefined;
-};
-
-/** Words for where the schema refused the result, never a value. */
-const describeIssuePath = (source: Source, path: readonly PropertyKey[]): string => {
-  const [, collection, index] = path;
-  if (collection === "pages" && typeof index === "number")
-    return `the page ${quoted(source.body.pages[index]?.name ?? "")}`;
-  if (collection === "shells" && typeof index === "number")
-    return `the layout ${quoted(source.body.shells[index]?.name ?? "")}`;
-  if (collection === "navigation") return "the menu";
-  return typeof collection === "string" ? tokenName(collection).toLowerCase() : "the application";
-};
-
-const judged = (candidate: Source): Source => {
-  syncStoredBlockDependencies(candidate);
-  const parsed = applicationSourceDocumentSchema.safeParse(candidate);
-  if (parsed.success) return parsed.data;
-  const issue = parsed.error.issues[0]!;
-  console.error("[studio] structure edit refused by the source schema", issue.path.join("."), issue.code);
-  return refuse(`This change would leave ${describeIssuePath(candidate, issue.path)} invalid (${issue.message}). Nothing was changed.`);
-};
-
 /** The layouts a page can use: the application's layouts, then the platform's default frame. */
 export const studioStructureShellChoices = (source: Source): readonly StudioStructureShellChoice[] => [
   ...source.body.shells.map((shell) => ({ shellAlias: shell.id as string | null, label: shell.name })),
@@ -227,36 +110,15 @@ export const studioStructureDefaultShell = (source: Source): string | null => {
   return home === undefined ? null : sourcePageShell(home.composition);
 };
 
-/** Empty page data in a frame: each of a layout's content areas is present and holds no blocks. */
-const emptyPageData = (source: Source, shellAlias: string | null) => {
-  const shell = shellAlias === null ? undefined : source.body.shells.find((entry) => entry.id === shellAlias);
-  if (shellAlias !== null && shell === undefined) refuse("The chosen layout is no longer in this application. Choose another.");
-  return {
-    root: { props: { vortex: { shell: shellAlias, slot_orders: {} },
-      ...Object.fromEntries((shell?.content_slots ?? []).map((slot) => [slot.id, []])) } },
-    content: [],
-  };
-};
-
 const addPage = (context: StudioStructureContext, candidate: Source,
   command: Extract<StudioStructureCommand, { kind: "add_page" }>): StudioStructureResult => {
   const name = cleanName(command.name, "page");
-  const body = candidate.body;
-  if (body.pages.length >= 100) refuse("An application can have at most 100 pages.");
   const composition = emptyPageData(context.source, command.shellAlias);
-  const home = body.pages.find((page) => page.key === body.home_page);
+  const home = candidate.body.pages.find((page) => page.key === candidate.body.home_page);
   if (home === undefined) refuse("The application's home page is missing, so a new page has no access rule to start from.");
-  const key = uniqueKey(name, "", new Set(body.pages.map((page) => page.key)), 40);
-  const id = uniqueKey(key, "page_", new Set(body.pages.map((page) => page.id)), 160);
   // A valid empty Puck page: no blocks, in the chosen frame. Who can open it starts as who can open the home page.
-  const page = { id, key, name, type: "dashboard", permission: home!.permission, composition } as unknown as Page;
-  body.pages.push(page);
-  if (command.addToMenu) {
-    if (navigationCount(body.navigation) >= 100) refuse("The menu is full, so the page cannot be added to it.");
-    body.navigation.push({ id: uniqueKey(key, "nav_", navigationIds(body.navigation), 160), type: "page",
-      label: name, icon: "grid", page: key, permission: home!.permission });
-  }
-  return { kind: "applied", source: judged(candidate), select: { kind: "page", pageAlias: id },
+  const placed = placeNewPage(candidate, name, { type: "dashboard", permission: home!.permission }, composition, command.addToMenu);
+  return { kind: "applied", source: judged(placed.source), select: { kind: "page", pageAlias: placed.page.id }, details: [],
     message: `Page ${quoted(name)} added${command.addToMenu ? " to the menu" : ""}. Save to keep it.` };
 };
 
@@ -320,31 +182,9 @@ const movePage = (context: StudioStructureContext, candidate: Source,
     ? { step_content: Object.fromEntries(Object.entries(composition.step_content)
       .map(([step, data]) => [step, movedData(context, page, data, command.shellAlias)])) }
     : movedData(context, page, composition, command.shellAlias)) as unknown as Page["composition"];
-  return { kind: "applied", source: judged(candidate), select: { kind: "page", pageAlias: page.id },
+  return { kind: "applied", source: judged(candidate), select: { kind: "page", pageAlias: page.id }, details: [],
     message: `${quoted(page.name)} now uses ${target === undefined ? "the platform default frame" : `the layout ${quoted(target.name)}`}. Save to keep it.` };
 };
-
-const newestRelease = (catalogue: ImmutablePlatformBlockCatalogue, identity: Readonly<{ blockId: string }>) => {
-  const versions = catalogue.releases.filter((release) => String(release.blockId) === identity.blockId);
-  const parts = (version: string) => version.split(".").map(Number);
-  return versions.sort((left, right) => {
-    const [a, b] = [parts(String(left.releaseVersion)), parts(String(right.releaseVersion))];
-    return (b[0]! - a[0]!) || (b[1]! - a[1]!) || (b[2]! - a[2]!);
-  })[0];
-};
-
-const blockItem = (release: NonNullable<ReturnType<typeof newestRelease>>, id: string,
-  settings: Record<string, unknown>, slots: Record<string, SourceItem[]>): SourceItem => ({
-  type: String(release.rendererKey),
-  props: {
-    id, ...settings, ...Object.fromEntries(release.slots.map((slot) => [slot.key, slots[slot.key] ?? []])),
-    vortex: {
-      block: { block_id: String(release.blockId), release_version: String(release.releaseVersion) },
-      theme_overrides: {},
-      responsive: { desktop: { visible: true, width: { kind: "fill" }, height: { kind: "content" } } },
-    },
-  },
-} as SourceItem);
 
 /**
  * A new layout: a frame with the application menu beside one optional content area, so any page,
@@ -391,19 +231,21 @@ const addShell = (context: StudioStructureContext, candidate: Source,
     refuse("The new layout could not be built from the block catalogue, so none was added.");
   }
   body.shells.push(shell);
-  return { kind: "applied", source: judged(candidate), select: { kind: "shell", shellAlias: id },
+  return { kind: "applied", source: judged(candidate), select: { kind: "shell", shellAlias: id }, details: [],
     message: `Layout ${quoted(name)} added. Save to keep it.` };
 };
 
 const removePage = (context: StudioStructureContext, candidate: Source, pageAlias: string): StudioStructureResult => {
   const page = context.source.body.pages.find((entry) => entry.id === pageAlias);
   if (page === undefined) return refuse("That page is no longer in the draft.");
-  const blocked = pageReferences(context, page);
-  if (blocked !== undefined) refuse(blocked);
+  // Everything outside the page that still names it refuses the removal; its menu entries go with it.
+  const where = applicationUses(context.source, { kind: "page", pageAlias }, (path) => path[1] === "navigation");
+  if (where.length > 0)
+    refuse(`The page ${quoted(page.name)} is still used in ${where.length === 1 ? "one place" : `${where.length} places`}, so it was not removed. Change those first.`, where);
   candidate.body.pages = candidate.body.pages.filter((entry) => entry.id !== pageAlias);
   candidate.body.navigation = withoutPageEntries(candidate.body.navigation, page.key);
   removeBlocks(context, candidate, sourcePageItems(page.composition), `The page ${quoted(page.name)}`);
-  return { kind: "applied", source: judged(candidate), select: null,
+  return { kind: "applied", source: judged(candidate), select: null, details: [],
     message: `Page ${quoted(page.name)} removed, with its menu entries. Save to keep it.` };
 };
 
@@ -415,7 +257,7 @@ const removeShell = (context: StudioStructureContext, candidate: Source, shellAl
     refuse(`The layout ${quoted(shell.name)} is used by ${users.length === 1 ? "the page" : `${users.length} pages, including`} ${quoted(users[0]!.name)}. Move or remove those pages first.`);
   candidate.body.shells = candidate.body.shells.filter((entry) => entry.id !== shellAlias);
   removeBlocks(context, candidate, sourceItemTree(shell.layout.content), `The layout ${quoted(shell.name)}`);
-  return { kind: "applied", source: judged(candidate), select: null,
+  return { kind: "applied", source: judged(candidate), select: null, details: [],
     message: `Layout ${quoted(shell.name)} removed. Save to keep it.` };
 };
 
@@ -425,6 +267,7 @@ export const applyStudioStructureCommand = (context: StudioStructureContext, com
     const candidate = applicationSourceDocumentSchema.parse(structuredClone(context.source));
     switch (command.kind) {
       case "add_page": return addPage(context, candidate, command);
+      case "add_record_page": return addRecordPage(context, candidate, command);
       case "add_shell": return addShell(context, candidate, command);
       case "remove_page": return removePage(context, candidate, command.pageAlias);
       case "remove_shell": return removeShell(context, candidate, command.shellAlias);
@@ -434,7 +277,7 @@ export const applyStudioStructureCommand = (context: StudioStructureContext, com
         if (page === undefined) return refuse("That page is no longer in the draft.");
         if (candidate.body.home_page === page.key) return refuse(`${quoted(page.name)} is already the home page.`);
         candidate.body.home_page = page.key;
-        return { kind: "applied", source: judged(candidate), select: { kind: "page", pageAlias: page.id },
+        return { kind: "applied", source: judged(candidate), select: { kind: "page", pageAlias: page.id }, details: [],
           message: `${quoted(page.name)} is now the home page. Save to keep it.` };
       }
       case "rename": {
@@ -443,12 +286,12 @@ export const applyStudioStructureCommand = (context: StudioStructureContext, com
         const result = applyStudioItemLabels(context.source, command.selection, name, context.source.body.description);
         if (result.kind === "not_found") return refuse(`That ${what} is no longer in the draft.`);
         if (result.kind === "invalid") return refuse(`The ${what} name was refused (${result.issues[0]?.message ?? "invalid"}). Nothing was changed.`);
-        return { kind: "applied", source: result.source, select: command.selection,
+        return { kind: "applied", source: result.source, select: command.selection, details: [],
           message: `Renamed to ${quoted(name)}. Save to keep it.` };
       }
     }
   } catch (error) {
-    if (error instanceof StructureRefusal) return { kind: "refused", message: error.message };
+    if (error instanceof StructureRefusal) return { kind: "refused", message: error.message, where: error.where };
     throw error;
   }
 };

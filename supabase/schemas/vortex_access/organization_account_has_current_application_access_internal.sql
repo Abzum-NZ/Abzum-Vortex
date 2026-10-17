@@ -31,6 +31,20 @@ begin
     return false;
   end if;
 
+  -- In a preview the builder who opened it holds every role of the previewed draft; anyone else
+  -- has the access their live roles give them.
+  if exists (
+    select 1
+    from vortex_access.request_application_registration_internal(
+      p_organization_id, p_application_root_id, p_organization_account_id
+    ) as registration
+    where registration.registration_kind = 'preview'
+      and registration.valid_until > checked_at
+      and pg_catalog.cardinality(registration.role_ids) > 0
+  ) then
+    return true;
+  end if;
+
   -- The Record writer invokes this helper only after locking the exact active
   -- organisation-account projection and its active identity in this organisation.
   return exists (
@@ -171,7 +185,7 @@ grant execute on function vortex_access.organization_account_has_current_applica
   to vortex_record_adapter;
 
 comment on function vortex_access.organization_account_has_current_application_access_internal(uuid, uuid, uuid) is
-  'Private Record-link authorization for a previously locked active organisation account: returns only whether that linked account has a current direct or Group application role under the validated human application context, including current assignment, membership and activation continuity.';
+  'Private Record-link authorization for a previously locked active organisation account: returns only whether that linked account has a current direct or Group application role under the validated human application context, including current assignment, membership and activation continuity, or is the builder of the preview the context runs, who holds its draft''s roles.';
 
 alter function vortex_access.organization_account_has_current_application_access_internal(uuid, uuid, uuid)
   owner to vortex_owner;
