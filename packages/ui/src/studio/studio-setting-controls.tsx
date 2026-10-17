@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
+  canonicalJson,
   validateComponentSettings,
   type ApplicationSourceDocument,
   type BlockPropertySchemaContract,
@@ -351,7 +352,7 @@ function GroupControl({ id, property, value, onChange, choices, disabled }: Cont
         onCheckedChange={(checked) => onChange(checked === true ? { kind: "group", properties: {} } : undefined)} />
       Use {property.label.toLowerCase()}</label>}
     {(group !== undefined || !optional) && <div className="space-y-3 border-l-2 border-border pl-3">
-      <StudioSettingFields idPrefix={id} properties={property.properties} values={group?.properties ?? {}}
+      <SettingFields idPrefix={id} properties={property.properties} values={group?.properties ?? {}}
         choices={choices} disabled={disabled}
         onChange={(properties) => onChange({ kind: "group", properties: { ...properties } })} />
     </div>}
@@ -442,14 +443,98 @@ export function StudioQueryPicker({ id, queries, value, onChange, disabled }: Re
  * its help and its default. `values` holds the settings that are set; a setting left out takes
  * its default.
  */
-export function StudioSettingFields({ idPrefix, properties, values, onChange, choices, disabled }: Readonly<{
+type SettingFieldsProps = Readonly<{
   idPrefix: string;
   properties: readonly BlockPropertySchemaContract[];
   values: StudioSettingValues;
   onChange: (values: StudioSettingValues) => void;
   choices: StudioSettingChoices;
   disabled: boolean;
-}>): ReactElement {
+}>;
+
+/** Remove copied field labels in one update, including every column affected by a query change. */
+const followFieldLabels = (properties: readonly BlockPropertySchemaContract[], values: StudioSettingValues,
+  previous: StudioSettingValues, fields: readonly StudioQueryField[], previousFields: readonly StudioQueryField[],
+): StudioSettingValues => {
+  let result = values;
+  const write = (key: string, value: SettingValue) => {
+    const next = { ...result };
+    if (value === undefined) delete next[key];
+    else next[key] = value;
+    result = next;
+  };
+  const fieldProperty = properties.find((property) => property.key === "field" && property.kind === "field_reference");
+  const labelProperty = properties.find((property) => property.key === "label" && property.kind === "text" &&
+    !property.required && property.defaultValue === undefined);
+  const oldField = fieldProperty === undefined ? undefined : previous.field;
+  const newField = fieldProperty === undefined ? undefined : values.field;
+  const oldLabel = oldField?.kind === "field_reference"
+    ? previousFields.find((field) => field.reference === oldField.field)?.label : undefined;
+  const newLabel = newField?.kind === "field_reference"
+    ? fields.find((field) => field.reference === newField.field)?.label : undefined;
+  const label = labelProperty === undefined ? undefined : values.label;
+  if (label?.kind === "text" && previous.label?.kind === "text" && label.value === previous.label.value &&
+    label.value === oldLabel && (oldField?.kind === "field_reference" &&
+      (newField?.kind !== "field_reference" || oldField.field !== newField.field || oldLabel !== newLabel)))
+    write("label", undefined);
+
+  const visit = (property: BlockPropertySchemaContract, value: SettingValue, before: SettingValue): SettingValue => {
+    if (property.kind === "group" && value?.kind === "group") {
+      const children = followFieldLabels(property.properties, value.properties,
+        before?.kind === "group" ? before.properties : {}, fields, previousFields);
+      return children === value.properties ? value : { ...value, properties: { ...children } };
+    }
+    if (property.kind === "list" && value?.kind === "list") {
+      const items = value.items.map((item, index) => visit(property.item, item,
+        before?.kind === "list" ? before.items[index] : undefined)!);
+      return items.every((item, index) => item === value.items[index]) ? value : { ...value, items };
+    }
+    return value;
+  };
+  for (const property of properties) {
+    const value = visit(property, values[property.key], previous[property.key]);
+    if (value !== values[property.key]) write(property.key, value);
+  }
+  return result;
+};
+
+export function StudioSettingFields(props: SettingFieldsProps): ReactElement {
+  // Keep the previously committed choices: an inline query can disappear from the new choices.
+  const previous = useRef({ values: props.values, fields: props.choices.fields, id: props.idPrefix });
+  useEffect(() => {
+    const before = previous.current;
+    previous.current = { values: props.values, fields: props.choices.fields, id: props.idPrefix };
+    // New settings came from an edit callback, selection or history, rather than a query switch.
+    if (props.disabled || before.id !== props.idPrefix ||
+      (before.values !== props.values && canonicalJson(before.values) !== canonicalJson(props.values))) return;
+    const values = followFieldLabels(props.properties, props.values, before.values, props.choices.fields, before.fields);
+    if (values !== props.values) props.onChange(values);
+  }, [props.values, props.choices.fields, props.properties, props.idPrefix, props.disabled, props.onChange]);
+  return <SettingFields {...props} onChange={(values) => props.onChange(
+    followFieldLabels(props.properties, values, props.values, props.choices.fields, props.choices.fields))} />;
+}
+
+function SettingFields({ idPrefix, properties, values, onChange, choices, disabled }: SettingFieldsProps): ReactElement {
+  // A field's optional label is an override. Matching text follows the field when it changes;
+  // other text stays authored, with an explicit way to return to the field's label.
+  const fieldProperty = properties.find((property) => property.key === "field" && property.kind === "field_reference");
+  const labelProperty = properties.find((property) => property.key === "label" && property.kind === "text" &&
+    !property.required && property.defaultValue === undefined);
+  const fieldValue = fieldProperty === undefined ? undefined : values[fieldProperty.key];
+  const field = fieldValue?.kind === "field_reference"
+    ? choices.fields.find((candidate) => candidate.reference === fieldValue.field) : undefined;
+  const label = labelProperty === undefined ? undefined : values[labelProperty.key];
+  const labelText = label?.kind === "text" ? label.value : undefined;
+  const fieldReference = fieldValue?.kind === "field_reference" ? fieldValue.field : undefined;
+  const [labelSource, setLabelSource] = useState({ idPrefix, labelText, fieldReference, fieldLabel: field?.label });
+  if (labelSource.idPrefix !== idPrefix || labelSource.labelText !== labelText)
+    setLabelSource({ idPrefix, labelText, fieldReference, fieldLabel: field?.label });
+  const fieldChanged = labelSource.fieldReference !== fieldReference || labelSource.fieldLabel !== field?.label;
+  const useFieldLabel = () => {
+    const result = { ...values };
+    delete result.label;
+    onChange(result);
+  };
   return <div className="space-y-3">
     {properties.map((property) => {
       const id = `${idPrefix}-${property.key}`;
@@ -472,6 +557,19 @@ export function StudioSettingFields({ idPrefix, properties, values, onChange, ch
               <SettingControl id={id} property={property} value={value} onChange={set} choices={choices} disabled={disabled} />
             </>}
         {property.help === undefined ? null : <p className="text-xs text-muted-foreground">{property.help}</p>}
+        {property === labelProperty && fieldProperty !== undefined && <div className="space-y-1 text-xs">
+          {field === undefined
+            ? <p role="alert">Choose a field offered by this data to resolve its label.</p>
+            : label?.kind === "text"
+              ? <>
+                  {fieldChanged && label.value !== field.label && <p role="alert">
+                    The field changed since this label was set. Keep it as a custom label, or use &ldquo;{field.label}&rdquo;.
+                  </p>}
+                  <Button type="button" variant="outline" size="sm" disabled={disabled} className="h-auto whitespace-normal text-left"
+                    onClick={useFieldLabel}>Use field label: {field.label}</Button>
+                </>
+              : <p>Uses field label: {field.label}</p>}
+        </div>}
       </div>;
     })}
   </div>;
