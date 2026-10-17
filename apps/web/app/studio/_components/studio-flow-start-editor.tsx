@@ -14,8 +14,9 @@ import {
 } from "@vortex/ui/studio";
 
 /**
- * The Start node's inspector: how the flow starts. Its name, the inputs it declares, where each
- * input comes from when a control starts it, and its record triggers. Apply writes it as one flow edit.
+ * The Start node's inspector: how the flow starts. Its name, the inputs it declares, the record it
+ * runs for, where each input comes from when a control starts it, and its record triggers. Apply
+ * writes it as one flow edit.
  */
 
 const typeLabels: Readonly<Record<string, string>> = {
@@ -104,6 +105,7 @@ export function StudioFlowStartEditor({ projection, recordTypes, controlLabel, d
   const shown = draft ?? projection.draft;
   const change = (next: StudioFlowStartDraft) => { setDraft(next); onPendingChange(true); setProblem(""); setStatus(""); };
   const setInputs = (inputs: readonly StudioFlowInputDraft[]) => change({ ...shown, inputs,
+    recordInput: inputs.some((input) => input.id === shown.recordInput) ? shown.recordInput : null,
     bindings: shown.bindings.map((binding) => ({ ...binding, inputs: Object.fromEntries(inputs.map((input) =>
       [input.id, binding.inputs[input.id] ?? { kind: "none" as const }])) })) });
   return <section className="space-y-4" aria-label="How it starts">
@@ -166,6 +168,18 @@ export function StudioFlowStartEditor({ projection, recordTypes, controlLabel, d
         }}>
         Add an input</Button>
     </fieldset>
+    {projection.execution === "interactive" && <div className="space-y-1.5">
+      <Label htmlFor="flow-start-record">Runs for</Label>
+      <NativeSelect id="flow-start-record" className="w-full" disabled={disabled} value={shown.recordInput ?? ""}
+        onChange={(event) => change({ ...shown, recordInput: event.target.value === "" ? null : event.target.value })}>
+        <NativeSelectOption value="">No record</NativeSelectOption>
+        {shown.inputs.filter((input) => input.type === "record_reference").map((input) =>
+          <NativeSelectOption key={input.id} value={input.id}>{`The record in ${studioWords(input.name)}${input.recordType === null ? ""
+            : ` (${recordTypes.find((entry) => entry.key === input.recordType)?.label ?? input.recordType})`}`}</NativeSelectOption>)}
+      </NativeSelect>
+      <p className="text-xs text-muted-foreground">Its steps read the fields of this record, such as its stage, as the person may see them
+        when the flow runs.</p>
+    </div>}
     <div className="flex gap-2">
       <Button type="button" size="sm" disabled={disabled || draft === null} onClick={() => {
         if (draft === null) return;
