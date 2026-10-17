@@ -285,6 +285,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             settings: { display_time_zone: "organisation" },
           },
         ],
+        pipelines: [],
         relationships: [],
       },
       {
@@ -398,6 +399,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             settings: { display_time_zone: "organisation" },
           },
         ],
+        pipelines: [],
         relationships: [],
       },
       {
@@ -558,6 +560,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             settings: {},
           },
         ],
+        pipelines: [],
         relationships: [],
       },
       {
@@ -692,6 +695,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             settings: { max_length: 36 },
           },
         ],
+        pipelines: [],
         relationships: [],
       },
       {
@@ -780,6 +784,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             settings: {},
           },
         ],
+        pipelines: [],
         relationships: [],
       },
       {
@@ -894,6 +899,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             settings: {},
           },
         ],
+        pipelines: [],
         relationships: [],
       },
       activityRecordType,

@@ -81,11 +81,18 @@ const runningFlows = (source: ApplicationSourceDocument, module: Module, action:
   ];
 };
 
-function ActionDialog({ source, module, record, action, open, onOpenChange, onSave, onShow }: Readonly<{
+/**
+ * Adds or changes one named action. A pipeline's gate opens it with the stage's option already set,
+ * so the new action owns that stage; `onSaved` then names the action it made.
+ */
+export function ActionDialog({ source, module, record, action, open, onOpenChange, onSave, onShow, initialEffect, onSaved }: Readonly<{
   source: ApplicationSourceDocument; module: Module; record: RecordType; action: Action | undefined; open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (next: ApplicationSourceDocument, message: string) => boolean;
   onShow: (reference: InlineRecordTypeReference) => void;
+  /** For a new action: the choice option it sets from the start. */
+  initialEffect?: Readonly<{ field: string; option: string }>;
+  onSaved?: (actionKey: string) => void;
 }>) {
   const [where, setWhere] = useState<readonly InlineRecordTypeReference[]>([]);
   const projected = useMemo(() => projectStudioActionCondition(action?.precondition), [action]);
@@ -94,7 +101,8 @@ function ActionDialog({ source, module, record, action, open, onOpenChange, onSa
   const [condition, setCondition] = useState<ConditionNode | undefined>(projected.kind === "condition" ? projected.condition : undefined);
   const [keptCondition, setKeptCondition] = useState(projected.kind === "unsupported");
   const [conditionValid, setConditionValid] = useState(true);
-  const [effects, setEffects] = useState<Effect[]>(() => effectsOf(action));
+  const [effects, setEffects] = useState<Effect[]>(() => action === undefined && initialEffect !== undefined
+    ? [{ field: initialEffect.field, from: "fixed", value: initialEffect.option }] : effectsOf(action));
   const named = module.permissions.filter((permission) => permission.action_kind === "named" && permission.record_type === record.key);
   const [permission, setPermission] = useState(action === undefined || action.permission === action.key ? "own" : action.permission ?? "own");
   const [ownsChoice, setOwnsChoice] = useState(action === undefined || action.sets_choice_field !== undefined);
@@ -120,7 +128,10 @@ function ActionDialog({ source, module, record, action, open, onOpenChange, onSa
     setWhere([]);
     if (result.kind === "invalid") { setIssues(result.issues); return; }
     if (result.kind === "referenced") { setIssues([result.issue]); setWhere(result.references); return; }
-    if (onSave(result.source, `Action ${label.trim()} ${action === undefined ? "added" : "changed"}. Save to keep it.`)) onOpenChange(false);
+    if (onSave(result.source, `Action ${label.trim()} ${action === undefined ? "added" : "changed"}. Save to keep it.`)) {
+      onSaved?.(result.actionKey);
+      onOpenChange(false);
+    }
     else setIssues(["The draft changed or is busy, so nothing was changed. Try again in a moment."]);
   };
   return <Dialog open={open} onOpenChange={onOpenChange}>

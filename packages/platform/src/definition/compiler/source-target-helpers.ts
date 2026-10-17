@@ -112,11 +112,6 @@ function conditionRootPaths(
       },
     );
   }
-  if (collection === "pipelines" && typeof sourcePath[4] === "number")
-    fixedRoots.push({
-      sourceRoot: ["body", "pipelines", first, "transitions", sourcePath[4], "gate"],
-      canonicalRoot: ["content", "pipelines", first, "transitions", sourcePath[4], "gate"],
-    });
   if (collection === "pages") {
     if (sourcePath[3] === "blocks" && typeof sourcePath[4] === "number")
       fixedRoots.push({

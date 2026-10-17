@@ -87,6 +87,7 @@
           }
         }
       ],
+      "pipelines": [],
       "relationships": []
     },
     {
@@ -198,6 +199,7 @@
           }
         }
       ],
+      "pipelines": [],
       "relationships": [
         {
           "id": "fld_record_tag_tag_relationship",
