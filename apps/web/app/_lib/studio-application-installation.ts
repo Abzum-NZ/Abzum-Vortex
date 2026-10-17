@@ -128,6 +128,25 @@ const upgradeEnvironment = (): UpgradeRoleEnvironment => ({
   accessAdministration: createOrganizationAccessAdministrationService(humanOrganizationRequestDependencies()),
 });
 
+/** The selected version's release note for the confirmation; a failed read is logged and shows none. */
+const readReleaseNote = async (selector: StudioApplicationInstallationSelector): Promise<string | null> => {
+  const access = await loadStudioApplicationHistoryAccess(selector.organizationId, selector.rootId);
+  if (access.kind !== "available") {
+    console.error(`[studio] upgrade release note unavailable: history ${access.kind}`);
+    return null;
+  }
+  const inspected = await inspectStudioApplicationReleaseHistory(selector.organizationId, {
+    rootId: selector.rootId,
+    expected: access.snapshot,
+    releaseRevision: selector.releaseRevision,
+  });
+  if (inspected.kind !== "available") {
+    console.error(`[studio] upgrade release note unavailable: release ${inspected.kind}`);
+    return null;
+  }
+  return inspected.metadata.releaseNote;
+};
+
 /**
  * The roles the upgrade would leave waiting for acceptance. An upgrader who may not read roles
  * still upgrades; the roles are then accepted in role administration, so this read failing is logged, not fatal.
@@ -193,6 +212,7 @@ export const loadStudioApplicationInstallation = async (
       kind: "available",
       snapshot: authorized.snapshot,
       roleRevisions: await readRoleRevisions(selector.data, authorized, session),
+      releaseNote: await readReleaseNote(selector.data),
     });
   } catch (error) {
     return toLoadFailure(classifyInstallationFailure(error));

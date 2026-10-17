@@ -86,6 +86,8 @@ export const studioApplicationInstallationLoadResultSchema = z.discriminatedUnio
       kind: z.literal("available"),
       snapshot: studioApplicationInstallationSnapshotSchema,
       roleRevisions: studioApplicationRoleRevisionsSchema,
+      /** The selected version's release note, or null when it could not be read. */
+      releaseNote: z.string().max(2_000).nullable(),
     })
     .strict(),
   z

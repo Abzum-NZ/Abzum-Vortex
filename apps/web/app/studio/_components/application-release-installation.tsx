@@ -1,6 +1,6 @@
 "use client";
 import { Button } from "@vortex/ui/components/button";
-import { Checkbox } from "@vortex/ui/components/checkbox";
+import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { TechnicalDetails } from "@vortex/ui/components/technical-details";
 
 import { useEffect, useRef, useState } from "react";
@@ -85,7 +85,7 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
   const [pending, setPending] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [message, setMessage] = useState(loadMessage(initialResult));
-  const [acceptRoleIds, setAcceptRoleIds] = useState<readonly string[]>([]);
+  const [confirm, confirmDialog] = useConfirm();
   const outcomeHeading = useRef<HTMLHeadingElement>(null);
   const mounted = useRef(false);
   const generation = useRef(0);
@@ -108,6 +108,7 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
   const snapshot = state.load.kind === "available" ? state.load.snapshot : null;
   const roleRevisions = state.load.kind === "available" ? state.load.roleRevisions : null;
   const listedRoles = roleRevisions?.kind === "listed" ? roleRevisions.roles : [];
+  const releaseNote = state.load.kind === "available" ? state.load.releaseNote : null;
   const snapshotId = snapshot === null ? null : snapshotKey(snapshot);
   const snapshotExpiry = snapshot?.validUntil ?? null;
   const expired = snapshot !== null && now >= Date.parse(snapshot.validUntil);
@@ -131,6 +132,28 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
   const install = async () => {
     if (!mounted.current || pendingRef.current || snapshot === null || expired ||
       snapshot.selected.releaseRevision <= snapshot.active.releaseRevision) return;
+    // The same shared confirmation as a first install: the version change, what is new, and the
+    // roles it changes, with one explicit choice to accept them in the same step.
+    let acceptRoles = false;
+    const confirmed = await confirm({
+      title: `Upgrade to version ${snapshot.selected.releaseVersion}?`,
+      description: `The application moves from version ${snapshot.active.releaseVersion} to ${snapshot.selected.releaseVersion}.`,
+      details: <>
+        {releaseNote !== null && <p><span className="font-medium">What&apos;s new:</span> {releaseNote}</p>}
+        {listedRoles.length > 0 && <>
+          <p>These roles change. Until a change is accepted, people in the role keep exactly the access they have now.</p>
+          <ul className="list-disc space-y-1 pl-5">
+            {listedRoles.map((role) => <li key={role.roleId}><span className="font-medium">{role.label}</span>: {role.changes.join("; ")}</li>)}
+          </ul>
+        </>}
+        {roleRevisions?.kind === "unavailable" && <p>The roles this version changes could not be read with your access. People keep the access they have; accept role changes in role administration.</p>}
+      </>,
+      ...(listedRoles.length > 0
+        ? { choice: { label: "Accept for these roles", onChange: (checked: boolean) => { acceptRoles = checked; } } }
+        : {}),
+      confirmLabel: "Upgrade",
+    });
+    if (!confirmed || !mounted.current || pendingRef.current) return;
     pendingRef.current = true;
     setPending(true);
     setMessage("Checking current authority and installing the selected release.");
@@ -146,7 +169,7 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
         kind: "application.release.install_selected",
         selector,
         expected: snapshot,
-        acceptRoleIds: acceptRoleIds.filter((roleId) => listedRoles.some((role) => role.roleId === roleId)),
+        acceptRoleIds: acceptRoles ? listedRoles.map((role) => role.roleId) : [],
       });
       if (!current()) return;
       const parsed = studioApplicationInstallationCommandResultSchema.safeParse(returned.command);
@@ -161,7 +184,6 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
         return;
       }
       setState({ load: reloaded.data, command: parsed.data });
-      setAcceptRoleIds([]);
       setMessage(commandText(parsed.data));
     } catch {
       if (!current()) return;
@@ -220,18 +242,9 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
             : listedRoles.length === 0
               ? <p>This version changes no role. People keep the access they have.</p>
               : <>
-                <p>These roles change in this version. Until a change is accepted, people in the role keep exactly the access they have now. Accept a change here to give it to them with the upgrade, or later in role administration. Accepting needs a recent sign-in.</p>
-                <ul className="space-y-3">
-                  {listedRoles.map((role) => <li key={role.roleId}>
-                    <label className="flex items-start gap-2">
-                      <Checkbox checked={acceptRoleIds.includes(role.roleId)} disabled={pending || expired}
-                        aria-label={`Accept the changes to ${role.label}`}
-                        onCheckedChange={(checked) => setAcceptRoleIds((previous) => checked
-                          ? [...previous.filter((roleId) => roleId !== role.roleId), role.roleId]
-                          : previous.filter((roleId) => roleId !== role.roleId))} />
-                      <span><span className="font-medium">{role.label}</span>: {role.changes.join("; ")}</span>
-                    </label>
-                  </li>)}
+                <p>These roles change in this version. Until a change is accepted, people in the role keep exactly the access they have now. You can accept the changes when you confirm the upgrade, or later in role administration.</p>
+                <ul className="list-disc space-y-1 pl-5">
+                  {listedRoles.map((role) => <li key={role.roleId}><span className="font-medium">{role.label}</span>: {role.changes.join("; ")}</li>)}
                 </ul>
               </>}
         </section>}
@@ -261,5 +274,6 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
         </Button>
       </section>
     </>}
+    {confirmDialog}
   </main>;
 }
