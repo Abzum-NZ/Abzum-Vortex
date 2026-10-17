@@ -11,7 +11,7 @@ set search_path = ''
 as $function$
   -- A Module source is exactly the lowering of one inline Module of its owning Application's
   -- current draft: the inline Module's alias, key and body, naming that Application as its owner,
-  -- under the one current Module source contract (moduleSourceContractVersion). Nothing else may
+  -- under the one accepted Module contract version (accepted_contract_version('module')). Nothing else may
   -- differ; a Module's dependencies are derived when it is compiled and never stored.
   select exists (
     select 1
@@ -24,7 +24,7 @@ as $function$
       and owner_root.organization_id = p_organization_id
       and owner_root.kind = 'application'
       and p_source = pg_catalog.jsonb_build_object(
-        'source_contract_version', '3.0.0',
+        'source_contract_version', (vortex_definition.accepted_contract_version('module'))[1],
         'root_alias', inline_module.value -> 'id',
         'key', inline_module.value -> 'key',
         'kind', 'module',
