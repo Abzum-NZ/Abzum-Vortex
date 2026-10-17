@@ -19,5 +19,4 @@ export {
   createCustomComponentPayloadParser,
   createCustomComponentRegistration,
   createCustomComponentRegistrations,
-  createCustomComponentRegistry,
 } from "./registration";
