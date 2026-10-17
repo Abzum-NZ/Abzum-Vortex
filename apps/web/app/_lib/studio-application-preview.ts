@@ -15,7 +15,9 @@ import {
   organizationIdSchema,
   revisionSchema,
   sameId,
+  type ApplicationRootId,
   type IdentitySession,
+  type OrganizationId,
 } from "@vortex/platform/schema";
 import { z } from "zod";
 import { installedReleaseCatalogue } from "./definition-catalogue";
@@ -122,8 +124,8 @@ const provisioning = new Map<string, Promise<StudioPreviewResult>>();
 
 const provision = (
   session: IdentitySession,
-  organizationId: string,
-  rootId: string,
+  organizationId: OrganizationId,
+  rootId: ApplicationRootId,
   draftRevision: number,
 ): Promise<StudioPreviewResult> => {
   const key = `${session.identityId}|${organizationId}|${rootId}|${draftRevision}`.toLowerCase();

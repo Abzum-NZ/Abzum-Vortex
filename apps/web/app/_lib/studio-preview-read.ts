@@ -5,7 +5,12 @@ import {
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
 } from "@vortex/platform/server";
-import { sameId, type IdentitySession } from "@vortex/platform/schema";
+import {
+  sameId,
+  type ApplicationRootId,
+  type IdentitySession,
+  type OrganizationId,
+} from "@vortex/platform/schema";
 import { humanOrganizationRequests } from "./server-composition";
 import { currentStudioPreview } from "./studio-application-preview";
 import { loadInstalledContext, requestDependencies } from "./application-page/load";
@@ -15,8 +20,8 @@ import { getQueryContinuationKey } from "./query-continuation-key";
 
 /** The selection every read of a Studio preview runs under: the Application and the builder's preview of it. */
 export type StudioPreviewSelection = Readonly<{
-  organizationId: string;
-  applicationRootId: string;
+  organizationId: OrganizationId;
+  applicationRootId: ApplicationRootId;
   previewInstallationId: string;
 }>;
 
@@ -44,8 +49,8 @@ export type StudioPreviewRead =
 /** Opens the builder's preview of the saved draft at this revision for reading records. */
 export const openStudioPreviewRead = async (
   session: IdentitySession,
-  organizationId: string,
-  rootId: string,
+  organizationId: OrganizationId,
+  rootId: ApplicationRootId,
   draftRevision: number,
 ): Promise<StudioPreviewRead> => {
   const preview = await currentStudioPreview(session, organizationId, { rootId, draftRevision });
