@@ -3,8 +3,10 @@ import "server-only";
 import {
   BuilderAuthorityError,
   collectRecordLinks,
+  collectRecordLinkValues,
   createBuilderAuthority,
   protectedQueryCommandSchema,
+  protectedQuerySummaryCommandSchema,
   recordLinkPlainText,
   requireBuilderAuthority,
   type ProjectedRecordLinks,
@@ -44,6 +46,9 @@ const requestSchema = z.object({
 /** One column of the results grid: a field the query returns, by its label. */
 export type StudioDataColumn = Readonly<{ key: string; label: string }>;
 
+/** One total of a summary, as a person reads it. */
+export type StudioDataTotal = Readonly<{ alias: string; label: string; value: string }>;
+
 export type StudioDataRecordsResult =
   | Readonly<{
       kind: "available";
@@ -55,6 +60,16 @@ export type StudioDataRecordsResult =
       rows: readonly Readonly<{ id: string; cells: Readonly<Record<string, string>> }>[];
       next?: string;
       previous?: string;
+    }>
+  /** A query that groups records or adds totals: its groups, each with its count and totals, and its overall totals. */
+  | Readonly<{
+      kind: "summary";
+      queryLabel: string;
+      /** The fields the records are grouped by, by label; empty when the query only adds totals. */
+      groupColumns: readonly StudioDataColumn[];
+      groups: readonly Readonly<{ key: string; values: readonly string[]; count: number; totals: readonly StudioDataTotal[] }>[];
+      totalRowCount: number;
+      totals: readonly StudioDataTotal[];
     }>
   /** The running application does not have this module, record type or query yet: preview or publish first. */
   | Readonly<{ kind: "not_installed" }>
@@ -74,11 +89,22 @@ const sentence = (key: string): string => {
   return words.length === 0 ? key : words[0]!.toUpperCase() + words.slice(1);
 };
 
-/** The query a record type is read through when none is chosen: its first plain query (no inputs, no groups). */
+/** The query a record type is read through when none is chosen: its first plain query (no inputs, groups or totals). */
 const plainQueryOf = (module: ModuleRelease, record: ModuleRecordType): ModuleQuery | undefined =>
   module.content.queries.find((query) => query.recordType.state === "resolved" &&
     sameId(String(query.recordType.recordTypeId), String(record.recordTypeId)) &&
-    query.inputs.length === 0 && query.groupByFieldIds.length === 0);
+    query.inputs.length === 0 && query.groupByFieldIds.length === 0 && query.aggregates.length === 0);
+
+const totalLabels = { count: "Number of records", sum: "Sum", average: "Average", minimum: "Lowest", maximum: "Highest" } as const;
+
+/** A total's value as plain text: a number, an amount of money, a date. */
+const totalText = (result: Readonly<{ outcome: string; value?: JsonValue }>): string => {
+  if (result.outcome !== "completed") return "Not one currency";
+  const value = result.value;
+  if (value === null || value === undefined) return "None";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  return isRecord(value) ? moneyText(value as Record<string, JsonValue>) ?? "Set" : "Set";
+};
 
 const moneyText = (value: Record<string, JsonValue>): string | undefined =>
   (typeof value.amount === "string" || typeof value.amount === "number") && typeof value.currency === "string"
@@ -150,6 +176,7 @@ export const readStudioDataRecords = async (
       : undefined;
     if (queryRecord === undefined) return { kind: "not_installed" };
 
+    const summary = query.groupByFieldIds.length > 0 || query.aggregates.length > 0;
     const launcher = await loadOrganizationLauncher(session);
     const entry = launcher.kind === "available"
       ? launcher.entries.find((candidateEntry) => sameId(candidateEntry.organizationId, organization.data)) : undefined;
@@ -157,6 +184,37 @@ export const readStudioDataRecords = async (
     const services = createPlacementReadServices({ session, selection, dependencies,
       continuationKey: getQueryContinuationKey(), tenantShortName: entry.tenantShortName,
       organizationShortName: entry.organizationShortName });
+    const label = query.label ?? sentence(query.key);
+    if (summary) {
+      const summaryCommand = protectedQuerySummaryCommandSchema.safeParse({ moduleRootId: module.rootId, queryId: query.queryId, inputValues: {} });
+      if (!summaryCommand.success) return { kind: "query_refused", reason: "request_invalid" };
+      const read = await services.queries.summarise(session, selection, summaryCommand.data);
+      if (read.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
+      if (read.kind !== "available") return { kind: "refused" };
+      if (read.value.outcome !== "completed") return { kind: "query_refused", reason: read.value.reasonCode };
+      const completed = read.value;
+      const fieldOf = (fieldId: string) => queryRecord.fields.find((field) => sameId(String(field.fieldId), fieldId));
+      const groupFields = query.groupByFieldIds.flatMap((fieldId) => { const field = fieldOf(String(fieldId)); return field === undefined ? [] : [field]; });
+      const groupLinks = collectRecordLinkValues(completed.groups.flatMap((group) => Object.values<JsonValue>(group.groupValues)));
+      const links = groupLinks.length === 0 ? undefined : await services.recordLinkResolver(context)(groupLinks);
+      const totalsOf = (aggregates: Readonly<Record<string, Readonly<{ outcome: string; value?: JsonValue }>>>): StudioDataTotal[] =>
+        query.aggregates.map((aggregate) => {
+          const field = aggregate.fieldId === undefined ? undefined : fieldOf(String(aggregate.fieldId));
+          const result = aggregates[aggregate.alias];
+          return { alias: aggregate.alias,
+            label: field === undefined ? totalLabels[aggregate.operation] : `${totalLabels[aggregate.operation]} of ${field.label}`,
+            value: result === undefined ? "None" : totalText(result) };
+        });
+      return {
+        kind: "summary", queryLabel: label, totalRowCount: completed.totalRowCount, totals: totalsOf(completed.aggregates),
+        groupColumns: groupFields.map((field) => ({ key: field.key, label: field.label })),
+        groups: completed.groups.slice(0, request.pageSize).map((group) => ({
+          key: group.groupKey, count: group.rowCount, totals: totalsOf(group.aggregates),
+          values: groupFields.map((field) => cellText(field,
+            Object.entries(group.groupValues).find(([fieldId]) => sameId(fieldId, String(field.fieldId)))?.[1], links) || "None"),
+        })),
+      };
+    }
     const command = protectedQueryCommandSchema.safeParse({
       moduleRootId: module.rootId, queryId: query.queryId, inputValues: {},
       requestedFieldIds: query.selectedFieldIds, requestedSystemFieldKeys: [], sort: [],
@@ -179,7 +237,7 @@ export const readStudioDataRecords = async (
     const title = fields.find((field) => sameId(String(field.fieldId), String(queryRecord.titleFieldId)));
     return {
       kind: "available",
-      queryLabel: sentence(query.key),
+      queryLabel: label,
       columns: fields.map((field) => ({ key: field.key, label: field.label })),
       ...(title === undefined ? {} : { titleColumn: title.key }),
       rows: page.rows.map((row) => ({
