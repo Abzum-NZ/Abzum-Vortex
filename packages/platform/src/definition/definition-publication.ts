@@ -284,7 +284,8 @@ export const createDefinitionPublicationService = (
       );
       return prepareDefinitionPublicationResultSchema.parse({
         confirmation: state.confirmation,
-        componentLabels: componentLabelsOf(
+        componentLabels: await componentLabelsOf(
+          (blockId, releaseVersion) => catalogue.readPlatformBlockRelease(blockId, releaseVersion),
           state.compilationOutput.canonical,
           ...state.moduleOutputs.map((output) => output.canonical),
           candidate.historyEvidence.latestRelease?.content,
