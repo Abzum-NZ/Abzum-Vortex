@@ -1183,7 +1183,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     <StudioStructurePanel {...outlinePanelProps} hidden={tab !== "structure"}
       homePageKey={homePage === undefined ? undefined : studioSemanticSelectionKey({ kind: "page", pageAlias: homePage.id })}
       editor={<StudioStructureEditor source={source} selected={selected} onCommand={commandStructure}
-        onOpenAccess={() => { void changeTab("access"); }}
+        onOpenAccess={() => { access.showPages(); void changeTab("access"); }}
         disabled={busy.anyRendered() || state.isSaving || workspaceLifetime === 0} />} />
     <StudioBlockOutlinePanel {...outlinePanelProps} hidden={tab !== "outline"} ownerKey={outlineOwnerKey} />
     <StudioPanelShell title="Blocks" description="Blocks to add to the page on the canvas." hidden={tab !== "blocks"}>
@@ -1194,7 +1194,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     <StudioMenuPanel source={source} hidden={tab !== "menu"}
       selectedAlias={selected?.kind === "navigation" ? selected.navigationItemAlias : null}
       onSelect={(alias) => { void chooseSelection(alias === null ? null : { kind: "navigation", navigationItemAlias: alias }); }}
-      onCommand={commandMenu} onOpenAccess={() => { void changeTab("access"); }}
+      onCommand={commandMenu} onOpenAccess={() => { access.showPages(); void changeTab("access"); }}
       disabled={busy.anyRendered() || state.isSaving || workspaceLifetime === 0} />
     {data.panel}
     {flows.panel(tab !== "flows")}

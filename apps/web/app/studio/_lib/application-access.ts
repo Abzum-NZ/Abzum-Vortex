@@ -309,10 +309,14 @@ const setFieldAccess = (candidate: Source, command: Extract<StudioAccessCommand,
   const order = (keys: ReadonlySet<string>) => record.fields.map((entry) => entry.key).filter((key) => keys.has(key));
   const taken = takenAliases(body);
   const notes: string[] = [];
-  const read = ownedBy(body, role, heldOn(body, role, command.moduleKey, command.recordKey, "read")[0]!, taken, notes);
-  (read as { field_policy?: unknown }).field_policy = { readable_fields: order(readable), changeable_fields: [] };
+  // Only the permissions whose fields change are rewritten, so a change of what is changed leaves Read alone.
+  const readChanged = field.readable !== reads;
+  if (readChanged) {
+    const read = ownedBy(body, role, heldOn(body, role, command.moduleKey, command.recordKey, "read")[0]!, taken, notes);
+    (read as { field_policy?: unknown }).field_policy = { readable_fields: order(readable), changeable_fields: [] };
+  } else if (field.changeable === command.changeable) refuse(`Nothing changes for ${quoted(field.label)}.`);
   const update = heldOn(body, role, command.moduleKey, command.recordKey, "update")[0];
-  if (update !== undefined) {
+  if (update !== undefined && (readChanged || field.changeable !== command.changeable)) {
     const owned = ownedBy(body, role, update, taken, notes);
     (owned as { field_policy?: unknown }).field_policy = { readable_fields: order(readable),
       changeable_fields: order(new Set([...changeable].filter((key) => readable.has(key)))) };

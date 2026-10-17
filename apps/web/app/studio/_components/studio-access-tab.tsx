@@ -46,7 +46,7 @@ export function useStudioAccessTab({ source, compiledRoles, hidden, disabled, on
   onPreview: (roleKey: string) => void;
   /** Opens a place outside this tab that uses a role or permission. */
   goTo: (place: Exclude<StudioAccessPlace, { kind: "role" | "other" }>) => void;
-}>): Readonly<{ panel: ReactNode; centre: ReactNode; title: string }> {
+}>): Readonly<{ panel: ReactNode; centre: ReactNode; title: string; showPages: () => void }> {
   const roles = source.body.roles;
   const [chosen, setChosen] = useState<View>({ kind: "role", roleKey: roles[0]?.key ?? "" });
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -114,5 +114,5 @@ export function useStudioAccessTab({ source, compiledRoles, hidden, disabled, on
     {view.kind === "permissions" && <StudioAccessPermissionList source={source} disabled={disabled} run={run} />}
   </div>;
   const title = view.kind === "pages" ? "Pages and menu" : view.kind === "permissions" ? "Permissions" : `Role: ${role?.name ?? ""}`;
-  return { panel, centre, title };
+  return { panel, centre, title, showPages: () => show({ kind: "pages" }) };
 }
