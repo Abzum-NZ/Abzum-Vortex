@@ -37,6 +37,7 @@ export type FlowConfirmIntent = Readonly<{
   details: readonly string[];
   choice: string | undefined;
   confirmLabel: string | undefined;
+  destructive: boolean | undefined;
 }>;
 /** The person's answer to a confirmation; `choice` is set only when one was offered. */
 export type FlowConfirmAnswer = Readonly<{ confirmed: boolean; choice?: boolean }>;
@@ -96,6 +97,10 @@ export const readConfirmIntent = (intent: FlowIntent): FlowConfirmIntent | undef
         details,
         choice: text(intent.properties.choice),
         confirmLabel: text(intent.properties.confirm_label),
+        destructive:
+          typeof intent.properties.destructive === "boolean"
+            ? intent.properties.destructive
+            : undefined,
       };
 };
 

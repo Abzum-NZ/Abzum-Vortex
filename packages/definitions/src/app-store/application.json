@@ -1937,6 +1937,13 @@
                           "type": "text",
                           "value": "Remove"
                         }
+                      },
+                      "destructive": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "yes_no",
+                          "value": true
+                        }
                       }
                     }
                   },
