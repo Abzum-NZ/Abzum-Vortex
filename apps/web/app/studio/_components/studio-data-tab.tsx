@@ -15,6 +15,7 @@ import { StudioField } from "./studio-field";
 import { StudioDataPanel } from "./studio-data-panel";
 import { StudioDataCentre } from "./studio-data-centre";
 import { StudioRecordTypeDialog } from "./studio-record-type-dialog";
+import { StudioModuleActions } from "./studio-module-actions";
 import {
   ModuleFieldsEditor, studioFieldPublication, type ModuleFieldEditorContext, type StudioModuleOwnerApplication,
 } from "./module-fields-editor";
@@ -140,6 +141,8 @@ function RecordTypeInspector({ source, saved, moduleKey, recordKey, disabled, fi
         disabled={disabled} context={fieldContext} onPendingChange={onFieldPending} onApply={applyField}
         onApplied={(fieldKey) => onSelect({ kind: "field", moduleKey, recordKey, fieldKey })} onShow={onShow} />
     </section>}
+    <StudioModuleActions source={source} moduleKey={moduleKey} recordKey={recordKey} disabled={disabled} onShow={onShow}
+      apply={(next, message) => apply(next, message)} />
     <section className="space-y-2 border-t border-border pt-3" aria-label="Delete">
       <Button type="button" size="sm" variant="destructive" disabled={disabled} onClick={() => { void remove(); }}>Delete record type</Button>
       {references.length === 0 ? null : <Alert variant="destructive" role="alert">
