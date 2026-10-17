@@ -322,40 +322,17 @@ const rejectSettingFailures = (failures: readonly ComponentSettingFailure[]): vo
   if (first !== undefined) reject("vortex.definition.application_block_settings", first.family);
 };
 
-/** Every theme token a canonical value names, including inside groups and lists, must resolve. */
-const validateThemeTokenSettings = (
-  value: BlockPropertyValueContract,
-  schema: BlockPropertySchemaContract,
-  theme: CanonicalTheme,
-): void => {
-  if (schema.kind === "theme_token" && value.kind === "theme_token") {
-    const token = theme.tokens[value.tokenKey];
-    if (token === undefined || token.kind !== schema.tokenKind)
-      reject("vortex.definition.application_block_settings", "broken_reference");
-  } else if (schema.kind === "group" && value.kind === "group") {
-    for (const property of schema.properties) {
-      const nested = value.properties[property.key];
-      if (nested !== undefined) validateThemeTokenSettings(nested, property, theme);
-    }
-  } else if (schema.kind === "list" && value.kind === "list") {
-    for (const item of value.items) validateThemeTokenSettings(item, schema.item, theme);
-  }
-};
-
 const validateCanonicalPropertyValue = (
   value: BlockPropertyValueContract,
   schema: BlockPropertySchemaContract,
-  theme: CanonicalTheme,
 ): void => {
   rejectSettingFailures(validateComponentSettingValue(value, schema));
-  validateThemeTokenSettings(value, schema, theme);
 };
 
 const compilePropertyValue = (
   authored: SourceBlockPropertyValueContract,
   schema: BlockPropertySchemaContract,
   resolution: ApplicationCompositionResolution,
-  theme: CanonicalTheme,
 ): BlockPropertyValueContract => {
   let compiled: unknown;
   switch (authored.kind) {
@@ -372,9 +349,6 @@ const compilePropertyValue = (
       break;
     case "icon":
       compiled = { kind: authored.kind, iconKey: authored.icon_key };
-      break;
-    case "theme_token":
-      compiled = { kind: authored.kind, tokenKey: authored.token };
       break;
     case "field_reference":
       compiled = { kind: authored.kind, fieldId: resolution.field(authored.field) };
@@ -417,7 +391,7 @@ const compilePropertyValue = (
           : reject("vortex.definition.application_block_settings", "invalid_value");
       compiled = {
         kind: "group",
-        properties: compileSettings(authored.properties, groupSchema.properties, resolution, theme),
+        properties: compileSettings(authored.properties, groupSchema.properties, resolution),
       };
       break;
     }
@@ -428,9 +402,7 @@ const compilePropertyValue = (
           : reject("vortex.definition.application_block_settings", "invalid_value");
       compiled = {
         kind: "list",
-        items: authored.items.map((item) =>
-          compilePropertyValue(item, listSchema.item, resolution, theme),
-        ),
+        items: authored.items.map((item) => compilePropertyValue(item, listSchema.item, resolution)),
       };
       break;
     }
@@ -440,7 +412,7 @@ const compilePropertyValue = (
   const parsed = blockPropertyValueSchema.safeParse(compiled);
   if (!parsed.success) reject("vortex.definition.application_block_settings", "invalid_value");
   const value = parsed.data!;
-  validateCanonicalPropertyValue(value, schema, theme);
+  validateCanonicalPropertyValue(value, schema);
   return value;
 };
 
@@ -448,15 +420,14 @@ const compileSettings = (
   authored: Record<string, SourceBlockPropertyValueContract>,
   declarations: readonly BlockPropertySchemaContract[],
   resolution: ApplicationCompositionResolution,
-  theme: CanonicalTheme,
 ): Record<string, BlockPropertyValueContract> => {
   const result: Record<string, BlockPropertyValueContract> = {};
   for (const declaration of declarations) {
     const value = authored[declaration.key];
     if (value !== undefined)
-      result[declaration.key] = compilePropertyValue(value, declaration, resolution, theme);
+      result[declaration.key] = compilePropertyValue(value, declaration, resolution);
     else if (declaration.defaultValue !== undefined) {
-      validateCanonicalPropertyValue(declaration.defaultValue, declaration, theme);
+      validateCanonicalPropertyValue(declaration.defaultValue, declaration);
       result[declaration.key] = declaration.defaultValue;
     }
   }
@@ -893,7 +864,7 @@ export const materialiseApplicationComposition = (
           [{ kind: "block", key: alias }],
         );
       rejectSettingFailures(reading.settingFailures);
-      const settings = compileSettings(reading.settings, release.properties, resolution, theme);
+      const settings = compileSettings(reading.settings, release.properties, resolution);
       applyFieldInputDerivation(release, settings, resolution);
       validateAccessibleName(settings, release);
       // A compiled item carries each setting as its plain value, and every setting it carries is one

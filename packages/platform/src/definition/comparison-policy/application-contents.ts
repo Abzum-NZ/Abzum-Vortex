@@ -44,7 +44,6 @@ const presentationPropertyValue = (value: unknown): boolean => {
     case "url":
     case "asset_reference":
     case "icon":
-    case "theme_token":
       return true;
     case "group":
       return Object.values(asRecord(property.properties)).every(presentationPropertyValue);
