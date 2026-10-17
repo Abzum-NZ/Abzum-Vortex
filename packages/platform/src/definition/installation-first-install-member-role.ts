@@ -31,6 +31,7 @@ import type {
   FirstInstallFlowEnvironment,
 } from "./installation-first-install-app";
 import type { FirstInstallSelector } from "./installation-first-install";
+import { classifyDatabaseError } from "./definition-error";
 import {
   createFirstInstallCoordinator,
   verifyFirstInstallActivation,
@@ -223,11 +224,24 @@ const readMemberRoleState = (
         installationOperation(selector.rootId, containsCustomComponents),
       ),
     );
-    const rows = await transaction.query<DatabaseRow & { readonly member_role: unknown }>`
-      select vortex_access.read_first_install_member_role(
-        ${selector.rootId}::uuid, ${sourceRoleId}::uuid
-      ) as member_role
-    `;
+    // The read re-proves the installation authority, including delegated management of the
+    // organisation catalogue; the database refusing it is the installer lacking that authority.
+    const rows = await named(
+      "first_install_member_role_read_refused",
+      "installation_authority",
+      () =>
+        transaction.query<DatabaseRow & { readonly member_role: unknown }>`
+          select vortex_access.read_first_install_member_role(
+            ${selector.rootId}::uuid, ${sourceRoleId}::uuid
+          ) as member_role
+        `.catch((error: unknown) => {
+          if (classifyDatabaseError(error) === "refused")
+            installationProblem("first_install_member_role_read_refused", "refused", undefined, {
+              cause: error,
+            });
+          throw error;
+        }),
+    );
     const state = memberRoleStateSchema.safeParse(rows[0]?.member_role);
     if (
       rows.length !== 1 ||
