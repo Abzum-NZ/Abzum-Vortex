@@ -90,6 +90,8 @@ export type StudioConditionOperandPermission =
       operand: ParameterOperand;
       label: string;
       role: Exclude<StudioConditionOperandRole, "current_field">;
+      /** A choice's options: a value compared with this operand is picked from them. */
+      options?: readonly Readonly<{ value: string; label: string }>[];
     }>;
 
 export type StudioConditionParameterDeclaration = Readonly<{

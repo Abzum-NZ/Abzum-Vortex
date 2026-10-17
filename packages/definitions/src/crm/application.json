@@ -4839,7 +4839,7 @@
         "contractVersion": "1.0.0",
         "id": "crm_named_action_opportunity_mark_won",
         "key": "crm_named_action_opportunity_mark_won",
-        "description": "Marks the current opportunity won through the bound opportunity.mark_won named action.",
+        "description": "Marks the opportunity the page shows won: an open one is saved as Won, which runs the Mark won action that owns the stage; one already won gets a message.",
         "labels": {
           "name": "Mark opportunity won"
         },
@@ -4847,21 +4847,84 @@
         "runAs": {
           "kind": "initiator"
         },
-        "inputs": {},
+        "inputs": {
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.crm.opportunities:opportunity"]
+          }
+        },
+        "recordInput": "record_id",
         "tasks": [
           {
-            "id": "call",
-            "type": "operation.call",
-            "version": "1.0.0",
-            "properties": {
-              "operation": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "vortex.crm.opportunities.opportunity.mark_won"
+            "id": "not_won_yet",
+            "type": "if",
+            "condition": {
+              "op": "neq",
+              "left": {
+                "op": "reference",
+                "reference": {
+                  "source": "trigger_record",
+                  "field": "stage"
+                }
+              },
+              "right": {
+                "op": "literal",
+                "type": "choice",
+                "value": "won"
+              }
+            },
+            "then": [
+              {
+                "id": "save_won",
+                "type": "record.save",
+                "version": "1.0.0",
+                "properties": {
+                  "record_type": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "vortex.crm.opportunities:opportunity"
+                    }
+                  },
+                  "record": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "record_id"
+                    }
+                  },
+                  "values": {
+                    "kind": "map",
+                    "entries": {
+                      "stage": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "choice",
+                          "value": "won"
+                        }
+                      }
+                    }
+                  }
                 }
               }
-            }
+            ],
+            "else": [
+              {
+                "id": "already_won",
+                "type": "interface.show_message",
+                "version": "1.0.0",
+                "properties": {
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "This opportunity is already won."
+                    }
+                  }
+                }
+              }
+            ]
           }
         ],
         "outputs": {}
@@ -5986,7 +6049,12 @@
         "event_id": "event_crm_opportunity_mark_won",
         "event": "action",
         "flow": "crm_named_action_opportunity_mark_won",
-        "inputs": {}
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
       },
       {
         "id": "action_binding_crm_activity_complete",
