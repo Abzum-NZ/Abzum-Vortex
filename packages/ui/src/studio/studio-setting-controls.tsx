@@ -512,7 +512,7 @@ export function StudioSettingFields({ idPrefix, properties, values, onChange, ch
                   {label.value !== field.label && <p role="alert">
                     This label differs from the field label, &ldquo;{field.label}&rdquo;. Keep it as a custom label, or use the field label.
                   </p>}
-                  <Button type="button" variant="outline" size="sm" disabled={disabled}
+                  <Button type="button" variant="outline" size="sm" disabled={disabled} className="h-auto whitespace-normal text-left"
                     onClick={useFieldLabel}>Use field label: {field.label}</Button>
                 </>
               : <p>Uses field label: {field.label}</p>}
