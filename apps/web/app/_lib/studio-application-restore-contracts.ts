@@ -2,7 +2,6 @@ import { z } from "zod";
 import {
   applicationRootIdSchema,
   correlationIdSchema,
-  definitionReleaseMetadataSchema,
   fingerprintSchema,
   namespacedKeySchema,
   organizationAccountIdSchema,
@@ -28,40 +27,6 @@ export const studioPersonLabelSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("named"), name: z.string().min(1) }).strict(),
   z.object({ kind: z.literal("restricted") }).strict(),
   z.object({ kind: z.literal("unavailable") }).strict(),
-]);
-
-const studioApplicationRestoreSnapshotSchema = z.object({
-  organizationId: organizationIdSchema,
-  rootId: applicationRootIdSchema,
-  definitionKey: namespacedKeySchema,
-  ...studioApplicationRestoreExpectedSchema.shape,
-}).strict();
-
-const studioApplicationRestoreAvailableSchema = z.object({
-  kind: z.literal("available"),
-  selector: studioApplicationRestoreSelectorSchema,
-  snapshot: studioApplicationRestoreSnapshotSchema,
-  metadata: definitionReleaseMetadataSchema,
-  publishedBy: studioPersonLabelSchema,
-}).strict().superRefine((result, refinement) => {
-  if (result.snapshot.organizationId.toLowerCase() !== result.selector.organizationId.toLowerCase() ||
-    result.snapshot.rootId.toLowerCase() !== result.selector.rootId.toLowerCase()) {
-    refinement.addIssue({ code: "custom", path: ["snapshot"], message: "Restore snapshot does not match its selector" });
-  }
-  if (result.selector.releaseRevision > result.snapshot.anchorReleaseRevision ||
-    result.metadata.releaseRevision !== result.selector.releaseRevision ||
-    result.metadata.isCurrent !== (result.metadata.releaseRevision === result.snapshot.anchorReleaseRevision)) {
-    refinement.addIssue({ code: "custom", path: ["metadata"], message: "Restore metadata does not match the current snapshot" });
-  }
-});
-
-const studioApplicationRestoreFailureSchema = z.object({
-  kind: z.enum(["refused", "conflict", "temporarily_unavailable"]),
-}).strict();
-
-export const studioApplicationRestoreLoadResultSchema = z.union([
-  studioApplicationRestoreAvailableSchema,
-  studioApplicationRestoreFailureSchema,
 ]);
 
 export const studioApplicationRestoreCommandSchema = z.object({
@@ -102,9 +67,8 @@ export const studioApplicationRestoreCommandResultSchema = z.union([
 
 export type StudioPersonLabel = z.infer<typeof studioPersonLabelSchema>;
 export type StudioApplicationRestoreSelector = z.infer<typeof studioApplicationRestoreSelectorSchema>;
-export type StudioApplicationRestoreAvailable = z.infer<typeof studioApplicationRestoreAvailableSchema>;
-export type StudioApplicationRestoreFailure = z.infer<typeof studioApplicationRestoreFailureSchema>;
-export type StudioApplicationRestoreLoadResult = z.infer<typeof studioApplicationRestoreLoadResultSchema>;
+/** Why a restore did not run. */
+export type StudioApplicationRestoreFailure = Readonly<{ kind: "refused" | "conflict" | "temporarily_unavailable" }>;
 export type StudioApplicationRestoreCommand = z.infer<typeof studioApplicationRestoreCommandSchema>;
 export type StudioApplicationRestoreReceipt = z.infer<typeof studioApplicationRestoreReceiptSchema>;
 export type StudioApplicationRestoreCommandResult = z.infer<typeof studioApplicationRestoreCommandResultSchema>;

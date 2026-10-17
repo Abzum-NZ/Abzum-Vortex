@@ -166,7 +166,12 @@ export function applicationPageRules(scope: ApplicationScope): void {
         if (
           board === undefined ||
           boardRecordType === undefined ||
-          !boardBlockSourceIsSupported(bound, array(boardRecordType.fields), board)
+          !boardBlockSourceIsSupported(
+            bound,
+            array(boardRecordType.fields),
+            array(boardRecordType.pipelines),
+            board,
+          )
         )
           failures.push(
             failure(output, "vortex.definition.application_block_settings", "broken_reference"),
@@ -371,7 +376,6 @@ export function applicationPageRules(scope: ApplicationScope): void {
             pages.get(String(setting.pageId))?.type !== "public"
           )
             publicBlockReferencesSafe = false;
-          if (setting.kind === "pipeline_reference") publicBlockReferencesSafe = false;
           if (setting.kind === "query_reference") {
             const query = moduleQueries.get(String(setting.queryId));
             if (!publicQuerySafe(query, pageRecordId, pagePublicFields))

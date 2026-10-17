@@ -44,6 +44,13 @@ const normaliseRecordType = (recordType: RecordValue): RecordValue => ({
   relationships: sorted(recordType.relationships as unknown[], "relationshipId"),
   standardActions: sorted(recordType.standardActions as unknown[]),
   customActionIds: sorted(recordType.customActionIds as unknown[]),
+  pipelines: sorted(
+    (recordType.pipelines as RecordValue[]).map((pipeline) => ({
+      ...pipeline,
+      transitions: sorted(pipeline.transitions as unknown[]),
+    })),
+    "pipelineId",
+  ),
 });
 
 /**
@@ -134,7 +141,6 @@ export const normaliseApplicationSharedContent = (content: ApplicationContent): 
     ),
     queries: sorted(value.queries as unknown[], "queryId"),
     permissions: sorted(value.permissions as unknown[], "permissionId"),
-    pipelines: sorted(value.pipelines as unknown[], "pipelineId"),
     actions: sorted((value.actions as RecordValue[]).map(normaliseAction), "actionId"),
     events: sorted(
       (value.events as RecordValue[]).map((event) => ({
@@ -238,6 +244,11 @@ export const assertUnambiguousModuleContent = (content: unknown): void => {
     assertUnique(recordType.relationships as RecordValue[], "relationshipId");
     assertUniqueValues(recordType.standardActions as unknown[]);
     assertUniqueValues(recordType.customActionIds as unknown[]);
+    assertUnique(recordType.pipelines as RecordValue[], "pipelineId");
+    for (const pipeline of recordType.pipelines as RecordValue[]) {
+      assertUnique(pipeline.stages as RecordValue[], "option");
+      assertUniqueValues(pipeline.transitions as unknown[]);
+    }
     for (const field of recordType.fields as RecordValue[]) {
       const settings = asRecord(field.settings);
       if (field.type === "choice" || field.type === "several_choices")
@@ -273,7 +284,6 @@ export const assertUnambiguousApplicationSharedContent = (content: unknown): voi
     ["roles", "roleId"],
     ["queries", "queryId"],
     ["permissions", "permissionId"],
-    ["pipelines", "pipelineId"],
     ["actions", "actionId"],
     ["events", "eventId"],
     ["connectionBindings", "bindingId"],
@@ -286,8 +296,6 @@ export const assertUnambiguousApplicationSharedContent = (content: unknown): voi
   assertUnique(flattenNavigation(value.navigation as RecordValue[]), "id");
   for (const role of value.roles as RecordValue[])
     assertUniqueValues(role.permissionKeys as unknown[]);
-  for (const pipeline of value.pipelines as RecordValue[])
-    assertUnique(pipeline.stages as RecordValue[], "key");
   const flowBindings = value.flowBindings as RecordValue[];
   const flowBindingKeys = flowBindings.map((binding) => `${binding.controlId}:${binding.eventId}`);
   if (new Set(flowBindingKeys).size !== flowBindingKeys.length)

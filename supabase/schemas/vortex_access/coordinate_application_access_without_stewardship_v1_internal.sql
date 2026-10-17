@@ -13,6 +13,7 @@ declare
   target_template jsonb;
   current_permission_count bigint;
   retained_permission_count bigint;
+  unchanged_permission_count bigint;
   target_permission_count bigint;
   target_lifecycle text;
   next_role_revision bigint;
@@ -313,13 +314,7 @@ begin
       and continuity.continuity_revision = 9007199254740991
       and (
         (target.permission_id is null and continuity.state <> 'unavailable')
-        or (
-          target.permission_id is not null
-          and (
-            continuity.state <> 'available'
-            or continuity.meaning_fingerprint <> target.meaning_fingerprint
-          )
-        )
+        or (target.permission_id is not null and continuity.state <> 'available')
       )
   ) then
     raise exception using errcode = '22003',
@@ -352,10 +347,13 @@ begin
         when transition.target_permission_id is null then 'unavailable'
         else 'available'
       end,
+      -- The continuity revision is the permission's availability lineage: it advances only
+      -- when the permission is withdrawn or registered again. A meaning change while it stays
+      -- registered keeps the lineage; roles keep the meaning they accepted until they accept
+      -- the new one.
       continuity_revision = case
         when transition.target_permission_id is not null
           and continuity.state = 'available'
-          and continuity.meaning_fingerprint = transition.target_meaning_fingerprint
           then continuity.continuity_revision
         when transition.target_permission_id is null
           and continuity.state = 'unavailable'
@@ -532,7 +530,36 @@ begin
       target_permission_count := 0;
       target_lifecycle := 'unavailable';
     else
+      -- A role keeps every permission the template still grants, with the
+      -- meaning it was accepted under: a changed meaning is neither applied
+      -- nor dropped until the role revision is accepted. A permission the
+      -- template no longer grants, or that is no longer registered, leaves.
       select pg_catalog.count(*) into retained_permission_count
+      from vortex_access.organization_role_permission_entries as permission
+      join vortex_access.permission_continuities as continuity
+        on continuity.organization_id = permission.organization_id
+        and continuity.application_root_id = permission.application_root_id
+        and continuity.owner_kind = permission.owner_kind
+        and continuity.owner_id = permission.owner_id
+        and continuity.permission_id = permission.permission_id
+        and continuity.state = 'available'
+        and continuity.continuity_revision = permission.continuity_revision
+      where permission.organization_id = p_organization_id
+        and permission.role_id = role_record.role_id
+        and permission.role_revision = role_record.live_revision
+        and exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(
+            target_template -> 'livePermissions'
+          ) as candidate(value)
+          where (candidate.value ->> 'applicationRootId')::uuid =
+              permission.application_root_id
+            and candidate.value ->> 'ownerKind' = permission.owner_kind
+            and (candidate.value ->> 'ownerId')::uuid = permission.owner_id
+            and (candidate.value #>> '{permission,permissionId}')::uuid =
+              permission.permission_id
+        );
+      select pg_catalog.count(*) into unchanged_permission_count
       from vortex_access.organization_role_permission_entries as permission
       join vortex_access.permission_continuities as continuity
         on continuity.organization_id = permission.organization_id
@@ -563,8 +590,13 @@ begin
       target_permission_count := pg_catalog.jsonb_array_length(
         target_template -> 'livePermissions'
       );
+      -- ACCEPTANCE INVARIANT: a role stays active only when it holds every
+      -- permission of the template with exactly its registered meaning. Any
+      -- meaning change, added or removed permission requires acceptance. The
+      -- release version class (patch, minor or major) is never consulted.
       if role_record.lifecycle = 'active'
-        and retained_permission_count > 0
+        and unchanged_permission_count > 0
+        and unchanged_permission_count = target_permission_count
         and retained_permission_count = target_permission_count
         and role_record.template_continuity_revision =
           target_template_continuity_revision then
@@ -624,7 +656,6 @@ begin
         and continuity.permission_id = permission.permission_id
         and continuity.state = 'available'
         and continuity.continuity_revision = permission.continuity_revision
-        and continuity.meaning_fingerprint = permission.meaning_fingerprint
       where permission.organization_id = p_organization_id
         and permission.role_id = role_record.role_id
         and permission.role_revision = role_record.live_revision
@@ -639,8 +670,6 @@ begin
             and (candidate.value ->> 'ownerId')::uuid = permission.owner_id
             and (candidate.value #>> '{permission,permissionId}')::uuid =
               permission.permission_id
-            and candidate.value ->> 'meaningFingerprint' =
-              permission.meaning_fingerprint
         );
     end if;
 

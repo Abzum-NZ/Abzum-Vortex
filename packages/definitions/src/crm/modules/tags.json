@@ -11,7 +11,7 @@
       "plural_name": "Tags",
       "title_field": "name",
       "storage_contract_id": "srt_00000007",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "group",
       "standard_actions": [
         "create",
@@ -87,6 +87,7 @@
           }
         }
       ],
+      "pipelines": [],
       "relationships": []
     },
     {
@@ -96,7 +97,7 @@
       "plural_name": "Record tags",
       "title_field": "assigned_at",
       "storage_contract_id": "srt_00000008",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "inherited",
       "ownership_relationship": "record",
       "standard_actions": [
@@ -173,7 +174,7 @@
           "public_display": "refused",
           "type": "link_to_person",
           "settings": {
-            "audience": "organisation_accounts",
+            "audience": "organization_accounts",
             "application_root_required": false,
             "on_person_deactivation": "retain_reference"
           }
@@ -198,6 +199,7 @@
           }
         }
       ],
+      "pipelines": [],
       "relationships": [
         {
           "id": "fld_record_tag_tag_relationship",

@@ -52,7 +52,6 @@ declare
   semantic_type text;
   column_entry jsonb;
   database_value_type text;
-  exact_values boolean;
   parameter_offset integer;
   supported boolean;
   compiled jsonb;
@@ -268,8 +267,6 @@ begin
         limit 1;
 
         if condition_entry is not null then
-          exact_values := coalesce(target_meta ->> 'validationContractVersion', '')
-            in ('2.0.0', '3.0.0');
           condition_field_types := '{}'::jsonb;
           condition_field_columns := '{}'::jsonb;
           condition_field_database_types := '{}'::jsonb;
@@ -286,9 +283,9 @@ begin
               -- saved-condition evaluator: calculation and total fields have no
               -- fixed stored value here and stay out of the map.
               semantic_type := case
-                when exact_values and field_kind = 'decimal_number' then 'decimal_number'
-                when exact_values and field_kind = 'money' then 'money'
-                when field_kind in ('whole_number', 'decimal_number', 'money') then 'number'
+                when field_kind = 'decimal_number' then 'decimal_number'
+                when field_kind = 'money' then 'money'
+                when field_kind = 'whole_number' then 'number'
                 when field_kind = 'yes_no' then 'boolean'
                 when field_kind = 'date' then 'date'
                 when field_kind = 'date_time' then 'date_time'

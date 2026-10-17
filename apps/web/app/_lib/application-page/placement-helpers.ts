@@ -22,7 +22,6 @@ import {
   sameId,
   walkPageComposition,
 } from "@vortex/platform/schema";
-import { hasReferenceChoiceSource } from "../reference-choices";
 import type { InstalledFlow, ModuleRelease, ModuleField } from "./types";
 
 /**
@@ -132,22 +131,50 @@ export const projectedUseAvailability = ({
   return "invalid";
 };
 
-export const isUnboundReferenceChoicePlacement = (placement: PlacedItemParts): boolean => {
-  if (!hasReferenceChoiceSource(placement)) return false;
-  const source = placement.settings.choice_source;
-  return isRecord(source) && isRecord(source.properties) && !Object.hasOwn(source.properties, "input");
-};
-
 export const isEditFieldPlacement = (placement: PlacedItemParts): boolean => {
   const block = placement.vortex.block;
   return (
-    isUnboundReferenceChoicePlacement(placement) ||
-    (isRecord(block) &&
-      typeof block.blockId === "string" &&
-      (sameId(block.blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) ||
-        Object.values(FIELD_INPUT_CONTROL_RELEASES).some((release) =>
-          sameId(release.blockId, block.blockId as string),
-        )))
+    isRecord(block) &&
+    typeof block.blockId === "string" &&
+    (sameId(block.blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) ||
+      Object.values(FIELD_INPUT_CONTROL_RELEASES).some((release) =>
+        sameId(release.blockId, block.blockId as string),
+      ))
+  );
+};
+
+/**
+ * A link field's input: an automatic field input whose derived control is a link, or a link
+ * input placed on its own. Either is the one record picker.
+ */
+export const isLinkInputPlacement = ({ vortex, settings }: PlacedItemParts): boolean => {
+  const block = vortex.block;
+  if (!isRecord(block) || typeof block.blockId !== "string") return false;
+  if (sameId(block.blockId, FIELD_INPUT_CONTROL_RELEASES.link.blockId)) return true;
+  const control = settings.control;
+  return (
+    sameId(block.blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) &&
+    isRecord(control) &&
+    control.kind === "choice" &&
+    control.value === "link"
+  );
+};
+
+/** The record types a link input may point at, as the installed release resolved them. */
+export const linkInputTargets = (
+  settings: Readonly<Record<string, unknown>>,
+): readonly Readonly<{ moduleRootId: string; recordTypeId: string }>[] => {
+  const targets = settings.record_types;
+  if (!isRecord(targets) || targets.kind !== "list" || !Array.isArray(targets.items)) return [];
+  return targets.items.flatMap((item: unknown) =>
+    isRecord(item) &&
+    item.kind === "record_type_reference" &&
+    isRecord(item.recordType) &&
+    item.recordType.state === "resolved" &&
+    typeof item.recordType.moduleRootId === "string" &&
+    typeof item.recordType.recordTypeId === "string"
+      ? [{ moduleRootId: item.recordType.moduleRootId, recordTypeId: item.recordType.recordTypeId }]
+      : [],
   );
 };
 

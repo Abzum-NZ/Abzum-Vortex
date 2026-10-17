@@ -19,15 +19,16 @@ export const studioRailTabs: readonly StudioRailTab<StudioRailKey>[] = [
 export const isStudioRailKey = (value: unknown): value is StudioRailKey =>
   studioRailTabs.some((tab) => tab.key === value);
 
-/** The tabs whose centre is the page canvas; Data, Flows and Releases draw their own editor there. */
-export const railShowsCanvas = (key: StudioRailKey): boolean => key !== "data" && key !== "flows" && key !== "releases";
+/** The tabs whose centre is the page canvas; Data, Flows, Access and Releases draw their own editor there. */
+export const railShowsCanvas = (key: StudioRailKey): boolean =>
+  key !== "data" && key !== "flows" && key !== "access" && key !== "releases";
 
 /** What the Releases tab can open in the centre. */
 export type StudioReleasesSection = "history" | "page-adoption" | "import";
 export const studioReleasesSections: readonly Readonly<{ value: StudioReleasesSection; label: string; description: string }>[] = [
-  { value: "history", label: "Published versions", description: "Every published version, with install, upgrade and restore reviews." },
+  { value: "history", label: "Published versions", description: "Every published version: when, by whom and what changed. Restore one into the draft." },
   { value: "page-adoption", label: "Page adoption", description: "Keep your own page or adopt the standard one after an upgrade." },
-  { value: "import", label: "Import from source", description: "Replace the draft with a source document (advanced)." },
+  { value: "import", label: "Import from source", description: "Advanced: replace the draft with a source document." },
 ];
 export const isStudioReleasesSection = (value: unknown): value is StudioReleasesSection =>
   studioReleasesSections.some((section) => section.value === value);

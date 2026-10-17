@@ -31,8 +31,6 @@ export const definitionCompilerRefusalCodes = Object.freeze([
   "vortex.definition.application_page_permission",
   "vortex.definition.application_page_query",
   "vortex.definition.application_page_references",
-  "vortex.definition.application_pipeline_references",
-  "vortex.definition.application_pipeline_stage",
   "vortex.definition.application_public_paths",
   "vortex.definition.application_public_surface",
   "vortex.definition.application_query_references",

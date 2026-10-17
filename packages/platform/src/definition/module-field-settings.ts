@@ -61,7 +61,7 @@ const fieldChoices = (fields: ModuleFieldSettingsContext["fields"], types?: read
   fields.filter((field) => types === undefined || types.includes(field.type)).map((field) => [field.key, field.label] as const);
 const deleteRules = [["refuse", "Refuse to delete the linked record"], ["empty_optional", "Clear this link"],
   ["soft_delete_dependent", "Delete this record too"]] as const;
-const currencyModes = [["organisation_default", "The organisation's currency"], ["fixed", "One fixed currency"]] as const;
+const currencyModes = [["organization_default", "The organisation's currency"], ["fixed", "One fixed currency"]] as const;
 const optionItem = (): Declaration => group("option", "Option", [
   text("value", "Stored value", true, 1, 120, "What is stored. It cannot change once records hold it."),
   text("label", "Label", true, 1, 60),
@@ -69,7 +69,7 @@ const optionItem = (): Declaration => group("option", "Option", [
 ]);
 const tableColumnTypes = [["text", "Text"], ["whole_number", "Whole number"], ["decimal_number", "Decimal number"],
   ["money", "Money"], ["yes_no", "Yes or no"], ["date", "Date"], ["date_time", "Date and time"], ["choice", "Choice"]] as const;
-const timeZones = [["person", "The person's time zone"], ["organisation", "The organisation's time zone"], ["utc", "UTC"]] as const;
+const timeZones = [["person", "The person's time zone"], ["organization", "The organisation's time zone"], ["utc", "UTC"]] as const;
 const textFormats = [["email_address", "Email address"], ["web_address", "Secure web address"], ["uuid", "Identifier (UUID)"]] as const;
 
 /** One table column, with every column type's settings: the column's type picks the ones it keeps. */
@@ -152,9 +152,9 @@ export const moduleFieldSettingDeclarations = (
       return [list("targets", "Record types it may link to", true, 2, 20, { ...base("target", "Record type", true), kind: "record_type_reference" }),
         choice("on_parent_delete", "When the linked record is deleted", true, deleteRules)];
     case "link_to_person":
-      return [choice("audience", "Who can be chosen", true, [["organisation_accounts", "People in the organisation"],
+      return [choice("audience", "Who can be chosen", true, [["organization_accounts", "People in the organisation"],
         ["application_accounts", "People using this application"],
-        ["organisation_identities_and_external_requesters", "People in the organisation and outside requesters"]]),
+        ["organization_identities_and_external_requesters", "People in the organisation and outside requesters"]]),
         boolean("application_root_required", "Only people of this application", false),
         choice("on_person_deactivation", "When the person is deactivated", true, [["retain_reference", "Keep the link"],
           ["empty_optional", "Clear the link"], ["refuse_deactivation", "Refuse the deactivation"]])];
@@ -246,7 +246,7 @@ export const starterModuleFieldSettings = (
     case "long_text": return { max_length: 10_000 };
     case "formatted_text": return { allowed_blocks: ["paragraph", "heading", "list", "link"] };
     case "decimal_number": return { digits_before_decimal: 12, decimal_places: 2 };
-    case "money": return { currency_mode: "organisation_default" };
+    case "money": return { currency_mode: "organization_default" };
     case "choice": return { options: [{ value: "option_1", label: "Option 1" }] };
     case "several_choices": return { options: [{ value: "option_1", label: "Option 1" }] };
     case "reference_number": return { digits: 6 };
@@ -254,7 +254,7 @@ export const starterModuleFieldSettings = (
     case "link": return { ...(start.recordTypes[0] === undefined ? {} : { target: start.recordTypes[0] }),
       reverse_key: `${start.recordKey}_${start.fieldKey}`.slice(0, 40).replace(/_+$/u, ""), on_parent_delete: "empty_optional" };
     case "link_to_one_of_several": return { targets: start.recordTypes.slice(0, 2), on_parent_delete: "empty_optional" };
-    case "link_to_person": return { audience: "organisation_accounts", application_root_required: false, on_person_deactivation: "retain_reference" };
+    case "link_to_person": return { audience: "organization_accounts", application_root_required: false, on_person_deactivation: "retain_reference" };
     case "calculation": return { result_type: "text", evaluation: "stored", expression: { operation: "join_text", fields: [start.titleField], separator: " " } };
     case "total": return { ...(start.relationships[0] === undefined ? {} : { relationship: start.relationships[0] }),
       operation: "count", result_type: "whole_number" };
