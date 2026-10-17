@@ -10,7 +10,6 @@ import {
   compareSet,
   compareKeyed,
   compareOrderedEntries,
-  fieldDisplayEntry,
   presentationOnlyValue,
   finaliseReasons,
   sorted,
@@ -52,7 +51,8 @@ const placementSubtreeIsOptionalPresentation = (item: RecordValue): boolean => {
     vortex.usePermissionKey === undefined &&
     vortex.visibilityCondition === undefined &&
     vortex.queryId === undefined &&
-    Object.values(placementSettings(props)).every(presentationOnlyValue) &&
+    // Flow bindings for interactive entries are compared separately as major changes.
+    Object.values(placementSettings(props)).every((value) => presentationOnlyValue(value)) &&
     itemSlots(item).every(([, children]) =>
       children.every((child) => placementSubtreeIsOptionalPresentation(asRecord(child))),
     )
@@ -297,29 +297,35 @@ const comparePlacements = (
     for (const key of new Set([...Object.keys(before.settings), ...Object.keys(after.settings)])) {
       const previousSetting = asRecord(before.settings[key]);
       const candidateSetting = asRecord(after.settings[key]);
-      // A list setting compares entry by entry: appending an entry that only shows a field
-      // (a detail field, a column) or reordering is minor; any other append is major.
-      if (previousSetting?.kind === "list" && candidateSetting?.kind === "list")
+      // Display list entries may be appended or have their text edited; other settings and
+      // references remain behaviour changes. A list that exists on one side only compares as
+      // an empty list on the other, so a whole new list is an append (minor), never a patch.
+      const previousItems = previousSetting?.kind === "list" ? (previousSetting.items as unknown[]) : previousSetting === undefined ? [] : undefined;
+      const candidateItems = candidateSetting?.kind === "list" ? (candidateSetting.items as unknown[]) : candidateSetting === undefined ? [] : undefined;
+      if (previousItems !== undefined && candidateItems !== undefined && (previousSetting !== undefined || candidateSetting !== undefined))
         compareOrderedEntries(
           reasons,
-          previousSetting.items as unknown[],
-          candidateSetting.items as unknown[],
+          previousItems,
+          candidateItems,
           "block_placement",
           id,
           "behavior",
-          fieldDisplayEntry,
+          (entry) => presentationOnlyValue(entry, undefined, key),
+          key,
         );
-      else
+      else {
+        const presentationOnly = presentationOnlyValue(candidateSetting, previousSetting, key);
         pushChange(
           reasons,
           before.settings[key],
           after.settings[key],
-          "major",
-          "existing_behavior_changed",
+          presentationOnly ? "patch" : "major",
+          presentationOnly ? "presentation_changed" : "existing_behavior_changed",
           "block_placement",
-          "behavior",
+          presentationOnly ? "configuration" : "behavior",
           id,
         );
+      }
     }
   }
 };
