@@ -492,6 +492,10 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
         name: opportunity.name,
         company: { recordTypeId: companyType.recordTypeId, recordId: companyIds[index]! },
         primary_contact: { recordTypeId: contactType.recordTypeId, recordId: contactIds[index]! },
+        owner: {
+          recordTypeId: personType.recordTypeId,
+          recordId: facts.stewardOrganizationAccountId,
+        },
         value: { amount: opportunity.value, currency: "NZD" },
         discount_percent: opportunity.discount,
         probability: opportunity.probability,

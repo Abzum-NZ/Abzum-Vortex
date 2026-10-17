@@ -2994,6 +2994,10 @@
                         "label": "Primary contact"
                       },
                       {
+                        "field": "vortex.crm.opportunities:opportunity.owner",
+                        "label": "Owner"
+                      },
+                      {
                         "field": "vortex.crm.opportunities:opportunity.value",
                         "label": "Value"
                       },
@@ -3356,6 +3360,37 @@
                               }
                             },
                             {
+                              "type": "platform.renderer.choice_input",
+                              "props": {
+                                "id": "input_crm_opportunity_edit_owner",
+                                "name": "owner",
+                                "label": "Owner",
+                                "required": false,
+                                "choice_source": {
+                                  "query": "vortex.system_directory:people",
+                                  "label_field": "vortex.system_directory:person.display_name"
+                                },
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                                    "release_version": "1.1.0"
+                                  },
+                                  "theme_overrides": {},
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
                               "type": "platform.renderer.field_input",
                               "props": {
                                 "id": "input_crm_opportunity_edit_probability",
@@ -3600,6 +3635,37 @@
                                 "choice_source": {
                                   "query": "vortex.crm.people:crm_contacts",
                                   "label_field": "vortex.crm.people:contact.full_name"
+                                },
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                                    "release_version": "1.1.0"
+                                  },
+                                  "theme_overrides": {},
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.choice_input",
+                              "props": {
+                                "id": "input_crm_opportunity_create_owner",
+                                "name": "owner",
+                                "label": "Owner",
+                                "required": false,
+                                "choice_source": {
+                                  "query": "vortex.system_directory:people",
+                                  "label_field": "vortex.system_directory:person.display_name"
                                 },
                                 "vortex": {
                                   "block": {

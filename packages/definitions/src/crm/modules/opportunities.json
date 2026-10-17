@@ -13,18 +13,8 @@
       "storage_contract_id": "srt_00000004",
       "storage_scope": "application_contained",
       "ownership_mode": "group",
-      "standard_actions": [
-        "create",
-        "read",
-        "update",
-        "soft_delete",
-        "restore",
-        "export"
-      ],
-      "custom_actions": [
-        "act_opp_mark_won",
-        "act_opp_mark_lost"
-      ],
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
+      "custom_actions": ["act_opp_mark_won", "act_opp_mark_lost"],
       "fields": [
         {
           "id": "fld_opp_number",
@@ -92,6 +82,24 @@
           "settings": {
             "target": "vortex.crm.people:contact",
             "reverse_key": "primary_opportunities",
+            "on_parent_delete": "empty_optional"
+          }
+        },
+        {
+          "id": "fld_opp_owner",
+          "key": "owner",
+          "label": "Owner",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "search_priority": "normal",
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "link",
+          "settings": {
+            "target": "vortex.system_directory:person",
+            "reverse_key": "crm_opportunities_owned",
             "on_parent_delete": "empty_optional"
           }
         },
@@ -360,6 +368,14 @@
           "to_record_type": "vortex.crm.people:contact",
           "cardinality": "many_to_one",
           "on_parent_delete": "empty_optional"
+        },
+        {
+          "id": "fld_opp_owner_relationship",
+          "key": "owner",
+          "from_field": "owner",
+          "to_record_type": "vortex.system_directory:person",
+          "cardinality": "many_to_one",
+          "on_parent_delete": "empty_optional"
         }
       ]
     },
@@ -373,14 +389,7 @@
       "storage_scope": "application_contained",
       "ownership_mode": "inherited",
       "ownership_relationship": "opportunity",
-      "standard_actions": [
-        "create",
-        "read",
-        "update",
-        "soft_delete",
-        "restore",
-        "export"
-      ],
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
       "custom_actions": [],
       "fields": [
         {
@@ -687,16 +696,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "opportunity",
-          "contact",
-          "role"
-        ],
-        "changeable_fields": [
-          "opportunity",
-          "contact",
-          "role"
-        ]
+        "readable_fields": ["opportunity", "contact", "role"],
+        "changeable_fields": ["opportunity", "contact", "role"]
       }
     },
     {
@@ -715,11 +716,7 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "opportunity",
-          "contact",
-          "role"
-        ],
+        "readable_fields": ["opportunity", "contact", "role"],
         "changeable_fields": []
       }
     },
@@ -739,16 +736,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "opportunity",
-          "contact",
-          "role"
-        ],
-        "changeable_fields": [
-          "opportunity",
-          "contact",
-          "role"
-        ]
+        "readable_fields": ["opportunity", "contact", "role"],
+        "changeable_fields": ["opportunity", "contact", "role"]
       }
     },
     {
@@ -807,11 +796,7 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "opportunity",
-          "contact",
-          "role"
-        ],
+        "readable_fields": ["opportunity", "contact", "role"],
         "changeable_fields": []
       }
     },
@@ -832,12 +817,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "stage"
-        ],
-        "changeable_fields": [
-          "stage"
-        ]
+        "readable_fields": ["stage"],
+        "changeable_fields": ["stage"]
       }
     },
     {
@@ -857,14 +838,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "stage",
-          "lost_reason"
-        ],
-        "changeable_fields": [
-          "stage",
-          "lost_reason"
-        ]
+        "readable_fields": ["stage", "lost_reason"],
+        "changeable_fields": ["stage", "lost_reason"]
       }
     }
   ],
@@ -936,12 +911,7 @@
       "precondition": {
         "field": "stage",
         "operator": "in",
-        "value": [
-          "discovery",
-          "qualified",
-          "proposal",
-          "negotiation"
-        ]
+        "value": ["discovery", "qualified", "proposal", "negotiation"]
       },
       "tasks": [
         {
@@ -975,34 +945,21 @@
       "id": "evt_opp_created",
       "key": "vortex.crm.opportunities.opportunity.created",
       "record_type": "opportunity",
-      "carries": [
-        "opportunity_number",
-        "company",
-        "value",
-        "stage"
-      ],
+      "carries": ["opportunity_number", "company", "value", "stage"],
       "personal_or_sensitive_values_allowed": false
     },
     {
       "id": "evt_opp_stage",
       "key": "vortex.crm.opportunities.opportunity.stage_changed",
       "record_type": "opportunity",
-      "carries": [
-        "opportunity_number",
-        "stage",
-        "value"
-      ],
+      "carries": ["opportunity_number", "stage", "value"],
       "personal_or_sensitive_values_allowed": false
     },
     {
       "id": "evt_opp_won",
       "key": "vortex.crm.opportunities.opportunity.won",
       "record_type": "opportunity",
-      "carries": [
-        "opportunity_number",
-        "company",
-        "net_value"
-      ],
+      "carries": ["opportunity_number", "company", "net_value"],
       "personal_or_sensitive_values_allowed": false
     }
   ],
@@ -1173,17 +1130,13 @@
       "id": "ext_opp_fields",
       "key": "opportunity_fields",
       "record_type": "opportunity",
-      "accepts": [
-        "field"
-      ]
+      "accepts": ["field"]
     },
     {
       "id": "ext_opp_actions",
       "key": "opportunity_actions",
       "record_type": "opportunity",
-      "accepts": [
-        "action"
-      ]
+      "accepts": ["action"]
     }
   ],
   "sharing_conditions": [],
@@ -1205,10 +1158,7 @@
       "filter": {
         "field": "stage",
         "operator": "not_in",
-        "value": [
-          "won",
-          "lost"
-        ]
+        "value": ["won", "lost"]
       },
       "group_by": [],
       "aggregates": [],
@@ -1228,13 +1178,9 @@
       "description": "Opportunity count for each pipeline stage",
       "record_type": "opportunity",
       "inputs": [],
-      "select": [
-        "stage"
-      ],
+      "select": ["stage"],
       "filter": null,
-      "group_by": [
-        "stage"
-      ],
+      "group_by": ["stage"],
       "aggregates": [
         {
           "operation": "count",
@@ -1257,17 +1203,9 @@
       "description": "Opportunities grouped by stage with the total value of each stage",
       "record_type": "opportunity",
       "inputs": [],
-      "select": [
-        "stage",
-        "name",
-        "opportunity_number",
-        "value",
-        "expected_close_date"
-      ],
+      "select": ["stage", "name", "opportunity_number", "value", "expected_close_date"],
       "filter": null,
-      "group_by": [
-        "stage"
-      ],
+      "group_by": ["stage"],
       "aggregates": [
         {
           "operation": "sum",
