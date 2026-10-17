@@ -67,7 +67,13 @@ export type StudioDataRecordsResult =
       queryLabel: string;
       /** The fields the records are grouped by, by label; empty when the query only adds totals. */
       groupColumns: readonly StudioDataColumn[];
+      /** One page of the groups, in the summary's own group order. */
       groups: readonly Readonly<{ key: string; values: readonly string[]; count: number; totals: readonly StudioDataTotal[] }>[];
+      /** How many groups the summary has in all, over every page. */
+      groupCount: number;
+      /** The groups after and before this page, by keyset: the key of the group the page ends or starts at. */
+      next?: string;
+      previous?: string;
       totalRowCount: number;
       totals: readonly StudioDataTotal[];
     }>
@@ -195,7 +201,18 @@ export const readStudioDataRecords = async (
       const completed = read.value;
       const fieldOf = (fieldId: string) => queryRecord.fields.find((field) => sameId(String(field.fieldId), fieldId));
       const groupFields = query.groupByFieldIds.flatMap((fieldId) => { const field = fieldOf(String(fieldId)); return field === undefined ? [] : [field]; });
-      const groupLinks = collectRecordLinkValues(completed.groups.flatMap((group) => Object.values<JsonValue>(group.groupValues)));
+      // Groups are paged by keyset like records: a page continues after (or before) the group whose
+      // key the token names. A token that names no group of this summary is refused, never guessed.
+      let start = 0;
+      let end = Math.min(completed.groups.length, request.pageSize);
+      if (request.continuationToken !== undefined) {
+        const at = completed.groups.findIndex((group) => `g:${group.groupKey}` === request.continuationToken);
+        if (at < 0) return { kind: "query_refused", reason: "continuation_invalid" };
+        if (request.pageDirection === "backward") { end = at; start = Math.max(0, at - request.pageSize); }
+        else { start = at + 1; end = Math.min(completed.groups.length, start + request.pageSize); }
+      }
+      const shown = completed.groups.slice(start, end);
+      const groupLinks = collectRecordLinkValues(shown.flatMap((group) => Object.values<JsonValue>(group.groupValues)));
       const links = groupLinks.length === 0 ? undefined : await services.recordLinkResolver(context)(groupLinks);
       const totalsOf = (aggregates: Readonly<Record<string, Readonly<{ outcome: string; value?: JsonValue }>>>): StudioDataTotal[] =>
         query.aggregates.map((aggregate) => {
@@ -208,7 +225,10 @@ export const readStudioDataRecords = async (
       return {
         kind: "summary", queryLabel: label, totalRowCount: completed.totalRowCount, totals: totalsOf(completed.aggregates),
         groupColumns: groupFields.map((field) => ({ key: field.key, label: field.label })),
-        groups: completed.groups.slice(0, request.pageSize).map((group) => ({
+        groupCount: completed.groups.length,
+        ...(end < completed.groups.length && shown.length > 0 ? { next: `g:${shown.at(-1)!.groupKey}` } : {}),
+        ...(start > 0 && shown.length > 0 ? { previous: `g:${shown[0]!.groupKey}` } : {}),
+        groups: shown.map((group) => ({
           key: group.groupKey, count: group.rowCount, totals: totalsOf(group.aggregates),
           values: groupFields.map((field) => cellText(field,
             Object.entries(group.groupValues).find(([fieldId]) => sameId(fieldId, String(field.fieldId)))?.[1], links) || "None"),
