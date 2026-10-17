@@ -50,7 +50,7 @@ import { StudioHistoryTab } from "./studio-history-tab";
 import { StandardPageAdoption } from "./standard-page-adoption";
 import { useStudioDataTab } from "./studio-data-tab";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
-import type { StudioDataModule } from "../_lib/studio-data-model";
+import type { StudioDataModule, StudioPublishedData } from "../_lib/studio-data-model";
 import { StudioTopBar } from "./studio-top-bar";
 import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-toolbar";
 import { StudioInspector } from "./studio-inspector";
@@ -126,6 +126,8 @@ type WorkspaceProps = Readonly<{
       borrowedChoices?: StudioBorrowedChoices | null;
       /** The modules the application uses, read-only in the Data tab. */
       usedModules?: readonly StudioDataModule[] | null;
+      /** What the published versions of its own modules hold, whose stored shape is fixed. */
+      published?: StudioPublishedData | null;
       pageCompiledSlots?: StudioApplicationCompiledPageSlots | null;
       canvasFrames?: StudioApplicationCanvasFrames | null;
       compileFailure?: StudioCompileFailure | null }>);
@@ -198,6 +200,7 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
         initialSearchMetadata={props.searchMetadata ?? null}
         initialBorrowedChoices={props.borrowedChoices ?? null}
         initialUsedModules={props.usedModules ?? null}
+        initialPublished={props.published ?? null}
         pageCompiledSlots={props.pageCompiledSlots ?? null}
         canvasFrames={props.canvasFrames ?? null}
         compileFailure={props.compileFailure ?? null}
@@ -207,7 +210,7 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
 }
 
 function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab, initialSection, initialModule, applications,
-  initialSearchMetadata, initialBorrowedChoices, initialUsedModules, pageCompiledSlots, canvasFrames, compileFailure, platformBlockCatalogue, fieldInputControlReleases,
+  initialSearchMetadata, initialBorrowedChoices, initialUsedModules, initialPublished, pageCompiledSlots, canvasFrames, compileFailure, platformBlockCatalogue, fieldInputControlReleases,
   platformThemeTokens, themeOptions }: {
   organizationId: string; draft: StudioStoredApplicationDraft; place: StudioWorkspacePlace;
   themeOptions: StudioThemeOptions;
@@ -216,6 +219,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   initialSearchMetadata: StudioApplicationSearchMetadata | null;
   initialBorrowedChoices: StudioBorrowedChoices | null;
   initialUsedModules: readonly StudioDataModule[] | null;
+  initialPublished: StudioPublishedData | null;
   pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
   canvasFrames: StudioApplicationCanvasFrames | null;
   compileFailure: StudioCompileFailure | null;
@@ -236,6 +240,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const [tab, setTab] = useState<StudioRailKey>(initialTab);
   const [releasesSection, setReleasesSection] = useState<StudioReleasesSection>(initialSection);
   const [usedModules, setUsedModules] = useState<readonly StudioDataModule[] | null>(initialUsedModules);
+  const [published, setPublished] = useState<StudioPublishedData | null>(initialPublished);
   const [previewPending, setPreviewPending] = useState(false);
   const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>(100);
   const [canvasBreakpoint, setCanvasBreakpoint] = useState<StudioCanvasBreakpoint>("desktop");
@@ -637,6 +642,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         failure: result.compileFailure, generation: previous.generation + 1 }));
       setBorrowedChoices((previous) => result.borrowedChoices ?? previous);
       setUsedModules((previous) => result.usedModules ?? previous);
+      setPublished((previous) => result.published ?? previous);
       searchRefresh.current += 1;
       setSearchMetadata(result.searchMetadata);
     } catch (error) {
@@ -709,6 +715,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         frames: result.canvasFrames, failure: result.compileFailure, generation: previous.generation + 1 }));
       setBorrowedChoices((previous) => result.borrowedChoices ?? previous);
       setUsedModules((previous) => result.usedModules ?? previous);
+      setPublished((previous) => result.published ?? previous);
       searchRefresh.current += 1;
       discardSourceImport();
       lifetime.current += 1;
@@ -1056,7 +1063,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     return true;
   };
   const data = useStudioDataTab({ organizationId, rootId: state.rootId, source, saved: savedPreviewDraft.current.source,
-    used: usedModules, applications, initialModule, hidden: tab !== "data",
+    used: usedModules, published, applications, initialModule, hidden: tab !== "data",
+    compositionContext, readRecords: readRecordChoices,
     selection: isStudioDataSelection(selected) ? selected : null,
     disabled: noEdit || busy.anyOfRendered("publication", "reopening"), refresh: compiled.generation,
     search: <ApplicationSearchEditor source={source} metadata={currentSearchMetadata}

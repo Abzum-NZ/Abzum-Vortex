@@ -9,6 +9,7 @@ import {
   pushChange,
   compareSet,
   compareKeyed,
+  compareOrderedEntries,
   finaliseReasons,
   sorted,
 } from "./shared";
@@ -44,6 +45,8 @@ const presentationPropertyValue = (value: unknown): boolean => {
     case "url":
     case "asset_reference":
     case "icon":
+    case "field_reference":
+      // Showing or entering a field the module declares adds to a page; it changes nothing there.
       return true;
     case "group":
       return Object.values(asRecord(property.properties)).every(presentationPropertyValue);
@@ -302,20 +305,41 @@ const comparePlacements = (
       "behavior",
       id,
     );
-    for (const [previousValue, candidateValue] of [
-      [before.vortex.block, after.vortex.block],
-      [before.settings, after.settings],
-    ] as const)
-      pushChange(
-        reasons,
-        previousValue,
-        candidateValue,
-        "major",
-        "existing_behavior_changed",
-        "block_placement",
-        "behavior",
-        id,
-      );
+    pushChange(
+      reasons,
+      before.vortex.block,
+      after.vortex.block,
+      "major",
+      "existing_behavior_changed",
+      "block_placement",
+      "behavior",
+      id,
+    );
+    for (const key of new Set([...Object.keys(before.settings), ...Object.keys(after.settings)])) {
+      const previousSetting = asRecord(before.settings[key]);
+      const candidateSetting = asRecord(after.settings[key]);
+      // A list setting (fields, columns) compares entry by entry: appending or reordering is minor.
+      if (previousSetting.kind === "list" && candidateSetting.kind === "list")
+        compareOrderedEntries(
+          reasons,
+          previousSetting.items as unknown[],
+          candidateSetting.items as unknown[],
+          "block_placement",
+          id,
+          "behavior",
+        );
+      else
+        pushChange(
+          reasons,
+          before.settings[key],
+          after.settings[key],
+          "major",
+          "existing_behavior_changed",
+          "block_placement",
+          "behavior",
+          id,
+        );
+    }
   }
 };
 

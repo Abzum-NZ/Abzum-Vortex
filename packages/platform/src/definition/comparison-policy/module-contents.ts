@@ -12,6 +12,7 @@ import {
   comparePresentationSet,
   compareBound,
   compareKeyed,
+  compareOrderedEntries,
   finaliseReasons,
   sorted,
 } from "./shared";
@@ -872,10 +873,18 @@ export const compareModuleContents = (
     "record_type",
     (left, right) => compareRecordType(reasons, left, right),
   );
+  const fieldIds = (content: RecordValue): Set<string> =>
+    new Set(
+      (content.recordTypes as RecordValue[]).flatMap((record) =>
+        (record.fields as RecordValue[]).map((field) => String(field.fieldId)),
+      ),
+    );
+  const previousFieldIds = fieldIds(previous);
   comparePermissions(
     reasons,
     previous.permissions as RecordValue[],
     candidate.permissions as RecordValue[],
+    new Set([...fieldIds(candidate)].filter((fieldId) => !previousFieldIds.has(fieldId))),
   );
   compareKeyed(
     reasons,
@@ -932,13 +941,25 @@ export const compareModuleContents = (
     (candidate.queries as RecordValue[] | undefined) ?? [],
     "queryId",
     "query",
-    // Label and description are presentation; every other declared part of a published query
+    // Label and description are presentation, and the selected fields are an ordered list of
+    // entries (appending or reordering is minor). Every other declared part of a published query
     // changes what consumers receive, so it is a major change.
-    (left, right) =>
-      compareSimpleComponent(reasons, "query", right.queryId, left, right, [
+    (left, right) => {
+      const { selectedFieldIds: leftSelected, ...leftRest } = left;
+      const { selectedFieldIds: rightSelected, ...rightRest } = right;
+      compareSimpleComponent(reasons, "query", right.queryId, leftRest, rightRest, [
         "label",
         "description",
-      ]),
+      ]);
+      compareOrderedEntries(
+        reasons,
+        (leftSelected as unknown[] | undefined) ?? [],
+        (rightSelected as unknown[] | undefined) ?? [],
+        "query",
+        right.queryId,
+        "behavior",
+      );
+    },
   );
   compareKeyed(
     reasons,

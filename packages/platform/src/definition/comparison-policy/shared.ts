@@ -119,6 +119,37 @@ export const comparePresentationSet = (
     reasons.push(makeReason("patch", "presentation_changed", componentKind, "order", componentId));
 };
 
+/**
+ * An ordered list of entries (a block's fields or columns, a query's selected fields). Appending
+ * entries is additive and reordering them keeps every entry, so both are minor; removing or
+ * replacing an entry changes what existing consumers get, so it is major.
+ */
+export const compareOrderedEntries = (
+  reasons: VersionImpactReason[],
+  previous: readonly unknown[],
+  candidate: readonly unknown[],
+  componentKind: ComponentKind,
+  componentId: unknown,
+  property: Property,
+): void => {
+  if (same(previous, candidate)) return;
+  const remaining = candidate.map((entry) => canonicalJson(entry));
+  const kept: number[] = [];
+  for (const entry of previous) {
+    const at = remaining.indexOf(canonicalJson(entry));
+    if (at < 0) {
+      reasons.push(makeReason("major", "existing_behavior_changed", componentKind, property, componentId));
+      return;
+    }
+    kept.push(at);
+    remaining[at] = "";
+  }
+  if (candidate.length > previous.length)
+    reasons.push(makeReason("minor", "component_added", componentKind, property, componentId));
+  if (kept.some((position, index) => index > 0 && position < kept[index - 1]!))
+    reasons.push(makeReason("minor", "meaningful_order_changed", componentKind, "order", componentId));
+};
+
 export const compareBound = (
   reasons: VersionImpactReason[],
   previous: unknown,
