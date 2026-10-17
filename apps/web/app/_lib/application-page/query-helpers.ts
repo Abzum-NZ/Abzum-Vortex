@@ -295,6 +295,7 @@ export const logPlacementFailure = (
     | "choice_settings_invalid"
     | "choice_initial_value_invalid"
     | "choice_initial_value_unavailable"
+    | "edit_field_unprojected"
     | BoardPlacementFailureCause
     | "board_payload_invalid",
   detail?: string,

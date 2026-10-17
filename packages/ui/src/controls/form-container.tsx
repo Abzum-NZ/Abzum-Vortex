@@ -313,35 +313,31 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       : undefined;
   const fieldsDisabled = context.unavailable || props.data?.status === "disabled" ||
     ownerGroups?.length === 0;
-  const note = context.unavailable ? "Unavailable" : context.disabledReason;
+  // Why the form cannot be used now, such as a required field this person cannot fill in.
+  const refusal = context.unavailable ? undefined : context.disabledReason;
   const flowFeedback = props.flowFeedback === undefined
     ? undefined
     : formFlowFeedbackPresentation(props.flowFeedback);
-  if (props.data?.status === "disabled" && props.data.reason === "Record unavailable")
-    return (
-      <p
-        role="alert"
-        data-vortex-control="form-container"
-        data-vortex-placement-id={props.placementId}
-      >
-        Record unavailable.
-      </p>
-    );
   return (
     <Card>
-      {title === undefined && note === undefined ? null : (
+      {title === undefined && !context.unavailable ? null : (
         <CardHeader>
           {title === undefined ? null : (
             <CardTitle id={titleId} role="heading" aria-level={2}>
               {title}
             </CardTitle>
           )}
-          {note === undefined ? null : (
-            <CardDescription data-vortex-field-note="">{note}</CardDescription>
-          )}
+          {context.unavailable ? (
+            <CardDescription data-vortex-field-note="">Unavailable</CardDescription>
+          ) : null}
         </CardHeader>
       )}
       <CardContent>
+        {refusal === undefined ? null : (
+          <Alert role="alert" className="mb-4" data-vortex-form-refusal="">
+            <AlertDescription>{refusal}</AlertDescription>
+          </Alert>
+        )}
         <form
           ref={formRef}
           noValidate
