@@ -136,7 +136,7 @@ function ConfirmSurface({
       title: confirmation.title ?? "Confirm",
       description: confirmation.message,
       confirmLabel: confirmation.confirmLabel ?? "Confirm",
-      destructive: confirmation.destructive,
+      ...(confirmation.destructive === undefined ? {} : { destructive: confirmation.destructive }),
       details: (
         <div className="flex flex-col gap-3">
           {confirmation.details.length === 0 ? null : (
