@@ -132,10 +132,12 @@ export const compareApplicationSharedContent = (
     "role",
     (left, right) => compareRole(reasons, left, right),
   );
+  // An Application declares no fields of its own, so no field is new to its permissions.
   comparePermissions(
     reasons,
     previous.permissions as RecordValue[],
     candidate.permissions as RecordValue[],
+    new Set(),
   );
   compareKeyed(
     reasons,
@@ -382,10 +384,18 @@ const compareRole = (
   );
 };
 
+/**
+ * Permissions compare by identity. A field policy's readable and changeable fields compare as sets,
+ * and any change other than a field added in this same release (in `addedFieldIds`) joining a
+ * policy is major. A field the candidate adds joining a policy removes or narrows nothing, so the
+ * release is minor; it still changes that permission's meaning fingerprint, so every installed role
+ * holding it needs acceptance before the wider field access applies, whatever the version class.
+ */
 export const comparePermissions = (
   reasons: VersionImpactReason[],
   previous: RecordValue[],
   candidate: RecordValue[],
+  addedFieldIds: ReadonlySet<string>,
 ): void => {
   compareKeyed(reasons, previous, candidate, "permissionId", "permission", (left, right) => {
     const id = right.permissionId;
@@ -410,13 +420,38 @@ export const comparePermissions = (
       "key",
       id,
     );
+    const leftPolicy = left.fieldPolicy === undefined ? undefined : asRecord(left.fieldPolicy);
+    const rightPolicy = right.fieldPolicy === undefined ? undefined : asRecord(right.fieldPolicy);
+    if (leftPolicy === undefined || rightPolicy === undefined)
+      pushChange(
+        reasons,
+        leftPolicy,
+        rightPolicy,
+        "major",
+        "permission_changed",
+        "permission",
+        "permission",
+        id,
+      );
+    else
+      for (const key of ["readableFieldIds", "changeableFieldIds"]) {
+        const before = new Set((leftPolicy[key] as unknown[]).map(String));
+        const after = new Set((rightPolicy[key] as unknown[]).map(String));
+        const added = [...after].filter((fieldId) => !before.has(fieldId));
+        if (
+          [...before].some((fieldId) => !after.has(fieldId)) ||
+          added.some((fieldId) => !addedFieldIds.has(fieldId))
+        )
+          reasons.push(makeReason("major", "permission_changed", "permission", "permission", id));
+        else if (added.length > 0)
+          reasons.push(makeReason("minor", "component_added", "permission", "permission", id));
+      }
     for (const key of [
       "recordTypeId",
       "actionKind",
       "namedAction",
       "administrative",
       "recordScope",
-      "fieldPolicy",
     ])
       pushChange(
         reasons,

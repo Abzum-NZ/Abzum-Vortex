@@ -4,16 +4,12 @@ import { useMemo, useRef, useState } from "react";
 /** Everything in the workspace that holds unapplied input or an in-flight request and so blocks other changes. */
 export type StudioBusyKey =
   | "search" | "sourceImport" | "labels" | "appearance" | "composition" | "condition"
-  | "flowEditor" | "flowSetting" | "flowAppend" | "moduleField" | "publication" | "reopening";
+  | "flowStep" | "moduleField" | "publication" | "reopening";
 
-/** `flowText` names the Flow text editor and an unapplied canvas task setting together. */
-export type StudioBusyExcept = StudioBusyKey | "flowText";
-
-const expand = (except: readonly StudioBusyExcept[]): ReadonlySet<StudioBusyKey> => new Set(
-  except.flatMap((key): StudioBusyKey[] => key === "flowText" ? ["flowEditor", "flowSetting"] : [key]));
+type StudioBusyExcept = StudioBusyKey;
 
 const anyIn = (set: ReadonlySet<StudioBusyKey>, except: readonly StudioBusyExcept[]): boolean => {
-  const skipped = expand(except);
+  const skipped = new Set(except);
   for (const key of set) if (!skipped.has(key)) return true;
   return false;
 };

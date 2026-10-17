@@ -109,16 +109,14 @@ import {
  *    release when it does not already name it. Registration assigns nothing to anybody.
  * 2. Switch: detach the previously active release and its contributions (upgrade only), prepare
  *    every pinned Module's storage and attach the new contributions, then activate the complete
- *    binding set through the fixed operation (which also
- *    gates executable lifecycle policies) and append the lifecycle Activity. Any failure rolls the
- *    whole switch back, so the previously active exact release stays selected, and an upgrade then
- *    restores the registration to that still-active release.
+ *    binding set through the fixed operation (which also gives every record type its lifecycle
+ *    policy and gates executable lifecycle policies) and append the lifecycle Activity. Any failure
+ *    rolls the whole switch back, so the previously active exact release stays selected, and an
+ *    upgrade then restores the registration to that still-active release.
  *
  * A first installation is prepared before it is activated: `prepare` commits the registration,
- * provisioned inactive storage and the complete runtime bundle, so the installer can store the
- * initial record-type lifecycle policies the activation gate requires. An upgrade cannot
- * pre-provision a Module its active
- * release still binds, so its storage is prepared inside the atomic switch.
+ * provisioned inactive storage and the complete runtime bundle. An upgrade cannot pre-provision a
+ * Module its active release still binds, so its storage is prepared inside the atomic switch.
  *
  * Withdrawal is one transaction: detach the active or prepared binding set and retire its contributions
  * (storage and records are retained), append its Activity, then withdraw the permission registration,
@@ -999,8 +997,8 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         );
       } catch (error) {
         // The prior exact release is still selected; point Access back at it. A failed first
-        // installation keeps its registration, which grants nobody access and is needed for the
-        // provisioned lifecycle-policy setup.
+        // installation keeps its registration, which grants nobody access and is needed to retry
+        // the activation of its prepared release.
         if (request.expectedActiveReleaseRevision !== null)
           await restoreAccessToActiveRelease(
             verifiedSession.data,

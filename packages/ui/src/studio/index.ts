@@ -15,9 +15,13 @@ export {
 export * from "./condition-controls";
 export * from "./application-appearance";
 export * from "./application-composition-commands";
-export * from "./application-flow-text-commands";
+export * from "./field-placement";
+export * from "./application-flow-model";
+export * from "./application-flow-commands";
+export * from "./application-flow-create";
 export * from "./application-visibility-condition-commands";
 export * from "./placement-theme-overrides";
 export * from "./studio-setting-controls";
+export * from "./studio-record-reference-control";
 export * from "./theme-preset";
 export { StoredCompositionRefusal, syncStoredBlockDependencies, validateStoredShell } from "./stored-composition";

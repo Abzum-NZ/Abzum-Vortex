@@ -46,8 +46,8 @@ declare
   canonical_permissions jsonb;
   current_permissions jsonb;
   permission_count bigint;
-  prepared_templates jsonb;
-  selected_template jsonb;
+  template_source jsonb;
+  live_permissions jsonb;
   selected_template_count bigint;
   policy_choice jsonb;
   policy_value jsonb;
@@ -190,9 +190,9 @@ begin
     'accept_application_role_revision'
   ) then
     if not (candidate ?& array[
-      'preparedTemplates', 'sourceRoleId', 'templateContinuityRevision'
+      'templateSource', 'sourceRoleId', 'templateContinuityRevision'
     ])
-      or pg_catalog.jsonb_typeof(candidate -> 'preparedTemplates') is distinct from 'object'
+      or pg_catalog.jsonb_typeof(candidate -> 'templateSource') is distinct from 'object'
       or pg_catalog.jsonb_typeof(candidate -> 'sourceRoleId') is distinct from 'string'
       or pg_catalog.jsonb_typeof(candidate -> 'templateContinuityRevision')
         is distinct from 'number'
@@ -203,11 +203,11 @@ begin
       raise exception using errcode = '22023',
         message = 'Application role-template evidence is invalid';
     end if;
-    prepared_templates := candidate -> 'preparedTemplates';
+    template_source := candidate -> 'templateSource';
     target_source_role_id := (candidate ->> 'sourceRoleId')::uuid;
     target_template_continuity_revision :=
       (candidate ->> 'templateContinuityRevision')::numeric::bigint;
-  elsif candidate ? 'preparedTemplates'
+  elsif candidate ? 'templateSource'
     or candidate ? 'sourceRoleId'
     or candidate ? 'templateContinuityRevision' then
     raise exception using errcode = '22023',
@@ -224,7 +224,7 @@ begin
   elsif operation_name in ('create_custom_from_template', 'accept_new_application_role') then
     if candidate - array[
       'operation', 'organizationId', 'roleId', 'key', 'label', 'description',
-      'privilegeClassification', 'assignmentPolicy', 'preparedTemplates',
+      'privilegeClassification', 'assignmentPolicy', 'templateSource',
       'sourceRoleId', 'templateContinuityRevision', 'permissions'
     ]::text[] <> '{}'::jsonb then
       raise exception using errcode = '22023', message = 'New template role shape is invalid';
@@ -248,7 +248,7 @@ begin
     if candidate - array[
       'operation', 'organizationId', 'roleId', 'expectedRoleRevision', 'key',
       'label', 'description', 'privilegeClassification', 'assignmentPolicy',
-      'preparedTemplates', 'sourceRoleId', 'templateContinuityRevision', 'permissions'
+      'templateSource', 'sourceRoleId', 'templateContinuityRevision', 'permissions'
     ]::text[] <> '{}'::jsonb then
       raise exception using errcode = '22023', message = 'Application acceptance shape is invalid';
     end if;
@@ -481,94 +481,56 @@ begin
     end if;
   end if;
 
-  if prepared_templates is not null then
-    if prepared_templates - array[
-      'contractVersion', 'preparationBasis', 'permissionRegistration',
-      'templates'
+  if template_source is not null then
+    if template_source - array[
+      'applicationRootId', 'registrationRevision', 'catalogueFingerprint'
     ]::text[] <> '{}'::jsonb
-      or not (prepared_templates ?& array[
-        'contractVersion', 'preparationBasis', 'permissionRegistration',
-        'templates'
+      or not (template_source ?& array[
+        'applicationRootId', 'registrationRevision', 'catalogueFingerprint'
       ])
-      or prepared_templates ->> 'contractVersion' is distinct from '1.0.0'
-      or pg_catalog.jsonb_typeof(prepared_templates -> 'preparationBasis') <> 'object'
-      or (prepared_templates -> 'preparationBasis') - array[
-        'kind', 'registrationRevision'
-      ]::text[] <> '{}'::jsonb
-      or not ((prepared_templates -> 'preparationBasis') ?& array[
-        'kind', 'registrationRevision'
-      ])
-      or prepared_templates #>> '{preparationBasis,kind}' <>
-        'current_active_registration'
-      or pg_catalog.jsonb_typeof(
-        prepared_templates #> '{preparationBasis,registrationRevision}'
-      ) <> 'number'
-      or (prepared_templates #>> '{preparationBasis,registrationRevision}')::numeric
-        not between 1 and 9007199254740991
-      or (prepared_templates #>> '{preparationBasis,registrationRevision}')::numeric <>
-        pg_catalog.trunc(
-          (prepared_templates #>> '{preparationBasis,registrationRevision}')::numeric
-        )
-      or pg_catalog.jsonb_typeof(prepared_templates -> 'permissionRegistration') <> 'object'
-      or pg_catalog.jsonb_typeof(
-        prepared_templates #> '{permissionRegistration,applicationRelease,releaseRevision}'
-      ) <> 'number'
-      or (prepared_templates #>>
-        '{permissionRegistration,applicationRelease,releaseRevision}')::numeric
-          not between 1 and 9007199254740991
-      or (prepared_templates #>>
-        '{permissionRegistration,applicationRelease,releaseRevision}')::numeric <>
-          pg_catalog.trunc((prepared_templates #>>
-            '{permissionRegistration,applicationRelease,releaseRevision}')::numeric)
-      or pg_catalog.jsonb_typeof(prepared_templates -> 'templates') <> 'array'
-      or pg_catalog.jsonb_array_length(prepared_templates -> 'templates') = 0 then
+      or pg_catalog.jsonb_typeof(template_source -> 'applicationRootId') <> 'string'
+      or vortex_platform.is_non_nil_uuid(template_source ->> 'applicationRootId') is not true
+      or pg_catalog.jsonb_typeof(template_source -> 'registrationRevision') <> 'number'
+      or (template_source ->> 'registrationRevision')::numeric not between 1 and 9007199254740991
+      or (template_source ->> 'registrationRevision')::numeric <>
+        pg_catalog.trunc((template_source ->> 'registrationRevision')::numeric)
+      or pg_catalog.jsonb_typeof(template_source -> 'catalogueFingerprint') <> 'string'
+      or target_source_role_id = '00000000-0000-0000-0000-000000000000'::uuid then
       raise exception using errcode = '22023',
-        message = 'Prepared application role-template evidence is invalid';
+        message = 'Application role-template evidence is invalid';
     end if;
 
     target_accepted_registration_revision :=
-      (prepared_templates #>> '{preparationBasis,registrationRevision}')::numeric::bigint;
-    target_application_root_id :=
-      (prepared_templates #>> '{permissionRegistration,applicationRootId}')::uuid;
-    if (prepared_templates #>> '{permissionRegistration,organizationId}')::uuid <>
-        target_organization_id
-      or target_source_role_id = '00000000-0000-0000-0000-000000000000'::uuid
-      or not vortex_access.application_permission_registration_matches_candidate(
-        target_organization_id,
-        target_application_root_id,
-        target_accepted_registration_revision,
-        prepared_templates -> 'permissionRegistration'
-      ) then
+      (template_source ->> 'registrationRevision')::numeric::bigint;
+    target_application_root_id := (template_source ->> 'applicationRootId')::uuid;
+
+    -- The evidence names the registration; the source release and the role's live permissions
+    -- are read from it here, exactly as the preparation read them.
+    select registration.source_definition_key, registration.source_revision,
+      registration.source_version, registration.validation_contract_version
+    into target_source_definition_key, target_source_release_revision,
+      target_source_release_version, target_source_validation_contract_version
+    from vortex_access.permission_registrations as registration
+    where registration.organization_id = target_organization_id
+      and registration.registration_kind = 'application'
+      and registration.registration_owner_id = target_application_root_id
+      and registration.revision = target_accepted_registration_revision
+      and registration.state = 'active'
+      and registration.permission_catalogue_fingerprint =
+        template_source ->> 'catalogueFingerprint';
+    if not found then
       raise exception using errcode = '40001',
         message = 'Prepared application registration is stale or unavailable';
     end if;
 
-    select pg_catalog.count(*), pg_catalog.jsonb_agg(item.value) -> 0
-    into selected_template_count, selected_template
-    from pg_catalog.jsonb_array_elements(prepared_templates -> 'templates') as item(value)
-    where (item.value #>> '{template,roleId}')::uuid = target_source_role_id;
-    if selected_template_count <> 1
-      or pg_catalog.jsonb_typeof(selected_template) <> 'object'
-      or selected_template - array['template', 'sourcePermissions', 'livePermissions']::text[]
-        <> '{}'::jsonb
-      or not (selected_template ?& array['template', 'sourcePermissions', 'livePermissions'])
-      or pg_catalog.jsonb_typeof(selected_template -> 'template') <> 'object'
-      or pg_catalog.jsonb_typeof(selected_template -> 'livePermissions') <> 'array'
-      or pg_catalog.jsonb_array_length(selected_template -> 'livePermissions') = 0 then
-      raise exception using errcode = '22023',
-        message = 'Selected application role-template evidence is invalid';
+    live_permissions := vortex_access.application_role_template_live_permissions_internal(
+      target_organization_id, target_application_root_id,
+      target_accepted_registration_revision, target_source_role_id
+    );
+    if live_permissions is null or pg_catalog.jsonb_array_length(live_permissions) = 0 then
+      raise exception using errcode = '40001',
+        message = 'Application role template is stale or unavailable';
     end if;
-
-    target_source_definition_key :=
-      prepared_templates #>> '{permissionRegistration,applicationRelease,definitionKey}';
-    target_source_release_revision :=
-      (prepared_templates #>>
-        '{permissionRegistration,applicationRelease,releaseRevision}')::numeric::bigint;
-    target_source_release_version :=
-      prepared_templates #>> '{permissionRegistration,applicationRelease,releaseVersion}';
-    target_source_validation_contract_version :=
-      prepared_templates #>>
-        '{permissionRegistration,applicationRelease,validationContractVersion}';
   end if;
 
   manifest := p_evidence -> 'affectedAssignmentManifest';
@@ -665,7 +627,7 @@ begin
     end if;
   end if;
 
-  if prepared_templates is not null then
+  if template_source is not null then
     perform 1
     from vortex_access.permission_registrations as registration
     where registration.organization_id = target_organization_id
@@ -698,15 +660,13 @@ begin
     from pg_catalog.jsonb_array_elements(candidate_permissions) as permission(value)
     where exists (
       select 1
-      from pg_catalog.jsonb_array_elements(
-        selected_template -> 'livePermissions'
-      ) as live(value)
+      from pg_catalog.jsonb_array_elements(live_permissions) as live(value)
       where (live.value ->> 'applicationRootId')::uuid =
           (permission.value ->> 'applicationRootId')::uuid
         and live.value ->> 'ownerKind' = permission.value ->> 'ownerKind'
         and (live.value ->> 'ownerId')::uuid =
           (permission.value ->> 'ownerId')::uuid
-        and (live.value #>> '{permission,permissionId}')::uuid =
+        and (live.value ->> 'permissionId')::uuid =
           (permission.value ->> 'permissionId')::uuid
         and live.value ->> 'meaningFingerprint' =
           permission.value ->> 'meaningFingerprint'
@@ -715,7 +675,7 @@ begin
       or (
         operation_name in ('accept_new_application_role', 'accept_application_role_revision')
         and permission_count <>
-          pg_catalog.jsonb_array_length(selected_template -> 'livePermissions')
+          pg_catalog.jsonb_array_length(live_permissions)
       ) then
       raise exception using errcode = '40001',
         message = 'Role permissions do not match the current application template';

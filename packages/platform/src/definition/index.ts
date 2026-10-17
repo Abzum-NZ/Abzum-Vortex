@@ -28,9 +28,6 @@ export {
 export { FirstInstallUnavailable } from "./installation-first-install";
 export {
   readCurrentFirstInstallCandidate,
-  readFirstInstallArchiveOptions,
-  saveFirstInstallInitialPolicy,
-  type FirstInstallCommandRun,
   type FirstInstallEnvironment,
   type FirstInstallFlowEnvironment,
 } from "./installation-first-install-app";
@@ -53,11 +50,6 @@ export {
   type UpgradeSnapshot,
   type UpgradeState,
 } from "./installation-upgrade";
-export {
-  ProvisionedSetupError,
-  readProvisionedSetupInTransaction,
-  type ProvisionedSetup,
-} from "./installation-provisioned-setup";
 export type { OfflineSourceFailure } from "./offline-source-validation";
 export { applicationModuleSources } from "./application-module-lowering";
 export { validateApplicationsOffline } from "./offline-application-validation";

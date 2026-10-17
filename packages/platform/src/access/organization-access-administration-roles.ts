@@ -67,7 +67,7 @@ import {
   refuseAdministration,
   mapRecordedRefusal,
   preparationUnavailable,
-  sealPreparedRoleChangeTemplates,
+  readRoleTemplateSource,
   sealPreparedRoleChange,
 } from "./organization-access-administration-shared";
 import type {
@@ -371,7 +371,7 @@ export const createAccessAdministrationRoleOperations = ({
               organizationId?: unknown;
               permissions?: unknown;
               templateContinuityRevision?: unknown;
-              preparedTemplatesCore?: unknown;
+              templateSource?: unknown;
             }>
           | undefined;
         if (
@@ -415,7 +415,7 @@ export const createAccessAdministrationRoleOperations = ({
           assignmentPolicy: { kind: "standing" },
           sourceRoleId: command.data.sourceRoleId,
           templateContinuityRevision,
-          preparedTemplates: sealPreparedRoleChangeTemplates(read.preparedTemplatesCore),
+          templateSource: readRoleTemplateSource(read.templateSource),
           permissions,
         };
         return sealPreparedRoleChange(templateCandidate);
@@ -465,7 +465,7 @@ export const createAccessAdministrationRoleOperations = ({
               roleConfiguration?: unknown;
               permissions?: unknown;
               templateContinuityRevision?: unknown;
-              preparedTemplatesCore?: unknown;
+              templateSource?: unknown;
               manifestRequired?: unknown;
               affectedAssignments?: unknown;
             }>
@@ -505,7 +505,7 @@ export const createAccessAdministrationRoleOperations = ({
           assignmentPolicy: roleConfiguration.assignmentPolicy,
           sourceRoleId: roleConfiguration.sourceRoleId,
           templateContinuityRevision,
-          preparedTemplates: sealPreparedRoleChangeTemplates(read.preparedTemplatesCore),
+          templateSource: readRoleTemplateSource(read.templateSource),
           permissions: read.permissions,
         });
         if (
