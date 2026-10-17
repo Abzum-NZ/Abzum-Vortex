@@ -7,6 +7,7 @@ declare
   target_template jsonb;
   current_permission_count bigint;
   retained_permission_count bigint;
+  unchanged_permission_count bigint;
   target_permission_count bigint;
   target_lifecycle text;
   target_template_continuity_revision bigint;
@@ -92,7 +93,34 @@ begin
       target_permission_count := 0;
       target_lifecycle := 'unavailable';
     else
+      -- Exactly the coordinator's carry-over: a permission the template still grants stays in
+      -- its availability lineage with the meaning the role accepted.
       select pg_catalog.count(*) into retained_permission_count
+      from vortex_access.organization_role_permission_entries as permission
+      join vortex_access.permission_continuities as continuity
+        on continuity.organization_id = permission.organization_id
+        and continuity.application_root_id = permission.application_root_id
+        and continuity.owner_kind = permission.owner_kind
+        and continuity.owner_id = permission.owner_id
+        and continuity.permission_id = permission.permission_id
+        and continuity.state = 'available'
+        and continuity.continuity_revision = permission.continuity_revision
+      where permission.organization_id = p_organization_id
+        and permission.role_id = role_record.role_id
+        and permission.role_revision = role_record.role_revision
+        and exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(
+            target_template -> 'livePermissions'
+          ) as candidate(value)
+          where (candidate.value ->> 'applicationRootId')::uuid =
+              permission.application_root_id
+            and candidate.value ->> 'ownerKind' = permission.owner_kind
+            and (candidate.value ->> 'ownerId')::uuid = permission.owner_id
+            and (candidate.value #>> '{permission,permissionId}')::uuid =
+              permission.permission_id
+        );
+      select pg_catalog.count(*) into unchanged_permission_count
       from vortex_access.organization_role_permission_entries as permission
       join vortex_access.permission_continuities as continuity
         on continuity.organization_id = permission.organization_id
@@ -124,7 +152,8 @@ begin
         target_template -> 'livePermissions'
       );
       if role_record.lifecycle = 'active'
-        and retained_permission_count > 0
+        and unchanged_permission_count > 0
+        and unchanged_permission_count = target_permission_count
         and retained_permission_count = target_permission_count
         and role_record.template_continuity_revision =
           target_template_continuity_revision then

@@ -20,7 +20,6 @@ import {
   studioQueryChoices,
   studioRelationshipChoices,
   studioSourceFields,
-  studioSourcePipelines,
   studioSourceRecordTypes,
   type StudioActionChoice,
   type StudioBorrowedChoices,
@@ -44,7 +43,7 @@ export type StudioSettingValues = Readonly<Record<string, SourceBlockPropertyVal
 /**
  * What reference settings can point at, all read from the draft being edited: the fields of the
  * block's data (or every field of its record types), its queries, pages, record types, module
- * actions, pipelines and relationships. Records are not part of a draft: `records` reads them from
+ * actions and relationships. Records are not part of a draft: `records` reads them from
  * the installed application with the person's own access, or is null where none can be read.
  */
 export type StudioSettingChoices = Readonly<{
@@ -53,15 +52,13 @@ export type StudioSettingChoices = Readonly<{
   pages: readonly Readonly<{ key: string; label: string }>[];
   recordTypes: readonly Readonly<{ key: string; label: string }>[];
   actions: readonly StudioActionChoice[];
-  pipelines: readonly Readonly<{ key: string; label: string }>[];
   relationships: readonly StudioRelationshipChoice[];
   records: StudioRecordReader | null;
 }>;
 
 /**
  * The one source of every reference picker: the draft being edited, never the installed release.
- * Its own Modules' queries, fields, record types, actions and relationships, its pages and
- * pipelines, and what the Modules it uses offer (read from their releases, as nothing of theirs is
+ * Its own Modules' queries, fields, record types, actions and relationships, its pages, and what the Modules it uses offer (read from their releases, as nothing of theirs is
  * in this draft).
  */
 export const studioDraftChoices = (source: ApplicationSourceDocument, borrowed: StudioBorrowedChoices | null,
@@ -71,7 +68,6 @@ export const studioDraftChoices = (source: ApplicationSourceDocument, borrowed: 
   pages: source.body.pages.map((page) => ({ key: page.key, label: page.name })),
   recordTypes: studioSourceRecordTypes(source),
   actions: studioActionChoices(source, borrowed),
-  pipelines: studioSourcePipelines(source),
   relationships: studioRelationshipChoices(source, borrowed),
   records,
 });
@@ -140,8 +136,6 @@ const initialValue = (property: BlockPropertySchemaContract, choices: StudioSett
       : { kind: "record_type_reference", record_type: choices.recordTypes[0].key };
     case "action_reference": return choices.actions[0] === undefined ? undefined
       : { kind: "action_reference", action: choices.actions[0].reference };
-    case "pipeline_reference": return choices.pipelines[0] === undefined ? undefined
-      : { kind: "pipeline_reference", pipeline: choices.pipelines[0].key };
     case "relationship_reference": return choices.relationships[0] === undefined ? undefined
       : { kind: "relationship_reference", relationship: choices.relationships[0].reference };
     // A new entry of these starts only once the person writes its text or picks its record.
@@ -256,11 +250,6 @@ function SettingControl(props: ControlProps): ReactElement {
         value={value?.kind === "action_reference" ? value.action : ""}
         unset={choices.actions.length === 0 ? "This application has no actions yet" : unsetLabel(property, undefined)}
         onChange={(next) => onChange(next === "" ? undefined : { kind: "action_reference", action: next })} />;
-    case "pipeline_reference":
-      return <StudioOptionControl id={id} disabled={disabled} value={value?.kind === "pipeline_reference" ? value.pipeline : ""}
-        unset={choices.pipelines.length === 0 ? "This application has no pipelines yet" : unsetLabel(property, undefined)}
-        options={choices.pipelines.map((pipeline) => ({ value: pipeline.key, label: pipeline.label }))}
-        onChange={(next) => onChange(next === "" ? undefined : { kind: "pipeline_reference", pipeline: next })} />;
     case "relationship_reference":
       return <BorrowableReferenceControl id={id} disabled={disabled} choices={choices.relationships}
         value={value?.kind === "relationship_reference" ? value.relationship : ""}

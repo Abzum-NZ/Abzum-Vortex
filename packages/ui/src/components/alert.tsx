@@ -3,26 +3,27 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
 
 /*
- * One severity treatment per variant: a left rule, title and surface read from the resolved theme
- * roles. Tailwind only emits utilities it finds as complete strings in source, so each variant
- * spells its own classes out.
+ * One severity treatment per variant: a left rule and title in the severity's semantic text role
+ * (success, warning, info, destructive) on the resolved theme's surface; never a chart colour.
+ * Tailwind only emits utilities it finds as complete strings in source, so each variant spells its
+ * own classes out.
  */
 const infoVariant =
-  "border-l-4 bg-[var(--vortex-surface)] border-l-[var(--vortex-info-text)] " +
-  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-[var(--vortex-info-text)] " +
-  "[&_[data-slot=alert-description]]:text-[var(--vortex-text)]";
+  "border-l-4 bg-background border-l-info " +
+  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-info " +
+  "[&_[data-slot=alert-description]]:text-foreground";
 const successVariant =
-  "border-l-4 bg-[var(--vortex-surface)] border-l-[var(--vortex-success-text)] " +
-  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-[var(--vortex-success-text)] " +
-  "[&_[data-slot=alert-description]]:text-[var(--vortex-text)]";
+  "border-l-4 bg-background border-l-success " +
+  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-success " +
+  "[&_[data-slot=alert-description]]:text-foreground";
 const warningVariant =
-  "border-l-4 bg-[var(--vortex-surface)] border-l-[var(--vortex-warning-text)] " +
-  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-[var(--vortex-warning-text)] " +
-  "[&_[data-slot=alert-description]]:text-[var(--vortex-text)]";
+  "border-l-4 bg-background border-l-warning " +
+  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-warning " +
+  "[&_[data-slot=alert-description]]:text-foreground";
 const dangerVariant =
-  "border-l-4 bg-[var(--vortex-surface)] border-l-[var(--vortex-danger-text)] " +
-  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-[var(--vortex-danger-text)] " +
-  "[&_[data-slot=alert-description]]:text-[var(--vortex-text)]";
+  "border-l-4 bg-background border-l-destructive " +
+  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-destructive " +
+  "[&_[data-slot=alert-description]]:text-foreground";
 
 const alertVariants = cva(
   "cn-alert group/alert relative w-full",

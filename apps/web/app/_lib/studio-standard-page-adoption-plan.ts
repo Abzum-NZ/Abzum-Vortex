@@ -114,7 +114,6 @@ const propertyDisplayValue = (value: BlockPropertyValueContract): string => {
     case "action_reference":
     case "page_reference":
     case "query_reference":
-    case "pipeline_reference":
     case "record_type_reference":
     case "record_reference":
       return `${value.kind.replaceAll("_", " ")} (reference omitted)`;
@@ -303,10 +302,6 @@ const pageFacts = (
       );
       for (const [propertyKey, value] of Object.entries(placementSettings(item.props)).sort(([left], [right]) => left.localeCompare(right))) {
         addProperty(`${placementLabel} / setting ${safeDifferenceLabel(propertyKey)}`, value);
-        if (facts.size >= maxPageDifferenceFacts) break;
-      }
-      for (const [tokenKey, value] of Object.entries(placement.themeOverrides).sort(([left], [right]) => left.localeCompare(right))) {
-        add(`${placementLabel} / theme override ${safeDifferenceLabel(tokenKey)}`, value, `${value.kind.replaceAll("_", " ")} override`);
         if (facts.size >= maxPageDifferenceFacts) break;
       }
       for (const [breakpoint, layout] of Object.entries(placement.responsive))

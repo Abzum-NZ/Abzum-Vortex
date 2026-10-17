@@ -13,7 +13,6 @@ import { labelSchema } from "../catalogue/common";
 import { versionRequirementSchema } from "./definitions";
 import {
   sourceAliasSchema,
-  sourceConditionSchema,
   sourceQualifiedFieldSchema,
   sourceQualifiedQueryReferenceSchema,
   sourceProvenanceTarget,
@@ -433,11 +432,11 @@ const sourceInterfaceOperationSchema = z
       z.record(builderKeySchema, sourceInterfaceOutputFieldSchema),
     ),
     authentication: sourceProvenanceTarget(
-      z.enum(["organisation_token", "partner_token", "public"]),
+      z.enum(["organization_token", "partner_token", "public"]),
       ["authentication"],
     ),
     permission: sourceProvenanceTarget(namespacedKeySchema, ["permissionKey"]),
-    visibility: sourceProvenanceTarget(z.enum(["organisation_private", "partner", "public"]), [
+    visibility: sourceProvenanceTarget(z.enum(["organization_private", "partner", "public"]), [
       "visibility",
     ]),
     rate_limit_per_minute: sourceProvenanceUnchanged(z.number().int().min(1).max(100_000)),
@@ -613,85 +612,6 @@ export const sourceApplicationBodySchema = z
         }),
     ),
     navigation: sourceProvenanceUnchanged(z.array(sourceNavigationSchema).max(100)),
-    pipelines: sourceProvenanceUnchanged(
-      z
-        .array(
-          z
-            .object({
-              id: sourceProvenanceTarget(sourceAliasSchema, ["pipelineId"]),
-              key: sourceProvenanceUnchanged(builderKeySchema),
-              name: sourceProvenanceUnchanged(labelSchema),
-              record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, [
-                "recordType/**",
-              ]),
-              stage_field: sourceProvenanceTarget(builderKeySchema, ["stageFieldId"]),
-              stages: sourceProvenanceUnchanged(
-                z
-                  .array(
-                    z
-                      .object({
-                        key: sourceProvenanceUnchanged(builderKeySchema),
-                        label: sourceProvenanceUnchanged(labelSchema),
-                        entry_actions: sourceProvenanceUnchanged(
-                          z
-                            .array(
-                              sourceProvenanceTarget(namespacedKeySchema, ["entryActionKeys/#"]),
-                            )
-                            .max(10),
-                        ),
-                        exit_actions: sourceProvenanceUnchanged(
-                          z
-                            .array(
-                              sourceProvenanceTarget(namespacedKeySchema, ["exitActionKeys/#"]),
-                            )
-                            .max(10),
-                        ),
-                      })
-                      .strict(),
-                  )
-                  .min(1)
-                  .max(100),
-              ),
-              transitions: sourceProvenanceUnchanged(
-                z
-                  .array(
-                    z
-                      .object({
-                        from: sourceProvenanceUnchanged(builderKeySchema),
-                        to: sourceProvenanceUnchanged(builderKeySchema),
-                        permission: sourceProvenanceTarget(namespacedKeySchema.optional(), [
-                          "permissionKey",
-                        ]),
-                        action: sourceProvenanceTarget(namespacedKeySchema.optional(), [
-                          "actionKey",
-                        ]),
-                        gate: sourceProvenanceUnchanged(sourceConditionSchema.optional()),
-                      })
-                      .strict(),
-                  )
-                  .min(1)
-                  .max(200),
-              ),
-              time_targets: sourceProvenanceUnchanged(
-                z
-                  .array(
-                    z
-                      .object({
-                        stage: sourceProvenanceTarget(builderKeySchema, ["stageKey"]),
-                        field: sourceProvenanceTarget(builderKeySchema, ["dateTimeFieldId"]),
-                        escalation_event: sourceProvenanceTarget(namespacedKeySchema, [
-                          "escalationEventKey",
-                        ]),
-                      })
-                      .strict(),
-                  )
-                  .max(100),
-              ),
-            })
-            .strict(),
-        )
-        .max(100),
-    ),
     connection_bindings: sourceProvenanceUnchanged(
       z
         .array(
