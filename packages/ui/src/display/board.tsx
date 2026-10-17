@@ -8,7 +8,12 @@ import {
   type ReactElement,
   type RefObject,
 } from "react";
-import { describeFailure, type BoardColumnSelector } from "@vortex/platform/schema";
+import {
+  describeFailure,
+  type BoardColumnSelector,
+  type PipelineStageTone,
+} from "@vortex/platform/schema";
+import { Badge } from "../components/badge";
 import { Button } from "../components/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "../components/card";
 import {
@@ -35,7 +40,30 @@ type BoardBucket = Readonly<{
   label: string;
   selector: BoardColumnSelector;
   values: BoardBucketPayload;
+  /** The pipeline stage a column is: its colour role, where its cards may go, its owning action. */
+  stage?: Readonly<{ tone: PipelineStageTone; moves: readonly string[]; gatedBy?: string }>;
 }>;
+
+/** Each stage colour role as its theme token; never a colour value. */
+const toneClasses: Readonly<Record<PipelineStageTone, string>> = {
+  neutral: "bg-muted-foreground",
+  primary: "bg-primary",
+  destructive: "bg-destructive",
+  chart_1: "bg-chart-1",
+  chart_2: "bg-chart-2",
+  chart_3: "bg-chart-3",
+  chart_4: "bg-chart-4",
+  chart_5: "bg-chart-5",
+};
+
+/**
+ * Whether the pipeline lets a card in one bucket move to another column. A card with no stage yet
+ * may go to any stage; a stage's own moves name every column it may go to.
+ */
+const mayMove = (from: BoardBucket | undefined, to: BoardBucket): boolean => {
+  if (to.selector.kind !== "option" || from === undefined || from.key === to.key) return false;
+  return from.stage === undefined || from.stage.moves.includes(to.selector.value);
+};
 
 /** The card a move acts on: its record, the revision it was read at and the column it sits in. */
 type BoardMoveCard = Readonly<{
@@ -50,6 +78,9 @@ type BoardMover = Readonly<{
   movingRecordId: string | undefined;
   move: (card: BoardMoveCard, target: BoardBucket) => Promise<void>;
   dragged: RefObject<BoardMoveCard | undefined>;
+  /** The bucket a card is being dragged from, so each column can show whether it may go there. */
+  draggingFrom: BoardBucket | undefined;
+  setDraggingFrom: (bucket: BoardBucket | undefined) => void;
 }>;
 
 const countText = (count: number): string => formatLocaleNumber(count);
@@ -124,31 +155,57 @@ function BoardColumn({
   const page = bucket.values.page;
   const canContinue =
     events?.page_changed !== undefined && page?.nextContinuationToken !== undefined;
+  // While a card is dragged, every other column says whether the pipeline lets it go there.
+  const from = mover?.draggingFrom;
+  const dropAllowed = from !== undefined && mayMove(from, bucket);
+  const dropRefused = from !== undefined && from.key !== bucket.key && !dropAllowed;
   return (
     <div
-      className="flex min-w-64 flex-1 basis-64 flex-col gap-3"
+      className={`flex min-w-64 flex-1 basis-64 flex-col gap-3 transition-opacity ${
+        dropRefused ? "opacity-50" : dropAllowed ? "ring-2 ring-ring" : ""
+      }`}
       data-vortex-board-column="true"
+      data-vortex-board-drop={dropAllowed ? "allowed" : dropRefused ? "refused" : undefined}
       {...(mover === undefined || bucket.selector.kind !== "option"
         ? {}
         : {
             onDragOver: (event: DragEvent) => {
-              if (mover.dragged.current !== undefined) event.preventDefault();
+              if (mover.dragged.current !== undefined && dropAllowed) event.preventDefault();
             },
             onDrop: (event: DragEvent) => {
               const card = mover.dragged.current;
-              if (card === undefined) return;
+              if (card === undefined || !dropAllowed) return;
               event.preventDefault();
               mover.dragged.current = undefined;
+              mover.setDraggingFrom(undefined);
               void mover.move(card, bucket);
             },
           })}
     >
-      <header className="flex flex-col">
-        <h3 className="m-0 font-medium">{bucket.label}</h3>
+      <header className="flex flex-col gap-1">
+        <h3 className="m-0 flex items-center gap-2 font-medium">
+          {bucket.stage === undefined ? null : (
+            <span
+              aria-hidden="true"
+              className={`h-4 w-1 shrink-0 ${toneClasses[bucket.stage.tone]}`}
+            />
+          )}
+          {bucket.label}
+        </h3>
+        {bucket.stage?.gatedBy === undefined ? null : (
+          <Badge variant="outline" title={`Moving a card here runs ${bucket.stage.gatedBy}`}>
+            Runs {bucket.stage.gatedBy}
+          </Badge>
+        )}
         <p className="m-0 text-muted-foreground">
           {countText(bucket.values.rowCount)} {bucket.values.rowCount === 1 ? "record" : "records"}
         </p>
         <ColumnMetrics metrics={bucket.values.aggregates} />
+        {dropRefused ? (
+          <p role="status" className="m-0 text-sm text-muted-foreground">
+            {from.label} can&apos;t move here.
+          </p>
+        ) : null}
       </header>
       <div className="flex flex-col gap-3">
         {page === null ? (
@@ -200,11 +257,13 @@ function BoardColumn({
                           draggable: true,
                           onDragStart: (event: DragEvent) => {
                             mover.dragged.current = card;
+                            mover.setDraggingFrom(bucket);
                             event.dataTransfer.effectAllowed = "move";
                             event.dataTransfer.setData("text/plain", accessibleTitle);
                           },
                           onDragEnd: () => {
                             mover.dragged.current = undefined;
+                            mover.setDraggingFrom(undefined);
                           },
                         }
                       : {})}
@@ -221,6 +280,7 @@ function BoardColumn({
                         <CardAction>
                           <CardActionsMenu
                             card={card}
+                            from={bucket}
                             name={accessibleTitle}
                             events={events}
                             mover={movable ? mover : undefined}
@@ -287,19 +347,22 @@ function BoardColumn({
  */
 function CardActionsMenu({
   card,
+  from,
   name,
   events,
   mover,
   disabled,
 }: Readonly<{
   card: BoardMoveCard;
+  /** The column the card is in: its pipeline stage decides where the card may move. */
+  from: BoardBucket;
   name: string;
   events: DisplayRenderProps<BoardPayload>["events"];
   mover: BoardMover | undefined;
   disabled: boolean;
 }>): ReactElement | null {
   const onRowAction = events?.row_action;
-  const targets = mover?.targets.filter((target) => target.key !== card.bucketKey) ?? [];
+  const targets = mover?.targets.filter((target) => mayMove(from, target)) ?? [];
   if (onRowAction === undefined && targets.length === 0) return null;
   return (
     <DropdownMenu>
@@ -369,6 +432,7 @@ export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElem
   const movingRef = useRef(false);
   const focusAfterMoveRef = useRef<string | undefined>(undefined);
   const draggedRef = useRef<BoardMoveCard | undefined>(undefined);
+  const [draggingFrom, setDraggingFrom] = useState<BoardBucket>();
 
   const buckets: BoardBucket[] =
     values === undefined
@@ -379,6 +443,11 @@ export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElem
             label: column.label,
             selector: { kind: "option" as const, value: column.value },
             values: column,
+            stage: {
+              tone: column.tone,
+              moves: column.moves,
+              ...(column.gatedBy === undefined ? {} : { gatedBy: column.gatedBy }),
+            },
           })),
           {
             key: "unassigned",
@@ -429,6 +498,10 @@ export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElem
       values === undefined ||
       target.selector.kind !== "option" ||
       target.key === card.bucketKey ||
+      !mayMove(
+        buckets.find((bucket) => bucket.key === card.bucketKey),
+        target,
+      ) ||
       movingRef.current
     )
       return;
@@ -460,6 +533,8 @@ export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElem
           movingRecordId: moving?.recordId,
           move: moveCard,
           dragged: draggedRef,
+          draggingFrom,
+          setDraggingFrom,
         };
 
   const continueBucket = async (bucket: BoardBucket, continuationToken: string): Promise<void> => {

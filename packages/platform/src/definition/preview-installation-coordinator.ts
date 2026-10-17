@@ -115,13 +115,19 @@ const toCoordinatorError = (
 };
 
 /**
- * Provisions the preview of an Application draft for the requesting builder in two human
- * requests. The organisation request rehearses the draft's publication, which only it may: it
- * writes the inline Modules' drafts, as preparing a publication does, and returns the release
- * rows the undone rehearsal wrote. The Application request then provisions the preview from
- * exactly those rows, atomically, and refuses them unless the draft is still at the revision they
- * were rehearsed from. No live installation, permission registration or external service is
- * touched.
+ * Provisions the preview of an Application draft for the requesting builder in a series of human
+ * requests, each checking the builder's authority:
+ * 1. An organisation request rehearses the draft's publication, which only it may. It writes the
+ *    inline Modules' drafts, as preparing a publication does, and returns the release rows the
+ *    undone rehearsal wrote.
+ * 2. A second organisation request creates the preview from exactly those rows. It refuses them
+ *    unless the draft is still at the revision they were rehearsed from. It writes the preview's
+ *    own permission registration (the draft's roles, which only this builder holds) and empty
+ *    storage. The Application may not be installed yet.
+ * 3. When the Application is installed, a request in its own context seeds the storage. The seed
+ *    holds only the live records the builder reads there, with only the fields the builder reads.
+ * 4. A request in the preview writes the release set it runs.
+ * No live installation, live registration or external service is touched.
  */
 export const createPreviewInstallationCoordinator = (
   dependencies: PreviewInstallationCoordinatorDependencies,
@@ -193,21 +199,37 @@ export const createPreviewInstallationCoordinator = (
               expectedDraftRevision,
             }),
       );
+      // The preview is created in the organisation's context, as its Application may not be
+      // installed yet: its releases, Module pins, own permission registration and empty storage.
+      const created = await builderRequest(
+        session.data,
+        { organizationId },
+        applicationRootId,
+        (transaction) =>
+          createPreviewInstallationRepository(transaction).create(request.data, releases),
+      );
+      const { previewInstallationId } = created.installation;
+      // The builder's live records are read as the builder reads them in the installed
+      // Application; an Application with no installation has none to seed.
+      if (created.seedable)
+        await builderRequest(
+          session.data,
+          { organizationId, applicationRootId },
+          applicationRootId,
+          (transaction) => createPreviewInstallationRepository(transaction).seed(previewInstallationId),
+        );
+      // Last, in the preview itself: the release set it runs. A preview without it never runs.
       return builderRequest(
         session.data,
-        { organizationId, applicationRootId },
+        { organizationId, applicationRootId, previewInstallationId },
         applicationRootId,
         async (transaction) => {
-          const preview = await createPreviewInstallationRepository(transaction).create(
-            request.data,
-            releases,
-          );
           await writePreviewRuntimeReleaseSet(
             transaction,
             dependencies.releaseCatalogue,
-            preview.previewInstallationId,
+            previewInstallationId,
           );
-          return preview;
+          return created.installation;
         },
       );
     },

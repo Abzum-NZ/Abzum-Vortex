@@ -23,25 +23,16 @@ import type {
 } from "@vortex/platform/schema";
 import type { FieldInputControlReleaseMap } from "../registry";
 import type { PlatformThemeTokens } from "../theme";
-import { createFullPlatformComponentRegistry } from "../combined-registry";
+import { createPlatformComponentRegistryForReleases } from "../combined-registry";
 import { getVortexPuckConfig } from "../puck-config";
 import { contentConfigFor } from "../shell-outlet";
 import type { Breakpoint } from "../definition-error";
 
 export type { Breakpoint as StudioCanvasBreakpoint } from "../definition-error";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Button } from "../components/button";
 import { Label } from "../components/label";
 import { NativeSelect, NativeSelectOption } from "../components/native-select";
-import type { StudioApplicationTheme } from "./application-appearance";
-import {
-  clearPlacementThemeOverrides,
-  placementsWithThemeOverrides,
-  type StudioCompileFailure,
-  type StudioPlacementThemeFailure,
-  type StudioPlacementThemeOverrides,
-  type StudioPlacementThemeResult,
-} from "./placement-theme-overrides";
+import type { StudioCompileFailure } from "./compile-failure";
 import {
   StoredCompositionRefusal,
   storedItemRelease,
@@ -49,20 +40,23 @@ import {
   validateStoredZone,
   storedZoneAliases,
   withCopiedFlowBindings,
-  withoutFlowBindingsOf,
+  removeFlowBindingsOf,
   syncStoredBlockDependencies,
 } from "./stored-composition";
 import {
   StudioCanvasCompiledSettings,
   studioCanvasConfig,
   StudioCanvasRecordsProvider,
+  StudioCanvasViewerProvider,
   type StudioCanvasRecords,
+  type StudioCanvasViewer,
 } from "./studio-canvas-render";
 import { puckDataForBreakpoint, StudioCanvasBridge, type StudioCanvasFrame } from "./studio-canvas-bridge";
 import { StudioBlockPalette, type StudioCanvasAddRequest } from "./studio-block-palette";
 import type { StudioCompositionAddTargetsModel, StudioCompositionDestination } from "./application-composition-commands";
 
 export type { StudioCanvasFrame } from "./studio-canvas-bridge";
+export type { StudioCanvasViewer } from "./studio-canvas-render";
 export type { StudioCanvasAddRequest } from "./studio-block-palette";
 
 /** Studio's block palette: drawn in the Blocks panel, inside this editor so its blocks drag with Puck. */
@@ -160,13 +154,6 @@ export type ApplicationPagePuckEditorProps = Readonly<{
   disabled: boolean;
   /** Why the saved draft would not compile; the page stays open so the cause can be corrected. */
   compileFailure?: StudioCompileFailure | null | undefined;
-  /** Judges placement theme overrides with the checks publication applies. */
-  validateThemeOverrides?: (
-    theme: StudioApplicationTheme,
-    placements: readonly StudioPlacementThemeOverrides[],
-  ) => Promise<StudioPlacementThemeResult>;
-  /** Reports whether any placement theme override is currently refused, so Save can wait. */
-  onThemeOverrideProblems?: (hasProblems: boolean) => void;
   onChange: (
     expectedSource: ApplicationSourceDocument,
     source: ApplicationSourceDocument,
@@ -188,6 +175,8 @@ export type ApplicationPagePuckEditorProps = Readonly<{
   readRecords?: ((area: string) => Promise<StudioCanvasRecordsRead>) | undefined;
   /** A newer saved revision than `compiledSource` is being compiled. */
   updating?: boolean | undefined;
+  /** The role the canvas previews, hiding what it may not see; `null` or absent is the design view. */
+  viewer?: StudioCanvasViewer | null | undefined;
 }>;
 
 /** Edits one content slot of a page; a page with several slots or guided steps lets the person pick. */
@@ -302,8 +291,6 @@ function ApplicationPageSlotPuckEditor({
   at,
   disabled,
   compileFailure,
-  validateThemeOverrides,
-  onThemeOverrideProblems,
   onChange,
   selectedPlacementAlias,
   onSelectPlacement,
@@ -312,19 +299,20 @@ function ApplicationPageSlotPuckEditor({
   palette,
   readRecords,
   updating,
+  viewer,
 }: ApplicationPagePuckEditorProps & { at: PageSlotAddress }) {
   const registry = useMemo(
-    () => createFullPlatformComponentRegistry(platformBlockCatalogue.releases),
+    () => createPlatformComponentRegistryForReleases(platformBlockCatalogue.releases),
     [platformBlockCatalogue],
   );
   const catalogue = useMemo(() => registry.toPlatformBlockCatalogue(), [registry]);
   // The content renders inside the frame's outlet, exactly as a running page's content does.
   const config = useMemo(
     () => studioCanvasConfig(
-      contentConfigFor(getVortexPuckConfig(registry, fieldInputControlReleases, platformThemeTokens)),
+      contentConfigFor(getVortexPuckConfig(registry, fieldInputControlReleases)),
       registry,
     ),
-    [registry, fieldInputControlReleases, platformThemeTokens],
+    [registry, fieldInputControlReleases],
   );
   const compiledSlot = compiledSlots?.[at.key];
   const [message, setMessage] = useState("");
@@ -395,72 +383,6 @@ function ApplicationPageSlotPuckEditor({
   }), [recordsRead, compiledSource, catalogue, originalSlot, slot, updating]);
   const editable = !disabled && readOnlyCause === undefined && breakpoint === "desktop";
 
-  const [themeProblems, setThemeProblems] = useState<readonly StudioPlacementThemeFailure[]>([]);
-  const [themeCheckNote, setThemeCheckNote] = useState("");
-  const placementOverrides = useMemo(
-    () => (slot === undefined ? [] : placementsWithThemeOverrides(slot.items)),
-    [slot],
-  );
-  const themeCheckKey = JSON.stringify([source.body.theme, placementOverrides]);
-  useEffect(() => {
-    if (validateThemeOverrides === undefined) return;
-    if (placementOverrides.length === 0) {
-      setThemeProblems([]);
-      setThemeCheckNote("");
-      onThemeOverrideProblems?.(false);
-      return;
-    }
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      validateThemeOverrides(source.body.theme, placementOverrides).then(
-        (result) => {
-          if (cancelled) return;
-          const failures = result.kind === "available" ? result.failures : [];
-          setThemeProblems(failures);
-          setThemeCheckNote(
-            result.kind === "available"
-              ? ""
-              : "Theme overrides could not be checked now. They are checked again when the draft is opened.",
-          );
-          onThemeOverrideProblems?.(failures.length > 0);
-        },
-        (error: unknown) => {
-          console.error("Failed to check placement theme overrides", error);
-          if (cancelled) return;
-          setThemeProblems([]);
-          setThemeCheckNote("Theme overrides could not be checked now.");
-          onThemeOverrideProblems?.(false);
-        },
-      );
-    }, 400);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [themeCheckKey]);
-
-  useEffect(() => () => onThemeOverrideProblems?.(false), []);
-
-  const removeThemeOverrides = (alias: string) => {
-    try {
-      const current = sourceRef.current;
-      const next = structuredClone(current);
-      const nextPage = next.body.pages.find((item) => item.id === pageAlias);
-      const nextSlot = nextPage === undefined ? undefined : sourcePageSlotAt(nextPage, at);
-      if (nextSlot === undefined || !clearPlacementThemeOverrides(nextSlot.items, alias))
-        throw new TypeError("The block is not on this page content slot.");
-      const parsed = applicationSourceDocumentSchema.safeParse(next);
-      if (!parsed.success) throw parsed.error;
-      setMessage("");
-      onChange(current, parsed.data);
-    } catch (error: unknown) {
-      console.error("Failed to remove placement theme overrides", error);
-      setMessage(
-        "The theme overrides could not be removed. The saved draft and current edits are preserved.",
-      );
-    }
-  };
-
   // Every canvas change goes back through the definition: Puck's data is converted to the
   // authored content area, placed in the current draft and validated before the history takes it.
   const change = (candidate: Data) => {
@@ -483,8 +405,8 @@ function ApplicationPageSlotPuckEditor({
         throw new TypeError("The selected page is unavailable.");
       const kept = storedZoneAliases(editedSlot);
       const removed = new Set([...storedZoneAliases(targetSlot)].filter((alias) => !kept.has(alias)));
-      next.body.flow_bindings = withoutFlowBindingsOf(
-        withCopiedFlowBindings(next.body.flow_bindings, copies), removed);
+      next.body.flow_bindings = withCopiedFlowBindings(next.body.flow_bindings, copies);
+      removeFlowBindingsOf(next.body, removed);
       syncStoredBlockDependencies(next);
       const parsed = applicationSourceDocumentSchema.safeParse(next);
       if (!parsed.success) throw parsed.error;
@@ -529,9 +451,6 @@ function ApplicationPageSlotPuckEditor({
         {compileFailure === null || compileFailure === undefined ? null : (
           <CompileFailureNotice
             failure={compileFailure}
-            hasOverrides={placementOverrides.some((entry) => entry.alias === compileFailure.blockAlias)}
-            disabled={disabled}
-            onRemoveOverrides={removeThemeOverrides}
           />
         )}
         {message.length === 0 ? null : <p role="status">{message}</p>}
@@ -552,26 +471,11 @@ function ApplicationPageSlotPuckEditor({
         </p>
       </div>
       {message.length === 0 ? null : <p role="status">{message}</p>}
-      {themeCheckNote.length === 0 ? null : <p role="status">{themeCheckNote}</p>}
-      {themeProblems.length === 0 ? null : (
-        <div role="alert" className="space-y-1 text-sm text-destructive">
-          <p className="font-semibold">These theme overrides are refused and cannot be saved:</p>
-          <ul className="list-disc pl-5">
-            {themeProblems.map((problem, index) => (
-              <li key={index}>
-                Block {problem.alias}
-                {problem.tokenKey === undefined ? "" : `, ${tokenLabel(problem.tokenKey)}`}:{" "}
-                {problem.code.toLowerCase().replaceAll("_", " ")}. Change the colour or remove the
-                override.
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
       <div className="overflow-x-auto border border-border bg-muted/30 p-2">
         <div className="mx-auto overflow-hidden bg-background" style={{ width, maxWidth: "100%" }}>
           <StudioCanvasCompiledSettings settings={compiled.settings ?? {}}>
           <StudioCanvasRecordsProvider records={canvasRecords}>
+          <StudioCanvasViewerProvider viewer={viewer ?? null}>
           <Puck
             config={config}
             data={shown}
@@ -607,6 +511,7 @@ function ApplicationPageSlotPuckEditor({
               platformThemeTokens={platformThemeTokens}
             />
           </Puck>
+          </StudioCanvasViewerProvider>
           </StudioCanvasRecordsProvider>
           </StudioCanvasCompiledSettings>
         </div>
@@ -618,17 +523,7 @@ function ApplicationPageSlotPuckEditor({
 const tokenLabel = (key: string): string =>
   key.replace(/_/gu, " ").replace(/^./u, (first) => first.toUpperCase());
 
-function CompileFailureNotice({
-  failure,
-  hasOverrides,
-  disabled,
-  onRemoveOverrides,
-}: Readonly<{
-  failure: StudioCompileFailure;
-  hasOverrides: boolean;
-  disabled: boolean;
-  onRemoveOverrides: (alias: string) => void;
-}>) {
+function CompileFailureNotice({ failure }: Readonly<{ failure: StudioCompileFailure }>) {
   const alias = failure.blockAlias;
   return (
     <div role="alert" className="space-y-2 text-sm">
@@ -638,23 +533,6 @@ function CompileFailureNotice({
         {alias === undefined ? "" : `, block ${alias}`}
         {failure.tokenKey === undefined ? "" : `, ${tokenLabel(failure.tokenKey)}`}.
       </p>
-      {hasOverrides && alias !== undefined ? (
-        <>
-          <p>
-            Remove this block&apos;s theme overrides, save the draft and reload the page to open it
-            for visual editing again.
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={disabled}
-            onClick={() => onRemoveOverrides(alias)}
-          >
-            Remove theme overrides from {alias}
-          </Button>
-        </>
-      ) : null}
     </div>
   );
 }

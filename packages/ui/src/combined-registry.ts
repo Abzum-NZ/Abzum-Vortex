@@ -11,6 +11,7 @@ import { CONTROL_COMPONENT_REGISTRATIONS } from "./controls/registrations";
 import { LAUNCHER_COMPONENT_REGISTRATIONS } from "./launcher/registrations";
 import { LAYOUT_COMPONENT_REGISTRATIONS } from "./layout/registrations";
 import { NAVIGATION_COMPONENT_REGISTRATIONS } from "./navigation/registrations";
+import { createCustomComponentRegistrations } from "./custom-component/registration";
 
 /** Every platform component registration, combining the display, control, launcher, layout and navigation families. */
 export const ALL_PLATFORM_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistration[] =
@@ -23,13 +24,6 @@ export const ALL_PLATFORM_COMPONENT_REGISTRATIONS: readonly PlatformComponentReg
     ...LAYOUT_COMPONENT_REGISTRATIONS,
     ...NAVIGATION_COMPONENT_REGISTRATIONS,
   ]);
-
-/** Creates an immutable PlatformComponentRegistry populated with every display, control, launcher, layout and navigation release. */
-export function createFullPlatformComponentRegistry(
-  platformReleases: readonly PlatformBlockRelease[],
-): PlatformComponentRegistry {
-  return createPlatformComponentRegistry(ALL_PLATFORM_COMPONENT_REGISTRATIONS, platformReleases);
-}
 
 /** Creates an immutable registry containing only registrations for the supplied release metadata. */
 export function createPlatformComponentRegistryForReleases(
@@ -44,5 +38,9 @@ export function createPlatformComponentRegistryForReleases(
       identity !== undefined && releaseIdentities.has(`${identity.key}:${identity.releaseVersion}`)
     );
   });
-  return createPlatformComponentRegistry(registrations, platformReleases);
+  const customReleases = platformReleases.filter((release) => release.customComponent !== undefined);
+  return createPlatformComponentRegistry(
+    [...registrations, ...createCustomComponentRegistrations(customReleases)],
+    platformReleases,
+  );
 }

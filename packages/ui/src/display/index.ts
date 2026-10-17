@@ -1,8 +1,8 @@
 // Per-Block Payload & Event Contracts
+export { parseBoardPayload } from "./board-payload";
 export type { ChartPayload } from "./chart";
 export {
   DISPLAY_EVENT_NAMES,
-  parseBoardPayload,
   parseDisplayData,
   parseDisplayEventHandlers,
   parseGroupedPayload,
@@ -75,7 +75,7 @@ export { SummaryValuesDisplay } from "./summary-values";
 export { type DisplayRenderProps } from "./context";
 
 // Display Registrations & Registry
-export { DISPLAY_COMPONENT_REGISTRATIONS, createDisplayComponentRegistry } from "./registrations";
+export { DISPLAY_COMPONENT_REGISTRATIONS } from "./registrations";
 
 export {
   QueryNoticeDisplay,

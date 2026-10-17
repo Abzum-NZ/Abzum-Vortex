@@ -117,6 +117,13 @@ export const guardRules = {
     description:
       "A shipped definition source that publication would refuse (offline compile and validation)",
   },
+  "contract-version-parity": {
+    tier: "blocking",
+    owner: "lead",
+    reviewBy: "2027-01-15",
+    description:
+      "Each definition kind accepts exactly one contract version: vortex_definition.accepted_contract_version returns a single element per kind and the TypeScript source and validation constants equal it",
+  },
   "derived-id-parity": {
     tier: "blocking",
     owner: "lead",
@@ -154,4 +161,5 @@ export const scannedRuleIds = new Set([
   "ui-literal-style",
   "definition-validation",
   "derived-id-parity",
+  "contract-version-parity",
 ]);

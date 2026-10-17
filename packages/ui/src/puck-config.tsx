@@ -68,7 +68,6 @@ import {
   type FieldInputControlReleaseMap,
   type RuntimeInputsByPlacement,
 } from "./registry";
-import { resolvePlacementTheme, type PlacementThemeScope, type PlatformThemeTokens } from "./theme";
 import { ApplicationLauncher } from "./launcher/application-launcher";
 import { LinkTiles } from "./launcher/link-tiles";
 import { ViewFilter } from "./launcher/view-filter";
@@ -158,7 +157,6 @@ type FieldInputControlReleases = FieldInputControlReleaseMap;
 export type VortexPlacementMeta = Readonly<{
   block: CompiledItemVortex["block"];
   responsive: CompiledItemVortex["responsive"];
-  themeOverrides: CompiledItemVortex["themeOverrides"];
   /** The complete tablet and phone order of each child slot; a slot array is its desktop order. */
   slotOrders?: Readonly<Record<string, BreakpointOrder>>;
   availability?: "unavailable";
@@ -186,10 +184,7 @@ export type VortexPuckComponentProps = Readonly<{
 }> &
   Readonly<Record<string, unknown>>;
 
-const EMPTY_THEME_SCOPE: PlacementThemeScope = Object.freeze({ application: {}, inherited: {} });
-
-/** Theme tokens in force for nested placements when the host supplies no explicit scope. */
-const ThemeScopeContext = createContext<PlacementThemeScope>(EMPTY_THEME_SCOPE);
+const ThemeTokensContext = createContext<Readonly<Record<string, unknown>>>({});
 
 /**
  * The page root's resolved slot gap. It travels by context rather than a CSS variable so slots
@@ -210,12 +205,12 @@ export function RootSlotGapProvider({
   );
 }
 
-/** Seeds the root tokens while descendant placements inherit their nearest themed ancestor. */
-export function VortexPuckThemeScopeProvider({
-  scope,
+/** Supplies the application's theme tokens to custom components. */
+export function VortexPuckThemeTokensProvider({
+  tokens,
   children,
-}: Readonly<{ scope: PlacementThemeScope; children: ReactNode }>): ReactElement {
-  return <ThemeScopeContext.Provider value={scope}>{children}</ThemeScopeContext.Provider>;
+}: Readonly<{ tokens: Readonly<Record<string, unknown>>; children: ReactNode }>): ReactElement {
+  return <ThemeTokensContext.Provider value={tokens}>{children}</ThemeTokensContext.Provider>;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -377,12 +372,11 @@ function PlacementBlock(props: {
   registry: PlatformComponentRegistry;
   componentProps: VortexPuckComponentProps;
   fieldInputControlReleases: FieldInputControlReleases;
-  platformThemeTokens: PlatformThemeTokens;
 }): ReactElement {
-  const { registry, componentProps, fieldInputControlReleases, platformThemeTokens } = props;
+  const { registry, componentProps, fieldInputControlReleases } = props;
   const { id: placementId, vortex, puck, wrapper } = componentProps;
   const metadataIn = (puck.metadata ?? {}) as VortexPuckMetadata;
-  const inheritedScope = useContext(ThemeScopeContext);
+  const themeTokens = useContext(ThemeTokensContext);
   const rootSlotGap = useContext(RootSlotGapContext);
   const breakpoint = metadataIn.breakpoint;
   const responsive = breakpoint === undefined;
@@ -425,14 +419,6 @@ function PlacementBlock(props: {
       ? EMPTY_RUNTIME_INPUTS
       : registration.parsePayload(suppliedInputs, location);
 
-  // Declared theme overrides apply to this placement and its subtree; a re-themed placement is
-  // also a theme root, so its surface, text and typography repaint from its own variables.
-  const placementTheme = resolvePlacementTheme(
-    inheritedScope,
-    vortex.themeOverrides,
-    platformThemeTokens,
-  );
-
   const slotStyle: CSSProperties = { gap: slotGapFor(release, settings, rootSlotGap, location) };
   const slots: Record<string, ReactNode> = {};
   const latestSlots = useRef<Record<string, SlotComponent>>({});
@@ -469,7 +455,6 @@ function PlacementBlock(props: {
     : computePlacementClassName(layout);
   const wrapperStyle: CSSProperties = {
     ...wrapper?.style,
-    ...placementTheme.style,
     ...(responsive ? {} : computePlacementStyle(layout)),
   };
   const ownCss =
@@ -482,68 +467,64 @@ function PlacementBlock(props: {
       : undefined;
 
   return (
-    <ThemeScopeContext.Provider value={placementTheme.scope}>
-      <div
-        data-vortex-layout-wrapper=""
-        data-vortex-placement-id={placementId}
-        data-vortex-block-id={release.blockId}
-        data-vortex-block-key={release.key}
-        {...(responsive && !pageEmitsCss ? { "data-vortex-wrapper-scope": placementId } : {})}
-        {...(gridChild ? { "data-vortex-grid-child": "" } : {})}
-        {...(responsive
-          ? {}
-          : {
-              "data-vortex-breakpoint": activeBreakpoint,
-              "data-vortex-visible": String(layout.visible),
-            })}
-        {...(placementTheme.style === undefined ? {} : { "data-vortex-theme": "" })}
-        className={
-          wrapper?.className ? `${wrapperClassName} ${wrapper.className}` : wrapperClassName
-        }
-        style={wrapperStyle}
-      >
-        {ownCss === undefined ? null : <style>{ownCss}</style>}
-        {visible ? (
-          <Implementation
-            {...parsedInputs}
-            placementId={placementId}
-            settings={settings}
-            slots={slots}
-            breakpoint={activeBreakpoint}
-            responsiveLayout={responsive}
-            metadata={release}
-            fieldInputControlReleases={fieldInputControlReleases}
-            themeOverrides={vortex.themeOverrides}
-            themeTokens={placementTheme.scope.inherited}
-            {...availability}
-            {...(metadataIn.projectedNavigation === undefined
-              ? {}
-              : { projectedNavigation: metadataIn.projectedNavigation })}
-            {...(metadataIn.resolvePageHref === undefined
-              ? {}
-              : { resolvePageHref: metadataIn.resolvePageHref })}
-            {...(metadataIn.onNavigatePage === undefined
-              ? {}
-              : { onNavigatePage: metadataIn.onNavigatePage })}
-            {...(metadataIn.onPrefetchPage === undefined
-              ? {}
-              : { onPrefetchPage: metadataIn.onPrefetchPage })}
-            {...(metadataIn.currentPageId === undefined
-              ? {}
-              : { currentPageId: metadataIn.currentPageId })}
-            {...(metadataIn.componentBundleOrigin === undefined
-              ? {}
-              : { componentBundleOrigin: metadataIn.componentBundleOrigin })}
-            {...(metadataIn.applicationSearch === undefined
-              ? {}
-              : { applicationSearch: metadataIn.applicationSearch })}
-            {...(metadataIn.applicationSearchPageSubject === undefined
-              ? {}
-              : { applicationSearchPageSubject: metadataIn.applicationSearchPageSubject })}
-          />
-        ) : null}
-      </div>
-    </ThemeScopeContext.Provider>
+    <div
+      data-vortex-layout-wrapper=""
+      data-vortex-placement-id={placementId}
+      data-vortex-block-id={release.blockId}
+      data-vortex-block-key={release.key}
+      {...(responsive && !pageEmitsCss ? { "data-vortex-wrapper-scope": placementId } : {})}
+      {...(gridChild ? { "data-vortex-grid-child": "" } : {})}
+      {...(responsive
+        ? {}
+        : {
+            "data-vortex-breakpoint": activeBreakpoint,
+            "data-vortex-visible": String(layout.visible),
+          })}
+      className={
+        wrapper?.className ? `${wrapperClassName} ${wrapper.className}` : wrapperClassName
+      }
+      style={wrapperStyle}
+    >
+      {ownCss === undefined ? null : <style>{ownCss}</style>}
+      {visible ? (
+        <Implementation
+          {...parsedInputs}
+          placementId={placementId}
+          settings={settings}
+          slots={slots}
+          breakpoint={activeBreakpoint}
+          responsiveLayout={responsive}
+          metadata={release}
+          fieldInputControlReleases={fieldInputControlReleases}
+          themeTokens={themeTokens}
+          {...availability}
+          {...(metadataIn.projectedNavigation === undefined
+            ? {}
+            : { projectedNavigation: metadataIn.projectedNavigation })}
+          {...(metadataIn.resolvePageHref === undefined
+            ? {}
+            : { resolvePageHref: metadataIn.resolvePageHref })}
+          {...(metadataIn.onNavigatePage === undefined
+            ? {}
+            : { onNavigatePage: metadataIn.onNavigatePage })}
+          {...(metadataIn.onPrefetchPage === undefined
+            ? {}
+            : { onPrefetchPage: metadataIn.onPrefetchPage })}
+          {...(metadataIn.currentPageId === undefined
+            ? {}
+            : { currentPageId: metadataIn.currentPageId })}
+          {...(metadataIn.componentBundleOrigin === undefined
+            ? {}
+            : { componentBundleOrigin: metadataIn.componentBundleOrigin })}
+          {...(metadataIn.applicationSearch === undefined
+            ? {}
+            : { applicationSearch: metadataIn.applicationSearch })}
+          {...(metadataIn.applicationSearchPageSubject === undefined
+            ? {}
+            : { applicationSearchPageSubject: metadataIn.applicationSearchPageSubject })}
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -575,7 +556,6 @@ type VortexComponentConfig = ComponentConfig<Record<string, unknown>>;
 export function createVortexPuckConfig(
   registry: PlatformComponentRegistry,
   fieldInputControlReleases: FieldInputControlReleases,
-  platformThemeTokens: PlatformThemeTokens,
 ): Config {
   const newestByKey = new Map<string, PlatformBlockRelease>();
   for (const { metadata } of registry.list()) {
@@ -632,7 +612,6 @@ export function createVortexPuckConfig(
         ),
         vortex: {
           block: { blockId: release.blockId, releaseVersion: release.releaseVersion },
-          themeOverrides: {},
           responsive: Object.fromEntries(
             RESPONSIVE_BREAKPOINT_ORDER.map((breakpoint) => [
               breakpoint,
@@ -656,7 +635,6 @@ export function createVortexPuckConfig(
         <PlacementBlock
           registry={registry}
           fieldInputControlReleases={fieldInputControlReleases}
-          platformThemeTokens={platformThemeTokens}
           componentProps={componentProps as unknown as VortexPuckComponentProps}
         />
       ),
@@ -732,11 +710,10 @@ const configs = new WeakMap<PlatformComponentRegistry, Config>();
 export function getVortexPuckConfig(
   registry: PlatformComponentRegistry,
   fieldInputControlReleases: FieldInputControlReleases,
-  platformThemeTokens: PlatformThemeTokens,
 ): Config {
   let config = configs.get(registry);
   if (config === undefined) {
-    config = createVortexPuckConfig(registry, fieldInputControlReleases, platformThemeTokens);
+    config = createVortexPuckConfig(registry, fieldInputControlReleases);
     configs.set(registry, config);
   }
   return config;
