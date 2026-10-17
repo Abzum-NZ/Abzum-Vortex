@@ -137,7 +137,11 @@ const readReleaseNote = async (selector: StudioApplicationInstallationSelector):
   }
   const inspected = await inspectStudioApplicationReleaseHistory(selector.organizationId, {
     rootId: selector.rootId,
-    expected: access.snapshot,
+    expected: {
+      draftRevision: access.snapshot.draftRevision,
+      sourceFingerprint: access.snapshot.sourceFingerprint,
+      anchorReleaseRevision: access.snapshot.anchorReleaseRevision,
+    },
     releaseRevision: selector.releaseRevision,
   });
   if (inspected.kind !== "available") {
