@@ -12,6 +12,7 @@ import {
   comparePresentationSet,
   compareBound,
   compareKeyed,
+  compareOrderedEntries,
   finaliseReasons,
   sorted,
 } from "./shared";
@@ -871,10 +872,22 @@ export const compareModuleContents = (
     "record_type",
     (left, right) => compareRecordType(reasons, left, right),
   );
+  const fieldIds = (content: RecordValue): Set<string> =>
+    new Set(
+      (content.recordTypes as RecordValue[]).flatMap((record) =>
+        (record.fields as RecordValue[]).map((field) => String(field.fieldId)),
+      ),
+    );
+  const previousFieldIds = fieldIds(previous);
+  // The fields this release adds: only they may join a permission or a query additively.
+  const addedFieldIds = new Set(
+    [...fieldIds(candidate)].filter((fieldId) => !previousFieldIds.has(fieldId)),
+  );
   comparePermissions(
     reasons,
     previous.permissions as RecordValue[],
     candidate.permissions as RecordValue[],
+    addedFieldIds,
   );
   compareKeyed(
     reasons,
@@ -931,13 +944,27 @@ export const compareModuleContents = (
     (candidate.queries as RecordValue[] | undefined) ?? [],
     "queryId",
     "query",
-    // Label and description are presentation; every other declared part of a published query
-    // changes what consumers receive, so it is a major change.
-    (left, right) =>
-      compareSimpleComponent(reasons, "query", right.queryId, left, right, [
+    // Label and description are presentation, and the selected fields are an ordered list of
+    // entries: appending a field added in this same release, or reordering, is minor; appending a
+    // field that already existed exposes it to every consumer, so it is major. Every other
+    // declared part of a published query changes what consumers receive: major.
+    (left, right) => {
+      const { selectedFieldIds: leftSelected, ...leftRest } = left;
+      const { selectedFieldIds: rightSelected, ...rightRest } = right;
+      compareSimpleComponent(reasons, "query", right.queryId, leftRest, rightRest, [
         "label",
         "description",
-      ]),
+      ]);
+      compareOrderedEntries(
+        reasons,
+        (leftSelected as unknown[] | undefined) ?? [],
+        (rightSelected as unknown[] | undefined) ?? [],
+        "query",
+        right.queryId,
+        "behavior",
+        (fieldId) => addedFieldIds.has(String(fieldId)),
+      );
+    },
   );
   compareKeyed(
     reasons,

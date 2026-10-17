@@ -73,6 +73,33 @@ const moduleAliases = (module: InlineModule): Set<string> => new Set([
   ...module.queries.map((query) => query.id),
 ]);
 
+/**
+ * Adds one empty Module the Application owns: no record types, permissions or queries yet. It is
+ * the one way an owned Module is created, for a new Application and for the first record type of
+ * an Application that owns none. The source is changed in place.
+ */
+export const addOwnedInlineModule = (
+  source: ApplicationSourceDocument,
+  creation: Readonly<{ key: string; name: string }>,
+): Readonly<{ kind: "added"; module: InlineModule }> | Readonly<{ kind: "invalid"; issues: readonly string[] }> => {
+  const key = creation.key.trim();
+  const name = creation.name.trim();
+  const issues: string[] = [];
+  if (!namespacedKeySchema.safeParse(key).success)
+    issues.push("The module key must be lowercase words separated by dots, for example team.workspace.data.");
+  else if (takenModuleKeys(source).has(key)) issues.push("This application already owns or uses a module with that key.");
+  if (name === "") issues.push("Enter the module's name.");
+  if (issues.length > 0) return { kind: "invalid", issues };
+  const module = {
+    id: `mod_${aliasPart(key)}`.slice(0, 160), key, name,
+    description: `The records of ${source.body.name}.`.slice(0, 1_000),
+    record_types: [], permissions: [], actions: [], events: [], flows: [], extension_points: [],
+    sharing_conditions: [], queries: [],
+  } as unknown as InlineModule;
+  source.body.modules.push(module);
+  return { kind: "added", module };
+};
+
 const permissionLabel = (verb: string, name: string): string => `${verb} ${name.toLowerCase()}`.slice(0, 60);
 const permissionDescription = (action: string, plural: string): string =>
   `Allows the standard ${action.replaceAll("_", " ")} operation for ${plural.toLowerCase()}.`;
@@ -126,21 +153,9 @@ export const createInlineRecordType = (
   } else if (source.body.modules.length > 0) {
     issues.push("Choose the module this record type belongs to.");
   } else {
-    const moduleKey = creation.newModule?.key.trim() ?? "";
-    const moduleName = creation.newModule?.name.trim() ?? "";
-    if (!namespacedKeySchema.safeParse(moduleKey).success)
-      issues.push("The module key must be lowercase words separated by dots, for example team.workspace.data.");
-    else if (takenModuleKeys(source).has(moduleKey)) issues.push("This application already owns or uses a module with that key.");
-    if (moduleName === "") issues.push("Enter the module's name.");
-    if (issues.length === 0) {
-      module = {
-        id: `mod_${aliasPart(moduleKey)}`.slice(0, 160), key: moduleKey, name: moduleName,
-        description: `The records of ${source.body.name}.`.slice(0, 1_000),
-        record_types: [], permissions: [], actions: [], events: [], flows: [], extension_points: [],
-        sharing_conditions: [], queries: [],
-      } as unknown as InlineModule;
-      source.body.modules.push(module);
-    }
+    const created = addOwnedInlineModule(source, creation.newModule ?? { key: "", name: "" });
+    if (created.kind === "invalid") issues.push(...created.issues);
+    else module = created.module;
   }
   if (module !== undefined && module.record_types.some((record) => record.key === key))
     issues.push(`This module already has a record type with the key "${key}".`);
@@ -315,14 +330,16 @@ export type InlineRecordTypeReference = Readonly<{
     | Readonly<{ kind: "none" }>;
 }>;
 
-type Path = readonly (string | number)[];
+export type SourcePath = readonly (string | number)[];
+type Path = SourcePath;
 type Visit = (text: string, path: Path, key: string | undefined) => void;
 
-const walk = (value: unknown, path: Path, visit: Visit, key?: string): void => {
+/** Visits every string under a value with its path and the property it sits in. */
+export const walkSourceStrings = (value: unknown, path: Path, visit: Visit, key?: string): void => {
   if (typeof value === "string") visit(value, path, key);
-  else if (Array.isArray(value)) value.forEach((item, index) => walk(item, [...path, index], visit, key));
+  else if (Array.isArray(value)) value.forEach((item, index) => walkSourceStrings(item, [...path, index], visit, key));
   else if (value !== null && typeof value === "object")
-    for (const [childKey, child] of Object.entries(value)) walk(child, [...path, childKey], visit, childKey);
+    for (const [childKey, child] of Object.entries(value)) walkSourceStrings(child, [...path, childKey], visit, childKey);
 };
 
 const at = (value: unknown, path: Path): unknown =>
@@ -339,8 +356,8 @@ const navigationAt = (source: ApplicationSourceDocument, path: Path): { id?: str
   return found;
 };
 
-/** Names the place in the source a reference sits at. */
-const describePlace = (source: ApplicationSourceDocument, path: Path): InlineRecordTypeReference => {
+/** Names the place in the source a reference sits at, with what Studio can open to show it. */
+export const describeSourcePlace = (source: ApplicationSourceDocument, path: Path): InlineRecordTypeReference => {
   const [, section, index] = path;
   const body = source.body;
   if (section === "modules" && typeof index === "number") {
@@ -418,7 +435,7 @@ export const inlineRecordTypeReferences = (
     path[1] === "modules" && path[2] === moduleIndex &&
     ((path[3] === "record_types" && path[4] === recordIndex) ||
       (path[3] === "permissions" && typeof path[4] === "number" && ownPermissionIndexes.has(path[4])));
-  walk(source, [], (text, path, key) => {
+  walkSourceStrings(source, [], (text, path, key) => {
     if (isOwn(path)) return;
     // Access groups list the standard permissions, which are removed with the record type.
     if (path[1] === "roles" && ownPermissions.has(text)) return;
@@ -426,7 +443,7 @@ export const inlineRecordTypeReferences = (
     const uses = text === qualified || text.startsWith(`${qualified}.`) || ownPermissions.has(text) ||
       queryReferences.has(text) || (inOwningModule && key !== undefined && localRecordProperties.has(key) && text === recordKey);
     if (!uses) return;
-    const place = describePlace(source, path);
+    const place = describeSourcePlace(source, path);
     found.set(place.label, place);
   });
   return [...found.values()];
@@ -434,8 +451,8 @@ export const inlineRecordTypeReferences = (
 
 /**
  * The Application source without one record type of an owned Module. It is refused while anything
- * else uses the record type. Its standard permissions go with it, and so does its Module when it
- * was the Module's last record type and the Module holds nothing else.
+ * else uses the record type. Its standard permissions go with it; its Module stays, empty when
+ * this was its last record type.
  */
 export const deleteInlineRecordType = (
   current: ApplicationSourceDocument, moduleKey: string, recordKey: string,
@@ -451,14 +468,5 @@ export const deleteInlineRecordType = (
   module.permissions = module.permissions.filter((permission) => !own.has(permission.key));
   for (const role of source.body.roles)
     (role as { permissions: string[] }).permissions = (role.permissions as string[]).filter((entry) => !own.has(entry));
-  if (module.record_types.length === 0) {
-    const leftovers = module.permissions.length + module.actions.length + module.events.length + module.flows.length +
-      module.extension_points.length + module.sharing_conditions.length + module.queries.length;
-    if (leftovers > 0)
-      return { kind: "invalid", issues: [`${module.name} still holds permissions, actions, rules or queries, so its last record type cannot be deleted.`] };
-    if (source.body.modules.length === 1 && source.body.uses.length === 0)
-      return { kind: "invalid", issues: ["This is the application's only record type, and an application needs at least one module."] };
-    source.body.modules = source.body.modules.filter((item) => item.key !== moduleKey);
-  }
   return parsedResult(source, moduleKey, recordKey);
 };
