@@ -105,7 +105,6 @@ export const moduleInstallationStorageCommandSchema = z
 
 const canonicalStorageContractIdsSchema = z
   .array(storageContractIdSchema)
-  .min(1)
   .max(500)
   .superRefine((values, context) => {
     if (new Set(values).size !== values.length)

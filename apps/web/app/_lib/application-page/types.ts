@@ -48,6 +48,11 @@ export type ApplicationPageModel = Readonly<{
   navigation: ProjectedNavigation;
   /** Structural body visibility only; absence on guided pages preserves their active-step UI. */
   bodyContentAvailable?: boolean;
+  /**
+   * Where a draft preview's builder adds the first record type: present only on the empty home
+   * page of a preview whose application has no record types.
+   */
+  firstRecordTypeHref?: string;
   /** Current Access revision used to re-register page tools after a permission change. */
   accessVersion: number;
   /** Permission-filtered tools that map to one usable control on this page. */
