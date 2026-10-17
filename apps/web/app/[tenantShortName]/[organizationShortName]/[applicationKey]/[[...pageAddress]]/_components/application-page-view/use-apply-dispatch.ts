@@ -19,7 +19,6 @@ export function useApplyDispatch({
   setFormFeedback,
   router,
   model,
-  resolvePageHref,
   platformComponentRegistry,
   setCompletedGuidedNavigationKey,
   refreshPlacements,
@@ -36,7 +35,6 @@ export function useApplyDispatch({
   setFormFeedback: Dispatch<SetStateAction<Readonly<Record<string, FormFlowFeedback>>>>;
   router: ReturnType<typeof useRouter>;
   model: ApplicationPageModel;
-  resolvePageHref: (page: string) => string;
   platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
   setCompletedGuidedNavigationKey: Dispatch<SetStateAction<string | undefined>>;
   refreshPlacements: (
@@ -150,10 +148,6 @@ export function useApplyDispatch({
                   ? { tone: "problem", text: [...new Set(correctionMessages)].join(" ") }
                   : refusalNotices[diagnostic.code];
             const presentation = diagnostic.presentation;
-            const recoveryPage = presentation === undefined ? undefined : resolvePageHref(presentation.page);
-            const recoveryAddress = recoveryPage === window.location.pathname
-              ? `${recoveryPage}${window.location.search}`
-              : recoveryPage;
             resultNotice = {
               ...reason,
               ...(presentation === undefined
@@ -161,7 +155,7 @@ export function useApplyDispatch({
                 : {
                     link: {
                       label: presentation.link_label,
-                      href: `${recoveryAddress}#record-${presentation.record_id}`,
+                      href: `#record-${presentation.record_id}`,
                     },
                   }),
               text:
@@ -236,7 +230,6 @@ export function useApplyDispatch({
       navigationKey,
       refreshPlacements,
       refreshTargetsForBinding,
-      resolvePageHref,
       router,
     ],
   );

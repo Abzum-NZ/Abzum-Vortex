@@ -5076,13 +5076,6 @@
                               "value": "This role changed in the latest release and needs accepting in IAM before it can be assigned"
                             }
                           },
-                          "page": {
-                            "kind": "literal",
-                            "literal": {
-                              "type": "text",
-                              "value": "iam_roles_groups"
-                            }
-                          },
                           "link_label": {
                             "kind": "literal",
                             "literal": {
@@ -5317,13 +5310,6 @@
                             "literal": {
                               "type": "text",
                               "value": "This role changed in the latest release and needs accepting in IAM before it can be assigned"
-                            }
-                          },
-                          "page": {
-                            "kind": "literal",
-                            "literal": {
-                              "type": "text",
-                              "value": "iam_roles_groups"
                             }
                           },
                           "link_label": {

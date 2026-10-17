@@ -350,7 +350,6 @@ export function ApplicationPageViewContent({
     setCompletedGuidedNavigationKey,
     refreshPlacements,
     refreshTargetsForBinding,
-    resolvePageHref,
   });
 
   const invokeWebMcpTool = useCallback(

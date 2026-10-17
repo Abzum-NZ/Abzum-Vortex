@@ -12,12 +12,11 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
   "role_acceptance_required",
 ]);
 
-/** Definition-authored guidance and an internal link to the affected record. */
+/** Definition-authored guidance and a link to the affected row on the current page. */
 export const flowRefusalPresentationSchema = z
   .object({
     code: flowRefusalFeedbackCodeSchema,
     message: z.string().min(1).max(300),
-    page: builderKeySchema,
     link_label: z.string().min(1).max(100),
     record_id: recordIdSchema,
   })
