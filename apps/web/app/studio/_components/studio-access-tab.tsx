@@ -84,8 +84,9 @@ export function useStudioAccessTab({ source, compiledRoles, hidden, disabled, on
       <h3 className="text-sm font-medium">Roles</h3>
       <ul className="list-none space-y-1">{roles.map((entry) => <li key={entry.key}>
         {choice(view.kind === "role" && view.roleKey === entry.key, entry.name,
-          entry.permissions.includes("*") ? "Holds every permission"
-            : `${entry.permissions.length} ${entry.permissions.length === 1 ? "permission" : "permissions"}`,
+          (entry.permissions.includes("*") ? "Holds every permission"
+            : `${entry.permissions.length} ${entry.permissions.length === 1 ? "permission" : "permissions"}`) +
+            (entry.default_member === true ? " · default member role" : ""),
           () => show({ kind: "role", roleKey: entry.key }))}
       </li>)}</ul>
     </section>

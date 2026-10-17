@@ -119,6 +119,15 @@ export function StudioAccessRoleEditor({ source, role, compiledGrants, disabled,
       <Button type="button" size="sm" variant="outline" onClick={onPreview}><Icon name="eye" />Preview as {role.name}</Button>
       <Button type="button" size="sm" variant="destructive" disabled={disabled} onClick={() => { void remove(); }}>Remove role</Button>
     </div>
+    <div className="flex flex-wrap items-center gap-3 rounded-md border border-border p-3">
+      {role.default_member === true
+        ? <p className="text-sm"><span className="font-medium">Default member role.</span> A first install offers this role to the person who installs the application.</p>
+        : <>
+          <p className="text-sm text-muted-foreground">A first install offers the default member role to the person who installs the application. The application has exactly one.</p>
+          <Button type="button" size="sm" variant="outline" disabled={disabled}
+            onClick={() => run({ kind: "set_default_member", roleKey: role.key })}>Make this the default member role</Button>
+        </>}
+    </div>
 
     {wildcard ? <div className="space-y-2">
       <Notice severity="info" content={`${role.name} holds every permission of the application that is not administrative. To choose them one by one, list them first.`} />

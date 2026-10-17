@@ -61,6 +61,8 @@ export type StudioAccessCommand =
   | Readonly<{ kind: "add_role"; name: string }>
   | Readonly<{ kind: "rename_role"; roleKey: string; name: string }>
   | Readonly<{ kind: "remove_role"; roleKey: string }>
+  /** Makes a role the application's one default member role: the role a first install offers the installer. */
+  | Readonly<{ kind: "set_default_member"; roleKey: string }>
   | Readonly<{ kind: "set_role_home_page"; roleKey: string; pageKey: string }>
   | Readonly<{ kind: "grant"; roleKey: string; permissionKey: string; granted: boolean }>
   /** A role holding every application permission is changed to hold them one by one, as the compiled draft grants them. */
@@ -442,6 +444,9 @@ const addRole = (candidate: Source, name: string): StudioAccessResult => {
 const removeRole = (candidate: Source, roleKey: string): StudioAccessResult => {
   const role = requireRole(candidate.body, roleKey);
   if (candidate.body.roles.length === 1) refuse(`${quoted(role.name)} is the application's only role. Add another role first.`);
+  if (role.default_member === true)
+    refuse(`${quoted(role.name)} is the default member role. Make another role the default member role first.`,
+      [{ kind: "role", roleKey: role.key, label: `${quoted(role.name)} is offered to whoever installs the application` }]);
   candidate.body.roles = candidate.body.roles.filter((entry) => entry.key !== roleKey);
   return applied(candidate, `Role ${quoted(role.name)} removed.`);
 };
@@ -477,6 +482,14 @@ export const applyStudioAccessCommand = (source: Source, command: StudioAccessCo
         return applied(candidate, `Role renamed to ${quoted(name)}.`, role.key);
       }
       case "remove_role": return removeRole(candidate, command.roleKey);
+      case "set_default_member": {
+        const role = requireRole(body, command.roleKey);
+        if (role.default_member === true) refuse(`${quoted(role.name)} is already the default member role.`);
+        // Exactly one role is the default member role, so the mark moves from the previous one.
+        for (const entry of body.roles) delete (entry as { default_member?: true }).default_member;
+        (role as { default_member?: true }).default_member = true;
+        return applied(candidate, `${quoted(role.name)} is now the default member role: a first install offers it to the installer.`, role.key);
+      }
       case "set_role_home_page": {
         const role = requireRole(body, command.roleKey);
         const page = pageOf(body, command.pageKey) ?? refuse("That page is no longer in the draft.");
