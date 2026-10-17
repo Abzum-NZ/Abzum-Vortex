@@ -23,10 +23,10 @@ type MinimumApplicationSourceResult =
       fieldErrors: Readonly<Partial<Record<keyof MinimumApplicationInputs, string>>>;
     }>;
 
-/** The key a new application gets from its name: `app.` and the name's words, `app.assets_hub`. */
+/** The key a new application gets from its name: `app.` and the name's words, `app.assets_hub`, cut to the 40-character segment limit. */
 export const applicationKeyFromName = (name: string): string => {
   const words = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^[_0-9]+|_+$/g, "");
-  return words === "" ? "" : `app.${words.slice(0, 96).replace(/_+$/, "")}`;
+  return words === "" ? "" : `app.${words.slice(0, 40).replace(/_+$/, "")}`;
 };
 
 /** The input each authored source path is edited in; everything made from the key reports on it. */
