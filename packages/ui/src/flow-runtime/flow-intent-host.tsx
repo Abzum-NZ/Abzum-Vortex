@@ -11,6 +11,7 @@ import {
 } from "react";
 import { Button } from "../components/button";
 import { Checkbox } from "../components/checkbox";
+import { useConfirm } from "../components/confirm-dialog";
 import {
   Dialog,
   DialogContent,
@@ -127,50 +128,47 @@ function ConfirmSurface({
   confirmation: FlowConfirmIntent;
   settle: (answer: FlowConfirmAnswer) => void;
 }>): ReactElement {
-  const [choice, setChoice] = useState(false);
-  const decline = (): void => settle({ confirmed: false });
-  return (
-    <FlowDialog
-      title={confirmation.title ?? "Confirm"}
-      onDismiss={decline}
-      actions={
-        <>
-          <Button type="button" variant="secondary" onClick={decline}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={() =>
-              settle(
-                confirmation.choice === undefined
-                  ? { confirmed: true }
-                  : { confirmed: true, choice },
-              )
-            }
-          >
-            {confirmation.confirmLabel ?? "Confirm"}
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        <p className="whitespace-pre-line">{confirmation.message}</p>
-        {confirmation.details.length === 0 ? null : (
-          <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
-            {confirmation.details.map((line, index) => (
-              <li key={index}>{line}</li>
-            ))}
-          </ul>
-        )}
-        {confirmation.choice === undefined ? null : (
-          <label className="flex items-start gap-2 text-sm">
-            <Checkbox checked={choice} onCheckedChange={(checked) => setChoice(checked === true)} />
-            <span>{confirmation.choice}</span>
-          </label>
-        )}
-      </div>
-    </FlowDialog>
-  );
+  const [confirm, dialog] = useConfirm();
+  useEffect(() => {
+    let mounted = true;
+    let choice = false;
+    void confirm({
+      title: confirmation.title ?? "Confirm",
+      description: confirmation.message,
+      confirmLabel: confirmation.confirmLabel ?? "Confirm",
+      details: (
+        <div className="flex flex-col gap-3">
+          {confirmation.details.length === 0 ? null : (
+            <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
+              {confirmation.details.map((line, index) => (
+                <li key={index}>{line}</li>
+              ))}
+            </ul>
+          )}
+          {confirmation.choice === undefined ? null : (
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox
+                defaultChecked={false}
+                onCheckedChange={(checked) => {
+                  choice = checked === true;
+                }}
+              />
+              <span>{confirmation.choice}</span>
+            </label>
+          )}
+        </div>
+      ),
+    }).then((confirmed) => {
+      if (mounted)
+        settle(
+          confirmed && confirmation.choice !== undefined ? { confirmed, choice } : { confirmed },
+        );
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [confirm, confirmation, settle]);
+  return dialog;
 }
 
 /**
