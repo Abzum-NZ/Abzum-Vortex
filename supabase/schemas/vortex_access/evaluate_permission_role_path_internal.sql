@@ -25,7 +25,49 @@ declare
   permission_value uuid := (p_permission ->> 'permissionId')::uuid;
   action_kind_value text := p_action ->> 'actionKind';
   named_action_value text := p_action ->> 'namedAction';
+  preview_registration record;
 begin
+  -- A preview request decides the permissions of the previewed Application and its own Modules
+  -- from the preview's registration alone: the builder who opened the preview holds the draft's
+  -- roles there. Every other permission, a used Module's included, and every permission on a
+  -- system projection, the platform's live read model, is decided by the builder's own live
+  -- access below; the preview's roles never apply to it.
+  if permission_owner_kind_value in ('application', 'module')
+    and nullif(
+      pg_catalog.current_setting('vortex_record.preview_installation_id', true), ''
+    ) is not null then
+    select registration.* into preview_registration
+    from vortex_access.request_application_registration_internal(
+      context_organization_value,
+      (p_context ->> 'applicationRootId')::uuid,
+      context_account_value
+    ) as registration;
+    if preview_registration.registration_kind is distinct from 'preview' then
+      return;
+    end if;
+    if permission_owner_value = any(preview_registration.owned_owner_ids)
+      and not coalesce(
+        p_record_type_id = any(preview_registration.system_projection_record_type_ids), false
+      ) then
+      return query
+      select preview_entry.entry,
+        case when preview_entry.held
+          then least(context_expires_value, preview_registration.valid_until)
+        end
+      from vortex_access.preview_permission_entries as preview_entry
+      where preview_entry.preview_installation_id = preview_registration.preview_installation_id
+        and (preview_entry.entry).application_root_id is not distinct from
+          permission_application_value
+        and (preview_entry.entry).owner_kind = permission_owner_kind_value
+        and (preview_entry.entry).owner_id = permission_owner_value
+        and (preview_entry.entry).permission_id = permission_value
+        and (preview_entry.entry).record_type_id is not distinct from p_record_type_id
+        and (preview_entry.entry).action_kind = action_kind_value
+        and (preview_entry.entry).named_action is not distinct from named_action_value;
+      return;
+    end if;
+  end if;
+
   return query
   with current_permission as materialized (
     select catalogue.application_root_id, catalogue.owner_kind,
@@ -317,7 +359,7 @@ comment on function
   vortex_access.evaluate_permission_role_path_internal(
     jsonb, timestamptz, jsonb, jsonb, uuid
   ) is
-  'Private current-permission and role-path evidence; null record type selects only non-record permissions. It returns one row per accepted meaning the caller holds through a live role path (never a later registered meaning), the registered meaning for a super administrator, or the registered permission without a deadline when no path is live. No row authority.';
+  'Private current-permission and role-path evidence; null record type selects only non-record permissions. It returns one row per accepted meaning the caller holds through a live role path (never a later registered meaning), the registered meaning for a super administrator, or the registered permission without a deadline when no path is live. A preview request decides the previewed Application''s own permissions from its preview registration. No row authority.';
 
 alter function vortex_access.evaluate_permission_role_path_internal(p_context jsonb, p_checked_at timestamp with time zone, p_permission jsonb, p_action jsonb, p_record_type_id uuid) owner to vortex_owner;
 
