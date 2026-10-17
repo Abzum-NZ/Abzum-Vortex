@@ -23,7 +23,6 @@ import {
   sourceResponsivePlacementSchema,
   sourceShellContentSlotSchema,
 } from "./page-composition";
-import { sourceThemeTokenValueSchema } from "./theme";
 
 /**
  * Authored page and shell layouts take Puck 0.23's data shape (`Data`, `ComponentData`).
@@ -50,7 +49,6 @@ export type SourceItemVortex = {
   use_permission?: string | undefined;
   visibility_condition?: z.infer<typeof sourceQualifiedConditionSchema> | undefined;
   query?: string | undefined;
-  theme_overrides: Record<string, z.infer<typeof sourceThemeTokenValueSchema>>;
   responsive: z.infer<typeof sourceResponsivePlacementSchema>;
   slot_orders?: SourceSlotOrders | undefined;
 };
@@ -164,9 +162,6 @@ const sourceItemVortexSchema = z
     use_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["usePermissionKey"]),
     visibility_condition: sourceProvenanceUnchanged(sourceQualifiedConditionSchema.optional()),
     query: sourceProvenanceTarget(sourceQualifiedQueryReferenceSchema.optional(), ["queryId"]),
-    theme_overrides: sourceProvenanceUnchanged(
-      z.record(builderKeySchema, sourceThemeTokenValueSchema),
-    ),
     responsive: sourceProvenanceUnchanged(sourceResponsivePlacementSchema),
     slot_orders: sourceProvenanceUnchanged(sourceSlotOrdersSchema.optional()),
   })

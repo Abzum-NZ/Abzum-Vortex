@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.protect_permission_continuity() RETURNS trigger
+CREATE OR REPLACE FUNCTION vortex_access.protect_permission_continuity() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
@@ -16,21 +16,17 @@ begin
     or new.registration_owner_id is distinct from old.registration_owner_id
     or old.last_processed_registration_revision = 9007199254740991
     or new.last_processed_registration_revision <= old.last_processed_registration_revision
+    -- The continuity revision is an availability lineage: it advances exactly when the
+    -- permission is withdrawn or registered again. Its meaning may change only while it stays
+    -- registered, within the lineage.
     or new.continuity_revision not in (
       old.continuity_revision,
       old.continuity_revision + 1
     )
+    or (new.continuity_revision = old.continuity_revision + 1) = (new.state is not distinct from old.state)
     or (
-      new.continuity_revision = old.continuity_revision
-      and (
-        new.state is distinct from old.state
-        or new.meaning_fingerprint is distinct from old.meaning_fingerprint
-      )
-    )
-    or (
-      new.continuity_revision = old.continuity_revision + 1
-      and new.state is not distinct from old.state
-      and new.meaning_fingerprint is not distinct from old.meaning_fingerprint
+      new.meaning_fingerprint is distinct from old.meaning_fingerprint
+      and new.state is distinct from 'available'
     ) then
     raise exception using errcode = '23514',
       message = 'Permission continuity transition is invalid';

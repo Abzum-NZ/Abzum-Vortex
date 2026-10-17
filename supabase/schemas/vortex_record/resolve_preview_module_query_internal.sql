@@ -111,7 +111,7 @@ begin
   where release.root_id = p_module_root_id
     and release.release_revision = query_release_revision;
   if not found
-    or query_validation_contract_version is distinct from '3.0.0'
+    or query_validation_contract_version <> all (vortex_definition.accepted_contract_version('module'))
     or query_source_contract_version is distinct from query_validation_contract_version
     or query_compilation_output #>> '{kind}' is distinct from 'module'
     or query_compilation_output #>> '{canonical,envelope,rootId}'
@@ -129,12 +129,28 @@ begin
   loop
     query_match_count := query_match_count + 1;
   end loop;
-  if query_match_count <> 1 then
+  if query_match_count > 1 then
     return null;
   end if;
-  select item.value into query_item
-  from pg_catalog.jsonb_array_elements(query_content -> 'queries') as item(value)
-  where pg_catalog.lower(item.value ->> 'queryId') = p_query_id::text;
+  if query_match_count = 1 then
+    select item.value into query_item
+    from pg_catalog.jsonb_array_elements(query_content -> 'queries') as item(value)
+    where pg_catalog.lower(item.value ->> 'queryId') = p_query_id::text;
+  else
+    -- No authored query has this identity: one record type of this Module, listed by its own.
+    if pg_catalog.jsonb_typeof(query_content -> 'recordTypes') is distinct from 'array'
+      or (
+        select pg_catalog.count(*)
+        from pg_catalog.jsonb_array_elements(query_content -> 'recordTypes') as item(value)
+        where pg_catalog.lower(item.value ->> 'recordTypeId') = p_query_id::text
+      ) <> 1 then
+      return null;
+    end if;
+    select vortex_record.record_type_listing_query_internal(p_module_root_id, item.value)
+    into query_item
+    from pg_catalog.jsonb_array_elements(query_content -> 'recordTypes') as item(value)
+    where pg_catalog.lower(item.value ->> 'recordTypeId') = p_query_id::text;
+  end if;
   if pg_catalog.jsonb_typeof(query_item) is distinct from 'object'
     or query_item #>> '{recordType,state}' is distinct from 'resolved' then
     return null;
@@ -198,7 +214,7 @@ begin
       return null;
     end if;
   end if;
-  if record_type_validation_contract_version not in ('2.0.0', '3.0.0')
+  if record_type_validation_contract_version <> all (vortex_definition.accepted_contract_version('module'))
     or record_type_source_contract_version is distinct from record_type_validation_contract_version
     or record_type_compilation_output #>> '{kind}' is distinct from 'module'
     or record_type_compilation_output #>> '{canonical,envelope,rootId}'

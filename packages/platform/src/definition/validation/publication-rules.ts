@@ -60,8 +60,6 @@ export const applicationRuleCodes = [
   "vortex.definition.application_block_references",
   "vortex.definition.application_block_settings",
   "vortex.definition.application_public_surface",
-  "vortex.definition.application_pipeline_stage",
-  "vortex.definition.application_pipeline_references",
   "vortex.definition.application_connection_operations",
   "vortex.definition.application_public_paths",
   "vortex.definition.application_interface_references",

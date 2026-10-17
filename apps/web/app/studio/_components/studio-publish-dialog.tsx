@@ -49,7 +49,7 @@ export function StudioPublishDialog(props: StudioPublishDialogProps) {
       <DialogHeader>
         <DialogTitle>Publish this application</DialogTitle>
         <DialogDescription>
-          Publishing makes the saved draft a new version. Installing it in an organization is a separate step.
+          Publishing makes the saved draft a new version. Organisations install it, or upgrade to it, from the App Store.
         </DialogDescription>
       </DialogHeader>
       {hasUnsavedChanges

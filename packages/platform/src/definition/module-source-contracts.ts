@@ -23,7 +23,7 @@ import {
   sourceExactDecimalTextSchema,
   sourceMoneyValueSchema,
 } from "../records/module-field-values";
-import { moduleSourceRecordOwnershipModeSchema } from "../records/record-ownership-compatibility";
+import { recordOwnershipModeSchema } from "../records/record-ownership-mode";
 import { sourceFlowCollectionSchema } from "../workflows/flow-source-contracts";
 import {
   boundedProtectedReadModelSortKeys,
@@ -37,6 +37,14 @@ import {
 } from "../access/permissions";
 import { moduleSourceFieldSchema } from "./module-source-fields";
 import { moduleSourceActionInputSchema } from "./module-source-action-inputs";
+import {
+  maximumPipelineStages,
+  maximumPipelineTransitions,
+  maximumRecordTypePipelines,
+  pipelineShapeProblems,
+  pipelineStageSchema,
+  pipelineTransitionSchema,
+} from "./record-type-pipelines";
 
 /** The one current Module source/validation contract pair. */
 export const moduleSourceContractVersion = "3.0.0" as const;
@@ -378,11 +386,11 @@ const moduleSourceRecordTypeSchema = z
     title_field: sourceProvenanceTarget(builderKeySchema, ["titleFieldId"]),
     storage_contract_id: sourceProvenanceTarget(sourceAliasSchema, ["storageContractId"]),
     storage_scope: sourceProvenanceTarget(
-      z.enum(["organisation_shared", "application_contained"]),
+      z.enum(["organization_shared", "application_contained"]),
       ["storageScope"],
     ),
     system_projection: sourceProvenanceUnchanged(moduleSourceSystemProjectionSchema.optional()),
-    ownership_mode: sourceProvenanceTarget(moduleSourceRecordOwnershipModeSchema, [
+    ownership_mode: sourceProvenanceTarget(recordOwnershipModeSchema, [
       "ownershipMode",
     ]),
     ownership_relationship: sourceProvenanceTarget(builderKeySchema.optional(), [
@@ -430,9 +438,53 @@ const moduleSourceRecordTypeSchema = z
         )
         .max(500),
     ),
+    /** The lifecycles of its choice fields: stage order, colours and the moves a save accepts. */
+    pipelines: sourceProvenanceUnchanged(
+      z
+        .array(
+          z
+            .object({
+              id: sourceProvenanceTarget(sourceAliasSchema, ["pipelineId"]),
+              key: sourceProvenanceUnchanged(builderKeySchema),
+              name: sourceProvenanceUnchanged(labelSchema),
+              stage_field: sourceProvenanceTarget(builderKeySchema, ["stageFieldId"]),
+              stages: sourceProvenanceUnchanged(
+                z.array(pipelineStageSchema).min(1).max(maximumPipelineStages),
+                true,
+              ),
+              transitions: sourceProvenanceUnchanged(
+                z.array(pipelineTransitionSchema).max(maximumPipelineTransitions),
+                true,
+              ),
+            })
+            .strict(),
+        )
+        .max(maximumRecordTypePipelines),
+    ),
   })
   .strict()
   .superRefine((value, context) => {
+    const pipelineKeys = new Set<string>();
+    const stageFields = new Set<string>();
+    for (const [index, pipeline] of value.pipelines.entries()) {
+      if (pipelineKeys.has(pipeline.key) || stageFields.has(pipeline.stage_field))
+        context.addIssue({
+          code: "custom",
+          path: ["pipelines", index],
+          message: "A choice field has at most one pipeline, and each pipeline its own key",
+        });
+      pipelineKeys.add(pipeline.key);
+      stageFields.add(pipeline.stage_field);
+      const field = value.fields.find((candidate) => candidate.key === pipeline.stage_field);
+      const options =
+        field?.type === "choice" ? field.settings.options.map((option) => option.value) : undefined;
+      for (const problem of pipelineShapeProblems(pipeline, options))
+        context.addIssue({
+          code: "custom",
+          path: ["pipelines", index, ...problem.path],
+          message: problem.message,
+        });
+    }
     if (value.fields.filter((field) => field.sortable).length > 8)
       context.addIssue({
         code: "custom",
@@ -462,7 +514,7 @@ const moduleSourceRecordTypeSchema = z
     if (projection === undefined) return;
     // A system projection is read-only by default. Only a projection in the closed writable
     // registration may declare standard update; create, delete and restore always remain refused.
-    if (value.storage_scope !== "organisation_shared")
+    if (value.storage_scope !== "organization_shared")
       context.addIssue({
         code: "custom",
         path: ["storage_scope"],
