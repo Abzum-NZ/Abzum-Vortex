@@ -92,8 +92,16 @@ const entriesFor = (
   }));
 };
 
-const entrySubject = (entry: PermissionRegistryEntryCandidate): string =>
-  `${entry.ownerKind}:${entry.ownerId}:${entry.permission.key}:${entry.permission.permissionId}`;
+// The one entry order: field by field (owner kind, owner id, key, permission id), as the
+// database checks it. Joining the fields into one string orders `read_1`, `read_10`, `read_2` differently.
+const comparePermissionEntries = (
+  left: PermissionRegistryEntryCandidate,
+  right: PermissionRegistryEntryCandidate,
+): number =>
+  compareCanonicalStrings(left.ownerKind, right.ownerKind) ||
+  compareCanonicalStrings(left.ownerId, right.ownerId) ||
+  compareCanonicalStrings(left.permission.key, right.permission.key) ||
+  compareCanonicalStrings(left.permission.permissionId, right.permission.permissionId);
 
 const applicationCatalogue = (permissions: readonly PermissionDeclaration[]) => {
   const included = permissions
@@ -144,9 +152,7 @@ export const verifyPreparedApplicationPermissionRegistration = (
   if (!parsed.success)
     throw new PermissionRegistryPreparationError("PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID");
   const candidate = parsed.data;
-  const orderedEntries = [...candidate.entries].sort((left, right) =>
-    compareCanonicalStrings(entrySubject(left), entrySubject(right)),
-  );
+  const orderedEntries = [...candidate.entries].sort(comparePermissionEntries);
   if (
     orderedEntries.some((entry, index) => entry !== candidate.entries[index]) ||
     candidate.entries.some(
@@ -254,7 +260,7 @@ const prepareRegistrationForRelease = (
   const entries = [
     ...entriesFor(application.rootId, application),
     ...releaseSet.data.modules.flatMap((module) => entriesFor(application.rootId, module)),
-  ].sort((left, right) => compareCanonicalStrings(entrySubject(left), entrySubject(right)));
+  ].sort(comparePermissionEntries);
   requireUniqueOwnership(entries);
 
   const candidate = {
