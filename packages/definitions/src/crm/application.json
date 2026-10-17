@@ -3279,7 +3279,6 @@
                                     "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
                                     "release_version": "1.1.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -3555,7 +3554,6 @@
                                     "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
                                     "release_version": "1.1.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
