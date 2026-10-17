@@ -11,7 +11,6 @@ import {
   type RolePermissionEntry,
 } from "../schema";
 import { canonicalJson } from "../definition/definition-index";
-import { verifyPreparedApplicationRoleTemplates } from "./application-role-template-adapter";
 
 export const organizationRoleChangeEvidenceErrorCodes = [
   "INVALID_ORGANIZATION_ROLE_CHANGE_PREPARATION",
@@ -118,31 +117,6 @@ const normalizePolicyChoice = (
           },
         };
 
-type TemplateCandidate = Extract<
-  OrganizationRoleChangeCandidate,
-  {
-    operation:
-      | "create_custom_from_template"
-      | "accept_new_application_role"
-      | "accept_application_role_revision";
-  }
->;
-
-const hasTemplateEvidence = (
-  candidate: OrganizationRoleChangeCandidate,
-): candidate is TemplateCandidate =>
-  candidate.operation === "create_custom_from_template" ||
-  candidate.operation === "accept_new_application_role" ||
-  candidate.operation === "accept_application_role_revision";
-
-const selectedTemplate = (candidate: TemplateCandidate) => {
-  const selected = candidate.preparedTemplates.templates.filter(
-    (entry) => normalizedUuid(entry.template.roleId) === normalizedUuid(candidate.sourceRoleId),
-  );
-  if (selected.length !== 1) throw evidenceError();
-  return selected[0]!;
-};
-
 const normalizeCandidate = (
   candidate: OrganizationRoleChangeCandidate,
 ): OrganizationRoleChangeCandidate => {
@@ -165,6 +139,10 @@ const normalizeCandidate = (
         ...candidate,
         ...identity,
         sourceRoleId: normalizedUuid(candidate.sourceRoleId),
+        templateSource: {
+          ...candidate.templateSource,
+          applicationRootId: normalizedUuid(candidate.templateSource.applicationRootId),
+        },
         assignmentPolicy: normalizePolicyChoice(candidate.assignmentPolicy),
         permissions: normalizePermissions(candidate.permissions),
       };
@@ -196,14 +174,6 @@ const prepareParsed = (
   preparation: OrganizationRoleChangePreparation,
 ): PreparedOrganizationRoleChange => {
   const candidate = normalizeCandidate(preparation.candidate);
-  if (hasTemplateEvidence(candidate)) {
-    try {
-      verifyPreparedApplicationRoleTemplates(candidate.preparedTemplates);
-      selectedTemplate(candidate);
-    } catch (error) {
-      throw evidenceError(error);
-    }
-  }
 
   const assignments = preparation.affectedAssignments
     ?.map(normalizeAssignment)

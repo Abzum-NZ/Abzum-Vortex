@@ -1325,7 +1325,7 @@ export const moduleContentSchema = z
       /** The one Application that owns this Module; every other Application uses it by name. */
       ownerApplication: namespacedKeySchema,
       dependencies: z.array(moduleDependencySchema),
-      recordTypes: z.array(recordTypeDefinitionSchema).min(1).max(100),
+      recordTypes: z.array(recordTypeDefinitionSchema).max(100),
       permissions: z.array(permissionDeclarationSchema),
       actions: z.array(actionDefinitionSchema),
       events: z.array(eventDefinitionSchema),

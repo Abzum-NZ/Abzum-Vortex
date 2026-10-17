@@ -18,15 +18,9 @@ declare
   target_application_root_id uuid;
   target_source_role_id uuid;
   application_registration vortex_access.permission_registrations%rowtype;
-  application_release jsonb;
-  registration_entries jsonb;
-  application_permission_ids jsonb;
-  permission_registration jsonb;
-  selected_template jsonb;
   selected_continuity vortex_access.application_role_template_continuities%rowtype;
-  source_permissions jsonb;
   live_permissions jsonb;
-  prepared_templates_core jsonb;
+  template_source jsonb;
   role_identity vortex_access.organization_roles%rowtype;
   current_revision vortex_access.organization_role_revisions%rowtype;
   role_configuration jsonb;
@@ -241,118 +235,6 @@ begin
       return pg_catalog.jsonb_build_object('outcome', 'unavailable');
     end if;
 
-    select pg_catalog.jsonb_build_object(
-      'kind', 'application',
-      'definitionKey', application_registration.source_definition_key,
-      'rootId', application_registration.registration_owner_id,
-      'releaseRevision', application_registration.source_revision,
-      'releaseVersion', application_registration.source_version,
-      'validationContractVersion', application_registration.validation_contract_version,
-      'contentFingerprint', release.content_fingerprint,
-      'resolutionFingerprint', release.resolution_fingerprint
-    ) into application_release
-    from vortex_definition.releases as release
-    where release.root_id = application_registration.registration_owner_id
-      and release.release_revision = application_registration.source_revision
-      and release.release_version = application_registration.source_version
-      and release.validation_contract_version = application_registration.validation_contract_version;
-    if not found then
-      return pg_catalog.jsonb_build_object('outcome', 'unavailable');
-    end if;
-
-    -- The same entry projection and order that
-    -- vortex_access.application_permission_registration_matches_candidate compares, so the stored
-    -- registration candidate fingerprint describes exactly these entries.
-    select coalesce(pg_catalog.jsonb_agg(ordered_entries.entry_json order by
-        ordered_entries.owner_kind collate "C", ordered_entries.owner_id,
-        ordered_entries.permission_key collate "C", ordered_entries.permission_id),
-      '[]'::jsonb)
-    into registration_entries
-    from (
-      select pg_catalog.jsonb_build_object(
-          'applicationRootId', entry.application_root_id,
-          'ownerKind', entry.owner_kind,
-          'ownerId', entry.owner_id,
-          'permission', pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
-            'permissionId', entry.permission_id,
-            'key', entry.permission_key,
-            'label', entry.label,
-            'description', entry.description,
-            'recordTypeId', entry.record_type_id,
-            'recordScope', entry.record_scope,
-            'fieldPolicy', entry.field_policy,
-            'actionKind', entry.action_kind,
-            'namedAction', entry.named_action,
-            'administrative', entry.administrative
-          )),
-          'sourceRelease', pg_catalog.jsonb_build_object(
-            'kind', entry.source_kind,
-            'definitionKey', entry.source_definition_key,
-            'rootId', entry.source_root_id,
-            'releaseRevision', entry.source_revision,
-            'releaseVersion', entry.source_version,
-            'validationContractVersion', entry.source_validation_contract_version,
-            'contentFingerprint', source_release.content_fingerprint,
-            'resolutionFingerprint', source_release.resolution_fingerprint
-          ),
-          'meaningFingerprint', entry.meaning_fingerprint
-        ) as entry_json,
-        entry.owner_kind, entry.owner_id, entry.permission_key, entry.permission_id
-      from vortex_access.permission_catalogue_entries as entry
-      left join vortex_definition.releases as source_release
-        on source_release.root_id = entry.source_root_id
-        and source_release.release_revision = entry.source_revision
-        and source_release.release_version = entry.source_version
-        and source_release.validation_contract_version =
-          entry.source_validation_contract_version
-      where entry.organization_id = context_organization_id
-        and entry.registration_kind = 'application'
-        and entry.registration_owner_id = target_application_root_id
-        and entry.registration_revision = application_registration.revision
-    ) as ordered_entries;
-
-    select coalesce(pg_catalog.jsonb_agg(
-      entry.permission_id order by entry.permission_key collate "C", entry.permission_id
-    ), '[]'::jsonb)
-    into application_permission_ids
-    from vortex_access.permission_catalogue_entries as entry
-    where entry.organization_id = context_organization_id
-      and entry.registration_kind = 'application'
-      and entry.registration_owner_id = target_application_root_id
-      and entry.registration_revision = application_registration.revision
-      and entry.owner_kind = 'application'
-      and not entry.administrative;
-
-    permission_registration := pg_catalog.jsonb_build_object(
-      'contractVersion', '1.0.0',
-      'organizationId', context_organization_id,
-      'applicationRootId', target_application_root_id,
-      'applicationRelease', application_release,
-      'applicationCatalogueFingerprint', application_registration.permission_catalogue_fingerprint,
-      'applicationPermissionIds', application_permission_ids,
-      'entries', registration_entries,
-      'candidateFingerprint', application_registration.candidate_fingerprint
-    );
-
-    select template.value into selected_template
-    from vortex_definition.roots as root
-    join vortex_definition.releases as release
-      on release.root_id = root.root_id
-      and release.release_revision = application_registration.source_revision
-      and release.release_version = application_registration.source_version
-      and release.validation_contract_version = application_registration.validation_contract_version
-    cross join lateral pg_catalog.jsonb_array_elements(
-      release.compilation_output #> '{canonical,content,roles}'
-    ) as template(value)
-    where root.root_id = target_application_root_id
-      and root.organization_id = context_organization_id
-      and root.kind = 'application'
-      and root.key = application_registration.source_definition_key
-      and (template.value ->> 'roleId')::uuid = target_source_role_id;
-    if selected_template is null then
-      return pg_catalog.jsonb_build_object('outcome', 'unavailable');
-    end if;
-
     select continuity.* into selected_continuity
     from vortex_access.application_role_template_continuities as continuity
     where continuity.organization_id = context_organization_id
@@ -364,62 +246,26 @@ begin
       return pg_catalog.jsonb_build_object('outcome', 'unavailable');
     end if;
 
-    -- Each template key resolves to exactly one registered entry, in the template's own key order,
-    -- as the canonical template preparation does: an exact template among every registered entry,
-    -- a wildcard template only among the application's own catalogue permissions.
-    select pg_catalog.jsonb_agg(entry.value order by key.ordinal)
-    into source_permissions
-    from pg_catalog.jsonb_array_elements_text(selected_template -> 'permissionKeys')
-      with ordinality as key(permission_key, ordinal)
-    join pg_catalog.jsonb_array_elements(registration_entries) as entry(value)
-      on entry.value #>> '{permission,key}' = key.permission_key
-      and (
-        selected_template #>> '{permissionSelection,kind}' is distinct from 'application_wildcard'
-        or (
-          entry.value ->> 'ownerKind' = 'application'
-          and (entry.value ->> 'applicationRootId')::uuid = target_application_root_id
-          and (entry.value ->> 'ownerId')::uuid = target_application_root_id
-          and application_permission_ids
-            @> pg_catalog.jsonb_build_array(entry.value #> '{permission,permissionId}')
-        )
-      );
-    if source_permissions is null
-      or pg_catalog.jsonb_array_length(source_permissions)
-        <> pg_catalog.jsonb_array_length(selected_template -> 'permissionKeys') then
+    -- The writer reads the same projection, so the evidence names the registration revision and
+    -- its catalogue fingerprint instead of carrying the registered entries.
+    live_permissions := vortex_access.application_role_template_live_permissions_internal(
+      context_organization_id, target_application_root_id, application_registration.revision,
+      target_source_role_id
+    );
+    if live_permissions is null then
       return pg_catalog.jsonb_build_object('outcome', 'unavailable');
     end if;
-
-    if selected_template #>> '{permissionSelection,kind}' = 'application_wildcard' then
-      select coalesce(pg_catalog.jsonb_agg(item.value), '[]'::jsonb)
-      into live_permissions
-      from pg_catalog.jsonb_array_elements(source_permissions) as item(value)
-      where item.value ->> 'ownerKind' = 'application'
-        and (item.value ->> 'ownerId')::uuid = target_application_root_id
-        and (item.value #>> '{permission,administrative}')::boolean = false
-        and item.value #>> '{permission,actionKind}' <> 'export';
-    else
-      live_permissions := source_permissions;
-    end if;
-
-    prepared_templates_core := pg_catalog.jsonb_build_object(
-      'contractVersion', '1.0.0',
-      'preparationBasis', pg_catalog.jsonb_build_object(
-        'kind', 'current_active_registration',
-        'registrationRevision', application_registration.revision
-      ),
-      'permissionRegistration', permission_registration,
-      'templates', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-        'template', selected_template,
-        'sourcePermissions', source_permissions,
-        'livePermissions', live_permissions
-      ))
+    template_source := pg_catalog.jsonb_build_object(
+      'applicationRootId', target_application_root_id,
+      'registrationRevision', application_registration.revision,
+      'catalogueFingerprint', application_registration.permission_catalogue_fingerprint
     );
 
     select pg_catalog.jsonb_agg(pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
         'applicationRootId', item.value -> 'applicationRootId',
         'ownerKind', item.value ->> 'ownerKind',
         'ownerId', item.value ->> 'ownerId',
-        'permissionId', item.value #>> '{permission,permissionId}'
+        'permissionId', item.value ->> 'permissionId'
       )))
     into refs
     from pg_catalog.jsonb_array_elements(live_permissions) as item(value);
@@ -540,7 +386,7 @@ begin
       'roleConfiguration', role_configuration,
       'permissions', permissions_value,
       'templateContinuityRevision', selected_continuity.continuity_revision,
-      'preparedTemplatesCore', prepared_templates_core,
+      'templateSource', template_source,
       'manifestRequired', manifest_required,
       'affectedAssignments', affected_assignments
     );
@@ -552,7 +398,7 @@ begin
       'organizationId', context_organization_id,
       'permissions', permissions_value,
       'templateContinuityRevision', null,
-      'preparedTemplatesCore', null
+      'templateSource', null
     );
   end if;
 
@@ -561,7 +407,7 @@ begin
     'organizationId', context_organization_id,
     'permissions', permissions_value,
     'templateContinuityRevision', selected_continuity.continuity_revision,
-    'preparedTemplatesCore', prepared_templates_core
+    'templateSource', template_source
   );
 exception
   when invalid_text_representation or invalid_parameter_value

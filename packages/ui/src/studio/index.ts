@@ -15,6 +15,7 @@ export {
 export * from "./condition-controls";
 export * from "./application-appearance";
 export * from "./application-composition-commands";
+export * from "./field-placement";
 export * from "./application-flow-model";
 export * from "./application-flow-commands";
 export * from "./application-flow-create";

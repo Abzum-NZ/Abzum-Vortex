@@ -36,18 +36,13 @@ begin
   -- The same protected activation target fact the lifecycle-policy readiness
   -- read uses; the organisation is re-derived from the validated human request
   -- context inside it and is never taken from the caller.
-  select pg_catalog.array_agg(distinct targets.storage_contract_id)
+  -- An installation whose Modules hold no record types yet has no targets and no indexes.
+  select coalesce(pg_catalog.array_agg(distinct targets.storage_contract_id), array[]::uuid[])
     into target_storage_contract_ids
   from vortex_definition.read_lifecycle_activation_targets_internal(
     p_organization_id, p_application_root_id, p_application_release_revision,
     p_expected_module_bindings
   ) as targets;
-
-  if target_storage_contract_ids is null
-    or pg_catalog.cardinality(target_storage_contract_ids) = 0 then
-    raise exception using errcode = '23514',
-      message = 'Index activation targets are incomplete';
-  end if;
 
   for target in
     select catalogue.storage_contract_id, catalogue.storage_scope,

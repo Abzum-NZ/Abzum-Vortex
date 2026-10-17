@@ -1,24 +1,30 @@
 "use client";
 import { Button } from "@vortex/ui/components/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@vortex/ui/components/collapsible";
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { describeFailure } from "@vortex/platform/schema";
 import { createStudioApplication } from "../actions";
-import { minimumApplicationSource, type MinimumApplicationInputs } from "../_lib/minimum-application-source";
+import {
+  applicationKeyFromName, minimumApplicationSource, type MinimumApplicationInputs,
+} from "../_lib/minimum-application-source";
 import { TechnicalDetails } from "@vortex/ui/components/technical-details";
 import { StudioField } from "./studio-field";
 import { conflictMessage, refusalMessage } from "./studio-refusal-messages";
 
 const inputClass = "w-full";
 
+/**
+ * The new application form: a name and a description. The key is made from the name (it can be
+ * set under Advanced); the home page, who can open it and the application's own empty Module are
+ * made with it.
+ */
 export function NewApplicationWorkspace({ organizationId }: { organizationId: string }) {
   const router = useRouter();
-  const [inputs, setInputs] = useState<MinimumApplicationInputs>({
-    key: "", name: "", description: "", moduleApplication: "", moduleKey: "",
-    roleKey: "", roleName: "", homeName: "",
-  });
+  const [inputs, setInputs] = useState<MinimumApplicationInputs>({ name: "", description: "", key: "" });
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [isCreating, setCreating] = useState(false);
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Readonly<Partial<Record<keyof MinimumApplicationInputs, string>>>>({});
@@ -34,20 +40,19 @@ export function NewApplicationWorkspace({ organizationId }: { organizationId: st
   const edit = (changes: Partial<MinimumApplicationInputs>) => {
     setInputs({ ...inputs, ...changes });
     setFieldErrors((current) => Object.fromEntries(
-      Object.entries(current).filter(([name]) => !(name in changes))));
+      Object.entries(current).filter(([name]) => !(name in changes) && !(name === "key" && "name" in changes))));
   };
-
-  const textInput = (key: keyof MinimumApplicationInputs,
-    label: string, maxLength: number, hint?: string) => <StudioField label={label} hint={hint} error={fieldErrors[key]}>
-      {(control) => <Input {...control} required maxLength={maxLength} value={inputs[key]}
-        disabled={isCreating} onChange={(event) => edit({ [key]: event.target.value })} />}
-    </StudioField>;
 
   const create = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (pending.current) return;
     const candidate = minimumApplicationSource(inputs);
-    if (candidate.kind !== "valid") { setFieldErrors(candidate.fieldErrors); setMessage(candidate.message); return; }
+    if (candidate.kind !== "valid") {
+      setFieldErrors(candidate.fieldErrors);
+      if (candidate.fieldErrors.key !== undefined) setAdvancedOpen(true);
+      setMessage(candidate.message);
+      return;
+    }
     setFieldErrors({});
     pending.current = true;
     const requestLifetime = lifetime.current;
@@ -79,24 +84,31 @@ export function NewApplicationWorkspace({ organizationId }: { organizationId: st
 
   return <main className="mx-auto max-w-3xl space-y-6 p-6">
     <header><h1 className="text-2xl font-semibold">New application</h1>
-      <p>This creates an unpublished draft with one empty home page. It does not publish or install anything.</p>
+      <p>This creates an unpublished draft with an empty home page and a place for its records. Add record types and
+        pages next. Nothing is published or installed yet.</p>
       <TechnicalDetails><p className="break-all text-sm">Organization id: {organizationId}</p></TechnicalDetails></header>
     <form onSubmit={create} className="grid gap-4" aria-busy={isCreating} noValidate>
-      {textInput("key", "Technical name", 120, "Lowercase words separated by dots, for example team.workspace. It cannot be changed later.")}
-      {textInput("name", "Name", 120)}
-      <StudioField label="Description" error={fieldErrors.description}>
+      <StudioField label="Name" hint="For example Assets Hub." error={fieldErrors.name}>
+        {(control) => <Input {...control} required maxLength={120} value={inputs.name} autoFocus
+          disabled={isCreating} onChange={(event) => edit({ name: event.target.value })} />}
+      </StudioField>
+      <StudioField label="Description" hint="What people use this application for." error={fieldErrors.description}>
         {(control) => <Textarea {...control} className={inputClass} required maxLength={1000} value={inputs.description}
           disabled={isCreating} onChange={(event) => edit({ description: event.target.value })} />}
       </StudioField>
-      <fieldset className="space-y-4 rounded-xl border bg-card text-card-foreground border-border p-4"><legend>Module this application uses</legend>
-        {textInput("moduleApplication", "Technical name of the application that owns the module", 120)}
-        {textInput("moduleKey", "Module technical name", 120)}
-        <p className="text-sm">This records which module the application builds on. Each published version of this application records the module version it was built with.</p>
-      </fieldset>
-      {textInput("roleKey", "Access group technical name", 40, "Lowercase letters, digits and underscores.")}
-      {textInput("roleName", "Access group name", 60)}
-      {textInput("homeName", "Home page title", 60)}
-      <p className="text-sm">The access group only allows people to open the home page. Who belongs to it is set separately, after the application is live.</p>
+      <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen} className="rounded-xl border border-border">
+        <CollapsibleTrigger render={<Button type="button" variant="ghost" size="sm" className="w-full justify-start" />}>
+          Advanced
+        </CollapsibleTrigger>
+        <CollapsibleContent className="px-3 pb-3">
+          <StudioField label="Key" error={fieldErrors.key}
+            hint="Made from the name. It identifies the application everywhere and cannot be changed after it is created.">
+            {(control) => <Input {...control} maxLength={100} value={inputs.key}
+              placeholder={applicationKeyFromName(inputs.name) || "app.assets_hub"}
+              disabled={isCreating} onChange={(event) => edit({ key: event.target.value })} />}
+          </StudioField>
+        </CollapsibleContent>
+      </Collapsible>
       <Button type="submit" disabled={isCreating}>Create application</Button>
       <p role="status" aria-live="polite">{message}</p>
     </form>
