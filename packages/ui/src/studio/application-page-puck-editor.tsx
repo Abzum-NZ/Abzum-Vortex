@@ -23,7 +23,7 @@ import type {
 } from "@vortex/platform/schema";
 import type { FieldInputControlReleaseMap } from "../registry";
 import type { PlatformThemeTokens } from "../theme";
-import { createFullPlatformComponentRegistry } from "../combined-registry";
+import { createPlatformComponentRegistryForReleases } from "../combined-registry";
 import { getVortexPuckConfig } from "../puck-config";
 import { contentConfigFor } from "../shell-outlet";
 import type { Breakpoint } from "../definition-error";
@@ -314,7 +314,7 @@ function ApplicationPageSlotPuckEditor({
   updating,
 }: ApplicationPagePuckEditorProps & { at: PageSlotAddress }) {
   const registry = useMemo(
-    () => createFullPlatformComponentRegistry(platformBlockCatalogue.releases),
+    () => createPlatformComponentRegistryForReleases(platformBlockCatalogue.releases),
     [platformBlockCatalogue],
   );
   const catalogue = useMemo(() => registry.toPlatformBlockCatalogue(), [registry]);
