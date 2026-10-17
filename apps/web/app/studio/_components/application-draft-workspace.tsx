@@ -1094,6 +1094,9 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     setMessage(result.message);
     return result;
   };
+  // What a Structure command would do to the current draft, for its preview; nothing is kept.
+  const previewStructure = (command: StudioStructureCommand): StudioStructureResult =>
+    applyStudioStructureCommand({ source: history.getState().source, catalogue: platformBlockCatalogue, describePlacement }, command);
   const homePage = source.body.pages.find((page) => page.key === source.body.home_page);
   // The Menu tab's one edit path, the same as Structure's: a checked command taken by the draft history.
   const commandMenu = (command: StudioMenuCommand): StudioMenuResult => {
@@ -1132,7 +1135,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const panels = <>
     <StudioStructurePanel {...outlinePanelProps} hidden={tab !== "structure"}
       homePageKey={homePage === undefined ? undefined : studioSemanticSelectionKey({ kind: "page", pageAlias: homePage.id })}
-      editor={<StudioStructureEditor source={source} selected={selected} onCommand={commandStructure}
+      editor={<StudioStructureEditor source={source} selected={selected} onCommand={commandStructure} onPreview={previewStructure}
         disabled={busy.anyRendered() || state.isSaving || workspaceLifetime === 0} />} />
     <StudioBlockOutlinePanel {...outlinePanelProps} hidden={tab !== "outline"} ownerKey={outlineOwnerKey} />
     <StudioPanelShell title="Blocks" description="Blocks to add to the page on the canvas." hidden={tab !== "blocks"}>
