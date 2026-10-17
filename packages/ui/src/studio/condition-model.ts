@@ -47,7 +47,10 @@ export type StudioConditionSemanticType =
   | "record_reference"
   | "organization_account_reference";
 
-/** Parameter types accepted by Rule . Host-only values use the same parameter source. */
+/**
+ * Parameter types accepted by Rule and query conditions. Host-only values use the same parameter
+ * source; a record reference is a query input that names one record, compared with a link field.
+ */
 export type StudioConditionParameterType =
   | "text"
   | "number"
@@ -56,6 +59,7 @@ export type StudioConditionParameterType =
   | "boolean"
   | "date"
   | "date_time"
+  | "record_reference"
   | "organization_account_reference";
 
 export type StudioConditionOperandRole =
@@ -64,6 +68,9 @@ export type StudioConditionOperandRole =
   | "declared_input"
   | "event_value"
   | "variable"
+  | "step_output"
+  | "record_field"
+  | "run_value"
   | "trusted_account_context"
   | "host_context";
 
@@ -83,6 +90,8 @@ export type StudioConditionOperandPermission =
       operand: ParameterOperand;
       label: string;
       role: Exclude<StudioConditionOperandRole, "current_field">;
+      /** A choice's options: a value compared with this operand is picked from them. */
+      options?: readonly Readonly<{ value: string; label: string }>[];
     }>;
 
 export type StudioConditionParameterDeclaration = Readonly<{
@@ -189,6 +198,9 @@ const roleLabels: Readonly<Record<StudioConditionOperandRole, string>> = {
   declared_input: "Declared inputs",
   event_value: "Event values",
   variable: "Variables",
+  step_output: "Earlier steps",
+  record_field: "Record fields",
+  run_value: "The run",
   trusted_account_context: "Trusted account context",
   host_context: "Host context",
 };
@@ -311,6 +323,7 @@ const contextIssues = (
     "boolean",
     "date",
     "date_time",
+    "record_reference",
     "organization_account_reference",
   ]);
   const parameterDeclarations = new Map<string, StudioConditionParameterType>();

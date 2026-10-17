@@ -182,7 +182,7 @@ export const createInlineRecordType = (
     id: uniqueAlias(`rt_${key}`, taken), key, name, plural_name: pluralName, title_field: titleKey,
     storage_contract_id: uniqueAlias(`srt_${aliasPart(module.key)}_${key}`, taken),
     storage_scope: "organisation_shared", ownership_mode: "group",
-    standard_actions: standardActions.map((entry) => entry.action), custom_actions: [], fields, relationships: [],
+    standard_actions: standardActions.map((entry) => entry.action), custom_actions: [], fields, pipelines: [], relationships: [],
   } as unknown as RecordType;
   module.record_types.push(record);
   const readable = fields.map((field) => field.key);
@@ -365,6 +365,9 @@ export const describeSourcePlace = (source: ApplicationSourceDocument, path: Pat
     const [, , , part, partIndex, child, childIndex] = path;
     if (part === "record_types" && typeof partIndex === "number") {
       const record = module.record_types[partIndex]!;
+      if (child === "pipelines" && typeof childIndex === "number")
+        return { label: `Pipeline ${record.pipelines[childIndex]!.name} of ${record.name}`,
+          open: { kind: "record_type", moduleKey: module.key, recordKey: record.key } };
       const field = child === "fields" && typeof childIndex === "number" ? record.fields[childIndex]
         : child === "relationships" && typeof childIndex === "number"
           ? record.fields.find((item) => item.key === record.relationships[childIndex]?.from_field) : undefined;
@@ -379,7 +382,8 @@ export const describeSourcePlace = (source: ApplicationSourceDocument, path: Pat
       case "queries":
         return { label: `Query ${itemName}`, open: { kind: "query", moduleKey: module.key, queryKey: String(item?.key ?? "") } };
       case "permissions": return { label: `Permission ${itemName} in ${module.name}`, open: { kind: "none" } };
-      case "actions": return { label: `Action ${itemName} in ${module.name}`, open: { kind: "none" } };
+      case "actions": return { label: `Action ${itemName} in ${module.name}`,
+        open: typeof item?.record_type === "string" ? { kind: "record_type", moduleKey: module.key, recordKey: item.record_type } : { kind: "none" } };
       case "events": return { label: `Event ${itemName} in ${module.name}`, open: { kind: "none" } };
       case "flows": return { label: `Rule or flow ${itemName} in ${module.name}`,
         open: typeof item?.id === "string" ? { kind: "flow", flowAlias: item.id, moduleKey: module.key } : { kind: "none" } };
@@ -403,7 +407,6 @@ export const describeSourcePlace = (source: ApplicationSourceDocument, path: Pat
   }
   if (section === "shells" && typeof index === "number") return { label: `Layout ${body.shells[index]!.name}`, open: { kind: "none" } };
   if (section === "search") return { label: "Search settings", open: { kind: "none" } };
-  if (section === "pipelines" && typeof index === "number") return { label: `Board ${body.pipelines[index]!.name}`, open: { kind: "none" } };
   if (section === "permissions" && typeof index === "number") return { label: `Permission ${body.permissions[index]!.label}`, open: { kind: "none" } };
   if (section === "events") return { label: "A form event of the application", open: { kind: "none" } };
   if (section === "roles" && typeof index === "number") return { label: `Access group ${body.roles[index]!.name}`, open: { kind: "none" } };

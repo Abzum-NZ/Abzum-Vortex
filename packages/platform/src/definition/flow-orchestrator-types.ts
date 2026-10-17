@@ -36,6 +36,7 @@ import type {
   FlowFailureOutcome,
   FlowInterfaceIntent,
   FlowLibrary,
+  FlowRuntimeValues,
 } from "../rules/index";
 import type {
   FlowContinuationStore,
@@ -231,6 +232,24 @@ type FlowSelectedRecordReadPort = Readonly<{
 }>;
 
 /**
+ * The record an interactive flow runs for, read afresh under the initiator's current access with
+ * field-level read policy applied: every field of its record type, keyed by field key and typed by
+ * the field's type, where a field the initiator may not read is empty. A record the initiator may
+ * not read is unavailable, indistinguishably from one that does not exist.
+ */
+export type FlowCurrentRecordRead =
+  | Readonly<{ outcome: "read"; values: FlowRuntimeValues }>
+  | Readonly<{ outcome: "unavailable" }>;
+
+type FlowCurrentRecordPort = Readonly<{
+  read(
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    target: Readonly<{ recordTypeId: string; recordId: string }>,
+  ): Promise<FlowCurrentRecordRead>;
+}>;
+
+/**
  * What the record service runs for a named action: it prepares the action's subject under
  * the actor's authority, calls the supplied flow run inside its own transaction, and applies every
  * record change the flow collected in one apply record changes call. The result is the closed
@@ -260,6 +279,11 @@ export type FlowOrchestratorDependencies = Readonly<{
   subjects?: FlowSubjectReadPort;
   /** Reads selected fields afresh; its result is never entered into the protected effect ledger. */
   selectedRecordReads?: FlowSelectedRecordReadPort;
+  /**
+   * Reads the record a flow with a record input runs for, at its start and again at every resume,
+   * so a stored run never holds record values. Without it such a flow cannot start.
+   */
+  currentRecords?: FlowCurrentRecordPort;
   /** Acquires a current installed identity for a human; no display values or replayed read results. */
   recordPins?: Readonly<{
     acquireIdentity(

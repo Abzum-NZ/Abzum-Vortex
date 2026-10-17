@@ -54,6 +54,7 @@ export const activityRecordType = {
     type: field.type,
     settings: field.settings,
   })),
+  pipelines: [],
   relationships: [],
 };
 

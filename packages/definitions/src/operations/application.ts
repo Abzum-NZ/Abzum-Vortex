@@ -622,7 +622,6 @@ export const operationsApplication: ApplicationSourceDocument =
           })),
         },
       ],
-      pipelines: [],
       connection_bindings: [],
       interfaces: [],
       events: [

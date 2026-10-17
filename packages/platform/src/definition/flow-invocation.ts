@@ -46,6 +46,7 @@ import { createRecordSaveService } from "../records/save-record";
 import type { createDatabaseApplicationBoundReleaseSetService } from "./application-bound-release-set";
 import { readPermittedApplicationsAtAddress } from "./application-address";
 import { createDatabaseFlowStores } from "./flow-continuation-store";
+import { createFlowCurrentRecordReader } from "./flow-current-record";
 import { createFlowOrchestrator } from "./flow-orchestrator";
 import type { FlowNamedAction, FlowRecordType, FlowRelease } from "./flow-orchestrator-types";
 import { createFormContinuationService } from "./form-continuation";
@@ -636,6 +637,12 @@ export async function invokeInstalledFlow(
           (await subjectReader.read(session, selection, subject)).kind,
       },
       selectedRecordReads: selectedRecordReadsFor(installation),
+      currentRecords: createFlowCurrentRecordReader({
+        requests,
+        reader: selectedRecordReader,
+        installation,
+        identityId: identity.session.identityId,
+      }),
       recordPins: {
         acquireIdentity: async (session, selection, selector) => {
           if (
