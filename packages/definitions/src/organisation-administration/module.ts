@@ -1443,6 +1443,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
       {
         id: "qry_application_role_templates",
         key: "application_role_templates",
+        label: "Application role templates",
         record_type: "application_role_template",
         inputs: [
           {
