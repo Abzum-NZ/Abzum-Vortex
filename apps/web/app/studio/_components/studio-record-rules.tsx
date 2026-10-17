@@ -59,7 +59,7 @@ export function StudioRecordRules({ source, moduleKey, recordKey, disabled, appl
       <Button type="button" size="sm" variant="outline" disabled={disabled} aria-expanded={adding}
         onClick={() => { setAdding(!adding); setProblem(""); }}>Add a rule</Button>
     </div>
-    <p className="text-xs text-muted-foreground">They check every save of a {record.name.toLowerCase()}: on a form, a board, a named
+    <p className="text-xs text-muted-foreground">They check every save of {record.plural_name.toLowerCase()}: on a form, a board, a named
       action or a flow step. A rule can refuse the save, warn, or require a field.</p>
     {adding && <form className="space-y-2" onSubmit={add} aria-label="New rule">
       <div className="space-y-1.5"><Label htmlFor="record-rule-name">Name</Label>
