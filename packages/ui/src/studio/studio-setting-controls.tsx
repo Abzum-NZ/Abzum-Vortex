@@ -461,6 +461,23 @@ export function StudioSettingFields({ idPrefix, properties, values, onChange, ch
   choices: StudioSettingChoices;
   disabled: boolean;
 }>): ReactElement {
+  // A field's optional label is an override. Matching text follows the field when it changes;
+  // other text stays authored, with an explicit way to return to the field's label.
+  const fieldProperty = properties.find((property) => property.key === "field" && property.kind === "field_reference");
+  const labelProperty = properties.find((property) => property.key === "label" && property.kind === "text" &&
+    !property.required && property.defaultValue === undefined);
+  const fieldValue = fieldProperty === undefined ? undefined : values[fieldProperty.key];
+  const field = fieldValue?.kind === "field_reference"
+    ? choices.fields.find((candidate) => candidate.reference === fieldValue.field) : undefined;
+  const previousField = fieldValue?.kind === "field_reference"
+    ? field ?? choices.queries.flatMap((query) => query.fields).find((candidate) => candidate.reference === fieldValue.field)
+    : undefined;
+  const label = labelProperty === undefined ? undefined : values[labelProperty.key];
+  const useFieldLabel = () => {
+    const result = { ...values };
+    delete result.label;
+    onChange(result);
+  };
   return <div className="space-y-3">
     {properties.map((property) => {
       const id = `${idPrefix}-${property.key}`;
@@ -469,6 +486,10 @@ export function StudioSettingFields({ idPrefix, properties, values, onChange, ch
         const result: Record<string, SourceBlockPropertyValueContract> = { ...values };
         if (next === undefined) delete result[property.key];
         else result[property.key] = next;
+        if (property === fieldProperty && fieldValue?.kind === "field_reference" &&
+          (next?.kind !== "field_reference" || next.field !== fieldValue.field) &&
+          label?.kind === "text" && label.value === previousField?.label)
+          delete result.label;
         onChange(result);
       };
       const inline = property.kind === "boolean";
@@ -483,6 +504,19 @@ export function StudioSettingFields({ idPrefix, properties, values, onChange, ch
               <SettingControl id={id} property={property} value={value} onChange={set} choices={choices} disabled={disabled} />
             </>}
         {property.help === undefined ? null : <p className="text-xs text-muted-foreground">{property.help}</p>}
+        {property === labelProperty && fieldProperty !== undefined && <div className="space-y-1 text-xs">
+          {field === undefined
+            ? <p role="alert">Choose a field offered by this data to resolve its label.</p>
+            : label?.kind === "text"
+              ? <>
+                  {label.value !== field.label && <p role="alert">
+                    This label differs from the field label, &ldquo;{field.label}&rdquo;. Keep it as a custom label, or use the field label.
+                  </p>}
+                  <Button type="button" variant="outline" size="sm" disabled={disabled}
+                    onClick={useFieldLabel}>Use field label: {field.label}</Button>
+                </>
+              : <p>Uses field label: {field.label}</p>}
+        </div>}
       </div>;
     })}
   </div>;
