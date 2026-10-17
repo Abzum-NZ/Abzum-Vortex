@@ -14,6 +14,9 @@ declare
   -- the first the builder can read in record order. The seed says when the bound was reached, and
   -- the preview tells the builder so.
   copy_limit constant integer := 2000;
+  -- A table the builder can mostly not read is scanned only this far; the seed is then bounded too.
+  scan_limit constant integer := 20000;
+  scanned_count integer := 0;
   bounded boolean := false;
   live_table_token text;
   preview_table_token text;
@@ -93,6 +96,11 @@ begin
       'select record_id from record_data.%I order by record_id', live_table_token
     )
   loop
+    scanned_count := scanned_count + 1;
+    if scanned_count > scan_limit then
+      bounded := true;
+      exit;
+    end if;
     select projected.projection, projected.read_bounds into row_read
     from vortex_record.read_record_projection_internal(
       p_record_type_id, live_record.record_id
@@ -144,4 +152,4 @@ revoke all on function vortex_record.copy_live_records_to_preview_internal(uuid,
 grant execute on function vortex_record.copy_live_records_to_preview_internal(uuid, uuid, uuid, uuid)
   to vortex_owner;
 comment on function vortex_record.copy_live_records_to_preview_internal(uuid, uuid, uuid, uuid) is
-  'Seeds one preview record table with the live records of the same record type that the request''s builder reads in the installed Application, each with only the fields they read there, and the reference counters: the first 2,000 they read, in record order, and whether there were more.';
+  'Seeds one preview record table with the live records of the same record type that the request''s builder reads in the installed Application, each with only the fields they read there, and the reference counters: the first 2,000 they read, in record order, within the first 20,000 records, and whether there were more.';

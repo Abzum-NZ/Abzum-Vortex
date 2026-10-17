@@ -122,8 +122,12 @@ begin
       message = 'Record type is not part of the active installation';
   end if;
   -- A system projection is the platform's live read model and has no preview copy: a preview
-  -- reads it on the live path, under the reader's own live access, never as the preview's owner.
+  -- reads it on the live path, under the reader's own live access, never as the preview's owner,
+  -- and never changes it.
   if record_type_value ? 'systemProjection' then
+    if preview_installation is not null and p_action_kind <> 'read' then
+      return pg_catalog.jsonb_build_object('outcome', 'refused');
+    end if;
     preview_installation_id_value := null;
   end if;
 
