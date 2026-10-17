@@ -384,6 +384,7 @@ export const resolveReferenceChoiceFormValues = async (
   }>,
 ): Promise<Readonly<Record<string, JsonValue>> | undefined> => {
   if (!isRecord(args.values)) return undefined;
+  const values = args.values;
   const authoredFields = referenceChoiceFieldsForForm(args.application, args.modules, args.formId);
   if (authoredFields === undefined) return undefined;
   const fields = args.projectedFields;
@@ -404,7 +405,7 @@ export const resolveReferenceChoiceFormValues = async (
     fieldKey: string,
     field: ReferenceChoiceFormField,
   ): Promise<Readonly<{ value: unknown; selected: ReferenceChoiceOption }> | null | undefined> => {
-    const submitted = args.values[fieldKey];
+    const submitted = values[fieldKey];
     if (submitted === null) return Object.hasOwn(parsedEvidence.data, fieldKey) ? undefined : null;
     if (typeof submitted !== "string") return undefined;
     const evidence: ReferenceChoiceSelectionEvidence | undefined = parsedEvidence.data[fieldKey];
@@ -432,7 +433,7 @@ export const resolveReferenceChoiceFormValues = async (
   };
   // Independent fields are rechecked together, each in its own request; a dependent field is
   // rechecked after the parent it is bound to, so it is read for that parent's verified choice.
-  const submittedFields = [...fields].filter(([fieldKey]) => Object.hasOwn(args.values, fieldKey));
+  const submittedFields = [...fields].filter(([fieldKey]) => Object.hasOwn(values, fieldKey));
   for (const dependent of [false, true]) {
     const round = submittedFields.filter(
       ([, field]) => (field.dependency !== undefined) === dependent,
