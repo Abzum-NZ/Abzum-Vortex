@@ -11,7 +11,7 @@ as $function$
 declare
   installer record;
   member_role record;
-  held boolean := false;
+  held_assignment record;
 begin
   if p_application_root_id is null
     or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -39,7 +39,8 @@ begin
       detail = 'vortex_access.read_first_install_member_role';
   end if;
 
-  -- The one organisation role accepted from this template, if any; a retired one is history.
+  -- The organisation role accepted from this template, if any: a live one before a retired one,
+  -- so a retired role is reported (and refused by name) instead of being accepted a second time.
   select role.role_id, role.live_revision, revision.lifecycle, revision.assignment_policy
   into member_role
   from vortex_access.organization_roles as role
@@ -51,24 +52,27 @@ begin
     and role.role_kind = 'application'
     and role.application_root_id = p_application_root_id
     and role.source_role_id = p_source_role_id
-    and revision.lifecycle <> 'retired'
-  order by role.created_at, role.role_id
+  order by (revision.lifecycle = 'retired'), role.created_at desc, role.role_id
   limit 1;
 
+  -- The installer's own live standing assignment of that role, and whether they granted it to
+  -- themselves (as a first-install acceptance does) rather than receiving it from an administrator.
   if member_role.role_id is not null then
-    held := exists (
-      select 1
-      from vortex_access.organization_role_assignments as assignment
-      where assignment.organization_id = installer.organization_id
-        and assignment.role_id = member_role.role_id
-        and assignment.assignee_kind = 'organization_account'
-        and assignment.organization_account_id = installer.organization_account_id
-        and assignment.assignment_kind = 'standing'
-        and assignment.state = 'live'
-        and assignment.starts_at <= pg_catalog.clock_timestamp()
-        and (assignment.expires_at is null
-          or assignment.expires_at > pg_catalog.clock_timestamp())
-    );
+    select assignment.role_assignment_id, assignment.revision,
+      assignment.granted_by = installer.organization_account_id as self_granted
+    into held_assignment
+    from vortex_access.organization_role_assignments as assignment
+    where assignment.organization_id = installer.organization_id
+      and assignment.role_id = member_role.role_id
+      and assignment.assignee_kind = 'organization_account'
+      and assignment.organization_account_id = installer.organization_account_id
+      and assignment.assignment_kind = 'standing'
+      and assignment.state = 'live'
+      and assignment.starts_at <= pg_catalog.clock_timestamp()
+      and (assignment.expires_at is null
+        or assignment.expires_at > pg_catalog.clock_timestamp())
+    order by assignment.granted_at, assignment.role_assignment_id
+    limit 1;
   end if;
 
   return pg_catalog.jsonb_build_object(
@@ -80,7 +84,12 @@ begin
       'lifecycle', member_role.lifecycle,
       'assignmentPolicy', member_role.assignment_policy
     ) end,
-    'installerHoldsRole', held
+    'installerAssignment', case when held_assignment.role_assignment_id is null then null
+      else pg_catalog.jsonb_build_object(
+        'roleAssignmentId', held_assignment.role_assignment_id,
+        'revision', held_assignment.revision,
+        'selfGranted', held_assignment.self_granted
+      ) end
   );
 end
 $function$;
@@ -93,4 +102,4 @@ grant execute on function vortex_access.read_first_install_member_role(uuid, uui
   to vortex_request;
 
 comment on function vortex_access.read_first_install_member_role(uuid, uuid) is
-  'First-install member role read under the installation authority: whether the organisation already accepted the one Application role template the installer is accepting, and whether the installer already holds it. Reads only that template''s role and the installer''s own assignment; needs no roles.read grant.';
+  'First-install member role read under the installation authority: the organisation role accepted from the one Application role template the installer is accepting (a live one before a retired one), and the installer''s own live standing assignment of it, including whether they granted it to themselves. Reads only that template''s role and the installer''s own assignment; needs no roles.read grant.';

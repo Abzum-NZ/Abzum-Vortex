@@ -56,16 +56,18 @@ const loadMessage = (result: StudioApplicationFirstInstallLoadResult): string =>
       : "First-install information is temporarily unavailable.";
 };
 
-type MissingAuthority = NonNullable<
-  Extract<StudioApplicationFirstInstallCommandResult, { missingAuthority?: unknown }>["missingAuthority"]
+type MemberRoleRefusal = NonNullable<
+  Extract<StudioApplicationFirstInstallCommandResult, { memberRoleRefusal?: unknown }>["memberRoleRefusal"]
 >;
 
-/** Each refusal of the member role names what is missing, in the permission's own words. */
-const missingAuthorityMessage: Readonly<Record<MissingAuthority, string>> = {
+/** Each refusal of the member role says what is missing or what happened, in plain words. */
+const memberRoleRefusalMessage: Readonly<Record<MemberRoleRefusal, string>> = {
   installation_authority: "Installing needs the Manage applications permission and delegated management of the organisation's permissions; ask your organisation steward.",
   member_role_delegation: "Installing with the member role needs delegated management of every permission the role gives; ask your organisation steward.",
   roles_manage: "Installing with the member role needs the Manage roles permission; ask your organisation steward, or install without accepting the role.",
   assignments_manage: "Installing with the member role needs the Manage access assignments permission; ask your organisation steward, or install without accepting the role.",
+  role_unavailable: "This application's member role was retired or is waiting for acceptance in access administration; ask your organisation steward, or install without accepting the role.",
+  access_changed: "Someone else changed access at the same time; try again.",
 };
 
 const commandMessage = (result: StudioApplicationFirstInstallCommandResult): string => {
@@ -73,7 +75,7 @@ const commandMessage = (result: StudioApplicationFirstInstallCommandResult): str
     if (result.kind === "conflict") return "The current release or setup changed. Reload before taking another action.";
     if (result.kind === "authentication_required")
       return "Sign in again to install. Accepting the member role needs a sign-in within the last 15 minutes.";
-    if (result.missingAuthority !== undefined) return missingAuthorityMessage[result.missingAuthority];
+    if (result.memberRoleRefusal !== undefined) return memberRoleRefusalMessage[result.memberRoleRefusal];
     if (result.kind === "refused")
       return "Current HUMAN permission or eligibility could not be confirmed. Reload to inspect current access.";
     if (result.stateMayHaveChanged === "unknown")

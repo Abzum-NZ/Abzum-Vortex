@@ -10,6 +10,8 @@ import {
   organizationAccountIdSchema,
   organizationIdSchema,
   prepareOrganizationAdministrationRoleChangeCommandSchema,
+  revokeOrganizationAdministrationRoleAssignmentCommandSchema,
+  roleAssignmentIdSchema,
   roleIdSchema,
   sameId,
   type SelectedOrganizationScope,
@@ -24,7 +26,7 @@ import {
   readInstallationHumanContext,
   readInstallationPermissionDeadline,
   requireInstallationAuthority,
-  type InstallationMissingAuthority,
+  type InstallationMemberRoleRefusal,
 } from "./installation-authority";
 import type {
   FirstInstallCandidate,
@@ -98,17 +100,13 @@ export const firstInstallMemberRole = (
   };
 };
 
-/** What the installer is missing when the member role cannot be accepted or assigned. */
-type FirstInstallMissingAuthority = InstallationMissingAuthority;
+/** Why the member role could not be accepted, assigned or removed, as the install screen names it. */
+type Refusal = InstallationMemberRoleRefusal;
 
-/** A refusal that names what the installer lacks, so the install screen can say it plainly. */
-const refusedFor = (
-  detail: string,
-  missingAuthority: FirstInstallMissingAuthority,
-  cause?: unknown,
-): never => {
+/** A refusal that names what is missing, so the install screen can say it plainly. */
+const refusedFor = (detail: string, refusal: Refusal, cause?: unknown): never => {
   throw new InstallationProblem(
-    { kind: "refused", missingAuthority },
+    { kind: "refused", memberRoleRefusal: refusal },
     detail,
     cause === undefined ? undefined : { cause },
   );
@@ -117,27 +115,16 @@ const refusedFor = (
 /** Turns a check's refusal into the named refusal; a stale sign-in and other failures keep their own meaning. */
 const named = async <Value>(
   detail: string,
-  missingAuthority: FirstInstallMissingAuthority,
+  refusal: Refusal,
   check: () => Promise<Value>,
 ): Promise<Value> => {
   try {
     return await check();
   } catch (error) {
     if (error instanceof InstallationProblem && error.problem.kind === "refused")
-      return refusedFor(detail, missingAuthority, error);
+      return refusedFor(detail, refusal, error);
     throw error;
   }
-};
-
-const requireAvailable = <Value>(
-  detail: string,
-  missingAuthority: FirstInstallMissingAuthority,
-  result: Readonly<{ kind: "available"; value: Value }> | Readonly<{ kind: string }>,
-): Value => {
-  if (result.kind === "available" && "value" in result) return result.value as Value;
-  if (result.kind === "temporarily_unavailable")
-    return installationProblem(detail, "temporarily_unavailable");
-  return refusedFor(detail, missingAuthority);
 };
 
 const memberRoleStateSchema = z
@@ -148,12 +135,19 @@ const memberRoleStateSchema = z
       .object({
         roleId: roleIdSchema,
         liveRevision: z.number().int().min(1),
-        lifecycle: z.enum(["active", "acceptance_required", "unavailable"]),
+        lifecycle: z.enum(["active", "acceptance_required", "unavailable", "retired"]),
         assignmentPolicy: z.enum(["standing", "activation_required"]),
       })
       .strict()
       .nullable(),
-    installerHoldsRole: z.boolean(),
+    installerAssignment: z
+      .object({
+        roleAssignmentId: roleAssignmentIdSchema,
+        revision: z.number().int().min(1),
+        selfGranted: z.boolean(),
+      })
+      .strict()
+      .nullable(),
   })
   .strict();
 
@@ -198,12 +192,27 @@ const inInstallerRequest = async <Value>(
     : refusedFor("first_install_member_role_request_refused", "installation_authority");
 };
 
+/** Proves one platform permission in the open installer transaction, refusing it by name. */
+const requirePermission = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  context: Awaited<ReturnType<typeof readInstallationHumanContext>>,
+  environment: FirstInstallFlowEnvironment,
+  key: "platform.organization.roles.manage" | "platform.organization.assignments.manage",
+): Promise<void> => {
+  const refusal: Refusal =
+    key === "platform.organization.roles.manage" ? "roles_manage" : "assignments_manage";
+  await named(`first_install_member_role_${refusal}_refused`, refusal, () =>
+    readInstallationPermissionDeadline(transaction, scope, context, environment.permissions, key),
+  );
+};
+
 /**
- * Reads, under the installer's own installation authority, whether this template's role is
- * already accepted and whether the installer already holds it, and proves the permissions the
- * remaining steps need. Reading the one template being accepted is part of the installation
- * authority, so no roles.read grant is needed; the accept and assign operations still check
- * their own permissions and delegation when they run.
+ * Reads, under the installer's own installation authority, the role accepted from this template
+ * and the installer's own assignment of it, and proves the permissions the remaining steps need.
+ * Reading the one template being accepted is part of the installation authority, so no roles.read
+ * grant is needed; the accept, assign and revoke operations still check their own permissions and
+ * delegation when they run.
  */
 const readMemberRoleState = (
   environment: FirstInstallFlowEnvironment,
@@ -211,6 +220,7 @@ const readMemberRoleState = (
   selector: FirstInstallSelector,
   sourceRoleId: string,
   containsCustomComponents: boolean,
+  choice: FirstInstallMemberRoleChoice["kind"],
 ): Promise<MemberRoleState> =>
   inInstallerRequest(environment, session, selector, async (transaction, scope, issuedAt) => {
     const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
@@ -231,10 +241,10 @@ const readMemberRoleState = (
       "installation_authority",
       () =>
         transaction.query<DatabaseRow & { readonly member_role: unknown }>`
-          select vortex_access.read_first_install_member_role(
-            ${selector.rootId}::uuid, ${sourceRoleId}::uuid
-          ) as member_role
-        `.catch((error: unknown) => {
+            select vortex_access.read_first_install_member_role(
+              ${selector.rootId}::uuid, ${sourceRoleId}::uuid
+            ) as member_role
+          `.catch((error: unknown) => {
           if (classifyDatabaseError(error) === "refused")
             installationProblem("first_install_member_role_read_refused", "refused", undefined, {
               cause: error,
@@ -252,28 +262,71 @@ const readMemberRoleState = (
       return installationProblem("first_install_member_role_state_invalid", "failed", undefined, {
         cause: state.success ? undefined : state.error,
       });
-    if (state.data.installerHoldsRole) return state.data;
-    if (state.data.role === null)
-      await named("first_install_member_role_roles_manage_refused", "roles_manage", () =>
-        readInstallationPermissionDeadline(
+    if (choice === "decline") {
+      // Declining removes only an assignment the installer gave themselves, which is what an
+      // earlier accepted attempt whose activation failed leaves behind.
+      if (state.data.installerAssignment?.selfGranted === true)
+        await requirePermission(
           transaction,
           scope,
           context,
-          environment.permissions,
-          "platform.organization.roles.manage",
-        ),
-      );
-    await named("first_install_member_role_assignments_manage_refused", "assignments_manage", () =>
-      readInstallationPermissionDeadline(
+          environment,
+          "platform.organization.assignments.manage",
+        );
+      return state.data;
+    }
+    if (state.data.installerAssignment !== null) return state.data;
+    if (state.data.role === null)
+      await requirePermission(
         transaction,
         scope,
         context,
-        environment.permissions,
-        "platform.organization.assignments.manage",
-      ),
+        environment,
+        "platform.organization.roles.manage",
+      );
+    else if (
+      state.data.role.lifecycle !== "active" ||
+      state.data.role.assignmentPolicy !== "standing"
+    )
+      refusedFor("first_install_member_role_unavailable_role", "role_unavailable");
+    await requirePermission(
+      transaction,
+      scope,
+      context,
+      environment,
+      "platform.organization.assignments.manage",
     );
     return state.data;
   });
+
+/**
+ * Names an Access operation that declined. The permission was proved just before the operation's
+ * own transaction, so it is proved again: still held means someone else changed access in between
+ * (the operation is pinned to one Access version), not held means the permission itself.
+ */
+const declined = async (
+  environment: FirstInstallFlowEnvironment,
+  session: IdentitySession,
+  selector: FirstInstallSelector,
+  detail: string,
+  key: "platform.organization.roles.manage" | "platform.organization.assignments.manage",
+  result: Readonly<{ kind: string }>,
+): Promise<never> => {
+  if (result.kind === "temporarily_unavailable")
+    return installationProblem(detail, "temporarily_unavailable");
+  await inInstallerRequest(environment, session, selector, async (transaction, scope, issuedAt) =>
+    requirePermission(
+      transaction,
+      scope,
+      await readInstallationHumanContext(transaction, scope, session, issuedAt, {
+        organizationId: selector.organizationId,
+      }),
+      environment,
+      key,
+    ),
+  );
+  return refusedFor(detail, "access_changed");
+};
 
 /**
  * Proves, before the role is accepted, the role-template acceptance rule of the builder authority:
@@ -298,28 +351,31 @@ const requireAcceptanceAuthority = (
   );
 
 /**
- * The installer's explicit acceptance of the application's default member role on a FIRST install.
- * It runs before the activation switch. It reads the template's role under the installation
- * authority, then changes Access only through the existing operations, so every check stays
- * theirs: accepting the template (`accept_new_application_role`) needs the role-management
- * permission, delegated scope over its permissions and a recent primary sign-in; assigning it needs
+ * The installer's choice for the application's default member role on a FIRST install. It runs
+ * before the activation switch. It reads the template's role under the installation authority,
+ * then changes Access only through the existing operations, so every check stays theirs:
+ * accepting the template (`accept_new_application_role`) needs the role-management permission,
+ * delegated scope over its permissions and a recent primary sign-in; assigning or revoking needs
  * the assignment permission and the same delegated scope. Every refusal names what is missing.
  *
  * Each operation advances the organisation Access version that a human request transaction is
  * pinned to, so each commits in its own transaction, and the activation switch that follows starts
  * a fresh one. A refusal here leaves nothing installed. If the switch then fails, the installer
- * holds a role of an application that is not active, which opens nothing; retrying finds the
- * accepted role and the assignment and does not repeat them. Upgrades never reach this step.
+ * holds a role of an application that is not active, which opens nothing: retrying with the role
+ * accepted finds the role and the assignment and does not repeat them, and retrying with the role
+ * declined revokes the assignment the installer gave themselves. A role that was retired (for
+ * example before an uninstall) or awaits acceptance is refused by name, never accepted twice.
+ * Upgrades never reach this step.
  */
-const acceptFirstInstallMemberRole = async (
+const applyFirstInstallMemberRoleChoice = async (
   environment: FirstInstallFlowEnvironment,
   session: IdentitySession,
   selector: FirstInstallSelector,
   releaseSet: SystemApplicationBoundReleaseSetResult,
-  choice: Extract<FirstInstallMemberRoleChoice, { kind: "accept" }>,
+  choice: FirstInstallMemberRoleChoice,
 ): Promise<void> => {
   const memberRole = firstInstallMemberRole(releaseSet);
-  if (!sameId(memberRole.sourceRoleId, choice.sourceRoleId))
+  if (choice.kind === "accept" && !sameId(memberRole.sourceRoleId, choice.sourceRoleId))
     installationProblem("first_install_member_role_changed", "conflict");
   const administration = environment.accessAdministration;
   const selection = { organizationId: selector.organizationId };
@@ -332,33 +388,59 @@ const acceptFirstInstallMemberRole = async (
     selector,
     memberRole.sourceRoleId,
     containsCustomComponents,
+    choice.kind,
   );
-  if (state.installerHoldsRole) return;
-  let role: Readonly<{
-    roleId: string;
-    liveRevision: number;
-    lifecycle: string;
-    standing: boolean;
-  }>;
-  if (state.role === null) {
-    const prepared = requireAvailable(
-      "first_install_member_role_preparation_refused",
-      "roles_manage",
-      await administration.prepareRoleChange(
-        session,
-        selection,
-        prepareOrganizationAdministrationRoleChangeCommandSchema.parse({
-          operation: "accept_new_application_role",
-          roleKey: acceptedApplicationRoleKey(rootId, memberRole.sourceRoleId, memberRole.key),
-          label: memberRole.name,
-          description: `Accepted from the ${memberRole.key} role template when the application was first installed.`,
-          privilegeClassification: memberRole.privileged ? "privileged" : "standard",
-          templateApplicationRootId: rootId,
-          sourceRoleId: memberRole.sourceRoleId,
-          acceptBroadenedAuthority: "accept",
-        }),
-      ),
+
+  if (choice.kind === "decline") {
+    const assignment = state.installerAssignment;
+    if (assignment === null || !assignment.selfGranted) return;
+    const revoked = await administration.revokeRoleAssignment(
+      session,
+      selection,
+      revokeOrganizationAdministrationRoleAssignmentCommandSchema.parse({
+        roleAssignmentId: assignment.roleAssignmentId,
+        expectedAssignmentRevision: assignment.revision,
+      }),
     );
+    if (revoked.kind !== "available")
+      await declined(
+        environment,
+        session,
+        selector,
+        "first_install_member_role_revoke_refused",
+        "platform.organization.assignments.manage",
+        revoked,
+      );
+    return;
+  }
+
+  if (state.installerAssignment !== null) return;
+  let role: Readonly<{ roleId: string; liveRevision: number }>;
+  if (state.role === null) {
+    const prepareResult = await administration.prepareRoleChange(
+      session,
+      selection,
+      prepareOrganizationAdministrationRoleChangeCommandSchema.parse({
+        operation: "accept_new_application_role",
+        roleKey: acceptedApplicationRoleKey(rootId, memberRole.sourceRoleId, memberRole.key),
+        label: memberRole.name,
+        description: `Accepted from the ${memberRole.key} role template when the application was first installed.`,
+        privilegeClassification: memberRole.privileged ? "privileged" : "standard",
+        templateApplicationRootId: rootId,
+        sourceRoleId: memberRole.sourceRoleId,
+        acceptBroadenedAuthority: "accept",
+      }),
+    );
+    if (prepareResult.kind !== "available")
+      return declined(
+        environment,
+        session,
+        selector,
+        "first_install_member_role_preparation_refused",
+        "platform.organization.roles.manage",
+        prepareResult,
+      );
+    const prepared = prepareResult.value;
     const candidate = prepared.candidate;
     if (candidate.operation !== "accept_new_application_role")
       installationProblem("first_install_member_role_preparation_invalid", "failed");
@@ -374,54 +456,56 @@ const acceptFirstInstallMemberRole = async (
         permissionId: String(permission.permissionId),
       })),
     );
-    const accepted = requireAvailable(
-      "first_install_member_role_acceptance_refused",
-      "roles_manage",
-      await administration.acceptApplicationRoleTemplate(
+    const acceptResult = await administration.acceptApplicationRoleTemplate(
+      session,
+      selection,
+      changeOrganizationAdministrationRoleAuthorityCommandSchema.parse({ evidence: prepared }),
+    );
+    if (acceptResult.kind !== "available")
+      return declined(
+        environment,
         session,
-        selection,
-        changeOrganizationAdministrationRoleAuthorityCommandSchema.parse({ evidence: prepared }),
-      ),
-    ).role;
+        selector,
+        "first_install_member_role_acceptance_refused",
+        "platform.organization.roles.manage",
+        acceptResult,
+      );
+    const accepted = acceptResult.value.role;
     if (
       accepted.source.kind !== "application" ||
       !sameId(accepted.source.applicationRootId, rootId) ||
-      !sameId(accepted.source.sourceRoleId, memberRole.sourceRoleId)
+      !sameId(accepted.source.sourceRoleId, memberRole.sourceRoleId) ||
+      accepted.lifecycle !== "active" ||
+      accepted.assignmentPolicy.kind !== "standing"
     )
       installationProblem("first_install_member_role_acceptance_mismatch", "failed");
-    role = {
-      roleId: accepted.roleId,
-      liveRevision: accepted.liveRevision,
-      lifecycle: accepted.lifecycle,
-      standing: accepted.assignmentPolicy.kind === "standing",
-    };
+    role = { roleId: accepted.roleId, liveRevision: accepted.liveRevision };
   } else {
-    role = {
-      roleId: state.role.roleId,
-      liveRevision: state.role.liveRevision,
-      lifecycle: state.role.lifecycle,
-      standing: state.role.assignmentPolicy === "standing",
-    };
+    role = { roleId: state.role.roleId, liveRevision: state.role.liveRevision };
   }
-  if (role.lifecycle !== "active" || !role.standing)
-    installationProblem("first_install_member_role_not_assignable", "conflict");
 
   const organizationAccountId = state.organizationAccountId;
-  const assigned = requireAvailable(
-    "first_install_member_role_assignment_refused",
-    "assignments_manage",
-    await administration.assignRoleAssignment(
+  const assignResult = await administration.assignRoleAssignment(
+    session,
+    selection,
+    assignOrganizationAdministrationRoleAssignmentCommandSchema.parse({
+      roleId: role.roleId,
+      expectedRoleRevision: role.liveRevision,
+      assigneeKind: "organization_account",
+      organizationAccountId,
+      assignmentKind: "standing",
+    }),
+  );
+  if (assignResult.kind !== "available")
+    return declined(
+      environment,
       session,
-      selection,
-      assignOrganizationAdministrationRoleAssignmentCommandSchema.parse({
-        roleId: role.roleId,
-        expectedRoleRevision: role.liveRevision,
-        assigneeKind: "organization_account",
-        organizationAccountId,
-        assignmentKind: "standing",
-      }),
-    ),
-  ).assignment;
+      selector,
+      "first_install_member_role_assignment_refused",
+      "platform.organization.assignments.manage",
+      assignResult,
+    );
+  const assigned = assignResult.value.assignment;
   if (
     assigned.state !== "live" ||
     assigned.temporalState !== "active" ||
@@ -434,9 +518,9 @@ const acceptFirstInstallMemberRole = async (
 };
 
 /**
- * The one first-install activation the Studio and the App Store share. With the installer's
- * explicit acceptance it first gives them the default member role (above); then it activates the
- * exact prepared release and proves the result names it. Declining activates without a role, and
+ * The one first-install activation the Studio and the App Store share. It first applies the
+ * installer's explicit choice for the default member role (above); then it activates the exact
+ * prepared release and proves the result names it. Declining activates without a role, and
  * organisation administrators assign roles as for any other application.
  */
 export const activateFirstInstall = async (
@@ -444,14 +528,13 @@ export const activateFirstInstall = async (
   candidate: FirstInstallCandidate,
   choice: FirstInstallMemberRoleChoice,
 ): Promise<ApplicationInstallationActivationResult<unknown>> => {
-  if (choice.kind === "accept")
-    await acceptFirstInstallMemberRole(
-      environment,
-      candidate.session,
-      candidate.selector,
-      candidate.releaseSet,
-      choice,
-    );
+  await applyFirstInstallMemberRoleChoice(
+    environment,
+    candidate.session,
+    candidate.selector,
+    candidate.releaseSet,
+    choice,
+  );
   const coordinator = createFirstInstallCoordinator(
     environment,
     candidate.selector,
