@@ -43,9 +43,19 @@ export type StudioConditionSemanticType =
   | "opaque_json"
   | "record_reference";
 
-/** Parameter types accepted by Rule . Host-only values use the same parameter source. */
+/**
+ * Parameter types accepted by Rule and query conditions. Host-only values use the same parameter
+ * source; a record reference is a query input that names one record, compared with a link field.
+ */
 export type StudioConditionParameterType =
-  "text" | "number" | "decimal_number" | "money" | "boolean" | "date" | "date_time";
+  | "text"
+  | "number"
+  | "decimal_number"
+  | "money"
+  | "boolean"
+  | "date"
+  | "date_time"
+  | "record_reference";
 
 export type StudioConditionOperandRole =
   | "current_field"
@@ -312,6 +322,7 @@ const contextIssues = (
     "boolean",
     "date",
     "date_time",
+    "record_reference",
   ]);
   const parameterDeclarations = new Map<string, StudioConditionParameterType>();
   for (const [index, declaration] of context.parameterDeclarations.entries()) {
