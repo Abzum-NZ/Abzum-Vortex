@@ -35,7 +35,6 @@ export const platformPageItem = (
     ...Object.fromEntries(emptySlots.map((key) => [key, []])),
     vortex: {
       block: { blockId: release.blockId, releaseVersion: release.releaseVersion },
-      themeOverrides: {},
       responsive,
       slotOrders: Object.fromEntries(emptySlots.map((key) => [key, sameOrder([])])),
     },

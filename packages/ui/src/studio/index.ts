@@ -4,24 +4,35 @@ export * from "./semantic-selection";
 export * from "./application-draft-history";
 export * from "./selection-inspector";
 export type {
-  StudioConditionSemanticType, StudioConditionParameterType, StudioConditionOperandRole,
-  StudioConditionOperandPermission, StudioConditionParameterDeclaration,
-  StudioConditionControlsContext, StudioConditionOperator, StudioConditionOperatorOption,
-  StudioConditionValidationIssue, StudioConditionValidation,
+  StudioConditionSemanticType,
+  StudioConditionParameterType,
+  StudioConditionOperandRole,
+  StudioConditionOperandPermission,
+  StudioConditionParameterDeclaration,
+  StudioConditionControlsContext,
+  StudioConditionOperator,
+  StudioConditionOperatorOption,
+  StudioConditionValidationIssue,
+  StudioConditionValidation,
 } from "./condition-model";
 export {
-  studioConditionOperatorsFor, createInitialStudioCondition, validateStudioCondition,
+  studioConditionOperatorsFor,
+  createInitialStudioCondition,
+  validateStudioCondition,
 } from "./condition-model";
 export * from "./condition-controls";
-export * from "./application-appearance";
 export * from "./application-composition-commands";
 export * from "./field-placement";
 export * from "./application-flow-model";
 export * from "./application-flow-commands";
 export * from "./application-flow-create";
 export * from "./application-visibility-condition-commands";
-export * from "./placement-theme-overrides";
+export type { StudioCompileFailure } from "./compile-failure";
 export * from "./studio-setting-controls";
 export * from "./studio-record-reference-control";
 export * from "./theme-preset";
-export { StoredCompositionRefusal, syncStoredBlockDependencies, validateStoredShell } from "./stored-composition";
+export {
+  StoredCompositionRefusal,
+  syncStoredBlockDependencies,
+  validateStoredShell,
+} from "./stored-composition";

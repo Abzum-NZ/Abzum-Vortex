@@ -39,7 +39,7 @@ const BRAND_LOADER_CSS = `/*
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--vortex-loader-ink, var(--primary, currentColor));
+  color: var(--primary);
   animation: vortex-loader-appear var(--vortex-motion-loader-fade, 200ms) ease-out
     var(--vortex-loader-delay, 200ms) both;
 }
@@ -131,7 +131,7 @@ const segmentCss = (count: number): string => {
  * The platform loader: the mark drawn segment by segment, held, then erased backwards while it
  * turns a third of a revolution, on a loop. It is pure CSS (keyframes in its own hoisted stylesheet),
  * so it never runs on the script thread. Its ink, size and cycle are theme tokens
- * (`--vortex-loader-ink`, `--vortex-loader-size`, `--vortex-loader-cycle`); with reduced motion it
+ * (`--primary`, `--vortex-loader-size`, `--vortex-loader-cycle`); with reduced motion it
  * is the still, fully drawn mark. It is for long waits only (the first load of an application and a
  * page change that is still waiting after the loader delay), never for a button or a row.
  *
@@ -143,7 +143,12 @@ export function BrandLoader({
   overlay = false,
   label = "Loading",
   className,
-}: Readonly<{ mark?: LoaderMark; overlay?: boolean; label?: string; className?: string }>): ReactElement {
+}: Readonly<{
+  mark?: LoaderMark;
+  overlay?: boolean;
+  label?: string;
+  className?: string;
+}>): ReactElement {
   const count = mark.segments.length;
   return (
     <div
@@ -168,7 +173,12 @@ export function BrandLoader({
         {mark.segments.map(([x1, y1, x2, y2], index) => {
           const d = `M${x1} ${y1} L${x2} ${y2}`;
           return (
-            <path key={`${index}:${d}`} d={d} pathLength={100} data-vortex-loader-segment={index + 1} />
+            <path
+              key={`${index}:${d}`}
+              d={d}
+              pathLength={100}
+              data-vortex-loader-segment={index + 1}
+            />
           );
         })}
       </svg>

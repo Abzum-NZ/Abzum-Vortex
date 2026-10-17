@@ -340,7 +340,6 @@ const blockItem = (release: NonNullable<ReturnType<typeof newestRelease>>, id: s
     id, ...settings, ...Object.fromEntries(release.slots.map((slot) => [slot.key, slots[slot.key] ?? []])),
     vortex: {
       block: { block_id: String(release.blockId), release_version: String(release.releaseVersion) },
-      theme_overrides: {},
       responsive: { desktop: { visible: true, width: { kind: "fill" }, height: { kind: "content" } } },
     },
   },

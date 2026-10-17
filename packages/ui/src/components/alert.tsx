@@ -8,21 +8,21 @@ import { cn } from "../lib/utils";
  * spells its own classes out.
  */
 const infoVariant =
-  "border-l-4 bg-[var(--vortex-surface)] border-l-[var(--vortex-info-text)] " +
-  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-[var(--vortex-info-text)] " +
-  "[&_[data-slot=alert-description]]:text-[var(--vortex-text)]";
+  "border-l-4 bg-background border-l-primary " +
+  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-foreground " +
+  "[&_[data-slot=alert-description]]:text-foreground";
 const successVariant =
-  "border-l-4 bg-[var(--vortex-surface)] border-l-[var(--vortex-success-text)] " +
-  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-[var(--vortex-success-text)] " +
-  "[&_[data-slot=alert-description]]:text-[var(--vortex-text)]";
+  "border-l-4 bg-background border-l-[var(--chart-2)] " +
+  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-foreground " +
+  "[&_[data-slot=alert-description]]:text-foreground";
 const warningVariant =
-  "border-l-4 bg-[var(--vortex-surface)] border-l-[var(--vortex-warning-text)] " +
-  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-[var(--vortex-warning-text)] " +
-  "[&_[data-slot=alert-description]]:text-[var(--vortex-text)]";
+  "border-l-4 bg-background border-l-[var(--chart-3)] " +
+  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-foreground " +
+  "[&_[data-slot=alert-description]]:text-foreground";
 const dangerVariant =
-  "border-l-4 bg-[var(--vortex-surface)] border-l-[var(--vortex-danger-text)] " +
-  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-[var(--vortex-danger-text)] " +
-  "[&_[data-slot=alert-description]]:text-[var(--vortex-text)]";
+  "border-l-4 bg-background border-l-destructive " +
+  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-foreground " +
+  "[&_[data-slot=alert-description]]:text-foreground";
 
 const alertVariants = cva(
   "cn-alert group/alert relative w-full",

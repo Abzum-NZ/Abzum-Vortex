@@ -42,7 +42,6 @@ const placement = (
     vortex: {
       block: { block_id: release.blockId, release_version: release.releaseVersion },
       ...bindings,
-      theme_overrides: {},
       responsive: { desktop: layout },
     },
   },

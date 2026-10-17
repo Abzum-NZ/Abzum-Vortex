@@ -4,7 +4,6 @@ import {
   applicationThemeSchema,
   canonicalApplicationThemeSelection,
   canonicalResponsivePlacement,
-  canonicalThemeTokenValue,
   blockPropertyValueSchema,
   guidedFormPageCompositionSchema,
   findFieldInputBinding,
@@ -49,7 +48,6 @@ import {
   resolveThemeSelection,
   validateApplicationTheme,
   type ThemeResolutionOptions,
-  type ThemeTokenValue,
   type ThemeValidationFailure,
 } from "../theme/index";
 
@@ -101,38 +99,6 @@ const validateThemeTokenReferences = (tokens: CanonicalTheme["tokens"]): void =>
   }
 };
 
-/**
- * Runs the Theme engine's readability, focus and asset checks and refuses publication
- * with the first failure, located at the application theme or the overriding placement.
- */
-const validateTheme = (
-  theme: CanonicalTheme,
-  documentKey: string,
-  options: ThemeResolutionOptions,
-  scope: readonly { kind: "block"; key: string }[] = [],
-): void => {
-  validateThemeTokenReferences(theme.tokens);
-  const result = validateApplicationTheme(theme, { ...options, documentKey });
-  const first = result.failures[0];
-  if (result.valid || first === undefined) return;
-  reject(
-    isDefinitionCompilerRefusalCode(first.ruleCode)
-      ? first.ruleCode
-      : "vortex.definition.application_block_settings",
-    first.family,
-    createThemeLocation(documentKey, first.tokenKey, scope),
-  );
-};
-
-/** Colour roles are declared by the platform theme release; overrides inherit them. */
-const inheritColorRole = (
-  inherited: Record<string, unknown> | undefined,
-  override: Record<string, unknown>,
-): Record<string, unknown> =>
-  inherited?.kind === "color_pair" && inherited.role !== undefined
-    ? { ...override, role: inherited.role }
-    : override;
-
 export type ApplicationThemeMaterialisation =
   | Readonly<{ valid: true; theme: CanonicalTheme; options: ThemeResolutionOptions }>
   | Readonly<{
@@ -156,16 +122,10 @@ export const materialiseApplicationTheme = (
     })
   )
     reject("vortex.definition.application_dependency_manifest");
-  const overrides: Record<string, ThemeTokenValue> = {};
-  for (const [key, value] of Object.entries(authored.token_overrides))
-    overrides[key] = canonicalThemeTokenValue(
-      value as unknown as Record<string, unknown>,
-    ) as ThemeTokenValue;
   const selection = resolveThemeSelection({
     base: release,
     baseTokens: release.tokens,
     selection: canonicalApplicationThemeSelection(authored.selection),
-    overrides,
     options: { documentKey },
   });
   if (!selection.valid) {
@@ -250,71 +210,6 @@ export const materialiseApplicationTheme = (
       },
     };
   return { valid: true, theme, options };
-};
-
-type MergedPlacementThemeOverrides = Readonly<{
-  themeOverrides: Record<string, unknown>;
-  effectiveOverrides: Record<string, unknown>;
-  failure?: Readonly<{ code: "UNKNOWN_TOKEN_OVERRIDE" | "TOKEN_KIND_MISMATCH"; tokenKey: string }>;
-}>;
-
-/** A placement may only override a token the application theme has, with a value of the same kind. */
-const mergePlacementThemeOverrides = (
-  theme: CanonicalTheme,
-  authoredOverrides: Record<string, unknown>,
-): MergedPlacementThemeOverrides => {
-  const themeOverrides: Record<string, unknown> = {};
-  const effectiveOverrides: Record<string, unknown> = {};
-  for (const [key, authoredValue] of Object.entries(authoredOverrides)) {
-    const inherited = theme.tokens[key] as Record<string, unknown> | undefined;
-    const override = canonicalThemeTokenValue(authoredValue as Record<string, unknown>) as Record<
-      string,
-      unknown
-    >;
-    if (inherited === undefined || inherited.kind !== override.kind)
-      return {
-        themeOverrides,
-        effectiveOverrides,
-        failure: {
-          code: inherited === undefined ? "UNKNOWN_TOKEN_OVERRIDE" : "TOKEN_KIND_MISMATCH",
-          tokenKey: key,
-        },
-      };
-    themeOverrides[key] = override;
-    effectiveOverrides[key] = inheritColorRole(inherited, override);
-  }
-  return { themeOverrides, effectiveOverrides };
-};
-
-/**
- * Judges one placement's authored theme overrides with the checks publication applies, so Studio
- * can name a refusal where the override is edited instead of when the draft is compiled.
- */
-export const checkPlacementThemeOverrides = (
-  authoredTheme: ApplicationSourceDocument["body"]["theme"],
-  authoredOverrides: Record<string, unknown>,
-  documentKey: string,
-  release: PlatformThemeRelease,
-): readonly Pick<ThemeValidationFailure, "code" | "family" | "tokenKey">[] => {
-  const materialised = materialiseApplicationTheme(authoredTheme, documentKey, release);
-  if (!materialised.valid) return materialised.failures;
-  const { theme, options } = materialised;
-  const merged = mergePlacementThemeOverrides(theme, authoredOverrides);
-  if (merged.failure !== undefined)
-    return [{ ...merged.failure, family: "broken_reference" as const }];
-  if (Object.keys(merged.effectiveOverrides).length === 0) return [];
-  const effective = applicationThemeSchema.parse({
-    base: theme.base,
-    selection: theme.selection,
-    tokens: { ...theme.tokens, ...merged.effectiveOverrides },
-  });
-  try {
-    validateThemeTokenReferences(effective.tokens);
-  } catch (error) {
-    if (!(error instanceof DefinitionCompilationError)) throw error;
-    return [{ code: "BROKEN_TOKEN_REFERENCE", family: "broken_reference" }];
-  }
-  return validateApplicationTheme(effective, { ...options, documentKey }).failures;
 };
 
 const rejectSettingFailures = (failures: readonly ComponentSettingFailure[]): void => {
@@ -402,7 +297,9 @@ const compilePropertyValue = (
           : reject("vortex.definition.application_block_settings", "invalid_value");
       compiled = {
         kind: "list",
-        items: authored.items.map((item) => compilePropertyValue(item, listSchema.item, resolution)),
+        items: authored.items.map((item) =>
+          compilePropertyValue(item, listSchema.item, resolution),
+        ),
       };
       break;
     }
@@ -734,7 +631,7 @@ export const materialiseApplicationComposition = (
       first.location,
     );
   }
-  const { theme, options: themeValidationOptions } = materialisedTheme;
+  const { theme } = materialisedTheme;
 
   const releaseByIdentity = new Map(
     snapshot.platformBlocks.releases.map((release) => [
@@ -848,21 +745,6 @@ export const materialiseApplicationComposition = (
         authoredPlacement.responsive as unknown as Record<string, unknown>,
         release,
       );
-      const merged = mergePlacementThemeOverrides(theme, authoredPlacement.theme_overrides);
-      if (merged.failure !== undefined)
-        reject("vortex.definition.application_block_settings", "broken_reference");
-      const { themeOverrides, effectiveOverrides } = merged;
-      if (Object.keys(effectiveOverrides).length > 0)
-        validateTheme(
-          applicationThemeSchema.parse({
-            base: theme.base,
-            selection: theme.selection,
-            tokens: { ...theme.tokens, ...effectiveOverrides },
-          }),
-          source.key,
-          themeValidationOptions,
-          [{ kind: "block", key: alias }],
-        );
       rejectSettingFailures(reading.settingFailures);
       const settings = compileSettings(reading.settings, release.properties, resolution);
       applyFieldInputDerivation(release, settings, resolution);
@@ -894,7 +776,6 @@ export const materialiseApplicationComposition = (
         ...(authoredPlacement.query === undefined
           ? {}
           : { queryId: resolution.moduleQuery(authoredPlacement.query) }),
-        themeOverrides,
         responsive,
         slotOrders,
       };
