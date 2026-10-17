@@ -1,4 +1,4 @@
--- Refuse a pending role revision with a named reason before attempting an assignment.
+-- Refuse a pending role revision with a named reason once the caller is eligible to assign it.
 set local role vortex_owner;
 
 create or replace function vortex_access.assign_organization_role_assignment_for_administration(
@@ -34,6 +34,7 @@ declare
   role_fact vortex_access.organization_roles%rowtype;
   revision_fact vortex_access.organization_role_revisions%rowtype;
   affected_permissions jsonb;
+  authority_after jsonb;
   authority_requirement jsonb;
   decision record;
   changed record;
@@ -113,16 +114,15 @@ begin
   where revision.organization_id = context_organization_id
     and revision.role_id = p_role_id
     and revision.revision = role_fact.live_revision;
-  if revision_fact.lifecycle = 'acceptance_required' then
-    raise exception using errcode = 'V3144',
-      message = 'Organization role revision requires acceptance before assignment';
-  end if;
-  if revision_fact.lifecycle <> 'active'
-    or not (
-      (p_assignment_kind = 'standing' and revision_fact.assignment_policy = 'standing')
-      or (
-        p_assignment_kind = 'eligible'
-        and revision_fact.assignment_policy = 'activation_required'
+  if revision_fact.lifecycle <> 'acceptance_required'
+    and (
+      revision_fact.lifecycle <> 'active'
+      or not (
+        (p_assignment_kind = 'standing' and revision_fact.assignment_policy = 'standing')
+        or (
+          p_assignment_kind = 'eligible'
+          and revision_fact.assignment_policy = 'activation_required'
+        )
       )
     ) then
     raise exception using errcode = '40001',
@@ -147,7 +147,13 @@ begin
       and permission.role_id = p_role_id
       and permission.role_revision = role_fact.live_revision
   ) as reference;
-  if affected_permissions is null then
+  if affected_permissions is not null then
+    authority_after := pg_catalog.jsonb_build_object(
+      'kind', 'bounded', 'permissions', affected_permissions
+    );
+  elsif revision_fact.lifecycle = 'acceptance_required' then
+    authority_after := pg_catalog.jsonb_build_object('kind', 'organization_catalogue');
+  else
     raise exception using errcode = '40001',
       message = 'Organization role-assignment assignment authority is stale or unavailable';
   end if;
@@ -155,9 +161,7 @@ begin
   authority_requirement := pg_catalog.jsonb_build_object(
     'kind', 'delegated_management',
     'before', pg_catalog.jsonb_build_object('kind', 'none'),
-    'after', pg_catalog.jsonb_build_object(
-      'kind', 'bounded', 'permissions', affected_permissions
-    )
+    'after', authority_after
   );
 
   select evaluated.* into strict decision
@@ -209,6 +213,12 @@ begin
     or decision.correlation_id is distinct from context_correlation_id then
     raise exception using errcode = '42501',
       message = 'Organization role-assignment assignment is unavailable';
+  end if;
+
+  -- Named only to a caller already eligible to assign the role, so its lifecycle is not disclosed.
+  if revision_fact.lifecycle = 'acceptance_required' then
+    raise exception using errcode = 'V3144',
+      message = 'Organization role revision requires acceptance before assignment';
   end if;
 
   select result.* into strict changed
