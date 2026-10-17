@@ -1,6 +1,5 @@
 "use client";
 import { useState } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
@@ -9,6 +8,7 @@ import {
   deleteInlineModuleField, inlineRecordTypeLinks, type ApplicationSourceDocument, type InlineRecordTypeLink,
   type InlineRecordTypeReference, type ModuleFieldPublication,
 } from "@vortex/platform/schema";
+import { StudioReferencesAlert } from "./studio-references-alert";
 
 const deleteWords: Readonly<Record<InlineRecordTypeLink["onParentDelete"], string>> = {
   refuse: "deleting a linked record is refused",
@@ -45,7 +45,7 @@ export function StudioRelationshipsSection({ source, moduleKey, recordKey, publi
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const [refused, setRefused] = useState<Readonly<{ label: string; references: readonly InlineRecordTypeReference[] }> | null>(null);
-  const [showing, setShowing] = useState(false);
+  const [refusals, setRefusals] = useState(0);
   const [issues, setIssues] = useState<readonly string[]>([]);
   const record = source.body.modules.find((module) => module.key === moduleKey)?.record_types.find((item) => item.key === recordKey);
   if (record === undefined) return null;
@@ -54,7 +54,7 @@ export function StudioRelationshipsSection({ source, moduleKey, recordKey, publi
   const remove = async (link: InlineRecordTypeLink) => {
     setIssues([]); setRefused(null);
     const result = deleteInlineModuleField(source, moduleKey, recordKey, link.fieldKey, publication);
-    if (result.kind === "referenced") { setRefused({ label: link.label, references: result.references }); setShowing(false); return; }
+    if (result.kind === "referenced") { setRefused({ label: link.label, references: result.references }); setRefusals((value) => value + 1); return; }
     if (result.kind === "invalid") { setIssues(result.issues); return; }
     if (!await confirm({
       title: `Delete the relationship ${link.label}?`,
@@ -114,21 +114,8 @@ export function StudioRelationshipsSection({ source, moduleKey, recordKey, publi
         </ItemActions>
       </Item>)}
     </ItemGroup>}
-    {refused === null ? null : <Alert variant="destructive" role="alert">
-      <AlertTitle>The relationship {refused.label} cannot be deleted</AlertTitle>
-      <AlertDescription className="space-y-2">
-        <p>It is used in {refused.references.length} {refused.references.length === 1 ? "place" : "places"}. Remove those uses first.</p>
-        <Button type="button" size="xs" variant="outline" aria-expanded={showing} onClick={() => setShowing(!showing)}>
-          {showing ? "Hide where" : "Show me where"}</Button>
-        {showing && <ul className="list-disc space-y-1 pl-5" aria-label={`Where ${refused.label} is used`}>
-          {refused.references.map((reference) => <li key={reference.label} className="break-words">
-            {reference.open.kind === "none" ? reference.label
-              : <Button type="button" variant="link" size="sm" className="h-auto whitespace-normal p-0 text-left"
-                onClick={() => onShow(reference)}>{reference.label}</Button>}
-          </li>)}
-        </ul>}
-      </AlertDescription>
-    </Alert>}
+    {refused === null ? null : <StudioReferencesAlert key={refusals} name={`The relationship ${refused.label}`}
+      action="deleted" references={refused.references} onShow={onShow} />}
     {issues.length === 0 ? null : <ul role="alert" className="space-y-1 text-sm text-destructive">
       {issues.map((issue, index) => <li key={index} className="break-words">{issue}</li>)}</ul>}
     {confirmDialog}

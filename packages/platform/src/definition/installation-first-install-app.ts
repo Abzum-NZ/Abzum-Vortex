@@ -2,7 +2,10 @@ import "server-only";
 
 import type { RequestDatabaseTransaction } from "../db/index";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
-import type { createHumanOrganizationRequestService } from "../access/index";
+import type {
+  createHumanOrganizationRequestService,
+  createOrganizationAccessAdministrationService,
+} from "../access/index";
 import {
   canonicalJson,
   type ApplicationRootId,
@@ -36,6 +39,7 @@ import {
   type FirstInstallSelector,
 } from "./installation-first-install";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
+import { firstInstallMemberRole, type FirstInstallMemberRole } from "./installation-first-install-member-role";
 
 /** What a first-install read needs from the application: the catalogue, the permissions, and the custom-component rule. */
 export type FirstInstallEnvironment = Readonly<{
@@ -113,6 +117,8 @@ type FirstInstallSnapshot = Readonly<{
   registrationState: FirstInstallRegistrationState;
   registeredReleaseRevision: number | null;
   moduleBindings: InstallationBindings["moduleBindings"];
+  /** The default member role the installer is offered, and accepts explicitly, on activation. */
+  memberRole: FirstInstallMemberRole;
 }>;
 
 /** Why a draft-history read did not produce a snapshot; `reason` is the stable code it logged. */
@@ -148,10 +154,12 @@ export type FirstInstallFlowEnvironment = FirstInstallEnvironment &
   Readonly<{
     requests: ReturnType<typeof createHumanOrganizationRequestService>;
     history: FirstInstallHistoryReads;
+    /** The Access operations that accept and assign the default member role for the installer. */
+    accessAdministration: ReturnType<typeof createOrganizationAccessAdministrationService>;
   }>;
 
 /** The current first-install state, proved for one session: the release set, the snapshot and who proved it. */
-type FirstInstallCandidate = Readonly<{
+export type FirstInstallCandidate = Readonly<{
   selector: FirstInstallSelector;
   history: FirstInstallHistory;
   releaseSet: SystemApplicationBoundReleaseSetResult;
@@ -173,6 +181,7 @@ const firstInstallSnapshot = (
   registrationState,
   registeredReleaseRevision: bindings.registeredReleaseRevision,
   moduleBindings: bindings.moduleBindings,
+  memberRole: firstInstallMemberRole(releaseSet),
 });
 
 /**

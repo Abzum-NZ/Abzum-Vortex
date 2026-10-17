@@ -20,6 +20,7 @@ import {
   type ModuleFieldPublication, type ModuleFieldType, type PeopleDirectoryOwner,
 } from "@vortex/platform/schema";
 import { StudioField } from "./studio-field";
+import { StudioReferencesAlert } from "./studio-references-alert";
 import { StudioLinkSection } from "./studio-link-section";
 
 /** An application in this organisation, for the link to the owner of a used module. */
@@ -151,7 +152,6 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
   const [message, setMessage] = useState("");
   const [issues, setIssues] = useState<readonly string[]>([]);
   const [references, setReferences] = useState<readonly InlineRecordTypeReference[]>([]);
-  const [showing, setShowing] = useState(false);
 
   const declarations = declarationsFor(form.type, form.settings, plainBase);
   const defaultModel = moduleFieldDefaultDeclaration(form.type, writeModuleFieldSettings(form.type, form.settings, declarations, plainBase));
@@ -236,7 +236,7 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
     if (existing === undefined) return;
     setIssues([]); setReferences([]);
     const result = deleteInlineModuleField(source, moduleKey, recordKey, existing.key, context.publication);
-    if (result.kind === "referenced") { setReferences(result.references); setShowing(false); return; }
+    if (result.kind === "referenced") { setReferences(result.references); return; }
     if (result.kind === "invalid") { setIssues(result.issues); return; }
     if (!await confirm({
       title: `Remove ${existing.label}?`,
@@ -341,21 +341,7 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
         <Button type="button" size="sm" variant="destructive" disabled={disabled || pending}
           onClick={() => { void remove(); }}>Remove field</Button>
       </div>
-      {references.length === 0 ? null : <Alert variant="destructive" role="alert">
-        <AlertTitle>{existing.label} cannot be removed</AlertTitle>
-        <AlertDescription className="space-y-2">
-          <p>It is used in {references.length} {references.length === 1 ? "place" : "places"}. Remove those uses first.</p>
-          <Button type="button" size="xs" variant="outline" aria-expanded={showing} onClick={() => setShowing(!showing)}>
-            {showing ? "Hide where" : "Show me where"}</Button>
-          {showing && <ul className="list-disc space-y-1 pl-5" aria-label={`Where ${existing.label} is used`}>
-            {references.map((reference) => <li key={reference.label} className="break-words">
-              {reference.open.kind === "none" || onShow === undefined ? reference.label
-                : <Button type="button" variant="link" size="sm" className="h-auto whitespace-normal p-0 text-left"
-                  onClick={() => onShow(reference)}>{reference.label}</Button>}
-            </li>)}
-          </ul>}
-        </AlertDescription>
-      </Alert>}
+      <StudioReferencesAlert name={existing.label} action="removed" references={references} onShow={onShow} />
     </section>}
     {confirmDialog}
   </form>;

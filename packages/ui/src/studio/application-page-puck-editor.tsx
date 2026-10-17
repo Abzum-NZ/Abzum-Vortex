@@ -23,7 +23,7 @@ import type {
 } from "@vortex/platform/schema";
 import type { FieldInputControlReleaseMap } from "../registry";
 import type { PlatformThemeTokens } from "../theme";
-import { createFullPlatformComponentRegistry } from "../combined-registry";
+import { createPlatformComponentRegistryForReleases } from "../combined-registry";
 import { getVortexPuckConfig } from "../puck-config";
 import { contentConfigFor } from "../shell-outlet";
 import type { Breakpoint } from "../definition-error";
@@ -49,7 +49,7 @@ import {
   validateStoredZone,
   storedZoneAliases,
   withCopiedFlowBindings,
-  withoutFlowBindingsOf,
+  removeFlowBindingsOf,
   syncStoredBlockDependencies,
 } from "./stored-composition";
 import {
@@ -314,7 +314,7 @@ function ApplicationPageSlotPuckEditor({
   updating,
 }: ApplicationPagePuckEditorProps & { at: PageSlotAddress }) {
   const registry = useMemo(
-    () => createFullPlatformComponentRegistry(platformBlockCatalogue.releases),
+    () => createPlatformComponentRegistryForReleases(platformBlockCatalogue.releases),
     [platformBlockCatalogue],
   );
   const catalogue = useMemo(() => registry.toPlatformBlockCatalogue(), [registry]);
@@ -483,8 +483,8 @@ function ApplicationPageSlotPuckEditor({
         throw new TypeError("The selected page is unavailable.");
       const kept = storedZoneAliases(editedSlot);
       const removed = new Set([...storedZoneAliases(targetSlot)].filter((alias) => !kept.has(alias)));
-      next.body.flow_bindings = withoutFlowBindingsOf(
-        withCopiedFlowBindings(next.body.flow_bindings, copies), removed);
+      next.body.flow_bindings = withCopiedFlowBindings(next.body.flow_bindings, copies);
+      removeFlowBindingsOf(next.body, removed);
       syncStoredBlockDependencies(next);
       const parsed = applicationSourceDocumentSchema.safeParse(next);
       if (!parsed.success) throw parsed.error;
