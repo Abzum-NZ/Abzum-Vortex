@@ -134,7 +134,11 @@ function platformDefaults(tokens: ThemeTokens): Readonly<{
   secondary: ColorPair;
   onSecondary: ColorPair;
   danger: ColorPair;
+  focus: ColorPair;
 }> {
+  const focus = tokens.focus;
+  if (focus?.kind !== "focus")
+    throw new Error('Platform theme release is missing focus role "focus"');
   return {
     textMuted: platformColor(tokens, "muted_text"),
     border: platformColor(tokens, "border_color"),
@@ -143,6 +147,7 @@ function platformDefaults(tokens: ThemeTokens): Readonly<{
     secondary: platformColor(tokens, "secondary"),
     onSecondary: platformColor(tokens, "secondary_foreground"),
     danger: platformColor(tokens, "danger"),
+    focus: platformColor(tokens, focus.colorToken as PlatformThemeTokenRoleKey),
   };
 }
 
@@ -322,6 +327,8 @@ function generateThemeCssVariables(
   const danger = filledPair(tokens, "danger");
 
   const focus = tokenOfKind(tokens, "focus", "focus");
+  const focusColor =
+    focus === undefined || !surfaceValidated ? undefined : colorPair(tokens, focus.colorToken);
   const border = tokenOfKind(tokens, "border", "border");
   const borderColor = border === undefined ? undefined : colorPair(tokens, border.colorToken);
 
@@ -424,7 +431,8 @@ function generateThemeCssVariables(
     "--destructive": colorValue(danger?.[0] ?? PLATFORM_DEFAULTS.danger),
     "--border": colorValue(borderColor ?? PLATFORM_DEFAULTS.border),
     "--input": shadcnColour("input"),
-    "--ring": shadcnColour("ring"),
+    // The ring paints visible focus, so it is the focus token's colour that #594 checked.
+    "--ring": colorValue(focusColor ?? (surfaceValidated ? text : PLATFORM_DEFAULTS.focus)),
     "--chart-1": shadcnColour("chart_1"),
     "--chart-2": shadcnColour("chart_2"),
     "--chart-3": shadcnColour("chart_3"),
