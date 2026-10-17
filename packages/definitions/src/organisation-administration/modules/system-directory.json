@@ -2019,6 +2019,7 @@
     {
       "id": "qry_people",
       "key": "people",
+      "label": "People",
       "record_type": "person",
       "inputs": [],
       "select": [
@@ -2042,6 +2043,7 @@
     {
       "id": "qry_organization_invitations",
       "key": "organization_invitations",
+      "label": "Organisation invitations",
       "record_type": "organization_invitation",
       "inputs": [],
       "select": [
@@ -2065,6 +2067,7 @@
     {
       "id": "qry_roles",
       "key": "roles",
+      "label": "Roles",
       "record_type": "role",
       "inputs": [],
       "select": [
@@ -2092,6 +2095,7 @@
     {
       "id": "qry_groups",
       "key": "groups",
+      "label": "Groups",
       "record_type": "group",
       "inputs": [],
       "select": [
@@ -2114,6 +2118,7 @@
     {
       "id": "qry_role_assignments",
       "key": "role_assignments",
+      "label": "Role assignments",
       "record_type": "role_assignment",
       "inputs": [],
       "select": [
@@ -2145,6 +2150,7 @@
     {
       "id": "qry_group_memberships",
       "key": "group_memberships",
+      "label": "Group memberships",
       "record_type": "group_membership",
       "inputs": [],
       "select": [
@@ -2170,6 +2176,7 @@
     {
       "id": "qry_role_activations",
       "key": "role_activations",
+      "label": "Role activations",
       "record_type": "role_activation",
       "inputs": [],
       "select": [
@@ -2196,6 +2203,7 @@
     {
       "id": "qry_delegations",
       "key": "delegations",
+      "label": "Delegations",
       "record_type": "delegation",
       "inputs": [],
       "select": [
@@ -2222,6 +2230,7 @@
     {
       "id": "qry_organizations",
       "key": "organizations",
+      "label": "Organisations",
       "record_type": "organization",
       "inputs": [],
       "select": [
@@ -2246,6 +2255,7 @@
     {
       "id": "qry_tenant_administrators",
       "key": "tenant_administrators",
+      "label": "Tenant administrators",
       "record_type": "tenant_administrator",
       "inputs": [],
       "select": [

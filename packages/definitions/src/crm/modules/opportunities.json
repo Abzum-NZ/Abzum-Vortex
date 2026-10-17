@@ -1260,6 +1260,7 @@
     {
       "id": "qry_crm_pipeline",
       "key": "crm_pipeline",
+      "label": "Opportunities",
       "record_type": "opportunity",
       "inputs": [],
       "select": [

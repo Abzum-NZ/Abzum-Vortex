@@ -1091,6 +1091,7 @@
     {
       "id": "qry_crm_contacts",
       "key": "crm_contacts",
+      "label": "Contacts",
       "record_type": "contact",
       "inputs": [],
       "select": [
@@ -1153,6 +1154,7 @@
     {
       "id": "qry_crm_leads",
       "key": "crm_leads",
+      "label": "Leads",
       "record_type": "lead",
       "inputs": [],
       "select": [
