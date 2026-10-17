@@ -28,7 +28,8 @@ export function StudioNewFlowDialog({ open, onOpenChange, choices, onCreate, ini
     event.preventDefault();
     const chosenType = choices.recordTypes.find((entry) => `${entry.moduleKey} ${entry.recordTypeKey}` === recordType);
     const command: StudioFlowCreateCommand | undefined = start === "action"
-      ? control === "" ? undefined : { kind: "action", controlAlias: control, name }
+      ? control === "" ? undefined : { kind: "action", controlAlias: control, name,
+        recordType: choices.actions.find((entry) => entry.controlAlias === control)?.recordType ?? null }
       : chosenType === undefined ? undefined : { kind: "before_save", moduleKey: chosenType.moduleKey,
         recordTypeKey: chosenType.recordTypeKey, name,
         operations: [...(onCreateRecord ? ["create" as const] : []), ...(onUpdateRecord ? ["update" as const] : [])] };

@@ -5274,11 +5274,14 @@
                     }
                   },
                   "values": {
-                    "kind": "literal",
-                    "literal": {
-                      "type": "json",
-                      "value": {
-                        "stage": "lost"
+                    "kind": "map",
+                    "entries": {
+                      "stage": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "choice",
+                          "value": "lost"
+                        }
                       }
                     }
                   },
