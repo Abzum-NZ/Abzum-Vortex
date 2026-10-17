@@ -49,26 +49,27 @@ const linkValue = (
 
 /**
  * Gives every projected link input value its title, read in one batch under the viewer's access.
- * Returns false when the titles could not be read; the read already logged its cause.
+ * Returns the link inputs left without a title: the linked record is not one the viewer may read,
+ * or the titles could not be read (the read already logged its cause).
  */
 export const titleLinkInputs = async (
   projected: Record<string, PageDataState>,
   resolveRecordLinks: RecordLinkResolver,
-): Promise<boolean> => {
+): Promise<ReadonlySet<string>> => {
   const linked = Object.entries(projected).flatMap(([placementId, state]) => {
     const reference = linkValue(state);
     return reference === undefined ? [] : [{ placementId, state, reference }];
   });
-  if (linked.length === 0) return true;
+  const untitled = new Set<string>();
+  if (linked.length === 0) return untitled;
   const links = await resolveRecordLinks(linked.map((entry) => entry.reference));
-  if (links === undefined) return false;
   for (const { placementId, state, reference } of linked) {
-    const title = titleOf(links, reference);
+    const title = links === undefined ? undefined : titleOf(links, reference);
     const values = state.status === "ready" ? state.values : undefined;
-    if (title === undefined || !isRecord(values)) return false;
-    projected[placementId] = { status: "ready", values: { ...values, title } };
+    if (title === undefined || !isRecord(values)) untitled.add(placementId);
+    else projected[placementId] = { status: "ready", values: { ...values, title } };
   }
-  return true;
+  return untitled;
 };
 
 /**

@@ -181,8 +181,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     if (settled?.kind === "refusal" && settled.corrections !== undefined)
       setEditedPastCorrections(JSON.stringify(settled.corrections));
     if (supplied) setFeedbackTick((current) => current + 1);
-    if (validationAttemptedRef.current)
-      setValidationErrors(registry.validationErrors());
+    if (validationAttemptedRef.current) setValidationErrors(registry.validationErrors());
     const baseline = baselineRef.current;
     if (baseline !== undefined)
       unsavedWorkRegistry?.setDirty(
@@ -214,7 +213,9 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       // A required value the server found missing is named by the field's own located message.
       return (
         correction.message ??
-        (correction.code === "required_value" ? registry.validationErrors()[fieldKey] : undefined) ??
+        (correction.code === "required_value"
+          ? registry.validationErrors()[fieldKey]
+          : undefined) ??
         fieldCorrectionText[correction.code]
       );
     },
@@ -231,7 +232,14 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       draftFeedbackFor,
       reportFieldChanged,
     }),
-    [context.pending, context.inactive, registry, fieldErrorFor, draftFeedbackFor, reportFieldChanged],
+    [
+      context.pending,
+      context.inactive,
+      registry,
+      fieldErrorFor,
+      draftFeedbackFor,
+      reportFieldChanged,
+    ],
   );
 
   const events = context.events;
@@ -306,42 +314,38 @@ export function FormContainer(props: FormContainerProps): ReactElement {
 
   const title = context.accessibleName;
   const ownerGroups = props.data?.status === "ready" ? props.data.values.ownerGroups : undefined;
-  const selectedOwnerGroupId = ownerGroups?.length === 1
-    ? ownerGroups[0]?.groupId
-    : ownerGroups?.some((group) => group.groupId === ownerGroupChoice)
-      ? ownerGroupChoice
-      : undefined;
-  const fieldsDisabled = context.unavailable || props.data?.status === "disabled" ||
-    ownerGroups?.length === 0;
-  const note = context.unavailable ? "Unavailable" : context.disabledReason;
-  const flowFeedback = props.flowFeedback === undefined
-    ? undefined
-    : formFlowFeedbackPresentation(props.flowFeedback);
-  if (props.data?.status === "disabled" && props.data.reason === "Record unavailable")
-    return (
-      <p
-        role="alert"
-        data-vortex-control="form-container"
-        data-vortex-placement-id={props.placementId}
-      >
-        Record unavailable.
-      </p>
-    );
+  const selectedOwnerGroupId =
+    ownerGroups?.length === 1
+      ? ownerGroups[0]?.groupId
+      : ownerGroups?.some((group) => group.groupId === ownerGroupChoice)
+        ? ownerGroupChoice
+        : undefined;
+  const fieldsDisabled =
+    context.unavailable || props.data?.status === "disabled" || ownerGroups?.length === 0;
+  // Why the form cannot be used now, such as a required field this person cannot fill in.
+  const refusal = context.unavailable ? undefined : context.disabledReason;
+  const flowFeedback =
+    props.flowFeedback === undefined ? undefined : formFlowFeedbackPresentation(props.flowFeedback);
   return (
     <Card>
-      {title === undefined && note === undefined ? null : (
+      {title === undefined && !context.unavailable ? null : (
         <CardHeader>
           {title === undefined ? null : (
             <CardTitle id={titleId} role="heading" aria-level={2}>
               {title}
             </CardTitle>
           )}
-          {note === undefined ? null : (
-            <CardDescription data-vortex-field-note="">{note}</CardDescription>
-          )}
+          {context.unavailable ? (
+            <CardDescription data-vortex-field-note="">Unavailable</CardDescription>
+          ) : null}
         </CardHeader>
       )}
       <CardContent>
+        {refusal === undefined ? null : (
+          <Alert role="alert" className="mb-4" data-vortex-form-refusal="">
+            <AlertDescription>{refusal}</AlertDescription>
+          </Alert>
+        )}
         <form
           ref={formRef}
           noValidate
@@ -362,7 +366,8 @@ export function FormContainer(props: FormContainerProps): ReactElement {
             <Field>
               {ownerGroups.length === 1 ? (
                 <p className="text-sm">
-                  <span className="font-medium">Owner Group: </span>{ownerGroups[0]?.label}
+                  <span className="font-medium">Owner Group: </span>
+                  {ownerGroups[0]?.label}
                 </p>
               ) : (
                 <>
@@ -404,7 +409,9 @@ export function FormContainer(props: FormContainerProps): ReactElement {
                   </Select>
                 </>
               )}
-              {ownerGroupError ? <FieldError role="alert">Select an owner Group.</FieldError> : null}
+              {ownerGroupError ? (
+                <FieldError role="alert">Select an owner Group.</FieldError>
+              ) : null}
             </Field>
           )}
           <FormScopeContext.Provider value={scope}>
