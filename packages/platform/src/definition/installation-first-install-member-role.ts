@@ -185,10 +185,10 @@ const holdsRole = async (
  * sign-in is refused as `authentication_required`, which the install screen shows as
  * "Sign in again to install". The acceptance operation re-checks both itself.
  */
-const requireAcceptanceAuthority = async (
-  environment: FirstInstallFlowEnvironment,
+export const requireRoleAcceptanceAuthority = async (
+  environment: Pick<FirstInstallFlowEnvironment, "requests" | "permissions">,
   session: IdentitySession,
-  selector: FirstInstallSelector,
+  selector: Pick<FirstInstallSelector, "organizationId" | "rootId">,
   containsCustomComponents: boolean,
   conferred: readonly BuilderConferredPermission[],
 ): Promise<string> => {
@@ -202,7 +202,7 @@ const requireAcceptanceAuthority = async (
           scope.applicationRootId !== undefined ||
           !sameId(scope.organizationId, selector.organizationId)
         )
-          installationProblem("first_install_member_role_scope_mismatch", "refused");
+          installationProblem("role_acceptance_scope_mismatch", "refused");
         await requireInstallationAuthority(transaction, scope, environment.permissions, {
           ...installationOperation(selector.rootId, containsCustomComponents),
           acceptedPermissions: conferred,
@@ -217,7 +217,7 @@ const requireAcceptanceAuthority = async (
   if (result.kind === "available") return result.value;
   if (failure !== undefined) throw failure;
   return unavailable(
-    "first_install_member_role_authority_unavailable",
+    "role_acceptance_authority_unavailable",
     result.kind === "temporarily_unavailable" ? "temporarily_unavailable" : "refused",
   );
 };
@@ -273,7 +273,7 @@ const acceptFirstInstallMemberRole = async (
     const candidate = prepared.candidate;
     if (candidate.operation !== "accept_new_application_role")
       installationProblem("first_install_member_role_preparation_invalid", "failed");
-    organizationAccountId = await requireAcceptanceAuthority(
+    organizationAccountId = await requireRoleAcceptanceAuthority(
       environment,
       session,
       selector,
@@ -294,7 +294,7 @@ const acceptFirstInstallMemberRole = async (
       ),
     ).role;
   } else {
-    organizationAccountId = await requireAcceptanceAuthority(
+    organizationAccountId = await requireRoleAcceptanceAuthority(
       environment,
       session,
       selector,

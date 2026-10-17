@@ -32,9 +32,9 @@ begin
     contribution_source := contribution -> 'source';
     contribution_route := contribution -> 'route';
 
-    -- The current catalogue entry for this contribution's exact permission.
-    -- Mirrors vortex_access.read_available_permission's own current-entry
-    -- join: entry joined to its owning registration, filtered to 'active'.
+    -- The catalogue entry of the registration revision this contribution's
+    -- decision names: the meaning the caller's role accepted, which may be
+    -- older than the registered one. Its registration must still be active.
     select entry.*
     into catalogue_entry
     from vortex_access.permission_catalogue_entries as entry
@@ -42,9 +42,10 @@ begin
       on registration.organization_id = entry.organization_id
       and registration.registration_kind = entry.registration_kind
       and registration.registration_owner_id = entry.registration_owner_id
-      and registration.revision = entry.registration_revision
+      and entry.registration_revision <= registration.revision
       and registration.state = 'active'
     where entry.organization_id = decision_organization_id
+      and entry.registration_revision = (contribution ->> 'registrationRevision')::bigint
       and entry.application_root_id = (contribution_permission ->> 'applicationRootId')::uuid
       and entry.owner_kind = contribution_permission ->> 'ownerKind'
       and entry.owner_id = (contribution_permission ->> 'ownerId')::uuid
@@ -57,8 +58,8 @@ begin
         message = 'Record field bounds found no catalogue entry';
     end if;
 
-    -- The active registration revision and the source release identity must
-    -- still match the contribution before its field policy can be used.
+    -- The source release identity must still match the contribution before
+    -- its field policy can be used.
     if catalogue_entry.registration_revision is distinct from
         (contribution ->> 'registrationRevision')::bigint
       or catalogue_entry.source_kind is distinct from (contribution_source ->> 'kind')
@@ -145,7 +146,7 @@ grant execute on function vortex_access.resolve_record_field_bounds_internal(jso
   to vortex_record_adapter, postgres;
 
 comment on function vortex_access.resolve_record_field_bounds_internal(jsonb) is
-  'Private field-bounds resolution over one allowed exact-record access decision; looks each contribution''s field policy up from the live permission catalogue itself, never from a caller-supplied declaration.';
+  'Private field-bounds resolution over one allowed exact-record access decision; looks each contribution''s field policy up from the permission catalogue itself at the registration revision the decision accepted, never from a caller-supplied declaration.';
 
 alter function vortex_access.resolve_record_field_bounds_internal(jsonb)
   owner to vortex_owner;
