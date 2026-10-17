@@ -13,13 +13,18 @@
 -- can be previewed. Its storage is created empty and then seeded, under the builder's own live
 -- access in the installed Application, with only the records and fields the builder reads there:
 -- at most the first 2,000 readable records of each record type, a deliberate preview bound the
--- preview tells the builder about when it is reached.
+-- preview tells the builder about when it is reached. When the builder opens the preview again the
+-- copied records are decided again by their current live access. A preview is one per Application
+-- and builder, needs the builder's current authority on every request, grants no share authority
+-- and runs no platform operation.
 set local role vortex_owner;
 
 alter table vortex_definition.preview_installations
   add column seeded_at timestamptz,
   -- The record types whose seed reached the preview bound of 2,000 readable records.
-  add column seed_bounded_record_type_ids uuid[] not null default '{}';
+  add column seed_bounded_record_type_ids uuid[] not null default '{}',
+  -- When the copied records were last decided again by the builder's live access.
+  add column reconciled_at timestamptz;
 
 create table vortex_access.preview_permission_registrations (
   preview_installation_id uuid not null
@@ -103,6 +108,7 @@ set search_path = ''
 as $function$
 declare
   preview_address text;
+  identity_id_value uuid;
 begin
   -- The one place that says which permission registration a request to an Application runs
   -- under. A request without a preview address runs the active installed registration. A request
@@ -128,6 +134,30 @@ begin
     return;
   end if;
   if not pg_catalog.pg_input_is_valid(preview_address, 'uuid') then
+    return;
+  end if;
+  -- Every preview request needs the builder's current authority to manage definition drafts, so
+  -- a builder who loses it can no longer open a preview they opened before.
+  select account.identity_id into identity_id_value
+  from vortex_identity.organization_accounts as account
+  where account.organization_account_id = p_organization_account_id
+    and account.organization_id = p_organization_id;
+  if not found or not exists (
+    select 1
+    from vortex_access.evaluate_permission_role_path_internal(
+      pg_catalog.jsonb_build_object(
+        'organizationId', p_organization_id,
+        'organizationAccountId', p_organization_account_id,
+        'identityId', identity_id_value,
+        'expiresAt', pg_catalog.statement_timestamp() + interval '1 minute'
+      ),
+      pg_catalog.statement_timestamp(),
+      vortex_access.required_platform_permission('platform.organization.definition_drafts.manage'),
+      pg_catalog.jsonb_build_object('actionKind', 'manage'),
+      null
+    ) as path
+    where path.path_valid_until is not null
+  ) then
     return;
   end if;
   return query
@@ -156,7 +186,7 @@ revoke all on function vortex_access.request_application_registration_internal(u
     vortex_record_adapter;
 
 comment on function vortex_access.request_application_registration_internal(uuid, uuid, uuid) is
-  'The permission registration one organisation account''s request to an Application runs under: the active installed registration, or, for a request with a preview address, only the registration of that unexpired preview, which only the builder who opened it holds.';
+  'The permission registration one organisation account''s request to an Application runs under: the active installed registration, or, for a request with a preview address, only the registration of that unexpired preview, which only the builder who opened it holds, and only while they may manage definition drafts.';
 
 CREATE OR REPLACE FUNCTION vortex_access.resolve_human_application_scope(p_identity_id uuid, p_organization_id uuid, p_application_root_id uuid) RETURNS TABLE(tenant_id uuid, organization_id uuid, organization_account_id uuid, application_root_id uuid, access_version bigint)
     LANGUAGE plpgsql SECURITY DEFINER
@@ -1152,8 +1182,11 @@ declare
   -- the first the builder can read in record order. The seed says when the bound was reached, and
   -- the preview tells the builder so.
   copy_limit constant integer := 2000;
-  -- A table the builder can mostly not read is scanned only this far; the seed is then bounded too.
+  -- A table the builder can mostly not read is scanned only this far. That is a silent
+  -- performance bound: it says nothing about how many live records exist.
   scan_limit constant integer := 20000;
+  counter_mapping record;
+  copied_maximum numeric;
   scanned_count integer := 0;
   bounded boolean := false;
   live_table_token text;
@@ -1235,10 +1268,7 @@ begin
     )
   loop
     scanned_count := scanned_count + 1;
-    if scanned_count > scan_limit then
-      bounded := true;
-      exit;
-    end if;
+    exit when scanned_count > scan_limit;
     select projected.projection, projected.read_bounds into row_read
     from vortex_record.read_record_projection_internal(
       p_record_type_id, live_record.record_id
@@ -1266,15 +1296,30 @@ begin
     copied_count := copied_count + 1;
   end loop;
 
-  insert into vortex_record.preview_reference_counters (
-    preview_installation_id, storage_contract_id, field_id, next_number
-  )
-  select p_preview_installation_id, p_preview_storage_contract_id, counter.field_id,
-    counter.next_number
-  from vortex_record.record_reference_counters as counter
-  where counter.storage_contract_id = p_live_storage_contract_id
-    and counter.organization_id = vortex_platform.organization_id()
-    and counter.next_number >= 2;
+  -- Each reference-number counter continues after the highest number among the copied records,
+  -- never from the live counter, which would reveal how many live records exist.
+  for counter_mapping in
+    select mapping.field_id, mapping.physical_column_token
+    from vortex_record.field_storage_mappings as mapping
+    where mapping.storage_contract_id = p_preview_storage_contract_id
+      and mapping.state = 'active'
+      and mapping.field_definition ->> 'type' = 'reference_number'
+      and mapping.physical_column_token = any(field_columns)
+    order by mapping.field_id
+  loop
+    execute pg_catalog.format(
+      'select pg_catalog.max(pg_catalog.substring(%I from ''([0-9]+)[^0-9]*$'')::numeric) from record_data.%I where storage_contract_id = %L::uuid',
+      counter_mapping.physical_column_token, preview_table_token, p_preview_storage_contract_id
+    ) into copied_maximum;
+    if copied_maximum is not null then
+      insert into vortex_record.preview_reference_counters (
+        preview_installation_id, storage_contract_id, field_id, next_number
+      ) values (
+        p_preview_installation_id, p_preview_storage_contract_id, counter_mapping.field_id,
+        copied_maximum + 1
+      );
+    end if;
+  end loop;
   return pg_catalog.jsonb_build_object('copied', copied_count, 'bounded', bounded);
 exception
   when no_data_found then
@@ -1290,7 +1335,127 @@ revoke all on function vortex_record.copy_live_records_to_preview_internal(uuid,
 grant execute on function vortex_record.copy_live_records_to_preview_internal(uuid, uuid, uuid, uuid)
   to vortex_owner;
 comment on function vortex_record.copy_live_records_to_preview_internal(uuid, uuid, uuid, uuid) is
-  'Seeds one preview record table with the live records of the same record type that the request''s builder reads in the installed Application, each with only the fields they read there, and the reference counters: the first 2,000 they read, in record order, within the first 20,000 records, and whether there were more.';
+  'Seeds one preview record table with the live records of the same record type that the request''s builder reads in the installed Application, each with only the fields they read there, and reference counters that continue after the copied records: the first 2,000 they read, in record order, and whether they read more.';
+
+create or replace function vortex_record.reconcile_preview_records_internal(
+  p_record_type_id uuid,
+  p_live_storage_contract_id uuid,
+  p_preview_storage_contract_id uuid
+)
+returns bigint
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  live_table_token text;
+  preview_table_token text;
+  field_columns text[];
+  readable_columns text[];
+  cleared_columns text;
+  preview_record record;
+  row_read record;
+  changed_count bigint := 0;
+begin
+  if not vortex_platform.is_non_nil_uuid(p_record_type_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_live_storage_contract_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_preview_storage_contract_id::text) then
+    raise exception using errcode = '22023', message = 'Preview record check selector is invalid';
+  end if;
+  -- The check reads as the builder reads the installed Application: never in a preview.
+  if nullif(pg_catalog.current_setting('vortex_record.preview_installation_id', true), '')
+    is not null then
+    raise exception using errcode = '42501', message = 'Preview record check must read live records';
+  end if;
+  select catalogue.physical_table_token into strict live_table_token
+  from vortex_record.storage_catalogue as catalogue
+  where catalogue.storage_contract_id = p_live_storage_contract_id
+    and catalogue.record_type_id = p_record_type_id
+    and catalogue.physical_schema_token = 'record_data'
+    and catalogue.state = 'active';
+  select catalogue.physical_table_token into strict preview_table_token
+  from vortex_record.storage_catalogue as catalogue
+  where catalogue.storage_contract_id = p_preview_storage_contract_id
+    and catalogue.physical_schema_token = 'record_data'
+    and catalogue.state = 'active'
+    and catalogue.record_type_id = p_record_type_id;
+
+  -- The field columns a copy could have filled: the ones both tables declare with the same type.
+  select coalesce(pg_catalog.array_agg(preview_column.attname::text order by preview_column.attnum), array[]::text[])
+  into field_columns
+  from pg_catalog.pg_attribute as preview_column
+  join pg_catalog.pg_class as preview_table on preview_table.oid = preview_column.attrelid
+  join pg_catalog.pg_namespace as preview_schema on preview_schema.oid = preview_table.relnamespace
+  where preview_schema.nspname = 'record_data'
+    and preview_table.relname = preview_table_token
+    and preview_column.attnum > 0
+    and not preview_column.attisdropped
+    and preview_column.attname ~ '^f_[0-9a-f]{32}$'
+    and exists (
+      select 1
+      from pg_catalog.pg_attribute as live_column
+      join pg_catalog.pg_class as live_table on live_table.oid = live_column.attrelid
+      join pg_catalog.pg_namespace as live_schema on live_schema.oid = live_table.relnamespace
+      where live_schema.nspname = 'record_data'
+        and live_table.relname = live_table_token
+        and live_column.attname = preview_column.attname
+        and live_column.attnum > 0
+        and not live_column.attisdropped
+        and live_column.atttypid = preview_column.atttypid
+    );
+
+  -- Every copied record is decided again by the builder's live access: one they can no longer
+  -- read leaves the preview, and a field they can no longer read is emptied. A record created in
+  -- the preview has no live row and stays.
+  for preview_record in
+    execute pg_catalog.format(
+      'select preview_row.record_id from record_data.%I as preview_row where exists (select 1 from record_data.%I as live_row where live_row.record_id = preview_row.record_id) order by preview_row.record_id',
+      preview_table_token, live_table_token
+    )
+  loop
+    select projected.projection, projected.read_bounds into row_read
+    from vortex_record.read_record_projection_internal(
+      p_record_type_id, preview_record.record_id
+    ) as projected;
+    if row_read.projection ->> 'outcome' is distinct from 'allowed' then
+      execute pg_catalog.format('delete from record_data.%I where record_id = $1', preview_table_token)
+        using preview_record.record_id;
+      changed_count := changed_count + 1;
+      continue;
+    end if;
+    select coalesce(pg_catalog.array_agg(readable.column_name), array[]::text[])
+    into readable_columns
+    from (
+      select 'f_' || pg_catalog.replace(pg_catalog.lower(readable_id.value #>> '{}'), '-', '') as column_name
+      from pg_catalog.jsonb_array_elements(row_read.read_bounds -> 'readableFieldIds') as readable_id(value)
+    ) as readable;
+    select pg_catalog.string_agg(pg_catalog.format('%I = null', field_column.value), ', ')
+    into cleared_columns
+    from pg_catalog.unnest(field_columns) as field_column(value)
+    where not (field_column.value = any(readable_columns));
+    if cleared_columns is not null then
+      execute pg_catalog.format('update record_data.%I set %s where record_id = $1',
+        preview_table_token, cleared_columns)
+        using preview_record.record_id;
+      changed_count := changed_count + 1;
+    end if;
+  end loop;
+  return changed_count;
+exception
+  when no_data_found then
+    raise exception using errcode = 'P0002', message = 'Preview record check storage is unavailable';
+end
+$function$;
+
+alter function vortex_record.reconcile_preview_records_internal(uuid, uuid, uuid)
+  owner to vortex_record_adapter;
+
+revoke all on function vortex_record.reconcile_preview_records_internal(uuid, uuid, uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.reconcile_preview_records_internal(uuid, uuid, uuid)
+  to vortex_owner;
+comment on function vortex_record.reconcile_preview_records_internal(uuid, uuid, uuid) is
+  'Decides every copied record of one preview record table again by the request''s builder''s live access in the installed Application: removes a record they can no longer read and empties each field they can no longer read. Records created in the preview stay.';
 
 create or replace function vortex_record.load_record_access_facts_from_installation_internal(
   p_record_type_id uuid,
@@ -3329,12 +3494,14 @@ begin
     raise exception using errcode = 'P0002', message = 'Application has no release to preview';
   end if;
 
-  -- One preview per Application: a new preview replaces the previous one and its storage.
+  -- One preview per Application and builder: a new preview replaces this builder's previous one
+  -- and its storage, never another builder's.
   for previous_preview in
     select preview.preview_installation_id
     from vortex_definition.preview_installations as preview
     where preview.organization_id = organization_id_value
       and preview.application_root_id = p_application_root_id
+      and preview.previewer_organization_account_id = organization_account_id_value
     order by preview.preview_installation_id
     for update
   loop
@@ -3639,7 +3806,7 @@ revoke all on function vortex_definition.create_preview_installation(uuid, bigin
 grant execute on function vortex_definition.create_preview_installation(uuid, bigint, jsonb)
   to vortex_request;
 comment on function vortex_definition.create_preview_installation(uuid, bigint, jsonb) is
-  'Replaces the 24-hour preview of one Application with a preview of its current draft: the releases its publication rehearsed, the exact Module pins they and the used Module releases name, the preview''s own permission registration whose draft roles only its builder holds, and empty isolated storage for every bound record type.';
+  'Replaces the builder''s 24-hour preview of one Application with a preview of its current draft: the releases its publication rehearsed, the exact Module pins they and the used Module releases name, the preview''s own permission registration whose draft roles only its builder holds, and empty isolated storage for every bound record type.';
 
 create or replace function vortex_definition.seed_preview_installation(
   p_preview_installation_id uuid
@@ -3764,5 +3931,253 @@ grant execute on function vortex_definition.read_preview_runtime_source()
   to vortex_request;
 comment on function vortex_definition.read_preview_runtime_source() is
   'The installation, draft revision, expiry and stored release set of the preview the validated human Application request runs, for the runtime to render it as an installed Application.';
+
+create or replace function vortex_definition.reconcile_preview_installation(
+  p_preview_installation_id uuid
+)
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  reconcile_interval constant interval := interval '5 minutes';
+  checked_context jsonb;
+  preview_row vortex_definition.preview_installations;
+  storage_identity jsonb;
+begin
+  if not vortex_platform.is_non_nil_uuid(p_preview_installation_id::text) then
+    raise exception using errcode = '22023', message = 'Preview installation command is invalid';
+  end if;
+  -- Like the seed, the check runs in the installed Application's own context, never the preview.
+  checked_context := vortex_definition.assert_preview_installation_authority_internal();
+  if not checked_context ? 'applicationRootId'
+    or nullif(pg_catalog.current_setting('vortex_record.preview_installation_id', true), '')
+      is not null then
+    raise exception using errcode = '42501', message = 'Preview installation context is unavailable';
+  end if;
+  select preview.* into preview_row
+  from vortex_definition.preview_installations as preview
+  where preview.preview_installation_id = p_preview_installation_id
+    and preview.organization_id = (checked_context ->> 'organizationId')::uuid
+    and preview.application_root_id = (checked_context ->> 'applicationRootId')::uuid
+    and preview.previewer_organization_account_id =
+      (checked_context ->> 'organizationAccountId')::uuid
+    and preview.expires_at > pg_catalog.statement_timestamp()
+  for update;
+  if not found then
+    raise exception using errcode = '42501', message = 'Preview installation is unavailable';
+  end if;
+  -- A preview with nothing seeded has nothing to check; a recent check is not repeated.
+  if preview_row.seeded_at is null
+    or preview_row.reconciled_at > pg_catalog.statement_timestamp() - reconcile_interval then
+    return false;
+  end if;
+  for storage_identity in
+    select identity.value
+    from pg_catalog.jsonb_array_elements(preview_row.storage_identities) as identity(value)
+    where exists (
+      select 1
+      from vortex_record.storage_catalogue as catalogue
+      where catalogue.storage_contract_id = (identity.value ->> 'releaseStorageContractId')::uuid
+        and catalogue.physical_schema_token = 'record_data'
+        and catalogue.state = 'active'
+    )
+    order by identity.value ->> 'previewStorageContractId'
+  loop
+    perform vortex_record.reconcile_preview_records_internal(
+      (storage_identity ->> 'recordTypeId')::uuid,
+      (storage_identity ->> 'releaseStorageContractId')::uuid,
+      (storage_identity ->> 'previewStorageContractId')::uuid
+    );
+  end loop;
+  update vortex_definition.preview_installations as preview
+  set reconciled_at = pg_catalog.statement_timestamp()
+  where preview.preview_installation_id = p_preview_installation_id;
+  return true;
+end
+$function$;
+
+alter function vortex_definition.reconcile_preview_installation(uuid) owner to vortex_owner;
+
+revoke all on function vortex_definition.reconcile_preview_installation(uuid)
+  from public, anon, authenticated, service_role, vortex_runtime;
+grant execute on function vortex_definition.reconcile_preview_installation(uuid) to vortex_request;
+comment on function vortex_definition.reconcile_preview_installation(uuid) is
+  'When a builder opens their preview, decides its copied records again by their current live access, at most every five minutes: a record they can no longer read leaves the preview and a field they can no longer read is emptied. A preview never keeps more than its builder sees live.';
+
+create or replace function vortex_definition.read_preview_application_identity(
+  p_preview_installation_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  checked_context jsonb;
+  identity_value jsonb;
+begin
+  if not vortex_platform.is_non_nil_uuid(p_preview_installation_id::text) then
+    raise exception using errcode = '22023', message = 'Preview installation identity is invalid';
+  end if;
+  checked_context := vortex_definition.assert_preview_installation_authority_internal();
+  select pg_catalog.jsonb_build_object(
+    'previewInstallationId', preview.preview_installation_id,
+    'organizationId', preview.organization_id,
+    'applicationRootId', preview.application_root_id,
+    'definitionKey', root.key,
+    'draftRevision', preview.draft_revision,
+    'expiresAt', preview.expires_at,
+    'seeded', preview.seeded_at is not null
+  ) into identity_value
+  from vortex_definition.preview_installations as preview
+  join vortex_definition.roots as root on root.root_id = preview.application_root_id
+  where preview.preview_installation_id = p_preview_installation_id
+    and preview.organization_id = (checked_context ->> 'organizationId')::uuid
+    and preview.previewer_organization_account_id =
+      (checked_context ->> 'organizationAccountId')::uuid
+    and preview.expires_at > pg_catalog.statement_timestamp()
+    and root.kind = 'application';
+  return identity_value;
+end
+$function$;
+
+alter function vortex_definition.read_preview_application_identity(uuid) owner to vortex_owner;
+
+revoke all on function vortex_definition.read_preview_application_identity(uuid)
+  from public, anon, authenticated, service_role, vortex_runtime;
+grant execute on function vortex_definition.read_preview_application_identity(uuid)
+  to vortex_request;
+comment on function vortex_definition.read_preview_application_identity(uuid) is
+  'The Application, key and draft revision of one unexpired preview, and whether it holds copied live records, for the builder of the validated human organisation context who opened it; null when there is no such preview.';
+
+CREATE OR REPLACE FUNCTION vortex_access.record_share_grant_source_authority_internal(p_context jsonb, p_module_root_id uuid, p_record_type_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+declare
+  context_organization_id uuid := (p_context ->> 'organizationId')::uuid;
+  context_application_root_id uuid := (p_context ->> 'applicationRootId')::uuid;
+  checked_at timestamptz := pg_catalog.clock_timestamp();
+  authority jsonb;
+begin
+  -- A preview never grants share authority: its draft roles must not reach live records, so a
+  -- request that runs a preview has none.
+  if p_context ? 'delegatedContext' or p_context ? 'supportContext'
+    or context_organization_id is null or context_application_root_id is null
+    or p_module_root_id is null
+    or nullif(
+      pg_catalog.current_setting('vortex_record.preview_installation_id', true), ''
+    ) is not null then
+    return pg_catalog.jsonb_build_object(
+      'recordTypeIds', '[]'::jsonb,
+      'readableFieldIds', '[]'::jsonb,
+      'changeableFieldIds', '[]'::jsonb
+    );
+  end if;
+
+  with current_entries as materialized (
+    select entry.*
+    from vortex_access.permission_catalogue_entries as entry
+    join vortex_access.permission_registrations as registration
+      on registration.organization_id = entry.organization_id
+      and registration.registration_kind = entry.registration_kind
+      and registration.registration_owner_id = entry.registration_owner_id
+      and registration.revision = entry.registration_revision
+      and registration.state = 'active'
+    where entry.organization_id = context_organization_id
+      and entry.application_root_id = context_application_root_id
+      and entry.record_type_id is not null
+      and (p_record_type_id is null or entry.record_type_id = p_record_type_id)
+  ), module_record_types as materialized (
+    select distinct entry.record_type_id
+    from current_entries as entry
+    where entry.owner_kind = 'module'
+      and entry.owner_id = p_module_root_id
+  ), candidates as materialized (
+    select entry.record_type_id, entry.action_kind, entry.field_policy,
+      entry.owner_kind, entry.owner_id, entry.permission_id
+    from current_entries as entry
+    join module_record_types as scoped
+      on scoped.record_type_id = entry.record_type_id
+    where (
+        (entry.owner_kind = 'application' and entry.owner_id = context_application_root_id)
+        or (entry.owner_kind = 'module' and entry.owner_id = p_module_root_id)
+      )
+      and entry.action_kind in ('share', 'read', 'update')
+      and entry.named_action is null
+      and entry.record_scope is not null
+      and exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(entry.record_scope -> 'routes') as route(value)
+        where route.value ->> 'kind' = 'all_records'
+      )
+      and not (entry.record_scope ? 'savedCondition')
+  ), effective as materialized (
+    select candidate.*
+    from candidates as candidate
+    where exists (
+      select 1
+      from vortex_access.evaluate_permission_role_path_internal(
+        p_context,
+        checked_at,
+        pg_catalog.jsonb_build_object(
+          'applicationRootId', context_application_root_id,
+          'ownerKind', candidate.owner_kind,
+          'ownerId', candidate.owner_id,
+          'permissionId', candidate.permission_id
+        ),
+        pg_catalog.jsonb_build_object('actionKind', candidate.action_kind),
+        candidate.record_type_id
+      ) as path
+      where path.path_valid_until > checked_at
+    )
+  ), shareable_types as materialized (
+    select distinct effective.record_type_id
+    from effective
+    where effective.action_kind = 'share'
+  )
+  select pg_catalog.jsonb_build_object(
+    'recordTypeIds', coalesce((
+      select pg_catalog.jsonb_agg(shareable.record_type_id order by shareable.record_type_id)
+      from shareable_types as shareable
+    ), '[]'::jsonb),
+    'readableFieldIds', coalesce((
+      select pg_catalog.jsonb_agg(distinct pg_catalog.lower(field.value))
+      from effective
+      join shareable_types as shareable
+        on shareable.record_type_id = effective.record_type_id
+      cross join lateral pg_catalog.jsonb_array_elements_text(
+        case when pg_catalog.jsonb_typeof(effective.field_policy -> 'readableFieldIds') = 'array'
+          then effective.field_policy -> 'readableFieldIds' else '[]'::jsonb end
+      ) as field(value)
+      where effective.action_kind = 'read'
+    ), '[]'::jsonb),
+    'changeableFieldIds', coalesce((
+      select pg_catalog.jsonb_agg(distinct pg_catalog.lower(field.value))
+      from effective
+      join shareable_types as shareable
+        on shareable.record_type_id = effective.record_type_id
+      cross join lateral pg_catalog.jsonb_array_elements_text(
+        case when pg_catalog.jsonb_typeof(effective.field_policy -> 'changeableFieldIds') = 'array'
+          then effective.field_policy -> 'changeableFieldIds' else '[]'::jsonb end
+      ) as field(value)
+      where effective.action_kind = 'update'
+    ), '[]'::jsonb)
+  )
+  into authority;
+
+  return authority;
+end
+$$;
+
+alter function vortex_access.record_share_grant_source_authority_internal(p_context jsonb, p_module_root_id uuid, p_record_type_id uuid) owner to vortex_owner;
+
+REVOKE ALL ON FUNCTION vortex_access.record_share_grant_source_authority_internal(p_context jsonb, p_module_root_id uuid, p_record_type_id uuid) FROM PUBLIC;
+
+grant execute on function vortex_access.record_share_grant_source_authority_internal(p_context jsonb, p_module_root_id uuid, p_record_type_id uuid) to postgres;
 
 reset role;

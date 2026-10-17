@@ -14,8 +14,11 @@ declare
   -- the first the builder can read in record order. The seed says when the bound was reached, and
   -- the preview tells the builder so.
   copy_limit constant integer := 2000;
-  -- A table the builder can mostly not read is scanned only this far; the seed is then bounded too.
+  -- A table the builder can mostly not read is scanned only this far. That is a silent
+  -- performance bound: it says nothing about how many live records exist.
   scan_limit constant integer := 20000;
+  counter_mapping record;
+  copied_maximum numeric;
   scanned_count integer := 0;
   bounded boolean := false;
   live_table_token text;
@@ -97,10 +100,7 @@ begin
     )
   loop
     scanned_count := scanned_count + 1;
-    if scanned_count > scan_limit then
-      bounded := true;
-      exit;
-    end if;
+    exit when scanned_count > scan_limit;
     select projected.projection, projected.read_bounds into row_read
     from vortex_record.read_record_projection_internal(
       p_record_type_id, live_record.record_id
@@ -128,15 +128,30 @@ begin
     copied_count := copied_count + 1;
   end loop;
 
-  insert into vortex_record.preview_reference_counters (
-    preview_installation_id, storage_contract_id, field_id, next_number
-  )
-  select p_preview_installation_id, p_preview_storage_contract_id, counter.field_id,
-    counter.next_number
-  from vortex_record.record_reference_counters as counter
-  where counter.storage_contract_id = p_live_storage_contract_id
-    and counter.organization_id = vortex_platform.organization_id()
-    and counter.next_number >= 2;
+  -- Each reference-number counter continues after the highest number among the copied records,
+  -- never from the live counter, which would reveal how many live records exist.
+  for counter_mapping in
+    select mapping.field_id, mapping.physical_column_token
+    from vortex_record.field_storage_mappings as mapping
+    where mapping.storage_contract_id = p_preview_storage_contract_id
+      and mapping.state = 'active'
+      and mapping.field_definition ->> 'type' = 'reference_number'
+      and mapping.physical_column_token = any(field_columns)
+    order by mapping.field_id
+  loop
+    execute pg_catalog.format(
+      'select pg_catalog.max(pg_catalog.substring(%I from ''([0-9]+)[^0-9]*$'')::numeric) from record_data.%I where storage_contract_id = %L::uuid',
+      counter_mapping.physical_column_token, preview_table_token, p_preview_storage_contract_id
+    ) into copied_maximum;
+    if copied_maximum is not null then
+      insert into vortex_record.preview_reference_counters (
+        preview_installation_id, storage_contract_id, field_id, next_number
+      ) values (
+        p_preview_installation_id, p_preview_storage_contract_id, counter_mapping.field_id,
+        copied_maximum + 1
+      );
+    end if;
+  end loop;
   return pg_catalog.jsonb_build_object('copied', copied_count, 'bounded', bounded);
 exception
   when no_data_found then
@@ -152,4 +167,4 @@ revoke all on function vortex_record.copy_live_records_to_preview_internal(uuid,
 grant execute on function vortex_record.copy_live_records_to_preview_internal(uuid, uuid, uuid, uuid)
   to vortex_owner;
 comment on function vortex_record.copy_live_records_to_preview_internal(uuid, uuid, uuid, uuid) is
-  'Seeds one preview record table with the live records of the same record type that the request''s builder reads in the installed Application, each with only the fields they read there, and the reference counters: the first 2,000 they read, in record order, within the first 20,000 records, and whether there were more.';
+  'Seeds one preview record table with the live records of the same record type that the request''s builder reads in the installed Application, each with only the fields they read there, and reference counters that continue after the copied records: the first 2,000 they read, in record order, and whether they read more.';

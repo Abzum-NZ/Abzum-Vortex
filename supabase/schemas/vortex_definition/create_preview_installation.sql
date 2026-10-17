@@ -108,12 +108,14 @@ begin
     raise exception using errcode = 'P0002', message = 'Application has no release to preview';
   end if;
 
-  -- One preview per Application: a new preview replaces the previous one and its storage.
+  -- One preview per Application and builder: a new preview replaces this builder's previous one
+  -- and its storage, never another builder's.
   for previous_preview in
     select preview.preview_installation_id
     from vortex_definition.preview_installations as preview
     where preview.organization_id = organization_id_value
       and preview.application_root_id = p_application_root_id
+      and preview.previewer_organization_account_id = organization_account_id_value
     order by preview.preview_installation_id
     for update
   loop
@@ -418,4 +420,4 @@ revoke all on function vortex_definition.create_preview_installation(uuid, bigin
 grant execute on function vortex_definition.create_preview_installation(uuid, bigint, jsonb)
   to vortex_request;
 comment on function vortex_definition.create_preview_installation(uuid, bigint, jsonb) is
-  'Replaces the 24-hour preview of one Application with a preview of its current draft: the releases its publication rehearsed, the exact Module pins they and the used Module releases name, the preview''s own permission registration whose draft roles only its builder holds, and empty isolated storage for every bound record type.';
+  'Replaces the builder''s 24-hour preview of one Application with a preview of its current draft: the releases its publication rehearsed, the exact Module pins they and the used Module releases name, the preview''s own permission registration whose draft roles only its builder holds, and empty isolated storage for every bound record type.';

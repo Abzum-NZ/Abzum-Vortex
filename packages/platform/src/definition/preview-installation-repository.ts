@@ -47,6 +47,11 @@ export type PreviewInstallationRepository = Readonly<{
    * only the fields of them, that its builder reads there.
    */
   seed(previewInstallationId: string): Promise<void>;
+  /**
+   * In the installed Application's own context: decides the preview's copied records again by
+   * the builder's current live access, removing what they can no longer read.
+   */
+  reconcile(previewInstallationId: string): Promise<void>;
   readApplicationIdentity(
     previewInstallationId: string,
   ): Promise<PreviewApplicationIdentity | undefined>;
@@ -111,6 +116,20 @@ export const createPreviewInstallationRepository = (
           ) as seeded
         `;
         if (rows.length !== 1 || rows[0]?.seeded === null || rows[0]?.seeded === undefined)
+          throw new DefinitionError("PREVIEW_INSTALLATION_FAILED");
+      } catch (error) {
+        throw mapFailure(error);
+      }
+    },
+
+    async reconcile(previewInstallationId) {
+      try {
+        const rows = await transaction.query<DatabaseRow & { readonly reconciled: unknown }>`
+          select vortex_definition.reconcile_preview_installation(
+            ${previewInstallationId}::uuid
+          ) as reconciled
+        `;
+        if (rows.length !== 1 || typeof rows[0]?.reconciled !== "boolean")
           throw new DefinitionError("PREVIEW_INSTALLATION_FAILED");
       } catch (error) {
         throw mapFailure(error);

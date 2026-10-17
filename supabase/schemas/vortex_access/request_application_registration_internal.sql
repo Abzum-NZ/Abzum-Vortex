@@ -19,6 +19,7 @@ set search_path = ''
 as $function$
 declare
   preview_address text;
+  identity_id_value uuid;
 begin
   -- The one place that says which permission registration a request to an Application runs
   -- under. A request without a preview address runs the active installed registration. A request
@@ -44,6 +45,30 @@ begin
     return;
   end if;
   if not pg_catalog.pg_input_is_valid(preview_address, 'uuid') then
+    return;
+  end if;
+  -- Every preview request needs the builder's current authority to manage definition drafts, so
+  -- a builder who loses it can no longer open a preview they opened before.
+  select account.identity_id into identity_id_value
+  from vortex_identity.organization_accounts as account
+  where account.organization_account_id = p_organization_account_id
+    and account.organization_id = p_organization_id;
+  if not found or not exists (
+    select 1
+    from vortex_access.evaluate_permission_role_path_internal(
+      pg_catalog.jsonb_build_object(
+        'organizationId', p_organization_id,
+        'organizationAccountId', p_organization_account_id,
+        'identityId', identity_id_value,
+        'expiresAt', pg_catalog.statement_timestamp() + interval '1 minute'
+      ),
+      pg_catalog.statement_timestamp(),
+      vortex_access.required_platform_permission('platform.organization.definition_drafts.manage'),
+      pg_catalog.jsonb_build_object('actionKind', 'manage'),
+      null
+    ) as path
+    where path.path_valid_until is not null
+  ) then
     return;
   end if;
   return query
@@ -72,4 +97,4 @@ revoke all on function vortex_access.request_application_registration_internal(u
     vortex_record_adapter;
 
 comment on function vortex_access.request_application_registration_internal(uuid, uuid, uuid) is
-  'The permission registration one organisation account''s request to an Application runs under: the active installed registration, or, for a request with a preview address, only the registration of that unexpired preview, which only the builder who opened it holds.';
+  'The permission registration one organisation account''s request to an Application runs under: the active installed registration, or, for a request with a preview address, only the registration of that unexpired preview, which only the builder who opened it holds, and only while they may manage definition drafts.';
