@@ -237,34 +237,13 @@ begin
 end
 $function$;
 
-create or replace function vortex_access.evaluate_organization_record_access_page_internal(
-  p_rows jsonb,
-  p_jobs jsonb
-)
-returns jsonb
-language sql
-volatile
-security invoker
-set search_path = ''
-as $function$
-  select vortex_access.evaluate_organization_record_access_page_internal(p_rows, p_jobs, null::jsonb)
-$function$;
-
 alter function vortex_access.evaluate_organization_record_access_page_internal(jsonb,jsonb,jsonb)
-  owner to vortex_owner;
-alter function vortex_access.evaluate_organization_record_access_page_internal(jsonb,jsonb)
   owner to vortex_owner;
 
 revoke all on function vortex_access.evaluate_organization_record_access_page_internal(jsonb,jsonb,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.evaluate_organization_record_access_page_internal(jsonb,jsonb,jsonb)
   to vortex_record_adapter;
-revoke all on function vortex_access.evaluate_organization_record_access_page_internal(jsonb,jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_access.evaluate_organization_record_access_page_internal(jsonb,jsonb)
-  to vortex_record_adapter;
 
 comment on function vortex_access.evaluate_organization_record_access_page_internal(jsonb,jsonb,jsonb) is
   'Private page access decision over already validated read facts: shares eligibility by action declaration, decides every record whose routes have an exact set form in one set pass per declaration, and keeps the exact row-scope composition for every other record; a compact page row carries only its own record fact and shares the one page envelope''s facts, which are never copied per action job.';
-comment on function vortex_access.evaluate_organization_record_access_page_internal(jsonb,jsonb) is
-  'Private page access decision over rows that each carry their complete read facts; delegates to the envelope variant.';
