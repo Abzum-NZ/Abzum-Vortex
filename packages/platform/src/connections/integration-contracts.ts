@@ -65,7 +65,16 @@ export const connectionAuthenticationSchema = z.discriminatedUnion("kind", [
 export const connectionShapeFieldSchema = z
   .object({
     key: builderKeySchema,
-    type: z.enum(["text", "number", "boolean", "date", "date_time", "record_reference", "json"]),
+    type: z.enum([
+      "text",
+      "whole_number",
+      "decimal_number",
+      "yes_no",
+      "date",
+      "date_time",
+      "record_reference",
+      "json",
+    ]),
     required: z.boolean(),
   })
   .strict();
