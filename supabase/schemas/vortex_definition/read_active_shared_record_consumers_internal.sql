@@ -253,7 +253,6 @@ begin
       if storage_provision.module_root_id is distinct from module_binding.module_root_id
         or storage_provision.release_revision is distinct from module_binding.module_release_revision
         or storage_provision.storage_contract_ids is null
-        or pg_catalog.cardinality(storage_provision.storage_contract_ids) = 0
         or module_binding.storage_contract_ids is distinct from storage_provision.storage_contract_ids
         or exists (
           select 1
@@ -266,10 +265,10 @@ begin
           from pg_catalog.unnest(storage_provision.storage_contract_ids) as stored(contract_id)
           group by stored.contract_id having pg_catalog.count(*) <> 1
         )
-        or storage_provision.storage_contract_ids is distinct from (
+        or storage_provision.storage_contract_ids is distinct from coalesce((
           select pg_catalog.array_agg(stored.contract_id order by stored.contract_id)
           from pg_catalog.unnest(storage_provision.storage_contract_ids) as stored(contract_id)
-        ) then
+        ), array[]::uuid[]) then
         continue application_loop;
       end if;
 

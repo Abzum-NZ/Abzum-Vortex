@@ -3,7 +3,6 @@ import {
   platformBlockReleaseIdentity,
   projectPlatformCatalogueDiscovery,
   type BlockPaletteGroup,
-  type BlockPropertySchemaContract,
   type BlockReferencePropertyKind,
   type ComponentDiscovery,
   type ComponentPropertyControl,
@@ -22,17 +21,9 @@ import {
  * that draft and grant nothing; validation remains the authority on save and publish.
  */
 
-type ThemeTokenKind = Extract<BlockPropertySchemaContract, { kind: "theme_token" }>["tokenKind"];
-
 export type StudioReferenceOption = Readonly<{ id: string; key: string; label: string }>;
 
-export type StudioThemeTokenOption = Readonly<{
-  tokenKey: string;
-  tokenKind: ThemeTokenKind;
-  label: string;
-}>;
-
-/** Reference targets and theme tokens of the application draft being edited. */
+/** Reference targets of the application draft being edited. */
 export type StudioDiscoveryContext = Readonly<{
   /** `type` is the page type; a public page may link only to other public pages. */
   pages?: readonly Readonly<{ pageId: string; key: string; name: string; type: string }>[];
@@ -53,7 +44,6 @@ export type StudioDiscoveryContext = Readonly<{
   }>[];
   pipelines?: readonly Readonly<{ pipelineId: string; key: string; name: string }>[];
   assets?: readonly Readonly<{ assetId: string; name: string }>[];
-  themeTokens?: readonly StudioThemeTokenOption[];
 }>;
 
 /** The surface of the page being edited. Shells are always validated as authenticated. */
@@ -91,8 +81,6 @@ export type InspectorPropertyChoice = Readonly<{
    * record is runtime data found through a governed record search, not a draft definition.
    */
   referenceChoices?: readonly StudioReferenceOption[];
-  /** Tokens of the declared kind for a theme-token property. */
-  themeTokenChoices?: readonly StudioThemeTokenOption[];
   /** Choices for the properties of a group. */
   properties?: readonly InspectorPropertyChoice[];
   /** Choice for each item of a list. */
@@ -246,7 +234,6 @@ export function createStudioDiscoveryAdapter(
   ): InspectorPropertyChoice | undefined => {
     const kind = control.referenceKind;
     if (kind !== undefined && isPublic && publicRefusedReferenceKinds.has(kind)) return undefined;
-    const declaration = control.declaration;
     const properties =
       control.properties === undefined
         ? undefined
@@ -265,15 +252,6 @@ export function createStudioDiscoveryAdapter(
             referenceChoices: getReferenceChoices(
               kind,
               recordTypeId === undefined ? {} : { recordTypeId },
-            ),
-          }
-        : {}),
-      ...(declaration.kind === "theme_token"
-        ? {
-            themeTokenChoices: Object.freeze(
-              (context.themeTokens ?? []).filter(
-                (token) => token.tokenKind === declaration.tokenKind,
-              ),
             ),
           }
         : {}),

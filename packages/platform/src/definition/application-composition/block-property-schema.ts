@@ -23,7 +23,6 @@ import {
   blockPropertyValueSchema,
   type SourceBlockPropertyValueContract,
 } from "./block-property-values";
-import type { themeTokenKindSchema } from "./theme";
 
 /**
  * The control an automatic field input renders, chosen from its referenced module field type by the
@@ -74,10 +73,6 @@ export type BlockPropertySchemaContract =
       allowedElements: z.infer<typeof richTextElementKindSchema>[];
     })
   | (BlockPropertySchemaBase & { kind: "url" | "asset_reference" | "icon" })
-  | (BlockPropertySchemaBase & {
-      kind: "theme_token";
-      tokenKind: z.infer<typeof themeTokenKindSchema>;
-    })
   | (BlockPropertySchemaBase & {
       kind:
         | "field_reference"
@@ -416,10 +411,6 @@ export const typedSourceSettingValue = (
       const parsed = text(builderKeySchema);
       return parsed === undefined ? undefined : { kind: "icon", icon_key: parsed };
     }
-    case "theme_token": {
-      const parsed = text(builderKeySchema);
-      return parsed === undefined ? undefined : { kind: "theme_token", token: parsed };
-    }
     case "field_reference": {
       const parsed = text(sourceQualifiedFieldSchema);
       return parsed === undefined ? undefined : { kind: "field_reference", field: parsed };
@@ -548,8 +539,6 @@ export const plainSourceSettingValue = (value: SourceBlockPropertyValueContract)
       return value.asset_id;
     case "icon":
       return value.icon_key;
-    case "theme_token":
-      return value.token;
     case "field_reference":
       return value.field;
     case "relationship_reference":
@@ -591,8 +580,6 @@ export const plainSettingValue = (value: BlockPropertyValueContract): unknown =>
       return value.assetId;
     case "icon":
       return value.iconKey;
-    case "theme_token":
-      return value.tokenKey;
     case "field_reference":
       return value.fieldId;
     case "relationship_reference":
@@ -640,8 +627,6 @@ const typedSettingCandidate = (
       return { kind: declaration.kind, assetId: value };
     case "icon":
       return { kind: declaration.kind, iconKey: value };
-    case "theme_token":
-      return { kind: declaration.kind, tokenKey: value };
     case "field_reference":
       return { kind: declaration.kind, fieldId: value };
     case "relationship_reference":
@@ -816,25 +801,6 @@ export const blockPropertySchema: z.ZodType<BlockPropertySchemaContract> = z.laz
         .strict(),
       z
         .object({ ...propertySchemaBase, kind: sourceProvenanceUnchanged(z.literal("icon")) })
-        .strict(),
-      z
-        .object({
-          ...propertySchemaBase,
-          kind: sourceProvenanceUnchanged(z.literal("theme_token")),
-          tokenKind: sourceProvenanceUnchanged(
-            z.enum([
-              "color_pair",
-              "typography",
-              "spacing",
-              "corners",
-              "border",
-              "elevation",
-              "focus",
-              "asset",
-              "density",
-            ]),
-          ),
-        })
         .strict(),
       z
         .object({
