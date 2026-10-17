@@ -5,7 +5,7 @@ const fields = [
     key: "occurred_at",
     label: "Occurred",
     type: "date_time",
-    settings: { display_time_zone: "organisation" },
+    settings: { display_time_zone: "organization" },
   },
   { key: "actor_kind", label: "Actor kind", type: "text", settings: { max_length: 40 } },
   {
@@ -31,7 +31,7 @@ export const activityRecordType = {
   plural_name: "Activity",
   title_field: "action",
   storage_contract_id: "srt_org_admin_activity_entry",
-  storage_scope: "organisation_shared",
+  storage_scope: "organization_shared",
   ownership_mode: "none",
   standard_actions: ["read"],
   custom_actions: [],
@@ -87,6 +87,7 @@ export const activityReadPermission = {
 export const activityQuery = {
   id: "qry_activity_entries",
   key: "activity_entries",
+  label: "Activity",
   record_type: "activity_entry",
   inputs: [],
   select: ["occurred_at", "actor_kind", "actor", "action", "subject_count", "changed_field_count"],

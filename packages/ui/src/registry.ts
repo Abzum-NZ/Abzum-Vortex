@@ -82,7 +82,6 @@ const RESERVED_RENDER_PROP_NAMES: ReadonlySet<string> = new Set([
   "breakpoint",
   "responsiveLayout",
   "metadata",
-  "themeOverrides",
   "availability",
   "unavailableReason",
   "projectedNavigation",
@@ -180,7 +179,6 @@ export type PlatformBlockRenderProps = Readonly<{
   responsiveLayout?: boolean;
   metadata: PlatformBlockRelease;
   fieldInputControlReleases: FieldInputControlReleaseMap;
-  themeOverrides?: Readonly<Record<string, unknown>>;
   availability: "available" | "unavailable";
   unavailableReason?: "operation_unavailable";
   /**
@@ -241,7 +239,7 @@ export type PlatformComponentRegistration = Readonly<{
     | Readonly<{
         metadata?: never;
         releaseIdentity: Readonly<{ key: string; releaseVersion: string }>;
-    }>
+      }>
   );
 
 /** Registration after its exact release identity has been resolved from the supplied catalogue. */

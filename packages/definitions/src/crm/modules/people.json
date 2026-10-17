@@ -11,7 +11,7 @@
       "plural_name": "Contacts",
       "title_field": "full_name",
       "storage_contract_id": "srt_00000002",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "group",
       "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
       "custom_actions": [],
@@ -211,7 +211,7 @@
       "title_field": "display_name",
       "storage_contract_id": "srt_00000003",
       "storage_scope": "application_contained",
-      "ownership_mode": "organisation_account",
+      "ownership_mode": "organization_account",
       "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
       "custom_actions": ["act_lead_convert"],
       "fields": [
@@ -1033,6 +1033,7 @@
     {
       "id": "qry_crm_contacts",
       "key": "crm_contacts",
+      "label": "Contacts",
       "record_type": "contact",
       "inputs": [],
       "select": ["contact_number", "full_name", "email", "company", "relationship_owner"],
@@ -1082,6 +1083,7 @@
     {
       "id": "qry_crm_leads",
       "key": "crm_leads",
+      "label": "Leads",
       "record_type": "lead",
       "inputs": [],
       "select": [

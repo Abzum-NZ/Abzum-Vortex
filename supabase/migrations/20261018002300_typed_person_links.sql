@@ -263,6 +263,7 @@ exception
     raise exception using errcode = '22023', message = 'Typed record condition is invalid';
 end
 $_$;
+
 alter function vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) IS 'Owner-only pure predicate for one sealed permission saved condition over trusted versioned record values and a protected current organization account.';
@@ -270,172 +271,6 @@ COMMENT ON FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_s
 REVOKE ALL ON FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) FROM PUBLIC;
 
 grant execute on function vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) to postgres;
-
-create or replace function vortex_access.list_organization_activity_entries_projection(
-  p_record_ids uuid[],
-  p_sort_key text,
-  p_direction text,
-  p_after jsonb,
-  p_limit integer
-)
-returns table (
-  organization_id uuid,
-  record_id uuid,
-  revision bigint,
-  attribute_values jsonb
-)
-language plpgsql
-volatile
-security definer
-set search_path = ''
-as $function$
-declare
-  checked_context jsonb;
-  visible_organization_id uuid;
-  actor_identity_id uuid;
-  actor_account_id uuid;
-  person_record_type_id uuid;
-  decision_outcome text;
-  decision_organization_id uuid;
-  decision_account_id uuid;
-  audit_projection boolean;
-  after_occurred_at timestamptz;
-  after_record_id uuid;
-  keyset_sql text := '';
-  base_sql text;
-  source_sql text;
-  order_sql text;
-  scan_sql text;
-begin
-  if p_sort_key <> 'occurred_at' or p_direction not in ('ascending', 'descending')
-    or p_sort_key is null or p_direction is null
-    or (p_limit is not null and p_limit < 1) then
-    raise exception using errcode = '22023', message = 'Activity projection bounds are invalid';
-  end if;
-  if p_after is not null then
-    if pg_catalog.jsonb_typeof(p_after) <> 'object'
-      or pg_catalog.jsonb_typeof(p_after -> 'sortKey') is distinct from 'array'
-      or pg_catalog.jsonb_array_length(p_after -> 'sortKey') <> 1
-      or pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0) <> 'string'
-      or pg_catalog.jsonb_typeof(p_after -> 'recordId') is distinct from 'string' then
-      raise exception using errcode = '22023', message = 'Activity projection cursor is invalid';
-    end if;
-    begin
-      after_occurred_at := (p_after -> 'sortKey' ->> 0)::timestamptz;
-      after_record_id := (p_after ->> 'recordId')::uuid;
-    exception when invalid_text_representation or datetime_field_overflow then
-      raise exception using errcode = '22023', message = 'Activity projection cursor is invalid';
-    end;
-    keyset_sql := case when p_direction = 'descending'
-      then ' and (entry.occurred_at, entry.activity_id) < ($6, $7)'
-      else ' and (entry.occurred_at, entry.activity_id) > ($6, $7)' end;
-  end if;
-  begin
-    checked_context := vortex_access.validated_human_request_context();
-    visible_organization_id := (checked_context ->> 'organizationId')::uuid;
-    actor_identity_id := (checked_context ->> 'identityId')::uuid;
-    actor_account_id := (checked_context ->> 'organizationAccountId')::uuid;
-    perform 1 from vortex_access.resolve_human_organization_scope(
-      actor_identity_id, visible_organization_id
-    );
-  exception
-    when insufficient_privilege or no_data_found then
-      return;
-  end;
-
-  select evaluated.outcome, evaluated.organization_id, evaluated.organization_account_id
-  into decision_outcome, decision_organization_id, decision_account_id
-  from vortex_access.evaluate_organization_permission_eligibility(
-    pg_catalog.jsonb_build_object(
-      'operationKey', 'platform.organization.permissions.read',
-      'action', pg_catalog.jsonb_build_object('actionKind', 'read'),
-      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
-      'requiredPermission', vortex_access.required_platform_permission(
-        'platform.organization.permissions.read'
-      ),
-      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
-      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
-    )
-  ) as evaluated;
-  audit_projection := coalesce(
-    decision_outcome = 'eligible'
-      and decision_organization_id = visible_organization_id
-      and decision_account_id = actor_account_id,
-    false
-  );
-
-  select (item.value ->> 'recordTypeId')::uuid into strict person_record_type_id
-  from pg_catalog.jsonb_array_elements(
-    vortex_definition.read_current_active_installation() -> 'moduleBindings'
-  ) as binding(value)
-  join vortex_definition.runtime_releases as release
-    on release.root_id = (binding.value ->> 'moduleRootId')::uuid
-    and release.release_revision = (binding.value ->> 'moduleReleaseRevision')::bigint
-  cross join lateral pg_catalog.jsonb_array_elements(
-    release.compilation_output #> '{canonical,content,recordTypes}'
-  ) as item(value)
-  where item.value #>> '{systemProjection,protectedView}' = 'organization_accounts';
-
-  order_sql := pg_catalog.format(
-    ' order by entry.occurred_at %s, entry.activity_id %s limit $8',
-    case when p_direction = 'descending' then 'desc' else 'asc' end,
-    case when p_direction = 'descending' then 'desc' else 'asc' end
-  );
-  base_sql := $scan$select entry.*
-    from vortex_record.organization_activity_entries as entry
-    where entry.organization_id = $1
-      and entry.occurred_at >= pg_catalog.statement_timestamp() - interval '90 days'
-      and ($2 is null or entry.activity_id = any($2))$scan$;
-  if audit_projection then
-    source_sql := base_sql || keyset_sql || order_sql;
-  else
-    source_sql := 'select visible.* from (('
-      || base_sql
-      || ' and entry.actor_kind = ''organization_account'' and entry.actor_id = $4'
-      || keyset_sql || order_sql
-      || ') union all ('
-      || base_sql
-      || ' and entry.actor_kind = ''identity'' and entry.actor_id = $5'
-      || keyset_sql || order_sql
-      || ')) as visible'
-      || pg_catalog.format(' order by visible.occurred_at %s, visible.activity_id %s limit $8',
-        case when p_direction = 'descending' then 'desc' else 'asc' end,
-        case when p_direction = 'descending' then 'desc' else 'asc' end);
-  end if;
-  scan_sql := $scan$select
-    entry.organization_id,
-    entry.activity_id,
-    1::bigint,
-    pg_catalog.jsonb_build_object(
-      'organization_id', entry.organization_id::text,
-      'revision', 1,
-      'occurred_at', entry.occurred_at,
-      'actor_kind', case entry.actor_kind
-        when 'organization_account' then 'Person'
-        when 'identity' then 'Platform operator'
-        when 'system' then 'System'
-        when 'public_session' then 'Public visitor'
-        else 'Other' end,
-      'actor', case when entry.actor_kind = 'organization_account'
-        then pg_catalog.jsonb_build_object(
-          'recordTypeId', person_record_type_id::text,
-          'recordId', entry.actor_id::text
-        )
-        else null end,
-      'action', entry.action,
-      'subject_count', pg_catalog.cardinality(entry.subject_ids),
-      'changed_field_count', case when $3
-        then pg_catalog.cardinality(entry.changed_field_ids) else null end
-    )
-  from ($scan$ || source_sql || $scan$) as entry$scan$
-    || pg_catalog.format(' order by entry.occurred_at %s, entry.activity_id %s',
-      case when p_direction = 'descending' then 'desc' else 'asc' end,
-      case when p_direction = 'descending' then 'desc' else 'asc' end);
-  return query execute scan_sql using visible_organization_id, p_record_ids,
-    audit_projection, actor_account_id, actor_identity_id,
-    after_occurred_at, after_record_id, p_limit;
-end
-$function$;
 
 create or replace function vortex_access.list_organization_activity_entries_projection(
   p_record_ids uuid[],
@@ -612,17 +447,6 @@ grant execute on function vortex_access.list_organization_activity_entries_proje
 alter function vortex_access.list_organization_activity_entries_projection(
   uuid[], text, text, jsonb, integer
 ) owner to vortex_owner;
-
-revoke all on function vortex_access.list_organization_activity_entries_projection(uuid, integer)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_access.list_organization_activity_entries_projection(uuid, integer)
-  to vortex_owner, vortex_record_adapter;
-comment on function vortex_access.list_organization_activity_entries_projection(uuid, integer) is
-  'Recent organisation activity projection; own rows or the existing permissions-read audit view, with counts and no payload or identifier lists.';
-alter function vortex_access.list_organization_activity_entries_projection(uuid, integer)
-  owner to vortex_owner;
-grant execute on function vortex_access.list_organization_activity_entries_projection(uuid, integer)
-  to postgres;
 
 CREATE OR REPLACE FUNCTION vortex_record.database_value_type(p_field jsonb) RETURNS text
     LANGUAGE sql IMMUTABLE
@@ -847,6 +671,7 @@ declare
   protected_view_key text;
   reader_schema_value text;
   reader_function_value text;
+  reader_sort_key_value text;
   field_columns_sql text;
   projection_view_sql text;
   existing_columns text[];
@@ -976,11 +801,15 @@ begin
     protected_view_key := null;
     reader_schema_value := null;
     reader_function_value := null;
+    reader_sort_key_value := null;
     projection_view_sql := null;
     if is_projection then
       protected_view_key := record_type #>> '{systemProjection,protectedView}';
-      select registered.reader_schema, registered.reader_function
-      into reader_schema_value, reader_function_value
+      -- The view reads every row in the reader's first registered cursor order, which each
+      -- reader accepts without a page limit.
+      select registered.reader_schema, registered.reader_function,
+        registered.cursor_sort_keys[1]
+      into reader_schema_value, reader_function_value, reader_sort_key_value
       from vortex_record.protected_read_model_views as registered
       where registered.protected_read_model_key = protected_view_key;
       if not found then
@@ -1058,10 +887,10 @@ begin
            null::uuid as deleted_by,
            null::timestamptz as removal_due_at,
            %s
-         from %I.%I(null::uuid, null::integer) as projection',
+         from %I.%I(null::uuid[], %L, ''ascending'', null, null) as projection',
         table_token, p_module_root_id, record_type_id_value, storage_id,
         p_module_release_revision, field_columns_sql,
-        reader_schema_value, reader_function_value
+        reader_schema_value, reader_function_value, reader_sort_key_value
       );
     end if;
 
@@ -1454,6 +1283,7 @@ exception
     raise exception using errcode = '55000', message = 'Module storage evidence is ambiguous';
 end
 $function$;
+
 alter function vortex_record.provision_exact_module_storage(uuid,bigint) owner to vortex_owner;
 
 revoke all on function vortex_record.provision_exact_module_storage(uuid, bigint)
@@ -2430,6 +2260,7 @@ begin
   return result_value;
 end
 $function$;
+
 alter function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb) owner to vortex_owner;
 
 revoke all on function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb)
@@ -3393,7 +3224,7 @@ begin
       );
     else
       loaded := vortex_record.load_record_access_facts_internal(
-        p_record_type_id, 'update', p_record_id, p_expected_concurrency_number
+        p_record_type_id, 'update', p_record_id, p_expected_concurrency_number, null::jsonb
       );
     end if;
     if loaded ->> 'outcome' = 'conflict' then
@@ -3515,7 +3346,7 @@ begin
         end if;
 
         target_loaded := vortex_record.load_record_access_facts_internal(
-          target_record_type_id, 'read', target_record_id, null
+          target_record_type_id, 'read', target_record_id, null, null::jsonb
         );
         if target_loaded ->> 'outcome' <> 'loaded'
           or pg_catalog.jsonb_typeof(target_loaded -> 'declaration') <> 'object' then
@@ -4539,7 +4370,7 @@ begin
 
   if required_permissions is null then
     return query select false, null::uuid, array[]::uuid[], array[]::uuid[],
-      array[]::text[], 'true'::text, '[]'::jsonb;
+      array[]::text[], 'false'::text, '[]'::jsonb;
     return;
   end if;
 
@@ -5356,6 +5187,11 @@ begin
       -- examined. A planning failure propagates; it never widens the scan.
       select plan.* into access_plan
       from vortex_record.plan_record_read_scan_internal(record_type_id_value) as plan;
+      -- No eligible read alternative admits any record. Report a refusal before
+      -- an empty scan can be mistaken for an empty query result.
+      if access_plan.access_predicate = 'false' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'read_forbidden');
+      end if;
       readable_field_ids := coalesce(access_plan.readable_field_ids, array[]::text[]);
       prepared_plan := prepared_plan || pg_catalog.jsonb_build_object(
         'storage', pg_catalog.jsonb_build_object(
@@ -5620,6 +5456,7 @@ begin
   );
 end
 $function$;
+
 alter function vortex_record.prepare_module_query_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb,text,jsonb) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.prepare_module_query_internal(uuid, uuid, bigint, jsonb, jsonb, jsonb, text, jsonb)
@@ -7131,8 +6968,6 @@ grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jso
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid) is
   'One bounded keyset page of rows readable through read_record for one installed Module query, or one exact current human-owned preview query over isolated preview storage, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows an installed scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the installed scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; validates every preview stage against the current human, candidate revision and exact release and storage pins, uses only active preview catalogue mappings and preview field bounds, and never falls through to installed resolution; works out read-time fields, such as a deadline-passed calculation, inside an installed query at one statement timestamp in the organisation time zone, so no installed query is refused for freshness; admits board members only through a separately validated board selector over the sole filterable choice grouping key, reads one column''s member page or, for a board''s first pages, the first page of every requested column in one invocation with its own budget and position per column, classifies those columns from current readable values and, when the choice field is guaranteed readable on every scanned row, narrows each column''s candidate scan to its own stored choice value so a column reads only its own cards, and admits generic grouped members only when every installed grouping value is present in the current readable projection and JSONB-equal to the closed typed selector; missing or withheld values belong to no generic group while JSON null is a value, and generic group membership never uses hidden stored values or affects scan order or budget; orders board and generic group pages by record identity, returns generic group identity even for empty pages, and binds each member operation, selector and projection in its own uncached continuation; reads the copied records of a preview like installed ones and refuses a system projection in a preview.';
 
-grant execute on function vortex_record.validate_named_action_reference_inputs(text,uuid,bigint,uuid,uuid,jsonb)
-  to vortex_record_adapter;
 CREATE OR REPLACE FUNCTION vortex_record.validate_named_action_reference_inputs(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_inputs jsonb) RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''

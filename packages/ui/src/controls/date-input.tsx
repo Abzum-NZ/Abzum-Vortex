@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, type ChangeEvent, type ReactElement } from "react";
-import { format } from "date-fns";
 import { Icon } from "../icons/icon";
 import { Button } from "../components/button";
-import { Calendar } from "../components/calendar";
+import { Calendar, calendarDay } from "../components/calendar";
 import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/popover";
@@ -33,7 +32,7 @@ const toCalendarDay = (iso: string): Date | undefined =>
   isIsoCalendarDate(iso) ? new Date(`${iso}T00:00:00`) : undefined;
 
 /** The day a person chose in the month grid as an ISO calendar date, in the browser's own zone. */
-const toIsoCalendarDate = (day: Date): string => format(day, "yyyy-MM-dd");
+const toIsoCalendarDate = calendarDay;
 
 /**
  * ISO calendar date input emitting only its declared `field_changed` event. The typed value is

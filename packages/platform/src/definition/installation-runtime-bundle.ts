@@ -25,7 +25,7 @@ import {
   stableDefinitionReleaseVersionSchema,
   timestampSchema,
 } from "../catalogue/identifiers";
-import { recordOwnershipModeSchema } from "../records/record-ownership-compatibility";
+import { recordOwnershipModeSchema } from "../records/record-ownership-mode";
 import {
   permissionActionKindSchema,
   permissionDeclarationSchema,

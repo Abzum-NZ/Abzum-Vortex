@@ -175,7 +175,7 @@ begin
     end if;
     if action_loaded is null then
       action_loaded := vortex_record.load_record_access_facts_internal(
-        p_record_type_id, action_kind, p_record_id, null
+        p_record_type_id, action_kind, p_record_id, null, null::jsonb
       );
     end if;
     if action_loaded ->> 'outcome' = 'loaded'
@@ -224,33 +224,10 @@ begin
 end
 $function$;
 
-create or replace function vortex_record.read_record_capabilities_internal(
-  p_record_type_id uuid,
-  p_record_id uuid,
-  p_read_facts jsonb,
-  p_read_bounds jsonb
-)
-returns jsonb
-language sql
-volatile
-security invoker
-set search_path = ''
-as $function$
-  select vortex_record.read_record_capabilities_internal(
-    p_record_type_id, p_record_id, p_read_facts, p_read_bounds, null::jsonb
-  )
-$function$;
-
 alter function vortex_record.read_record_capabilities_internal(uuid,uuid,jsonb,jsonb,jsonb) owner to vortex_record_adapter;
-alter function vortex_record.read_record_capabilities_internal(uuid,uuid,jsonb,jsonb) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.read_record_capabilities_internal(uuid, uuid, jsonb, jsonb, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
-revoke all on function vortex_record.read_record_capabilities_internal(uuid, uuid, jsonb, jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-
 comment on function vortex_record.read_record_capabilities_internal(uuid, uuid, jsonb, jsonb, jsonb) is
-  'Private record capabilities with an optional protected projection action context the caller resolved once in this invocation for the same record type; otherwise as the four-argument form.';
-comment on function vortex_record.read_record_capabilities_internal(uuid, uuid, jsonb, jsonb) is
-  'Private record capabilities: returns the permitted update, delete and restore actions and changeable fields of one readable record, reusing the read facts and field bounds of its read decision.';
+  'Private record capabilities: returns the permitted update, delete and restore actions and changeable fields of one readable record, reusing the read facts and field bounds of its read decision, and the protected projection action context its caller resolved once in this invocation for the same record type when there is one.';

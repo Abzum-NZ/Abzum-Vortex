@@ -504,7 +504,6 @@
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -531,7 +530,6 @@
                         "release_version": "1.1.0"
                       },
                       "query": "vortex.service_desk.cases:service_desk_open_cases_by_status",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -561,7 +559,6 @@
                         "release_version": "1.0.0"
                       },
                       "query": "vortex.service_desk.cases:service_desk_open_cases_by_status",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -650,7 +647,6 @@
                         "release_version": "1.3.0"
                       },
                       "query": "vortex.service_desk.cases:service_desk_open_cases",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -678,7 +674,6 @@
                         "release_version": "1.0.0"
                       },
                       "view_permission": "application.service_desk.case.create",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -782,7 +777,6 @@
                         "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
                         "release_version": "1.2.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -811,7 +805,6 @@
                         "block_id": "39217bcc-8fd1-4825-afca-e97598a13f0a",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -863,7 +856,6 @@
                         "release_version": "1.3.0"
                       },
                       "query": "vortex.service_desk.cases:service_desk_case_comments",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1022,7 +1014,6 @@
                                     "block_id": "6f2c8d94-1a7b-4e53-8d90-3c5e7b1a4f28",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -1049,7 +1040,6 @@
                                     "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -1071,7 +1061,6 @@
                               "release_version": "1.0.0"
                             },
                             "view_permission": "application.service_desk.case.resolve",
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -1092,7 +1081,6 @@
                         "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
                         "release_version": "1.3.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1135,7 +1123,6 @@
                                     "block_id": "6f2c8d94-1a7b-4e53-8d90-3c5e7b1a4f28",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -1162,7 +1149,6 @@
                                     "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -1184,7 +1170,6 @@
                               "release_version": "1.0.0"
                             },
                             "view_permission": "application.service_desk.case.add_public_comment",
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -1205,7 +1190,6 @@
                         "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
                         "release_version": "1.3.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1233,7 +1217,6 @@
                         "release_version": "1.0.0"
                       },
                       "view_permission": "application.service_desk.case.update",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1294,7 +1277,6 @@
                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -1321,7 +1303,6 @@
                                     "block_id": "6f2c8d94-1a7b-4e53-8d90-3c5e7b1a4f28",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -1347,7 +1328,6 @@
                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -1372,7 +1352,6 @@
                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -1397,7 +1376,6 @@
                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -1423,7 +1401,6 @@
                                     "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -1444,7 +1421,6 @@
                               "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -1465,7 +1441,6 @@
                         "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
                         "release_version": "1.3.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1542,7 +1517,6 @@
                         "release_version": "1.3.0"
                       },
                       "query": "vortex.service_desk.knowledge:service_desk_knowledge",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1618,7 +1592,6 @@
                         "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
                         "release_version": "1.2.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1647,7 +1620,6 @@
                         "block_id": "39217bcc-8fd1-4825-afca-e97598a13f0a",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1675,7 +1647,6 @@
                         "release_version": "1.0.0"
                       },
                       "view_permission": "application.service_desk.article.publish",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1745,7 +1716,6 @@
                         "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
                         "release_version": "1.2.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1795,7 +1765,6 @@
                         "release_version": "1.0.0"
                       },
                       "view_permission": "application.service_desk.business_calendar.create",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1823,7 +1792,6 @@
                         "release_version": "1.0.0"
                       },
                       "view_permission": "application.service_desk.service_level.create",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1874,7 +1842,6 @@
                         "release_version": "1.3.0"
                       },
                       "query": "vortex.service_desk.sla:service_desk_service_levels",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1936,7 +1903,6 @@
                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -1993,7 +1959,6 @@
                                     "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -2014,7 +1979,6 @@
                               "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -2035,7 +1999,6 @@
                         "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
                         "release_version": "1.3.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2103,7 +2066,6 @@
                         "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
                         "release_version": "1.2.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2131,7 +2093,6 @@
                         "release_version": "1.0.0"
                       },
                       "view_permission": "application.service_desk.service_level.manage",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2200,7 +2161,6 @@
                         "release_version": "1.3.0"
                       },
                       "query": "vortex.service_desk.cases:service_desk_customers",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2292,7 +2252,6 @@
                         "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
                         "release_version": "1.2.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2344,7 +2303,6 @@
                         "release_version": "1.3.0"
                       },
                       "query": "vortex.service_desk.cases:service_desk_company_cases",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2372,7 +2330,6 @@
                         "release_version": "1.0.0"
                       },
                       "view_permission": "application.service_desk.case.create",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2441,7 +2398,6 @@
                         "release_version": "1.3.0"
                       },
                       "query": "vortex.service_desk.cases:service_desk_requesters",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2529,7 +2485,6 @@
                         "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
                         "release_version": "1.2.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2590,7 +2545,6 @@
                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -2615,7 +2569,6 @@
                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -2672,7 +2625,6 @@
                                     "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
                                     "release_version": "1.1.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -2700,7 +2652,6 @@
                                     "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -2728,7 +2679,6 @@
                                     "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -2755,7 +2705,6 @@
                                     "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -2776,7 +2725,6 @@
                               "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -2797,7 +2745,6 @@
                         "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
                         "release_version": "1.3.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2858,7 +2805,6 @@
                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -2890,7 +2836,6 @@
                                     "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
                                     "release_version": "1.1.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -2919,7 +2864,6 @@
                                     "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -2948,7 +2892,6 @@
                                     "block_id": "c8645b41-48b5-489c-bd2e-02283535a7c5",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -2976,7 +2919,6 @@
                                     "block_id": "e9418c36-3234-4806-a05a-0f259482238d",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -3003,7 +2945,6 @@
                                     "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                                     "release_version": "1.0.0"
                                   },
-                                  "theme_overrides": {},
                                   "responsive": {
                                     "desktop": {
                                       "visible": true,
@@ -3024,7 +2965,6 @@
                               "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3045,7 +2985,6 @@
                         "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
                         "release_version": "1.3.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -3110,7 +3049,6 @@
                         "release_version": "1.1.0"
                       },
                       "query": "vortex.service_desk.cases:service_desk_case_board",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -3186,9 +3124,9 @@
               }
             },
             "output_shape": {},
-            "authentication": "organisation_token",
+            "authentication": "organization_token",
             "permission": "vortex.service_desk.cases.case.assign",
-            "visibility": "organisation_private",
+            "visibility": "organization_private",
             "rate_limit_per_minute": 120,
             "maximum_request_bytes": 1000000,
             "duplicate_protection": "required",
@@ -3215,9 +3153,9 @@
                 }
               }
             },
-            "authentication": "organisation_token",
+            "authentication": "organization_token",
             "permission": "vortex.service_desk.cases.case.read",
-            "visibility": "organisation_private",
+            "visibility": "organization_private",
             "rate_limit_per_minute": 120,
             "maximum_request_bytes": 1000000,
             "duplicate_protection": "not_required",
@@ -3251,9 +3189,9 @@
               }
             },
             "output_shape": {},
-            "authentication": "organisation_token",
+            "authentication": "organization_token",
             "permission": "vortex.service_desk.cases.case.add_public_comment",
-            "visibility": "organisation_private",
+            "visibility": "organization_private",
             "rate_limit_per_minute": 120,
             "maximum_request_bytes": 1000000,
             "duplicate_protection": "required",
@@ -3475,7 +3413,6 @@
                           "block_id": "d5ecf8af-a6c4-4f0a-93e1-2c6d0a56a726",
                           "release_version": "1.0.0"
                         },
-                        "theme_overrides": {},
                         "responsive": {
                           "desktop": {
                             "visible": true,
@@ -3515,7 +3452,6 @@
                                 "block_id": "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
                                 "release_version": "1.0.0"
                               },
-                              "theme_overrides": {},
                               "responsive": {
                                 "desktop": {
                                   "visible": true,
@@ -3537,7 +3473,6 @@
                           "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
                           "release_version": "1.2.0"
                         },
-                        "theme_overrides": {},
                         "responsive": {
                           "desktop": {
                             "visible": true,
@@ -3558,7 +3493,6 @@
                     "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
                     "release_version": "1.3.0"
                   },
-                  "theme_overrides": {},
                   "responsive": {
                     "desktop": {
                       "visible": true,
@@ -3641,7 +3575,6 @@
                           "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
                           "release_version": "1.0.0"
                         },
-                        "theme_overrides": {},
                         "responsive": {
                           "desktop": {
                             "visible": true,
@@ -3663,7 +3596,6 @@
                     "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
                     "release_version": "1.3.0"
                   },
-                  "theme_overrides": {},
                   "responsive": {
                     "desktop": {
                       "visible": true,

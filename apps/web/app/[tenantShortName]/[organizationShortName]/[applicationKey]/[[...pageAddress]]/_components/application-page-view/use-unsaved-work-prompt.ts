@@ -1,47 +1,40 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { useRouter } from "next/navigation";
+import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { useUnsavedWorkGuard, useUnsavedWorkRegistry } from "@vortex/ui";
 
+/**
+ * Guards the page against losing unsaved work: the one shared confirmation prompt asks before a
+ * link, a flow's Navigate task or the browser leaves a page that holds input, and the returned
+ * `confirmDialog` is rendered once by the page.
+ */
 export function useUnsavedWorkPrompt({
   router,
 }: Readonly<{
   router: ReturnType<typeof useRouter>;
 }>) {
-  const [leavePromptOpen, setLeavePromptOpen] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
   const unsavedWorkRegistry = useUnsavedWorkRegistry();
 
-  const confirmationResolveRef = useRef<((leave: boolean) => void) | undefined>(undefined);
-  const confirmationPromiseRef = useRef<Promise<boolean> | undefined>(undefined);
-  const confirmDiscardUnsavedWork = useCallback((): Promise<boolean> => {
-    if (confirmationPromiseRef.current !== undefined) return Promise.resolve(false);
-    const confirmation = new Promise<boolean>((resolve) => {
-      confirmationResolveRef.current = resolve;
-    });
-    confirmationPromiseRef.current = confirmation;
-    setLeavePromptOpen(true);
-    return confirmation;
-  }, []);
-  const settleDiscardConfirmation = useCallback(
-    (leave: boolean) => {
-      const resolve = confirmationResolveRef.current;
-      if (resolve === undefined) return;
-      confirmationResolveRef.current = undefined;
-      confirmationPromiseRef.current = undefined;
-      setLeavePromptOpen(false);
+  // One leave question at a time: a second navigation while it is open stays on the page, so a
+  // queued prompt never asks again after the first answer has already discarded the work.
+  const asking = useRef(false);
+  const confirmDiscardUnsavedWork = useCallback(async (): Promise<boolean> => {
+    if (asking.current) return false;
+    asking.current = true;
+    try {
+      const leave = await confirm({
+        title: "Leave this page?",
+        description: "Your unsaved changes will be lost.",
+        confirmLabel: "Leave",
+        cancelLabel: "Stay",
+      });
       if (leave) unsavedWorkRegistry?.clearAll();
-      resolve(leave);
-    },
-    [unsavedWorkRegistry],
-  );
-  useEffect(
-    () => () => {
-      const resolve = confirmationResolveRef.current;
-      confirmationResolveRef.current = undefined;
-      confirmationPromiseRef.current = undefined;
-      resolve?.(false);
-    },
-    [],
-  );
+      return leave;
+    } finally {
+      asking.current = false;
+    }
+  }, [confirm, unsavedWorkRegistry]);
   const { hasUnsavedWork, guard: unsavedWork } = useUnsavedWorkGuard(confirmDiscardUnsavedWork);
 
   useEffect(() => {
@@ -106,5 +99,5 @@ export function useUnsavedWorkPrompt({
     return () => document.removeEventListener("click", onDocumentClick, true);
   }, [hasUnsavedWork, router, unsavedWork]);
 
-  return { unsavedWorkRegistry, unsavedWork, leavePromptOpen, settleDiscardConfirmation };
+  return { unsavedWorkRegistry, unsavedWork, confirmDialog };
 }

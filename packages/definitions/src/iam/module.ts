@@ -190,7 +190,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
       title_field: "title",
       storage_contract_id: "srt_iam_access_request",
       storage_scope: "application_contained",
-      ownership_mode: "organisation_account",
+      ownership_mode: "organization_account",
       standard_actions: [...standardActions],
       custom_actions: [],
       fields: [
@@ -504,6 +504,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
     {
       id: "qry_iam_access_requests",
       key: "iam_access_requests",
+      label: "Access requests",
       record_type: "access_request",
       inputs: [],
       select: ["request_number", "title", "request_type", "state", "beneficiary", "submitted_at"],

@@ -718,6 +718,7 @@
     {
       "id": "qry_sd_knowledge",
       "key": "service_desk_knowledge",
+      "label": "Knowledge articles",
       "record_type": "article",
       "inputs": [],
       "select": ["article_number", "title", "status", "public", "review_date", "author"],

@@ -114,7 +114,7 @@ const sourceDecimalSettingsSchema = z
   );
 const sourceMoneySettingsSchema = z
   .object({
-    currency_mode: sourceProvenanceTarget(z.enum(["fixed", "organisation_default"]), [
+    currency_mode: sourceProvenanceTarget(z.enum(["fixed", "organization_default"]), [
       "currencyMode",
     ]),
     currency: sourceProvenanceUnchanged(currencyCodeSchema.optional()),
@@ -149,7 +149,7 @@ const sourceDateSettingsSchema = z
 const sourceDateTimeSettingsSchema = z
   .object({
     display_time_zone: sourceProvenanceTarget(
-      z.enum(["person", "organisation", "utc"]).optional(),
+      z.enum(["person", "organization", "utc"]).optional(),
       ["displayTimeZone"],
     ),
   })

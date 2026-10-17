@@ -65,7 +65,7 @@ const deleteRules = [["refuse", "Refuse to delete the linked record"], ["empty_o
   ["soft_delete_dependent", "Delete this record too"]] as const;
 const resultTypes = [["text", "Text"], ["whole_number", "Whole number"], ["decimal_number", "Decimal number"],
   ["money", "Money"], ["yes_no", "Yes or no"], ["date", "Date"], ["date_time", "Date and time"]] as const;
-const currencyModes = [["organisation_default", "The organisation's currency"], ["fixed", "One fixed currency"]] as const;
+const currencyModes = [["organization_default", "The organisation's currency"], ["fixed", "One fixed currency"]] as const;
 const optionItem = (): Declaration => group("option", "Option", [
   text("value", "Stored value", true, 1, 120, "What is stored. It cannot change once records hold it."),
   text("label", "Label", true, 1, 60),
@@ -73,7 +73,7 @@ const optionItem = (): Declaration => group("option", "Option", [
 ]);
 const tableColumnTypes = [["text", "Text"], ["whole_number", "Whole number"], ["decimal_number", "Decimal number"],
   ["money", "Money"], ["yes_no", "Yes or no"], ["date", "Date"], ["date_time", "Date and time"], ["choice", "Choice"]] as const;
-const timeZones = [["person", "The person's time zone"], ["organisation", "The organisation's time zone"], ["utc", "UTC"]] as const;
+const timeZones = [["person", "The person's time zone"], ["organization", "The organisation's time zone"], ["utc", "UTC"]] as const;
 const textFormats = [["email_address", "Email address"], ["web_address", "Secure web address"], ["uuid", "Identifier (UUID)"]] as const;
 const numericOperations = [["add", "Add"], ["subtract", "Subtract"], ["multiply", "Multiply"], ["divide", "Divide"]] as const;
 
@@ -313,7 +313,7 @@ export const starterModuleFieldSettings = (
     case "long_text": return { max_length: 10_000 };
     case "formatted_text": return { allowed_blocks: ["paragraph", "heading", "list", "link"] };
     case "decimal_number": return { digits_before_decimal: 12, decimal_places: 2 };
-    case "money": return { currency_mode: "organisation_default" };
+    case "money": return { currency_mode: "organization_default" };
     case "choice": return { options: [{ value: "option_1", label: "Option 1" }] };
     case "several_choices": return { options: [{ value: "option_1", label: "Option 1" }] };
     case "reference_number": return { digits: 6 };

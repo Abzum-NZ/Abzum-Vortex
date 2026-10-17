@@ -2007,6 +2007,7 @@
     {
       "id": "qry_sd_open_cases",
       "key": "service_desk_open_cases",
+      "label": "Open cases",
       "record_type": "case",
       "inputs": [],
       "select": [
@@ -2097,6 +2098,7 @@
     {
       "id": "qry_sd_customers",
       "key": "service_desk_customers",
+      "label": "Customers",
       "record_type": "vortex.crm.organisations:company",
       "inputs": [],
       "select": ["company_number", "name", "phone", "website"],
@@ -2119,6 +2121,7 @@
     {
       "id": "qry_sd_requesters",
       "key": "service_desk_requesters",
+      "label": "Requesters",
       "record_type": "vortex.crm.people:contact",
       "inputs": [],
       "select": ["contact_number", "full_name", "email", "company"],

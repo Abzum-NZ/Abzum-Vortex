@@ -12,7 +12,7 @@
       "title_field": "subject",
       "storage_contract_id": "srt_00000006",
       "storage_scope": "application_contained",
-      "ownership_mode": "organisation_account",
+      "ownership_mode": "organization_account",
       "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
       "custom_actions": ["act_activity_complete"],
       "fields": [
@@ -445,6 +445,7 @@
     {
       "id": "qry_crm_activities",
       "key": "crm_activities",
+      "label": "Activities",
       "record_type": "activity",
       "inputs": [],
       "select": ["subject", "activity_type", "due_at", "completed", "regarding", "owner"],

@@ -115,7 +115,7 @@
           "public_display": "refused",
           "type": "money",
           "settings": {
-            "currency_mode": "organisation_default",
+            "currency_mode": "organization_default",
             "minimum": "0"
           }
         },
@@ -1219,6 +1219,7 @@
     {
       "id": "qry_crm_pipeline",
       "key": "crm_pipeline",
+      "label": "Opportunities",
       "record_type": "opportunity",
       "inputs": [],
       "select": [

@@ -304,10 +304,6 @@ const pageFacts = (
         addProperty(`${placementLabel} / setting ${safeDifferenceLabel(propertyKey)}`, value);
         if (facts.size >= maxPageDifferenceFacts) break;
       }
-      for (const [tokenKey, value] of Object.entries(placement.themeOverrides).sort(([left], [right]) => left.localeCompare(right))) {
-        add(`${placementLabel} / theme override ${safeDifferenceLabel(tokenKey)}`, value, `${value.kind.replaceAll("_", " ")} override`);
-        if (facts.size >= maxPageDifferenceFacts) break;
-      }
       for (const [breakpoint, layout] of Object.entries(placement.responsive))
         if (layout !== undefined)
           add(`${placementLabel} / ${breakpoint} layout`, layout, pageLayoutDisplay(layout));

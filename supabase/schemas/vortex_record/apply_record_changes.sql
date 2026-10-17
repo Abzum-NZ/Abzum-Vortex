@@ -949,7 +949,7 @@ begin
       );
     else
       loaded := vortex_record.load_record_access_facts_internal(
-        p_record_type_id, 'update', p_record_id, p_expected_concurrency_number
+        p_record_type_id, 'update', p_record_id, p_expected_concurrency_number, null::jsonb
       );
     end if;
     if loaded ->> 'outcome' = 'conflict' then
@@ -1071,7 +1071,7 @@ begin
         end if;
 
         target_loaded := vortex_record.load_record_access_facts_internal(
-          target_record_type_id, 'read', target_record_id, null
+          target_record_type_id, 'read', target_record_id, null, null::jsonb
         );
         if target_loaded ->> 'outcome' <> 'loaded'
           or pg_catalog.jsonb_typeof(target_loaded -> 'declaration') <> 'object' then
