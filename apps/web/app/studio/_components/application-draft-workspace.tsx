@@ -7,7 +7,7 @@ import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-e
 import { applicationSourceDocumentSchema, canonicalJson, describeFailure,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
   type ApplicationSourceDocument, type DefinitionPublicationConfirmation,
-  applicationModuleKeys, type PublishDefinitionResult, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
+  type PublishDefinitionResult, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
 import {
   applyStudioCompositionCommand,
   applyStudioVisibilityCondition,
@@ -45,14 +45,13 @@ import { useStudioFlowsTab } from "./use-studio-flows-tab";
 import { previewStudioApplication } from "../preview-actions";
 import type { SavedDraftContext } from "./application-draft-agent-tools";
 import { ApplicationSourceImport } from "./application-source-import";
-import { ApplicationSearchEditor } from "./application-search-editor";
 import { StudioPublishDialog } from "./studio-publish-dialog";
 import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
 import { StudioHistoryTab } from "./studio-history-tab";
 import { StandardPageAdoption } from "./standard-page-adoption";
 import { useStudioDataTab } from "./studio-data-tab";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
-import type { StudioDataModule, StudioPublishedData } from "../_lib/studio-data-model";
+import type { StudioCompiledFields, StudioDataModule, StudioPublishedData } from "../_lib/studio-data-model";
 import { StudioTopBar } from "./studio-top-bar";
 import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-toolbar";
 import { StudioInspector } from "./studio-inspector";
@@ -72,7 +71,6 @@ import {
 } from "./studio-rail-tabs";
 import { StudioFrame, StudioPanelShell } from "./studio-frame";
 import { useStudioBusy } from "./use-studio-busy";
-import type { StudioApplicationSearchMetadata } from "../../_lib/studio-application-draft";
 import type { StudioApplicationCanvasFrames, StudioApplicationCompiledPageSlots } from "../../_lib/studio-application-draft";
 import {
   sameStudioApplicationSourceImportSnapshot,
@@ -124,7 +122,8 @@ type WorkspaceProps = Readonly<{
       initialModule?: string | undefined;
       /** The organisation's applications, to name and link the owner of a used module. */
       applications: readonly StudioModuleOwnerApplication[];
-      searchMetadata?: StudioApplicationSearchMetadata | null;
+      /** The compiled fields of the saved draft, for a query filter's typed controls. */
+      compiledFields?: StudioCompiledFields | null;
       borrowedChoices?: StudioBorrowedChoices | null;
       /** The modules the application uses, read-only in the Data tab. */
       usedModules?: readonly StudioDataModule[] | null;
@@ -199,7 +198,7 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
         initialSection={isStudioReleasesSection(props.initialSection) ? props.initialSection : "history"}
         initialModule={props.initialModule ?? null}
         applications={props.applications}
-        initialSearchMetadata={props.searchMetadata ?? null}
+        initialCompiledFields={props.compiledFields ?? null}
         initialBorrowedChoices={props.borrowedChoices ?? null}
         initialUsedModules={props.usedModules ?? null}
         initialPublished={props.published ?? null}
@@ -212,13 +211,13 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
 }
 
 function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab, initialSection, initialModule, applications,
-  initialSearchMetadata, initialBorrowedChoices, initialUsedModules, initialPublished, pageCompiledSlots, canvasFrames, compileFailure, platformBlockCatalogue, fieldInputControlReleases,
+  initialCompiledFields, initialBorrowedChoices, initialUsedModules, initialPublished, pageCompiledSlots, canvasFrames, compileFailure, platformBlockCatalogue, fieldInputControlReleases,
   platformThemeTokens, themeOptions }: {
   organizationId: string; draft: StudioStoredApplicationDraft; place: StudioWorkspacePlace;
   themeOptions: StudioThemeOptions;
   initialTab: StudioRailKey; initialSection: StudioReleasesSection; initialModule: string | null;
   applications: readonly StudioModuleOwnerApplication[];
-  initialSearchMetadata: StudioApplicationSearchMetadata | null;
+  initialCompiledFields: StudioCompiledFields | null;
   initialBorrowedChoices: StudioBorrowedChoices | null;
   initialUsedModules: readonly StudioDataModule[] | null;
   initialPublished: StudioPublishedData | null;
@@ -280,7 +279,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const [selection] = useState(() => createStudioSemanticSelectionStore({ rootId: draft.rootId, source: draft.source, catalogue: platformBlockCatalogue }));
   const [state, setState] = useState(() => history.getState());
   const [selected, setSelected] = useState(() => selection.getSelection());
-  const [searchMetadata, setSearchMetadata] = useState<StudioApplicationSearchMetadata | null>(initialSearchMetadata);
+  const [compiledFields, setCompiledFields] = useState<StudioCompiledFields | null>(initialCompiledFields);
   const [compiled, setCompiled] = useState<CompiledView>(() =>
     ({ source: draft.source, draftRevision: draft.draftRevision, sourceFingerprint: draft.sourceFingerprint,
       slots: pageCompiledSlots, frames: canvasFrames, failure: compileFailure, generation: 0 }));
@@ -288,8 +287,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   // A saved revision whose compile is still on its way: the canvas keeps the last compiled one meanwhile.
   const compileEpoch = useRef(0);
   const [compiling, setCompiling] = useState(false);
-  const searchRefresh = useRef(0);
-  const [refreshingSearch, setRefreshingSearch] = useState(false);
   const [message, setMessage] = useState("");
   const [label, setLabel] = useState("");
   // The selection the name and description fields were loaded for; a field loaded for another item is never an unapplied edit.
@@ -414,38 +411,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     return () => window.removeEventListener("beforeunload", warn);
   }, [unsavedWork]);
 
-  const refreshSearchMetadata = async () => {
-    const current = history.getState();
-    if (!active.current || current.isDirty || current.isSaving || busy.any()) return;
-    const expectedSource = current.source;
-    const expectedLifetime = lifetime.current;
-    const epoch = ++searchRefresh.current;
-    const saved = savedPreviewDraft.current;
-    setSearchMetadata(null); setRefreshingSearch(true);
-    try {
-      const result = await reopenStudioApplication(organizationId, current.rootId);
-      const latest = history.getState();
-      if (!active.current || lifetime.current !== expectedLifetime || epoch !== searchRefresh.current ||
-          latest.source !== expectedSource || latest.draftRevision !== current.draftRevision || latest.isDirty || latest.isSaving ||
-          busy.any() ||
-          result.kind !== "available" || result.searchMetadata === null || result.organizationId !== organizationId ||
-          result.draft.rootId !== current.rootId || result.draft.key !== draft.key || result.draft.draftRevision !== current.draftRevision ||
-          result.draft.sourceFingerprint !== saved.sourceFingerprint || canonicalJson(result.draft.source) !== canonicalJson(expectedSource)) return;
-      const metadata = result.searchMetadata;
-      if (metadata.organizationId !== organizationId || metadata.rootId !== current.rootId || metadata.draftRevision !== current.draftRevision ||
-          metadata.sourceFingerprint !== saved.sourceFingerprint || metadata.bindingsSignature !== JSON.stringify(applicationModuleKeys(expectedSource))) return;
-      setSearchMetadata(metadata);
-    } catch (error) {
-      console.error("[studio] refreshing the module list failed", describeFailure(error));
-      if (active.current && lifetime.current === expectedLifetime && epoch === searchRefresh.current) setSearchMetadata(null);
-    }
-    finally { if (active.current && epoch === searchRefresh.current) setRefreshingSearch(false); }
-  };
-  const currentSearchMetadata = searchMetadata !== null && searchMetadata.organizationId === organizationId &&
-    searchMetadata.rootId === state.rootId &&
-    searchMetadata.draftRevision === state.draftRevision && searchMetadata.sourceFingerprint === savedPreviewDraft.current.sourceFingerprint &&
-    searchMetadata.bindingsSignature === JSON.stringify(applicationModuleKeys(source)) &&
-    canonicalJson(state.source) === canonicalJson(savedPreviewDraft.current.source) ? searchMetadata : null;
   const compositionContext = useMemo<StudioCompositionContext>(() => ({
     organizationId, rootId: state.rootId, key: draft.key, draftRevision: state.draftRevision,
     localLifetime: workspaceLifetime, catalogue: platformBlockCatalogue, source: state.source,
@@ -645,8 +610,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       setBorrowedChoices((previous) => result.borrowedChoices ?? previous);
       setUsedModules((previous) => result.usedModules ?? previous);
       setPublished((previous) => result.published ?? previous);
-      searchRefresh.current += 1;
-      setSearchMetadata(result.searchMetadata);
+      setCompiledFields(result.compiledFields);
     } catch (error) {
       console.error("[studio] compiling the saved draft for the canvas failed", describeFailure(error));
       if (active.current && epoch === compileEpoch.current)
@@ -709,7 +673,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         return;
       }
       savedPreviewDraft.current = result.draft;
-      setSearchMetadata(result.searchMetadata);
+      setCompiledFields(result.compiledFields);
       compileEpoch.current += 1;
       setCompiling(false);
       setCompiled((previous) => ({ source: result.draft.source, draftRevision: result.draft.draftRevision,
@@ -718,7 +682,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       setBorrowedChoices((previous) => result.borrowedChoices ?? previous);
       setUsedModules((previous) => result.usedModules ?? previous);
       setPublished((previous) => result.published ?? previous);
-      searchRefresh.current += 1;
       discardSourceImport();
       lifetime.current += 1;
       setWorkspaceLifetime(lifetime.current);
@@ -812,6 +775,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       }
       case "not_installed": return { kind: "not_installed" };
       case "no_query": return { kind: "no_list" };
+      // A record type is read through a plain query, never a summary.
+      case "summary": return { kind: "no_list" };
       case "query_refused":
         console.error(`[studio] record choices were refused: STUDIO_RECORD_CHOICES_REFUSED reason=${result.reason}`);
         return { kind: "refused" };
@@ -1006,21 +971,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     return "applied";
   };
 
-  const applySearch: Parameters<typeof ApplicationSearchEditor>[0]["onApply"] = (expected, search) => {
-    const current = history.getState();
-    if (!active.current || lifetime.current !== workspaceLifetime || current.isSaving || current.isDirty ||
-        busy.any("search") || canonicalJson(expected) !== canonicalJson(current.source) ||
-        (search !== undefined && currentSearchMetadata === null)) return false;
-    const candidate = structuredClone(expected);
-    if (search === undefined) delete candidate.body.search;
-    else candidate.body.search = search;
-    const parsed = applicationSourceDocumentSchema.safeParse(candidate);
-    if (!parsed.success || !history.edit(parsed.data)) return false;
-    setSearchMetadata(null); searchRefresh.current += 1;
-    setPreparedPublication(null); previewGeneration.current += 1;
-    return true;
-  };
-
   // Preview runs the saved draft as its own Application in a new tab, so it saves first. The tab is
   // opened at once, while the press still counts as the person's, and is closed if nothing runs.
   const openPreview = async () => {
@@ -1065,14 +1015,11 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     return true;
   };
   const data = useStudioDataTab({ organizationId, rootId: state.rootId, source, saved: savedPreviewDraft.current.source,
-    used: usedModules, published, applications, initialModule, hidden: tab !== "data",
+    used: usedModules, published, compiledFields, applications, initialModule, hidden: tab !== "data",
     compositionContext, readRecords: readRecordChoices,
     selection: isStudioDataSelection(selected) ? selected : null,
     disabled: noEdit || busy.anyOfRendered("publication", "reopening"), refresh: compiled.generation,
-    search: <ApplicationSearchEditor source={source} metadata={currentSearchMetadata}
-      disabled={busy.anyRendered("search") || state.isSaving || refreshingSearch || state.isDirty || workspaceLifetime === 0}
-      onPendingChange={reportSearchPending} onRefresh={refreshSearchMetadata} onApply={applySearch} />,
-    apply: applyDataChange, onFieldPending: reportModuleFieldPending,
+    apply: applyDataChange, onFieldPending: reportModuleFieldPending, onSearchPending: reportSearchPending,
     choose: (next) => { void chooseSelection(next); }, selectAfterEdit: (next) => { changeSelection(next); },
     openInTab: (nextTab, next) => { void changeTab(nextTab).then((changed) => { if (changed) void chooseSelection(next); }); },
   });

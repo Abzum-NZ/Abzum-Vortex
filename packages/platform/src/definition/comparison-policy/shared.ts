@@ -8,6 +8,7 @@ import {
   versionImpactReasonCodes,
 } from "../../schema";
 import { canonicalJson, compareCanonicalStrings } from "../canonical-json-definition";
+import type { BlockPropertySchemaContract } from "../application-composition/block-property-schema";
 
 export type RecordValue = Record<string, unknown>;
 export type ComponentKind = VersionImpactReason["location"]["componentKind"];
@@ -119,10 +120,7 @@ export const comparePresentationSet = (
     reasons.push(makeReason("patch", "presentation_changed", componentKind, "order", componentId));
 };
 
-/**
- * The one allowlist of presentation-only setting value kinds. A value of any other kind (an action,
- * query, page, pipeline, relationship, record type or record reference) carries behaviour.
- */
+/** Safe value kinds within a declared presentation list entry; references to behaviour are excluded. */
 const presentationKinds: ReadonlySet<unknown> = new Set([
   "text",
   "number",
@@ -135,29 +133,85 @@ const presentationKinds: ReadonlySet<unknown> = new Set([
   "field_reference",
 ]);
 
-/** Whether a compiled setting value holds only presentation-only kinds, nested groups and lists included. */
-export const presentationOnlyValue = (value: unknown): boolean => {
+/** A new entry may carry only safe display values declared by its presentation list. */
+const presentationEntryValue = (
+  value: unknown,
+  declaration: BlockPropertySchemaContract,
+): boolean => {
+  if (value === undefined || value === null) return false;
   const property = asRecord(value);
-  if (property.kind === "group")
-    return Object.values(asRecord(property.properties)).every(presentationOnlyValue);
-  if (property.kind === "list") return (property.items as unknown[]).every(presentationOnlyValue);
+  if (property.kind !== declaration.kind) return false;
+  if (property.kind === "group") {
+    if (declaration.kind !== "group") return false;
+    const properties = asRecord(property.properties);
+    return Object.entries(properties).every(([key, entry]) => {
+      const child = declaration.properties.find((candidate) => candidate.key === key);
+      return child !== undefined && presentationEntryValue(entry, child);
+    });
+  }
+  if (property.kind === "list") {
+    return (
+      declaration.kind === "list" &&
+      (property.items as unknown[]).every(
+        (entry) =>
+          presentationEntryValue(entry, declaration.item) &&
+          (declaration.presentationIdentity === undefined ||
+            presentationEntryIdentity(entry, declaration.presentationIdentity) !== undefined),
+      )
+    );
+  }
   return presentationKinds.has(property.kind);
 };
 
-const holdsFieldReference = (value: unknown): boolean => {
+export const presentationListEntry = (
+  value: unknown,
+  declaration: BlockPropertySchemaContract,
+): boolean =>
+  declaration.kind === "list" &&
+  declaration.presentation === true &&
+  presentationEntryValue(value, declaration.item) &&
+  (declaration.presentationIdentity === undefined ||
+    presentationEntryIdentity(value, declaration.presentationIdentity) !== undefined);
+
+/** Whether a declared display setting changes only its presentation values. */
+export const presentationOnlyValue = (
+  value: unknown,
+  declaration: BlockPropertySchemaContract,
+  previous?: unknown,
+): boolean => {
+  if (declaration.presentation !== true || !presentationEntryValue(value, declaration))
+    return false;
+  if (previous === undefined) return true;
   const property = asRecord(value);
-  if (property.kind === "group")
-    return Object.values(asRecord(property.properties)).some(holdsFieldReference);
-  return property.kind === "field_reference";
+  const old = asRecord(previous);
+  if (old.kind !== property.kind) return false;
+  if (declaration.kind === "group") return presentationEntryEdit(value, previous, declaration);
+  if (declaration.kind === "list") return false;
+  if (property.kind === "field_reference") return same(value, previous);
+  return true;
 };
 
-/**
- * Whether one list entry only shows a field: it names a field and holds nothing but
- * presentation-only values. A row action, bulk action or query parameter names no field, so
- * appending one is a behaviour change.
- */
-export const fieldDisplayEntry = (value: unknown): boolean =>
-  presentationOnlyValue(value) && holdsFieldReference(value);
+const presentationEntryEdit = (
+  value: unknown,
+  previous: unknown,
+  declaration: BlockPropertySchemaContract,
+): boolean => {
+  if (declaration.kind !== "group" || !presentationEntryValue(value, declaration)) return false;
+  const old = asRecord(previous);
+  if (old.kind !== "group") return false;
+  const properties = asRecord(asRecord(value).properties);
+  const oldProperties = asRecord(old.properties);
+  return [...new Set([...Object.keys(properties), ...Object.keys(oldProperties)])].every((key) => {
+    if (same(properties[key], oldProperties[key])) return true;
+    const child = declaration.properties.find((candidate) => candidate.key === key);
+    return child !== undefined && presentationOnlyValue(properties[key], child, oldProperties[key]);
+  });
+};
+
+const presentationEntryIdentity = (value: unknown, identityKey: string): string | undefined => {
+  const properties = asRecord(asRecord(value).properties);
+  return properties[identityKey] === undefined ? undefined : canonicalJson(properties[identityKey]);
+};
 
 /**
  * An ordered list of entries (a block's fields or columns, a query's selected fields). Appending
@@ -173,14 +227,36 @@ export const compareOrderedEntries = (
   componentId: unknown,
   property: Property,
   additive: (entry: unknown) => boolean,
+  presentationDeclaration?: BlockPropertySchemaContract,
 ): void => {
   if (same(previous, candidate)) return;
   const remaining = candidate.map((entry) => canonicalJson(entry));
   const kept: number[] = [];
-  for (const entry of previous) {
-    const at = remaining.indexOf(canonicalJson(entry));
+  let presentationEdited = false;
+  for (const [index, entry] of previous.entries()) {
+    let at = remaining.indexOf(canonicalJson(entry));
+    if (
+      at < 0 &&
+      presentationDeclaration?.kind === "list" &&
+      presentationDeclaration.presentation === true
+    ) {
+      const identityKey = presentationDeclaration.presentationIdentity;
+      const identity =
+        identityKey === undefined ? undefined : presentationEntryIdentity(entry, identityKey);
+      at = candidate.findIndex(
+        (next, nextIndex) =>
+          remaining[nextIndex] !== "" &&
+          (identity === undefined
+            ? nextIndex === index
+            : presentationEntryIdentity(next, identityKey!) === identity) &&
+          presentationEntryEdit(next, entry, presentationDeclaration.item),
+      );
+      if (at >= 0) presentationEdited = true;
+    }
     if (at < 0) {
-      reasons.push(makeReason("major", "existing_behavior_changed", componentKind, property, componentId));
+      reasons.push(
+        makeReason("major", "existing_behavior_changed", componentKind, property, componentId),
+      );
       return;
     }
     kept.push(at);
@@ -193,8 +269,14 @@ export const compareOrderedEntries = (
     );
   else if (appended.length > 0)
     reasons.push(makeReason("minor", "component_added", componentKind, property, componentId));
+  if (presentationEdited)
+    reasons.push(
+      makeReason("patch", "presentation_changed", componentKind, "configuration", componentId),
+    );
   if (kept.some((position, index) => index > 0 && position < kept[index - 1]!))
-    reasons.push(makeReason("minor", "meaningful_order_changed", componentKind, "order", componentId));
+    reasons.push(
+      makeReason("minor", "meaningful_order_changed", componentKind, "order", componentId),
+    );
 };
 
 export const compareBound = (
