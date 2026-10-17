@@ -7626,6 +7626,8 @@ alter function vortex_platform.start_value_matches_type_internal(p_type text, p_
 
 grant execute on function vortex_platform.start_value_matches_type_internal(p_type text, p_value jsonb) to postgres;
 
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.compile_query_filter_internal(
   p_condition jsonb,
   p_field_types jsonb,
@@ -8270,6 +8272,8 @@ comment on function vortex_record.compile_query_filter_internal(
   jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, integer, integer
 ) is
   'Compiles one validated typed query condition into a candidate-scan predicate over catalogue columns, with every value bound through one JSON parameter array; the predicate admits every row the condition engine admits, and is marked exact only when it admits no other row; a subtree it cannot express adds no condition, so the per-row condition and read_record stay authoritative; owner-only.';
+
+set local role vortex_owner;
 
 drop function vortex_record.mirror_person_links_internal(uuid,uuid,uuid,jsonb);
 
