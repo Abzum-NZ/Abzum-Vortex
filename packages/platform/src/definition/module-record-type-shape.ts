@@ -181,7 +181,7 @@ export const createInlineRecordType = (
   const record = {
     id: uniqueAlias(`rt_${key}`, taken), key, name, plural_name: pluralName, title_field: titleKey,
     storage_contract_id: uniqueAlias(`srt_${aliasPart(module.key)}_${key}`, taken),
-    storage_scope: "organisation_shared", ownership_mode: "group",
+    storage_scope: "organization_shared", ownership_mode: "group",
     standard_actions: standardActions.map((entry) => entry.action), custom_actions: [], fields, pipelines: [], relationships: [],
   } as unknown as RecordType;
   module.record_types.push(record);

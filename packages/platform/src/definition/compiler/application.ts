@@ -491,9 +491,9 @@ function compileApplication(
               ];
             }),
           ),
-          authentication: String(operation.authentication).replace("organisation", "organization"),
+          authentication: operation.authentication,
           permissionKey: operation.permission,
-          visibility: String(operation.visibility).replace("organisation", "organization"),
+          visibility: operation.visibility,
           rateLimitPerMinute: operation.rate_limit_per_minute,
           maximumRequestBytes: operation.maximum_request_bytes,
           duplicateProtection: operation.duplicate_protection,

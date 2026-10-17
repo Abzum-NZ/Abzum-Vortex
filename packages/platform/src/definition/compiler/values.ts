@@ -254,10 +254,7 @@ export function actionInput(
     key: input.key,
     label: input.label,
     required: input.required,
-    type:
-      input.type === "organisation_account_reference"
-        ? "organization_account_reference"
-        : input.type,
+    type: input.type,
     ...(compiledValidation ? { validation: compiledValidation } : {}),
     ...(input.record_types
       ? {
