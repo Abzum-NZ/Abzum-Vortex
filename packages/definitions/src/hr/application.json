@@ -49,6 +49,7 @@
       {
         "id": "role_hr_administrator",
         "key": "hr_administrator",
+        "default_member": true,
         "name": "HR administrator",
         "home_page": "hr_departments",
         "permissions": [
@@ -130,7 +131,6 @@
         "permission": "application.hr.open"
       }
     ],
-    "pipelines": [],
     "connection_bindings": [],
     "interfaces": [],
     "events": [

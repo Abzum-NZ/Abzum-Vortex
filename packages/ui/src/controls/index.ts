@@ -107,5 +107,4 @@ export {
 // Control Registrations & Registry
 export {
   CONTROL_COMPONENT_REGISTRATIONS,
-  createControlComponentRegistry,
 } from "./registrations";

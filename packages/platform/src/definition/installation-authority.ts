@@ -43,9 +43,23 @@ export type InstallationUnavailableReason =
   | "registration_misaligned"
   | "unsupported_root";
 
+/**
+ * Why the installer's default member role choice on a first install was refused: a missing
+ * permission or delegation, a member role that is retired or awaits acceptance, or access that
+ * someone else changed at the same time.
+ */
+export type InstallationMemberRoleRefusal =
+  | "installation_authority"
+  | "member_role_delegation"
+  | "roles_manage"
+  | "assignments_manage"
+  | "role_unavailable"
+  | "access_changed";
+
 export type InstallationProblemShape = Readonly<{
   kind: InstallationProblemKind;
   unavailableReason?: InstallationUnavailableReason;
+  memberRoleRefusal?: InstallationMemberRoleRefusal;
 }>;
 
 /**

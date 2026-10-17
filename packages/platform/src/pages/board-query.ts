@@ -21,6 +21,7 @@ import {
   describeFailure,
   exactDecimalTextSchema,
   moneyValueSchema,
+  pipelineMovesFrom,
   readBoardPlacementContract,
   richTextDocumentSchema,
   sameId,
@@ -30,10 +31,12 @@ import {
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
+  type PipelineStageTone,
 } from "../schema";
 
 type ModuleRelease = InstalledRuntimeContext["releaseSet"]["modules"][number];
-type ModuleField = ModuleRelease["content"]["recordTypes"][number]["fields"][number];
+type ModuleRecordType = ModuleRelease["content"]["recordTypes"][number];
+type ModuleField = ModuleRecordType["fields"][number];
 type ModuleQuery = ModuleRelease["content"]["queries"][number];
 type BoardQueries = Pick<
   ReturnType<typeof createProtectedQueryService>,
@@ -73,16 +76,13 @@ const findInstalledQuery = (
   return matches.length === 1 ? matches[0] : undefined;
 };
 
-const fieldsFor = (
-  module: ModuleRelease,
-  query: ModuleQuery,
-): readonly ModuleField[] | undefined => {
+const recordTypeFor = (module: ModuleRelease, query: ModuleQuery): ModuleRecordType | undefined => {
   if (query.recordType.state !== "resolved") return undefined;
   const recordTypeId = query.recordType.recordTypeId;
   const matches = module.content.recordTypes.filter((recordType) =>
     sameId(String(recordType.recordTypeId), String(recordTypeId)),
   );
-  return matches.length === 1 && matches[0] !== undefined ? matches[0].fields : undefined;
+  return matches.length === 1 ? matches[0] : undefined;
 };
 
 const installedFieldMap = (fields: readonly ModuleField[]): ReadonlyMap<string, ModuleField> =>
@@ -295,6 +295,14 @@ type BoardBucketValues = Readonly<{
   aggregates: readonly BoardMetric[];
   page: BoardPagePayload | null;
 }>;
+/** One pipeline stage as a board column: its colour role, where a card may go and who owns it. */
+type BoardStageValues = Readonly<{
+  value: string;
+  label: string;
+  tone: PipelineStageTone;
+  moves: readonly string[];
+  gatedBy?: string;
+}>;
 
 /** The board's ready values; the caller validates them with the board payload parser. */
 export type BoardPlacementValues = Readonly<{
@@ -308,7 +316,7 @@ export type BoardPlacementValues = Readonly<{
   cardFieldIds: readonly string[];
   totalRowCount: number;
   aggregates: readonly BoardMetric[];
-  columns: readonly (BoardBucketValues & Readonly<{ value: string; label: string }>)[];
+  columns: readonly (BoardBucketValues & BoardStageValues)[];
   unassigned: BoardBucketValues;
 }>;
 
@@ -381,9 +389,16 @@ export const projectBoardPlacement = async (
     const binding = findInstalledQuery(context, String(input.placement.props.vortex.queryId));
     if (contract === undefined || binding === undefined)
       return unavailable("board_settings_invalid");
-    const fields = fieldsFor(binding.module, binding.query);
-    if (fields === undefined || !boardBlockSourceIsSupported(binding.query, fields, contract))
+    const recordType = recordTypeFor(binding.module, binding.query);
+    if (
+      recordType === undefined ||
+      !boardBlockSourceIsSupported(binding.query, recordType.fields, recordType.pipelines, contract)
+    )
       return unavailable("board_query_unsupported");
+    const fields = recordType.fields;
+    const pipeline = recordType.pipelines.find((candidate) =>
+      sameId(String(candidate.stageFieldId), String(contract.choiceField)),
+    )!;
 
     const fieldsById = installedFieldMap(fields);
     const requestedFieldIds = [
@@ -452,25 +467,46 @@ export const projectBoardPlacement = async (
       board.aggregates,
       fieldsById,
     );
-    const columns = board.columns.flatMap((column) => {
-      const bucketAggregates = projectMetrics(
-        binding.query.aggregates,
-        contract.aggregateMetrics,
-        column.aggregates,
-        fieldsById,
-      );
-      return bucketAggregates === undefined
-        ? []
-        : [
-            {
-              value: column.value,
-              label: column.label,
-              rowCount: column.rowCount,
-              aggregates: bucketAggregates,
-              page: projectPage(column.page, contract, fieldsById),
-            },
-          ];
-    });
+    // Columns follow the pipeline's stage order; each carries its colour role, the stages a card
+    // in it may move to and the named action that owns it, if one does.
+    const stageOrder = new Map(pipeline.stages.map((stage, index) => [stage.option, index]));
+    const owners = binding.module.content.actions.filter(
+      (action) =>
+        sameId(String(action.subjectRecordTypeId), String(recordType.recordTypeId)) &&
+        action.setsChoiceFieldId !== undefined &&
+        sameId(String(action.setsChoiceFieldId), String(contract.choiceField)),
+    );
+    const columns = [...board.columns]
+      .sort(
+        (left, right) =>
+          (stageOrder.get(left.value) ?? Number.MAX_SAFE_INTEGER) -
+          (stageOrder.get(right.value) ?? Number.MAX_SAFE_INTEGER),
+      )
+      .flatMap((column) => {
+        const stage = pipeline.stages.find((candidate) => candidate.option === column.value);
+        const bucketAggregates = projectMetrics(
+          binding.query.aggregates,
+          contract.aggregateMetrics,
+          column.aggregates,
+          fieldsById,
+        );
+        if (stage === undefined || bucketAggregates === undefined) return [];
+        const owner = owners.find((action) => action.setsChoiceOption === column.value);
+        return [
+          {
+            value: column.value,
+            label: column.label,
+            tone: stage.tone,
+            moves: pipelineMovesFrom(pipeline, column.value).filter((target) =>
+              board.columns.some((candidate) => candidate.value === target),
+            ),
+            ...(owner === undefined ? {} : { gatedBy: owner.label }),
+            rowCount: column.rowCount,
+            aggregates: bucketAggregates,
+            page: projectPage(column.page, contract, fieldsById),
+          },
+        ];
+      });
     const unassignedAggregates = projectMetrics(
       binding.query.aggregates,
       contract.aggregateMetrics,

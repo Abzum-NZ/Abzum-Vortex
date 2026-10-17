@@ -92,7 +92,6 @@ const resolvedSettingKinds: ReadonlySet<string> = new Set([
   "action_reference",
   "field_reference",
   "page_reference",
-  "pipeline_reference",
   "query_reference",
   "record_type_reference",
   "relationship_reference",
@@ -107,7 +106,6 @@ const referenceSettingKinds: ReadonlySet<string> = new Set([
   "action_reference",
   "page_reference",
   "query_reference",
-  "pipeline_reference",
 ]);
 
 /**

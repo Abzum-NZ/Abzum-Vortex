@@ -7,9 +7,9 @@ import {
   FIELD_INPUT_CONTROL_RELEASES,
   PREVIEW_SEED_RECORD_BOUND,
   runtimePreviewOf,
-  type ProjectedNavigation,
 } from "@vortex/platform/server";
 import {
+  type ProjectedNavigation,
   sameId,
   compiledPageShellId,
   splitProjectedPage,

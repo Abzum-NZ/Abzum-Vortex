@@ -171,6 +171,7 @@
           }
         }
       ],
+      "pipelines": [],
       "relationships": []
     },
     {
@@ -273,6 +274,7 @@
           "default": true
         }
       ],
+      "pipelines": [],
       "relationships": [
         {
           "id": "fld_sla_calendar_relationship",
