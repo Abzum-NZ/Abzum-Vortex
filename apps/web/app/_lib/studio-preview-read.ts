@@ -4,6 +4,7 @@ import {
   createPreviewInstallationRepository,
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
+  type StoredApplicationDefinitionDraft,
 } from "@vortex/platform/server";
 import {
   sameId,
@@ -12,7 +13,7 @@ import {
   type OrganizationId,
 } from "@vortex/platform/schema";
 import { humanOrganizationRequests } from "./server-composition";
-import { currentStudioPreview } from "./studio-application-preview";
+import { currentStudioPreview, readStudioPreviewState } from "./studio-application-preview";
 import { loadInstalledContext, requestDependencies } from "./application-page/load";
 import { createPlacementReadServices } from "./application-page/placement-services";
 import { loadOrganizationLauncher } from "./organization-context";
@@ -27,20 +28,24 @@ export type StudioPreviewSelection = Readonly<{
 
 /**
  * Where Studio's canvas and Data tab read the records of the saved draft: the builder's own preview
- * installation of exactly that draft revision, with its runtime context and the running
- * application's own readers. Every read in it runs under the builder's preview access, as the
- * preview itself decides it: the draft's roles for the Application's own permissions, the builder's
- * own live access for people and every other system projection, and no record-share authority.
+ * installation of that draft, with its runtime context and the running application's own readers.
+ * The preview runs the draft's data shape: it is moved to each saved revision that changes records,
+ * queries or access, and runs as it is through presentation-only edits. Every read in it runs under
+ * the builder's preview access, as the preview itself decides it: the draft's roles for the
+ * Application's own permissions, the builder's own live access for people and every other system
+ * projection, and no record-share authority.
  */
 export type StudioPreviewRead =
   | Readonly<{
       kind: "available";
+      /** The saved draft at exactly the requested revision. */
+      draft: StoredApplicationDefinitionDraft;
       selection: StudioPreviewSelection;
       context: InstalledRuntimeContext;
       dependencies: HumanOrganizationRequestDependencies;
       services: ReturnType<typeof createPlacementReadServices>;
     }>
-  /** The builder may not preview this Application, so Studio reads no records of it. */
+  /** The builder may not edit or preview this Application, so Studio reads no records of it. */
   | Readonly<{ kind: "refused" }>
   /** The saved draft moved on from the revision the request names. */
   | Readonly<{ kind: "conflict" }>
@@ -53,14 +58,17 @@ export const openStudioPreviewRead = async (
   rootId: ApplicationRootId,
   draftRevision: number,
 ): Promise<StudioPreviewRead> => {
-  const preview = await currentStudioPreview(session, organizationId, { rootId, draftRevision });
+  const state = await readStudioPreviewState(session, organizationId, rootId, draftRevision);
+  if (state.kind === "refused") return { kind: "refused" };
+  if (state.kind !== "read") return state;
+  const preview = await currentStudioPreview(session, organizationId, state.draft, state.preview, "read");
   if (preview.kind === "refused") return { kind: "refused" };
   if (preview.kind !== "available") return preview;
   const dependencies = requestDependencies();
   const application = { organizationId, applicationRootId: rootId };
-  // A preview holding copied live records is read only once they are decided again by the
-  // builder's current live access in the installed Application, as opening the preview does.
-  if (preview.reusedSeeded) {
+  // Copied live records are read only once they are decided again by the builder's current live
+  // access in the installed Application, at most every five minutes, as opening the preview does.
+  if (preview.reconcileDue) {
     const reconciled = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
       session,
       application,
@@ -89,5 +97,5 @@ export const openStudioPreviewRead = async (
   const services = createPlacementReadServices({ session, selection, dependencies,
     continuationKey: getQueryContinuationKey(), tenantShortName: entry.tenantShortName,
     organizationShortName: entry.organizationShortName });
-  return { kind: "available", selection, context: installed.value, dependencies, services };
+  return { kind: "available", draft: state.draft, selection, context: installed.value, dependencies, services };
 };

@@ -1,12 +1,6 @@
 import "server-only";
 
-import {
-  BuilderAuthorityError,
-  createBuilderAuthority,
-  DefinitionError,
-  readApplicationDefinitionDraft,
-  requireBuilderAuthority,
-} from "@vortex/platform/server";
+import { DefinitionError } from "@vortex/platform/server";
 import {
   applicationRootIdSchema,
   compiledItemSlots,
@@ -24,9 +18,8 @@ import {
   type SourceItem,
 } from "@vortex/platform/schema";
 import { z } from "zod";
-import { humanOrganizationRequests } from "./server-composition";
-import { platformPermissionSource } from "./platform-permission-source";
-import { pageCompiledSlotsFor, studioDraftTargetFacts } from "./studio-application-draft";
+import { pageCompiledSlotsFor } from "./studio-application-draft";
+import { compiledDraftContent } from "./studio-compiled-drafts";
 import { collectPlacements } from "./application-page/placement-helpers";
 import { isStreamablePlacement, readPlacement } from "./application-page/placement-reader";
 import { openStudioPreviewRead } from "./studio-preview-read";
@@ -68,10 +61,11 @@ const placementAliases = (stored: readonly SourceItem[], compiled: readonly Comp
 
 /**
  * Reads the records the data blocks of one saved draft page area show, through the builder's own
- * preview installation of exactly that draft revision. It reads with the running application's
- * own placement reader against the preview, so a block shows on the canvas what it shows in the
- * preview to this builder: the records they may read, a draft-only record type's included, and
- * nothing of records they may not read.
+ * preview installation of that draft. The area's blocks are the saved revision's own compile; the
+ * records are read with the running application's own placement reader against the preview, so a
+ * block shows on the canvas what it shows in the preview to this builder: the records they may
+ * read, a draft-only record type's and those made in the preview included, and nothing of records
+ * they may not read.
  */
 export const readStudioCanvasRecords = async (
   session: IdentitySession,
@@ -83,33 +77,12 @@ export const readStudioCanvasRecords = async (
   if (!organization.success || !parsed.success) return { kind: "refused" };
   const request = parsed.data;
   try {
-    // The saved draft and the preview of its revision are read together. The preview runs the
-    // draft compiled, so the canvas compiles nothing itself.
-    const [saved, preview] = await Promise.all([
-      humanOrganizationRequests().run(session, { organizationId: organization.data },
-        async (transaction, scope) => {
-          const authority = createBuilderAuthority({ transaction, scope, targetFacts: studioDraftTargetFacts,
-            permissions: platformPermissionSource });
-          try {
-            await requireBuilderAuthority(authority, { kind: "draft_change", rootId: request.rootId });
-          } catch (error) {
-            if (error instanceof BuilderAuthorityError) return { kind: "refused" } as const;
-            throw error;
-          }
-          const draft = await readApplicationDefinitionDraft(transaction, scope,
-            { rootId: request.rootId, expectedDraftRevision: request.draftRevision });
-          if (draft.sourceFingerprint !== request.sourceFingerprint) return { kind: "conflict" } as const;
-          return { kind: "draft", draft } as const;
-        }),
-      openStudioPreviewRead(session, organization.data, request.rootId, request.draftRevision),
-    ]);
-    if (saved.kind !== "available")
-      return saved.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };
-    if (saved.value.kind !== "draft") return saved.value;
+    const preview = await openStudioPreviewRead(session, organization.data, request.rootId, request.draftRevision);
     if (preview.kind !== "available") return preview;
-    const { draft } = saved.value;
-    const { context, services, selection, dependencies } = preview;
-    const content = context.releaseSet.application.content;
+    const { draft, context, services, selection, dependencies } = preview;
+    if (draft.sourceFingerprint !== request.sourceFingerprint) return { kind: "conflict" };
+    const content = await compiledDraftContent(session, organization.data, draft);
+    if (typeof content === "string") return { kind: content };
     const pageIndex = draft.source.body.pages.findIndex((page) => page.id === request.pageAlias);
     const page = draft.source.body.pages[pageIndex];
     const compiledPage = content.pages[pageIndex] as PageDefinition | undefined;

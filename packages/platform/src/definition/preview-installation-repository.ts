@@ -1,16 +1,20 @@
 import "server-only";
 
 import {
+  builderPreviewInstallationSchema,
   previewApplicationIdentitySchema,
   previewInstallationSchema,
+  type BuilderPreviewInstallation,
   type PreviewApplicationIdentity,
   type PreviewInstallation,
   type PreviewInstallationCreateRequest,
+  type PreviewInstallationRefreshRequest,
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   DefinitionError,
   classifyDatabaseError,
+  databaseErrorCode,
   unexpectedDefinitionFailure,
 } from "./definition-error";
 import type { RehearsedPreviewRelease } from "./application-publication";
@@ -20,6 +24,7 @@ export const previewInstallationRepositoryErrorCodes = [
   "PREVIEW_INSTALLATION_NOT_FOUND",
   "PREVIEW_INSTALLATION_STALE",
   "PREVIEW_INSTALLATION_AUTHORITY_REFUSED",
+  "PREVIEW_INSTALLATION_SHAPE_INCOMPATIBLE",
   "PREVIEW_INSTALLATION_FAILED",
 ] as const;
 
@@ -43,6 +48,14 @@ export type PreviewInstallationRepository = Readonly<{
     releases: readonly RehearsedPreviewRelease[],
   ): Promise<CreatedPreviewInstallation>;
   /**
+   * In the preview's own context: moves it to the current draft revision in place, keeping the
+   * records it holds. A change those records cannot take is PREVIEW_INSTALLATION_SHAPE_INCOMPATIBLE.
+   */
+  refresh(
+    request: PreviewInstallationRefreshRequest,
+    releases: readonly RehearsedPreviewRelease[],
+  ): Promise<PreviewInstallation>;
+  /**
    * In the installed Application's own context: seeds the preview with the live records, and
    * only the fields of them, that its builder reads there.
    */
@@ -55,12 +68,15 @@ export type PreviewInstallationRepository = Readonly<{
   readApplicationIdentity(
     previewInstallationId: string,
   ): Promise<PreviewApplicationIdentity | undefined>;
-  /** In the organisation's context: this builder's current unexpired preview of one Application. */
-  readBuilderPreview(applicationRootId: string): Promise<PreviewApplicationIdentity | undefined>;
+  /** In the organisation's context: this builder's current runnable preview of one Application. */
+  readBuilderPreview(applicationRootId: string): Promise<BuilderPreviewInstallation | undefined>;
 }>;
 
 const mapFailure = (error: unknown): DefinitionError<PreviewInstallationRepositoryErrorCode> => {
   if (error instanceof DefinitionError) return error;
+  // The preview's records cannot take the draft's change; a new preview is provisioned instead.
+  if (databaseErrorCode(error) === "V3201")
+    return new DefinitionError("PREVIEW_INSTALLATION_SHAPE_INCOMPATIBLE", { cause: error });
   switch (classifyDatabaseError(error)) {
     case "invalid":
       return new DefinitionError("INVALID_PREVIEW_INSTALLATION_COMMAND", { cause: error });
@@ -80,12 +96,15 @@ const mapFailure = (error: unknown): DefinitionError<PreviewInstallationReposito
   }
 };
 
-/** One preview identity row: the preview, or undefined when there is none. */
-const identityOf = (rows: readonly IdentityRow[]): PreviewApplicationIdentity | undefined => {
+/** One identity row parsed by its schema, or undefined when the database returned none. */
+const parsedRow = <Value>(
+  rows: readonly IdentityRow[],
+  schema: { safeParse(value: unknown): { success: true; data: Value } | { success: false; error: unknown } },
+): Value | undefined => {
   if (rows.length !== 1) throw new DefinitionError("PREVIEW_INSTALLATION_FAILED");
   const value = rows[0]?.preview_identity;
   if (value === null || value === undefined) return undefined;
-  const parsed = previewApplicationIdentitySchema.safeParse(value);
+  const parsed = schema.safeParse(value);
   if (!parsed.success)
     throw unexpectedDefinitionFailure(
       "PREVIEW_INSTALLATION_FAILED",
@@ -106,7 +125,8 @@ export const createPreviewInstallationRepository = (
           select vortex_definition.create_preview_installation(
             ${request.applicationRootId}::uuid,
             ${request.expectedDraftRevision}::bigint,
-            ${JSON.stringify(releases)}::text::jsonb
+            ${JSON.stringify(releases)}::text::jsonb,
+            ${request.shapeFingerprint}::text
           ) as preview_installation
         `;
         const value = rows.length === 1 ? rows[0]?.preview_installation : undefined;
@@ -120,6 +140,31 @@ export const createPreviewInstallationRepository = (
             "preview-installation-repository",
           );
         return { installation: parsed.data, seedable };
+      } catch (error) {
+        throw mapFailure(error);
+      }
+    },
+
+    async refresh(request, releases) {
+      try {
+        const rows = await transaction.query<PreviewRow>`
+          select vortex_definition.refresh_preview_installation(
+            ${request.previewInstallationId}::uuid,
+            ${request.expectedDraftRevision}::bigint,
+            ${JSON.stringify(releases)}::text::jsonb,
+            ${request.shapeFingerprint}::text
+          ) as preview_installation
+        `;
+        const parsed = previewInstallationSchema.safeParse(
+          rows.length === 1 ? rows[0]?.preview_installation : undefined,
+        );
+        if (!parsed.success)
+          throw unexpectedDefinitionFailure(
+            "PREVIEW_INSTALLATION_FAILED",
+            parsed.error,
+            "preview-installation-repository",
+          );
+        return parsed.data;
       } catch (error) {
         throw mapFailure(error);
       }
@@ -155,11 +200,11 @@ export const createPreviewInstallationRepository = (
 
     async readApplicationIdentity(previewInstallationId) {
       try {
-        return identityOf(await transaction.query<IdentityRow>`
+        return parsedRow<PreviewApplicationIdentity>(await transaction.query<IdentityRow>`
           select vortex_definition.read_preview_application_identity(
             ${previewInstallationId}::uuid
           ) as preview_identity
-        `);
+        `, previewApplicationIdentitySchema);
       } catch (error) {
         throw mapFailure(error);
       }
@@ -167,11 +212,11 @@ export const createPreviewInstallationRepository = (
 
     async readBuilderPreview(applicationRootId) {
       try {
-        return identityOf(await transaction.query<IdentityRow>`
+        return parsedRow<BuilderPreviewInstallation>(await transaction.query<IdentityRow>`
           select vortex_definition.read_builder_preview_installation(
             ${applicationRootId}::uuid
           ) as preview_identity
-        `);
+        `, builderPreviewInstallationSchema);
       } catch (error) {
         throw mapFailure(error);
       }

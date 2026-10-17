@@ -9,10 +9,12 @@ import {
 import {
   identitySessionSchema,
   previewInstallationCreateRequestSchema,
+  previewInstallationRefreshRequestSchema,
   type IdentitySession,
   type OrganizationSelectionCandidate,
   type PreviewInstallation,
   type PreviewInstallationCreateRequest,
+  type PreviewInstallationRefreshRequest,
   type SelectedOrganizationScope,
   type SessionContext,
   sameId,
@@ -46,6 +48,7 @@ const previewInstallationCoordinatorErrorCodes = [
   "PREVIEW_INSTALLATION_REFUSED",
   "PREVIEW_INSTALLATION_PERMISSION_REFUSED",
   "PREVIEW_INSTALLATION_STALE",
+  "PREVIEW_INSTALLATION_SHAPE_INCOMPATIBLE",
   "PREVIEW_INSTALLATION_TEMPORARILY_UNAVAILABLE",
   "PREVIEW_INSTALLATION_FAILED",
 ] as const;
@@ -87,6 +90,8 @@ const toCoordinatorError = (
   if (error instanceof BuilderAuthorityError)
     return new DefinitionError("PREVIEW_INSTALLATION_PERMISSION_REFUSED", { cause: error });
   switch (errorCode(error)) {
+    case "PREVIEW_INSTALLATION_SHAPE_INCOMPATIBLE":
+      return new DefinitionError("PREVIEW_INSTALLATION_SHAPE_INCOMPATIBLE", { cause: error });
     case "PREVIEW_INSTALLATION_STALE":
     case "DEFINITION_DRAFT_STALE_OR_MISSING":
     case "DEFINITION_SOURCE_EVIDENCE_MISMATCH":
@@ -127,6 +132,11 @@ const toCoordinatorError = (
  * 3. When the Application is installed, a request in its own context seeds the storage. The seed
  *    holds only the live records the builder reads there, with only the fields the builder reads.
  * 4. A request in the preview writes the release set it runs.
+ * A refresh moves the builder's existing preview to the current draft revision instead:
+ * 1. An organisation request rehearses the draft's publication, as above.
+ * 2. One request in the preview itself replaces its releases, pins and registration, evolves its
+ *    Record storage in place, keeping the records it holds, and writes the release set it runs.
+ *    A change those records cannot take refuses with PREVIEW_INSTALLATION_SHAPE_INCOMPATIBLE.
  * No live installation, live registration or external service is touched.
  */
 export const createPreviewInstallationCoordinator = (
@@ -230,6 +240,47 @@ export const createPreviewInstallationCoordinator = (
             previewInstallationId,
           );
           return created.installation;
+        },
+      );
+    },
+
+    async refresh(
+      sessionCandidate: IdentitySession,
+      requestCandidate: PreviewInstallationRefreshRequest,
+    ): Promise<PreviewInstallation> {
+      const session = identitySessionSchema.safeParse(sessionCandidate);
+      const request = previewInstallationRefreshRequestSchema.safeParse(requestCandidate);
+      if (!session.success || !request.success)
+        throw new DefinitionError("INVALID_PREVIEW_INSTALLATION_COMMAND");
+      const { organizationId, applicationRootId, previewInstallationId, expectedDraftRevision } =
+        request.data;
+      const releases = await builderRequest(
+        session.data,
+        { organizationId },
+        applicationRootId,
+        (transaction, authority, context) =>
+          dependencies
+            .draftRehearsal(transaction, authority)
+            .rehearseApplicationPreview(context, {
+              rootId: applicationRootId,
+              expectedDraftRevision,
+            }),
+      );
+      return builderRequest(
+        session.data,
+        { organizationId, applicationRootId, previewInstallationId },
+        applicationRootId,
+        async (transaction) => {
+          const refreshed = await createPreviewInstallationRepository(transaction).refresh(
+            request.data,
+            releases,
+          );
+          await writePreviewRuntimeReleaseSet(
+            transaction,
+            dependencies.releaseCatalogue,
+            previewInstallationId,
+          );
+          return refreshed;
         },
       );
     },

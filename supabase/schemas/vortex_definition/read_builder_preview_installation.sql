@@ -25,7 +25,13 @@ begin
     'definitionKey', root.key,
     'draftRevision', preview.draft_revision,
     'expiresAt', preview.expires_at,
-    'seeded', preview.seeded_at is not null
+    'seeded', preview.seeded_at is not null,
+    'shapeFingerprint', preview.draft_shape_fingerprint,
+    -- Copied live records are decided again by the builder's live access at most every five
+    -- minutes, counting from the seed; reconcile_preview_installation keeps the same interval.
+    'reconcileDue', preview.seeded_at is not null
+      and coalesce(preview.reconciled_at, preview.seeded_at)
+        <= pg_catalog.statement_timestamp() - interval '5 minutes'
   ) into identity_value
   from vortex_definition.preview_installations as preview
   join vortex_definition.roots as root on root.root_id = preview.application_root_id
@@ -50,4 +56,4 @@ revoke all on function vortex_definition.read_builder_preview_installation(uuid)
 grant execute on function vortex_definition.read_builder_preview_installation(uuid)
   to vortex_request;
 comment on function vortex_definition.read_builder_preview_installation(uuid) is
-  'The current unexpired preview of one Application that the builder of the validated human organisation context opened, with its draft revision and whether it holds copied live records; null when they have none. Studio reads the canvas and Data tab records through it.';
+  'The current runnable, unexpired preview of one Application that the builder of the validated human organisation context opened: its draft revision, the fingerprint of the draft data shape it runs, and whether it holds copied live records that are due to be decided again; null when they have none. Studio reads the canvas and Data tab records through it.';

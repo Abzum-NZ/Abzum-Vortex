@@ -1,21 +1,28 @@
 import "server-only";
 
 import {
+  BuilderAuthorityError,
   createBuilderAuthority,
   createDatabaseDefinitionPublicationService,
   createPreviewInstallationCoordinator,
   createPreviewInstallationRepository,
   DefinitionError,
+  fingerprintCanonicalValue,
   previewApplicationKey,
+  readApplicationDefinitionDraft,
+  requireBuilderAuthority,
   type BuilderTargetFactsReader,
   type DatabaseRow,
+  type StoredApplicationDefinitionDraft,
 } from "@vortex/platform/server";
 import {
   applicationRootIdSchema,
+  describeFailure,
   organizationIdSchema,
   revisionSchema,
   sameId,
   type ApplicationRootId,
+  type BuilderPreviewInstallation,
   type IdentitySession,
   type OrganizationId,
 } from "@vortex/platform/schema";
@@ -25,6 +32,7 @@ import { humanOrganizationRequests } from "./server-composition";
 import { platformPermissionSource } from "./platform-permission-source";
 import { loadOrganizationLauncher } from "./organization-context";
 import { organizationAddressPath } from "./address-paths";
+import { studioDraftTargetFacts } from "./studio-application-draft";
 
 const previewRequestSchema = z
   .object({
@@ -43,7 +51,9 @@ export type StudioApplicationPreviewResult =
   | Readonly<{ kind: "conflict" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
-/** The builder's preview of the saved draft at one revision, or why there is none. */
+type PreviewFailure = Exclude<StudioApplicationPreviewResult, { kind: "provisioned" }>;
+
+/** The builder's preview that a read of the saved draft runs on, or why there is none. */
 export type StudioPreviewResult =
   | Readonly<{
       kind: "available";
@@ -51,10 +61,15 @@ export type StudioPreviewResult =
       organizationId: string;
       draftRevision: number;
       expiresAt: string;
-      /** An existing preview that holds copied live records: a read decides them again first. */
-      reusedSeeded: boolean;
+      /** Its copied live records are due to be decided again by the builder's live access. */
+      reconcileDue: boolean;
     }>
-  | Exclude<StudioApplicationPreviewResult, { kind: "provisioned" }>;
+  | PreviewFailure;
+
+/** The saved draft at one revision and the builder's current preview of its Application. */
+export type StudioPreviewState =
+  | Readonly<{ kind: "read"; draft: StoredApplicationDefinitionDraft; preview: BuilderPreviewInstallation | undefined }>
+  | PreviewFailure;
 
 type ClassificationRow = DatabaseRow & { outcome: unknown; application_origin_kind: unknown };
 
@@ -94,7 +109,7 @@ const coordinator = () =>
       createDatabaseDefinitionPublicationService(installedReleaseCatalogue, transaction, authority),
   });
 
-const failure = (error: unknown): Exclude<StudioPreviewResult, { kind: "available" }> => {
+const failure = (error: unknown): PreviewFailure => {
   const code = error instanceof DefinitionError ? error.code : undefined;
   switch (code) {
     case "PREVIEW_INSTALLATION_STALE":
@@ -111,108 +126,182 @@ const failure = (error: unknown): Exclude<StudioPreviewResult, { kind: "availabl
   return { kind: "temporarily_unavailable" };
 };
 
-/** A preview reused for a new read keeps at least this long, so it does not expire while Studio reads it. */
-const reuseMarginMs = 60 * 60 * 1000;
+/**
+ * The parts of a saved Application draft a preview's records, queries and access depend on. A
+ * draft edit that leaves them as they are is presentation only (pages, layouts, the menu, the
+ * theme, names and blocks), so the preview's data and access are still the draft's.
+ */
+const presentationKeys: ReadonlySet<string> = new Set([
+  "name", "description", "icon", "home_page", "navigation", "shells", "pages", "theme", "platform_block_dependencies",
+]);
+export const studioPreviewShapeFingerprint = (source: StoredApplicationDefinitionDraft["source"]): string =>
+  fingerprintCanonicalValue({ key: source.key,
+    body: Object.fromEntries(Object.entries(source.body).filter(([key]) => !presentationKeys.has(key))) });
 
 /**
- * Provisionings in flight, by builder, Application and draft revision. Studio's canvas areas and
- * Data tab ask for the same preview together; one provisioning serves them all instead of each
- * replacing the others' preview. It holds only the pending provisioning, never an access decision:
- * every read in the preview is still decided by the database for the requesting builder.
+ * Reads, in one organisation request under the builder's draft authority, the saved draft at
+ * exactly the requested revision and the builder's current preview of its Application.
  */
-const provisioning = new Map<string, Promise<StudioPreviewResult>>();
-
-const provision = (
+export const readStudioPreviewState = async (
   session: IdentitySession,
   organizationId: OrganizationId,
   rootId: ApplicationRootId,
   draftRevision: number,
-): Promise<StudioPreviewResult> => {
-  const key = `${session.identityId}|${organizationId}|${rootId}|${draftRevision}`.toLowerCase();
-  const pending = provisioning.get(key);
-  if (pending !== undefined) return pending;
-  const started = coordinator()
-    .create(session, { organizationId, applicationRootId: rootId, expectedDraftRevision: draftRevision })
-    .then(
-      (preview): StudioPreviewResult => ({
-        kind: "available",
-        previewInstallationId: preview.previewInstallationId,
-        organizationId: preview.organizationId,
-        draftRevision: preview.draftRevision,
-        expiresAt: preview.expiresAt,
-        reusedSeeded: false,
-      }),
-      failure,
-    )
-    .finally(() => provisioning.delete(key));
-  provisioning.set(key, started);
+): Promise<StudioPreviewState> => {
+  try {
+    const read = await humanOrganizationRequests().run(session, { organizationId },
+      async (transaction, scope) => {
+        const authority = createBuilderAuthority({ transaction, scope, targetFacts: studioDraftTargetFacts,
+          permissions: platformPermissionSource });
+        try {
+          await requireBuilderAuthority(authority, { kind: "draft_change", rootId });
+        } catch (error) {
+          if (error instanceof BuilderAuthorityError) return { kind: "refused", reason: "permission_refused" } as const;
+          throw error;
+        }
+        const draft = await readApplicationDefinitionDraft(transaction, scope,
+          { rootId, expectedDraftRevision: draftRevision });
+        const preview = await createPreviewInstallationRepository(transaction).readBuilderPreview(rootId);
+        if (preview !== undefined && (!sameId(preview.applicationRootId, rootId) || !sameId(preview.organizationId, organizationId)))
+          throw new Error("STUDIO_PREVIEW_LOOKUP_MISMATCH");
+        return { kind: "read", draft, preview } as const;
+      });
+    if (read.kind === "available") return read.value;
+    return read.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" }
+      : { kind: "refused", reason: "permission_refused" };
+  } catch (error) {
+    if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING") return { kind: "conflict" };
+    console.error(`[studio] preview state unavailable: STUDIO_PREVIEW_STATE_FAILED cause=${describeFailure(error)}`);
+    return { kind: "temporarily_unavailable" };
+  }
+};
+
+/** A preview reused for a new read keeps at least this long, so it does not expire while Studio reads it. */
+const reuseMarginMs = 60 * 60 * 1000;
+
+const available = (preview: Readonly<{ previewInstallationId: string; organizationId: string; draftRevision: number;
+  expiresAt: string }>, reconcileDue: boolean): StudioPreviewResult => ({
+  kind: "available", previewInstallationId: preview.previewInstallationId, organizationId: preview.organizationId,
+  draftRevision: preview.draftRevision, expiresAt: preview.expiresAt, reconcileDue,
+});
+
+/**
+ * Provisionings and refreshes in flight, by builder, Application and draft revision. Studio's
+ * canvas areas and Data tab ask for the same preview together; one operation serves them all. It
+ * holds only the pending operation, never an access decision: every read in the preview is still
+ * decided by the database for the requesting builder.
+ */
+const pending = new Map<string, Promise<StudioPreviewResult>>();
+
+const once = (key: string, run: () => Promise<StudioPreviewResult>): Promise<StudioPreviewResult> => {
+  const running = pending.get(key);
+  if (running !== undefined) return running;
+  const started = run().finally(() => pending.delete(key));
+  pending.set(key, started);
   return started;
 };
 
+type Target = Readonly<{
+  session: IdentitySession;
+  organizationId: OrganizationId;
+  rootId: ApplicationRootId;
+  draftRevision: number;
+  shapeFingerprint: string;
+}>;
+
+const keyOf = (target: Target): string =>
+  `${target.session.identityId}|${target.organizationId}|${target.rootId}|${target.draftRevision}`.toLowerCase();
+
+/** A new preview of the draft, replacing the builder's previous one and its records. */
+const provision = (target: Target): Promise<StudioPreviewResult> =>
+  once(`${keyOf(target)}|create`, () => coordinator()
+    .create(target.session, { organizationId: target.organizationId, applicationRootId: target.rootId,
+      expectedDraftRevision: target.draftRevision, shapeFingerprint: target.shapeFingerprint })
+    .then((preview) => available(preview, false), failure));
+
 /**
- * The builder's one preview of the saved Application draft at exactly this revision: their current
- * preview when it runs this revision, otherwise a new one that replaces it. Studio's canvas, its
- * Data tab and its Preview button all run on this one preview.
+ * The builder's preview moved to the draft in place, keeping its records; a new one only when
+ * its records cannot take the draft's change.
+ */
+const follow = (target: Target, previewInstallationId: string): Promise<StudioPreviewResult> =>
+  once(`${keyOf(target)}|follow`, () => coordinator()
+    .refresh(target.session, { organizationId: target.organizationId, applicationRootId: target.rootId,
+      previewInstallationId, expectedDraftRevision: target.draftRevision, shapeFingerprint: target.shapeFingerprint })
+    .then((preview) => available(preview, false), (error: unknown) =>
+      error instanceof DefinitionError && error.code === "PREVIEW_INSTALLATION_SHAPE_INCOMPATIBLE"
+        ? provision(target) : failure(error)));
+
+/**
+ * Presentation-only edits move the preview's pages to the draft after a short pause, so a burst of
+ * saves moves it once, to the newest revision; reads meanwhile run on the preview as it is.
+ */
+const scheduled = new Map<string, Readonly<{ timer: ReturnType<typeof setTimeout>; draftRevision: number }>>();
+const followLater = (target: Target, previewInstallationId: string): void => {
+  const key = `${target.session.identityId}|${target.organizationId}|${target.rootId}`.toLowerCase();
+  const waiting = scheduled.get(key);
+  if (waiting !== undefined && waiting.draftRevision >= target.draftRevision) return;
+  if (waiting !== undefined) clearTimeout(waiting.timer);
+  const timer = setTimeout(() => {
+    scheduled.delete(key);
+    void follow(target, previewInstallationId).then((result) => {
+      // A newer save already moved the draft on; its own read follows it.
+      if (result.kind !== "available" && result.kind !== "conflict")
+        console.error(`[studio] the preview did not follow the draft: STUDIO_PREVIEW_FOLLOW_${result.kind.toUpperCase()}`);
+    });
+  }, 1500);
+  scheduled.set(key, { timer, draftRevision: target.draftRevision });
+};
+
+/**
+ * The builder's one preview for the saved draft at this revision:
+ * - their current preview, when it runs this revision;
+ * - for a read, their current preview as it is when the draft changed only its presentation, so
+ *   the read takes no provisioning; the preview's pages follow the draft right after;
+ * - otherwise their current preview moved to this revision in place, keeping its records;
+ * - and a new preview when they have none or its records cannot take the change.
+ * Studio's canvas, its Data tab and its Preview button all run on this one preview.
  */
 export const currentStudioPreview = async (
   session: IdentitySession,
-  candidateOrganizationId: string,
-  candidate: unknown,
+  organizationId: OrganizationId,
+  draft: StoredApplicationDefinitionDraft,
+  preview: BuilderPreviewInstallation | undefined,
+  purpose: "read" | "open",
 ): Promise<StudioPreviewResult> => {
-  const organization = organizationIdSchema.safeParse(candidateOrganizationId);
-  const request = previewRequestSchema.safeParse(candidate);
-  if (!organization.success || !request.success)
-    return { kind: "refused", reason: "invalid_request" };
-  const { rootId, draftRevision } = request.data;
-  let found;
-  try {
-    found = await humanOrganizationRequests().run(
-      session,
-      { organizationId: organization.data },
-      (transaction) => createPreviewInstallationRepository(transaction).readBuilderPreview(rootId),
-    );
-  } catch (error) {
-    return failure(error);
-  }
-  if (found.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
-  if (found.kind !== "available") return { kind: "refused", reason: "permission_refused" };
-  const current = found.value;
-  if (
-    current !== undefined &&
-    (!sameId(current.applicationRootId, rootId) || !sameId(current.organizationId, organization.data))
-  ) {
-    console.error("[studio] preview lookup unavailable: STUDIO_PREVIEW_LOOKUP_MISMATCH");
-    return { kind: "temporarily_unavailable" };
-  }
+  const target: Target = { session, organizationId, rootId: draft.rootId as ApplicationRootId,
+    draftRevision: draft.draftRevision, shapeFingerprint: studioPreviewShapeFingerprint(draft.source) };
+  if (preview === undefined) return provision(target);
   // A preview of a newer saved revision means this request's draft revision is no longer current.
-  if (current !== undefined && current.draftRevision > draftRevision) return { kind: "conflict" };
-  if (
-    current !== undefined &&
-    current.draftRevision === draftRevision &&
-    Date.parse(current.expiresAt) - Date.now() > reuseMarginMs
-  )
-    return {
-      kind: "available",
-      previewInstallationId: current.previewInstallationId,
-      organizationId: current.organizationId,
-      draftRevision: current.draftRevision,
-      expiresAt: current.expiresAt,
-      reusedSeeded: current.seeded,
-    };
-  return provision(session, organization.data, rootId, draftRevision);
+  if (preview.draftRevision > draft.draftRevision) return { kind: "conflict" };
+  const lasting = Date.parse(preview.expiresAt) - Date.now() > reuseMarginMs;
+  if (lasting && preview.draftRevision === draft.draftRevision) return available(preview, preview.reconcileDue);
+  if (lasting && purpose === "read" && preview.shapeFingerprint === target.shapeFingerprint) {
+    followLater(target, preview.previewInstallationId);
+    return available(preview, preview.reconcileDue);
+  }
+  const followed = await follow(target, preview.previewInstallationId);
+  // A followed preview keeps its copied records, which are due to be decided again as before.
+  return followed.kind === "available" && sameId(followed.previewInstallationId, preview.previewInstallationId)
+    ? { ...followed, reconcileDue: preview.reconcileDue } : followed;
 };
 
 /**
  * The running preview of the saved Application draft at the given revision and its address: the
- * builder's current preview of that revision, or a new one replacing it. The session is the
- * server-resolved one; the browser names only the root and the saved revision it expects.
+ * builder's preview moved to that revision, or a new one. The session is the server-resolved one;
+ * the browser names only the root and the saved revision it expects.
  */
 export const provisionStudioApplicationPreview = async (
   session: IdentitySession,
   candidateOrganizationId: string,
   candidate: unknown,
 ): Promise<StudioApplicationPreviewResult> => {
-  const preview = await currentStudioPreview(session, candidateOrganizationId, candidate);
+  const organization = organizationIdSchema.safeParse(candidateOrganizationId);
+  const request = previewRequestSchema.safeParse(candidate);
+  if (!organization.success || !request.success)
+    return { kind: "refused", reason: "invalid_request" };
+  const state = await readStudioPreviewState(session, organization.data, request.data.rootId, request.data.draftRevision);
+  if (state.kind !== "read") return state;
+  const preview = await currentStudioPreview(session, organization.data, state.draft, state.preview, "open");
   if (preview.kind !== "available") return preview;
   const launcher = await loadOrganizationLauncher(session);
   if (launcher.kind !== "available") return { kind: "temporarily_unavailable" };

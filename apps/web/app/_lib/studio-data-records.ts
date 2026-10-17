@@ -1,14 +1,11 @@
 import "server-only";
 
 import {
-  BuilderAuthorityError,
   collectRecordLinks,
   collectRecordLinkValues,
-  createBuilderAuthority,
   protectedQueryCommandSchema,
   protectedQuerySummaryCommandSchema,
   recordLinkPlainText,
-  requireBuilderAuthority,
   type ProjectedRecordLinks,
 } from "@vortex/platform/server";
 import {
@@ -24,9 +21,6 @@ import {
   type JsonValue,
 } from "@vortex/platform/schema";
 import { z } from "zod";
-import { humanOrganizationRequests } from "./server-composition";
-import { platformPermissionSource } from "./platform-permission-source";
-import { studioDraftTargetFacts } from "./studio-application-draft";
 import { openStudioPreviewRead } from "./studio-preview-read";
 import type { ModuleRelease } from "./application-page/types";
 
@@ -146,24 +140,8 @@ export const readStudioDataRecords = async (
   if (!organization.success || !parsed.success) return { kind: "refused" };
   const request = parsed.data;
   try {
-    const [allowed, preview] = await Promise.all([
-      humanOrganizationRequests().run(session, { organizationId: organization.data },
-        async (transaction, scope) => {
-          const authority = createBuilderAuthority({ transaction, scope, targetFacts: studioDraftTargetFacts,
-            permissions: platformPermissionSource });
-          try {
-            await requireBuilderAuthority(authority, { kind: "draft_change", rootId: request.rootId });
-          } catch (error) {
-            if (error instanceof BuilderAuthorityError) return false;
-            throw error;
-          }
-          return true;
-        }),
-      openStudioPreviewRead(session, organization.data, request.rootId, request.draftRevision),
-    ]);
-    if (allowed.kind !== "available")
-      return allowed.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };
-    if (!allowed.value) return { kind: "refused" };
+    // The builder's draft authority is checked where the saved draft and their preview are read.
+    const preview = await openStudioPreviewRead(session, organization.data, request.rootId, request.draftRevision);
     if (preview.kind !== "available") return preview;
 
     const { context, selection, services } = preview;
