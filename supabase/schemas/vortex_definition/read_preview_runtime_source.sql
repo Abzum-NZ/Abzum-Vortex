@@ -1,4 +1,6 @@
-create or replace function vortex_definition.read_preview_runtime_source()
+create or replace function vortex_definition.read_preview_runtime_source(
+  p_cached_draft_revision bigint
+)
 returns jsonb
 language plpgsql
 volatile
@@ -24,17 +26,20 @@ begin
     'draftRevision', preview_row.draft_revision,
     'expiresAt', preview_row.expires_at,
     'correlationId', vortex_access.validated_human_request_context() ->> 'correlationId',
-    'releaseSet', preview_row.runtime_release_set,
+    -- The release set is written once for each draft revision the preview runs: a caller that
+    -- already holds this revision's set gets none.
+    'releaseSet', case when preview_row.draft_revision is not distinct from p_cached_draft_revision
+      then null else preview_row.runtime_release_set end,
     'seedBoundedRecordTypeIds', pg_catalog.to_jsonb(preview_row.seed_bounded_record_type_ids)
   );
 end
 $function$;
 
-alter function vortex_definition.read_preview_runtime_source() owner to vortex_owner;
+alter function vortex_definition.read_preview_runtime_source(bigint) owner to vortex_owner;
 
-revoke all on function vortex_definition.read_preview_runtime_source()
+revoke all on function vortex_definition.read_preview_runtime_source(bigint)
   from public, anon, authenticated, service_role, vortex_runtime;
-grant execute on function vortex_definition.read_preview_runtime_source()
+grant execute on function vortex_definition.read_preview_runtime_source(bigint)
   to vortex_request;
-comment on function vortex_definition.read_preview_runtime_source() is
-  'The installation, draft revision, expiry and stored release set of the preview the validated human Application request runs, for the runtime to render it as an installed Application.';
+comment on function vortex_definition.read_preview_runtime_source(bigint) is
+  'The installation, draft revision, expiry and stored release set of the preview the validated human Application request runs, for the runtime to render it as an installed Application. The release set is left out when the caller already holds the one for the draft revision the preview runs.';

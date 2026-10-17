@@ -211,11 +211,11 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
   };
 
   // What reference settings and the query picker offer: queries that already exist (own, then borrowed), fields and pages.
-  // A record reference picks a record of the installed application, read 40 at a time with the
-  // builder's own access through the same reader as the Data tab's results.
+  // A record reference picks a record of the builder's preview of the saved draft, read 40 at a
+  // time with their preview access through the same reader as the Data tab's results.
   const readRecordChoices = useCallback<StudioRecordReader>(async ({ recordType, after }) => {
     const separator = recordType.indexOf(":");
-    const result = await readStudioDataRecords(organizationId, { rootId,
+    const result = await readStudioDataRecords(organizationId, { rootId, draftRevision: view.draftRevision,
       moduleKey: recordType.slice(0, separator), recordKey: recordType.slice(separator + 1), pageSize: 40,
       ...(after === undefined ? {} : { continuationToken: after }) });
     switch (result.kind) {
@@ -225,7 +225,11 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
           label: (title === undefined ? undefined : row.cells[title]) || "Untitled record" })),
           ...(result.next === undefined ? {} : { next: result.next }) };
       }
-      case "not_installed": return { kind: "not_installed" };
+      case "not_saved": return { kind: "not_saved" };
+      // The preview is still moving to the saved revision; the picker reads again when opened again.
+      case "following": return { kind: "temporarily_unavailable" };
+      // The saved draft moved on; the next save's revision reads again.
+      case "conflict": return { kind: "temporarily_unavailable" };
       case "no_query": return { kind: "no_list" };
       // A record type is read through a plain query, never a summary.
       case "summary": return { kind: "no_list" };
@@ -235,21 +239,21 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
       case "refused": return { kind: "refused" };
       case "temporarily_unavailable": return { kind: "temporarily_unavailable" };
     }
-  }, [organizationId, rootId]);
+  }, [organizationId, rootId, view.draftRevision]);
   const draftChoices = useMemo(() => studioDraftChoices(source, view.borrowedChoices, readRecordChoices),
     [source, view.borrowedChoices, readRecordChoices]);
   // The records of the canvas's data blocks, read for the compiled saved revision only.
   const readCanvasRecords = useCallback(async (area: string) => {
     const pageAlias = canvasPageRef.current;
-    if (pageAlias === undefined) return { state: "unavailable" as const, records: {}, notInstalled: [] };
+    if (pageAlias === undefined) return { state: "unavailable" as const, records: {} };
     const result = await readStudioCanvasRecords(organizationId, { rootId,
       draftRevision: view.draftRevision, sourceFingerprint: view.sourceFingerprint, pageAlias, area });
     if (result.kind === "available" && result.draftRevision === view.draftRevision &&
       result.sourceFingerprint === view.sourceFingerprint && result.pageAlias === pageAlias && result.area === area)
-      return { state: "ready" as const, records: result.records, notInstalled: result.notInstalled };
-    if (result.kind !== "not_installed")
-      console.error(`[studio] the canvas records were not read: STUDIO_CANVAS_RECORDS_${result.kind.toUpperCase()}`);
-    return { state: result.kind === "not_installed" ? "not_installed" as const : "unavailable" as const, records: {}, notInstalled: [] };
+      return { state: "ready" as const, records: result.records, behind: result.behind };
+    if (result.kind === "refused") return { state: "refused" as const, records: {} };
+    console.error(`[studio] the canvas records were not read: STUDIO_CANVAS_RECORDS_${result.kind.toUpperCase()}`);
+    return { state: "unavailable" as const, records: {} };
   }, [organizationId, rootId, view.draftRevision, view.sourceFingerprint]);
 
   const commandVisibility: Parameters<typeof ApplicationVisibilityConditionEditor>[0]["onCommand"] =

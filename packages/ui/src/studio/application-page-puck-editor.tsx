@@ -93,7 +93,8 @@ const recordKeys = (catalogue: ImmutablePlatformBlockCatalogue, items: readonly 
 export type StudioCanvasRecordsRead = Readonly<{
   state: StudioCanvasRecords["state"];
   records: Readonly<Record<string, unknown>>;
-  notInstalled: readonly string[];
+  /** Read from a preview still moving to this revision: it is read again shortly. */
+  behind?: boolean;
 }>;
 
 /** One compiled content area: its items, exactly as the published definition holds them. */
@@ -361,22 +362,31 @@ function ApplicationPageSlotPuckEditor({
 
   // The records of this area's data blocks, read for the saved revision the compiled version is.
   const [recordsRead, setRecordsRead] = useState<StudioCanvasRecordsRead & { source?: ApplicationSourceDocument }>(
-    { state: "loading", records: {}, notInstalled: [] });
+    { state: "loading", records: {} });
+  // A preview still moving to this revision is read again shortly; the records shown meanwhile stay.
+  const [followed, setFollowed] = useState<Readonly<{ source?: ApplicationSourceDocument; area?: string; count: number }>>({ count: 0 });
+  const followUp = followed.source === compiledSource && followed.area === at.key ? followed.count : 0;
   useEffect(() => {
     if (readRecords === undefined) return;
     let cancelled = false;
-    setRecordsRead({ state: "loading", records: {}, notInstalled: [], source: compiledSource });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (followUp === 0) setRecordsRead({ state: "loading", records: {}, source: compiledSource });
     readRecords(at.key).then(
-      (read) => { if (!cancelled) setRecordsRead({ ...read, source: compiledSource }); },
+      (read) => {
+        if (cancelled) return;
+        setRecordsRead({ ...read, source: compiledSource });
+        if (read.behind === true && followUp < 30)
+          timer = setTimeout(() => setFollowed({ source: compiledSource, area: at.key, count: followUp + 1 }), 1500);
+      },
       (error: unknown) => {
         console.error("[studio] the canvas records could not be read", error);
-        if (!cancelled) setRecordsRead({ state: "unavailable", records: {}, notInstalled: [], source: compiledSource });
+        if (!cancelled) setRecordsRead({ state: "unavailable", records: {}, source: compiledSource });
       });
-    return () => { cancelled = true; };
-  }, [readRecords, compiledSource, at.key]);
+    return () => { cancelled = true; if (timer !== undefined) clearTimeout(timer); };
+  }, [readRecords, compiledSource, at.key, followUp]);
   const canvasRecords = useMemo((): StudioCanvasRecords => ({
     // Records read for another saved revision are never shown as this one's.
-    ...(recordsRead.source === compiledSource ? recordsRead : { state: "loading", records: {}, notInstalled: [] }),
+    ...(recordsRead.source === compiledSource ? recordsRead : { state: "loading", records: {} }),
     saved: recordKeys(catalogue, originalSlot?.items ?? []),
     current: recordKeys(catalogue, slot?.items ?? []),
     updating: updating === true,
