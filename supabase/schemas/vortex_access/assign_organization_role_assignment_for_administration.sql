@@ -110,15 +110,16 @@ begin
   where revision.organization_id = context_organization_id
     and revision.role_id = p_role_id
     and revision.revision = role_fact.live_revision;
-  if revision_fact.lifecycle not in ('active', 'acceptance_required')
-    or (
-      revision_fact.lifecycle = 'active'
-      and not (
-        (p_assignment_kind = 'standing' and revision_fact.assignment_policy = 'standing')
-        or (
-          p_assignment_kind = 'eligible'
-          and revision_fact.assignment_policy = 'activation_required'
-        )
+  if revision_fact.lifecycle = 'acceptance_required' then
+    raise exception using errcode = 'V3144',
+      message = 'Organization role revision requires acceptance before assignment';
+  end if;
+  if revision_fact.lifecycle <> 'active'
+    or not (
+      (p_assignment_kind = 'standing' and revision_fact.assignment_policy = 'standing')
+      or (
+        p_assignment_kind = 'eligible'
+        and revision_fact.assignment_policy = 'activation_required'
       )
     ) then
     raise exception using errcode = '40001',
@@ -205,11 +206,6 @@ begin
     or decision.correlation_id is distinct from context_correlation_id then
     raise exception using errcode = '42501',
       message = 'Organization role-assignment assignment is unavailable';
-  end if;
-
-  if revision_fact.lifecycle = 'acceptance_required' then
-    raise exception using errcode = 'V3144',
-      message = 'Organization role revision requires acceptance before assignment';
   end if;
 
   select result.* into strict changed
