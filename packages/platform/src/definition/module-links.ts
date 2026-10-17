@@ -84,6 +84,17 @@ export const linkTargetModule = (target: string): string | undefined => {
   return separator > 0 ? target.slice(0, separator) : undefined;
 };
 
+/** A link target as `module:record`; a bare record key names a record type of the linking module. */
+export const qualifiedLinkTarget = (moduleKey: string, target: string): string =>
+  linkTargetModule(target) === undefined ? `${moduleKey}:${target}` : target;
+
+/** Whether a field is a Person link: a link field that may point at the people directory's person. */
+export const isPersonLink = (field: Readonly<{ type: string; settings: unknown }>): boolean => {
+  const settings = field.settings as { target?: unknown; targets?: unknown };
+  return (field.type === "link" && settings.target === peopleDirectory.recordType) ||
+    (field.type === "link_to_one_of_several" && Array.isArray(settings.targets) && settings.targets.includes(peopleDirectory.recordType));
+};
+
 /**
  * Makes a draft that links to the people directory able to: the application uses the directory
  * Module (named by its owner), and every role that reads the linking record type reads people's
@@ -107,4 +118,24 @@ export const enablePeopleDirectoryLinks = (
     permissions.push(peopleDirectory.readPermission);
   }
   return undefined;
+};
+
+/**
+ * Undoes what the Person links added once the last of them is gone: the use of the directory
+ * Module and the roles' permission to read people's names. Both stay while anything else in the
+ * draft still names the directory, so nothing the author set up for another reason is removed.
+ */
+export const retirePeopleDirectoryLinks = (source: ApplicationSourceDocument): void => {
+  const fields = source.body.modules.flatMap((module) => module.record_types.flatMap((record) => record.fields));
+  if (fields.some((field) => field.type === "link_to_person" || isPersonLink(field))) return;
+  const { uses, roles, ...rest } = source.body;
+  const otherGrants = roles.map((role) => ({ ...role,
+    permissions: (role.permissions as string[]).filter((permission) => permission !== peopleDirectory.readPermission) }));
+  if (JSON.stringify([rest, otherGrants]).includes(peopleDirectory.module)) return;
+  (source.body as { uses: typeof uses }).uses = uses.filter((use) => use.module !== peopleDirectory.module);
+  for (const role of roles) {
+    const permissions = role.permissions as string[];
+    const at = permissions.indexOf(peopleDirectory.readPermission);
+    if (at >= 0) permissions.splice(at, 1);
+  }
 };

@@ -19,8 +19,11 @@ import { moduleFieldTypeLabels, type ModuleFieldType } from "./module-field-sett
 import {
   enablePeopleDirectoryLinks,
   linkCardinalities,
+  isPersonLink,
   linkTargetModule,
   peopleDirectory,
+  qualifiedLinkTarget,
+  retirePeopleDirectoryLinks,
   type LinkCardinality,
   type PeopleDirectoryOwner,
 } from "./module-links";
@@ -143,14 +146,22 @@ const linkProblem = (source: ApplicationSourceDocument, module: InlineModule, ch
     if (owner !== undefined && !reachable.has(owner))
       return `${label}: it links to ${target}, in a module this application neither owns nor uses. Choose one of the record types offered.`;
   }
-  // Each link back from one record type must have its own name, or the two would read the same.
+  // A link back is named on the linked record type, so no two links to one record type, from
+  // whichever owned record type, may share that name.
   const reverse = (change.settings as { reverse_key?: unknown }).reverse_key;
-  const record = module.record_types.find((item) => item.id === change.recordAlias);
-  const twin = record?.fields.find((field) => field.id !== change.fieldAlias && field.type === "link" &&
-    (field.settings as { target?: unknown; reverse_key?: unknown }).target === settings.target &&
-    (field.settings as { reverse_key?: unknown }).reverse_key === reverse);
-  if (change.type === "link" && reverse !== undefined && twin !== undefined)
-    return `${label}: ${twin.label} already links to the same record type with the link back "${String(reverse)}". Give this link back another name.`;
+  if (change.type === "link" && typeof settings.target === "string" && reverse !== undefined) {
+    const target = qualifiedLinkTarget(module.key, settings.target);
+    for (const other of source.body.modules) for (const linking of other.record_types) {
+      const twin = linking.fields.find((field) => field.type === "link" &&
+        !(other.key === module.key && linking.id === change.recordAlias && field.id === change.fieldAlias) &&
+        typeof (field.settings as { target?: unknown }).target === "string" &&
+        qualifiedLinkTarget(other.key, (field.settings as { target: string }).target) === target &&
+        (field.settings as { reverse_key?: unknown }).reverse_key === reverse);
+      if (twin !== undefined)
+        return `${label}: ${linking.name}'s ${twin.label} already links to the same record type with the link back "${String(reverse)}". ` +
+          "Give this link back another name.";
+    }
+  }
   return undefined;
 };
 
@@ -188,6 +199,7 @@ export const changeInlineModuleField = (
   const shape = { type: change.type, settings: change.settings, required: change.required, unique: change.unique,
     filterable: change.filterable, sortable: change.sortable };
   let field: Field;
+  let wasPersonLink = false;
   if (fieldIndex < 0) {
     if (change.required && publication.recordTypes.has(qualifiedRecord))
       return { kind: "invalid", issues: [`${record.name} is in a published version, so a field added to it can't be required: ` +
@@ -206,6 +218,7 @@ export const changeInlineModuleField = (
     includeFieldInStandardPermissions(module, record, { key, type: change.type as Field["type"] });
   } else {
     field = record.fields[fieldIndex]!;
+    wasPersonLink = isPersonLink(field);
     if (publication.fields.has(`${qualifiedRecord}.${field.key}`)) {
       const fixed = [
         ...(field.type === change.type ? [] : ["type"]),
@@ -229,12 +242,10 @@ export const changeInlineModuleField = (
     else destination.default = change.defaultValue;
   }
   syncLinkRelationship(module, record, field, change.cardinality);
-  const linked = field.settings as { target?: unknown; targets?: unknown };
-  if ((field.type === "link" && linked.target === peopleDirectory.recordType) ||
-      (field.type === "link_to_one_of_several" && Array.isArray(linked.targets) && linked.targets.includes(peopleDirectory.recordType))) {
+  if (isPersonLink(field)) {
     const refused = enablePeopleDirectoryLinks(source, module, record, context.peopleDirectory);
     if (refused !== undefined) return { kind: "invalid", issues: [refused] };
-  }
+  } else if (wasPersonLink) retirePeopleDirectoryLinks(source);
   const parsed = applicationSourceDocumentSchema.safeParse(source);
   if (!parsed.success)
     return { kind: "invalid", issues: locatedIssues(source, parsed.error.issues, moduleIndex, recordIndex, fieldIndex, label) };
@@ -367,6 +378,7 @@ export const deleteInlineModuleField = (
     policy.readable_fields = policy.readable_fields.filter((key) => key !== fieldKey);
     policy.changeable_fields = policy.changeable_fields.filter((key) => key !== fieldKey);
   }
+  if (isPersonLink(field)) retirePeopleDirectoryLinks(source);
   const parsed = applicationSourceDocumentSchema.safeParse(source);
   if (!parsed.success)
     return { kind: "invalid", issues: parsed.error.issues.map((issue) => `${issue.message} (${settingWords(issue.path.slice(1))})`) };
