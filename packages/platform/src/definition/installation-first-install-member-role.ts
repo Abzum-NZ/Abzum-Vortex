@@ -300,9 +300,10 @@ const readMemberRoleState = (
   });
 
 /**
- * Names an Access operation that declined. The permission was proved just before the operation's
- * own transaction, so it is proved again: still held means someone else changed access in between
- * (the operation is pinned to one Access version), not held means the permission itself.
+ * Names an Access operation that declined or failed. The permission was proved just before the
+ * operation's own transaction, so it is proved again: still held means someone else changed access
+ * in between (the operation is pinned to one Access version, and a concurrent acceptance of the
+ * same template collides), not held means the permission itself.
  */
 const declined = async (
   environment: FirstInstallFlowEnvironment,
@@ -310,10 +311,10 @@ const declined = async (
   selector: FirstInstallSelector,
   detail: string,
   key: "platform.organization.roles.manage" | "platform.organization.assignments.manage",
-  result: Readonly<{ kind: string }>,
 ): Promise<never> => {
-  if (result.kind === "temporarily_unavailable")
-    return installationProblem(detail, "temporarily_unavailable");
+  // Also when the operation reported a temporary failure: a concurrent change (another activation
+  // accepting the same template, a changed Access version) surfaces that way, and a database that
+  // is really unavailable fails the re-proof below instead.
   await inInstallerRequest(environment, session, selector, async (transaction, scope, issuedAt) =>
     requirePermission(
       transaction,
@@ -409,7 +410,6 @@ const applyFirstInstallMemberRoleChoice = async (
         selector,
         "first_install_member_role_revoke_refused",
         "platform.organization.assignments.manage",
-        revoked,
       );
     return;
   }
@@ -438,7 +438,6 @@ const applyFirstInstallMemberRoleChoice = async (
         selector,
         "first_install_member_role_preparation_refused",
         "platform.organization.roles.manage",
-        prepareResult,
       );
     const prepared = prepareResult.value;
     const candidate = prepared.candidate;
@@ -468,7 +467,6 @@ const applyFirstInstallMemberRoleChoice = async (
         selector,
         "first_install_member_role_acceptance_refused",
         "platform.organization.roles.manage",
-        acceptResult,
       );
     const accepted = acceptResult.value.role;
     if (
@@ -503,7 +501,6 @@ const applyFirstInstallMemberRoleChoice = async (
       selector,
       "first_install_member_role_assignment_refused",
       "platform.organization.assignments.manage",
-      assignResult,
     );
   const assigned = assignResult.value.assignment;
   if (

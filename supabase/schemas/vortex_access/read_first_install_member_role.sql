@@ -11,7 +11,9 @@ as $function$
 declare
   installer record;
   member_role record;
-  held_assignment record;
+  held_assignment_id uuid;
+  held_assignment_revision bigint;
+  held_assignment_self_granted boolean;
 begin
   if p_application_root_id is null
     or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -60,7 +62,7 @@ begin
   if member_role.role_id is not null then
     select assignment.role_assignment_id, assignment.revision,
       assignment.granted_by = installer.organization_account_id as self_granted
-    into held_assignment
+    into held_assignment_id, held_assignment_revision, held_assignment_self_granted
     from vortex_access.organization_role_assignments as assignment
     where assignment.organization_id = installer.organization_id
       and assignment.role_id = member_role.role_id
@@ -84,11 +86,11 @@ begin
       'lifecycle', member_role.lifecycle,
       'assignmentPolicy', member_role.assignment_policy
     ) end,
-    'installerAssignment', case when held_assignment.role_assignment_id is null then null
+    'installerAssignment', case when held_assignment_id is null then null
       else pg_catalog.jsonb_build_object(
-        'roleAssignmentId', held_assignment.role_assignment_id,
-        'revision', held_assignment.revision,
-        'selfGranted', held_assignment.self_granted
+        'roleAssignmentId', held_assignment_id,
+        'revision', held_assignment_revision,
+        'selfGranted', held_assignment_self_granted
       ) end
   );
 end

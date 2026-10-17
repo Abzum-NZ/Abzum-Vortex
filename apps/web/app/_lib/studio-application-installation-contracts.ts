@@ -199,7 +199,11 @@ export const studioApplicationFirstInstallLoadResultSchema = z.discriminatedUnio
     ]),
   }).strict(),
   z.object({ kind: z.literal("conflict") }).strict(),
-  z.object({ kind: z.literal("refused") }).strict(),
+  z.object({
+    kind: z.literal("refused"),
+    /** Set when the refusal is the installer lacking the installation authority. */
+    reason: z.literal("installation_authority").optional(),
+  }).strict(),
   z.object({ kind: z.literal("temporarily_unavailable") }).strict(),
 ]);
 

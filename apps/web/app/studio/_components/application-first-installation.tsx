@@ -49,6 +49,8 @@ const loadMessage = (result: StudioApplicationFirstInstallLoadResult): string =>
       case "unsupported_root": return "The selected application root is not supported for this first-install flow.";
     }
   }
+  if (result.kind === "refused" && result.reason === "installation_authority")
+    return memberRoleRefusalMessage.installation_authority;
   return result.kind === "conflict"
     ? "The current draft, selected release, or installation changed. Reload before continuing."
     : result.kind === "refused"
