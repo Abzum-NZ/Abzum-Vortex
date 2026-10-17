@@ -1132,20 +1132,14 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "hr_position_new_department",
-                          "name": "department",
-                          "label": "Department",
-                          "required": true,
-                          "choice_source": {
-                            "query": "vortex.hr:hr_departments",
-                            "label_field": "vortex.hr:department.name"
-                          },
+                          "field": "vortex.hr:position.department",
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.1.0"
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
                             },
                             "theme_overrides": {},
                             "responsive": {
@@ -1290,20 +1284,14 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "hr_position_edit_department",
-                          "name": "department",
-                          "label": "Department",
-                          "required": true,
-                          "choice_source": {
-                            "query": "vortex.hr:hr_departments",
-                            "label_field": "vortex.hr:department.name"
-                          },
+                          "field": "vortex.hr:position.department",
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.1.0"
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
                             },
                             "theme_overrides": {},
                             "responsive": {
@@ -1705,20 +1693,14 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "hr_employee_new_person",
-                          "name": "person",
-                          "label": "Person",
-                          "required": true,
-                          "choice_source": {
-                            "query": "vortex.system_directory:people",
-                            "label_field": "vortex.system_directory:person.display_name"
-                          },
+                          "field": "vortex.hr:employee.person",
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.1.0"
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
                             },
                             "theme_overrides": {},
                             "responsive": {
@@ -1736,20 +1718,14 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "hr_employee_new_position",
-                          "name": "position",
-                          "label": "Position",
-                          "required": true,
-                          "choice_source": {
-                            "query": "vortex.hr:hr_positions",
-                            "label_field": "vortex.hr:position.title"
-                          },
+                          "field": "vortex.hr:employee.position",
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.1.0"
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
                             },
                             "theme_overrides": {},
                             "responsive": {
@@ -1946,20 +1922,14 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "hr_employee_edit_person",
-                          "name": "person",
-                          "label": "Person",
-                          "required": true,
-                          "choice_source": {
-                            "query": "vortex.system_directory:people",
-                            "label_field": "vortex.system_directory:person.display_name"
-                          },
+                          "field": "vortex.hr:employee.person",
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.1.0"
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
                             },
                             "theme_overrides": {},
                             "responsive": {
@@ -1977,20 +1947,14 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "hr_employee_edit_position",
-                          "name": "position",
-                          "label": "Position",
-                          "required": true,
-                          "choice_source": {
-                            "query": "vortex.hr:hr_positions",
-                            "label_field": "vortex.hr:position.title"
-                          },
+                          "field": "vortex.hr:employee.position",
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.1.0"
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
                             },
                             "theme_overrides": {},
                             "responsive": {
@@ -2422,20 +2386,14 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "hr_leave_request_new_employee",
-                          "name": "employee",
-                          "label": "Employee",
-                          "required": true,
-                          "choice_source": {
-                            "query": "vortex.hr:hr_employees",
-                            "label_field": "vortex.hr:employee.employee_number"
-                          },
+                          "field": "vortex.hr:leave_request.employee",
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.1.0"
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
                             },
                             "theme_overrides": {},
                             "responsive": {
@@ -2453,20 +2411,14 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "hr_leave_request_new_entitlement",
-                          "name": "entitlement",
-                          "label": "Entitlement",
-                          "required": true,
-                          "choice_source": {
-                            "query": "vortex.hr:hr_leave_entitlements",
-                            "label_field": "vortex.hr:leave_entitlement.year"
-                          },
+                          "field": "vortex.hr:leave_request.entitlement",
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.1.0"
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
                             },
                             "theme_overrides": {},
                             "responsive": {
@@ -2689,20 +2641,14 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "hr_leave_request_edit_employee",
-                          "name": "employee",
-                          "label": "Employee",
-                          "required": true,
-                          "choice_source": {
-                            "query": "vortex.hr:hr_employees",
-                            "label_field": "vortex.hr:employee.employee_number"
-                          },
+                          "field": "vortex.hr:leave_request.employee",
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.1.0"
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
                             },
                             "theme_overrides": {},
                             "responsive": {
@@ -2720,20 +2666,14 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "hr_leave_request_edit_entitlement",
-                          "name": "entitlement",
-                          "label": "Entitlement",
-                          "required": true,
-                          "choice_source": {
-                            "query": "vortex.hr:hr_leave_entitlements",
-                            "label_field": "vortex.hr:leave_entitlement.year"
-                          },
+                          "field": "vortex.hr:leave_request.entitlement",
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.1.0"
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
                             },
                             "theme_overrides": {},
                             "responsive": {
@@ -3015,20 +2955,14 @@
                     "title": "New leave entitlement",
                     "content": [
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "hr_leave_entitlement_new_employee",
-                          "name": "employee",
-                          "label": "Employee",
-                          "required": true,
-                          "choice_source": {
-                            "query": "vortex.hr:hr_employees",
-                            "label_field": "vortex.hr:employee.employee_number"
-                          },
+                          "field": "vortex.hr:leave_entitlement.employee",
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.1.0"
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
                             },
                             "theme_overrides": {},
                             "responsive": {
@@ -3173,20 +3107,14 @@
                     "title": "Edit leave entitlement",
                     "content": [
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "hr_leave_entitlement_edit_employee",
-                          "name": "employee",
-                          "label": "Employee",
-                          "required": true,
-                          "choice_source": {
-                            "query": "vortex.hr:hr_employees",
-                            "label_field": "vortex.hr:employee.employee_number"
-                          },
+                          "field": "vortex.hr:leave_entitlement.employee",
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.1.0"
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
                             },
                             "theme_overrides": {},
                             "responsive": {

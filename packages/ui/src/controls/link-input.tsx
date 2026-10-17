@@ -1,8 +1,19 @@
 "use client";
 
-import type { ChangeEvent, ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { Button } from "../components/button";
+import {
+  Combobox,
+  ComboboxClear,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+} from "../components/combobox";
 import { Field, FieldLabel } from "../components/field";
-import { Input } from "../components/input";
+import { InputGroup, InputGroupAddon } from "../components/input-group";
 import {
   readControlSettings,
   resolveControlContext,
@@ -18,79 +29,161 @@ import {
   useSeededState,
 } from "./field-parts";
 import { useRequiredFormField } from "./form-context";
-import type { LinkInputPayload, TypedRecordReference } from "./projected-data";
+import {
+  parseRecordChoicePage,
+  type LinkInputPayload,
+  type RecordChoiceOption,
+  type TypedRecordReference,
+} from "./projected-data";
 
 export type LinkInputProps = ControlRenderProps<LinkInputPayload>;
 
-/**
- * A record-reference key is the exact `recordTypeId:recordId` pair of the linked record. It names
- * a reference only and never carries the record's values or grants access to it.
- */
-const referenceKey = (reference: TypedRecordReference | null | undefined): string =>
-  reference === null || reference === undefined
-    ? ""
-    : `${reference.recordTypeId}:${reference.recordId}`;
+/** How long typing rests before the records are searched, so a word costs one read, not one per key. */
+const SEARCH_DELAY_MS = 250;
+
+/** The picked record: its identity and the title the person picked it by. */
+type Picked = Readonly<{ reference: TypedRecordReference; title: string; typeLabel?: string }>;
+
+const choiceKey = (reference: TypedRecordReference): string =>
+  `${reference.recordTypeId.toLowerCase()}:${reference.recordId.toLowerCase()}`;
+
+const seededPick = (values: LinkInputPayload | undefined): Picked | null =>
+  values?.value === undefined || values.value === null || values.title === undefined
+    ? null
+    : { reference: values.value, title: values.title };
 
 /**
- * Parses an entered reference key, admitting only a complete pair whose record type is one the
- * block's authored allowed record types names. Anything else is no reference at all, so the form
- * and its events never carry a reference of an undeclared record type.
- */
-const parseReferenceKey = (
-  text: string,
-  allowedRecordTypeIds: readonly string[],
-): TypedRecordReference | null => {
-  const separator = text.indexOf(":");
-  if (separator < 0) return null;
-  const recordTypeId = text.slice(0, separator).trim();
-  const recordId = text.slice(separator + 1).trim();
-  if (recordTypeId.length === 0 || recordId.length === 0) return null;
-  return allowedRecordTypeIds.includes(recordTypeId)
-    ? Object.freeze({ recordTypeId, recordId })
-    : null;
-};
-
-/**
- * Link field that collects one record reference of an authored allowed record type. It emits only
- * its declared `field_changed` event with the typed reference and publishes it to its enclosing
- * form; it never fetches or discloses the referenced record.
+ * A link field: a searchable, paged picker over the records of the record types the field may
+ * point at. It asks its page for records through its `records_requested` event (search text and a
+ * continuation, nothing else) and shows each by its title; the server reads them under the
+ * person's own access. It emits `field_changed` with the picked record's typed reference and
+ * publishes it to its enclosing form. Without a page to ask, it offers no records.
  */
 export function LinkInput(props: LinkInputProps): ReactElement {
-  const context = resolveControlContext<LinkInputPayload>(props, ["field_changed"]);
+  const context = resolveControlContext<LinkInputPayload>(props, [
+    "field_changed",
+    "records_requested",
+  ]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();
   const label = context.accessibleName ?? props.metadata.name;
   const help = settings.text("help_text");
-  const placeholder = settings.text("placeholder");
+  const placeholder = settings.text("placeholder") ?? "Search by name";
   const required = settings.boolean("required");
   const readOnly = settings.boolean("read_only");
   const draftFeedback = useFieldFeedback(fieldKey);
   const disabled =
     context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
-  const allowedRecordTypeIds = settings.recordTypeIds("record_types");
+  const allowedRecordTypeIds = settings.recordTypeIds("record_types").map((id) => id.toLowerCase());
+  const severalTypes = allowedRecordTypeIds.length > 1;
   const projectedError = context.values?.error;
   const note = inactiveNote(context);
 
-  const [value, setValue] = useSeededState(referenceKey(context.values?.value));
-  const typedReference = parseReferenceKey(value, allowedRecordTypeIds);
-  const validationError = useRequiredFormField(fieldKey, props.placementId, typedReference, {
-    label,
-    missing: required && !disabled && !readOnly && typedReference === null,
-  });
+  const seed = useMemo(() => seededPick(context.values), [context.values]);
+  const [picked, setPicked] = useSeededState<Picked | null>(seed);
+  const permitted =
+    picked !== null && allowedRecordTypeIds.includes(picked.reference.recordTypeId.toLowerCase())
+      ? picked
+      : null;
+  const validationError = useRequiredFormField(
+    fieldKey,
+    props.placementId,
+    permitted?.reference ?? null,
+    { label, missing: required && !disabled && !readOnly && permitted === null },
+  );
   const error = projectedError ?? validationError;
 
-  const onChange = (event: ChangeEvent<HTMLInputElement>): void => {
-    if (disabled || readOnly) return;
-    const next = event.target.value;
-    setValue(next);
-    // A cleared or not-yet-valid entry reports no reference, so listeners never keep a stale one.
-    context.events?.field_changed?.({
-      event: "field_changed",
-      fieldKey,
-      value: parseReferenceKey(next, allowedRecordTypeIds),
-    });
+  const [open, setOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [choices, setChoices] = useState<readonly RecordChoiceOption[]>([]);
+  const [next, setNext] = useState<string | undefined>(undefined);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const generation = useRef(0);
+  const requestRecords = useRef(context.events?.records_requested);
+  requestRecords.current = context.events?.records_requested;
+  const location = useRef(context.location);
+  location.current = context.location;
+
+  /** Reads one page; a newer request or a closed picker discards the answer of an older one. */
+  const load = useRef<(search: string, continuationToken?: string) => void>(() => undefined);
+  load.current = (search, continuationToken) => {
+    const handler = requestRecords.current;
+    if (handler === undefined) return;
+    const request = ++generation.current;
+    setLoading(true);
+    setFailed(false);
+    const bounded = search.trim().slice(0, 100);
+    void Promise.resolve(
+      handler({
+        event: "records_requested",
+        ...(bounded === "" ? {} : { search: bounded }),
+        ...(continuationToken === undefined ? {} : { continuationToken }),
+      }),
+    )
+      .then((answer) => {
+        if (generation.current !== request) return;
+        const page = parseRecordChoicePage(answer, location.current);
+        setChoices((current) =>
+          continuationToken === undefined ? page.choices : [...current, ...page.choices],
+        );
+        setNext(page.nextContinuationToken);
+      })
+      .catch((cause: unknown) => {
+        if (generation.current !== request) return;
+        console.error("[link-input] records unavailable", cause);
+        setFailed(true);
+      })
+      .finally(() => {
+        if (generation.current === request) setLoading(false);
+      });
   };
+
+  // Opening reads the first page; typing reads again once the person pauses. Closing abandons any
+  // answer still on its way.
+  useEffect(() => {
+    if (!open) {
+      generation.current += 1;
+      return;
+    }
+    const timeout = setTimeout(
+      () => load.current(searchTerm),
+      searchTerm.trim() === "" ? 0 : SEARCH_DELAY_MS,
+    );
+    return () => clearTimeout(timeout);
+  }, [open, searchTerm]);
+
+  const pickedOption: RecordChoiceOption | null =
+    permitted === null
+      ? null
+      : {
+          ...permitted.reference,
+          title: permitted.title,
+          typeLabel: permitted.typeLabel ?? "",
+        };
+  const items =
+    pickedOption === null || choices.some((choice) => choiceKey(choice) === choiceKey(pickedOption))
+      ? choices
+      : [pickedOption, ...choices];
+
+  const change = (item: RecordChoiceOption | null): void => {
+    if (disabled || readOnly) return;
+    const reference =
+      item === null || !allowedRecordTypeIds.includes(item.recordTypeId.toLowerCase())
+        ? null
+        : Object.freeze({ recordTypeId: item.recordTypeId, recordId: item.recordId });
+    setPicked(
+      reference === null || item === null
+        ? null
+        : { reference, title: item.title, typeLabel: item.typeLabel },
+    );
+    context.events?.field_changed?.({ event: "field_changed", fieldKey, value: reference });
+  };
+
+  const described = describedBy(ids, help, error, note, draftFeedback);
+  const ariaRequired = required || described["aria-required"] === true;
+  const inactive = disabled || readOnly;
 
   return (
     <Field
@@ -99,22 +192,88 @@ export function LinkInput(props: LinkInputProps): ReactElement {
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
     >
-      <FieldLabel htmlFor={ids.control}>
+      <FieldLabel id={ids.label} htmlFor={ids.control}>
         <FieldLabelText label={label} required={required} />
       </FieldLabel>
-      <Input
-        id={ids.control}
+      <Combobox
+        items={items}
+        value={pickedOption}
+        inputValue={open ? searchTerm : (pickedOption?.title ?? "")}
+        onOpenChange={(next) => {
+          if (inactive && next) return;
+          setOpen(next);
+          setSearchTerm("");
+          if (!next) {
+            setChoices([]);
+            setNext(undefined);
+            setLoading(false);
+          }
+        }}
+        onInputValueChange={setSearchTerm}
+        onValueChange={(item) => change(item)}
+        itemToStringLabel={(item) => item.title}
+        itemToStringValue={(item) => choiceKey(item)}
+        isItemEqualToValue={(item, value) => choiceKey(item) === choiceKey(value)}
+        // The server already searched; every record it returned is offered.
+        filter={() => true}
         name={fieldKey}
-        type="text"
-        value={value}
-        onChange={onChange}
-        disabled={disabled}
-        readOnly={readOnly}
         required={required}
-        {...(placeholder === undefined ? {} : { placeholder })}
-        aria-invalid={error !== undefined}
-        {...describedBy(ids, help, error, note, draftFeedback)}
-      />
+        disabled={inactive}
+      >
+        <InputGroup>
+          <ComboboxInput
+            id={ids.control}
+            placeholder={placeholder}
+            disabled={inactive}
+            readOnly={readOnly}
+            aria-labelledby={ids.label}
+            aria-describedby={described["aria-describedby"]}
+            aria-required={ariaRequired}
+            aria-invalid={error !== undefined}
+          />
+          <InputGroupAddon align="inline-end">
+            <ComboboxTrigger aria-label={"Show " + label + " records"} disabled={inactive} />
+            <ComboboxClear
+              aria-label={"Clear " + label}
+              disabled={inactive || pickedOption === null}
+            />
+          </InputGroupAddon>
+        </InputGroup>
+        <ComboboxContent>
+          <ComboboxList>
+            {(item: RecordChoiceOption) => (
+              <ComboboxItem key={choiceKey(item)} value={item}>
+                <span className="truncate">{item.title}</span>
+                {severalTypes && item.typeLabel !== "" ? (
+                  <span className="ml-auto text-xs text-muted-foreground">{item.typeLabel}</span>
+                ) : null}
+              </ComboboxItem>
+            )}
+          </ComboboxList>
+          <ComboboxEmpty role="status">
+            {loading
+              ? "Searching…"
+              : failed
+                ? "Records could not be loaded. Try again."
+                : searchTerm.trim() === ""
+                  ? "No records you can see"
+                  : "No matching records"}
+          </ComboboxEmpty>
+          {next !== undefined ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={loading}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => load.current(searchTerm, next)}
+              className="w-full justify-start text-muted-foreground"
+            >
+              {loading ? "Loading…" : "Show more"}
+            </Button>
+          ) : null}
+        </ComboboxContent>
+      </Combobox>
       <FieldMessages
         ids={ids}
         help={help}
