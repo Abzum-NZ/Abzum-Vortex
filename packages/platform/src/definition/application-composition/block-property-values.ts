@@ -32,7 +32,6 @@ export type BlockPropertyValueContract =
   | { kind: "url"; value: string }
   | { kind: "asset_reference"; assetId: z.infer<typeof platformIdSchema> }
   | { kind: "icon"; iconKey: string }
-  | { kind: "theme_token"; tokenKey: string }
   | { kind: "field_reference"; fieldId: z.infer<typeof fieldIdSchema> }
   | {
       kind: "relationship_reference";
@@ -100,12 +99,6 @@ export const blockPropertyValueSchema: z.ZodType<BlockPropertyValueContract> = z
       .object({
         kind: sourceProvenanceUnchanged(z.literal("icon")),
         iconKey: sourceProvenanceUnchanged(builderKeySchema),
-      })
-      .strict(),
-    z
-      .object({
-        kind: sourceProvenanceUnchanged(z.literal("theme_token")),
-        tokenKey: sourceProvenanceUnchanged(builderKeySchema),
       })
       .strict(),
     z
@@ -186,7 +179,6 @@ export type SourceBlockPropertyValueContract =
   | { kind: "url"; value: string }
   | { kind: "asset_reference"; asset_id: z.infer<typeof platformIdSchema> }
   | { kind: "icon"; icon_key: string }
-  | { kind: "theme_token"; token: string }
   | { kind: "field_reference"; field: z.infer<typeof sourceQualifiedFieldSchema> }
   | {
       kind: "relationship_reference";
