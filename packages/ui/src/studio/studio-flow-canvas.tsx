@@ -27,7 +27,7 @@ const pathKey = (path: StudioFlowPath): string => JSON.stringify(path);
 
 function CanvasNode({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
   return <Card size="sm" style={{ width: nodeWidth, minHeight: nodeHeight }}
-    className={cn("gap-1 py-2", selected && "ring-2 ring-ring", data.kind === "step" ? "cursor-pointer" : "bg-muted text-muted-foreground")}>
+    className={cn("gap-1 py-2", selected && "ring-2 ring-ring", data.kind === "step" || data.kind === "start" ? "cursor-pointer" : "bg-muted text-muted-foreground")}>
     <Handle type="target" position={Position.Top} isConnectable={false} />
     <CardHeader className="gap-1 px-3">
       <CardTitle className="flex items-center gap-2 truncate text-sm">
@@ -44,7 +44,7 @@ const nodeTypes = { canvas: CanvasNode };
 type Layout = Readonly<{ width: number; height: number; firstIds: readonly string[]; lastIds: readonly string[] }>;
 
 const node = (id: string, x: number, y: number, data: CanvasNodeData): Node<CanvasNodeData> =>
-  ({ id, type: "canvas", draggable: false, connectable: false, selectable: data.kind === "step", position: { x, y }, data });
+  ({ id, type: "canvas", draggable: false, connectable: false, selectable: data.kind === "step" || data.kind === "start", position: { x, y }, data });
 
 /** Lists run top to bottom; a step's branches sit side by side below it and join again after it. */
 function layoutList(list: StudioFlowTaskListOutline, left: number, top: number,
@@ -138,19 +138,23 @@ export function StudioFlowCanvas({ lists, starts, selectedPath, onSelect, label 
   /** How the flow starts, in words: one entry per trigger or bound control event. */
   starts: readonly string[];
   selectedPath: StudioFlowPath | null;
-  /** A step was chosen on the canvas (its path), or the empty canvas (null). */
+  /**
+   * A step was chosen on the canvas (its path), or how the flow starts (null): the Start node or the
+   * empty canvas, whose inspector is the flow's own, how it starts.
+   */
   onSelect: (path: StudioFlowPath | null) => void;
   label: string;
 }>) {
   const graph = useMemo(() => buildGraph(lists, starts), [lists, starts]);
   const selectedKey = selectedPath === null ? null : pathKey(selectedPath);
   return <div className="h-full min-h-96 w-full border border-border" style={themed} aria-label={label} role="group">
-    <ReactFlow nodes={graph.nodes.map((entry) => ({ ...entry, selected: entry.id === selectedKey }))} edges={graph.edges}
+    <ReactFlow nodes={graph.nodes.map((entry) => ({ ...entry,
+      selected: selectedKey === null ? entry.data.kind === "start" : entry.id === selectedKey }))} edges={graph.edges}
       nodeTypes={nodeTypes} fitView fitViewOptions={{ maxZoom: 1 }} nodesDraggable={false} nodesConnectable={false}
       edgesFocusable={false} elementsSelectable proOptions={{ hideAttribution: true }}
       onNodeClick={(_, clicked) => {
-        if (clicked.data.kind !== "step") return;
-        onSelect(JSON.parse(clicked.id) as StudioFlowPath);
+        if (clicked.data.kind === "start") onSelect(null);
+        else if (clicked.data.kind === "step") onSelect(JSON.parse(clicked.id) as StudioFlowPath);
       }}
       onPaneClick={() => onSelect(null)}>
       <Background />

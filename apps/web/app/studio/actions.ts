@@ -40,8 +40,11 @@ import {
   type StudioApplicationSourceReviewResult,
 } from "./_lib/application-source-import";
 import { platformPermissionSource } from "../_lib/platform-permission-source";
-import { tokenName } from "./_lib/studio-labels";
+import { tokenName } from "@vortex/ui/studio";
 import type { StudioThemeResolution } from "./_lib/studio-theme-options";
+import type { StudioStoredApplicationDraft } from "@vortex/ui/studio";
+import { readStudioPersonLabel } from "../_lib/studio-person-labels";
+import type { StudioPersonLabel } from "../_lib/studio-application-restore-contracts";
 
 const refuse = <Result>(operation: string, code: string, fallback: Result, cause?: unknown): Result =>
   mapWebError(cause, { route: "studio/actions", operation, code, fallback });
@@ -136,13 +139,39 @@ export async function createStudioApplication(organizationId: string, candidate:
   return createHumanApplicationDraft(organizationId, { source: source.data });
 }
 
+/** What one autosave came to: the platform's answer, or a conflict that names the newer saved draft. */
+export type StudioSaveApplicationResult =
+  | Awaited<ReturnType<typeof saveHumanApplicationDraft>>
+  | Readonly<{ kind: "conflict"; reason: "draft_changed"; elsewhere: StudioDraftChangedElsewhere }>;
+
+/** The saved draft another window or person wrote, which a save from this workspace no longer extends. */
+export type StudioDraftChangedElsewhere = Readonly<{
+  draft: StudioStoredApplicationDraft;
+  /** Who wrote it, as the saving person may see them. */
+  changedBy: StudioPersonLabel;
+}>;
+
 /**
- * Saves the draft and nothing else. The draft is compiled for the canvas by the separate
- * `reopenStudioApplication` request the workspace sends once the save is in, so Save itself does
- * not wait for a compile; the workspace shows nothing compiled for the new revision as current
- * until that compile answers for exactly this revision.
+ * Saves the draft and nothing else: Studio autosaves each batch of edits through this one action.
+ * The draft is compiled for the canvas by the separate `reopenStudioApplication` request the
+ * workspace sends once its saves are idle, so a save never waits for a compile. A save that no
+ * longer extends the saved revision is refused as a conflict that names who wrote the newer
+ * revision and carries it, so the workspace can say what changed.
  */
-export async function saveStudioApplication(organizationId: string, candidate: unknown) {
+export async function saveStudioApplication(organizationId: string, candidate: unknown): Promise<StudioSaveApplicationResult> {
+  const saved = await saveApplicationDraft(organizationId, candidate);
+  if (saved.kind !== "conflict" || saved.reason !== "draft_changed") return saved;
+  const command = saveDefinitionDraftCommandSchema.parse(candidate);
+  const latest = await loadStudioApplicationDraft(organizationId, command.rootId, { compile: false });
+  if (latest.kind !== "available") {
+    console.error(`[studio] the newer saved draft could not be read after a conflict: STUDIO_SAVE_CONFLICT_READ_${latest.kind.toUpperCase()}`);
+    return saved;
+  }
+  const changedBy = await readStudioPersonLabel(organizationId, latest.draft.updatedBy);
+  return { kind: "conflict", reason: "draft_changed", elsewhere: { draft: latest.draft, changedBy } };
+}
+
+const saveApplicationDraft = async (organizationId: string, candidate: unknown) => {
   const command = saveDefinitionDraftCommandSchema.safeParse(candidate);
   if (!command.success)
     return refuse("save-application", "STUDIO_SAVE_COMMAND_SCHEMA_INVALID",
@@ -154,9 +183,8 @@ export async function saveStudioApplication(organizationId: string, candidate: u
   if (!validation.valid)
     return refuse("save-application", `STUDIO_SAVE_SOURCE_INVALID:${failureCodes(validation)}`,
       { kind: "refused", reason: "source_invalid" } as const);
-  const saved = await saveHumanApplicationDraft(organizationId, command.data);
-  return saved;
-}
+  return saveHumanApplicationDraft(organizationId, command.data);
+};
 
 /** The saved draft compiled for the canvas: its page slots, frames, choices and compile failure. */
 export async function reopenStudioApplication(organizationId: string, applicationRootId: string) {

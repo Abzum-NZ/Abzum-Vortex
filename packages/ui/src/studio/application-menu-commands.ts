@@ -7,8 +7,8 @@ import {
 
 /**
  * The Menu tab's edits of the application's one navigation definition (`body.navigation`): add a
- * page entry, group entries under a heading, rename, choose the icon, the page and who can see an
- * entry, move it (by drag or keyboard) and remove it. Each edit is applied to a copy of the draft
+ * page entry, group entries under a heading, rename, choose the icon and the page of an entry, move
+ * it (by drag or keyboard) and remove it. Who can see an entry is set in the Access tab. Each edit is applied to a copy of the draft
  * and judged by the source schema before it reaches the draft history; a refusal says where the
  * problem is and changes nothing. A page's removal already takes its entries with it (Structure).
  */
@@ -22,8 +22,6 @@ export type StudioMenuChanges = Readonly<{
   icon?: VortexIconName;
   /** The key of the page a page entry opens. */
   page?: string;
-  /** The permission a person must hold to see the entry. */
-  permission?: string;
   /** The https address an external entry opens. */
   address?: string;
 }>;
@@ -93,14 +91,6 @@ export const studioMenuPageChoices = (source: Source) =>
   source.body.pages.filter((page) => page.type !== "detail" && page.type !== "public")
     .map((page) => ({ key: page.key, label: page.name }));
 
-/** Who can see an entry: the application's own permissions, each with the roles that hold it. */
-export const studioMenuPermissionChoices = (source: Source) =>
-  source.body.permissions.map((permission) => ({
-    key: permission.key,
-    label: permission.label,
-    roles: source.body.roles.filter((role) => role.permissions.includes(permission.key)).map((role) => role.name),
-  }));
-
 const requirePage = (source: Source, key: string) => {
   const page = studioMenuPageChoices(source).find((choice) => choice.key === key);
   if (page === undefined)
@@ -108,10 +98,6 @@ const requirePage = (source: Source, key: string) => {
       ? "That page opens a single record, so it cannot be a menu entry. Choose a list, dashboard or form page."
       : "That page is no longer in this application. Choose another page.");
   return page!;
-};
-const requirePermission = (source: Source, key: string): void => {
-  if (!source.body.permissions.some((permission) => permission.key === key))
-    refuse("That permission is not one of this application's permissions. Choose who can see the entry again.");
 };
 
 const judged = (candidate: Source): Source => {
@@ -136,7 +122,7 @@ const addEntry = (candidate: Source, command: Extract<StudioMenuCommand, { kind:
     (place.item as Heading).children.push(entry);
   }
   return { kind: "applied", source: judged(candidate), select: entry.id,
-    message: `Menu entry ${quoted(entry.label)} added. Save to keep it.` };
+    message: `Menu entry ${quoted(entry.label)} added.` };
 };
 
 const addHeading = (candidate: Source, command: Extract<StudioMenuCommand, { kind: "add_heading" }>): StudioMenuResult => {
@@ -146,14 +132,14 @@ const addHeading = (candidate: Source, command: Extract<StudioMenuCommand, { kin
   const heading: Heading = { id: newAlias(candidate, label), type: "heading", label, icon: "grid", children: [place.item] };
   place.list.splice(place.index, 1, heading);
   return { kind: "applied", source: judged(candidate), select: heading.id,
-    message: `Heading ${quoted(label)} added with ${quoted(place.item.label)} under it. Save to keep it.` };
+    message: `Heading ${quoted(label)} added with ${quoted(place.item.label)} under it.` };
 };
 
 const change = (candidate: Source, command: Extract<StudioMenuCommand, { kind: "change" }>): StudioMenuResult => {
   const place = requirePlace(candidate.body.navigation, command.alias);
   const item = place.item;
   const next: Record<string, unknown> = { ...item };
-  const { label, icon, page, permission, address } = command.changes;
+  const { label, icon, page, address } = command.changes;
   if (label !== undefined) next.label = cleanLabel(label);
   if (icon !== undefined) {
     if (!(VORTEX_ICON_NAMES as readonly string[]).includes(icon)) refuse("That icon is not in the icon set. Choose another.");
@@ -163,11 +149,6 @@ const change = (candidate: Source, command: Extract<StudioMenuCommand, { kind: "
     if (item.type !== "page") refuse("Only a page entry opens a page.");
     next.page = requirePage(candidate, page).key;
   }
-  if (permission !== undefined) {
-    if (item.type === "heading") refuse("A heading is shown when any entry under it is; choose who can see each entry instead.");
-    requirePermission(candidate, permission);
-    next.permission = permission;
-  }
   if (address !== undefined) {
     if (item.type !== "external") refuse("Only a link entry opens an address.");
     if (!/^https:\/\/[^\s]+$/.test(address.trim())) refuse("Enter an address that starts with https://.");
@@ -175,7 +156,7 @@ const change = (candidate: Source, command: Extract<StudioMenuCommand, { kind: "
   }
   place.list[place.index] = next as StudioMenuItem;
   return { kind: "applied", source: judged(candidate), select: item.id,
-    message: `Menu entry ${quoted(String(next.label))} changed. Save to keep it.` };
+    message: `Menu entry ${quoted(String(next.label))} changed.` };
 };
 
 const move = (candidate: Source, command: Extract<StudioMenuCommand, { kind: "move" }>): StudioMenuResult => {
@@ -191,7 +172,7 @@ const move = (candidate: Source, command: Extract<StudioMenuCommand, { kind: "mo
   list.splice(index, 0, place.item);
   const where = target === undefined ? "the menu" : `the heading ${quoted(target.item.label)}`;
   return { kind: "applied", source: judged(candidate), select: place.item.id,
-    message: `${quoted(place.item.label)} moved to position ${index + 1} in ${where}. Save to keep it.` };
+    message: `${quoted(place.item.label)} moved to position ${index + 1} in ${where}.` };
 };
 
 const remove = (candidate: Source, alias: string): StudioMenuResult => {
@@ -200,8 +181,8 @@ const remove = (candidate: Source, alias: string): StudioMenuResult => {
   place.list.splice(place.index, 1, ...(place.item.type === "heading" ? place.item.children : []));
   return { kind: "applied", source: judged(candidate), select: null,
     message: place.item.type === "heading"
-      ? `Heading ${quoted(place.item.label)} removed; its entries stay in the menu. Save to keep it.`
-      : `Menu entry ${quoted(place.item.label)} removed. Save to keep it.` };
+      ? `Heading ${quoted(place.item.label)} removed; its entries stay in the menu.`
+      : `Menu entry ${quoted(place.item.label)} removed.` };
 };
 
 /** Applies one Menu edit to the draft, or refuses it with a located message. */

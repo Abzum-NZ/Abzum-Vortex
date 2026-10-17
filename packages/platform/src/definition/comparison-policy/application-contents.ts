@@ -672,7 +672,6 @@ export const normaliseApplicationContent = (content: ApplicationContent): Applic
     navigation: common.navigation,
     roles: common.roles,
     queries: common.queries,
-    pipelines: common.pipelines,
     permissions: common.permissions,
     actions: common.actions,
     events: common.events,

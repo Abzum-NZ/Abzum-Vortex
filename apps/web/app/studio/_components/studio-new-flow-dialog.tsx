@@ -27,8 +27,10 @@ export function StudioNewFlowDialog({ open, onOpenChange, choices, onCreate, ini
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const chosenType = choices.recordTypes.find((entry) => `${entry.moduleKey} ${entry.recordTypeKey}` === recordType);
+    const chosenControl = choices.actions.find((entry) => entry.controlAlias === control);
     const command: StudioFlowCreateCommand | undefined = start === "action"
-      ? control === "" ? undefined : { kind: "action", controlAlias: control, name }
+      ? chosenControl === undefined ? undefined : { kind: "action", controlAlias: control, name,
+        recordType: chosenControl.recordType, event: chosenControl.event }
       : chosenType === undefined ? undefined : { kind: "before_save", moduleKey: chosenType.moduleKey,
         recordTypeKey: chosenType.recordTypeKey, name,
         operations: [...(onCreateRecord ? ["create" as const] : []), ...(onUpdateRecord ? ["update" as const] : [])] };
@@ -42,7 +44,7 @@ export function StudioNewFlowDialog({ open, onOpenChange, choices, onCreate, ini
       <form onSubmit={submit} className="space-y-4">
         <DialogHeader>
           <DialogTitle>New flow</DialogTitle>
-          <DialogDescription>The flow starts with one step you then change on the canvas. Save to keep it.</DialogDescription>
+          <DialogDescription>The flow starts with one step you then change on the canvas.</DialogDescription>
         </DialogHeader>
         <div className="space-y-1.5">
           <Label htmlFor="new-flow-name">Name</Label>

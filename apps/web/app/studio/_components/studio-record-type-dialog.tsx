@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@vortex/ui/components/input";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 import { StudioField } from "./studio-field";
+import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
 
 /** The plural a builder most likely means; they can change it. */
 const pluralOf = (name: string): string => {
@@ -19,16 +20,17 @@ const pluralOf = (name: string): string => {
 };
 
 /**
- * The new record type form: its names, its key (made from the name and changeable until the draft
- * is saved) and the label of its title field. An application that owns no module yet gets its
+ * The new record type form: its names, its key (made from the name; it does not change later)
+ * and the label of its title field. An application that owns no module yet gets its
  * first module with it; the module's key is made from the application key.
  */
-export function StudioRecordTypeDialog({ open, source, onClose, onCreate }: Readonly<{
+export function StudioRecordTypeDialog({ open, source, edit, onClose, onCreated }: Readonly<{
   open: boolean;
   source: ApplicationSourceDocument;
+  edit: StudioDataEdit;
   onClose: () => void;
-  /** Applies the new source to the draft history; false when the draft moved on meanwhile. */
-  onCreate: (expected: ApplicationSourceDocument, next: ApplicationSourceDocument, moduleKey: string, recordKey: string) => boolean;
+  /** Called with the record type the form added. */
+  onCreated: (moduleKey: string, recordKey: string) => void;
 }>) {
   const modules = source.body.modules;
   const [name, setName] = useState("");
@@ -52,17 +54,14 @@ export function StudioRecordTypeDialog({ open, source, onClose, onCreate }: Read
   };
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const result = createInlineRecordType(source, {
+    const result = edit((current) => createInlineRecordType(current, {
       ...(firstModule ? { newModule: { key: effectiveModuleKey, name: effectiveModuleName } } : { moduleKey: target!.key }),
       name, pluralName: effectivePlural, key: effectiveKey, titleLabel,
-    });
-    if (result.kind === "invalid") { setIssues(result.issues); return; }
-    if (!onCreate(source, result.source, result.moduleKey, result.recordKey)) {
-      setIssues(["The draft changed or is busy, so the record type was not added. Try again in a moment."]);
-      return;
-    }
+    }));
+    if (result.kind !== "changed") { setIssues([studioEditProblem(result) ?? "The record type was not added."]); return; }
     reset();
     onClose();
+    onCreated(result.moduleKey, result.recordKey);
   };
 
   return <Dialog open={open} onOpenChange={(next) => { if (!next) { reset(); onClose(); } }}>
@@ -81,7 +80,7 @@ export function StudioRecordTypeDialog({ open, source, onClose, onCreate }: Read
           {(control) => <Input {...control} required maxLength={60} value={effectivePlural}
             onChange={(event) => { setPlural(event.target.value); setIssues([]); }} />}
         </StudioField>
-        <StudioField label="Key" hint="Made from the name. You can change it until you save the draft; after that it is permanent.">
+        <StudioField label="Key" hint="Made from the name. It does not change later.">
           {(control) => <Input {...control} required maxLength={40} value={effectiveKey}
             onChange={(event) => { setKey(event.target.value); setIssues([]); }} />}
         </StudioField>
@@ -97,7 +96,7 @@ export function StudioRecordTypeDialog({ open, source, onClose, onCreate }: Read
               {(control) => <Input {...control} required maxLength={120} value={effectiveModuleName}
                 onChange={(event) => { setNewModuleName(event.target.value); setIssues([]); }} />}
             </StudioField>
-            <StudioField label="Module key" hint="Made from the application key. You can change it until you save the draft.">
+            <StudioField label="Module key" hint="Made from the application key. It does not change later.">
               {(control) => <Input {...control} required maxLength={120} value={effectiveModuleKey}
                 onChange={(event) => { setNewModuleKey(event.target.value); setIssues([]); }} />}
             </StudioField>

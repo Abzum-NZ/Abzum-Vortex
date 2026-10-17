@@ -58,7 +58,7 @@ const newer = (left: string, right: string): boolean => {
  */
 const editableKinds = new Set<BlockPropertySchemaContract["kind"]>([
   "text", "url", "number", "boolean", "choice", "rich_text", "icon", "field_reference", "query_reference",
-  "page_reference", "record_type_reference", "action_reference", "pipeline_reference", "relationship_reference",
+  "page_reference", "record_type_reference", "action_reference", "relationship_reference",
   "record_reference",
 ]);
 
@@ -276,10 +276,6 @@ export function studioRelationshipChoices(
     })));
   return Object.freeze([...own, ...borrowedFor(source, borrowed)?.relationships ?? []]);
 }
-
-/** The application's pipelines in the draft, by key. */
-export const studioSourcePipelines = (source: ApplicationSourceDocument): readonly Readonly<{ key: string; label: string }>[] =>
-  Object.freeze(source.body.pipelines.map((pipeline) => Object.freeze({ key: pipeline.key, label: pipeline.name })));
 
 /**
  * Whether a block may store this query reference: a query of one of the application's own

@@ -14,20 +14,12 @@ import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-config
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";
 import {
-  inspectStudioApplicationReleaseHistory,
-  loadStudioApplicationHistoryAccess,
-} from "./studio-application-history";
-import {
   studioApplicationRestoreCommandSchema,
   studioApplicationRestoreCommandResultSchema,
-  studioApplicationRestoreLoadResultSchema,
   studioApplicationRestoreReceiptSchema,
-  studioApplicationRestoreSelectorSchema,
-  type StudioApplicationRestoreAvailable,
   type StudioApplicationRestoreCommand,
   type StudioApplicationRestoreCommandResult,
   type StudioApplicationRestoreFailure,
-  type StudioApplicationRestoreLoadResult,
   type StudioApplicationRestoreReceipt,
 } from "./studio-application-restore-contracts";
 import { DefinitionError, classifyDatabaseError } from "@vortex/platform/server";
@@ -51,23 +43,6 @@ const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId
   return { isSystemApplication: false };
 };
 
-const currentExpected = (snapshot: {
-  draftRevision: number;
-  sourceFingerprint: string;
-  anchorReleaseRevision: number | null;
-}) => ({
-  draftRevision: snapshot.draftRevision,
-  sourceFingerprint: snapshot.sourceFingerprint,
-  anchorReleaseRevision: snapshot.anchorReleaseRevision,
-});
-
-const sameExpected = (
-  left: ReturnType<typeof currentExpected>,
-  right: ReturnType<typeof currentExpected>,
-): boolean => left.draftRevision === right.draftRevision &&
-  left.sourceFingerprint === right.sourceFingerprint &&
-  left.anchorReleaseRevision === right.anchorReleaseRevision;
-
 const failureKind = (error: unknown): FailureKind => {
   const kind = classifyDatabaseError(error);
   if (error instanceof DefinitionError) {
@@ -85,68 +60,6 @@ const failureKind = (error: unknown): FailureKind => {
   if (kind === "conflict") return "conflict";
   return "temporarily_unavailable";
 };
-
-const loadFailure = (kind: FailureKind): StudioApplicationRestoreLoadResult => ({ kind });
-
-const availableLoad = (value: unknown): StudioApplicationRestoreAvailable | undefined => {
-  const parsed = studioApplicationRestoreLoadResultSchema.safeParse(value);
-  return parsed.success && parsed.data.kind === "available" ? parsed.data : undefined;
-};
-
-/** Loads a read-only exact release projection against one freshly checked saved-draft snapshot. */
-export async function loadStudioApplicationRestore(
-  organizationIdCandidate: string,
-  selectorCandidate: unknown,
-): Promise<StudioApplicationRestoreLoadResult> {
-  const organizationId = organizationIdSchema.safeParse(organizationIdCandidate);
-  const selector = studioApplicationRestoreSelectorSchema.safeParse(selectorCandidate);
-  if (!organizationId.success || !selector.success || !sameId(organizationId.data, selector.data.organizationId))
-    return loadFailure("refused");
-
-  try {
-    const access = await loadStudioApplicationHistoryAccess(
-      selector.data.organizationId,
-      selector.data.rootId,
-    );
-    if (access.kind !== "available") return loadFailure(access.kind);
-    const expected = currentExpected(access.snapshot);
-    if (!sameId(access.snapshot.organizationId, selector.data.organizationId) ||
-      !sameId(access.snapshot.rootId, selector.data.rootId) ||
-      access.snapshot.anchorReleaseRevision === null ||
-      access.snapshot.draftRevision >= Number.MAX_SAFE_INTEGER ||
-      selector.data.releaseRevision > access.snapshot.anchorReleaseRevision)
-      return loadFailure("refused");
-
-    const inspected = await inspectStudioApplicationReleaseHistory(selector.data.organizationId, {
-      rootId: selector.data.rootId,
-      expected,
-      releaseRevision: selector.data.releaseRevision,
-    });
-    if (inspected.kind !== "available") return loadFailure(inspected.kind);
-    if (!sameExpected(expected, currentExpected(inspected.snapshot))) return loadFailure("conflict");
-    if (inspected.metadata.releaseRevision !== selector.data.releaseRevision ||
-      inspected.metadata.isCurrent !== (selector.data.releaseRevision === expected.anchorReleaseRevision))
-      return loadFailure("temporarily_unavailable");
-
-    const result = availableLoad({
-      kind: "available",
-      selector: selector.data,
-      snapshot: {
-        organizationId: inspected.snapshot.organizationId,
-        rootId: inspected.snapshot.rootId,
-        definitionKey: inspected.snapshot.definitionKey,
-        draftRevision: inspected.snapshot.draftRevision,
-        sourceFingerprint: inspected.snapshot.sourceFingerprint,
-        anchorReleaseRevision: inspected.snapshot.anchorReleaseRevision,
-      },
-      metadata: inspected.metadata,
-      publishedBy: await readStudioPersonLabel(selector.data.organizationId, inspected.metadata.publishedBy),
-    });
-    return result ?? loadFailure("temporarily_unavailable");
-  } catch (error) {
-    return loadFailure(failureKind(error));
-  }
-}
 
 const createReceipt = (
   draft: StoredDefinitionDraft,

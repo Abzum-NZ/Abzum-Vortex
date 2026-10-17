@@ -8,6 +8,8 @@ import {
   moneyValueSchema,
   normalizeExactDecimal,
   parseExactDecimal,
+  pipelineAllowsMove,
+  pipelineMoveRefusalMessage,
   recordTypeDefinitionSchema,
   sourceExactDecimalTextSchema,
   sourceModuleFieldValueSchemas,
@@ -32,7 +34,8 @@ export type RecordFieldValuePreparationIssueCode =
   | "required_attachment_empty"
   | "invalid_value"
   | "organization_currency_required"
-  | "unresolved_record_target";
+  | "unresolved_record_target"
+  | "stage_move_refused";
 
 export type RecordFieldValuePreparationIssue = Readonly<{
   code: RecordFieldValuePreparationIssueCode;
@@ -880,6 +883,35 @@ const finalizeRecordFieldCandidateInternal = (
         },
       );
   }
+
+  // A changed stage moves only along its pipeline's transitions, whoever or whatever changed it:
+  // a person's save, a rule's output or a named action.
+  if (input.initialCandidate.operation === "update")
+    for (const pipeline of trustedRecordType.pipelines) {
+      const fieldId = String(pipeline.stageFieldId);
+      const before = input.initialCandidate.originalValues[fieldId];
+      const after = normalizedCandidate[fieldId];
+      if (
+        typeof before !== "string" ||
+        typeof after !== "string" ||
+        pipelineAllowsMove(pipeline, before, after)
+      )
+        continue;
+      const field = fieldsById.get(fieldId);
+      const options = field?.type === "choice" ? field.settings.options : [];
+      const optionLabel = (value: string): string =>
+        options.find((option) => option.value === value)?.label ?? value;
+      issue(context, "stage_move_refused", ["candidateValues", fieldId], fieldId, {
+        code: "stage_move_refused",
+        message: pipelineMoveRefusalMessage(
+          pipeline,
+          field?.label ?? pipeline.name,
+          optionLabel,
+          before,
+          after,
+        ),
+      });
+    }
 
   if (context.issues.length > 0) return { success: false, issues: context.issues };
 
