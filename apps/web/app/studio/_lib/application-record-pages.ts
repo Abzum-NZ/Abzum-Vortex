@@ -84,34 +84,56 @@ const resolveRecordType = (source: Source, reference: string) => {
   const title = record.fields.find((field) => field.key === record.title_field);
   if (title === undefined)
     return refuse(`The record type ${quoted(record.name)} has no title field, so its pages cannot name a record. Choose its title field in Data first.`);
+  /** The record type's standard permission for one action, or a located refusal. */
+  const standard = (action: "read" | "create" | "update") => {
+    const key = standardPermissionKey(module.key, record.key, action);
+    return module.permissions.find((entry) => entry.key === key) ??
+      refuse(`The record type ${quoted(record.name)} has no standard ${action} permission in ${quoted(module.name)}, so no page can be made for it. Restore it in Data first.`);
+  };
+  /** The fields the standard permission for an action lets people read or change; every field when it sets no field policy. */
+  const fieldAccess = (action: "read" | "create" | "update", access: "readable_fields" | "changeable_fields"): ReadonlySet<string> => {
+    const policy = standard(action).field_policy as Record<"readable_fields" | "changeable_fields", string[]> | undefined;
+    return new Set(policy === undefined ? record.fields.map((entry) => entry.key) : policy[access]);
+  };
+  const readable = fieldAccess("read", "readable_fields");
+  if (!readable.has(title.key))
+    refuse(`${quoted(title.label)}, the title field of ${quoted(record.name)}, is not readable under its read permission, so its pages cannot name a record. Change that permission in Access first.`);
   /**
    * The application permission that opens a page of the record type for one standard action:
-   * `<application>.<record>.<action>`, made when missing and granted to each access group that
-   * holds the record type's standard permission for that action. A page opens with an
-   * application permission; the record permission still governs the records it shows.
+   * `<application>.<module>.<record>.<action>` (the module in it, so two modules' record types of
+   * the same key never share one), made when missing and then granted to each access group that
+   * holds the record type's standard permission for that action at that moment. A page opens with
+   * an application permission; the record permission still governs the records it shows.
    */
-  const permission = (target: Source, action: "read" | "create" | "update") => {
-    const recordPermission = standardPermissionKey(module.key, record.key, action);
-    if (!module.permissions.some((entry) => entry.key === recordPermission))
-      refuse(`The record type ${quoted(record.name)} has no standard ${action} permission in ${quoted(module.name)}, so no page can be opened with it. Restore it in Data first.`);
+  const permission = (target: Source, action: "read" | "create" | "update", details?: string[]) => {
+    const recordPermission = standard(action).key;
     const body = target.body;
-    const key = `${target.key}.${record.key}.${action}`;
-    if (!body.permissions.some((entry) => entry.key === key)) {
-      if (body.permissions.length >= 100) refuse("The application already declares 100 permissions, so no page permission can be added.");
-      const verb = action === "read" ? "Open" : action === "create" ? "Open creation of" : "Open editing of";
-      const taken = new Set(body.permissions.map((entry) => entry.id));
-      body.permissions.push({ id: uniqueKey(`${record.key}_${action}`, "app_permission_", taken, 160), key,
-        label: `${verb} ${record.plural_name.toLowerCase()}`.slice(0, 60),
-        description: `Allows opening the ${action === "read" ? "" : `${action === "create" ? "creation" : "editing"} `}pages of ${record.plural_name.toLowerCase()}.`,
-        action_kind: "named", named_action: uniqueKey(`${record.key}_${action}`, "", new Set(), 40), administrative: false });
-      for (const role of body.roles) {
-        const held = role.permissions as string[];
-        if (!held.includes("*") && held.includes(recordPermission) && !held.includes(key)) held.push(key);
-      }
+    const key = `${target.key}.${module.key.replaceAll(".", "_")}.${record.key}.${action}`;
+    const existing = body.permissions.find((entry) => entry.key === key);
+    if (existing !== undefined) {
+      if (existing.action_kind !== "named" || existing.record_type !== undefined)
+        refuse(`The application permission ${quoted(existing.label)} already uses the key ${key} for something other than opening pages. Rename it in Access first.`);
+      return key;
     }
+    if (key.length > 120) refuse(`The page permission key for ${quoted(record.name)} would be longer than 120 characters. Use a shorter module or record type key.`);
+    if (body.permissions.length >= 100) refuse("The application already declares 100 permissions, so no page permission can be added.");
+    const verb = action === "read" ? "Open" : action === "create" ? "Open creation of" : "Open editing of";
+    body.permissions.push({ id: uniqueKey(`${record.key}_${action}`, "app_permission_", new Set(body.permissions.map((entry) => entry.id)), 160),
+      key, label: `${verb} ${record.plural_name.toLowerCase()}`.slice(0, 60),
+      description: `Allows opening the ${action === "read" ? "" : `${action === "create" ? "creation" : "editing"} `}pages of ${record.plural_name.toLowerCase()} in ${module.name}.`,
+      action_kind: "named",
+      named_action: uniqueKey(`${record.key}_${action}`, "", new Set(body.permissions.flatMap((entry) => entry.named_action ?? [])), 40),
+      administrative: false });
+    const granted = body.roles.filter((role) => {
+      const held = role.permissions as string[];
+      if (held.includes("*") || !held.includes(recordPermission)) return false;
+      held.push(key);
+      return true;
+    });
+    details?.push(`A new permission ${quoted(`${verb} ${record.plural_name.toLowerCase()}`)}, given now to ${granted.length === 0 ? "no access group" : listing(granted.map((role) => quoted(role.name)))} (those that can ${action} ${record.plural_name.toLowerCase()}). Access groups changed later get it in Access.`);
     return key;
   };
-  return { module, record, title, qualified: `${module.key}:${record.key}`, permission };
+  return { module, record, title, qualified: `${module.key}:${record.key}`, permission, readable, fieldAccess };
 };
 type Resolved = ReturnType<typeof resolveRecordType>;
 
@@ -183,10 +205,14 @@ const listQuery = (plan: Plan, resolved: Resolved, columns: readonly Field[]): R
   return { reference: `${module.key}:${key}`, select: query.select };
 };
 
-/** The fields a table of the record type shows: its numbers, its title, then compact fields. */
-const keyColumns = (record: RecordType, title: Field): Field[] => {
-  const numbers = record.fields.filter((entry) => entry.type === "reference_number");
-  const rest = record.fields.filter((entry) => entry !== title && entry.type !== "reference_number" && columnTypes.has(entry.type));
+/**
+ * The fields a table of the record type shows: its numbers, its title, then compact fields, each
+ * one its read permission lets people read.
+ */
+const keyColumns = (record: RecordType, title: Field, readable: ReadonlySet<string>): Field[] => {
+  const shown = record.fields.filter((entry) => readable.has(entry.key));
+  const numbers = shown.filter((entry) => entry.type === "reference_number");
+  const rest = shown.filter((entry) => entry !== title && entry.type !== "reference_number" && columnTypes.has(entry.type));
   return [...numbers, title, ...rest].slice(0, columnLimit);
 };
 
@@ -204,8 +230,8 @@ const pageData = (context: StudioStructureContext, source: Source, shellAlias: s
   }
   try { validateStoredZone(context.catalogue, { items }); }
   catch (error) {
+    // A refusal is the answer the preview shows, with its reason; anything else is a fault.
     if (!(error instanceof StoredCompositionRefusal)) throw error;
-    console.error("[studio] a record page's blocks were refused", error.message);
     refuse(`The page ${quoted(pageName)} could not be built from the block catalogue (${error.reason}), so nothing was changed.`);
   }
   if (area === undefined) data.content = items;
@@ -314,7 +340,7 @@ const addList = (context: StudioStructureContext, plan: Plan, resolved: Resolved
   }, {}, { query: query.reference });
   const name = record.plural_name.slice(0, 60);
   const items = [table];
-  const placedPage = placeNewPage(plan.source, name, { type: "list", record_type: resolved.qualified, permission: resolved.permission(plan.source, "read"),
+  const placedPage = placeNewPage(plan.source, name, { type: "list", record_type: resolved.qualified, permission: resolved.permission(plan.source, "read", plan.details),
     query: query.reference }, pageData(context, plan.source, command.shellAlias, items, name), command.addToMenu);
   plan.source = judged(placedPage.source);
   plan.details.unshift(`A page ${quoted(name)}, for people who can read ${record.plural_name.toLowerCase()}${command.addToMenu ? ", with a menu entry" : ""}.`);
@@ -326,7 +352,7 @@ const addList = (context: StudioStructureContext, plan: Plan, resolved: Resolved
   } else plan.details.push(`Rows open nothing yet: ${record.plural_name.toLowerCase()} have no detail page. Adding one makes rows open it.`);
   if (found.create !== undefined) {
     const label = `New ${lowerFirst(record.name)}`;
-    openButton(context, plan, label, resolved.permission(plan.source, "create"), found.create, undefined, { beside: tableAlias });
+    openButton(context, plan, label, resolved.permission(plan.source, "create", plan.details), found.create, undefined, { beside: tableAlias });
     plan.details.push(`A ${quoted(label)} button opens ${quoted(found.create.name)}.`);
   } else plan.details.push(`No New button yet: ${record.plural_name.toLowerCase()} have no create form. Adding one puts the button here.`);
   return placedPage.page;
@@ -377,7 +403,7 @@ const addDetail = (context: StudioStructureContext, plan: Plan, resolved: Resolv
   }, {});
   const name = record.name.slice(0, 60);
   const related = relatedTables(context, plan, resolved);
-  const placedPage = placeNewPage(plan.source, name, { type: "detail", record_type: resolved.qualified, permission: resolved.permission(plan.source, "read") },
+  const placedPage = placeNewPage(plan.source, name, { type: "detail", record_type: resolved.qualified, permission: resolved.permission(plan.source, "read", plan.details) },
     pageData(context, plan.source, command.shellAlias, [detail, ...related], name), command.addToMenu);
   plan.source = judged(placedPage.source);
   const page = placedPage.page;
@@ -386,7 +412,7 @@ const addDetail = (context: StudioStructureContext, plan: Plan, resolved: Resolv
   if (related.length === 0) plan.details.push(`No related tables: no record type of this application links to ${record.plural_name.toLowerCase()}.`);
   const found = companions(plan.source, resolved.qualified);
   if (found.edit !== undefined) {
-    openButton(context, plan, "Edit", resolved.permission(plan.source, "update"), found.edit, resolved, { beside: detailAlias });
+    openButton(context, plan, "Edit", resolved.permission(plan.source, "update", plan.details), found.edit, resolved, { beside: detailAlias });
     plan.details.push(`An ${quoted("Edit")} button opens ${quoted(found.edit.name)} with this ${lowerFirst(record.name)}.`);
   } else plan.details.push(`No Edit button yet: ${record.plural_name.toLowerCase()} have no edit form. Adding one puts the button here.`);
   for (const list of found.list) {
@@ -453,7 +479,7 @@ const addForm = (context: StudioStructureContext, plan: Plan, resolved: Resolved
   const name = `${mode === "create" ? "New" : "Edit"} ${lowerFirst(record.name)}`.slice(0, 60);
   const { frame, formAlias } = formBlock(context, plan, resolved, name, fields, "Save");
   const placedPage = placeNewPage(plan.source, name, { type: "form", record_type: resolved.qualified,
-    permission: resolved.permission(plan.source, mode === "create" ? "create" : "update") },
+    permission: resolved.permission(plan.source, mode === "create" ? "create" : "update", plan.details) },
     pageData(context, plan.source, command.shellAlias, [frame], name), command.addToMenu);
   plan.source = judged(placedPage.source);
   plan.details.unshift(`A page ${quoted(name)}, for people who can ${mode === "create" ? "create" : "change"} ${record.plural_name.toLowerCase()}${command.addToMenu ? ", with a menu entry" : ""}.`);
@@ -482,7 +508,7 @@ const linkFormBack = (context: StudioStructureContext, plan: Plan, resolved: Res
       const label = `New ${lowerFirst(resolved.record.name)}`;
       const data = list.composition as unknown as Parameters<typeof sourcePageZones>[0];
       const zone = sourcePageZones(data).find(([, items]) => items.length > 0)?.[1] ?? sourcePageZones(data).at(-1)![1];
-      openButton(context, plan, label, resolved.permission(plan.source, "create"), page, undefined,
+      openButton(context, plan, label, resolved.permission(plan.source, "create", plan.details), page, undefined,
         table === undefined ? { items: zone } : { beside: table.props.id });
       plan.details.push(`A ${quoted(label)} button on ${quoted(list.name)} opens this form.`);
     }
@@ -496,7 +522,7 @@ const linkFormBack = (context: StudioStructureContext, plan: Plan, resolved: Res
   if (opensAny(plan.source, detail, [page.key])) return;
   const shown = sourcePageItems(detail.composition).find((item) => String(item.type) === "platform.renderer.record_detail");
   const data = detail.composition as unknown as Parameters<typeof sourcePageZones>[0];
-  openButton(context, plan, "Edit", resolved.permission(plan.source, "update"), page, resolved,
+  openButton(context, plan, "Edit", resolved.permission(plan.source, "update", plan.details), page, resolved,
     shown === undefined ? { items: sourcePageZones(data).find(([, items]) => items.length > 0)?.[1] ?? sourcePageZones(data).at(-1)![1] }
       : { beside: shown.props.id });
   plan.details.push(`An ${quoted("Edit")} button on ${quoted(detail.name)} opens this form with the shown ${lowerFirst(resolved.record.name)}.`);
@@ -525,7 +551,7 @@ const addGuided = (context: StudioStructureContext, plan: Plan, resolved: Resolv
   const composition = { step_content: Object.fromEntries(steps.map((step, index) =>
     [step.id, pageData(context, plan.source, command.shellAlias, [forms[index]!.frame], name)])) };
   const placedPage = placeNewPage(plan.source, name, { type: "guided_form", record_type: resolved.qualified,
-    permission: resolved.permission(plan.source, "create"), steps: steps.map(({ id, name: stepName, summary }) => ({ id, name: stepName, summary })) },
+    permission: resolved.permission(plan.source, "create", plan.details), steps: steps.map(({ id, name: stepName, summary }) => ({ id, name: stepName, summary })) },
     composition, command.addToMenu);
   plan.source = judged(placedPage.source);
   plan.details.unshift(`A guided page ${quoted(name)}, for people who can create ${record.plural_name.toLowerCase()}${command.addToMenu ? ", with a menu entry" : ""}.`);
