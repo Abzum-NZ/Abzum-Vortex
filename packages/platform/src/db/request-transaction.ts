@@ -155,15 +155,55 @@ const validateContext = (candidate: SessionContext): SessionContext => {
   return parsed.data;
 };
 
+
+// VXPERF-TEMP: temporary #2811 instrumentation, never committed.
+type VxTx = { label: string; start: number; ms: number; queries: number; queryMs: number; qs?: string[] };
+const vxStore = (): { t0: number; tx: VxTx[] } | undefined =>
+  (globalThis as unknown as { __vxPerf?: AsyncLocalStorage<{ t0: number; tx: VxTx[] }> }).__vxPerf?.getStore();
+const vxTimedDriver = (driver: DatabaseDriver): DatabaseDriver => ({
+  transaction: async <Result>(operation: (transaction: TransactionDriver) => Promise<Result>) => {
+    const store = vxStore();
+    if (store === undefined) return driver.transaction(operation);
+    const start = performance.now();
+    const entry: VxTx = { label: "", start: Math.round((start - store.t0) * 10) / 10, ms: 0, queries: 0, queryMs: 0 };
+    try {
+      return await driver.transaction((transaction) =>
+        operation({
+          query: async <ResultRow extends DatabaseRow>(strings: TemplateStringsArray, ...values: readonly DatabaseValue[]) => {
+            const text = strings.join("?").replace(/\s+/g, " ").trim();
+            if (entry.label === "" && !text.startsWith("select vortex_platform.initialize") && !text.startsWith("set local role"))
+              entry.label = text.slice(0, 90);
+            const queryStart = performance.now();
+            try {
+              return await transaction.query<ResultRow>(strings, ...values);
+            } finally {
+              entry.queries += 1;
+              entry.queryMs += performance.now() - queryStart;
+              (entry.qs ??= []).push(`${(performance.now() - queryStart).toFixed(1)} ${text.slice(0, 110)}`);
+            }
+          },
+          ...((transaction as Partial<SavepointRequestDatabaseTransaction>).withSavepoint === undefined
+            ? {}
+            : { withSavepoint: (transaction as SavepointRequestDatabaseTransaction).withSavepoint.bind(transaction) }),
+        } as TransactionDriver),
+      );
+    } finally {
+      entry.ms = Math.round((performance.now() - start) * 10) / 10;
+      entry.queryMs = Math.round(entry.queryMs * 10) / 10;
+      store.tx.push(entry);
+    }
+  },
+});
+
 const createRuntimeTransactionRunner =
-  (driver: DatabaseDriver) =>
+  (rawDriver: DatabaseDriver, driver = vxTimedDriver(rawDriver)) =>
   async <Result>(operation: RuntimeOperation<Result>): Promise<Result> =>
     driver.transaction(async (transaction) =>
       invokeRequestDatabaseCallback(() => operation(transaction)),
     );
 
 const createResolvedRequestTransactionRunner =
-  (driver: DatabaseDriver) =>
+  (rawDriver: DatabaseDriver, driver = vxTimedDriver(rawDriver)) =>
   async <Scope, Result>(
     resolve: RequestContextResolver<Scope>,
     operation: ResolvedRequestOperation<Scope, Result>,

@@ -58,6 +58,12 @@ import { createFlowTaskRunner } from "./flow-task-runner";
 
 /** Orchestrates flows with verified authority, revision-bound writes and single-use continuations. */
 
+
+// VXPERF-TEMP: temporary #2811 instrumentation, never committed.
+const vxSpan = <T,>(name: string, operation: () => Promise<T>): Promise<T> => {
+  const span = (globalThis as unknown as { __vxSpan?: <U>(n: string, o: () => Promise<U>) => Promise<U> }).__vxSpan;
+  return span === undefined ? operation() : span(name, operation);
+};
 /** The seconds a suspended run may wait for the person's answer. */
 const flowContinuationLifetimeSeconds = 900;
 const serverMilliseconds = flowMaximumServerSeconds * 1_000;
@@ -207,14 +213,18 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       if (elapsedMilliseconds(run) > serverMilliseconds) return limitExceeded(run, step.state);
       if (step.kind === "interface")
         return run.authority.kind === "person" ? suspend(run, step) : refused;
-      const result = await runProtectedTask(run, step.state, step.call);
+      const call = step.call;
+      const state = step.state;
+      const result = await vxSpan(`step.${call.taskType}:${call.taskId}`, () => runProtectedTask(run, state, call));
       const resume: FlowRunResume = {
         kind: "task_result",
         outcome: result.outcome,
         ...(result.outputs === undefined ? {} : { outputs: result.outputs }),
         ...(result.diagnostic === undefined ? {} : { diagnostic: result.diagnostic }),
       };
+      const resumeStart = performance.now();
       step = resumeFlowRun(step.state, resume, run.library);
+      void vxSpan(`interpret:${(performance.now() - resumeStart).toFixed(1)}ms`, async () => undefined);
     }
   };
 
@@ -226,13 +236,13 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
   ): Promise<PreparedPersonRun | undefined> => {
     // An expired session is not a verified initiator, on a start or on any resume.
     if (!(Date.parse(session.accessTokenExpiresAt) > now().valueOf())) return undefined;
-    const release = await dependencies.resolveRelease(selection.organizationId, flowId);
+    const release = await vxSpan("orch.resolveRelease", () => dependencies.resolveRelease(selection.organizationId, flowId));
     if (release === undefined) return undefined;
     const validated = libraryOf(release);
     const permitted = async (flow: FlowDefinition): Promise<boolean> =>
       flow.invocationPermissionId === undefined ||
       (dependencies.authorizeInvocation !== undefined &&
-        (await dependencies.authorizeInvocation(session, selection, flow)));
+        (await vxSpan("orch.authorizeInvocation", () => dependencies.authorizeInvocation!(session, selection, flow))));
 
     const flow = validated(flowId);
     // A flow the platform runs for a person runs as that person, and only that. A named action's

@@ -50,6 +50,12 @@ import type {
  * runs the record, operation or named-action path it names. `runNamedAction` is the orchestrator's
  * one named-action path.
  */
+
+// VXPERF-TEMP: temporary #2811 instrumentation, never committed.
+const vxSpan = <T,>(name: string, operation: () => Promise<T>): Promise<T> => {
+  const span = (globalThis as unknown as { __vxSpan?: <U>(n: string, o: () => Promise<U>) => Promise<U> }).__vxSpan;
+  return span === undefined ? operation() : span(name, operation);
+};
 export const createFlowTaskRunner = (
   dependencies: FlowOrchestratorDependencies,
   runNamedAction: (
@@ -404,7 +410,7 @@ export const createFlowTaskRunner = (
           ? { recordTypeId: plan.command.recordTypeId, recordId: plan.command.recordId }
           : undefined;
     if (target !== undefined) {
-      const subject = await dependencies.subjects!.read(session, selection, target);
+      const subject = await vxSpan("task.subjectRead", () => dependencies.subjects!.read(session, selection, target));
       if (subject !== "read")
         return {
           result: { outcome: subject === "refused" ? "refused" : "failed" },
@@ -412,7 +418,7 @@ export const createFlowTaskRunner = (
         };
     }
     if (plan.kind === "save") {
-      const saved = await dependencies.records!.save(session, selection, plan.command);
+      const saved = await vxSpan("task.recordSave", () => dependencies.records!.save(session, selection, plan.command));
       if (saved.kind !== "available")
         return { result: { outcome: requestOutcome(saved.kind) }, stored: {} };
       const value = saved.value;
@@ -481,7 +487,7 @@ export const createFlowTaskRunner = (
     }
 
     if (plan.kind === "action") {
-      const executed = await runNamedAction(session, selection, plan.command);
+      const executed = await vxSpan("task.namedAction", () => runNamedAction(session, selection, plan.command));
       if (executed.kind !== "available")
         return { result: { outcome: requestOutcome(executed.kind) }, stored: {} };
       const value = executed.value;
@@ -634,7 +640,7 @@ export const createFlowTaskRunner = (
     } as const;
     let claim: Awaited<ReturnType<FlowEffectLedger["begin"]>>;
     try {
-      claim = await dependencies.ledger.begin(key);
+      claim = await vxSpan("task.ledgerBegin", () => dependencies.ledger.begin(key));
     } catch (error) {
       reportUnexpectedFailure("effect ledger claim", error);
       // Nothing was claimed, so nothing ran.
@@ -699,7 +705,7 @@ export const createFlowTaskRunner = (
       return { outcome: "uncertain" };
     }
     try {
-      await dependencies.ledger.complete(key, ran.result.outcome, ran.stored);
+      await vxSpan("task.ledgerComplete", () => dependencies.ledger.complete(key, ran.result.outcome, ran.stored));
     } catch (error) {
       reportUnexpectedFailure("effect ledger completion", error);
       // The effect ran. Leaving the claim open makes any repeat report it uncertain, never re-run it.

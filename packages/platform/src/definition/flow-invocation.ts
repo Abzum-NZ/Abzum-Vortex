@@ -490,12 +490,24 @@ const declaresPausedNode = (
   if (form?.kind !== "literal") return form !== undefined;
   return String(form.literal?.value).toLowerCase() === node.formId.toLowerCase();
 };
+
+// VXPERF-TEMP: temporary #2811 instrumentation, never committed.
+const vxSpan = <T,>(name: string, operation: () => Promise<T>): Promise<T> => {
+  const span = (globalThis as unknown as { __vxSpan?: <U>(n: string, o: () => Promise<U>) => Promise<U> }).__vxSpan;
+  return span === undefined ? operation() : span(name, operation);
+};
 export async function invokeInstalledFlow(
   session: IdentitySession,
   body: FlowInvocationRequest,
   address: FlowInvocationAddress,
-  dependencies: InvocationDependencies,
+  rawDependencies: InvocationDependencies,
 ): Promise<FlowBindingEndpointResult> {
+  const dependencies: InvocationDependencies = {
+    ...rawDependencies,
+    projectForm: (session, form) => vxSpan("inv.projectForm", () => rawDependencies.projectForm(session, form)),
+    resolveFormValues: (input) => vxSpan("inv.resolveFormValues", async () => rawDependencies.resolveFormValues(input)),
+    loadGuidedPage: (session, guided, subject) => vxSpan("inv.loadGuidedPage", () => rawDependencies.loadGuidedPage(session, guided, subject)),
+  };
   const identity = { session };
   const telemetry = dependencies.telemetry;
   const authorityId = dependencies.authorityId;
@@ -1133,7 +1145,7 @@ export async function invokeInstalledFlow(
   // Use the same installed snapshot for this gate and the endpoint. A crafted action on a
   // guided page must not start a flow before its final form submit is confirmed.
   const bindingInstallation =
-    invocation.kind === "binding" ? await readInstalled(identity.session, selection) : undefined;
+    invocation.kind === "binding" ? await vxSpan("inv.readInstalled", () => readInstalled(identity.session, selection)) : undefined;
   if (invocation.kind === "binding") {
     if (bindingInstallation === undefined) {
       logFlowRefusal("BINDING_INSTALLATION_NOT_CURRENT");
@@ -1367,6 +1379,6 @@ export async function invokeInstalledFlow(
           clickId: guidedClickId(confirmation.draftId, confirmation.revision, invocation.bindingId),
         }
       : invocation;
-  const result = await endpoint.invoke(identity.session, selection, invocationWithStableClick);
+  const result = await vxSpan("inv.endpoint.invoke", () => endpoint.invoke(identity.session, selection, invocationWithStableClick));
   return result;
 }
