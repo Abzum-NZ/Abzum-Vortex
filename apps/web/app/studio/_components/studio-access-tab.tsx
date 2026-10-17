@@ -43,7 +43,7 @@ export function useStudioAccessTab({ source, compiledRoles, hidden, disabled, on
   selectedRole: string | null;
   /** Selects a role in the workspace's one selection store. */
   chooseRole: (roleKey: string) => void;
-}>): Readonly<{ panel: ReactNode; centre: ReactNode; title: string; showPages: () => void }> {
+}>): Readonly<{ panel: ReactNode; centre: ReactNode; title: string; showPages: () => void; showRole: () => void }> {
   const roles = source.body.roles;
   const [section, setSection] = useState<Section>("role");
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -112,5 +112,5 @@ export function useStudioAccessTab({ source, compiledRoles, hidden, disabled, on
     {view === "permissions" && <StudioAccessPermissionList source={source} disabled={disabled} run={run} />}
   </div>;
   const title = view === "pages" ? "Pages and menu" : view === "permissions" ? "Permissions" : `Role: ${role?.name ?? ""}`;
-  return { panel, centre, title, showPages: () => show("pages") };
+  return { panel, centre, title, showPages: () => show("pages"), showRole: () => show("role") };
 }

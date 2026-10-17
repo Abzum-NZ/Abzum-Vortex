@@ -1060,7 +1060,10 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const placeOpener: StudioPlaceOpener = {
     open: (place) => {
       const next = studioPlaceSelection(place.open, draft.rootId);
-      if (next !== null) openIn(studioTabOfSelection(next), next);
+      if (next === null) return;
+      // The Access tab may be showing another of its views while the role is already selected.
+      if (next.kind === "role") access.showRole();
+      openIn(studioTabOfSelection(next), next);
     },
     nameOf: (place) => {
       const next = studioPlaceSelection(place.open, draft.rootId);
