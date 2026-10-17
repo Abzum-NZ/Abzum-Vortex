@@ -69,8 +69,9 @@ export const inlineRecordTypeLinks = (
   const record = source.body.modules.find((module) => module.key === moduleKey)?.record_types
     .find((candidate) => candidate.key === recordKey);
   const qualified = `${moduleKey}:${recordKey}`;
+  // A record type that links to itself lists that link once, among its own.
   const incoming = source.body.modules.flatMap((module) => module.record_types.flatMap((other) =>
-    linksOf(other).filter((link) => link.targets.some((target) => target === qualified ||
+    module.key === moduleKey && other.key === recordKey ? [] : linksOf(other).filter((link) => link.targets.some((target) => target === qualified ||
       (module.key === moduleKey && target === recordKey)))
       .map((link) => ({ ...link, moduleKey: module.key, recordKey: other.key, recordName: other.name,
         recordPluralName: other.plural_name }))));
