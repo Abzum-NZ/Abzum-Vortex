@@ -52,17 +52,13 @@ begin
   end if;
 
   -- The storage contracts of the binding set the activation just switched on, read once.
-  select pg_catalog.array_agg(distinct targets.storage_contract_id)
+  -- Modules that hold no record types yet have no targets: zero record types, zero policies.
+  select coalesce(pg_catalog.array_agg(distinct targets.storage_contract_id), array[]::uuid[])
     into target_storage_contract_ids
   from vortex_definition.read_lifecycle_activation_targets_internal(
     p_organization_id, p_application_root_id, p_application_release_revision,
     p_expected_module_bindings
   ) as targets;
-  if target_storage_contract_ids is null
-    or pg_catalog.cardinality(target_storage_contract_ids) = 0 then
-    raise exception using errcode = '23514',
-      message = 'Lifecycle policy installation targets are incomplete';
-  end if;
 
   select limits.* into limits_row
   from vortex_record.organization_lifecycle_limits as limits

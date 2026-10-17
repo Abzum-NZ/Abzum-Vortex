@@ -11,7 +11,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   type FieldInputControlReleaseMap,
-  type createFullPlatformComponentRegistry,
+  type createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
   type ControlSemanticEvent,
   type ChoiceInputPayload,
@@ -31,8 +31,10 @@ import {
   isRecord,
   walkPageComposition,
 } from "@vortex/platform/schema";
+import Link from "next/link";
 import { Button } from "@vortex/ui/components/button";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
+import { FirstRecordTypeEmptyState } from "../../../../../../_components/first-record-type-empty-state";
 import { toast } from "@vortex/ui/components/sonner";
 import {
   Dialog,
@@ -95,7 +97,7 @@ export function ApplicationPageViewContent({
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
   adoptReleaseAction?: ((formData: FormData) => Promise<void>) | undefined;
   pageFeedback?: ReactNode;
-  platformComponentRegistry: ReturnType<typeof createFullPlatformComponentRegistry>;
+  platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
 }>): ReactElement {
@@ -597,7 +599,15 @@ export function ApplicationPageViewContent({
             model.bodyContentAvailable !== false ? undefined : (
               <>
                 {pageFeedback}
-                {model.bodyContentAvailable !== false ? null : (
+                {model.bodyContentAvailable !== false ? null : model.firstRecordTypeHref !== undefined ? (
+                  <FirstRecordTypeEmptyState
+                    action={
+                      <Button nativeButton={false} render={<Link href={model.firstRecordTypeHref} />}>
+                        Open the Data tab in Studio
+                      </Button>
+                    }
+                  />
+                ) : (
                   <Alert role="status" aria-live="polite">
                     <AlertDescription>No page content is available.</AlertDescription>
                   </Alert>

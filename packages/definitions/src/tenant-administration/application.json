@@ -105,6 +105,7 @@
       {
         "id": "role_tenant_administrator",
         "key": "tenant_administrator",
+        "default_member": true,
         "name": "Tenant administrator",
         "home_page": "tenant_overview",
         "permissions": [
@@ -157,7 +158,6 @@
         ]
       }
     ],
-    "pipelines": [],
     "connection_bindings": [],
     "interfaces": [],
     "events": [

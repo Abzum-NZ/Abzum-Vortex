@@ -12,6 +12,7 @@ import {
   comparePresentationSet,
   compareBound,
   compareKeyed,
+  compareOrderedEntries,
   finaliseReasons,
   sorted,
 } from "./shared";
@@ -690,6 +691,89 @@ const compareRecordType = (
         right.relationshipId,
       ),
   );
+  // A new pipeline limits the moves a save accepts; removing one, or a transition, narrows them too.
+  compareKeyed(
+    reasons,
+    previous.pipelines as RecordValue[],
+    candidate.pipelines as RecordValue[],
+    "pipelineId",
+    "pipeline",
+    (left, right) => comparePipeline(reasons, left, right),
+    () => "major",
+  );
+};
+
+const comparePipeline = (
+  reasons: VersionImpactReason[],
+  previous: RecordValue,
+  candidate: RecordValue,
+): void => {
+  const id = candidate.pipelineId;
+  pushChange(
+    reasons,
+    previous.name,
+    candidate.name,
+    "patch",
+    "presentation_changed",
+    "pipeline",
+    "name",
+    id,
+  );
+  pushChange(
+    reasons,
+    previous.key,
+    candidate.key,
+    "major",
+    "component_key_changed",
+    "pipeline",
+    "key",
+    id,
+  );
+  pushChange(
+    reasons,
+    previous.stageFieldId,
+    candidate.stageFieldId,
+    "major",
+    "existing_behavior_changed",
+    "pipeline",
+    "behavior",
+    id,
+  );
+  compareSet(
+    reasons,
+    previous.transitions as unknown[],
+    candidate.transitions as unknown[],
+    "pipeline",
+    id,
+    "behavior",
+  );
+  compareKeyed(
+    reasons,
+    previous.stages as RecordValue[],
+    candidate.stages as RecordValue[],
+    "option",
+    "pipeline_stage",
+    (left, right) =>
+      pushChange(
+        reasons,
+        left.tone,
+        right.tone,
+        "patch",
+        "presentation_changed",
+        "pipeline_stage",
+        "name",
+        id,
+      ),
+    () => "minor",
+    () => id,
+  );
+  const beforeOrder = (previous.stages as RecordValue[]).map((stage) => stage.option);
+  const afterOrder = (candidate.stages as RecordValue[]).map((stage) => stage.option);
+  if (
+    same([...beforeOrder].sort(compareUnknownText), [...afterOrder].sort(compareUnknownText)) &&
+    !same(beforeOrder, afterOrder)
+  )
+    reasons.push(makeReason("patch", "presentation_changed", "pipeline", "order", id));
 };
 
 export const compareSimpleComponent = (
@@ -872,10 +956,22 @@ export const compareModuleContents = (
     "record_type",
     (left, right) => compareRecordType(reasons, left, right),
   );
+  const fieldIds = (content: RecordValue): Set<string> =>
+    new Set(
+      (content.recordTypes as RecordValue[]).flatMap((record) =>
+        (record.fields as RecordValue[]).map((field) => String(field.fieldId)),
+      ),
+    );
+  const previousFieldIds = fieldIds(previous);
+  // The fields this release adds: only they may join a permission or a query additively.
+  const addedFieldIds = new Set(
+    [...fieldIds(candidate)].filter((fieldId) => !previousFieldIds.has(fieldId)),
+  );
   comparePermissions(
     reasons,
     previous.permissions as RecordValue[],
     candidate.permissions as RecordValue[],
+    addedFieldIds,
   );
   compareKeyed(
     reasons,
@@ -932,13 +1028,27 @@ export const compareModuleContents = (
     (candidate.queries as RecordValue[] | undefined) ?? [],
     "queryId",
     "query",
-    // Label and description are presentation; every other declared part of a published query
-    // changes what consumers receive, so it is a major change.
-    (left, right) =>
-      compareSimpleComponent(reasons, "query", right.queryId, left, right, [
+    // Label and description are presentation, and the selected fields are an ordered list of
+    // entries: appending a field added in this same release, or reordering, is minor; appending a
+    // field that already existed exposes it to every consumer, so it is major. Every other
+    // declared part of a published query changes what consumers receive: major.
+    (left, right) => {
+      const { selectedFieldIds: leftSelected, ...leftRest } = left;
+      const { selectedFieldIds: rightSelected, ...rightRest } = right;
+      compareSimpleComponent(reasons, "query", right.queryId, leftRest, rightRest, [
         "label",
         "description",
-      ]),
+      ]);
+      compareOrderedEntries(
+        reasons,
+        (leftSelected as unknown[] | undefined) ?? [],
+        (rightSelected as unknown[] | undefined) ?? [],
+        "query",
+        right.queryId,
+        "behavior",
+        (fieldId) => addedFieldIds.has(String(fieldId)),
+      );
+    },
   );
   compareKeyed(
     reasons,

@@ -7,10 +7,8 @@ import {
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import {
   createPayloadParser,
-  createPlatformComponentRegistry,
   type PlatformComponentPayloadParser,
   type PlatformComponentRegistration,
-  type PlatformComponentRegistry,
 } from "../registry";
 import type { CustomComponentEventBinding } from "./custom-component-host";
 
@@ -119,8 +117,3 @@ export const createCustomComponentRegistrations = (
   releases: readonly PlatformBlockRelease[],
 ): readonly PlatformComponentRegistration[] =>
   Object.freeze(releases.map((release) => createCustomComponentRegistration(release)));
-
-/** Creates an immutable registry over exactly the supplied custom component releases. */
-export const createCustomComponentRegistry = (
-  releases: readonly PlatformBlockRelease[],
-): PlatformComponentRegistry => createPlatformComponentRegistry(createCustomComponentRegistrations(releases));

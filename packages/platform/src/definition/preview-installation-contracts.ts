@@ -45,6 +45,8 @@ export const previewApplicationIdentitySchema = z
     definitionKey: namespacedKeySchema,
     draftRevision: revisionSchema,
     expiresAt: timestampSchema,
+    /** Whether the preview holds copies of live records, which are decided again on opening. */
+    seeded: z.boolean(),
   })
   .strict();
 

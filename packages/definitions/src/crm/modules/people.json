@@ -211,6 +211,7 @@
           }
         }
       ],
+      "pipelines": [],
       "relationships": [
         {
           "id": "fld_contact_company_relationship",
@@ -459,6 +460,7 @@
           "settings": {}
         }
       ],
+      "pipelines": [],
       "relationships": []
     }
   ],

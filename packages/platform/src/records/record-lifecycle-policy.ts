@@ -381,7 +381,7 @@ export const applicationLifecyclePolicyReadinessSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
-    policies: z.array(recordTypeLifecyclePolicySchema).min(1),
+    policies: z.array(recordTypeLifecyclePolicySchema),
     organizationLimits: organizationLifecycleLimitsSchema,
     readinessEvidence: lifecycleReadinessEvidenceSchema,
   })

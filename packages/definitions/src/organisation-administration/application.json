@@ -122,6 +122,7 @@
       {
         "id": "role_organisation_administrator",
         "key": "organisation_administrator",
+        "default_member": true,
         "name": "Organisation administrator",
         "home_page": "organisation_notices",
         "permissions": [
@@ -244,7 +245,6 @@
         ]
       }
     ],
-    "pipelines": [],
     "connection_bindings": [],
     "interfaces": [],
     "events": [

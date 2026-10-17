@@ -26,6 +26,8 @@ begin
   where preview.preview_installation_id = p_preview_installation_id
     and preview.organization_id = (context_value ->> 'organizationId')::uuid
     and preview.application_root_id = (context_value ->> 'applicationRootId')::uuid
+    and preview.previewer_organization_account_id =
+      (context_value ->> 'organizationAccountId')::uuid
     and preview.expires_at > pg_catalog.statement_timestamp()
   for key share;
   if not found then

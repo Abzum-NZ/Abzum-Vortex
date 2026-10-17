@@ -355,9 +355,14 @@ const addressedActiveApplicationIdentitySchema = z.object({
 
 /** An addressed Application: its active installation, or the preview of its draft. */
 type AddressedActiveApplicationIdentity =
-  | (z.infer<typeof addressedActiveApplicationIdentitySchema> & { previewInstallationId?: never })
+  | (z.infer<typeof addressedActiveApplicationIdentitySchema> & {
+      previewInstallationId?: never;
+      seeded?: never;
+    })
   | (Omit<z.infer<typeof addressedActiveApplicationIdentitySchema>, "applicationReleaseRevision"> & {
       previewInstallationId: string;
+      /** Whether the preview holds copies of live records. */
+      seeded: boolean;
       applicationReleaseRevision?: never;
     });
 
@@ -841,6 +846,7 @@ const readAddressedActiveApplicationIdentity = async (
           applicationRootId: preview.applicationRootId,
           definitionKey: preview.definitionKey,
           previewInstallationId: preview.previewInstallationId,
+          seeded: preview.seeded,
         };
       }
       const rows = await transaction.query<AddressedIdentityRow>`
@@ -857,7 +863,26 @@ const readAddressedActiveApplicationIdentity = async (
       return identity.data;
     },
   );
-  return result.kind === "available" ? result.value : undefined;
+  if (result.kind !== "available" || result.value === undefined) return undefined;
+  const identity: AddressedActiveApplicationIdentity = result.value;
+  // A preview holding copies of live records opens only once they are decided again by the
+  // builder's current live access in the installed Application; a refusal refuses the preview.
+  if (identity.previewInstallationId !== undefined && identity.seeded) {
+    const previewInstallationId = identity.previewInstallationId;
+    const reconciled = await requests.run(
+      session.data,
+      { organizationId: organizationId.data, applicationRootId: identity.applicationRootId },
+      async (transaction) => {
+        await createPreviewInstallationRepository(transaction).reconcile(previewInstallationId);
+        return true;
+      },
+    );
+    if (reconciled.kind !== "available") {
+      logRefusal("application-address", "preview records", "PREVIEW_RECORDS_UNCHECKED", reconciled);
+      return undefined;
+    }
+  }
+  return identity;
 };
 
 /** Resolves an address to a thin current active identity before any Application-scoped read. */

@@ -35,7 +35,7 @@ export type StudioApplicationPreviewResult =
   | Readonly<{ kind: "provisioned"; href: string; draftRevision: number; expiresAt: string }>
   | Readonly<{
       kind: "refused";
-      reason: "invalid_request" | "permission_refused" | "not_installed";
+      reason: "invalid_request" | "permission_refused";
     }>
   | Readonly<{ kind: "conflict" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
@@ -117,11 +117,6 @@ export const provisionStudioApplicationPreview = async (
       expectedDraftRevision: request.data.draftRevision,
     });
   } catch (error) {
-    if (error instanceof DefinitionError && error.code === "PREVIEW_INSTALLATION_FAILED") {
-      const cause = (error as { cause?: unknown }).cause;
-      if (cause instanceof Error && /no release to preview/i.test(cause.message))
-        return { kind: "refused", reason: "not_installed" };
-    }
     return failure(error);
   }
   const launcher = await loadOrganizationLauncher(session);

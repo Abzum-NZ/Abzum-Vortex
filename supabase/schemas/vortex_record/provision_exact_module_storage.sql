@@ -82,8 +82,8 @@ begin
   end if;
 
   record_types := release_row.compilation_output #> '{canonical,content,recordTypes}';
-  if pg_catalog.jsonb_typeof(record_types) <> 'array'
-    or pg_catalog.jsonb_array_length(record_types) < 1 then
+  -- A Module may hold no record types yet; its release is provisioned with no storage.
+  if pg_catalog.jsonb_typeof(record_types) is distinct from 'array' then
     raise exception using errcode = '23514', message = 'Module record storage definition is incompatible';
   end if;
 
@@ -96,10 +96,10 @@ begin
     from vortex_record.release_provisions as provision
     where provision.module_root_id = p_module_root_id
       and provision.release_revision = p_module_release_revision;
-    if result_storage_ids is distinct from (
+    if result_storage_ids is distinct from coalesce((
       select pg_catalog.array_agg((item.value ->> 'storageContractId')::uuid order by item.value ->> 'storageContractId')
       from pg_catalog.jsonb_array_elements(record_types) as item(value)
-    ) then
+    ), array[]::uuid[]) then
       raise exception using errcode = '55000', message = 'Stored release provision identities are incompatible';
     end if;
     result_storage_ids := array[]::uuid[];
@@ -646,7 +646,7 @@ begin
     p_module_root_id, p_module_release_revision
   );
 
-  select pg_catalog.array_agg(value order by value) into result_storage_ids
+  select coalesce(pg_catalog.array_agg(value order by value), array[]::uuid[]) into result_storage_ids
   from pg_catalog.unnest(result_storage_ids) as item(value);
   insert into vortex_record.release_provisions (
     module_root_id, release_revision, storage_contract_ids

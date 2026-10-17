@@ -8,6 +8,7 @@ import {
   versionImpactReasonCodes,
 } from "../../schema";
 import { canonicalJson, compareCanonicalStrings } from "../canonical-json-definition";
+import type { BlockPropertySchemaContract } from "../application-composition/block-property-schema";
 
 export type RecordValue = Record<string, unknown>;
 export type ComponentKind = VersionImpactReason["location"]["componentKind"];
@@ -117,6 +118,165 @@ export const comparePresentationSet = (
     !same(previous, candidate)
   )
     reasons.push(makeReason("patch", "presentation_changed", componentKind, "order", componentId));
+};
+
+/** Safe value kinds within a declared presentation list entry; references to behaviour are excluded. */
+const presentationKinds: ReadonlySet<unknown> = new Set([
+  "text",
+  "number",
+  "boolean",
+  "choice",
+  "rich_text",
+  "url",
+  "asset_reference",
+  "icon",
+  "field_reference",
+]);
+
+/** A new entry may carry only safe display values declared by its presentation list. */
+const presentationEntryValue = (
+  value: unknown,
+  declaration: BlockPropertySchemaContract,
+): boolean => {
+  if (value === undefined || value === null) return false;
+  const property = asRecord(value);
+  if (property.kind !== declaration.kind) return false;
+  if (property.kind === "group") {
+    if (declaration.kind !== "group") return false;
+    const properties = asRecord(property.properties);
+    return Object.entries(properties).every(([key, entry]) => {
+      const child = declaration.properties.find((candidate) => candidate.key === key);
+      return child !== undefined && presentationEntryValue(entry, child);
+    });
+  }
+  if (property.kind === "list") {
+    return (
+      declaration.kind === "list" &&
+      (property.items as unknown[]).every(
+        (entry) =>
+          presentationEntryValue(entry, declaration.item) &&
+          (declaration.presentationIdentity === undefined ||
+            presentationEntryIdentity(entry, declaration.presentationIdentity) !== undefined),
+      )
+    );
+  }
+  return presentationKinds.has(property.kind);
+};
+
+export const presentationListEntry = (
+  value: unknown,
+  declaration: BlockPropertySchemaContract,
+): boolean =>
+  declaration.kind === "list" &&
+  declaration.presentation === true &&
+  presentationEntryValue(value, declaration.item) &&
+  (declaration.presentationIdentity === undefined ||
+    presentationEntryIdentity(value, declaration.presentationIdentity) !== undefined);
+
+/** Whether a declared display setting changes only its presentation values. */
+export const presentationOnlyValue = (
+  value: unknown,
+  declaration: BlockPropertySchemaContract,
+  previous?: unknown,
+): boolean => {
+  if (declaration.presentation !== true || !presentationEntryValue(value, declaration))
+    return false;
+  if (previous === undefined) return true;
+  const property = asRecord(value);
+  const old = asRecord(previous);
+  if (old.kind !== property.kind) return false;
+  if (declaration.kind === "group") return presentationEntryEdit(value, previous, declaration);
+  if (declaration.kind === "list") return false;
+  if (property.kind === "field_reference") return same(value, previous);
+  return true;
+};
+
+const presentationEntryEdit = (
+  value: unknown,
+  previous: unknown,
+  declaration: BlockPropertySchemaContract,
+): boolean => {
+  if (declaration.kind !== "group" || !presentationEntryValue(value, declaration)) return false;
+  const old = asRecord(previous);
+  if (old.kind !== "group") return false;
+  const properties = asRecord(asRecord(value).properties);
+  const oldProperties = asRecord(old.properties);
+  return [...new Set([...Object.keys(properties), ...Object.keys(oldProperties)])].every((key) => {
+    if (same(properties[key], oldProperties[key])) return true;
+    const child = declaration.properties.find((candidate) => candidate.key === key);
+    return child !== undefined && presentationOnlyValue(properties[key], child, oldProperties[key]);
+  });
+};
+
+const presentationEntryIdentity = (value: unknown, identityKey: string): string | undefined => {
+  const properties = asRecord(asRecord(value).properties);
+  return properties[identityKey] === undefined ? undefined : canonicalJson(properties[identityKey]);
+};
+
+/**
+ * An ordered list of entries (a block's fields or columns, a query's selected fields). Appending
+ * entries that `additive` accepts is minor, and reordering keeps every entry, so it is minor too.
+ * Appending any other entry, or removing or replacing an entry, changes what existing consumers
+ * get, so it is major.
+ */
+export const compareOrderedEntries = (
+  reasons: VersionImpactReason[],
+  previous: readonly unknown[],
+  candidate: readonly unknown[],
+  componentKind: ComponentKind,
+  componentId: unknown,
+  property: Property,
+  additive: (entry: unknown) => boolean,
+  presentationDeclaration?: BlockPropertySchemaContract,
+): void => {
+  if (same(previous, candidate)) return;
+  const remaining = candidate.map((entry) => canonicalJson(entry));
+  const kept: number[] = [];
+  let presentationEdited = false;
+  for (const [index, entry] of previous.entries()) {
+    let at = remaining.indexOf(canonicalJson(entry));
+    if (
+      at < 0 &&
+      presentationDeclaration?.kind === "list" &&
+      presentationDeclaration.presentation === true
+    ) {
+      const identityKey = presentationDeclaration.presentationIdentity;
+      const identity =
+        identityKey === undefined ? undefined : presentationEntryIdentity(entry, identityKey);
+      at = candidate.findIndex(
+        (next, nextIndex) =>
+          remaining[nextIndex] !== "" &&
+          (identity === undefined
+            ? nextIndex === index
+            : presentationEntryIdentity(next, identityKey!) === identity) &&
+          presentationEntryEdit(next, entry, presentationDeclaration.item),
+      );
+      if (at >= 0) presentationEdited = true;
+    }
+    if (at < 0) {
+      reasons.push(
+        makeReason("major", "existing_behavior_changed", componentKind, property, componentId),
+      );
+      return;
+    }
+    kept.push(at);
+    remaining[at] = "";
+  }
+  const appended = candidate.filter((_, index) => !kept.includes(index));
+  if (appended.some((entry) => !additive(entry)))
+    reasons.push(
+      makeReason("major", "existing_behavior_changed", componentKind, property, componentId),
+    );
+  else if (appended.length > 0)
+    reasons.push(makeReason("minor", "component_added", componentKind, property, componentId));
+  if (presentationEdited)
+    reasons.push(
+      makeReason("patch", "presentation_changed", componentKind, "configuration", componentId),
+    );
+  if (kept.some((position, index) => index > 0 && position < kept[index - 1]!))
+    reasons.push(
+      makeReason("minor", "meaningful_order_changed", componentKind, "order", componentId),
+    );
 };
 
 export const compareBound = (

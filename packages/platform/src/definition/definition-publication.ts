@@ -20,6 +20,9 @@ import {
   type Revision,
 } from "../schema";
 import { applicationModuleKeys } from "./application-module-sources";
+import { peopleDirectory, type PeopleDirectoryOwner } from "./module-links";
+import { selectCurrentModuleRelease } from "./definition-dependency-resolution";
+import { DefinitionError } from "./definition-error";
 import { applicationModuleSources } from "./application-module-lowering";
 import { createDraftModuleOverlay } from "./publication/draft-module-overlay";
 import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "./platform-compatibility";
@@ -63,7 +66,31 @@ export type ApplicationDraftCompilation = Readonly<{
   conditionContexts: readonly ApplicationDraftConditionContext[];
   /** The root's current published release revision; preview only labels it and never reads it. */
   currentReleaseRevision: Revision | null;
+  /**
+   * What the current published releases of the draft's own Modules hold, as qualified references:
+   * every record type (`module:record`) and field (`module:record.field`). Their stored shape is
+   * fixed, so Studio offers only the changes an upgrade accepts.
+   */
+  published: Readonly<{ recordTypes: readonly string[]; fields: readonly string[] }>;
+  /**
+   * The organisation's people directory, which a Person link points at: the Application that owns
+   * it and the label people are shown by. Null when the organisation has no released directory.
+   */
+  peopleDirectory: PeopleDirectoryOwner | null;
 }>;
+
+/** The owner and person title of a release of the people directory Module. */
+const peopleDirectoryOwnerOf = (release: ResolvableModuleRelease): PeopleDirectoryOwner | null => {
+  const content = release.compilationOutput.canonical.content;
+  const personKey = peopleDirectory.recordType.slice(peopleDirectory.recordType.lastIndexOf(":") + 1);
+  const person = content.recordTypes.find((record) => record.key === personKey);
+  const title = person?.fields.find((field) => String(field.fieldId) === String(person.titleFieldId));
+  if (title === undefined) {
+    console.error("[definition] the people directory release has no person title field: PEOPLE_DIRECTORY_UNREADABLE");
+    return null;
+  }
+  return { application: content.ownerApplication, titleLabel: title.label };
+};
 
 /** Authoring metadata from the very same verified dependency resolution as compilation. */
 export type ApplicationDraftConditionContext = Readonly<{
@@ -325,6 +352,10 @@ export const createDefinitionPublicationService = (
         const page = await overlay.readModuleReleasePage(candidate.draft.organizationId, moduleKey);
         usedAnchors.push([moduleKey, page.rootId, page.anchorReleaseRevision]);
       }
+      // A draft that does not use the people directory yet still names its current release, so
+      // Studio can offer a Person link that adds the use.
+      const directoryPage = applicationModuleKeys(source).includes(peopleDirectory.module) ? undefined
+        : await overlay.readModuleReleasePage(candidate.draft.organizationId, peopleDirectory.module);
       const cacheKey = applicationDraftCompilationKey([
         candidate.draft.organizationId.toLowerCase(),
         candidate.draft.rootId.toLowerCase(),
@@ -340,6 +371,7 @@ export const createDefinitionPublicationService = (
           root.sourceFingerprint,
         ]),
         usedAnchors,
+        directoryPage === undefined ? null : [directoryPage.rootId, directoryPage.anchorReleaseRevision],
       ]);
       const cached = readCachedApplicationDraftCompilation(cacheKey);
       if (cached !== undefined) return cached;
@@ -352,11 +384,33 @@ export const createDefinitionPublicationService = (
         candidate,
       );
       const compilation = compiled.output;
+      // The stored current release of each own Module (not the draft's, which the overlay holds).
+      const published = { recordTypes: [] as string[], fields: [] as string[] };
+      for (const root of ownedRoots) {
+        if (root.currentReleaseRevision === null) continue;
+        const release = await reader.readModuleRelease(candidate.draft.organizationId, root.rootId, root.currentReleaseRevision);
+        if (release === undefined) return refuse("DEFINITION_COMPILATION_REFUSED");
+        for (const record of release.compilationOutput.canonical.content.recordTypes as readonly {
+          key: string; fields: readonly { key: string }[];
+        }[]) {
+          published.recordTypes.push(`${root.key}:${record.key}`);
+          for (const field of record.fields) published.fields.push(`${root.key}:${record.key}.${field.key}`);
+        }
+      }
       if (
         compilation.kind !== "application" ||
         compilation.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION
       )
         return refuse("DEFINITION_COMPILATION_REFUSED");
+      let directory = compiled.dependencies.modules.find((release) => release.key === peopleDirectory.module);
+      if (directory === undefined && directoryPage !== undefined && directoryPage.rootId !== null) {
+        try {
+          directory = await selectCurrentModuleRelease(overlay, candidate, peopleDirectory.module);
+        } catch (error) {
+          if (!(error instanceof DefinitionError)) throw error;
+          console.error(`[definition] the people directory release could not be read: ${error.code}`);
+        }
+      }
       return retainApplicationDraftCompilation(cacheKey, {
         compilation,
         moduleReleases: compiled.dependencies.modules,
@@ -367,6 +421,8 @@ export const createDefinitionPublicationService = (
           compiled.resolution,
         ),
         currentReleaseRevision: candidate.draft.publishedRevision ?? null,
+        published,
+        peopleDirectory: directory === undefined ? null : peopleDirectoryOwnerOf(directory),
       });
     });
   },

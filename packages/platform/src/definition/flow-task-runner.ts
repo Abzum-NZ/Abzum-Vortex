@@ -314,7 +314,13 @@ export const createFlowTaskRunner = (
     const entry = Object.values(PLATFORM_SERVICE_OPERATIONS).find(
       (candidate) => platformOperationKey(candidate.key) === operationKey,
     );
-    if (entry !== undefined) return { plan: { kind: "operation", entry, inputs } };
+    if (entry !== undefined) {
+      // A platform operation acts on the organisation's live data or an outside service; a
+      // preview changes only its own copy of the records, so it never runs one.
+      if (run.authority.kind === "person" && run.authority.selection.previewInstallationId !== undefined)
+        return { outcome: "refused" };
+      return { plan: { kind: "operation", entry, inputs } };
+    }
 
     // Otherwise the key may name one named action of the exact release, run for the surface's
     // subject record through the same path as its binding (`executeAction`).

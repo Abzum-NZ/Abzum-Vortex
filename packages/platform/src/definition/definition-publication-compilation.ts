@@ -181,7 +181,7 @@ const compileModuleCandidate = (
     output === undefined ||
     output.kind !== "module" ||
     !("validationContractVersion" in output) ||
-    output.validationContractVersion !== applicationValidationContractVersion
+    output.validationContractVersion !== moduleValidationContractVersion
   )
     return refuse("DEFINITION_COMPILATION_REFUSED");
   return { request, output, dependencyOutputs };

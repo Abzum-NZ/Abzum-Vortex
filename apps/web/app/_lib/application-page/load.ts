@@ -27,7 +27,6 @@ import {
   type FlowTask,
   flowTaskChildLists,
   type JsonValue,
-  fieldIdSchema,
   sameId,
   isRecord,
   compiledPageShellId,
@@ -80,15 +79,11 @@ import {
   fieldControl,
   fieldForPlacement,
   isEditFieldPlacement,
-  isUnboundReferenceChoicePlacement,
+  isLinkInputPlacement,
 } from "./placement-helpers";
 import { isApplicationLauncherPlacement, logPlacementFailure } from "./query-helpers";
-import {
-  type ReferenceChoiceFirstPage,
-  projectSelectedReferenceChoiceEditField,
-  selectedReferenceChoiceField,
-  projectEditField,
-} from "./reference-choice";
+import { projectEditField } from "./reference-choice";
+import { projectInitialLinkInputs, titleLinkInputs } from "./link-input";
 import { projectPlacementRecordTypes, projectFlowBindingTargets } from "./flow-bindings";
 import { isStreamablePlacement, projectPlacementBindings, readPlacement } from "./placement-reader";
 import { projectPageWebMcpTools } from "./webmcp-projection";
@@ -272,6 +267,15 @@ const loadApplicationPageJoined = async (
     pageDefinition.type === "guided_form"
       ? undefined
       : projectedBodyContentAvailable(pageDefinition, application.content.shells, page);
+  // A draft preview of an application with no record types leads its builder to the Data tab
+  // from the empty home page; an installed application never does.
+  const firstRecordTypeHref =
+    bodyContentAvailable === false &&
+    address.pageKey === address.application.homePageKey &&
+    runtimePreviewOf(context) !== undefined &&
+    context.releaseSet.modules.every((module) => module.content.recordTypes.length === 0)
+      ? `/studio/${encodeURIComponent(context.organizationId)}/${encodeURIComponent(context.applicationRootId)}?tab=data`
+      : undefined;
   const allPlacements = collectPlacements(page);
   if (boardContinuation !== undefined) {
     const targets = allPlacements.filter(({ placementId }) =>
@@ -574,7 +578,6 @@ const loadApplicationPageJoined = async (
       };
   const bindings: Record<string, PlacementFlowBinding[]> = {};
   const referenceChoiceInputs: Array<ApplicationPageModel["referenceChoiceInputs"][number]> = [];
-  const referenceChoiceFirstPages = new Map<string, ReferenceChoiceFirstPage>();
   // Placement reads are independent: each reads under its own protected request and writes only
   // its own placement entry, so they run concurrently and are assembled by placement identity.
   const markSubjectUnreadable = (): void => {
@@ -598,7 +601,6 @@ const loadApplicationPageJoined = async (
     referenceChoices,
     session,
     selection,
-    referenceChoiceFirstPages,
     address,
     subjectType,
     parameters,
@@ -780,7 +782,12 @@ const loadApplicationPageJoined = async (
     const computedStepId = computeGuidedFormStepId(stepFields, openedDraft.draft.validation);
     if (computedStepId === undefined) return { kind: "unavailable" };
     const activeStepId = earlierGuidedStepId(stepFields, computedStepId, first(parameters.step));
-    Object.assign(data, guidedFormInputData(page, recordType, values, dateTimeZones));
+    const stepData = {
+      ...guidedFormInputData(page, recordType, values, dateTimeZones),
+    } as Record<string, PageDataState>;
+    // A linked record shows by its title, read under the viewer's access.
+    if (!(await titleLinkInputs(stepData, resolveRecordLinks))) return { kind: "unavailable" };
+    Object.assign(data, stepData);
     guidedForm = {
       draftId: String(openedDraft.draft.draftId),
       revision: openedDraft.draft.revision,
@@ -829,49 +836,23 @@ const loadApplicationPageJoined = async (
       const projected: Record<string, PageDataState> = {};
       let complete = true;
       for (const entry of fields) {
-        let projectedField:
-          Readonly<{ key: string; value: JsonValue; data: PageDataState }> | undefined;
-        if (isUnboundReferenceChoicePlacement(entry)) {
-          const firstPage = referenceChoiceFirstPages.get(entry.placementId);
-          const definition =
-            firstPage === undefined
-              ? undefined
-              : subjectRecordType.fields.find(
-                  (candidate) => candidate.key === firstPage.field.fieldKey,
-                );
-          const valueKey =
-            definition === undefined
-              ? undefined
-              : Object.keys(subjectRow.row.values).find((key) =>
-                  sameId(key, String(definition.fieldId)),
-                );
-          const parsedValueFieldId =
-            valueKey === undefined ? undefined : fieldIdSchema.safeParse(valueKey);
-          projectedField = await projectSelectedReferenceChoiceEditField({
-            firstPage,
-            field: selectedReferenceChoiceField(definition),
-            stored:
-              parsedValueFieldId !== undefined && parsedValueFieldId.success
-                ? subjectRow.row.values[parsedValueFieldId.data]
-                : undefined,
-            service: referenceChoices,
-            session,
-            selection,
-          });
-        } else {
-          projectedField = projectEditField(
-            entry,
-            subjectRecordType,
-            subjectRow.row.values,
-            dateTimeZones,
-          );
-        }
+        const projectedField = projectEditField(
+          entry,
+          subjectRecordType,
+          subjectRow.row.values,
+          dateTimeZones,
+        );
         if (projectedField === undefined || Object.hasOwn(baseline, projectedField.key)) {
           complete = false;
           break;
         }
         baseline[projectedField.key] = projectedField.value;
         projected[entry.placementId] = projectedField.data;
+      }
+      // A linked record shows by its title, read under the viewer's access in one batched read.
+      if (complete && !(await titleLinkInputs(projected, resolveRecordLinks))) {
+        logPlacementFailure(address, placementId, "link_titles_unavailable");
+        complete = false;
       }
       if (!complete) {
         data[placementId] = { status: "disabled", reason: "Record unavailable" };
@@ -882,6 +863,18 @@ const loadApplicationPageJoined = async (
       editFormBaselines[placementId] = baseline;
     }
   }
+  const linkInputs = placements.filter(isLinkInputPlacement);
+  // A new record's link field may start with the record its page address names.
+  if (pageDefinition.type !== "guided_form")
+    await projectInitialLinkInputs({
+      placements: linkInputs.filter(
+        (entry) => entry.formId === undefined || !Object.hasOwn(editFormBaselines, entry.formId),
+      ),
+      parameters,
+      data,
+      resolveRecordLinks,
+      log: (placementId, reason) => logPlacementFailure(address, placementId, reason),
+    });
 
   if (subjectUnreadable) return { kind: "unavailable" };
   if (typeof page.accessVersion !== "number" || !Number.isSafeInteger(page.accessVersion))
@@ -955,6 +948,7 @@ const loadApplicationPageJoined = async (
     theme: application.content.theme,
     navigation: navigation.value,
     ...(bodyContentAvailable === undefined ? {} : { bodyContentAvailable }),
+    ...(firstRecordTypeHref === undefined ? {} : { firstRecordTypeHref }),
     accessVersion: page.accessVersion,
     webMcpTools: projectPageWebMcpTools({
       page,
@@ -981,6 +975,7 @@ const loadApplicationPageJoined = async (
     refreshPlacementsByBinding,
     editFormBaselines,
     referenceChoiceInputs,
+    linkInputPlacementIds: linkInputs.map((entry) => entry.placementId),
     ...(guidedForm === undefined ? {} : { guidedForm }),
     pages: application.content.pages
       .filter((candidate) => permittedKeys.has(candidate.key))

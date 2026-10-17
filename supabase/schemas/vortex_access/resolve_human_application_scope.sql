@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.resolve_human_application_scope(p_identity_id uuid, p_organization_id uuid, p_application_root_id uuid) RETURNS TABLE(tenant_id uuid, organization_id uuid, organization_account_id uuid, application_root_id uuid, access_version bigint)
+CREATE OR REPLACE FUNCTION vortex_access.resolve_human_application_scope(p_identity_id uuid, p_organization_id uuid, p_application_root_id uuid) RETURNS TABLE(tenant_id uuid, organization_id uuid, organization_account_id uuid, application_root_id uuid, access_version bigint)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -23,13 +23,12 @@ begin
     p_organization_id
   ) as scope;
 
+  -- The registration the request runs under: the installed one, or the preview's own.
   if not exists (
     select 1
-    from vortex_access.permission_registrations as registration
-    where registration.organization_id = resolved_organization_id
-      and registration.registration_kind = 'application'
-      and registration.registration_owner_id = p_application_root_id
-      and registration.state = 'active'
+    from vortex_access.request_application_registration_internal(
+      resolved_organization_id, p_application_root_id, resolved_organization_account_id
+    )
   ) then
     raise exception using errcode = '42501',
       message = 'Application selection is unavailable';
