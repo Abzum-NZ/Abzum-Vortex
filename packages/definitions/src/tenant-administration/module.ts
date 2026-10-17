@@ -157,6 +157,7 @@ export const tenantAdministrationModule: SourceApplicationModule = sourceApplica
           settings: { display_time_zone: "organisation" },
         },
       ],
+      pipelines: [],
       relationships: [],
     },
   ],

@@ -84,7 +84,6 @@ export type BlockPropertySchemaContract =
         | "action_reference"
         | "page_reference"
         | "query_reference"
-        | "pipeline_reference"
         | "record_type_reference"
         | "record_reference";
     })
@@ -441,10 +440,6 @@ export const typedSourceSettingValue = (
       const parsed = text(sourceQualifiedQueryReferenceSchema);
       return parsed === undefined ? undefined : { kind: "query_reference", query: parsed };
     }
-    case "pipeline_reference": {
-      const parsed = text(builderKeySchema);
-      return parsed === undefined ? undefined : { kind: "pipeline_reference", pipeline: parsed };
-    }
     case "record_type_reference": {
       const parsed = text(sourceQualifiedRecordTypeSchema);
       return parsed === undefined
@@ -557,8 +552,6 @@ export const plainSourceSettingValue = (value: SourceBlockPropertyValueContract)
       return value.page;
     case "query_reference":
       return value.query;
-    case "pipeline_reference":
-      return value.pipeline;
     case "record_type_reference":
       return value.record_type;
     case "record_reference":
@@ -598,8 +591,6 @@ export const plainSettingValue = (value: BlockPropertyValueContract): unknown =>
       return value.pageId;
     case "query_reference":
       return value.queryId;
-    case "pipeline_reference":
-      return value.pipelineId;
     case "record_type_reference":
       return value.recordType;
     case "record_reference":
@@ -645,8 +636,6 @@ const typedSettingCandidate = (
       return { kind: declaration.kind, pageId: value };
     case "query_reference":
       return { kind: declaration.kind, queryId: value };
-    case "pipeline_reference":
-      return { kind: declaration.kind, pipelineId: value };
     case "record_type_reference":
       return { kind: declaration.kind, recordType: value };
     case "record_reference": {
@@ -698,7 +687,6 @@ const authorityReferenceKinds: ReadonlySet<string> = new Set([
   "action_reference",
   "page_reference",
   "query_reference",
-  "pipeline_reference",
   "record_type_reference",
   "record_reference",
 ]);
@@ -822,7 +810,6 @@ export const blockPropertySchema: z.ZodType<BlockPropertySchemaContract> = z.laz
               "action_reference",
               "page_reference",
               "query_reference",
-              "pipeline_reference",
               "record_type_reference",
               "record_reference",
             ]),

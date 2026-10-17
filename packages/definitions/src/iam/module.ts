@@ -371,6 +371,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
           settings: {},
         },
       ],
+      pipelines: [],
       relationships: [
         {
           id: "rel_iam_request_beneficiary_person",
@@ -470,6 +471,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
           settings: { max_length: 120 },
         },
       ],
+      pipelines: [],
       relationships: [
         {
           id: "rel_iam_item_request",
