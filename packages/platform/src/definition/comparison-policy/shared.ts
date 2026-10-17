@@ -120,9 +120,9 @@ export const comparePresentationSet = (
 };
 
 /**
- * The one allowlist for presentation settings. Actions carry no field reference or require a new
- * flow binding, so callers must classify them as major independently of this value check.
- * References and settings outside these display keys also carry behaviour.
+ * The one allowlist for presentation settings, by setting name. Settings outside it (actions,
+ * parameters, references) are major, and a new interactive placement is major through its flow
+ * bindings, so nobody should rely on this value check alone.
  */
 const presentationKinds: ReadonlySet<unknown> = new Set([
   "text",

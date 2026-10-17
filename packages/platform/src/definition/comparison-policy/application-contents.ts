@@ -298,12 +298,15 @@ const comparePlacements = (
       const previousSetting = asRecord(before.settings[key]);
       const candidateSetting = asRecord(after.settings[key]);
       // Display list entries may be appended or have their text edited; other settings and
-      // references remain behaviour changes.
-      if (previousSetting?.kind === "list" && candidateSetting?.kind === "list")
+      // references remain behaviour changes. A list that exists on one side only compares as
+      // an empty list on the other, so a whole new list is an append (minor), never a patch.
+      const previousItems = previousSetting?.kind === "list" ? (previousSetting.items as unknown[]) : previousSetting === undefined ? [] : undefined;
+      const candidateItems = candidateSetting?.kind === "list" ? (candidateSetting.items as unknown[]) : candidateSetting === undefined ? [] : undefined;
+      if (previousItems !== undefined && candidateItems !== undefined && (previousSetting !== undefined || candidateSetting !== undefined))
         compareOrderedEntries(
           reasons,
-          previousSetting.items as unknown[],
-          candidateSetting.items as unknown[],
+          previousItems,
+          candidateItems,
           "block_placement",
           id,
           "behavior",
