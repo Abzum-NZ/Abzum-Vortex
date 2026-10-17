@@ -189,7 +189,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
       title_field: "title",
       storage_contract_id: "srt_iam_access_request",
       storage_scope: "application_contained",
-      ownership_mode: "organisation_account",
+      ownership_mode: "organization_account",
       standard_actions: [...standardActions],
       custom_actions: [],
       fields: [
@@ -260,7 +260,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
           personal_data: "personal",
           type: "link_to_person",
           settings: {
-            audience: "organisation_accounts",
+            audience: "organization_accounts",
             application_root_required: false,
             on_person_deactivation: "retain_reference",
           },

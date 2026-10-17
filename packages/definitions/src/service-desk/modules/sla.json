@@ -11,7 +11,7 @@
       "plural_name": "Business calendars",
       "title_field": "name",
       "storage_contract_id": "srt_00000009",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "group",
       "standard_actions": [
         "create",
@@ -181,7 +181,7 @@
       "plural_name": "Service levels",
       "title_field": "name",
       "storage_contract_id": "srt_00000010",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "group",
       "standard_actions": [
         "create",

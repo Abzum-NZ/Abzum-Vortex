@@ -3048,9 +3048,9 @@
               }
             },
             "output_shape": {},
-            "authentication": "organisation_token",
+            "authentication": "organization_token",
             "permission": "vortex.service_desk.cases.case.assign",
-            "visibility": "organisation_private",
+            "visibility": "organization_private",
             "rate_limit_per_minute": 120,
             "maximum_request_bytes": 1000000,
             "duplicate_protection": "required",
@@ -3077,9 +3077,9 @@
                 }
               }
             },
-            "authentication": "organisation_token",
+            "authentication": "organization_token",
             "permission": "vortex.service_desk.cases.case.read",
-            "visibility": "organisation_private",
+            "visibility": "organization_private",
             "rate_limit_per_minute": 120,
             "maximum_request_bytes": 1000000,
             "duplicate_protection": "not_required",
@@ -3113,9 +3113,9 @@
               }
             },
             "output_shape": {},
-            "authentication": "organisation_token",
+            "authentication": "organization_token",
             "permission": "vortex.service_desk.cases.case.add_public_comment",
-            "visibility": "organisation_private",
+            "visibility": "organization_private",
             "rate_limit_per_minute": 120,
             "maximum_request_bytes": 1000000,
             "duplicate_protection": "required",
