@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   studioAccessGateChoices, studioAccessMenuEntries, studioAccessPermissions,
   type StudioAccessGate,
-} from "../_lib/application-access";
+} from "@vortex/ui/studio";
 import type { StudioAccessRun } from "./studio-access-role";
 import { StudioField } from "./studio-field";
 

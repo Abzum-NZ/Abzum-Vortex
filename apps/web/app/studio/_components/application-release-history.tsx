@@ -31,7 +31,7 @@ const failureMessage = (failure: Failure) => failure === "conflict"
 
 const restoreFailureMessage = (result: Exclude<StudioApplicationRestoreCommandResult, { kind: "completed" }>): string =>
   result.stateMayHaveChanged === "unknown"
-    ? "Whether the version was restored could not be confirmed. Choose Revert to saved to load the saved draft, then check it."
+    ? "Whether the version was restored could not be confirmed. Reload Studio to load the saved draft, then check it."
     : result.kind === "conflict"
       ? "The draft changed since this list was loaded, so nothing was restored. Reload the versions and try again."
       : result.kind === "refused"

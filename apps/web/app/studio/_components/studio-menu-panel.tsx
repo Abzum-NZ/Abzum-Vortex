@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useEffect, useMemo, useState, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
+import { Suspense, useMemo, useState, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
 import {
   DEFAULT_SHADCN_ICON_LIBRARY, isShadcnIconLibrary, VORTEX_ICON_NAMES, type ApplicationSourceDocument, type VortexIconName,
 } from "@vortex/platform/schema";
@@ -12,10 +12,11 @@ import { cn } from "@vortex/ui/lib/utils";
 import {
   studioMenuPageChoices, studioMenuPosition,
   type StudioMenuCommand, type StudioMenuItem, type StudioMenuResult,
-} from "../_lib/application-menu";
-import { studioAccessGateChoices } from "../_lib/application-access";
+} from "@vortex/ui/studio";
+import { studioAccessGateChoices } from "@vortex/ui/studio";
 import { StudioPanelShell } from "./studio-frame";
 import { StudioField } from "./studio-field";
+import { useStudioDraftText } from "./use-studio-draft-text";
 
 type Feedback = Readonly<{ kind: "applied" | "refused"; message: string }>;
 
@@ -33,7 +34,8 @@ export function StudioMenuPanel({ source, selectedAlias, onSelect, onCommand, on
   onSelect: (alias: string | null) => void;
   /** Opens the Access tab, where who can see an entry is set. */
   onOpenAccess: () => void;
-  onCommand: (command: StudioMenuCommand) => StudioMenuResult;
+  /** One menu edit; `merge` joins a run of edits to one value (typing a label) into one Undo step. */
+  onCommand: (command: StudioMenuCommand, merge?: string) => StudioMenuResult;
   disabled: boolean;
   hidden: boolean;
 }>) {
@@ -44,8 +46,8 @@ export function StudioMenuPanel({ source, selectedAlias, onSelect, onCommand, on
   const pages = useMemo(() => studioMenuPageChoices(source), [source]);
   const library = source.body.theme.selection.icon_library;
 
-  const run = (command: StudioMenuCommand): boolean => {
-    const result = onCommand(command);
+  const run = (command: StudioMenuCommand, merge?: string): boolean => {
+    const result = onCommand(command, merge);
     setFeedback({ kind: result.kind, message: result.message });
     return result.kind === "applied";
   };
@@ -135,7 +137,7 @@ export function StudioMenuPanel({ source, selectedAlias, onSelect, onCommand, on
   };
 
   return <StudioPanelShell title="Menu" hidden={hidden}
-    description="The application's navigation. Changes show on the canvas at once; save to keep them.">
+    description="The application's navigation. Changes show on the canvas at once and are saved automatically.">
     <IconLibraryProvider library={isShadcnIconLibrary(library) ? library : DEFAULT_SHADCN_ICON_LIBRARY}>
       {!isShadcnIconLibrary(library) && <p role="alert" className="text-sm text-destructive">
         The theme names an icon library Studio does not offer, so icons here are drawn with Lucide. Choose an icon library in Theme.</p>}
@@ -172,15 +174,16 @@ function StudioMenuEntryEditor({ source, item, position, disabled, run, moveBy, 
   item: StudioMenuItem;
   position: NonNullable<ReturnType<typeof studioMenuPosition>>;
   disabled: boolean;
-  run: (command: StudioMenuCommand) => boolean;
+  run: (command: StudioMenuCommand, merge?: string) => boolean;
   moveBy: (alias: string, key: string) => boolean;
   onOpenAccess: () => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
-  const [label, setLabel] = useState(item.label);
-  const [address, setAddress] = useState(item.type === "external" ? item.address : "");
+  const label = useStudioDraftText(item.label, (next) => next.trim().length === 0 ? "Enter a label."
+    : run({ kind: "change", alias: item.id, changes: { label: next } }, `menu-label:${item.id}`) || "");
+  const address = useStudioDraftText(item.type === "external" ? item.address : "", (next) =>
+    run({ kind: "change", alias: item.id, changes: { address: next } }, `menu-address:${item.id}`) || "");
   const [headingLabel, setHeadingLabel] = useState("");
-  useEffect(() => { setLabel(item.label); }, [item.label]);
   const pages = useMemo(() => studioMenuPageChoices(source), [source]);
   const permissions = useMemo(() => studioAccessGateChoices(source), [source]);
   const headings = source.body.navigation.filter((entry) => entry.type === "heading");
@@ -189,19 +192,16 @@ function StudioMenuEntryEditor({ source, item, position, disabled, run, moveBy, 
   const remove = async () => {
     if (!await confirm({
       title: `Remove “${item.label}” from the menu?`,
-      description: item.type === "heading" ? "The heading goes; the entries under it stay in the menu." : "The page itself stays; only its menu entry goes. Undo brings it back until you save.",
+      description: item.type === "heading" ? "The heading goes; the entries under it stay in the menu." : "The page itself stays; only its menu entry goes. Undo brings it back.",
       confirmLabel: "Remove entry",
     })) return;
     run({ kind: "remove", alias: item.id });
   };
   return <section aria-label={`Menu entry ${item.label}`} className="space-y-3 rounded-md border border-border p-3">
     <p className="text-sm font-medium">{kindWords(item)} “{item.label}”</p>
-    <form className="flex items-end gap-2" onSubmit={(event) => { event.preventDefault(); change({ kind: "change", alias: item.id, changes: { label } }); }}>
-      <StudioField label="Label">
-        {(control) => <Input {...control} value={label} maxLength={60} disabled={disabled} onChange={(event) => setLabel(event.target.value)} />}
-      </StudioField>
-      <Button type="submit" size="sm" disabled={disabled || label.trim().length === 0 || label.trim() === item.label}>Rename</Button>
-    </form>
+    <StudioField label="Label" error={label.problem === "" ? undefined : label.problem}>
+      {(control) => <Input {...control} value={label.text} maxLength={60} disabled={disabled} onChange={(event) => label.change(event.target.value)} />}
+    </StudioField>
     <fieldset className="space-y-1">
       <legend className="text-sm font-medium">Icon</legend>
       <p className="text-xs text-muted-foreground">Drawn from the application&apos;s icon library, chosen in Theme.</p>
@@ -223,13 +223,9 @@ function StudioMenuEntryEditor({ source, item, position, disabled, run, moveBy, 
         {pages.map((page) => <NativeSelectOption key={page.key} value={page.key}>{page.label}</NativeSelectOption>)}
       </NativeSelect>}
     </StudioField>}
-    {item.type === "external" && <form className="flex items-end gap-2"
-      onSubmit={(event) => { event.preventDefault(); change({ kind: "change", alias: item.id, changes: { address } }); }}>
-      <StudioField label="Address">
-        {(control) => <Input {...control} value={address} disabled={disabled} onChange={(event) => setAddress(event.target.value)} />}
-      </StudioField>
-      <Button type="submit" size="sm" disabled={disabled}>Set</Button>
-    </form>}
+    {item.type === "external" && <StudioField label="Address" error={address.problem === "" ? undefined : address.problem}>
+      {(control) => <Input {...control} value={address.text} disabled={disabled} onChange={(event) => address.change(event.target.value)} />}
+    </StudioField>}
     {item.type !== "heading" && <div className="space-y-1">
       <p className="text-sm font-medium">Who can see it</p>
       <p className="text-sm text-muted-foreground">{permission === undefined

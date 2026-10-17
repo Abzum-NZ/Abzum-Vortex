@@ -8,21 +8,16 @@ import {
   type ImmutablePlatformBlockCatalogue,
   type SourceItem,
 } from "@vortex/platform/schema";
-import {
-  StoredCompositionRefusal,
-  removeFlowBindingsOf,
-  studioPlacementRemovalReference,
-  validateStoredShell,
-  type StudioCompositionRemovalReason,
-  type StudioSemanticSelection,
-} from "@vortex/ui/studio";
+import { StoredCompositionRefusal, removeFlowBindingsOf, validateStoredShell } from "./stored-composition";
+import { studioPlacementRemovalReference, type StudioCompositionRemovalReason } from "./application-composition-commands";
+import type { StudioSemanticSelection } from "./semantic-selection";
 import { applyStudioItemLabels } from "./application-item-labels";
 import {
   blockItem, cleanName, emptyPageData, judged, newestRelease, placeNewPage, quoted, refuse, StructureRefusal, uniqueKey,
   type Navigation, type Page, type Shell, type Source, type StudioStructureContext, type StudioStructureResult,
 } from "./application-structure-common";
 import { addRecordPage, type StudioRecordPageCommand } from "./application-record-pages";
-import { tokenName } from "./studio-labels";
+import { tokenName } from "./studio-words";
 
 /**
  * The Structure tab's edits: add, rename and remove pages and layouts, add the pages of a record
@@ -172,7 +167,7 @@ const addPage = (context: StudioStructureContext, candidate: Source,
   // A valid empty Puck page: no blocks, in the chosen frame. Who can open it starts as who can open the home page.
   const placed = placeNewPage(candidate, name, { type: "dashboard", permission: home!.permission }, composition, command.addToMenu);
   return { kind: "applied", source: judged(placed.source), select: { kind: "page", pageAlias: placed.page.id }, details: [],
-    message: `Page ${quoted(name)} added${command.addToMenu ? " to the menu" : ""}. Save to keep it.` };
+    message: `Page ${quoted(name)} added${command.addToMenu ? " to the menu" : ""}.` };
 };
 
 type PageData = Readonly<{ root: { props: Record<string, unknown> & { vortex: { shell: string | null; slot_orders: Record<string, unknown> } } }; content: SourceItem[] }>;
@@ -236,7 +231,7 @@ const movePage = (context: StudioStructureContext, candidate: Source,
       .map(([step, data]) => [step, movedData(context, page, data, command.shellAlias)])) }
     : movedData(context, page, composition, command.shellAlias)) as unknown as Page["composition"];
   return { kind: "applied", source: judged(candidate), select: { kind: "page", pageAlias: page.id }, details: [],
-    message: `${quoted(page.name)} now uses ${target === undefined ? "the platform default frame" : `the layout ${quoted(target.name)}`}. Save to keep it.` };
+    message: `${quoted(page.name)} now uses ${target === undefined ? "the platform default frame" : `the layout ${quoted(target.name)}`}.` };
 };
 
 /**
@@ -285,7 +280,7 @@ const addShell = (context: StudioStructureContext, candidate: Source,
   }
   body.shells.push(shell);
   return { kind: "applied", source: judged(candidate), select: { kind: "shell", shellAlias: id }, details: [],
-    message: `Layout ${quoted(name)} added. Save to keep it.` };
+    message: `Layout ${quoted(name)} added.` };
 };
 
 const removePage = (context: StudioStructureContext, candidate: Source, pageAlias: string): StudioStructureResult => {
@@ -297,7 +292,7 @@ const removePage = (context: StudioStructureContext, candidate: Source, pageAlia
   candidate.body.navigation = withoutPageEntries(candidate.body.navigation, page.key);
   removeBlocks(context, candidate, sourcePageItems(page.composition), `The page ${quoted(page.name)}`);
   return { kind: "applied", source: judged(candidate), select: null, details: [],
-    message: `Page ${quoted(page.name)} removed, with its menu entries. Save to keep it.` };
+    message: `Page ${quoted(page.name)} removed, with its menu entries.` };
 };
 
 const removeShell = (context: StudioStructureContext, candidate: Source, shellAlias: string): StudioStructureResult => {
@@ -309,7 +304,7 @@ const removeShell = (context: StudioStructureContext, candidate: Source, shellAl
   candidate.body.shells = candidate.body.shells.filter((entry) => entry.id !== shellAlias);
   removeBlocks(context, candidate, sourceItemTree(shell.layout.content), `The layout ${quoted(shell.name)}`);
   return { kind: "applied", source: judged(candidate), select: null, details: [],
-    message: `Layout ${quoted(shell.name)} removed. Save to keep it.` };
+    message: `Layout ${quoted(shell.name)} removed.` };
 };
 
 /** Applies one Structure edit to the draft, or refuses it with a located message. */
@@ -329,7 +324,7 @@ export const applyStudioStructureCommand = (context: StudioStructureContext, com
         if (candidate.body.home_page === page.key) return refuse(`${quoted(page.name)} is already the home page.`);
         candidate.body.home_page = page.key;
         return { kind: "applied", source: judged(candidate), select: { kind: "page", pageAlias: page.id }, details: [],
-          message: `${quoted(page.name)} is now the home page. Save to keep it.` };
+          message: `${quoted(page.name)} is now the home page.` };
       }
       case "rename": {
         const what = command.selection.kind === "page" ? "page" : "layout";
@@ -338,7 +333,7 @@ export const applyStudioStructureCommand = (context: StudioStructureContext, com
         if (result.kind === "not_found") return refuse(`That ${what} is no longer in the draft.`);
         if (result.kind === "invalid") return refuse(`The ${what} name was refused (${result.issues[0]?.message ?? "invalid"}). Nothing was changed.`);
         return { kind: "applied", source: result.source, select: command.selection, details: [],
-          message: `Renamed to ${quoted(name)}. Save to keep it.` };
+          message: `Renamed to ${quoted(name)}.` };
       }
     }
   } catch (error) {

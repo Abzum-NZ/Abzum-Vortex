@@ -64,9 +64,9 @@ export type StudioRunOutcome<Result> =
 
 export type StudioRunOptions = Readonly<{
   /** The source the caller's view was drawn from; any other current source makes the command stale. */
-  expected?: unknown;
+  expected?: unknown | undefined;
   /** Consecutive edits with this key (typing into one field) are one Undo step. */
-  merge?: string;
+  merge?: string | undefined;
 }>;
 
 /** A request that holds the whole draft while it runs: nothing else may edit it meanwhile. */
@@ -143,6 +143,7 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
   const active = useRef(false);
   const savedRef = useRef(draft);
   const elsewhere = useRef<StudioDraftChangedElsewhere | null>(null);
+  const readElsewhere = () => elsewhere.current;
   const holds = useRef(new Set<StudioDraftHold>());
   const [renderedHolds, setRenderedHolds] = useState<ReadonlySet<StudioDraftHold>>(() => new Set());
   const statusRef = useRef<StudioSaveStatus>({ kind: "saved" });
@@ -236,7 +237,8 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
           else void refreshCompiled();
           return;
         case "conflict": {
-          const latest = elsewhere.current;
+          // Read through a function: TypeScript would otherwise narrow the ref to the null assigned before the awaited save.
+          const latest = readElsewhere();
           if (outcome.reason !== "draft_changed" || latest === null) {
             setStatus({ kind: "conflict", changedBy: null, changedAt: null, changes: [],
               message: conflictMessage(outcome.reason, "Your latest change was not saved.") });

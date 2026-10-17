@@ -1,7 +1,7 @@
 "use client";
 import { Button } from "@vortex/ui/components/button";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { applicationModuleKeys, type ConditionNode } from "@vortex/platform/schema";
 import {
   StudioConditionControls, parseStudioApplicationConditionContext,
@@ -19,7 +19,6 @@ type Props = Readonly<{
   context: StudioCompositionContext; selection: StudioSemanticSelection; saved: StudioStoredApplicationDraft;
   disabled: boolean; busy: boolean;
   readSnapshot: () => StudioVisibilityWorkspaceSnapshot | null;
-  onPendingChange: (pending: boolean) => void;
   onCommand: (expected: StudioCompositionContext, selection: StudioSemanticSelection,
     metadata: StudioApplicationConditionContext, condition: ConditionNode | undefined,
     isCurrentResponse: () => boolean) => StudioVisibilityCommandResult;
@@ -35,14 +34,16 @@ const sameSnapshot = (left: StudioVisibilityWorkspaceSnapshot, right: StudioVisi
   studioSemanticSelectionKey(left.selection) === studioSemanticSelectionKey(right.selection) &&
   left.saved === right.saved;
 
-/** A local buffer mounted in the real selected-placement workspace; Save is the sole writer. */
+/**
+ * The selected item's visibility rule. A valid rule reaches the draft as it changes; a rule that is
+ * not valid yet stays here with its problems and never reaches the draft.
+ */
 export function ApplicationVisibilityConditionEditor(props: Props) {
   const [response, setResponse] = useState<Response | null>(null);
   const [buffer, setBuffer] = useState<Buffer | null>(null);
   const [status, setStatus] = useState("Reading the fields this page can use…");
   const [message, setMessage] = useState("");
   const [reload, setReload] = useState(0);
-  const [controlsEpoch, setControlsEpoch] = useState(0);
   const generation = useRef(0);
   const latestProps = useRef(props);
   latestProps.current = props;
@@ -60,7 +61,7 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
       snapshot.saved.organizationId !== snapshot.context.organizationId || snapshot.saved.rootId !== snapshot.context.rootId ||
       snapshot.saved.key !== snapshot.context.key || snapshot.saved.draftRevision !== snapshot.context.draftRevision ||
       JSON.stringify(applicationModuleKeys(snapshot.context.source)) !== JSON.stringify(applicationModuleKeys(snapshot.saved.source))) {
-      setStatus("A visibility rule needs a saved detail page and the same modules as the saved draft. Save your changes first.");
+      setStatus("A visibility rule needs a saved detail page with the same modules as the saved draft. Waiting for your latest change to save…");
       return;
     }
     setStatus("Reading the fields this page can use…");
@@ -71,7 +72,7 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
       if (requestGeneration !== generation.current || current === null || !sameSnapshot(snapshot, current)) return;
       const metadata = result.kind === "available" ? parseStudioApplicationConditionContext(result.context) : undefined;
       if (metadata === undefined) {
-        setStatus(result.kind === "conflict" ? "The saved draft changed. Choose Revert to saved, then try again. What you typed is kept."
+        setStatus(result.kind === "conflict" ? "The saved draft changed while the fields were read. Choose Reload fields."
           : result.kind === "refused" ? "The fields for this rule are not available with your access. What you typed is kept."
             : "The fields for this rule are temporarily unavailable. What you typed is kept.");
         return;
@@ -80,7 +81,7 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
         metadata.publishedRevision !== (snapshot.saved.publishedRevision ?? null) ||
         metadata.createdAt !== snapshot.saved.createdAt || metadata.updatedAt !== snapshot.saved.updatedAt ||
         projectStudioVisibilityEditor(snapshot.context, snapshot.selection, metadata).kind === "stale") {
-        setStatus("The saved draft changed. Choose Revert to saved, then try again. What you typed is kept.");
+        setStatus("The saved draft changed while the fields were read. Choose Reload fields.");
         return;
       }
       const nextResponse = { metadata, snapshot, generation: requestGeneration };
@@ -115,36 +116,19 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
     validation = { ...validation, issues: [...validation.issues, ...scalarValidation.issues.filter((issue) =>
       !validation.issues.some((existing) => existing.code === issue.code && existing.pointer === issue.pointer))],
       isValid: validation.isValid && scalarValidation.isValid };
-    const meaningful = !validation.isValid || !sameStudioVisibilityCondition(value, model.condition);
-    props.onPendingChange(meaningful);
-    setBuffer(meaningful ? { value, validation, response: activeResponse ?? response } : null);
-    setMessage("");
-  };
-  const apply = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (latestProps.current.disabled || buffer === null || !isCurrentResponse()) {
-      setMessage("The draft or your selection changed. What you typed is kept.");
-      return;
-    }
-    if (!buffer.validation.isValid) { setMessage("Fix the problems listed below before applying."); return; }
-    const result = props.onCommand(buffer.response.snapshot.context, buffer.response.snapshot.selection,
-      buffer.response.metadata, buffer.value, isCurrentResponse);
+    const current = activeResponse ?? response;
+    // A rule that is not valid yet stays here; a valid one goes to the draft at once.
+    if (!validation.isValid) { setBuffer({ value, validation, response: current }); setMessage(""); return; }
+    if (sameStudioVisibilityCondition(value, model.condition)) { setBuffer(null); return; }
+    const result = props.onCommand(current.snapshot.context, current.snapshot.selection, current.metadata, value, isCurrentResponse);
     if (result.kind === "applied" || result.kind === "noop") {
-      props.onPendingChange(false);
       setBuffer(null);
-      setControlsEpoch((value) => value + 1);
-      setMessage(result.kind === "applied" ? "Visibility rule changed. Save to keep it."
-        : "The visibility rule is unchanged.");
-    } else if (result.kind === "invalid") {
-      setMessage(result.issues.map((issue) => issue.message).join(" "));
-    } else setMessage("The rule could not be applied. What you typed is kept.");
-  };
-  const discard = () => {
-    if (latestProps.current.busy) return;
-    props.onPendingChange(false);
-    setBuffer(null);
-    setControlsEpoch((value) => value + 1);
-    setMessage("Unapplied changes to the rule were discarded.");
+      setMessage(result.kind === "applied" ? "Visibility rule changed." : "");
+    } else {
+      setBuffer({ value, validation, response: current });
+      setMessage(result.kind === "invalid" ? result.issues.map((issue) => issue.message).join(" ")
+        : "The draft or your selection changed while the rule was checked. Change it again.");
+    }
   };
   const unsupported = model?.kind === "unsupported";
   const value = buffer === null ? model?.kind === "available" ? model.condition : undefined : buffer.value;
@@ -153,36 +137,22 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
     <p className="text-sm">Show this item only when a field on this page has a chosen value. This only hides or shows the item; who may open the page is set separately.</p>
     {status && <p role="status">{status}</p>}
     {buffer !== null && !isCurrentResponse() &&
-      <p role="status">Your unapplied rule is still shown. Apply is held until the page is up to date.</p>}
+      <p role="status">Your rule is still shown. It goes to the draft once the page is up to date.</p>}
     <Button type="button" variant="outline" size="sm" disabled={props.busy}
       onClick={() => setReload((value) => value + 1)}>Reload fields</Button>
     {unsupported && <p role="status">This rule cannot be edited here. It is kept as it is.</p>}
-    {model?.kind === "stale" && <p role="status">The saved page or its modules changed. Save, then reload the fields before editing.</p>}
-    {model?.kind === "available" && <form onSubmit={apply} className="space-y-3">
-      <fieldset disabled={props.disabled || !isCurrentResponse()} className="space-y-3" onInputCapture={() => {
-        if (latestProps.current.disabled || response === null || !isCurrentResponse()) return;
-        // Numeric inputs in the shared controls commit on blur. Hold all reciprocal commands
-        // synchronously from the first input event; the shared onChange resolves this draft.
-        props.onPendingChange(true);
-        setBuffer((current) => ({ value: current === null ? model.condition : current.value, response: current?.response ?? response,
-          validation: { condition: current === null ? model.condition : current.value,
-            issues: current?.validation.issues ?? [], isValid: false } }));
-      }}>
-        <StudioConditionControls key={controlsEpoch} {...(value === undefined ? {} : { value })} context={model.controls}
-          label="Visibility rule" onChange={update} />
-        <Button type="button" variant="outline" size="sm" disabled={value === undefined}
-          onClick={() => update(undefined, { condition: undefined, issues: [], isValid: true })}>Remove rule</Button>
-        <Button type="submit" disabled={buffer === null || !buffer.validation.isValid}>Apply rule</Button>
-      </fieldset>
-    </form>}
-    {buffer !== null && <>
-      {buffer.validation.issues.length > 0 && <ul role="status" aria-live="polite">
-        {buffer.validation.issues.map((issue, index) => <li key={`${issue.pointer}:${index}`}>
-          Visibility rule: {issue.message}
-        </li>)}
-      </ul>}
-      <Button type="button" variant="outline" size="sm" disabled={props.busy} onClick={discard}>Discard</Button>
-    </>}
+    {model?.kind === "stale" && <p role="status">The saved page or its modules changed. Reload the fields before editing.</p>}
+    {model?.kind === "available" && <fieldset disabled={props.disabled || !isCurrentResponse()} className="space-y-3">
+      <StudioConditionControls {...(value === undefined ? {} : { value })} context={model.controls}
+        label="Visibility rule" onChange={update} />
+      <Button type="button" variant="outline" size="sm" disabled={value === undefined}
+        onClick={() => update(undefined, { condition: undefined, issues: [], isValid: true })}>Remove rule</Button>
+    </fieldset>}
+    {buffer !== null && buffer.validation.issues.length > 0 && <ul role="alert" className="text-sm text-destructive">
+      {buffer.validation.issues.map((issue, index) => <li key={`${issue.pointer}:${index}`}>
+        Visibility rule: {issue.message}
+      </li>)}
+    </ul>}
     <p role="status" aria-live="polite">{message}</p>
   </section>;
 }

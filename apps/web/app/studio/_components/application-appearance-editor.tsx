@@ -18,11 +18,12 @@ import { validateStudioApplicationAppearance } from "../actions";
 type AvailableAppearance = Extract<StudioAppearanceResult, { kind: "available" }>;
 type Props = Readonly<{
   organizationId: string; rootId: string; draftRevision: number;
-  source: ApplicationSourceDocument; disabled: boolean; validationEpoch: number;
-  onPendingChange: (pending: boolean) => void;
-  onApply: (expected: ApplicationSourceDocument, next: ApplicationSourceDocument) => boolean;
+  source: ApplicationSourceDocument; disabled: boolean;
+  /** Puts checked values in the draft; `merge` joins a run of changes into one Undo step. */
+  onApply: (expected: ApplicationSourceDocument, next: ApplicationSourceDocument, merge: string) => boolean;
 }>;
-import { tokenKindName, tokenName } from "../_lib/studio-labels";
+import { tokenKindName } from "../_lib/studio-labels";
+import { tokenName } from "@vortex/ui/studio";
 const inputClass = "w-full";
 
 function TokenControls({ value, disabled, colors, assets, change }: {
@@ -90,136 +91,99 @@ function TokenControls({ value, disabled, colors, assets, change }: {
   }
 }
 
+/** How long the editor waits after the last change before it checks and applies the values. */
+const checkDelayMs = 500;
+
+/**
+ * The application's individual theme values. Each change is checked with publication's contrast,
+ * focus and image rules shortly after the last keystroke and, when allowed, goes to the draft;
+ * values that are refused stay here with their problems and never reach the draft.
+ */
 export function ApplicationAppearanceEditor(props: Props) {
   const id = useId();
   const active = useRef(false);
   const generation = useRef(0);
-  const validationEpoch = useRef(props.validationEpoch);
-  const cancelledEpoch = useRef(props.validationEpoch);
-  const feedbackEpoch = useRef(props.validationEpoch);
-  validationEpoch.current = props.validationEpoch;
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const latest = useRef(props);
+  latest.current = props;
   const valuesRef = useRef(props.source.body.theme.token_overrides);
   const [values, setValues] = useState(() => structuredClone(props.source.body.theme.token_overrides));
   const [descriptors, setDescriptors] = useState<AvailableAppearance>();
   const [feedback, setFeedback] = useState<AvailableAppearance>();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const valueKey = studioAppearanceValueKey(values);
   const baselineKey = studioAppearanceValueKey(props.source.body.theme.token_overrides);
-  const changed = valueKey !== baselineKey;
 
-  // Reopen cancels feedback, not local values. Only a successful source replacement
-  // runs the source-reset effect below; a refused read keeps this editor instance.
-  useEffect(() => {
-    if (cancelledEpoch.current === props.validationEpoch) return;
-    cancelledEpoch.current = props.validationEpoch;
-    generation.current += 1;
-    setFeedback(undefined);
-    setBusy(false);
-    props.onPendingChange(studioAppearanceValueKey(valuesRef.current) !== baselineKey);
-    setMessage("Your appearance changes are kept. Check them again once the draft has loaded.");
-  }, [props.validationEpoch, props.onPendingChange, baselineKey]);
-
+  // The draft's own values (after an edit, Undo or Redo) are read and checked once; they are never unapplied input.
   useEffect(() => {
     active.current = true;
     const ticket = ++generation.current;
-    const epoch = validationEpoch.current;
     const initial = structuredClone(props.source.body.theme.token_overrides);
+    if (studioAppearanceValueKey(valuesRef.current) === studioAppearanceValueKey(initial) && descriptors !== undefined) return;
     valuesRef.current = initial;
     setValues(initial);
-    setDescriptors(undefined);
-    setFeedback(undefined);
     setBusy(true);
-    // Reading the theme after a draft edit is not unapplied input: the values are the draft's own.
-    props.onPendingChange(false);
     setMessage("Reading the theme…");
     const request = { rootId: props.rootId, expectedDraftRevision: props.draftRevision, tokenOverrides: initial };
     void validateStudioApplicationAppearance(props.organizationId, request).then((result) => {
-      if (!active.current || ticket !== generation.current || epoch !== validationEpoch.current) return;
+      if (!active.current || ticket !== generation.current) return;
       if (result.kind === "available" && result.rootId === request.rootId &&
-          result.draftRevision === request.expectedDraftRevision &&
           studioAppearanceValueKey(result.theme) === studioAppearanceValueKey(props.source.body.theme)) {
         setDescriptors(result);
-        feedbackEpoch.current = epoch;
         setFeedback(result);
-        setMessage(result.valid ? "Change a value, then check it before applying." : "Some values are not allowed. See below.");
-      } else setMessage(result.kind === "conflict"
-        ? "The saved draft changed. Choose Revert to saved, then try again. Your changes are kept."
-        : "The appearance cannot be read with your access or for this draft's theme.");
-    }).catch(() => {
-      if (active.current && ticket === generation.current && epoch === validationEpoch.current)
-        setMessage("The appearance could not be checked. Your changes are kept.");
+        setMessage(result.valid ? "" : "Some values are not allowed. See below.");
+      } else if (result.kind !== "conflict") setMessage("The appearance cannot be read with your access or for this draft's theme.");
+    }).catch((error: unknown) => {
+      console.error("[studio] reading the appearance failed", error);
+      if (active.current && ticket === generation.current) setMessage("The appearance could not be read. Try again in a moment.");
     }).finally(() => {
-      if (active.current && ticket === generation.current && epoch === validationEpoch.current) {
-        setBusy(false);
-        props.onPendingChange(false);
-      }
+      if (active.current && ticket === generation.current) setBusy(false);
     });
-    return () => { active.current = false; generation.current += 1; };
-  }, [props.organizationId, props.rootId, props.draftRevision, props.source, props.onPendingChange]);
+  }, [props.organizationId, props.rootId, props.draftRevision, baselineKey]);
+  useEffect(() => () => { active.current = false; generation.current += 1; clearTimeout(timer.current); }, []);
 
-  // Unapplied input is values the builder typed that differ from the draft; a read or a check in flight is not.
-  useEffect(() => { props.onPendingChange(changed); }, [changed, props.onPendingChange]);
-  useEffect(() => () => props.onPendingChange(false), [props.onPendingChange]);
-
+  const checkAndApply = async (next: Record<string, StudioThemeTokenValue>) => {
+    const current = latest.current;
+    const request = parseStudioAppearanceRequest({ rootId: current.rootId,
+      expectedDraftRevision: current.draftRevision, tokenOverrides: next });
+    if (request === undefined) { setFeedback(undefined); setMessage("Enter a valid value for every changed setting."); return; }
+    const ticket = ++generation.current;
+    setBusy(true);
+    setMessage("Checking contrast, focus and images…");
+    try {
+      const result = await validateStudioApplicationAppearance(current.organizationId, request);
+      if (!active.current || ticket !== generation.current ||
+          studioAppearanceValueKey(valuesRef.current) !== studioAppearanceValueKey(request.tokenOverrides)) return;
+      const source = latest.current.source;
+      if (result.kind !== "available" || result.rootId !== request.rootId ||
+          studioAppearanceValueKey(result.theme.base) !== studioAppearanceValueKey(source.body.theme.base) ||
+          studioAppearanceValueKey(result.theme.selection) !== studioAppearanceValueKey(source.body.theme.selection) ||
+          studioAppearanceValueKey(result.theme.token_overrides) !== studioAppearanceValueKey(request.tokenOverrides)) {
+        setMessage(result.kind === "conflict" ? "The draft was saved while the values were checked. Change a value again."
+          : "This draft, your access or the theme was refused, so nothing was changed.");
+        return;
+      }
+      setDescriptors(result);
+      setFeedback(result);
+      if (!result.valid) { setMessage("Some values are not allowed, so they are not in your draft. See below."); return; }
+      const applied = applyStudioAppearance(source, current.rootId, request.expectedDraftRevision, request, result);
+      setMessage(applied !== undefined && latest.current.onApply(source, applied, "appearance")
+        ? "Appearance changed." : "The draft changed while the values were checked. Change a value again.");
+    } catch (error) {
+      console.error("[studio] checking the appearance failed", error);
+      if (active.current && ticket === generation.current) setMessage("The check could not be completed. Change a value again.");
+    } finally {
+      if (active.current && ticket === generation.current) setBusy(false);
+    }
+  };
   const update = (next: Record<string, StudioThemeTokenValue>) => {
     if (props.disabled) return;
     generation.current += 1;
     valuesRef.current = next;
     setValues(next);
     setFeedback(undefined);
-    setBusy(false);
-    props.onPendingChange(studioAppearanceValueKey(next) !== baselineKey);
-    setMessage("Changes not applied yet. Check them before applying, or discard them.");
-  };
-  const validate = async () => {
-    if (props.disabled || busy) return;
-    const request = parseStudioAppearanceRequest({ rootId: props.rootId,
-      expectedDraftRevision: props.draftRevision, tokenOverrides: values });
-    if (request === undefined) { setFeedback(undefined); setMessage("Enter a valid value for every changed setting."); return; }
-    const ticket = ++generation.current;
-    const epoch = validationEpoch.current;
-    setBusy(true);
-    props.onPendingChange(studioAppearanceValueKey(values) !== baselineKey);
-    setFeedback(undefined);
-    setMessage("Checking contrast, focus and images…");
-    try {
-      const result = await validateStudioApplicationAppearance(props.organizationId, request);
-      if (!active.current || ticket !== generation.current || epoch !== validationEpoch.current ||
-          studioAppearanceValueKey(valuesRef.current) !== studioAppearanceValueKey(request.tokenOverrides)) return;
-      if (result.kind === "available" && result.rootId === request.rootId &&
-          result.draftRevision === request.expectedDraftRevision &&
-          studioAppearanceValueKey(result.theme.base) === studioAppearanceValueKey(props.source.body.theme.base) &&
-          studioAppearanceValueKey(result.theme.selection) === studioAppearanceValueKey(props.source.body.theme.selection) &&
-          studioAppearanceValueKey(result.theme.token_overrides) === studioAppearanceValueKey(request.tokenOverrides)) {
-        setDescriptors(result);
-        feedbackEpoch.current = epoch;
-        setFeedback(result);
-        setMessage(result.valid ? "The values are allowed. Apply puts them in your draft."
-          : "Some values are not allowed, so nothing was applied. See below.");
-      } else setMessage(result.kind === "conflict"
-        ? "The saved draft changed. Your changes are kept; choose Revert to saved, then try again."
-        : "This draft, your access or the theme was refused, so nothing was applied.");
-    } catch {
-      if (active.current && ticket === generation.current && epoch === validationEpoch.current)
-        setMessage("The check could not be completed. Your changes are kept.");
-    } finally {
-      if (active.current && ticket === generation.current && epoch === validationEpoch.current) {
-        setBusy(false);
-        props.onPendingChange(studioAppearanceValueKey(valuesRef.current) !== baselineKey);
-      }
-    }
-  };
-  const apply = () => {
-    if (props.disabled || busy || feedback === undefined || feedbackEpoch.current !== props.validationEpoch) return;
-    const request = parseStudioAppearanceRequest({ rootId: props.rootId,
-      expectedDraftRevision: props.draftRevision, tokenOverrides: values });
-    const next = request === undefined ? undefined
-      : applyStudioAppearance(props.source, props.rootId, props.draftRevision, request, feedback);
-    if (next === undefined || !props.onApply(props.source, next)) {
-      setFeedback(undefined);
-      setMessage("The draft or the values changed. Check the appearance again.");
-    }
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => { void checkAndApply(next); }, checkDelayMs);
   };
   const colors = descriptors?.tokens.filter((token) => token.inherited.kind === "color_pair").map((token) => token.key) ?? [];
   const failures = feedback?.failures ?? [];
@@ -260,14 +224,6 @@ export function ApplicationAppearanceEditor(props: Props) {
         </ul>}
       </fieldset>;
     })}
-    <div className="flex flex-wrap gap-2">
-      <Button type="button" disabled={props.disabled || busy}
-        onClick={validate}>Check</Button>
-      <Button type="button" disabled={props.disabled || busy || !changed || feedback?.valid !== true || feedbackEpoch.current !== props.validationEpoch}
-        onClick={apply}>Apply</Button>
-      <Button type="button" disabled={props.disabled || (!changed && !busy)}
-        onClick={() => update(structuredClone(props.source.body.theme.token_overrides))}>Discard</Button>
-    </div>
-    <p className="text-sm">Apply puts the change in your draft. Save keeps it. Publishing and installing are separate steps.</p>
+    <p className="text-sm">Changes go to your draft once they pass the checks. Publishing and installing are separate steps.</p>
   </section>;
 }

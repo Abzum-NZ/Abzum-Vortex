@@ -20,7 +20,7 @@ import { StudioFlowValueControl } from "./studio-flow-value-control";
 /**
  * The settings form of one flow step: one typed control per setting the step catalogue declares,
  * and, for a decision, an early end or another control step, the controls of its shape. It edits a
- * step draft only; the inspector applies the draft as one flow command.
+ * step draft only; the inspector puts each change in the draft as one flow command.
  */
 
 type Entry = Readonly<{ name: string; source: StudioFlowValueSource }>;
@@ -37,8 +37,11 @@ export type StudioFlowStepFormProps = Readonly<{
   /** The other flows of the same owner, for a Run flow step. */
   flows: readonly SourceFlow[];
   disabled: boolean;
-  /** The edited draft, and why it cannot be applied yet (null when it can). */
-  onChange: (draft: StudioFlowStepDraft, problem: string | null) => void;
+  /**
+   * The edited draft, why it cannot go in the draft yet (null when it can), and the setting changed
+   * ("control", "description" or a setting key), so typing into one setting is one Undo step.
+   */
+  onChange: (draft: StudioFlowStepDraft, problem: string | null, setting: string) => void;
 }>;
 
 /** Name-value rows: the names this setting expects first, then any others. */
@@ -58,7 +61,8 @@ function EntryRows({ id, label, entries, expected, references, disabled, onChang
       label={`${entry.label}${entry.required ? " (required)" : ""}`} valueType={entry.type} references={references}
       value={entries.find((candidate) => candidate.name === entry.name)?.source ?? null} unset="Not given"
       onChange={(source) => set(entry.name, source)} />)}
-    {extra.map((entry, index) => <Item key={`${entry.name}-${index}`} variant="outline" size="sm">
+    {/* Keyed by place: the name is edited here, and a key that changed with it would lose the focus. */}
+    {extra.map((entry, index) => <Item key={index} variant="outline" size="sm">
       <ItemHeader className="flex-wrap gap-2">
         <ItemTitle>{studioWords(entry.name)}</ItemTitle>
         <ItemActions><Button type="button" variant="outline" size="sm" disabled={disabled}
@@ -208,18 +212,28 @@ function ConditionControl({ id, condition, context, disabled, onChange }: Readon
   // The tree being edited stays here while a comparison is unfinished; the step keeps its last whole condition.
   const [tree, setTree] = useState<ConditionNode | undefined>(projected.kind === "condition" ? projected.condition : undefined);
   const [replaced, setReplaced] = useState(false);
+  // The condition this tree stands for; another one (Undo, Redo) shows that one instead.
+  const [shown, setShown] = useState(condition);
+  if (JSON.stringify(shown) !== JSON.stringify(condition)) {
+    setShown(condition);
+    setTree(projected.kind === "condition" ? projected.condition : undefined);
+    setReplaced(false);
+  }
   if (projected.kind === "unsupported" && !replaced)
     return <div className="space-y-2 text-sm" id={id}>
       <p role="alert">This condition reads values this step can no longer read, or uses a calculation the condition controls do not show. It is kept as it is.</p>
       <Button type="button" variant="outline" size="sm" disabled={disabled}
-        onClick={() => { setReplaced(true); setTree(undefined); onChange({ op: "literal", type: "yes_no", value: true }, null); }}>Replace it with a new condition</Button>
+        onClick={() => {
+          const fresh: FlowFormula = { op: "literal", type: "yes_no", value: true };
+          setReplaced(true); setTree(undefined); setShown(fresh); onChange(fresh, null);
+        }}>Replace it with a new condition</Button>
     </div>;
   const change = (next: ConditionNode | undefined, validation: StudioConditionValidation) => {
     setTree(next);
     const formula = studioFlowConditionFormula(next, context);
     if (!validation.isValid || formula === undefined)
-      onChange(condition, "Condition: finish every comparison, with a value on both sides, before you apply.");
-    else onChange(formula, null);
+      onChange(condition, "Condition: finish every comparison, with a value on both sides, and the step takes it.");
+    else { setShown(formula); onChange(formula, null); }
   };
   return <fieldset className="space-y-2" id={id} disabled={disabled}>
     <legend className="text-sm font-medium">Condition</legend>
@@ -300,18 +314,18 @@ export function StudioFlowStepForm({ id, fields, draft, controlEntries, calculat
   return <div className="space-y-3">
     {draft.control !== null && <ControlForm id={`${id}-control`} control={draft.control} entries={controlEntries} references={references}
       condition={condition} choices={choices} flows={flows} disabled={disabled}
-      onChange={(control, problem) => onChange({ ...draft, control }, problem)} />}
+      onChange={(control, problem) => onChange({ ...draft, control }, problem, "control")} />}
     {fields.map((field) => <div key={field.key} className="space-y-1" data-vortex-setting={field.key}>
       <PropertyControl id={`${id}-${field.key}`} field={field} disabled={disabled}
         value={Object.hasOwn(draft.properties, field.key) ? draft.properties[field.key]! : null} references={references}
         choices={choices} flows={flows} calculationReferences={calculationReferences}
-        onChange={(value) => onChange({ ...draft, properties: { ...draft.properties, [field.key]: value } }, null)} />
+        onChange={(value) => onChange({ ...draft, properties: { ...draft.properties, [field.key]: value } }, null, field.key)} />
       {field.help === undefined ? null : <p className="text-xs text-muted-foreground">{field.help}</p>}
     </div>)}
     <div className="space-y-1.5">
       <Label htmlFor={`${id}-description`}>Description (optional)</Label>
       <Textarea id={`${id}-description`} disabled={disabled} maxLength={1_000} value={draft.description}
-        onChange={(event) => onChange({ ...draft, description: event.target.value }, null)} />
+        onChange={(event) => onChange({ ...draft, description: event.target.value }, null, "description")} />
       <p className="text-xs text-muted-foreground">Shown on the canvas in place of the step&apos;s summary.</p>
     </div>
   </div>;

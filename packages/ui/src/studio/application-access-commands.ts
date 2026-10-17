@@ -2,7 +2,7 @@ import {
   applicationSourceDocumentSchema, builderKeySchema, changeableByPeople, standardPermissionKeys,
   type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
-import { tokenName } from "./studio-labels";
+import { tokenName } from "./studio-words";
 
 /**
  * The Access tab's model and edits of the application draft: its roles (access groups), what each
@@ -340,7 +340,7 @@ const judged = (candidate: Source): Source => {
   return refuse(`This change would leave ${typeof issue.path[1] === "string" ? tokenName(issue.path[1]).toLowerCase() : "the application"} invalid (${issue.message}). Nothing was changed.`);
 };
 const applied = (candidate: Source, message: string, roleKey?: string): StudioAccessResult =>
-  ({ kind: "applied", source: judged(candidate), message: `${message} Save to keep it.`, roleKey });
+  ({ kind: "applied", source: judged(candidate), message, roleKey });
 
 const requireRole = (body: Body, roleKey: string): Role =>
   body.roles.find((role) => role.key === roleKey) ?? refuse("That role is no longer in the draft.");
@@ -503,7 +503,7 @@ export const applyStudioAccessCommand = (source: Source, command: StudioAccessCo
       case "list_role_permissions": {
         const role = requireRole(body, command.roleKey);
         if (!role.permissions.includes("*")) refuse(`${quoted(role.name)} already lists its permissions.`);
-        if (command.permissionKeys.length === 0) refuse("Save the draft first, so the permissions this role holds can be listed.");
+        if (command.permissionKeys.length === 0) refuse("The permissions this role holds are listed once your latest change is saved. Try again in a moment.");
         (role as { permissions: string[] }).permissions = [...command.permissionKeys];
         return applied(candidate, `${quoted(role.name)} now lists its ${command.permissionKeys.length} permissions one by one.`, role.key);
       }

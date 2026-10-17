@@ -40,7 +40,7 @@ import {
   type StudioApplicationSourceReviewResult,
 } from "./_lib/application-source-import";
 import { platformPermissionSource } from "../_lib/platform-permission-source";
-import { tokenName } from "./_lib/studio-labels";
+import { tokenName } from "@vortex/ui/studio";
 import type { StudioThemeResolution } from "./_lib/studio-theme-options";
 import type { StudioStoredApplicationDraft } from "@vortex/ui/studio";
 import { readStudioPersonLabel } from "../_lib/studio-person-labels";
@@ -139,6 +139,11 @@ export async function createStudioApplication(organizationId: string, candidate:
   return createHumanApplicationDraft(organizationId, { source: source.data });
 }
 
+/** What one autosave came to: the platform's answer, or a conflict that names the newer saved draft. */
+export type StudioSaveApplicationResult =
+  | Awaited<ReturnType<typeof saveHumanApplicationDraft>>
+  | Readonly<{ kind: "conflict"; reason: "draft_changed"; elsewhere: StudioDraftChangedElsewhere }>;
+
 /** The saved draft another window or person wrote, which a save from this workspace no longer extends. */
 export type StudioDraftChangedElsewhere = Readonly<{
   draft: StudioStoredApplicationDraft;
@@ -153,7 +158,7 @@ export type StudioDraftChangedElsewhere = Readonly<{
  * longer extends the saved revision is refused as a conflict that names who wrote the newer
  * revision and carries it, so the workspace can say what changed.
  */
-export async function saveStudioApplication(organizationId: string, candidate: unknown) {
+export async function saveStudioApplication(organizationId: string, candidate: unknown): Promise<StudioSaveApplicationResult> {
   const saved = await saveApplicationDraft(organizationId, candidate);
   if (saved.kind !== "conflict" || saved.reason !== "draft_changed") return saved;
   const command = saveDefinitionDraftCommandSchema.parse(candidate);
@@ -163,7 +168,7 @@ export async function saveStudioApplication(organizationId: string, candidate: u
     return saved;
   }
   const changedBy = await readStudioPersonLabel(organizationId, latest.draft.updatedBy);
-  return { ...saved, elsewhere: { draft: latest.draft, changedBy } satisfies StudioDraftChangedElsewhere };
+  return { kind: "conflict", reason: "draft_changed", elsewhere: { draft: latest.draft, changedBy } };
 }
 
 const saveApplicationDraft = async (organizationId: string, candidate: unknown) => {

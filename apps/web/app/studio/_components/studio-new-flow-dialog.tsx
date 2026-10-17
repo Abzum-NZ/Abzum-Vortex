@@ -44,7 +44,7 @@ export function StudioNewFlowDialog({ open, onOpenChange, choices, onCreate, ini
       <form onSubmit={submit} className="space-y-4">
         <DialogHeader>
           <DialogTitle>New flow</DialogTitle>
-          <DialogDescription>The flow starts with one step you then change on the canvas. Save to keep it.</DialogDescription>
+          <DialogDescription>The flow starts with one step you then change on the canvas.</DialogDescription>
         </DialogHeader>
         <div className="space-y-1.5">
           <Label htmlFor="new-flow-name">Name</Label>

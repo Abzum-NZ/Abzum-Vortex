@@ -18,6 +18,9 @@ import {
   StudioConditionControls, StudioOptionControl, projectStudioActionCondition, studioActionConditionContext,
   studioActionConditionSource, studioFlowLabel, type StudioConditionValidation,
 } from "@vortex/ui/studio";
+import { useStudioDraftText } from "./use-studio-draft-text";
+import { useStudioDraftHeld } from "./use-studio-draft-held";
+import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
 
 /**
  * The named actions of a record type, such as Mark won, Mark lost or Convert lead: what each is
@@ -33,6 +36,15 @@ type Field = RecordType["fields"][number];
 
 /** How an action sets one field: a fixed value, the person running it, or the time it runs. */
 type Effect = Readonly<{ field: string; from: "fixed" | "person" | "now"; value: string | boolean }>;
+
+/** What the action dialog sets; an existing action takes each change as one edit of the draft. */
+type ActionForm = Readonly<{
+  label: string; precondition: InlineModuleActionPrecondition | undefined; effects: readonly Effect[];
+  /** "own" for the action's own permission, else the key of another named permission. */
+  permission: string; ownsChoice: boolean;
+}>;
+
+const unfinishedCondition = "Runs only when: finish every comparison, with a value on both sides.";
 
 const choiceOptions = (field: Field | undefined): readonly { value: string; label: string }[] =>
   field?.type === "choice" ? ((field.settings as { options?: { value: string; label: string }[] }).options ?? []) : [];
@@ -81,77 +93,114 @@ const runningFlows = (source: ApplicationSourceDocument, module: Module, action:
   ];
 };
 
+/** A fixed value an action sets, applied as it is typed. */
+function EffectText({ label, value, apply }: Readonly<{ label: string; value: string; apply: (next: string) => string | true }>) {
+  const text = useStudioDraftText(value, apply);
+  return <div className="space-y-1">
+    <Input aria-label={`${label} value`} value={text.text} aria-invalid={text.problem === "" ? undefined : true}
+      onChange={(event) => text.change(event.target.value)} />
+    {text.problem === "" ? null : <p role="alert" className="text-xs text-destructive">{text.problem}</p>}
+  </div>;
+}
+
 /**
- * Adds or changes one named action. A pipeline's gate opens it with the stage's option already set,
- * so the new action owns that stage; `onSaved` then names the action it made.
+ * Adds or changes one named action. A new action is a form, added with Add action; a pipeline's gate
+ * opens it with the stage's option already set, so the new action owns that stage, and `onSaved`
+ * then names the action it made. An existing action takes each valid change as one edit of the
+ * draft at once; a name or condition that is not valid yet stays in its control with why.
  */
-export function ActionDialog({ source, module, record, action, open, onOpenChange, onSave, onShow, initialEffect, onSaved }: Readonly<{
-  source: ApplicationSourceDocument; module: Module; record: RecordType; action: Action | undefined; open: boolean;
+export function ActionDialog({ module, record, action, open, onOpenChange, edit, onShow, initialEffect, onSaved }: Readonly<{
+  module: Module; record: RecordType; action: Action | undefined; open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (next: ApplicationSourceDocument, message: string) => boolean;
+  edit: StudioDataEdit;
   onShow: (reference: InlineRecordTypeReference) => void;
   /** For a new action: the choice option it sets from the start. */
   initialEffect?: Readonly<{ field: string; option: string }>;
   onSaved?: (actionKey: string) => void;
 }>) {
+  const adding = action === undefined;
   const [where, setWhere] = useState<readonly InlineRecordTypeReference[]>([]);
   const projected = useMemo(() => projectStudioActionCondition(action?.precondition), [action]);
   const context = useMemo(() => studioActionConditionContext(record), [record]);
-  const [label, setLabel] = useState(action?.label ?? "");
-  const [condition, setCondition] = useState<ConditionNode | undefined>(projected.kind === "condition" ? projected.condition : undefined);
-  const [keptCondition, setKeptCondition] = useState(projected.kind === "unsupported");
-  const [conditionValid, setConditionValid] = useState(true);
-  const [effects, setEffects] = useState<Effect[]>(() => action === undefined && initialEffect !== undefined
-    ? [{ field: initialEffect.field, from: "fixed", value: initialEffect.option }] : effectsOf(action));
-  const named = module.permissions.filter((permission) => permission.action_kind === "named" && permission.record_type === record.key);
-  const [permission, setPermission] = useState(action === undefined || action.permission === action.key ? "own" : action.permission ?? "own");
-  const [ownsChoice, setOwnsChoice] = useState(action === undefined || action.sets_choice_field !== undefined);
+  const [replacing, setReplacing] = useState(false);
+  const keptCondition = projected.kind === "unsupported" && !replacing;
+  const [created, setCreated] = useState<ActionForm>(() => ({
+    label: "", precondition: undefined, permission: "own", ownsChoice: true,
+    effects: initialEffect === undefined ? [] : [{ field: initialEffect.field, from: "fixed", value: initialEffect.option }],
+  }));
+  const stored: ActionForm = action === undefined ? created : {
+    label: action.label, precondition: action.precondition, effects: effectsOf(action),
+    permission: action.permission === action.key ? "own" : action.permission ?? "own", ownsChoice: action.sets_choice_field !== undefined,
+  };
   const [issues, setIssues] = useState<readonly string[]>([]);
+  const named = module.permissions.filter((permission) => permission.action_kind === "named" && permission.record_type === record.key);
   const settable = record.fields.filter((field) => field.type !== "reference_number" && field.type !== "calculation" && field.type !== "total");
+  const setsChoiceIn = (effects: readonly Effect[]) =>
+    effects.some((effect) => record.fields.find((field) => field.key === effect.field)?.type === "choice");
+
+  const save = (form: ActionForm, merge?: string): string | undefined => {
+    setWhere([]);
+    const result = edit((current) => saveInlineModuleAction(current, {
+      moduleKey: module.key, recordKey: record.key, ...(action === undefined ? {} : { actionKey: action.key }),
+      label: form.label, precondition: form.precondition,
+      effects: form.effects.map((effect) => ({ field: effect.field, value: effectValue(effect, record.fields.find((field) => field.key === effect.field)) })),
+      permission: form.permission === "own" ? { kind: "own" } : { kind: "existing", key: form.permission },
+      ownsChoice: form.ownsChoice && setsChoiceIn(form.effects),
+    }), merge === undefined ? {} : { merge });
+    if (result.kind === "referenced") setWhere(result.references);
+    if (result.kind === "changed" && action === undefined) { onSaved?.(result.actionKey); onOpenChange(false); }
+    return studioEditProblem(result);
+  };
+  /** A change of the form: kept in the new action's form, or one edit of an existing action. */
+  const change = (patch: Partial<ActionForm>, merge?: string): string | undefined => {
+    if (action === undefined) { setCreated({ ...created, ...patch }); setIssues([]); return undefined; }
+    const problem = save({ ...stored, ...patch }, merge);
+    setIssues(problem === undefined ? [] : [problem]);
+    return problem;
+  };
+  const label = useStudioDraftText(action?.label ?? "", (next) => adding ? true
+    : next.trim() === "" ? "Enter the action's name, for example Mark won." : change({ label: next }, `action-label:${module.key}:${action.key}`) ?? true);
+  const condition = useStudioDraftHeld<ConditionNode | undefined>(projected.kind === "condition" ? projected.condition : undefined);
+  const effects = stored.effects;
   const unused = settable.filter((field) => !effects.some((effect) => effect.field === field.key));
-  const setsChoice = effects.some((effect) => record.fields.find((field) => field.key === effect.field)?.type === "choice");
+  const setsChoice = setsChoiceIn(effects);
+
+  const changeCondition = (next: ConditionNode | undefined, validation: StudioConditionValidation) => {
+    const built = validation.isValid ? studioActionConditionSource(next) : { ok: false as const };
+    if (!built.ok) { condition.hold(next, unfinishedCondition); return; }
+    if (action === undefined) { condition.hold(next, ""); setCreated({ ...created, precondition: built.condition }); return; }
+    const problem = save({ ...stored, precondition: built.condition }, `action-condition:${module.key}:${action.key}`);
+    if (problem !== undefined) { condition.hold(next, problem); return; }
+    const after = projectStudioActionCondition(built.condition);
+    condition.applied(after.kind === "condition" ? after.condition : undefined);
+  };
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!conditionValid) { setIssues(["Runs only when: finish every comparison, with a value on both sides."]); return; }
-    let precondition: InlineModuleActionPrecondition | undefined = action?.precondition;
-    if (!keptCondition) {
-      const built = studioActionConditionSource(condition);
-      if (!built.ok) { setIssues(["Runs only when: finish every comparison, with a value on both sides."]); return; }
-      precondition = built.condition;
-    }
-    const result = saveInlineModuleAction(source, {
-      moduleKey: module.key, recordKey: record.key, ...(action === undefined ? {} : { actionKey: action.key }), label, precondition,
-      effects: effects.map((effect) => ({ field: effect.field, value: effectValue(effect, record.fields.find((field) => field.key === effect.field)) })),
-      permission: permission === "own" ? { kind: "own" } : { kind: "existing", key: permission },
-      ownsChoice: ownsChoice && setsChoice,
-    });
-    setWhere([]);
-    if (result.kind === "invalid") { setIssues(result.issues); return; }
-    if (result.kind === "referenced") { setIssues([result.issue]); setWhere(result.references); return; }
-    if (onSave(result.source, `Action ${label.trim()} ${action === undefined ? "added" : "changed"}. Save to keep it.`)) {
-      onSaved?.(result.actionKey);
-      onOpenChange(false);
-    }
-    else setIssues(["The draft changed or is busy, so nothing was changed. Try again in a moment."]);
+    if (action !== undefined) return;
+    if (condition.problem !== "") { setIssues([condition.problem]); return; }
+    const problem = save({ ...created, label: label.text });
+    setIssues(problem === undefined ? [] : [problem]);
   };
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="max-h-screen overflow-y-auto">
       <form onSubmit={submit} className="space-y-4">
         <DialogHeader>
           <DialogTitle>{action === undefined ? `New action of ${record.plural_name}` : `Change ${action.label}`}</DialogTitle>
-          <DialogDescription>A named action people run on one {record.name.toLowerCase()}, such as Mark won.</DialogDescription>
+          <DialogDescription>A named action people run on one {record.name.toLowerCase()}, such as Mark won.
+            {action === undefined ? "" : " Each change is kept as you make it."}</DialogDescription>
         </DialogHeader>
         <div className="space-y-1.5"><Label htmlFor="action-name">Name</Label>
-          <Input id="action-name" required maxLength={60} value={label} onChange={(event) => { setLabel(event.target.value); setIssues([]); }} /></div>
+          <Input id="action-name" required maxLength={60} value={label.text} aria-invalid={label.problem === "" ? undefined : true}
+            onChange={(event) => { label.change(event.target.value); if (adding) setIssues([]); }} />
+          {label.problem === "" ? null : <p role="alert" className="text-xs text-destructive">{label.problem}</p>}</div>
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium">Runs only when</legend>
           {keptCondition
             ? <div className="space-y-2 text-sm"><p>This condition compares values the condition controls do not show. It is kept as it is.</p>
-              <Button type="button" variant="outline" size="sm" onClick={() => { setKeptCondition(false); setCondition(undefined); }}>Replace it</Button></div>
-            : <StudioConditionControls {...(condition === undefined ? {} : { value: condition })} context={context} label="Runs only when"
-              onChange={(next: ConditionNode | undefined, validation: StudioConditionValidation) => {
-                setCondition(next); setConditionValid(validation.isValid); setIssues([]);
-              }} />}
+              <Button type="button" variant="outline" size="sm" onClick={() => setReplacing(true)}>Replace it</Button></div>
+            : <StudioConditionControls key={condition.epoch} {...(condition.value === undefined ? {} : { value: condition.value })}
+              context={context} label="Runs only when" onChange={changeCondition} />}
+          {condition.problem === "" ? null : <p role="alert" className="text-xs text-destructive">{condition.problem}</p>}
           <p className="text-xs text-muted-foreground">Leave it without a condition to let the action run on any {record.name.toLowerCase()}.</p>
         </fieldset>
         <fieldset className="space-y-2">
@@ -160,11 +209,12 @@ export function ActionDialog({ source, module, record, action, open, onOpenChang
           {effects.map((effect, index) => {
             const field = record.fields.find((candidate) => candidate.key === effect.field);
             const options = choiceOptions(field);
-            const set = (next: Effect) => { setEffects(effects.map((entry, at) => at === index ? next : entry)); setIssues([]); };
+            const replaced = (next: Effect) => effects.map((entry, at) => at === index ? next : entry);
+            const set = (next: Effect) => change({ effects: replaced(next) });
             return <Item key={effect.field} variant="outline" size="sm">
               <ItemHeader className="flex-wrap gap-2"><ItemTitle>{field?.label ?? effect.field}</ItemTitle>
                 <ItemActions><Button type="button" variant="outline" size="sm"
-                  onClick={() => setEffects(effects.filter((_, at) => at !== index))}>Remove</Button></ItemActions></ItemHeader>
+                  onClick={() => change({ effects: effects.filter((_, at) => at !== index) })}>Remove</Button></ItemActions></ItemHeader>
               <ItemContent className="basis-full space-y-2">
                 <NativeSelect aria-label={`${field?.label ?? effect.field}: set to`} className="w-full" value={effect.from}
                   onChange={(event) => set({ ...effect, from: event.target.value as Effect["from"] })}>
@@ -178,8 +228,9 @@ export function ActionDialog({ source, module, record, action, open, onOpenChang
                   : field?.type === "yes_no"
                     ? <div className="flex items-center gap-2"><Checkbox id={`action-effect-${effect.field}`} checked={effect.value === true}
                       onCheckedChange={(checked) => set({ ...effect, value: checked === true })} /><Label htmlFor={`action-effect-${effect.field}`}>Yes</Label></div>
-                    : <Input aria-label={`${field?.label ?? effect.field} value`} value={String(effect.value)}
-                      onChange={(event) => set({ ...effect, value: event.target.value })} />)}
+                    : <EffectText label={field?.label ?? effect.field} value={String(effect.value)}
+                      apply={(value) => change({ effects: replaced({ ...effect, value }) },
+                        action === undefined ? undefined : `action-effect:${module.key}:${action.key}:${effect.field}`) ?? true} />)}
               </ItemContent>
             </Item>;
           })}
@@ -188,15 +239,15 @@ export function ActionDialog({ source, module, record, action, open, onOpenChang
               options={unused.map((field) => ({ value: field.key, label: field.label }))}
               onChange={(key) => {
                 const field = record.fields.find((candidate) => candidate.key === key);
-                if (field !== undefined) setEffects([...effects, { field: key, from: "fixed",
-                  value: field.type === "yes_no" ? false : choiceOptions(field)[0]?.value ?? "" }]);
+                if (field !== undefined) change({ effects: [...effects, { field: key, from: "fixed",
+                  value: field.type === "yes_no" ? false : choiceOptions(field)[0]?.value ?? "" }] });
               }} /></div>}
-          {setsChoice && <div className="flex items-start gap-2"><Checkbox id="action-owns" checked={ownsChoice}
-            onCheckedChange={(checked) => setOwnsChoice(checked === true)} />
+          {setsChoice && <div className="flex items-start gap-2"><Checkbox id="action-owns" checked={stored.ownsChoice}
+            onCheckedChange={(checked) => change({ ownsChoice: checked === true })} />
             <Label htmlFor="action-owns" className="font-normal">Saving this option anywhere (a form, a board, a Save record step) runs this action, with its condition and permission.</Label></div>}
         </fieldset>
         <div className="space-y-1.5"><Label htmlFor="action-permission">Permission</Label>
-          <NativeSelect id="action-permission" className="w-full" value={permission} onChange={(event) => setPermission(event.target.value)}>
+          <NativeSelect id="action-permission" className="w-full" value={stored.permission} onChange={(event) => change({ permission: event.target.value })}>
             <NativeSelectOption value="own">{action === undefined ? "Its own permission, given to every access group" : "Its own permission"}</NativeSelectOption>
             {named.filter((entry) => entry.key !== action?.key).map((entry) =>
               <NativeSelectOption key={entry.key} value={entry.key}>{entry.label}</NativeSelectOption>)}
@@ -211,17 +262,19 @@ export function ActionDialog({ source, module, record, action, open, onOpenChang
               onClick={() => { onOpenChange(false); onShow(reference); }}>{reference.label}</Button>}</li>)}</ul>
         </div>}
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="submit">{action === undefined ? "Add action" : "Apply"}</Button>
+          {action === undefined
+            ? <><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button type="submit">Add action</Button></>
+            : <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>}
         </DialogFooter>
       </form>
     </DialogContent>
   </Dialog>;
 }
 
-export function StudioModuleActions({ source, moduleKey, recordKey, disabled, apply, onShow }: Readonly<{
+export function StudioModuleActions({ source, moduleKey, recordKey, disabled, edit, onShow }: Readonly<{
   source: ApplicationSourceDocument; moduleKey: string; recordKey: string; disabled: boolean;
-  apply: (next: ApplicationSourceDocument, message: string) => boolean;
+  edit: StudioDataEdit;
   onShow: (reference: InlineRecordTypeReference) => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
@@ -234,13 +287,14 @@ export function StudioModuleActions({ source, moduleKey, recordKey, disabled, ap
   const actions = module.actions.filter((action) => action.record_type === record.key);
   const remove = async (action: Action) => {
     setIssues([]); setReferences([]);
-    const result = deleteInlineModuleAction(source, module.key, action.key);
-    if (result.kind === "referenced") { setReferences(result.references); return; }
-    if (result.kind === "invalid") { setIssues(result.issues); return; }
+    const check = deleteInlineModuleAction(source, module.key, action.key);
+    if (check.kind === "referenced") { setReferences(check.references); return; }
+    if (check.kind === "invalid") { setIssues(check.issues); return; }
     if (!await confirm({ title: `Delete ${action.label}?`, confirmLabel: "Delete action",
-      description: "The action and its own permission leave the draft. You can undo this before you save." })) return;
-    if (!apply(result.source, `Action ${action.label} deleted. Save to keep it.`))
-      setIssues(["The draft changed or is busy, so nothing was deleted. Try again in a moment."]);
+      description: "The action and its own permission leave the draft. Undo brings them back." })) return;
+    const result = edit((current) => deleteInlineModuleAction(current, module.key, action.key));
+    if (result.kind === "referenced") setReferences(result.references);
+    else { const problem = studioEditProblem(result); if (problem !== undefined) setIssues([problem]); }
   };
   const chosen = editing === null || editing === "new" ? undefined : actions.find((action) => action.key === editing);
   return <section className="space-y-2 border-t border-border pt-3" aria-label={`Actions of ${record.plural_name}`}>
@@ -282,8 +336,8 @@ export function StudioModuleActions({ source, moduleKey, recordKey, disabled, ap
     </div>}
     {issues.length === 0 ? null : <ul role="alert" className="space-y-1 text-sm text-destructive">
       {issues.map((issue, index) => <li key={index}>{issue}</li>)}</ul>}
-    {editing !== null && <ActionDialog key={editing} source={source} module={module} record={record} action={chosen} open
-      onOpenChange={(open) => { if (!open) setEditing(null); }} onSave={apply} onShow={onShow} />}
+    {editing !== null && (editing === "new" || chosen !== undefined) && <ActionDialog key={editing} module={module}
+      record={record} action={chosen} open onOpenChange={(open) => { if (!open) setEditing(null); }} edit={edit} onShow={onShow} />}
     {confirmDialog}
   </section>;
 }
