@@ -1,6 +1,8 @@
 -- Preserve the viewer's current application access while reporting a missing read grant as a refusal.
 set local role vortex_owner;
 
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.plan_record_read_scan_internal(
   p_record_type_id uuid
 )
