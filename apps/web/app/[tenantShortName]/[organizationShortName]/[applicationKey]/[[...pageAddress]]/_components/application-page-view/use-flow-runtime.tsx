@@ -16,7 +16,7 @@ import {
   createFlowRuntime,
   createFormBlockRuntime,
   type FieldInputControlReleaseMap,
-  type createFullPlatformComponentRegistry,
+  type createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
   UnsavedWorkProvider,
   useFlowIntentHost,
@@ -107,7 +107,7 @@ export function useFlowRuntime({
   basePath: string;
   unsavedWork: ReturnType<typeof useUnsavedWorkGuard>["guard"];
   model: ApplicationPageModel;
-  platformComponentRegistry: ReturnType<typeof createFullPlatformComponentRegistry>;
+  platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
   runtimeInputsRef: RefObject<Readonly<Record<string, unknown>>>;
   choicePayloadFor: (placementId: string, formId?: string) => ChoiceInputPayload | undefined;
   choiceDefaultContextsRef: RefObject<Record<string, boolean>>;

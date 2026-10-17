@@ -530,10 +530,16 @@ export const withCopiedFlowBindings = <Binding extends SourceFlowBinding>(
  * Duplicate copies them with a copied block. Undo restores both, because history holds the whole
  * draft.
  */
-export const withoutFlowBindingsOf = <Binding extends SourceFlowBinding>(
-  bindings: readonly Binding[],
-  removed: ReadonlySet<string>,
-): Binding[] => bindings.filter((binding) => !removed.has(binding.control));
+export const removeFlowBindingsOf = (body: ApplicationSourceDocument["body"], removed: ReadonlySet<string>): void => {
+  const unbound = new Set(body.flow_bindings.filter((binding) => removed.has(binding.control)).map((binding) => binding.event_id));
+  body.flow_bindings = body.flow_bindings.filter((binding) => !removed.has(binding.control));
+  // An event declared only for the bindings that left goes with them; one that another binding or
+  // a remaining block's setting still names stays.
+  for (const binding of body.flow_bindings) unbound.delete(binding.event_id);
+  if (unbound.size === 0) return;
+  const named = JSON.stringify([...body.pages.map((page) => page.composition), ...body.shells.map((shell) => shell.layout)]);
+  body.events = body.events.filter((event) => !unbound.has(event.id) || named.includes(`"event_id":"${event.id}"`));
+};
 
 /** Every block name in a slot, at any depth. */
 export const storedZoneAliases = (zone: StoredZone): Set<string> => {

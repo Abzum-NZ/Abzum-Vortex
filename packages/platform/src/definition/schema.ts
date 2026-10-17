@@ -27,6 +27,7 @@ export * from "./definition-store-contracts";
 export * from "./installation-runtime-bundle";
 export * from "./module-foundation-contracts";
 export * from "./module-contracts";
+export * from "./record-type-pipelines";
 export {
   modulePlatformPermissionDeclarationSchema,
   type ModulePlatformPermissionDeclaration,
