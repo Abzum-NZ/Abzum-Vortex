@@ -213,8 +213,8 @@ export const createDurableActorRequestService = (dependencies: DurableActorReque
         const value = await runTransaction(
           async (transaction) => {
             if (policy.kind === "initiating_person") {
-              // A durable person actor runs only platform-service operations: Access, account and
-              // tenant administration, most of which advance the Access version. It holds that
+              // A durable person actor runs only platform-service operations (Access, accounts and
+              // tenants), most of which advance the Access version. It holds that
               // version exclusively from the first statement, as every access change does, so two
               // never deadlock on a lock upgrade.
               const row = single(

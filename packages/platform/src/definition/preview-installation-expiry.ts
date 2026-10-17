@@ -83,7 +83,9 @@ export const dropRetiredPreviewStorage = async (): Promise<number> => {
     } catch (error) {
       // 55P03: the retired table is still read; the next run drops it.
       if (databaseErrorCode(error) !== "55P03") throw error;
-      console.info(`[preview] retired preview storage is still in use; a later run drops it: ${describeFailure(error)}`);
+      console.info(
+        `[preview] retired preview storage is still in use; a later run drops it: ${describeFailure(error)}`,
+      );
     }
   }
   return dropped;

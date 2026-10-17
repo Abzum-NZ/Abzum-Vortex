@@ -1917,7 +1917,9 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
@@ -1937,7 +1939,9 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
@@ -2012,7 +2016,9 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
@@ -2133,7 +2139,9 @@ begin
         'target', pg_catalog.jsonb_build_object('kind', 'organization'),
         'requiredPermission', pg_catalog.jsonb_build_object(
           'ownerKind', 'platform',
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           'permissionId', '630a980c-0ff5-40b1-a329-7326a2122395'
         ),
         'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
@@ -3893,6 +3901,7 @@ declare
   protected_view_key text;
   reader_schema_value text;
   reader_function_value text;
+  reader_sort_key_value text;
   field_columns_sql text;
   projection_view_sql text;
   existing_columns text[];
@@ -4022,11 +4031,15 @@ begin
     protected_view_key := null;
     reader_schema_value := null;
     reader_function_value := null;
+    reader_sort_key_value := null;
     projection_view_sql := null;
     if is_projection then
       protected_view_key := record_type #>> '{systemProjection,protectedView}';
-      select registered.reader_schema, registered.reader_function
-      into reader_schema_value, reader_function_value
+      -- The view reads every row in the reader's first registered cursor order, which each
+      -- reader accepts without a page limit.
+      select registered.reader_schema, registered.reader_function,
+        registered.cursor_sort_keys[1]
+      into reader_schema_value, reader_function_value, reader_sort_key_value
       from vortex_record.protected_read_model_views as registered
       where registered.protected_read_model_key = protected_view_key;
       if not found then
@@ -4104,10 +4117,10 @@ begin
            null::uuid as deleted_by,
            null::timestamptz as removal_due_at,
            %s
-         from %I.%I(null::uuid, null::integer) as projection',
+         from %I.%I(null::uuid[], %L, ''ascending'', null, null) as projection',
         table_token, p_module_root_id, record_type_id_value, storage_id,
         p_module_release_revision, field_columns_sql,
-        reader_schema_value, reader_function_value
+        reader_schema_value, reader_function_value, reader_sort_key_value
       );
     end if;
 
