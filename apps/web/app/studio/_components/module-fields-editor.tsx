@@ -129,7 +129,7 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, dis
   const declarations = declarationsFor(form.type, form.settings, plainBase);
   const defaultModel = moduleFieldDefaultDeclaration(form.type, writeModuleFieldSettings(form.type, form.settings, declarations, plainBase));
   const kept = moduleFieldKeptSettings(form.type, plainBase);
-  const choices: StudioSettingChoices = { fields: [], queries: [], pages: [], recordTypes, actions: [], pipelines: [],
+  const choices: StudioSettingChoices = { fields: [], queries: [], pages: [], recordTypes, actions: [],
     relationships, records: context.readRecords };
   const offered = adding ? studioFieldPlacements({ ...context.composition, source }, moduleKey, recordKey, form.type) : [];
   const nextKey = adding && record !== undefined && form.label.trim() !== ""

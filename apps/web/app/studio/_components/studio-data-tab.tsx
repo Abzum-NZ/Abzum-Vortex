@@ -16,6 +16,7 @@ import { StudioDataPanel } from "./studio-data-panel";
 import { StudioDataCentre } from "./studio-data-centre";
 import { StudioRecordTypeDialog } from "./studio-record-type-dialog";
 import { StudioModuleActions } from "./studio-module-actions";
+import { StudioRecordPipelines } from "./studio-record-pipelines";
 import {
   ModuleFieldsEditor, studioFieldPublication, type ModuleFieldEditorContext, type StudioModuleOwnerApplication,
 } from "./module-fields-editor";
@@ -65,10 +66,12 @@ function ModuleInspector({ source, saved, moduleKey, disabled, apply }: Readonly
 }
 
 /** The owned record type's names, its key while unsaved, and Delete, refused with where it is used. */
-function RecordTypeInspector({ source, saved, moduleKey, recordKey, disabled, fieldContext, apply, applyField, onFieldPending, onSelect, onShow }: Readonly<{
+function RecordTypeInspector({ source, saved, moduleKey, recordKey, disabled, fieldContext, apply, applyInPlace, applyField, onFieldPending, onSelect, onShow }: Readonly<{
   source: ApplicationSourceDocument; saved: ApplicationSourceDocument; moduleKey: string; recordKey: string; disabled: boolean;
   fieldContext: ModuleFieldEditorContext;
   apply: (next: ApplicationSourceDocument, message: string, select?: StudioDataSelection | null) => boolean;
+  /** Applies an edit while the inspector's open forms keep what the person has set. */
+  applyInPlace: (next: ApplicationSourceDocument, message: string) => boolean;
   applyField: (expected: ApplicationSourceDocument, next: ApplicationSourceDocument) => boolean;
   onFieldPending: (pending: boolean) => void;
   onSelect: (selection: StudioDataSelection) => void;
@@ -143,6 +146,8 @@ function RecordTypeInspector({ source, saved, moduleKey, recordKey, disabled, fi
     </section>}
     <StudioModuleActions source={source} moduleKey={moduleKey} recordKey={recordKey} disabled={disabled} onShow={onShow}
       apply={(next, message) => apply(next, message)} />
+    <StudioRecordPipelines source={source} moduleKey={moduleKey} recordKey={recordKey} publication={fieldContext.publication}
+      disabled={disabled} onShow={onShow} apply={(next, message) => apply(next, message)} applyAction={applyInPlace} />
     <section className="space-y-2 border-t border-border pt-3" aria-label="Delete">
       <Button type="button" size="sm" variant="destructive" disabled={disabled} onClick={() => { void remove(); }}>Delete record type</Button>
       {references.length === 0 ? null : <Alert variant="destructive" role="alert">
@@ -303,6 +308,7 @@ export function useStudioDataTab({ organizationId, rootId, source, saved, used, 
         : current.kind === "record_type"
           ? <RecordTypeInspector key={`${epoch}:${current.moduleKey}:${current.recordKey}`} source={source} saved={saved}
             moduleKey={current.moduleKey} recordKey={current.recordKey} disabled={disabled} fieldContext={fieldContext} apply={applyAndSelect}
+            applyInPlace={(next, message) => apply(source, next, message)}
             applyField={applyField} onFieldPending={onFieldPending} onSelect={selectAfterEdit} onShow={onShow} />
           : <ModuleFieldsEditor key={`${epoch}:${current.moduleKey}:${current.recordKey}:${current.fieldKey}`}
             source={source} moduleKey={current.moduleKey} recordKey={current.recordKey} fieldKey={current.fieldKey}

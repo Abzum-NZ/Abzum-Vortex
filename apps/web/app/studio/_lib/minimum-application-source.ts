@@ -109,7 +109,6 @@ export const minimumApplicationSource = (
         },
       }],
       navigation: [],
-      pipelines: [],
       connection_bindings: [],
       interfaces: [],
       events: [],

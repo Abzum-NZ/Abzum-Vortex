@@ -15,13 +15,16 @@ import { traverseStudioSemanticSelectionDraft, type StudioSemanticSelection } fr
  * - for an action control: an interactive flow started by the person, with one Show message step,
  *   and one flow binding of the control's action event to it (the existing `flow_bindings` model);
  *   on a record page the flow reads the record the page shows as its `record_id` input;
+ * - for a board: an interactive flow bound to its card moves, with one Save record step that saves
+ *   the moved card's new stage, so its pipeline and the action that owns the stage apply;
  * - for a record event: a transaction flow an owned Module runs before one of its record types is
  *   saved, with one Warn step (the trigger is the flow's own `triggers`, as Module rules have).
  */
 
 export type StudioFlowCreateCommand =
   /** On a record page, the flow gets the record the page shows as its record_id input. */
-  | Readonly<{ kind: "action"; controlAlias: string; name: string; recordType: string | null }>
+  | Readonly<{ kind: "action"; controlAlias: string; name: string; recordType: string | null;
+      event: "action" | "card_moved" }>
   | Readonly<{ kind: "before_save"; moduleKey: string; recordTypeKey: string; name: string;
       operations: readonly ("create" | "update")[] }>;
 
@@ -34,7 +37,8 @@ export type StudioFlowCreateChoices = Readonly<{
    * Action controls (buttons that are not a form's Save or Continue, which submit their form to
    * its own flow) with no flow bound yet; on a record page, the record type the page shows.
    */
-  actions: readonly Readonly<{ controlAlias: string; label: string; recordType: string | null }>[];
+  actions: readonly Readonly<{ controlAlias: string; label: string; recordType: string | null;
+    event: "action" | "card_moved" }>[];
   /** Record types of the Modules this application owns. */
   recordTypes: readonly Readonly<{ moduleKey: string; moduleName: string; recordTypeKey: string; label: string }>[];
 }>;
@@ -44,18 +48,29 @@ export const projectStudioFlowCreateChoices = (
     source: ApplicationSourceDocument; catalogue: ImmutablePlatformBlockCatalogue }>,
   controlLabel: (alias: string) => string,
 ): StudioFlowCreateChoices => {
-  const bound = new Set(draft.source.body.flow_bindings.filter((binding) => binding.event === "action")
-    .map((binding) => binding.control));
-  const actions: { controlAlias: string; label: string; recordType: string | null }[] = [];
+  const bound = new Set(draft.source.body.flow_bindings.filter((binding) => binding.event === "action" ||
+    binding.event === "card_moved").map((binding) => `${binding.control} ${binding.event}`));
+  const actions: { controlAlias: string; label: string; recordType: string | null; event: "action" | "card_moved" }[] = [];
   traverseStudioSemanticSelectionDraft(draft, ({ phase, node }) => {
-    if (phase !== "enter" || node.kind !== "placement" || bound.has(node.selection.placementAlias)) return;
+    if (phase !== "enter" || node.kind !== "placement") return;
+    const alias = node.selection.placementAlias;
     const release = draft.catalogue.releases.find((candidate) => String(candidate.blockId) === node.block.block_id &&
       String(candidate.releaseVersion) === node.block.release_version);
+    // A board moves a card by saving its record's stage; its record type is its choice field's.
+    const choiceField = node.settings.choice_field;
+    if (release?.supportedEvents.includes("card_moved") === true && typeof choiceField === "string" &&
+        choiceField.includes(".")) {
+      if (!bound.has(`${alias} card_moved`))
+        actions.push({ controlAlias: alias, label: `${controlLabel(alias)} (moving a card)`,
+          recordType: choiceField.slice(0, choiceField.lastIndexOf(".")), event: "card_moved" });
+      return;
+    }
+    if (bound.has(`${alias} action`)) return;
     if (release?.supportedEvents.includes("action") !== true || node.settings.action_kind === "submit") return;
     const owner = node.owner;
     const page = owner.kind === "page" ? draft.source.body.pages.find((candidate) => candidate.id === owner.pageAlias) : undefined;
     const recordType = page?.type === "detail" && "record_type" in page && typeof page.record_type === "string" ? page.record_type : null;
-    actions.push({ controlAlias: node.selection.placementAlias, label: controlLabel(node.selection.placementAlias), recordType });
+    actions.push({ controlAlias: alias, label: controlLabel(alias), recordType, event: "action" });
   });
   const recordTypes = draft.source.body.modules.flatMap((module) => module.record_types.map((recordType) => ({
     moduleKey: module.key, moduleName: module.name, recordTypeKey: recordType.key,
@@ -87,7 +102,31 @@ export const applyStudioFlowCreate = (
   let flows: SourceFlow[];
   let moduleKey: string | null;
   let flow: SourceFlow;
-  if (command.kind === "action") {
+  if (command.kind === "action" && command.event === "card_moved") {
+    if (body.flow_bindings.some((binding) => binding.control === command.controlAlias && binding.event === "card_moved"))
+      return { kind: "refused", reason: "This board already runs a flow when a card is moved. Open that flow and change it instead." };
+    if (command.recordType === null) return { kind: "refused", reason: "Choose the board's choice field first." };
+    flows = body.flows;
+    moduleKey = null;
+    const key = keyFrom(name, new Set(flows.flatMap((entry) => [entry.id, entry.key])));
+    if (key === undefined) return { kind: "refused", reason: "No free name could be made for this flow. Choose another name." };
+    flow = { contractVersion: flowContractVersion, id: key, key, labels: { name }, execution: "interactive",
+      runAs: { kind: "initiator" },
+      inputs: { record: { type: "record_reference", required: true, recordTypeIds: [command.recordType] },
+        values: { type: "json", required: true } },
+      variables: {}, triggers: [], outputs: {}, errors: [], finally: [],
+      tasks: [{ id: "save_stage", type: "record.save", version: "1.0.0", properties: {
+        record_type: { kind: "literal", literal: { type: "text", value: command.recordType } },
+        record: { kind: "reference", reference: { source: "input", name: "record" } },
+        values: { kind: "reference", reference: { source: "input", name: "values" } } } }] } as SourceFlow;
+    const aliases = new Set(body.flow_bindings.flatMap((binding) => [binding.id, binding.event_id]));
+    const bindingId = keyFrom(`binding_${key}`, aliases);
+    const eventId = keyFrom(`event_${key}`, aliases);
+    if (bindingId === undefined || eventId === undefined)
+      return { kind: "refused", reason: "No free name could be made for the binding. Choose another name." };
+    body.flow_bindings.push({ id: bindingId, control: command.controlAlias, event_id: eventId, event: "card_moved", flow: key,
+      inputs: { record: { kind: "caller", name: "record_id" }, values: { kind: "caller", name: "values" } } });
+  } else if (command.kind === "action") {
     if (body.flow_bindings.some((binding) => binding.control === command.controlAlias && binding.event === "action"))
       return { kind: "refused", reason: "This control already runs a flow when it is used. Open that flow and change it instead." };
     flows = body.flows;

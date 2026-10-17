@@ -130,7 +130,6 @@
         "permission": "application.hr.open"
       }
     ],
-    "pipelines": [],
     "connection_bindings": [],
     "interfaces": [],
     "events": [

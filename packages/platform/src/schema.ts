@@ -18,5 +18,6 @@ export * from "./rules/flow-interpreter";
 export * from "./definition/module-field-shape";
 export * from "./definition/module-record-type-shape";
 export * from "./definition/module-action-shape";
+export * from "./definition/module-pipeline-shape";
 export * from "./definition/module-field-settings";
 export * from "./definition/module-field-edit";
