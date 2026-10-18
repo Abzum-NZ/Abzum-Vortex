@@ -11,7 +11,8 @@ import {
   translateDefinitionRuleFailures,
 } from "@vortex/platform/schema";
 import { findPinnedPlatformThemeRelease } from "./_lib/pinned-platform-theme-release";
-import { fingerprintCanonicalValue, materialiseApplicationTheme, validateDefinitionSource } from "@vortex/platform/server";
+import { createHumanApplicationDraftWriter, fingerprintCanonicalValue, materialiseApplicationTheme, validateDefinitionSource } from "@vortex/platform/server";
+import { humanOrganizationRequests } from "../_lib/server-composition";
 import { createHumanApplicationDraft, saveHumanApplicationDraft } from "../_lib/definition-draft-write";
 import { mapWebError } from "../_lib/web-error-mapper";
 import { loadStudioApplicationDraft } from "../_lib/studio-application-draft";
@@ -78,6 +79,17 @@ export async function reviewStudioApplicationSource(
         correlationId: randomUUID(),
         rootLocation: { documentKind: "application", documentKey: draft.key, segments: [] },
       }),
+    });
+    const session = await resolveIdentitySession();
+    if (session.kind !== "active") return { kind: "refused" };
+    const identities = await createHumanApplicationDraftWriter({
+      requests: humanOrganizationRequests(), permissions: platformPermissionSource,
+    }).reviewSource(session.session, organizationId, {
+      rootId: draft.rootId, expectedDraftRevision: draft.draftRevision, source,
+    });
+    if (identities.kind !== "available") return identities;
+    if (identities.conflicts.length > 0) return studioApplicationSourceReviewResultSchema.parse({
+      kind: "identity_conflict", ...binding, conflicts: identities.conflicts,
     });
     return studioApplicationSourceReviewResultSchema.parse({
       kind: "available", ...binding, source,
