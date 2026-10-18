@@ -38,7 +38,7 @@ const parameterType = (type: string | undefined): StudioConditionParameterType =
 };
 
 const roles: Readonly<Record<StudioFlowReferenceChoice["group"], Exclude<StudioConditionOperandRole, "current_field">>> = {
-  Inputs: "declared_input", Variables: "variable", "Earlier steps": "step_output",
+  "Flow inputs": "declared_input", "From the triggering event": "event_value", "Saved values": "variable", "Earlier steps": "step_output",
   "The record": "record_field", "The run": "run_value",
 };
 
