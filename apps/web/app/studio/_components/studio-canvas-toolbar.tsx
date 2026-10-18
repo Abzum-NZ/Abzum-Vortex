@@ -57,7 +57,7 @@ export function StudioCanvasToolbar({
   /** Screen size and zoom apply to the page canvas only. */
   showsCanvas: boolean;
   inspectorOpen: boolean;
-  onToggleInspector: () => void;
+  onToggleInspector: (() => void) | undefined;
   focused: boolean;
   onFocusCanvas: () => void;
 }>) {
@@ -214,7 +214,7 @@ export function StudioCanvasToolbar({
             Focus canvas <Kbd>Ctrl \\</Kbd>
           </TooltipContent>
         </Tooltip>
-        <Tooltip>
+        {onToggleInspector !== undefined && <Tooltip>
           <TooltipTrigger
             render={
               <Button
@@ -232,7 +232,7 @@ export function StudioCanvasToolbar({
           <TooltipContent>
             Inspector <Kbd>Ctrl .</Kbd>
           </TooltipContent>
-        </Tooltip>
+        </Tooltip>}
       </div>
     </div>
   );

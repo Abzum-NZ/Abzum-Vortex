@@ -15,8 +15,6 @@ export const linkSettingTargets = (settings: StudioSettingValues): readonly stri
     ? list.items.flatMap((item) => item.kind === "record_type_reference" ? [item.record_type] : []) : [];
 };
 
-const words = (key: string): string => key.replaceAll("_", " ");
-
 /**
  * What a link field makes of its record type, read as a relationship: how many records may link to
  * one linked record, how each linked record is shown, the link in both directions, and, for a
@@ -39,8 +37,8 @@ export function StudioLinkSection({ settings, cardinality, label, recordName, re
   const chosen = linkSettingTargets(settings).map((key) => targets.find((target) => target.key === key) ??
     { key, label: key, titleLabel: undefined });
   const names = chosen.length === 0 ? "the linked record type" : chosen.map((target) => target.label).join(" or ");
-  const reverse = settings.reverse_key?.kind === "text" && settings.reverse_key.value.trim() !== ""
-    ? words(settings.reverse_key.value) : undefined;
+  const reverse = settings.reverse_name?.kind === "text" && settings.reverse_name.value.trim() !== ""
+    ? settings.reverse_name.value.trim() : undefined;
   const linksPerson = chosen.some((target) => target.key === peopleDirectory.recordType);
   const name = label.trim() === "" ? "this link" : `"${label.trim()}"`;
   return <section className="space-y-3" aria-label="Relationship">

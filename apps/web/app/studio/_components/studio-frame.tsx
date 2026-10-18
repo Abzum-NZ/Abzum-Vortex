@@ -314,7 +314,7 @@ export function StudioFrame<Key extends string>({
   canvas: (
     controls: Readonly<{
       inspectorOpen: boolean;
-      toggleInspector: () => void;
+      toggleInspector: (() => void) | undefined;
       focused: boolean;
       focusCanvas: () => void;
     }>,
@@ -332,6 +332,7 @@ export function StudioFrame<Key extends string>({
   const [narrowPanelOpen, setNarrowPanelOpen] = useState(false);
   const [narrowInspectorOpen, setNarrowInspectorOpen] = useState(false);
   const [focused, setFocused] = useState(false);
+  const hasInspector = inspector !== null;
   const beforeFocus = useRef({ panel: true, inspector: true });
   const focusCanvas = useCallback(() => {
     if (!focused) {
@@ -347,10 +348,11 @@ export function StudioFrame<Key extends string>({
     setFocused(!focused);
   }, [focused, panelOpen, inspectorOpen]);
   const toggleInspector = useCallback(() => {
+    if (!hasInspector) return;
     setFocused(false);
     if (dockInspector) setInspectorOpen((open) => !open);
     else setNarrowInspectorOpen((open) => !open);
-  }, [dockInspector]);
+  }, [dockInspector, hasInspector]);
   useEffect(() => {
     const shortcut = (event: globalThis.KeyboardEvent) => {
       if (event.target instanceof Element && event.target.closest('[role="dialog"], [role="alertdialog"]')) return;
@@ -369,10 +371,10 @@ export function StudioFrame<Key extends string>({
   }, [focusCanvas, toggleInspector]);
   const previousSelection = useRef(selectionKey);
   useEffect(() => {
-    if (previousSelection.current !== selectionKey && wide && !dockInspector && !focused)
+    if (hasInspector && previousSelection.current !== selectionKey && wide && !dockInspector && !focused)
       setNarrowInspectorOpen(true);
     previousSelection.current = selectionKey;
-  }, [selectionKey, wide, dockInspector, focused]);
+  }, [selectionKey, wide, dockInspector, focused, hasInspector]);
   const [hosts, setHosts] = useState<PaneHosts | null>(null);
   // The hosts are made once per frame: effects run again when a suspended part of Studio shows again,
   // and a new host would remount every panel and lose what is typed in it.
@@ -407,7 +409,7 @@ export function StudioFrame<Key extends string>({
   const width = widthOf(activeTab, defaultWidth);
   const inspectorWidth = widthOf("inspector", viewport >= 1920 ? 24 : viewport >= 1440 ? 22 : 20);
   const showPanel = wide && panelOpen;
-  const showInspector = dockInspector && inspectorOpen;
+  const showInspector = hasInspector && dockInspector && inspectorOpen;
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
       {topBar}
@@ -439,8 +441,8 @@ export function StudioFrame<Key extends string>({
         )}
         <section aria-label="Canvas" className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
           {canvas({
-            inspectorOpen: dockInspector ? inspectorOpen : narrowInspectorOpen,
-            toggleInspector,
+            inspectorOpen: hasInspector && (dockInspector ? inspectorOpen : narrowInspectorOpen),
+            toggleInspector: hasInspector ? toggleInspector : undefined,
             focused,
             focusCanvas,
           })}
@@ -474,7 +476,7 @@ export function StudioFrame<Key extends string>({
           </div>
         </SheetContent>
       </Sheet>
-      <Sheet open={!dockInspector && narrowInspectorOpen} onOpenChange={setNarrowInspectorOpen}>
+      <Sheet open={hasInspector && !dockInspector && narrowInspectorOpen} onOpenChange={setNarrowInspectorOpen}>
         <SheetContent side="right" className="w-96 max-w-full p-0">
           <SheetHeader className="sr-only">
             <SheetTitle>{inspectorLabel}</SheetTitle>
