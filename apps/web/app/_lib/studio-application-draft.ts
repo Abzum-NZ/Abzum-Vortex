@@ -319,13 +319,12 @@ export const loadStudioApplicationDraft = async (
         const context = options.compile === false ? null
           : await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt });
         const service = createDatabaseDefinitionPublicationService(installedReleaseCatalogue, transaction, authority);
-        // What is published is read from the stored releases, not the compile, so a draft that does
-        // not compile still lets the builder change or remove the fields it has never published.
-        if (context !== null)
-          published = await service.readApplicationDraftPublication(context, { rootId: draft.rootId, expectedDraftRevision: draft.draftRevision });
-        if (context !== null) try {
-          const compiled = await service
-            .compileApplicationDraft(context, { rootId: draft.rootId, expectedDraftRevision: draft.draftRevision });
+        const snapshot = context === null ? null : await service.readApplicationDraftSnapshot(context,
+          { rootId: draft.rootId, expectedDraftRevision: draft.draftRevision });
+        if (snapshot !== null) published = snapshot.publication;
+        if (context !== null && snapshot !== null) try {
+          if (snapshot.compilation === null) throw snapshot.failure;
+          const compiled = snapshot.compilation;
           const envelope = compiled.compilation.canonical.envelope;
           if (!sameId(envelope.rootId, draft.rootId) || !sameId(envelope.organizationId, draft.organizationId) || envelope.key !== draft.key ||
               envelope.draftRevision !== draft.draftRevision || envelope.publishedRevision !== draft.publishedRevision ||
