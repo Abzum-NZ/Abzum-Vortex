@@ -1,13 +1,16 @@
 "use client";
 
-import { Item, ItemContent, ItemDescription, ItemTitle } from "../components/item";
+import { Icon, resolveVortexIconName } from "../icons";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "../components/empty";
 import { Drawer } from "@puckeditor/core";
 import { useId, useMemo, useState } from "react";
-import { Button } from "../components/button";
 import { Input } from "../components/input";
 import { Label } from "../components/label";
 import { NativeSelect, NativeSelectOption } from "../components/native-select";
-import type { StudioCompositionAddTarget, StudioCompositionDestination } from "./application-composition-commands";
+import type {
+  StudioCompositionAddTarget,
+  StudioCompositionDestination,
+} from "./application-composition-commands";
 import { groupStudioPaletteChoices, type StudioPaletteChoice } from "./contextual-palette";
 
 /** A new block for one place on the page, from a drop on the canvas or the palette's Add button. */
@@ -47,72 +50,116 @@ export function StudioBlockPalette({
   const searchId = useId();
   const targetSelectId = useId();
   const target = targets.find((candidate) => candidate.id === targetId) ?? targets[0];
-  const groups = useMemo(() => groupStudioPaletteChoices(target?.choices ?? [], search), [target, search]);
+  const groups = useMemo(
+    () => groupStudioPaletteChoices(target?.choices ?? [], search),
+    [target, search],
+  );
   if (target === undefined)
-    return <p role="status" className="text-sm text-muted-foreground">This page has no place for new blocks.</p>;
+    return (
+      <Empty role="status">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Icon name="blocks" />
+          </EmptyMedia>
+          <EmptyTitle>No block targets</EmptyTitle>
+          <EmptyDescription>This page has no place for new blocks.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
   const add = (choice: StudioPaletteChoice) =>
-    onAdd({ area: target.area, destination: target.destination, index: END_OF_SLOT, rendererKey: choice.rendererKey });
+    onAdd({
+      area: target.area,
+      destination: target.destination,
+      index: END_OF_SLOT,
+      rendererKey: choice.rendererKey,
+    });
 
   return (
     <div className="space-y-3" data-vortex-studio-palette="">
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor={searchId}>Search blocks</Label>
-        <Input id={searchId} type="search" value={search} placeholder="Name, description or group"
-          onChange={(event) => setSearch(event.target.value)} />
-      </div>
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         <Label htmlFor={targetSelectId}>Add to</Label>
-        <NativeSelect id={targetSelectId} className="w-full" value={target.id}
-          onChange={(event) => setTargetId(event.target.value)}>
+        <NativeSelect
+          id={targetSelectId}
+          className="w-full"
+          value={target.id}
+          onChange={(event) => setTargetId(event.target.value)}
+        >
           {targets.map((candidate) => (
             <NativeSelectOption key={candidate.id} value={candidate.id}>
-              {`${"  ".repeat(candidate.depth)}${candidate.label}`}
+              {`${"  ".repeat(candidate.depth)}${candidate.label}`}
             </NativeSelectOption>
           ))}
         </NativeSelect>
-        <p className="text-xs text-muted-foreground">
-          Drag a block onto any place on the page, or use Add to put it at the end of this place.
-        </p>
       </div>
-      {message.length === 0 ? null : <p role="status" aria-live="polite" className="text-sm">{message}</p>}
-      {groups.length === 0 ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          {search.trim().length > 0 ? "No block matches this search." : "This place takes no new blocks."}
+      <div className="flex flex-col gap-2">
+        <Label htmlFor={searchId}>Search blocks</Label>
+        <Input
+          id={searchId}
+          type="search"
+          value={search}
+          placeholder="Find a block"
+          onChange={(event) => setSearch(event.target.value)}
+        />
+      </div>
+      <p className="text-sm text-muted-foreground">Drag onto the page or choose a tile to add.</p>
+      {message.length === 0 ? null : (
+        <p role="status" aria-live="polite" className="text-sm">
+          {message}
         </p>
+      )}
+      {groups.length === 0 ? (
+        <Empty role="status">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Icon name="search" />
+            </EmptyMedia>
+            <EmptyTitle>No blocks found</EmptyTitle>
+            <EmptyDescription>
+              {search.trim().length > 0
+                ? "Try another name or group."
+                : "This place takes no new blocks."}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <Drawer>
-          {groups.map((group) => (
-            <section key={group.group} aria-label={group.label} className="space-y-2">
-              <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{group.label}</h3>
-              <ul className="space-y-2">
-                {group.choices.map((choice) => {
-                  const available = choice.unavailable === undefined;
-                  return (
-                    <li key={choice.id} className="flex items-start gap-2">
-                      <div className="min-w-0 flex-1">
-                        <Drawer.Item name={choice.rendererKey} label={choice.name}
-                          isDragDisabled={!editable || !available}>
-                          {() => (
-                            <Item variant="outline" size="sm">
-                              <ItemContent>
-                                <ItemTitle>{choice.name}</ItemTitle>
-                                <ItemDescription>{choice.description}</ItemDescription>
-                                {available ? null : <ItemDescription>{choice.unavailable}</ItemDescription>}
-                              </ItemContent>
-                            </Item>
-                          )}
-                        </Drawer.Item>
-                      </div>
-                      <Button type="button" variant="outline" size="sm" disabled={!editable || !available}
-                        aria-label={`Add ${choice.name} to ${target.label}`} onClick={() => add(choice)}>
-                        Add
-                      </Button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          ))}
+          <div className="space-y-6">
+            {groups.map((group) => (
+              <section key={group.group} aria-label={group.label} className="space-y-2">
+                <h3 className="text-sm font-medium text-foreground">{group.label}</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {group.choices.map((choice) => {
+                    const available = choice.unavailable === undefined;
+                    return (
+                      <Drawer.Item
+                        key={choice.id}
+                        name={choice.rendererKey}
+                        label={choice.name}
+                        isDragDisabled={!editable || !available}
+                      >
+                        {() => (
+                          <button
+                            type="button"
+                            disabled={!editable || !available}
+                            className="flex h-full w-full flex-col items-start justify-start gap-2 whitespace-normal rounded-lg border border-border bg-card p-3 text-left text-card-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label={`Add ${choice.name} to ${target.label}`}
+                            title={choice.unavailable ?? choice.description}
+                            onClick={() => add(choice)}
+                          >
+                            <Icon name={resolveVortexIconName(choice.icon) ?? "blocks"} className="size-5" />
+                            <span className="text-sm font-medium">{choice.name}</span>
+                            <span className="line-clamp-2 text-xs font-normal text-muted-foreground">
+                              {choice.unavailable ?? choice.description}
+                            </span>
+                          </button>
+                        )}
+                      </Drawer.Item>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
         </Drawer>
       )}
     </div>

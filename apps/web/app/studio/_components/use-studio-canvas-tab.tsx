@@ -12,6 +12,8 @@ import {
   type StudioCompositionOutcome, type StudioRecordReader, type StudioSemanticOutline, type StudioSemanticSelection,
 } from "@vortex/ui/studio";
 import { createAppearanceRootProps, Icon, type FieldInputControlReleaseMap, type PlatformThemeTokens } from "@vortex/ui";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@vortex/ui/components/empty";
+import { Spinner } from "@vortex/ui/components/spinner";
 import { Button } from "@vortex/ui/components/button";
 import type { StudioCanvasAddRequest, StudioCanvasBreakpoint, StudioCanvasFrame } from "@vortex/ui/studio/page-puck-editor";
 import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-empty-state";
@@ -82,7 +84,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
   const { organizationId, source, selected, state, view } = draft;
   const rootId = state.rootId;
   const key = draft.saved.key;
-  const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>(100);
+  const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>("fit");
   const [breakpoint, setBreakpoint] = useState<StudioCanvasBreakpoint>("desktop");
   // The canvas previews the application in light or dark; the running application keeps its own toggle.
   const [appearance, setAppearance] = useState<"light" | "dark">("light");
@@ -317,7 +319,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
     <StudioPanelShell title="Blocks" description="Blocks to add to the page on the canvas." hidden={tab !== "blocks"}>
       {/* The canvas's editor draws the palette here, so its blocks drag with the canvas's own drag and drop. */}
       <div ref={setPaletteHost} />
-      {canvasPage === undefined && <p className="text-sm text-muted-foreground">Choose a page in Structure to add blocks to it.</p>}
+      {canvasPage === undefined && <Empty><EmptyHeader><EmptyMedia variant="icon"><Icon name="blocks" /></EmptyMedia><EmptyTitle>No page open</EmptyTitle><EmptyDescription>Choose a page in Structure to add blocks.</EmptyDescription></EmptyHeader></Empty>}
     </StudioPanelShell>
   </>;
 
@@ -354,7 +356,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
     {selected?.kind === "application" && <p>{source.body.description}</p>}
     {selected?.kind === "placement" && canvasPage === undefined && <p>This block is part of a layout. Change it in the inspector.</p>}
     {canvasPage === undefined && selected?.kind !== "flow" && selected?.kind !== "placement" &&
-      <p className="text-sm text-muted-foreground">Choose a page in Structure to arrange it here.</p>}
+      <Empty className="min-h-64"><EmptyHeader><EmptyMedia variant="icon"><Icon name="blocks" /></EmptyMedia><EmptyTitle>No page open</EmptyTitle><EmptyDescription>Choose a page in Structure, or add one.</EmptyDescription></EmptyHeader></Empty>}
     {(canvasPage === undefined ? selected?.kind === "application" : canvasPage.key === source.body.home_page) &&
       source.body.uses.length === 0 && source.body.modules.every((module) => module.record_types.length === 0) &&
       <FirstRecordTypeEmptyState action={<Button type="button" onClick={() => openTab("data")}>
@@ -365,9 +367,9 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
       {draft.updatingCanvas ? ", as the saved draft grants it. Your latest change shows once the canvas is updated." : "."}</p>}
     {shown && canvasPage !== undefined &&
       // The canvas previews the application in light or dark: the appearance is set on the canvas only, never on Studio's frame.
-      <div {...createAppearanceRootProps(appearance)} style={{ ...createAppearanceRootProps(appearance).style, zoom: canvasZoom / 100 }}>
+      <div {...createAppearanceRootProps(appearance)}>
         {/* A newly chosen icon library loads before the canvas draws with it; only the canvas waits. */}
-        <Suspense fallback={<p role="status" className="text-sm text-muted-foreground">Drawing the canvas with the new theme…</p>}>
+        <Suspense fallback={<Empty role="status" className="min-h-64"><EmptyHeader><Spinner /><EmptyTitle>Drawing the canvas</EmptyTitle><EmptyDescription>Loading the application theme.</EmptyDescription></EmptyHeader></Empty>}>
           <ApplicationPagePuckEditor key={`canvas:${canvasPage.id}`} source={source} compiledSource={view.source}
             platformBlockCatalogue={catalogue} fieldInputControlReleases={fieldInputControlReleases}
             platformThemeTokens={platformThemeTokens} pageAlias={canvasPage.id} compiledSlots={view.slots?.[canvasPage.id]}
@@ -377,7 +379,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
             onSelectPlacement={(alias) => Promise.resolve(alias !== null
               ? draft.select({ kind: "placement", placementAlias: alias })
               : canvasPageRef.current !== undefined && draft.select({ kind: "page", pageAlias: canvasPageRef.current }))}
-            breakpoint={breakpoint} disabled={draft.locked} compileFailure={view.failure}
+            breakpoint={breakpoint} zoom={canvasZoom} disabled={draft.locked} compileFailure={view.failure}
             onChange={applyPuckPageEdit} readRecords={readCanvasRecords} updating={draft.updatingCanvas}
             palette={addTargets === null ? undefined : { host: paletteHost, targets: addTargets, message: paletteMessage, onAdd: addBlock }} />
         </Suspense>
