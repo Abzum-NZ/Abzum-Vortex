@@ -1,5 +1,5 @@
 import {
-  applicationSourceDocumentSchema, applicationUses, builderKeySchema, changeableByPeople, standardPermissionKeys,
+  applicationSourceDocumentSchema, applicationUses, builderKeySchema, changeableByPeople, maximumApplicationRoles, standardPermissionKeys,
   type ApplicationSourceDocument, type ApplicationUsePlace,
 } from "@vortex/platform/schema";
 import { tokenName } from "./studio-words";
@@ -372,7 +372,7 @@ const grant = (candidate: Source, command: Extract<StudioAccessCommand, { kind: 
 const addRole = (candidate: Source, name: string): StudioAccessResult => {
   const label = cleanLabel(name, "role");
   const body = candidate.body;
-  if (body.roles.length >= 100) refuse("An application can have at most 100 roles.");
+  if (body.roles.length >= maximumApplicationRoles) refuse(`An application can have at most ${maximumApplicationRoles} roles.`);
   if (body.roles.some((role) => role.name.toLowerCase() === label.toLowerCase())) refuse(`There is already a role named ${quoted(label)}.`);
   const home = pageOf(body, body.home_page) ?? refuse("The application's home page is missing, so a new role has nowhere to start.");
   const key = uniqueKey(label, new Set(body.roles.map((role) => role.key)));

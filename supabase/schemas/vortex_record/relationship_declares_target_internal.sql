@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.relationship_declares_target_internal(p_relationship jsonb, p_record_type_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION vortex_record.relationship_declares_target_internal(p_relationship jsonb, p_record_type_id uuid) RETURNS boolean
     LANGUAGE sql IMMUTABLE
     SET search_path TO ''
     AS $$
@@ -23,3 +23,4 @@ alter function vortex_record.relationship_declares_target_internal(jsonb,uuid) o
 COMMENT ON FUNCTION vortex_record.relationship_declares_target_internal(p_relationship jsonb, p_record_type_id uuid) IS 'True only when a concrete record type is one of a relationship''s declared targets: its single toRecordType or a member of its toRecordTypes list.';
 
 REVOKE ALL ON FUNCTION vortex_record.relationship_declares_target_internal(p_relationship jsonb, p_record_type_id uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION vortex_record.relationship_declares_target_internal(jsonb, uuid) TO vortex_owner;

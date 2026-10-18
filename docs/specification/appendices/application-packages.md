@@ -124,7 +124,7 @@ normal request context.
 
 ## Installation
 
-Installation is one command. Its inputs are the package, the installer's confirmation of the manifest, and the role templates the installer accepts.
+Installation is one command. Its inputs are the package and the installer's confirmation of the manifest, which lists every role template in plain language; confirming accepts them all as organisation roles that nobody holds until they are assigned. An upgrade likewise lists and accepts the roles it adds or changes; a change that could not be accepted is offered again by the next review of the installed version.
 
 **Prepare.** A failure at any point leaves the previous installation active:
 1. Verify the platform version and the installer's permissions.

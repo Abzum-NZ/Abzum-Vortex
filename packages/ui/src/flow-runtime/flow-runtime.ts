@@ -20,6 +20,11 @@ export type FlowRuntimeOptions = Readonly<{
   library?: FlowLibrary;
   clock?: () => string;
   newId?: () => string;
+  /**
+   * Told, with the binding's identity, when a server run of that binding committed and before its
+   * closing messages are shown, so the page can re-read the placements the binding writes.
+   */
+  committed?: (bindingId: string) => void;
 }>;
 
 /** The safe identity of a binding used by a surface that does not receive its input map. */
@@ -96,7 +101,16 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
     );
     return {
       ranIn: "server",
-      result: await driveServerFlow(options.client, binding.flowId, first, options.host, signal),
+      result: await driveServerFlow(
+        options.client,
+        binding.flowId,
+        first,
+        options.host,
+        signal,
+        options.committed === undefined
+          ? undefined
+          : () => options.committed?.(binding.bindingId),
+      ),
     };
   };
   return Object.freeze({

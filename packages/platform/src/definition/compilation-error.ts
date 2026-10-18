@@ -1,4 +1,5 @@
 import type { DefinitionRuleFailureFamily, DefinitionValidationLocation } from "../schema";
+import { applicationRoleReviewVolumeMessage } from "./application-role-review-volume";
 
 export const definitionCompilerRefusalCodes = Object.freeze([
   "vortex.definition.rule_graph_topology",
@@ -35,6 +36,7 @@ export const definitionCompilerRefusalCodes = Object.freeze([
   "vortex.definition.application_public_surface",
   "vortex.definition.application_query_references",
   "vortex.definition.application_role_references",
+  "vortex.definition.application_role_review_volume",
   "vortex.definition.artifact_binding",
   "vortex.definition.candidate_version_binding",
   "vortex.definition.connection_operation_missing",
@@ -149,7 +151,11 @@ export class DefinitionCompilationError extends Error {
     location?: DefinitionValidationLocation,
   ) {
     assertDefinitionCompilerRefusalCode(ruleCode);
-    super(ruleCode);
+    super(
+      ruleCode === "vortex.definition.application_role_review_volume"
+        ? applicationRoleReviewVolumeMessage
+        : ruleCode,
+    );
     this.name = "DefinitionCompilationError";
     this.ruleCode = ruleCode;
     this.family = family;
