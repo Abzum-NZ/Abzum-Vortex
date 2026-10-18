@@ -318,10 +318,10 @@ export const sourcePageDefinitionSchema = z.discriminatedUnion("type", [
 ]);
 const sourceInterfaceValueTypeSchema = z.enum([
   "text",
-  "number",
+  "whole_number",
   "decimal_number",
   "money",
-  "boolean",
+  "yes_no",
   "date",
   "date_time",
   "record_reference",
@@ -392,8 +392,8 @@ const sourceInterfaceOutputFieldSchema = z
     if (
       value.target_binding.kind === "query_page_information" &&
       ((value.target_binding.value === "continuation_token" && value.type !== "text") ||
-        (value.target_binding.value === "has_more" && value.type !== "boolean") ||
-        (value.target_binding.value === "result_count" && value.type !== "number"))
+        (value.target_binding.value === "has_more" && value.type !== "yes_no") ||
+        (value.target_binding.value === "result_count" && value.type !== "whole_number"))
     )
       context.addIssue({
         code: "custom",

@@ -6,14 +6,13 @@ import {
   type FlowDefinition,
 } from "../../schema";
 import { array, failure, object } from "./helpers";
-import { semanticFieldType } from "./field-types";
+import { typedSemanticFieldType, typedConditionTypesValid } from "./field-types";
 import {
   actionPermissionKeys,
   actionPermissionsMatch,
   actionDeleteEffectsSupported,
 } from "./source-paths";
 import {
-  applicationConditionTypesValid,
   applicationActionValueCompatible,
   actionValueReferenceEntry,
   actionFieldByKey,
@@ -75,7 +74,7 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
       const inputMap = new Map(array(action.inputs).map((input) => [String(input.key), input]));
       const inputs = new Set(inputMap.keys());
       const inputTypes = new Map(
-        [...inputMap].map(([key, input]) => [key, semanticFieldType(input.type) ?? ""]),
+        [...inputMap].map(([key, input]) => [key, typedSemanticFieldType(input.type) ?? ""]),
       );
       // A record action changes a record under a record-scoped permission, so a platform
       // administration permission cannot gate it: the runtime record-access decision refuses
@@ -96,10 +95,9 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
           actionPermissionsMatch(action, permissionMap, permissionOwnersByKey)) &&
         applicationFieldReferencesValid(action.precondition, fields) &&
         (action.precondition === undefined ||
-          applicationConditionTypesValid(
+          typedConditionTypesValid(
             action.precondition,
             fieldMap,
-            subjectModuleBound,
             inputTypes,
           ));
       for (const task of array(action.tasks)) {
@@ -324,7 +322,6 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
     for (const query of queries.values()) {
       const record = object(query.recordType);
       const recordType = records.get(String(record.recordTypeId));
-      const moduleBound = boundRecordTypeIds.has(String(record.recordTypeId));
       const fieldMap = new Map(
         recordType ? array(recordType.fields).map((field) => [String(field.fieldId), field]) : [],
       );
@@ -348,7 +345,7 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
         const field = allFields.get(String(aggregate.fieldId));
         if (!field) return false;
         if (aggregate.operation === "sum" || aggregate.operation === "average")
-          return ["number", "whole_number", "decimal_number", "money"].includes(
+          return ["whole_number", "decimal_number", "money"].includes(
             applicationFieldType(fieldValuePairs.get(String(aggregate.fieldId))) ?? "",
           );
         return !["formatted_text", "table", "attachment", "link_to_one_of_several"].includes(
@@ -360,7 +357,7 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
         used.some((fieldId) => !fields.has(fieldId)) ||
         !filterFieldsValid ||
         (query.filter !== undefined &&
-          !applicationConditionTypesValid(query.filter, fieldMap, moduleBound)) ||
+          !typedConditionTypesValid(query.filter, fieldMap)) ||
         !aggregatesValid
       )
         failures.push(
