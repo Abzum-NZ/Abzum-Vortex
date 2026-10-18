@@ -1,9 +1,11 @@
 "use client";
+import { useMemo } from "react";
 import type { ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
 import {
   studioSemanticSelectionKey, type StudioPlacementDescriber, type StudioSemanticOutline, type StudioSemanticSelection,
 } from "@vortex/ui/studio";
 import { applyStudioStructureCommand, type StudioStructureCommand, type StudioStructureResult } from "@vortex/ui/studio";
+import { studioFieldPublication } from "./module-fields-editor";
 import { StudioStructurePanel } from "./studio-outline-panels";
 import { StudioStructureEditor } from "./studio-structure-editor";
 import type { StudioDraft } from "./use-studio-draft";
@@ -23,10 +25,12 @@ export function useStudioStructureTab({ draft, catalogue, describePlacement, out
   openAccessPages: () => void;
 }>) {
   const { source, selected } = draft;
+  const publishedFields = useMemo(() => studioFieldPublication(draft.view.published, draft.parsed(draft.saved.source)).fields,
+    [draft, draft.view.published, draft.saved.source]);
   const command = (structureCommand: StudioStructureCommand, merge?: string): StudioStructureResult => {
     const after: { select?: StudioSemanticSelection | undefined } = {};
     const outcome = draft.run<StudioStructureResult>((current) => {
-      const result = applyStudioStructureCommand({ source: current, catalogue, describePlacement }, structureCommand);
+      const result = applyStudioStructureCommand({ source: current, catalogue, describePlacement, publishedFields }, structureCommand);
       if (result.kind !== "applied") return { kind: "keep", result };
       after.select = result.select ?? { kind: "application", applicationRootId: draft.state.rootId };
       return { kind: "edit", source: result.source, result };
@@ -37,7 +41,8 @@ export function useStudioStructureTab({ draft, catalogue, describePlacement, out
   };
   // What a Structure command would do to the current draft, for its preview; nothing is kept.
   const preview = (structureCommand: StudioStructureCommand): StudioStructureResult =>
-    applyStudioStructureCommand({ source: draft.parsed(draft.history.getState().source), catalogue, describePlacement }, structureCommand);
+    applyStudioStructureCommand({ source: draft.parsed(draft.history.getState().source), catalogue, describePlacement,
+      publishedFields }, structureCommand);
   const homePage = source.body.pages.find((page) => page.key === source.body.home_page);
   const selectionKey = selected === null ? "" : studioSemanticSelectionKey(selected);
 

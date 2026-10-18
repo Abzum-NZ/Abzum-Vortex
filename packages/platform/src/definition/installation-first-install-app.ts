@@ -39,9 +39,9 @@ import {
 } from "./installation-first-install";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
 import {
-  firstInstallMemberRole,
-  type FirstInstallMemberRole,
-} from "./installation-first-install-member-role";
+  releaseRoleTemplates,
+  type ApplicationRoleTemplate,
+} from "./installation-role-templates";
 
 /** What a first-install read needs from the application: the catalogue, the permissions, and the custom-component rule. */
 export type FirstInstallEnvironment = Readonly<{
@@ -156,15 +156,15 @@ type FirstInstallSnapshot = Readonly<{
   registrationState: FirstInstallRegistrationState;
   registeredReleaseRevision: number | null;
   moduleBindings: InstallationBindings["moduleBindings"];
-  /** The default member role the installer is offered, and accepts explicitly, on activation. */
-  memberRole: FirstInstallMemberRole;
+  /** Every role the release offers; installing makes each of them an organisation role. */
+  roles: readonly ApplicationRoleTemplate[];
 }>;
 
 /** What the first-install reads and commands need from the application beyond the release reads. */
 export type FirstInstallFlowEnvironment = FirstInstallEnvironment &
   Readonly<{
     requests: ReturnType<typeof createHumanOrganizationRequestService>;
-    /** The Access operations that accept and assign the default member role for the installer. */
+    /** The Access operations that accept the application's roles and assign the member role. */
     accessAdministration: ReturnType<typeof createOrganizationAccessAdministrationService>;
   }>;
 
@@ -190,7 +190,7 @@ const firstInstallSnapshot = (
   registrationState,
   registeredReleaseRevision: bindings.registeredReleaseRevision,
   moduleBindings: bindings.moduleBindings,
-  memberRole: firstInstallMemberRole(releaseSet),
+  roles: releaseRoleTemplates(releaseSet),
 });
 
 /**

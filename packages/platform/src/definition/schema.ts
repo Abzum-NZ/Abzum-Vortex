@@ -1,4 +1,5 @@
 export * from "./application-contracts";
+export * from "./application-role-review-volume";
 export * from "./application-contract-versions";
 export * from "./application-composition/block-property-values";
 export * from "./application-composition/block-property-schema";

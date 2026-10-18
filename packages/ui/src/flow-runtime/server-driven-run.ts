@@ -47,7 +47,9 @@ const refuseInvalidServerFlowState = (stage: string): Readonly<{ kind: "refused"
  * form or confirmation it returns typed intents and a single-use continuation. The page shows the
  * intents and sends back only the continuation exactly as issued together with the person's
  * answer. It never chooses a path, never reuses a continuation and never resumes a run whose intent
- * does not match what the server said it awaits; the server re-checks everything on resume.
+ * does not match what the server said it awaits; the server re-checks everything on resume. When
+ * the run committed, `committed` is told before the closing messages are shown, so the page re-reads
+ * what it displays while the person reads the result.
  */
 export async function driveServerFlow(
   client: FlowInvokeClient,
@@ -55,6 +57,7 @@ export async function driveServerFlow(
   first: ServerFlowResponse,
   host: FlowIntentHost,
   signal?: AbortSignal,
+  committed?: () => void,
 ): Promise<ServerDrivenResult> {
   let response = first;
   let awaitingSurface = false;
@@ -67,6 +70,8 @@ export async function driveServerFlow(
         case "unavailable":
           return response;
         case "result": {
+          if (response.descriptor.commit === "confirmed" || response.descriptor.commit === "partial")
+            committed?.();
           for (const intent of response.intents) {
             if (signal?.aborted) return { kind: "abandoned" };
             await performPresentationIntent(intent, host, signal);

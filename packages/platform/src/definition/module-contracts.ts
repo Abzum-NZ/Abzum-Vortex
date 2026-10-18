@@ -786,11 +786,11 @@ export const actionInputDefinitionSchema = z
     z
       .object({
         ...actionInputBase,
-        type: z.literal(actionInputValueTypes.number),
+        type: z.literal(actionInputValueTypes.whole_number),
         validation: z
           .object({
-            minimum: z.number().finite().optional(),
-            maximum: z.number().finite().optional(),
+            minimum: z.number().int().safe().optional(),
+            maximum: z.number().int().safe().optional(),
           })
           .strict()
           .optional(),
@@ -810,7 +810,7 @@ export const actionInputDefinitionSchema = z
         validation: exactActionInputValidationSchema.optional(),
       })
       .strict(),
-    z.object({ ...actionInputBase, type: z.literal(actionInputValueTypes.boolean) }).strict(),
+    z.object({ ...actionInputBase, type: z.literal(actionInputValueTypes.yes_no) }).strict(),
     z
       .object({
         ...actionInputBase,
@@ -861,7 +861,7 @@ export const actionInputDefinitionSchema = z
         message: "Maximum length cannot be below minimum length",
       });
     if (
-      value.type === "number" &&
+      value.type === "whole_number" &&
       value.validation?.minimum !== undefined &&
       value.validation.maximum !== undefined &&
       value.validation.minimum > value.validation.maximum
@@ -890,13 +890,13 @@ const sharingParameterValueSchema = (
   switch (type) {
     case "text":
       return z.string();
-    case "number":
-      return z.number().finite();
+    case "whole_number":
+      return z.number().int().safe();
     case "decimal_number":
       return exactDecimalTextSchema;
     case "money":
       return z.object({ amount: exactDecimalTextSchema, currency: currencyCodeSchema }).strict();
-    case "boolean":
+    case "yes_no":
       return z.boolean();
     case "date":
       return z.iso.date();

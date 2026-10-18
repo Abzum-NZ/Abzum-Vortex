@@ -53,11 +53,11 @@ const firstParameter = (value: string | readonly string[] | undefined): string |
 /** Uses the same URL-to-typed-input coercion as the installed application page. */
 const coerceInput = (raw: string, type: string): JsonValue | undefined => {
   switch (type) {
-    case "number": {
+    case "whole_number": {
       const value = Number(raw);
-      return raw.trim() !== "" && Number.isFinite(value) ? value : undefined;
+      return raw.trim() !== "" && Number.isSafeInteger(value) ? value : undefined;
     }
-    case "boolean":
+    case "yes_no":
       return raw === "true" ? true : raw === "false" ? false : undefined;
     default:
       return raw;

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { maximumApplicationRoles } from "../definition/application-contracts";
 
 import { randomUUID } from "node:crypto";
 import {
@@ -93,24 +94,32 @@ export const createAccessAdministrationRoleOperations = ({
    * authority, affected assignments and acceptance; the owning composition keeps the
    * permanent-steward safeguard, so this entry never becomes a raw grant endpoint.
    */
-  const changeRoleAuthority = async (
+  const changeRolesAuthority = async (
     expectedOperations: readonly PreparedOrganizationRoleChange["candidate"]["operation"][],
     session: IdentitySession,
     candidate: OrganizationSelectionCandidate,
-    commandCandidate: ChangeOrganizationAdministrationRoleAuthorityCommand,
-  ): Promise<HumanOrganizationRequestResult<ChangeOrganizationAdministrationRoleResult>> => {
-    const command =
-      changeOrganizationAdministrationRoleAuthorityCommandSchema.safeParse(commandCandidate);
-    if (!command.success)
+    commandCandidates: readonly ChangeOrganizationAdministrationRoleAuthorityCommand[],
+  ): Promise<
+    HumanOrganizationRequestResult<readonly ChangeOrganizationAdministrationRoleResult[]>
+  > => {
+    const commands = z
+      .array(changeOrganizationAdministrationRoleAuthorityCommandSchema)
+      .min(1)
+      .max(maximumApplicationRoles)
+      .safeParse(commandCandidates);
+    if (!commands.success)
       return refuseAdministration(
         "changeRoleAuthority",
         "ACCESS_ADMIN_COMMAND_INVALID",
         { kind: "unavailable" } as const,
-        command.error,
+        commands.error,
       );
-    let evidence: PreparedOrganizationRoleChange;
+    let changes: { evidence: PreparedOrganizationRoleChange; activityId: string }[];
     try {
-      evidence = verifyPreparedOrganizationRoleChangeEvidence(command.data.evidence);
+      changes = commands.data.map((command) => ({
+        evidence: verifyPreparedOrganizationRoleChangeEvidence(command.evidence),
+        activityId: activityIdSchema.parse(newActivityId()),
+      }));
     } catch (error) {
       return refuseAdministration(
         "changeRoleAuthority",
@@ -119,44 +128,31 @@ export const createAccessAdministrationRoleOperations = ({
         error,
       );
     }
-    if (!expectedOperations.includes(evidence.candidate.operation))
+    if (changes.some(({ evidence }) => !expectedOperations.includes(evidence.candidate.operation)))
       return refuseAdministration("changeRoleAuthority", "ACCESS_ADMIN_OPERATION_NOT_EXPECTED", {
         kind: "unavailable",
       } as const);
-    // A new role starts at revision 1; an accepted revision advances the reviewed live revision.
-    const expectedLiveRevision =
-      "expectedRoleRevision" in evidence.candidate
-        ? evidence.candidate.expectedRoleRevision + 1
-        : 1;
-    let activityId: string;
-    try {
-      activityId = activityIdSchema.parse(newActivityId());
-    } catch (error) {
-      return refuseAdministration(
-        "changeRoleAuthority",
-        "ACCESS_ADMIN_IDENTITY_GENERATION_FAILED",
-        { kind: "temporarily_unavailable" } as const,
-        error,
-      );
-    }
-
-    return mapRecordedRefusal(
-      "changeRoleAuthority",
-      requests.runAccessChange(session, candidate, async (transaction, scope) => {
-        // The evidence names its organisation; it must be the one the request context selected.
-        if (!sameId(evidence.candidate.organizationId, scope.organizationId))
-          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
-        const row = requireOne(
-          await transaction.query<RoleChangeRow>`
-            select outcome, organization_id, role_summary, access_version
-            from vortex_access.change_organization_role_authority_for_administration(
-              ${JSON.stringify(evidence)}::text::jsonb,
-              ${activityId}::uuid
-            )
-          `,
-        );
-        if (isRecordedRefusal(row, row.role_summary, scope.organizationId, scope.accessVersion))
-          return recordedRefusal;
+    return requests.runAccessChange(session, candidate, async (transaction, scope) => {
+      if (
+        changes.some(
+          ({ evidence }) => !sameId(evidence.candidate.organizationId, scope.organizationId),
+        )
+      )
+        throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+      const rows = await transaction.query<RoleChangeRow>`
+        select outcome, organization_id, role_summary, access_version
+        from vortex_access.change_organization_role_authority_for_administration(
+          ${JSON.stringify(changes)}::text::jsonb
+        )
+      `;
+      if (rows.length !== changes.length)
+        throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+      return rows.map((row, index) => {
+        const evidence = changes[index]!.evidence;
+        const expectedLiveRevision =
+          "expectedRoleRevision" in evidence.candidate
+            ? evidence.candidate.expectedRoleRevision + 1
+            : 1;
         const parsed = changeOrganizationAdministrationRoleResultSchema.safeParse({
           role: row.role_summary,
           accessVersion: databaseRevision(row.access_version),
@@ -166,17 +162,39 @@ export const createAccessAdministrationRoleOperations = ({
           !sameId(row.organization_id, scope.organizationId) ||
           row.outcome !== "completed" ||
           !parsed.success ||
-          parsed.data.accessVersion !== scope.accessVersion + 1 ||
+          parsed.data.accessVersion !== scope.accessVersion + index + 1 ||
           !sameId(parsed.data.role.roleId, evidence.candidate.roleId) ||
           parsed.data.role.liveRevision !== expectedLiveRevision
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
         return parsed.data;
-      }),
-    );
+      });
+    });
+  };
+
+  const changeRoleAuthority = async (
+    expectedOperations: readonly PreparedOrganizationRoleChange["candidate"]["operation"][],
+    session: IdentitySession,
+    candidate: OrganizationSelectionCandidate,
+    command: ChangeOrganizationAdministrationRoleAuthorityCommand,
+  ): Promise<HumanOrganizationRequestResult<ChangeOrganizationAdministrationRoleResult>> => {
+    const result = await changeRolesAuthority(expectedOperations, session, candidate, [command]);
+    return result.kind === "available" ? { kind: "available", value: result.value[0]! } : result;
   };
 
   return {
+    /** Accepts the complete reviewed installation role set, or rolls back every acceptance. */
+    acceptApplicationRoles: (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commands: readonly ChangeOrganizationAdministrationRoleAuthorityCommand[],
+    ) =>
+      changeRolesAuthority(
+        ["accept_new_application_role", "accept_application_role_revision"],
+        session,
+        candidate,
+        commands,
+      ),
     reviseRoleMetadata: async (
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
