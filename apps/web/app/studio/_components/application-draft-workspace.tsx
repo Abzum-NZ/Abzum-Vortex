@@ -58,6 +58,8 @@ import { StudioInspector } from "./studio-inspector";
 import { StudioReleasesPanel } from "./studio-releases-panel";
 import { StudioBlockOutlinePanel, StudioStructurePanel } from "./studio-outline-panels";
 import { useStudioAccessTab } from "./studio-access-tab";
+import { StudioPlaceOpenerProvider, StudioUsedIn, type StudioPlaceOpener } from "./studio-used-in";
+import { studioPlaceSelection, studioTabOfSelection, studioUseTargetOf } from "../_lib/studio-places";
 import { applyStudioAccessCommand, type StudioAccessCommand, type StudioAccessResult } from "../_lib/application-access";
 import { StudioMenuPanel } from "./studio-menu-panel";
 import { StudioThemePanel, type StudioThemeChangeOutcome } from "./studio-theme-panel";
@@ -1023,7 +1025,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     disabled: noEdit || busy.anyOfRendered("publication", "reopening"), refresh: compiled.generation,
     apply: applyDataChange, onFieldPending: reportModuleFieldPending, onSearchPending: reportSearchPending,
     choose: (next) => { void chooseSelection(next); }, selectAfterEdit: (next) => { changeSelection(next); },
-    openInTab: (nextTab, next) => { void changeTab(nextTab).then((changed) => { if (changed) void chooseSelection(next); }); },
   });
 
   // The Access tab's one edit path, the same as Structure's and Menu's.
@@ -1040,6 +1041,21 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const openIn = (nextTab: StudioRailKey, next: StudioSemanticSelection) => {
     void changeTab(nextTab).then((changed) => { if (changed) void chooseSelection(next); });
   };
+  // Every "Used in" entry and "Show me where" link opens its place in its own tab, selected.
+  const placeOpener: StudioPlaceOpener = {
+    open: (place) => {
+      const next = studioPlaceSelection(place.open, draft.rootId);
+      if (next === null) return;
+      // The Access tab may be showing another of its views while the role is already selected.
+      if (next.kind === "role") access.showRole();
+      openIn(studioTabOfSelection(next), next);
+    },
+    nameOf: (place) => {
+      const next = studioPlaceSelection(place.open, draft.rootId);
+      return next === null ? undefined : labels.get(studioSemanticSelectionKey(next));
+    },
+  };
+  const usedIn = studioUseTargetOf(selected);
   const previewAs = (roleKey: string) => {
     const role = source.body.roles.find((entry) => entry.key === roleKey);
     if (role === undefined || compiled.frames?.roles[roleKey] === undefined) {
@@ -1052,10 +1068,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   };
   const access = useStudioAccessTab({ source, compiledRoles: compiled.frames?.roles, hidden: tab !== "access",
     disabled: busy.anyRendered() || state.isSaving || workspaceLifetime === 0, onCommand: commandAccess, onPreview: previewAs,
-    goTo: (place) => place.kind === "page" ? openIn("structure", { kind: "page", pageAlias: place.pageAlias })
-      : place.kind === "navigation" ? openIn("menu", { kind: "navigation", navigationItemAlias: place.alias })
-        : place.kind === "placement" ? openIn("structure", { kind: "placement", placementAlias: place.placementAlias })
-          : openIn("data", { kind: "module", moduleKey: place.moduleKey }) });
+    selectedRole: selected?.kind === "role" ? selected.roleKey : null,
+    chooseRole: (roleKey) => { void chooseSelection({ kind: "role", roleKey }); } });
   const pageLabel = (pageAlias: string, fallback: string) =>
     labels.get(studioSemanticSelectionKey({ kind: "page", pageAlias })) ?? fallback;
   // The layout open in Outline: selected directly, or the layout that holds the selected block.
@@ -1173,6 +1187,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       ? tab === "flows" ? undefined : "Open this flow in the Flows tab to change it."
       : selected === null ? undefined : selected.kind === "navigation" ? "Change this menu entry in the Menu tab."
         : selected.kind === "module" || selected.kind === "record_type" || selected.kind === "field" ? (tab === "data" ? undefined : "Change this in the Data tab.")
+        : selected.kind === "role" ? "Change this role in the Access tab."
         : "This item cannot be edited here."}>
     {(selected?.kind === "flow" || selected?.kind === "flow_step") && tab === "flows" && inspector.status === "resolved" && flows.inspector}
     {selected?.kind === "placement" && inspector.status === "resolved" &&
@@ -1188,6 +1203,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         readSnapshot={readVisibilitySnapshot} onPendingChange={reportConditionPending}
         onCommand={commandVisibility} />}
     {inspector.status === "resolved" && flows.placementWorkflows}
+    {usedIn !== null && <StudioUsedIn source={source} target={usedIn} name={selectedName ?? "it"} />}
   </StudioInspector>;
 
   const canvasCentre = canvasShown && <section className={canvasPage !== undefined ? "space-y-3"
@@ -1233,7 +1249,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       </div>}
   </section>;
 
-  return <div aria-busy={busy.isRendered("publication") || state.isSaving || busy.isRendered("reopening")}>
+  return <StudioPlaceOpenerProvider opener={placeOpener}>
+  <div aria-busy={busy.isRendered("publication") || state.isSaving || busy.isRendered("reopening")}>
     <ApplicationDraftAgentTools organizationId={organizationId} history={history}
       catalogue={platformBlockCatalogue} readLifetime={() => lifetime.current} blockedReason={agentBlockedReason}
       select={changeSelection} command={commandComposition} save={save}
@@ -1301,5 +1318,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     <StudioBlockSetupDialog request={blockSetup} choices={draftChoices} onClose={() => setBlockSetup(null)} />
     {data.dialog}
     {confirmDialog}
-  </div>;
+  </div>
+  </StudioPlaceOpenerProvider>;
 }

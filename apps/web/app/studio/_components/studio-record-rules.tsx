@@ -1,6 +1,6 @@
 "use client";
 import { useState, type FormEvent } from "react";
-import type { ApplicationSourceDocument, InlineRecordTypeReference } from "@vortex/platform/schema";
+import type { ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
@@ -8,6 +8,7 @@ import { Input } from "@vortex/ui/components/input";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemHeader, ItemTitle } from "@vortex/ui/components/item";
 import { Label } from "@vortex/ui/components/label";
 import { applyStudioFlowCreate, deleteStudioRecordRule, studioRecordRules } from "@vortex/ui/studio";
+import { useStudioPlaceOpener } from "./studio-used-in";
 
 /**
  * The before-save rules of a record type, such as "Enter the company name" or "A closed
@@ -17,12 +18,12 @@ import { applyStudioFlowCreate, deleteStudioRecordRule, studioRecordRules } from
  * save of the record, whichever way it is saved: a form, a board move, a named action or a Save
  * record step.
  */
-export function StudioRecordRules({ source, moduleKey, recordKey, disabled, apply, onShow }: Readonly<{
+export function StudioRecordRules({ source, moduleKey, recordKey, disabled, apply }: Readonly<{
   source: ApplicationSourceDocument; moduleKey: string; recordKey: string; disabled: boolean;
   apply: (next: ApplicationSourceDocument, message: string) => boolean;
-  onShow: (reference: InlineRecordTypeReference) => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
+  const opener = useStudioPlaceOpener();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [onCreate, setOnCreate] = useState(true);
@@ -31,7 +32,7 @@ export function StudioRecordRules({ source, moduleKey, recordKey, disabled, appl
   const record = source.body.modules.find((entry) => entry.key === moduleKey)?.record_types.find((entry) => entry.key === recordKey);
   if (record === undefined) return null;
   const rules = studioRecordRules(source, moduleKey, recordKey);
-  const open = (flowAlias: string, label: string) => onShow({ label, open: { kind: "flow", flowAlias, moduleKey } });
+  const open = (flowAlias: string, label: string) => opener.open({ label, open: { kind: "flow", flowAlias, moduleKey } });
   const add = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const result = applyStudioFlowCreate(source, { kind: "before_save", moduleKey, recordTypeKey: recordKey, name,
