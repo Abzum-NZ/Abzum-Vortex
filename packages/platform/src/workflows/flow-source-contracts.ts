@@ -469,6 +469,8 @@ export const sourceFlowSchema = z
     runAs: sourceFlowRunAsSchema,
     invocationPermissionId: flowAliasSchema.optional(),
     inputs: boundedRecord(sourceInputDeclarationSchema, 100).default({}),
+    /** The input that names the record an interactive flow runs for; see `flowSchema`. */
+    recordInput: builderKeySchema.optional(),
     variables: boundedRecord(sourceVariableDeclarationSchema, 100).default({}),
     triggers: z.array(sourceFlowTriggerSchema).max(10).default([]),
     tasks: z.array(sourceFlowTaskSchema).min(1).max(flowMaximumTaskCount),

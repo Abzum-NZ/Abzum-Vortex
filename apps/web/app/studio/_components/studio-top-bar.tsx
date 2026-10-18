@@ -19,7 +19,7 @@ export type StudioLocation = Readonly<{
 /** Studio's top bar: where you are, whether the draft is saved, and the commands that act on the whole draft. */
 export function StudioTopBar({ location, savedStateLabel, status, canUndo, canRedo, undoDisabled, onUndo, onRedo,
   onRevert, revertDisabled, onSave, saveDisabled, backToAppHref, onPreview, previewDisabled, previewPending,
-  onPublish, publishDisabled }: Readonly<{
+  onPublish, publishDisabled, statusLink }: Readonly<{
   location: StudioLocation;
   savedStateLabel: string;
   /** What just happened, or what must be applied first. */
@@ -31,6 +31,8 @@ export function StudioTopBar({ location, savedStateLabel, status, canUndo, canRe
   backToAppHref: string | undefined;
   onPreview: () => void; previewDisabled: boolean; previewPending: boolean;
   onPublish: () => void; publishDisabled: boolean;
+  /** A place the status points at, such as the App Store after a version is published. */
+  statusLink?: Readonly<{ label: string; href: string }> | undefined;
 }>) {
   return <header className="shrink-0 border-b border-border bg-background">
     <div className="flex flex-wrap items-center gap-2 px-3 py-2">
@@ -70,5 +72,8 @@ export function StudioTopBar({ location, savedStateLabel, status, canUndo, canRe
       </div>
     </div>
     <p role="status" aria-live="polite" className="px-3 pb-2 text-sm text-muted-foreground empty:hidden">{status.trim()}</p>
+    {statusLink === undefined ? null : <div className="px-3 pb-2">
+      <Button variant="link" size="sm" className="h-auto p-0" nativeButton={false} render={<Link href={statusLink.href} />}>
+        {statusLink.label}</Button></div>}
   </header>;
 }

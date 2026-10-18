@@ -740,6 +740,12 @@ const flowBaseShape = {
   /** The permission checked before the flow may start through any binding. */
   invocationPermissionId: permissionIdSchema.optional(),
   inputs: boundedRecord(flowInputDeclarationSchema, 100).default({}),
+  /**
+   * The input that names the record an interactive flow runs for (the record a page shows, the
+   * moved card). The platform reads that record afresh under the initiator's access, so the flow
+   * reads its fields as `{{ trigger.record.<field> }}`, the one way any flow reads its record.
+   */
+  recordInput: builderKeySchema.optional(),
   variables: boundedRecord(flowDefinitionVariableSchema, 100).default({}),
   triggers: z.array(flowTriggerSchema).max(10).default([]),
   tasks: z.array(flowTaskSchema).min(1).max(flowMaximumTaskCount),
@@ -764,6 +770,7 @@ type FlowShape = {
   execution: FlowExecutionKind;
   runAs: FlowRunAs;
   inputs: Record<string, unknown>;
+  recordInput?: string | undefined;
   variables: Record<string, unknown>;
   triggers: FlowTrigger[];
   tasks: FlowTask[];
@@ -783,6 +790,27 @@ const refineFlow = (flow: FlowShape, context: z.RefinementCtx) => {
   for (const name of Object.keys(flow.variables))
     if (name in flow.inputs)
       issue(["variables", name], "A variable cannot reuse the name of an input");
+
+  // An interactive flow names the input that carries its record; a record trigger supplies the
+  // record of every other flow that has one.
+  if (flow.recordInput !== undefined) {
+    const declaration = flow.inputs[flow.recordInput] as
+      | Readonly<{ type?: unknown; required?: unknown; recordTypeIds?: unknown }>
+      | undefined;
+    if (flow.execution !== "interactive")
+      issue(["recordInput"], "Only an interactive flow names the input that carries its record");
+    else if (
+      declaration === undefined ||
+      declaration.type !== "record_reference" ||
+      declaration.required !== true ||
+      !Array.isArray(declaration.recordTypeIds) ||
+      declaration.recordTypeIds.length !== 1
+    )
+      issue(
+        ["recordInput"],
+        "The record input must be a declared, required input naming one record of one record type",
+      );
+  }
 
   // Triggers must fit the execution kind, and a flow has one execution kind.
   if (flow.execution === "interactive" && flow.triggers.length > 0)

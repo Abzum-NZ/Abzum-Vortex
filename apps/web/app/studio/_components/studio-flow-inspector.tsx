@@ -138,7 +138,11 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
     const main = lists[0];
     return <div className="space-y-4">
       <StudioFlowStartEditor key={selection.flowAlias} projection={start}
-        recordTypes={choices.recordTypes} controlLabel={controlLabel} disabled={disabled} onPendingChange={report}
+        recordTypes={selection.moduleKey === null ? choices.recordTypes
+          // A module's own flow names its own record types by their bare key, as its triggers do.
+          : choices.recordTypes.filter((entry) => entry.key.startsWith(`${selection.moduleKey}:`))
+            .map((entry) => ({ key: entry.key.slice(entry.key.indexOf(":") + 1), label: entry.label }))}
+        controlLabel={controlLabel} disabled={disabled} onPendingChange={report}
         onApply={(draft) => { const result = onStart(context, draft); return result.kind === "applied" ? true : result.reason; }} />
       {ownerNote === undefined ? null : <p className="text-sm text-muted-foreground">{ownerNote}</p>}
       <p className="text-sm text-muted-foreground">Select a step on the canvas to change its settings, move it or add a step after it.</p>
