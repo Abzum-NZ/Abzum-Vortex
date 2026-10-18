@@ -20,7 +20,11 @@ export type EditFormBaseline = ApplicationPageModel["editFormBaselines"][string]
 export type TableContinuationTarget = Readonly<{
   placementId: string;
   fromAddress?: true;
-  request: Readonly<{ page: number; pageDirection: "forward" | "backward"; continuationToken?: string }>;
+  request: Readonly<{
+    page: number;
+    pageDirection: "forward" | "backward";
+    continuationToken?: string;
+  }>;
 }>;
 
 export type GuidedFormActions = Readonly<{
@@ -48,7 +52,11 @@ export type EventHandlers = Record<string, (event: never) => void> & {
   form_reset?: (event: FormResetEvent) => void | Promise<void>;
 };
 
-export type Notice = Readonly<{ tone: "info" | "problem"; text: string }>;
+export type Notice = Readonly<{
+  tone: "info" | "problem";
+  text: string;
+  link?: Readonly<{ label: string; href: string }>;
+}>;
 
 export type SubmittedForm = Readonly<{
   formId: string;

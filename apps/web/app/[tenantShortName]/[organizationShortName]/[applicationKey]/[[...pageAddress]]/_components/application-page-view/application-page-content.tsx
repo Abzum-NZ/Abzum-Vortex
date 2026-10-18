@@ -610,7 +610,17 @@ export function ApplicationPageViewContent({
                     aria-live="polite"
                     data-vortex-notice={notice.tone}
                   >
-                    <AlertDescription>{notice.text}</AlertDescription>
+                    <AlertDescription>
+                      {notice.text}
+                      {notice.link === undefined ? null : (
+                        <>
+                          {" "}
+                          <a className="underline" href={notice.link.href}>
+                            {notice.link.label}
+                          </a>
+                        </>
+                      )}
+                    </AlertDescription>
                   </Alert>
                 )}
               </>
