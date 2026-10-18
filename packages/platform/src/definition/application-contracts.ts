@@ -93,7 +93,10 @@ const wholeNumberActionInputSchema = z
     ...actionInputBase,
     type: z.literal(actionInputValueTypes.whole_number),
     validation: z
-      .object({ minimum: z.number().int().safe().optional(), maximum: z.number().int().safe().optional() })
+      .object({
+        minimum: z.number().int().safe().optional(),
+        maximum: z.number().int().safe().optional(),
+      })
       .strict()
       .optional(),
   })
@@ -920,7 +923,15 @@ const applicationSharedContentSchema = z
     queries: z.array(queryDefinitionSchema),
     permissions: z.array(permissionDeclarationSchema),
     actions: z.array(applicationActionDefinitionSchema),
-    events: z.array(eventDefinitionSchema),
+    // Component events on ordinary pages have no record subject or carried record fields.
+    events: z.array(
+      eventDefinitionSchema
+        .extend({ recordTypeId: recordTypeIdSchema.optional() })
+        .refine((event) => event.recordTypeId !== undefined || event.carriedFieldIds.length === 0, {
+          message: "An event without a record type cannot carry record fields",
+          path: ["carriedFieldIds"],
+        }),
+    ),
     connectionBindings: z.array(applicationConnectionBindingSchema),
     interfaces: z.array(interfaceDefinitionSchema),
     publicAddresses: z.array(publicAddressSchema),

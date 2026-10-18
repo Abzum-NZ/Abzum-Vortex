@@ -2,7 +2,7 @@ import type { InstalledRuntimeContext } from "@vortex/platform/server";
 import {
   BOARD_BLOCK_RELEASE,
   BOARD_BLOCK_RELEASE_1_1_0,
-  TABLE_BLOCK_RELEASE,
+  TABLE_BLOCK_RELEASE_1_4_0,
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
   FORM_CONTAINER_BLOCK_RELEASE,
@@ -113,7 +113,7 @@ export const isBoardPlacement = ({ vortex }: Pick<PlacedItem, "vortex">): boolea
 export const isTablePlacement = ({ vortex }: Pick<PlacedItem, "vortex">): boolean =>
   isRecord(vortex.block) &&
   typeof vortex.block.blockId === "string" &&
-  sameId(vortex.block.blockId, TABLE_BLOCK_RELEASE.blockId);
+  sameId(vortex.block.blockId, TABLE_BLOCK_RELEASE_1_4_0.blockId);
 
 export const projectedUseAvailability = ({
   vortex,

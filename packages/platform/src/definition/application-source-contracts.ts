@@ -661,7 +661,7 @@ export const sourceApplicationBodySchema = z
             .object({
               id: sourceProvenanceTarget(sourceAliasSchema, ["eventId"]),
               key: sourceProvenanceUnchanged(namespacedKeySchema),
-              record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, [
+              record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema.optional(), [
                 "recordTypeId",
               ]),
               carries: sourceProvenanceUnchanged(
@@ -669,7 +669,11 @@ export const sourceApplicationBodySchema = z
               ),
               personal_or_sensitive_values_allowed: sourceProvenanceUnchanged(z.literal(false)),
             })
-            .strict(),
+            .strict()
+            .refine((event) => event.record_type !== undefined || event.carries.length === 0, {
+              message: "An event without a record type cannot carry record fields",
+              path: ["carries"],
+            }),
         )
         .max(100),
     ),
