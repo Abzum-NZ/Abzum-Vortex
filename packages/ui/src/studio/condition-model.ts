@@ -113,8 +113,8 @@ export type ConditionOperator = StudioConditionOperator;
 
 export const unaryOperators = new Set<ConditionOperator>(["is_empty", "is_not_empty"]);
 const operatorLabels = {
-  equals: "equals",
-  not_equals: "does not equal",
+  equals: "is",
+  not_equals: "is not",
   contains: "contains",
   not_contains: "does not contain",
   in: "is in",
@@ -161,9 +161,9 @@ export type ConditionPath = readonly (string | number)[];
 const roleLabels: Readonly<Record<StudioConditionOperandRole, string>> = {
   current_field: "Current fields",
   previous_field: "Previous values",
-  declared_input: "Declared inputs",
-  event_value: "Event values",
-  variable: "Variables",
+  declared_input: "Flow inputs",
+  event_value: "From the triggering event",
+  variable: "Saved values",
   step_output: "Earlier steps",
   record_field: "Record fields",
   run_value: "The run",
@@ -670,12 +670,22 @@ export const operandToken = (operand: ConditionOperand): string =>
 const describeOperand = (
   operand: ConditionOperand,
   context: StudioConditionControlsContext,
+  other?: ConditionOperand,
+  operator?: ConditionOperator,
 ): string => {
-  if (operand.source === "value") return JSON.stringify(operand.value) ?? "null";
+  if (operand.source === "value") {
+    if (operand.value === null) return "empty";
+    if (operator !== "contains" && operator !== "not_contains") {
+      const options = choiceOptionsFor(other, context);
+      const option = options?.find((option) => option.value === operand.value);
+      if (option !== undefined) return option.label;
+    }
+    return JSON.stringify(operand.value) ?? "empty";
+  }
   const permission = context.allowedOperands.find(
     (candidate) => permissionKey(candidate) === referenceKey(operand),
   );
-  return permission ? permission.label : "Unavailable operand";
+  return permission ? permission.label : "Unavailable field or input";
 };
 
 export const describeCondition = (
@@ -683,14 +693,14 @@ export const describeCondition = (
   context: StudioConditionControlsContext,
 ): string => {
   if (isComparisonCondition(condition)) {
-    const left = describeOperand(condition.left, context);
+    const left = describeOperand(condition.left, context, condition.right, condition.operator);
     const operator = operatorLabels[condition.operator];
     return condition.right === undefined
       ? `${left} ${operator}`
-      : `${left} ${operator} ${describeOperand(condition.right, context)}`;
+      : `${left} ${operator} ${describeOperand(condition.right, context, condition.left, condition.operator)}`;
   }
   if (condition.kind === "not")
-    return `not (${describeCondition(condition.condition, context)})`;
+    return `Exclude records matching ${describeCondition(condition.condition, context)}`;
   const joiningWord = condition.kind === "all" ? " and " : " or ";
   return `(${condition.conditions.map((child) => describeCondition(child, context)).join(joiningWord)})`;
 };

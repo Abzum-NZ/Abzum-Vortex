@@ -34,7 +34,7 @@ export type StudioFlowReferenceChoice = Readonly<{
   /** A stable spelling of the reference, for a picker's option value. */
   token: string;
   label: string;
-  group: "Inputs" | "Variables" | "Earlier steps" | "The record" | "The run";
+  group: "Flow inputs" | "From the triggering event" | "Saved values" | "Earlier steps" | "The record" | "The run";
   /** The declared type, when the flow declares one. */
   type: string | undefined;
   reference: FlowReference;
@@ -195,12 +195,12 @@ export const studioFlowReferenceChoices = (
   const add = (reference: FlowReference, label: string, group: StudioFlowReferenceChoice["group"], type: string | undefined) =>
     choices.push({ token: studioFlowReferenceToken(reference), label, group, type, reference });
   for (const [name, declaration] of Object.entries(flow.inputs ?? {}))
-    add({ source: "input", name }, studioWords(name), "Inputs", declaration.type);
+    add({ source: "input", name }, studioWords(name), "Flow inputs", declaration.type);
   for (const trigger of flow.triggers ?? [])
     for (const [name, declaration] of Object.entries(trigger.inputs ?? {}))
-      if (!Object.hasOwn(flow.inputs ?? {}, name)) add({ source: "input", name }, studioWords(name), "Inputs", declaration.type);
+      if (!Object.hasOwn(flow.inputs ?? {}, name)) add({ source: "input", name }, studioWords(name), "From the triggering event", declaration.type);
   for (const [name, declaration] of Object.entries(flow.variables ?? {}))
-    add({ source: "variable", name }, studioWords(name), "Variables", declaration.type);
+    add({ source: "variable", name }, studioWords(name), "Saved values", declaration.type);
   if (path !== null)
     for (const task of studioFlowTasksBefore(flow, path)) {
       const location = describeStudioFlowLocation(flow, studioFlowTaskPath(flow, task.id) ?? []);
