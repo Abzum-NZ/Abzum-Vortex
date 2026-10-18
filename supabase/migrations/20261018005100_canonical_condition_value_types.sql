@@ -1,6 +1,5 @@
 -- Use canonical value-type declarations throughout database-backed conditions.
-begin;
-set local role vortex_owner;
+set local role vortex_record_adapter;
 
 create or replace function vortex_record.compile_query_filter_internal(
   p_condition jsonb,
@@ -1456,6 +1455,9 @@ grant execute on function vortex_record.prepare_module_query_internal(uuid, uuid
 comment on function vortex_record.prepare_module_query_internal(uuid, uuid, bigint, jsonb, jsonb, jsonb, text, jsonb) is
   'Shared owner-only Module query preparation for list and summary reads: derives organisation and application authority from validated_human_request_context(), resolves one installed query or the exact current human-owned preview pins, revalidates preview prior plans, exact active field mappings and preview catalogue/field bounds without using the installed read-scan routes, refuses a preview of a used Module''s record type with read_forbidden when the same read plan decision admits no read alternative, validates declared inputs and the published filter narrowed by the declared user filter, and returns the exact access predicate, pushed filter and residual per-row condition with bound inputs; it never accepts authority or identity from caller values.';
 
+reset role;
+set local role vortex_owner;
+
 CREATE OR REPLACE FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) RETURNS boolean
     LANGUAGE plpgsql IMMUTABLE
     SET search_path TO ''
@@ -2213,4 +2215,3 @@ REVOKE ALL ON FUNCTION vortex_access.typed_condition_value_matches_internal(p_va
 grant execute on function vortex_access.typed_condition_value_matches_internal(p_value jsonb, p_semantic_type text, p_nullable boolean) to postgres;
 
 reset role;
-commit;
