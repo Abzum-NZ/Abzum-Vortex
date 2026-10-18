@@ -11,7 +11,7 @@ import {
   type StudioConditionValidation, type StudioSemanticSelection, type StudioStoredApplicationDraft,
   type StudioVisibilityCommandResult,
 } from "@vortex/ui/studio";
-import { resolveStudioApplicationConditionContext } from "../actions";
+import { resolveStudioApplicationConditionContext } from "../_lib/studio-read-client";
 
 type Props = Readonly<{
   /** The current draft, which the rule is shown from and written to. */

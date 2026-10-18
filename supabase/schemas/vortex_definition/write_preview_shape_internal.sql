@@ -16,6 +16,7 @@ declare
   system_projection_ids_value uuid[] := array[]::uuid[];
   resolved_modules_value jsonb := '[]'::jsonb;
   storage_identities_value jsonb := '[]'::jsonb;
+  declared_permissions_value jsonb := '[]'::jsonb;
 begin
   select preview.* into strict preview_row
   from vortex_definition.preview_installations as preview
@@ -126,7 +127,10 @@ begin
     where root.organization_id = preview_row.organization_id
       and root.kind = 'module'
       and root.owner_application_root_id = preview_row.application_root_id
-  ) as owned;
+  ) as owned
+  on conflict (preview_installation_id) do update
+  set owned_owner_ids = excluded.owned_owner_ids
+  where preview_permission_registrations.owned_owner_ids is distinct from excluded.owned_owner_ids;
 
   for owned_release in
     select pinned.root_id, root.key, pinned.owner_kind,
@@ -166,6 +170,15 @@ begin
     if owned_release.owner_kind = 'application' then
       application_content_value := owned_release.release #> '{compilation_output,canonical,content}';
     end if;
+    declared_permissions_value := declared_permissions_value || (
+      select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+        'ownerKind', owned_release.owner_kind, 'ownerId', owned_release.root_id,
+        'permissionId', permission.value ->> 'permissionId'
+      )), '[]'::jsonb)
+      from pg_catalog.jsonb_array_elements(
+        owned_release.release #> '{compilation_output,canonical,content,permissions}'
+      ) as permission(value)
+    );
     insert into vortex_access.preview_permission_entries (
       preview_installation_id, entry, held
     )
@@ -203,13 +216,26 @@ begin
       false
     from pg_catalog.jsonb_array_elements(
       owned_release.release #> '{compilation_output,canonical,content,permissions}'
-    ) as permission(value);
+    ) as permission(value)
+    on conflict (preview_installation_id, ((entry).owner_kind), ((entry).owner_id), ((entry).permission_id))
+    do update set entry = excluded.entry
+    where preview_permission_entries.entry is distinct from excluded.entry;
   end loop;
   if application_content_value is null
     or pg_catalog.jsonb_typeof(application_content_value -> 'roles') is distinct from 'array' then
     raise exception using errcode = '23514',
       message = 'Previewed permission declarations are unavailable';
   end if;
+
+  -- Remove only declarations absent from the final validated release set, including removed owners.
+  delete from vortex_access.preview_permission_entries as entry
+  where entry.preview_installation_id = p_preview_installation_id
+    and not exists (
+      select 1 from pg_catalog.jsonb_array_elements(declared_permissions_value) as declared(value)
+      where declared.value ->> 'ownerKind' = (entry.entry).owner_kind
+        and (declared.value ->> 'ownerId')::uuid = (entry.entry).owner_id
+        and (declared.value ->> 'permissionId')::uuid = (entry.entry).permission_id
+    );
 
   -- A system projection, of an own Module or a used one, is the platform's live read model: every
   -- permission on it is decided by the builder's own live access, never by a preview role.
@@ -234,15 +260,15 @@ begin
   where record_type.value ? 'systemProjection';
   update vortex_access.preview_permission_registrations as registration
   set system_projection_record_type_ids = system_projection_ids_value
-  where registration.preview_installation_id = p_preview_installation_id;
+  where registration.preview_installation_id = p_preview_installation_id
+    and registration.system_projection_record_type_ids is distinct from system_projection_ids_value;
 
   -- The builder holds every role of the draft: a permission is held when a role selects it, an
   -- Application-wide selection taking only the Application's ordinary permissions, as it does
   -- at installation. A permission on a system projection is never held in a preview.
-  update vortex_access.preview_permission_entries as preview_entry
-  set held = true
-  where preview_entry.preview_installation_id = p_preview_installation_id
-    and not coalesce((preview_entry.entry).record_type_id = any(system_projection_ids_value), false)
+  with decisions as (
+    select preview_entry.ctid as entry_id,
+    not coalesce((preview_entry.entry).record_type_id = any(system_projection_ids_value), false)
     and exists (
       select 1
       from pg_catalog.jsonb_array_elements(application_content_value -> 'roles') as role(value)
@@ -256,13 +282,25 @@ begin
             and (preview_entry.entry).action_kind <> 'export'
           )
         )
-    );
+    ) as held
+    from vortex_access.preview_permission_entries as preview_entry
+    where preview_entry.preview_installation_id = p_preview_installation_id
+  )
+  update vortex_access.preview_permission_entries as preview_entry
+  set held = decisions.held
+  from decisions
+  where preview_entry.ctid = decisions.entry_id
+    and preview_entry.held is distinct from decisions.held;
   update vortex_access.preview_permission_registrations as registration
   set role_ids = coalesce((
-    select pg_catalog.array_agg(distinct (role.value ->> 'roleId')::uuid)
+    select pg_catalog.array_agg(distinct (role.value ->> 'roleId')::uuid order by (role.value ->> 'roleId')::uuid)
     from pg_catalog.jsonb_array_elements(application_content_value -> 'roles') as role(value)
   ), array[]::uuid[])
-  where registration.preview_installation_id = p_preview_installation_id;
+  where registration.preview_installation_id = p_preview_installation_id
+    and registration.role_ids is distinct from coalesce((
+      select pg_catalog.array_agg(distinct (role.value ->> 'roleId')::uuid order by (role.value ->> 'roleId')::uuid)
+      from pg_catalog.jsonb_array_elements(application_content_value -> 'roles') as role(value)
+    ), array[]::uuid[]);
 
   update vortex_definition.preview_installations as preview
   set resolved_modules = resolved_modules_value,

@@ -84,11 +84,6 @@ begin
             last_compatible_release_revision = p_module_release_revision,
             changed_at = pg_catalog.statement_timestamp()
         where catalogue.storage_contract_id = binding_row.storage_contract_id;
-        update vortex_record.field_storage_mappings as mapping
-        set introduced_by_module_root_id = p_module_root_id,
-            introduced_at_release_revision = p_module_release_revision
-        where mapping.storage_contract_id = binding_row.storage_contract_id
-          and mapping.state = 'active';
         update vortex_record.preview_storage_bindings as binding
         set module_release_revision = p_module_release_revision,
             release_storage_contract_id = release_storage_id
@@ -140,7 +135,12 @@ begin
       from vortex_record.field_storage_mappings as mapping
       where mapping.storage_contract_id = binding_row.storage_contract_id
         and mapping.field_id = field_id_value
-      for update;
+      ;
+      -- The preview row serializes followers. Unchanged fields need neither a row lock nor DDL;
+      -- their exact serving revision is advanced once, set based, after the record-type loop.
+      if found and mapping_row.state = 'active' and mapping_row.field_definition = field_value then
+        continue;
+      end if;
       if found then
         -- Stored values keep their meaning only while the field keeps its database type.
         if mapping_row.database_value_type is distinct from database_type then
@@ -256,6 +256,19 @@ begin
       )
     );
   end loop;
+  -- Every active mapping must name the exact release served by the preview query contract.
+  -- This metadata update is deliberately separate from changes to field definitions and DDL.
+  update vortex_record.field_storage_mappings as mapping
+  set introduced_by_module_root_id = p_module_root_id,
+      introduced_at_release_revision = p_module_release_revision
+  from vortex_record.preview_storage_bindings as binding
+  where binding.preview_installation_id = p_preview_installation_id
+    and binding.module_root_id = p_module_root_id
+    and binding.module_release_revision = p_module_release_revision
+    and mapping.storage_contract_id = binding.storage_contract_id
+    and mapping.state = 'active'
+    and (mapping.introduced_by_module_root_id is distinct from p_module_root_id
+      or mapping.introduced_at_release_revision is distinct from p_module_release_revision);
   return storage_identities;
 exception
   when no_data_found then

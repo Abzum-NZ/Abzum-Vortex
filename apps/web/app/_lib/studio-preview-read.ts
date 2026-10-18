@@ -1,10 +1,9 @@
 import "server-only";
 
-import {
-  createPreviewInstallationRepository,
-  type HumanOrganizationRequestDependencies,
-  type InstalledRuntimeContext,
-  type StoredApplicationDefinitionDraft,
+import type {
+  HumanOrganizationRequestDependencies,
+  InstalledRuntimeContext,
+  StoredApplicationDefinitionDraft,
 } from "@vortex/platform/server";
 import {
   sameId,
@@ -12,8 +11,7 @@ import {
   type IdentitySession,
   type OrganizationId,
 } from "@vortex/platform/schema";
-import { humanOrganizationRequests } from "./server-composition";
-import { currentStudioPreview, readStudioPreviewState } from "./studio-application-preview";
+import { readStudioPreviewState } from "./studio-application-preview";
 import { loadInstalledContext, requestDependencies } from "./application-page/load";
 import { createPlacementReadServices } from "./application-page/placement-services";
 import { loadOrganizationLauncher } from "./organization-context";
@@ -51,6 +49,7 @@ export type StudioPreviewRead =
   | Readonly<{ kind: "refused" }>
   /** The saved draft moved on from the revision the request names. */
   | Readonly<{ kind: "conflict" }>
+  | Readonly<{ kind: "following" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 /** Opens the builder's preview of the saved draft at this revision for reading records. */
@@ -62,28 +61,12 @@ export const openStudioPreviewRead = async (
 ): Promise<StudioPreviewRead> => {
   const state = await readStudioPreviewState(session, organizationId, rootId, draftRevision);
   if (state.kind === "refused") return { kind: "refused" };
-  if (state.kind !== "read") return state;
-  const preview = await currentStudioPreview(session, organizationId, state.draft, state.preview, "read");
-  if (preview.kind === "refused") return { kind: "refused" };
-  if (preview.kind !== "available") return preview;
+  if (state.kind !== "read") return state.kind === "preparation_failed" ? { kind: "temporarily_unavailable" } : state;
+  const preview = state.preview;
+  if (preview === undefined || preview.draftRevision !== draftRevision || preview.reconcileDue ||
+    Date.parse(preview.expiresAt) <= Date.now()) return { kind: "following" };
   const dependencies = requestDependencies();
   const application = { organizationId, applicationRootId: rootId };
-  // Copied live records are read only once they are decided again by the builder's current live
-  // access in the installed Application, at most every five minutes, as opening the preview does.
-  if (preview.reconcileDue) {
-    const reconciled = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
-      session,
-      application,
-      async (transaction) => {
-        await createPreviewInstallationRepository(transaction).reconcile(preview.previewInstallationId);
-        return true;
-      },
-    );
-    if (reconciled.kind !== "available") {
-      console.error(`[studio] preview records unchecked: STUDIO_PREVIEW_RECORDS_UNCHECKED kind=${reconciled.kind}`);
-      return reconciled.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };
-    }
-  }
   const selection: StudioPreviewSelection = { ...application, previewInstallationId: preview.previewInstallationId };
   const [installed, launcher] = await Promise.all([
     loadInstalledContext(session, dependencies, selection),
@@ -99,5 +82,5 @@ export const openStudioPreviewRead = async (
   const services = createPlacementReadServices({ session, selection, dependencies,
     continuationKey: getQueryContinuationKey(), tenantShortName: entry.tenantShortName,
     organizationShortName: entry.organizationShortName });
-  return { kind: "available", draft: state.draft, behind: preview.behind, selection, context: installed.value, dependencies, services };
+  return { kind: "available", draft: state.draft, behind: false, selection, context: installed.value, dependencies, services };
 };

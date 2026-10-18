@@ -60,19 +60,26 @@ begin
   );
 
   delete from vortex_definition.preview_releases as release
-  where release.preview_installation_id = p_preview_installation_id;
+  where release.preview_installation_id = p_preview_installation_id
+    and not exists (
+      select 1 from pg_catalog.jsonb_array_elements(p_releases -> 'releases') as item(value)
+      where (item.value #>> '{release,root_id}')::uuid = release.root_id
+    );
   insert into vortex_definition.preview_releases (
     preview_installation_id, root_id, release_revision, release, dependencies
   )
   select p_preview_installation_id, (item.value #>> '{release,root_id}')::uuid,
     (item.value #>> '{release,release_revision}')::bigint,
     item.value -> 'release', item.value -> 'dependencies'
-  from pg_catalog.jsonb_array_elements(p_releases -> 'releases') as item(value);
-  -- Its registration is written again from the new releases and draft roles.
-  delete from vortex_access.preview_permission_entries as entry
-  where entry.preview_installation_id = p_preview_installation_id;
-  delete from vortex_access.preview_permission_registrations as registration
-  where registration.preview_installation_id = p_preview_installation_id;
+  from pg_catalog.jsonb_array_elements(p_releases -> 'releases') as item(value)
+  on conflict (preview_installation_id, root_id) do update
+  set release_revision = excluded.release_revision,
+      release = excluded.release,
+      dependencies = excluded.dependencies
+  where preview_releases.release_revision is distinct from excluded.release_revision
+    or preview_releases.release - array['published_at', 'published_by']
+      is distinct from excluded.release - array['published_at', 'published_by']
+    or preview_releases.dependencies is distinct from excluded.dependencies;
   expires_at_value := pg_catalog.statement_timestamp() + preview_lifetime;
   -- The release set it runs is written again, in this same request, after the new pins.
   update vortex_definition.preview_installations as preview

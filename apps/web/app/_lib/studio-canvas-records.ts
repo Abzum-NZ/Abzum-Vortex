@@ -54,6 +54,7 @@ export type StudioCanvasRecordsResult =
        * whose query it does not have yet have no records here; read again shortly.
        */
       behind: boolean }>
+  | Readonly<{ kind: "following" }>
   | Readonly<{ kind: "conflict" }>
   /** The builder may not edit or preview this application, so the canvas reads no records. */
   | Readonly<{ kind: "refused" }>

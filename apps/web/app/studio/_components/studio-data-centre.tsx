@@ -6,7 +6,8 @@ import { Button } from "@vortex/ui/components/button";
 import { Label } from "@vortex/ui/components/label";
 import { StudioOptionControl, type StudioDataSelection } from "@vortex/ui/studio";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@vortex/ui/components/table";
-import { readStudioDataRecords } from "../actions";
+import { readStudioDataRecords } from "../_lib/studio-read-client";
+import type { StudioPreviewStatus } from "../../_lib/studio-application-preview";
 import type { StudioDataRecordsResult, StudioDataTotal } from "../../_lib/studio-data-records";
 import {
   fieldTypeLabel, type StudioDataModule, type StudioDataRecordType,
@@ -111,7 +112,7 @@ function SummaryResults({ result, onPage }: Readonly<{
  */
 function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, queryKey, draftRevision }: Readonly<{
   organizationId: string; rootId: string; moduleKey: string; recordKey: string; plural: string; queryKey: string | undefined;
-  /** The saved, compiled draft revision whose preview the records are read from. */
+  /** The latest saved draft revision whose preview the records are read from. */
   draftRevision: number;
 }>) {
   const [pageSize, setPageSize] = useState<number>(40);
@@ -124,18 +125,6 @@ function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, 
   const [read, setRead] = useState<Read | null>(null);
   const latest = useRef("");
   const request = JSON.stringify({ scope, page });
-  // A preview still moving to this revision is read again shortly; what it showed stays meanwhile.
-  const [followed, setFollowed] = useState<Readonly<{ request: string; count: number }>>({ request: "", count: 0 });
-  const followUp = followed.request === request ? followed.count : 0;
-  useEffect(() => {
-    if (read?.request !== request) return;
-    const result = read.result;
-    const behind = result.kind === "following" ||
-      ((result.kind === "available" || result.kind === "summary") && result.behind);
-    if (!behind || followUp >= 30) return;
-    const timer = setTimeout(() => setFollowed({ request, count: followUp + 1 }), 1500);
-    return () => clearTimeout(timer);
-  }, [read, request, followUp]);
   useEffect(() => {
     latest.current = request;
     void (async () => {
@@ -151,7 +140,7 @@ function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, 
       }
       if (latest.current === request) setRead({ request, result });
     })();
-  }, [organizationId, rootId, draftRevision, moduleKey, recordKey, queryKey, pageSize, page.token, page.direction, request, followUp]);
+  }, [organizationId, rootId, draftRevision, moduleKey, recordKey, queryKey, pageSize, page.token, page.direction, request]);
   const current = read?.request === request ? read.result : null;
   const problem = current === null ? undefined : notReadable(current, plural, queryKey !== undefined);
   return <section aria-labelledby="studio-data-results" className="space-y-2">
@@ -194,14 +183,15 @@ function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, 
 }
 
 /** The Data tab's centre: the selected record type's schema grid and its records in the builder's preview. */
-export function StudioDataCentre({ organizationId, rootId, modules, selection, unsaved, draftRevision }: Readonly<{
+export function StudioDataCentre({ organizationId, rootId, modules, selection, unsaved, draftRevision, preview }: Readonly<{
   organizationId: string; rootId: string;
+  preview: StudioPreviewStatus;
   /** Owned and used modules, as the tree shows them. */
   modules: readonly StudioDataModule[];
   selection: StudioDataSelection | null;
   /** Whether the selected record type or query is not in the saved draft yet. */
   unsaved: boolean;
-  /** The saved, compiled draft revision whose preview the records are read from. */
+  /** The latest saved draft revision whose preview the records are read from. */
   draftRevision: number;
 }>) {
   const module = selection === null ? undefined : modules.find((item) => item.key === selection.moduleKey);
@@ -230,6 +220,11 @@ export function StudioDataCentre({ organizationId, rootId, modules, selection, u
       ? <p role="status" className="text-sm">{query === undefined
         ? "Records show once this record type is saved, in a moment."
         : "Results show once this query is saved, in a moment."}</p>
+      : preview.kind !== "ready" ? <p role="status" className="text-sm">{preview.kind === "preparation_failed"
+        ? `The saved draft could not be prepared for preview (${preview.code}). Correct the draft to try again.`
+        : preview.kind === "refused" ? "Your access does not allow this preview."
+        : preview.kind === "temporarily_unavailable" ? "The preview could not be prepared just now. Your draft remains editable."
+        : "Your preview is catching up with the saved draft."}</p>
       : <PreviewResults organizationId={organizationId} rootId={rootId} moduleKey={module.key} recordKey={record.key} plural={record.pluralName}
         queryKey={query?.key} draftRevision={draftRevision} />}
   </div>;

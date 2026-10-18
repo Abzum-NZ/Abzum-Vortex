@@ -1,25 +1,18 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { z } from "zod";
 import {
   canonicalJson,
   sameId,
   saveDefinitionDraftCommandSchema,
-  sourceApplicationThemeSchema,
   translateDefinitionRuleFailures,
 } from "@vortex/platform/schema";
-import { findPinnedPlatformThemeRelease } from "./_lib/pinned-platform-theme-release";
-import { createHumanApplicationDraftWriter, fingerprintCanonicalValue, materialiseApplicationTheme, validateDefinitionSource } from "@vortex/platform/server";
+import { createHumanApplicationDraftWriter, fingerprintCanonicalValue, validateDefinitionSource } from "@vortex/platform/server";
 import { humanOrganizationRequests } from "../_lib/server-composition";
 import { createHumanApplicationDraft, saveHumanApplicationDraft } from "../_lib/definition-draft-write";
 import { mapWebError } from "../_lib/web-error-mapper";
 import { loadStudioApplicationDraft } from "../_lib/studio-application-draft";
-import { readStudioCanvasRecords as readStudioCanvasRecordsWithSession, type StudioCanvasRecordsResult } from "../_lib/studio-canvas-records";
-import { readStudioDataRecords as readStudioDataRecordsWithSession, type StudioDataRecordsResult } from "../_lib/studio-data-records";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
-import { readSavedStudioApplicationConditionContext } from "../_lib/studio-application-condition-context";
-import type { StudioApplicationConditionContextResult } from "@vortex/ui/studio";
 import { prepareHumanDefinitionPublication, publishHumanDefinition } from "../_lib/definition-publication";
 import {
   maximumApplicationSourceImportBytes,
@@ -28,8 +21,6 @@ import {
   type StudioApplicationSourceReviewResult,
 } from "./_lib/application-source-import";
 import { platformPermissionSource } from "../_lib/platform-permission-source";
-import { tokenName } from "@vortex/ui/studio";
-import type { StudioThemeResolution } from "./_lib/studio-theme-options";
 import type { StudioStoredApplicationDraft } from "@vortex/ui/studio";
 import { readStudioPersonLabel } from "../_lib/studio-person-labels";
 import type { StudioPersonLabel } from "../_lib/studio-application-restore-contracts";
@@ -103,23 +94,6 @@ export async function publishStudioApplication(organizationId: string, candidate
   return publishHumanDefinition(organizationId, candidate);
 }
 
-/** Metadata is resolved only from the server's active human session and exact saved draft. */
-export async function resolveStudioApplicationConditionContext(
-  organizationId: string, candidate: unknown,
-): Promise<StudioApplicationConditionContextResult> {
-  try {
-    const resolved = await resolveIdentitySession();
-    if (resolved.kind !== "active")
-      return refuse("read-condition-context", `STUDIO_CONDITION_CONTEXT_SESSION_${resolved.kind.toUpperCase()}`,
-        resolved.kind === "temporarily_unavailable"
-          ? { kind: "temporarily_unavailable" } as const : { kind: "refused" } as const);
-    return await readSavedStudioApplicationConditionContext(resolved.session, organizationId, candidate);
-  } catch (error) {
-    return refuse("read-condition-context", "STUDIO_CONDITION_CONTEXT_FAILED",
-      { kind: "temporarily_unavailable" } as const, error);
-  }
-}
-
 /** A browser document is authored input, never authority or evidence of an installed Module. */
 export async function createStudioApplication(organizationId: string, candidate: unknown) {
   return createHumanApplicationDraft(organizationId, { source: candidate });
@@ -139,7 +113,7 @@ export type StudioDraftChangedElsewhere = Readonly<{
 
 /**
  * Saves the draft and nothing else: Studio autosaves each batch of edits through this one action.
- * The draft is compiled for the canvas by the separate `reopenStudioApplication` request the
+ * The draft is compiled for the canvas by the separate independent draft fetch request the
  * workspace sends once its saves are idle, so a save never waits for a compile. A save that no
  * longer extends the saved revision is refused as a conflict that names who wrote the newer
  * revision and carries it, so the workspace can say what changed.
@@ -157,78 +131,3 @@ export async function saveStudioApplication(organizationId: string, candidate: u
   return { kind: "conflict", reason: "draft_changed", elsewhere: { draft: latest.draft, changedBy } };
 }
 
-/** The saved draft compiled for the canvas: its page slots, frames, choices and compile failure. */
-export async function reopenStudioApplication(organizationId: string, applicationRootId: string) {
-  return loadStudioApplicationDraft(organizationId, applicationRootId);
-}
-
-/** The records the data blocks of one saved draft page area show, read with the builder's own access. */
-export async function readStudioCanvasRecords(organizationId: string, candidate: unknown): Promise<StudioCanvasRecordsResult> {
-  try {
-    const resolved = await resolveIdentitySession();
-    if (resolved.kind !== "active")
-      return resolved.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };
-    return await readStudioCanvasRecordsWithSession(resolved.session, organizationId, candidate);
-  } catch (error) {
-    return refuse("read-canvas-records", "STUDIO_CANVAS_RECORDS_FAILED", { kind: "temporarily_unavailable" } as const, error);
-  }
-}
-
-/** One page of the records of a record type or query in the running application, read with the builder's own access. */
-export async function readStudioDataRecords(organizationId: string, candidate: unknown): Promise<StudioDataRecordsResult> {
-  try {
-    const resolved = await resolveIdentitySession();
-    if (resolved.kind !== "active")
-      return resolved.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };
-    return await readStudioDataRecordsWithSession(resolved.session, organizationId, candidate);
-  } catch (error) {
-    return refuse("read-data-records", "STUDIO_DATA_RECORDS_FAILED", { kind: "temporarily_unavailable" } as const, error);
-  }
-}
-
-const themeFailureWords: Readonly<Record<string, string>> = {
-  INSUFFICIENT_CONTRAST: "does not have enough contrast to be read",
-  HIDDEN_FOCUS: "would hide the focus outline",
-  TRANSLUCENT_BACKGROUND: "is see-through where a solid colour is needed",
-  UNKNOWN_THEME_OPTION: "is not an option of the pinned shadcn catalogue",
-  REFUSED_THEME_OPTION: "is refused by the platform's readability check",
-};
-const themeDimensionWords: Readonly<Record<string, string>> = {
-  style: "The style", baseColor: "The base colour", theme: "The theme colour", chartColor: "The chart colour",
-  radius: "The radius", menuColor: "The menu colour", menuAccent: "The menu accent", iconLibrary: "The icon library",
-  bodyFont: "The font", headingFont: "The heading font",
-};
-const describeThemeFailure = (failure: Readonly<{ code: string; tokenKey?: string | undefined }>): string => {
-  const words = themeFailureWords[failure.code] ?? `is refused (${failure.code.toLowerCase().replaceAll("_", " ")})`;
-  if (failure.tokenKey === undefined) return `This combination ${words}.`;
-  const subject = themeDimensionWords[failure.tokenKey] ?? `The colour “${tokenName(failure.tokenKey)}”`;
-  return `${subject} ${words} with these settings.`;
-};
-
-const themeRequestSchema = z.object({ rootId: z.string().min(1).max(200), theme: sourceApplicationThemeSchema }).strict();
-
-/**
- * Resolves a candidate application theme with the producer publication uses, for the Theme tab's
- * check before an edit and for the canvas, which draws the draft's theme as it is edited. The
- * theme must keep the draft's pinned base release; only its selection and overrides change.
- */
-export async function resolveStudioApplicationTheme(organizationId: string, candidate: unknown): Promise<StudioThemeResolution> {
-  const request = themeRequestSchema.safeParse(candidate);
-  if (!request.success) return refuse("resolve-theme", "STUDIO_THEME_REQUEST_INVALID", { kind: "refused" } as const, request.error);
-  const loaded = await loadStudioApplicationDraft(organizationId, request.data.rootId, { compile: false });
-  if (loaded.kind !== "available") return { kind: loaded.kind };
-  const draft = loaded.draft;
-  if (draft.rootId !== request.data.rootId ||
-    canonicalJson(draft.source.body.theme.base) !== canonicalJson(request.data.theme.base))
-    return refuse("resolve-theme", "STUDIO_THEME_BASE_MISMATCH", { kind: "refused" } as const);
-  try {
-    const release = findPinnedPlatformThemeRelease(request.data.theme.base);
-    if (release === undefined) return refuse("resolve-theme", "STUDIO_THEME_RELEASE_UNKNOWN", { kind: "refused" } as const);
-    const result = materialiseApplicationTheme(request.data.theme, draft.key, release);
-    if (result.valid) return { kind: "available", valid: true, theme: result.theme };
-    console.error(`[studio] theme resolution refused: ${result.failures.map((failure) => `${failure.code}:${failure.tokenKey ?? ""}`).slice(0, 8).join(",")}`);
-    return { kind: "available", valid: false, problems: [...new Set(result.failures.map(describeThemeFailure))].slice(0, 6) };
-  } catch (error) {
-    return refuse("resolve-theme", "STUDIO_THEME_RESOLUTION_FAILED", { kind: "temporarily_unavailable" } as const, error);
-  }
-}

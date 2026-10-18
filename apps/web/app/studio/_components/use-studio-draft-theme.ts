@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { canonicalJson, type ApplicationContent, type ApplicationSourceDocument } from "@vortex/platform/schema";
-import { resolveStudioApplicationTheme } from "../actions";
+import { resolveStudioApplicationTheme } from "../_lib/studio-read-client";
 import type { StudioThemeResolution } from "../_lib/studio-theme-options";
 
 type SourceTheme = ApplicationSourceDocument["body"]["theme"];
