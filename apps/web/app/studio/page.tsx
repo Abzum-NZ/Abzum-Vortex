@@ -8,7 +8,8 @@ import {
   CardTitle,
 } from "@vortex/ui/components/card";
 import type { OrganizationBuilderRoot } from "@vortex/platform/server";
-import { resolveIdentitySession } from "../auth/_lib/session-server";
+import { continueStudioSession } from "./_lib/studio-session";
+import { StudioUnavailable } from "./_components/studio-unavailable";
 import { loadOrganizationLauncher } from "../_lib/organization-context";
 import { loadStudioOrganizationHome } from "../_lib/studio-organization-home";
 
@@ -57,8 +58,9 @@ export default async function StudioLandingPage({
   searchParams,
 }: Readonly<{ searchParams: Promise<{ size?: string | string[] }> }>) {
   const size = pageSizeFrom((await searchParams).size);
-  const resolved = await resolveIdentitySession();
-  if (resolved.kind !== "active") notFound();
+  const resolved = await continueStudioSession();
+  if (resolved.kind === "temporarily_unavailable")
+    return <StudioUnavailable subject="Studio" result={resolved} reloadHref="/studio" />;
   const launcher = await loadOrganizationLauncher(resolved.session);
   if (launcher.kind !== "available") {
     console.error(`[studio] landing could not list organizations: ${launcher.kind}`);
@@ -94,7 +96,10 @@ export default async function StudioLandingPage({
     left.entry.organizationDisplayName.localeCompare(right.entry.organizationDisplayName),
   );
   const sizeLinks = size < maxPageSize && (
-    <Link className="text-sm underline underline-offset-4" href={`/studio?size=${Math.min(size * 5, maxPageSize)}`}>
+    <Link
+      className="text-sm underline underline-offset-4"
+      href={`/studio?size=${Math.min(size * 5, maxPageSize)}`}
+    >
       Show more
     </Link>
   );
@@ -112,7 +117,9 @@ export default async function StudioLandingPage({
           <Card key={entry.organizationId}>
             <CardHeader>
               <CardTitle>{entry.organizationDisplayName}</CardTitle>
-              {entry.tenantDisplayName !== entry.organizationDisplayName && <CardDescription>{entry.tenantDisplayName}</CardDescription>}
+              {entry.tenantDisplayName !== entry.organizationDisplayName && (
+                <CardDescription>{entry.tenantDisplayName}</CardDescription>
+              )}
             </CardHeader>
             <CardContent className="space-y-6">
               <section className="space-y-2">
