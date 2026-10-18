@@ -344,6 +344,11 @@ export const loadStudioApplicationDraft = async (
           const borrowedActions: StudioActionChoice[] = [];
           const borrowedRelationships: StudioRelationshipChoice[] = [];
           const used: StudioDataModule[] = [];
+          // Explicit record reads distinguish deliberate directory authoring from the
+          // name-only reference permission derived for a Person link.
+          const declaredReads = new Set(draft.source.body.permissions
+            .filter((permission) => permission.action_kind === "read")
+            .map((permission) => permission.record_type));
           // The exact Module releases the draft compiled against, its own inline Modules included.
           {
             for (const binding of compiled.compilation.canonical.content.moduleBindings) {
@@ -360,19 +365,21 @@ export const loadStudioApplicationDraft = async (
                 throw new Error("STUDIO_DRAFT_COMPILE_MISMATCH");
               const use = draft.source.body.uses.find((candidate) => candidate.module === release!.key);
               const content = release.compilationOutput.canonical.content;
-              // A Person link uses the directory for people, not its platform administration
-              // projections. Only ordinary business records and Person are offered to builders.
+              const linkable = (record: typeof content.recordTypes[number]) =>
+                record.systemProjection === undefined || `${release.key}:${record.key}` === directory.recordType;
+              // A Person link does not expose unrelated administration projections. Explicit
+              // read declarations keep deliberately authored administrative data available.
               const records = use === undefined ? content.recordTypes : content.recordTypes.filter((record) =>
-                record.systemProjection === undefined || `${release.key}:${record.key}` === directory.recordType);
+                linkable(record) || declaredReads.has(`${release.key}:${record.key}`));
               const person = records.find((record) => `${release.key}:${record.key}` === directory.recordType);
               if (release.key === directory.module && person === undefined)
                 throw new Error("STUDIO_DRAFT_COMPILE_MISMATCH");
-              const moduleName = person?.pluralLabel ?? content.name;
+              const moduleName = records.length === 1 && person !== undefined ? person.pluralLabel : content.name;
               // A used Module is shown read-only in the Data tab, as its installed release defines it.
               if (use !== undefined && !used.some((module) => module.key === release!.key))
                 used.push({ key: release.key, name: moduleName, ownerApplication: use.application,
                   recordTypes: records.map((record) => ({
-                    key: record.key, name: record.singularLabel, pluralName: record.pluralLabel,
+                    key: record.key, name: record.singularLabel, pluralName: record.pluralLabel, linkable: linkable(record),
                     titleFieldKey: record.fields.find((field) => sameId(String(field.fieldId), String(record.titleFieldId)))?.key ?? "",
                     fields: record.fields.map((field) => ({ key: field.key, label: field.label, type: field.type,
                       required: field.required, unique: field.unique, description: field.helpText ?? "",

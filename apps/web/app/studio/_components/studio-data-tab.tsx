@@ -529,7 +529,7 @@ export function useStudioDataTab({
   // people directory, which the link then adds to the modules it uses.
   const usedRecordTypes = useMemo((): readonly StudioLinkTarget[] => {
     const targets: StudioLinkTarget[] = (used ?? []).flatMap((module) =>
-      module.recordTypes.map((record) => {
+      module.recordTypes.filter((record) => record.linkable).map((record) => {
         const key = `${module.key}:${record.key}`;
         return {
           key,
