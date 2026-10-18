@@ -26,6 +26,7 @@ export * from "./application-composition-commands";
 export * from "./field-placement";
 export * from "./application-flow-model";
 export * from "./application-flow-commands";
+export * from "./studio-flow-step-picker";
 export * from "./application-flow-create";
 export * from "./application-flow-values";
 export * from "./application-flow-step-form";
