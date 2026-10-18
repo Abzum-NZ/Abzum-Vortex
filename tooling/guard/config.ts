@@ -122,7 +122,7 @@ export const guardRules = {
     owner: "lead",
     reviewBy: "2027-01-15",
     reviewNote:
-      "Drafts, preview plans and publication share compilation; offline validation must continue to enforce the same source and dependency rules.",
+      "Drafts, preview plans and publication share compilation and source rules: only table releases with a declared data contract remain registered, and row-action bindings require matching commands; offline validation enforces the same dependency rules.",
     description:
       "A shipped definition source that publication would refuse (offline compile and validation)",
   },

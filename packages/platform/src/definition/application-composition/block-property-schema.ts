@@ -94,6 +94,8 @@ export type BlockPropertySchemaContract =
   | (BlockPropertySchemaBase & {
       kind: "group";
       properties: BlockPropertySchemaContract[];
+      /** Named list entries get their immutable value from the label when added. */
+      namedEntry?: { label: string; value: string } | undefined;
     })
   | (BlockPropertySchemaBase & {
       kind: "list";
@@ -382,6 +384,19 @@ const plainStringOf = (schema: z.ZodType<string>, value: unknown): string | unde
   return parsed.success ? parsed.data : undefined;
 };
 
+/** Apply only declared defaults; an explicitly supplied value always takes precedence. */
+const sourceSettingsWithDefaults = (
+  settings: Readonly<Record<string, unknown>>,
+  declarations: readonly BlockPropertySchemaContract[],
+): Readonly<Record<string, unknown>> => ({
+  ...Object.fromEntries(
+    declarations
+      .filter((declaration) => declaration.defaultValue !== undefined)
+      .map((declaration) => [declaration.key, plainSettingValue(declaration.defaultValue!)]),
+  ),
+  ...settings,
+});
+
 /**
  * Reads one authored setting value as the typed value of the release property it fills.
  *
@@ -478,7 +493,9 @@ export const typedSourceSettingValue = (
       const declared = new Map(declaration.properties.map((property) => [property.key, property]));
       const properties: Record<string, SourceBlockPropertyValueContract> = {};
       let complete = true;
-      for (const [key, nested] of Object.entries(group)) {
+      for (const [key, nested] of Object.entries(
+        sourceSettingsWithDefaults(group, declaration.properties),
+      )) {
         const property = declared.get(key);
         if (property === undefined) {
           failures.push({
@@ -509,7 +526,7 @@ export const typedSourceSettingValue = (
 };
 
 /**
- * Reads an item's authored settings against its release declarations. Returns the typed settings
+ * Reads an item's authored settings with declared defaults, including nested groups. Returns the typed settings
  * and every failure: undeclared keys, plain values of the wrong shape and every rule
  * `validateComponentSettingValue` judges, including a missing required value.
  */
@@ -522,6 +539,7 @@ export const typedSourceSettings = (
 }> => {
   const failures: ComponentSettingFailure[] = [];
   const typed: Record<string, SourceBlockPropertyValueContract> = {};
+  const effectiveSettings = sourceSettingsWithDefaults(settings, declarations);
   const declared = new Set(declarations.map((declaration) => declaration.key));
   for (const key of Object.keys(settings))
     if (!declared.has(key))
@@ -530,13 +548,13 @@ export const typedSourceSettings = (
         path: [key],
       });
   for (const declaration of declarations) {
-    if (!Object.hasOwn(settings, declaration.key)) {
-      if (declaration.required && declaration.defaultValue === undefined)
+    if (!Object.hasOwn(effectiveSettings, declaration.key)) {
+      if (declaration.required)
         failures.push({ family: "required_value", path: [declaration.key] });
       continue;
     }
     const value = typedSourceSettingValue(
-      settings[declaration.key],
+      effectiveSettings[declaration.key],
       declaration,
       [declaration.key],
       failures,
@@ -706,9 +724,8 @@ const authorityReferenceKinds: ReadonlySet<string> = new Set([
 
 /**
  * A platform-owned default must pass the shared setting validator and name no application-scoped
- * authority reference. Compilation copies a declared default verbatim without filling nested
- * defaults, so a grouped default must also spell every nested setting that is required or
- * declares its own default.
+ * authority reference. A grouped default must spell every nested setting that is required or
+ * declares its own default so the declaration is complete in its own right.
  */
 const defaultMatchesProperty = (schema: BlockPropertySchemaContract): boolean => {
   const value = schema.defaultValue;
@@ -916,6 +933,7 @@ export const blockPropertySchema: z.ZodType<BlockPropertySchemaContract> = z.laz
           ...propertySchemaBase,
           kind: sourceProvenanceUnchanged(z.literal("group")),
           properties: sourceProvenanceUnchanged(z.array(blockPropertySchema)),
+          namedEntry: sourceProvenanceUnchanged(z.object({ label: builderKeySchema, value: builderKeySchema }).strict().optional()),
         })
         .strict()
         .refine(
@@ -939,6 +957,12 @@ export const blockPropertySchema: z.ZodType<BlockPropertySchemaContract> = z.laz
         }),
     ])
     .superRefine((value, context) => {
+      if (value.kind === "group" && value.namedEntry !== undefined) {
+        const named = value.namedEntry;
+        if (named.label === named.value || ![named.label, named.value].every((key) =>
+          value.properties.some((property) => property.key === key && property.kind === "text" && property.required)))
+          context.addIssue({ code: "custom", path: ["namedEntry"], message: "A named entry needs separate required text properties for its label and value" });
+      }
       if (!defaultMatchesProperty(value))
         context.addIssue({
           code: "custom",

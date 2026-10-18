@@ -190,6 +190,8 @@ export function useRuntimeInputs({
             bindings.some((binding) => binding.event === kind)
           )
             events[kind] = (event: DisplaySemanticEvent) => {
+              if (tableData !== undefined && event.event === "row_action" && event.eventId === undefined)
+                return;
               const binding = bindingFor(bindings, event);
               if (binding !== undefined && !busy)
                 return runBinding(

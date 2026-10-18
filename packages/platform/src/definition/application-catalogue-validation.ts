@@ -257,6 +257,18 @@ export function validateApplicationSourceCatalogue(
         checkRowBehaviour("row_click", behaviours.rowClick.eventId, "row_clicked", "record_reference");
       for (const action of behaviours.rowActions)
         checkRowBehaviour("row_actions", action.eventId, "row_action", "record_reference");
+      const rowActionIds = new Set(behaviours.rowActions.map((action) => action.eventId));
+      for (const binding of source.body.flow_bindings)
+        if (
+          binding.control === placementAlias &&
+          binding.event === "row_action" &&
+          !rowActionIds.has(binding.event_id)
+        )
+          report(
+            "vortex.definition.application_block_references",
+            "broken_reference",
+            at("row_actions"),
+          );
       for (const action of behaviours.bulkActions)
         checkRowBehaviour("bulk_actions", action.eventId, "bulk_action", "record_reference_list");
       if (behaviours.inlineEdit !== undefined) {
