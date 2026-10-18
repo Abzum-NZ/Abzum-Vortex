@@ -56,7 +56,11 @@ export type StudioApplicationDraftHistoryListener = (
 
 export interface StudioApplicationDraftHistoryController {
   getState(): StudioApplicationDraftHistoryState;
-  edit(source: ApplicationSourceDocument): boolean;
+  /**
+   * Takes one edit. Consecutive edits with the same `merge` key (typing into one field) replace the
+   * newest entry instead of adding one, so Undo restores the value from before the whole run.
+   */
+  edit(source: ApplicationSourceDocument, merge?: string): boolean;
   undo(): boolean;
   redo(): boolean;
   save(): Promise<StudioApplicationDraftSaveOutcome>;
@@ -168,6 +172,8 @@ export const createStudioApplicationDraftHistoryController = (
   let history = [baseline];
   let historyIndex = 0;
   let isSaving = false;
+  // The merge key of the newest entry, while the next edit may still extend it.
+  let mergeKey: string | undefined;
   let lastSaveOutcome: StudioApplicationDraftSaveOutcome | null = null;
   const listeners = new Set<StudioApplicationDraftHistoryListener>();
 
@@ -196,16 +202,19 @@ export const createStudioApplicationDraftHistoryController = (
 
   return Object.freeze({
     getState,
-    edit: (source: ApplicationSourceDocument): boolean => {
+    edit: (source: ApplicationSourceDocument, merge?: string): boolean => {
       const parsed = applicationSourceDocumentSchema.safeParse(source);
       if (!parsed.success || parsed.data.key !== key) return false;
 
       const next = snapshotSource(parsed.data);
       if (sameValue(next, history[historyIndex])) return false;
 
-      history = history.slice(0, historyIndex + 1);
+      const extendsNewest = merge !== undefined && merge === mergeKey && historyIndex > 0 &&
+        historyIndex === history.length - 1;
+      history = history.slice(0, extendsNewest ? historyIndex : historyIndex + 1);
       history.push(next);
       historyIndex = history.length - 1;
+      mergeKey = merge;
       lastSaveOutcome = null;
       notify();
       return true;
@@ -213,6 +222,7 @@ export const createStudioApplicationDraftHistoryController = (
     undo: (): boolean => {
       if (historyIndex === 0) return false;
       historyIndex -= 1;
+      mergeKey = undefined;
       lastSaveOutcome = null;
       notify();
       return true;
@@ -220,6 +230,7 @@ export const createStudioApplicationDraftHistoryController = (
     redo: (): boolean => {
       if (historyIndex >= history.length - 1) return false;
       historyIndex += 1;
+      mergeKey = undefined;
       lastSaveOutcome = null;
       notify();
       return true;
@@ -300,6 +311,7 @@ export const createStudioApplicationDraftHistoryController = (
       baseline = next;
       history = [next];
       historyIndex = 0;
+      mergeKey = undefined;
       lastSaveOutcome = null;
       notify();
       return true;
