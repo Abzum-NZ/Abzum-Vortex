@@ -159,10 +159,11 @@ export function validateApplicationSourceCatalogue(
     placementAlias: string,
     settings: Readonly<Record<string, SourceValue>>,
     location: readonly Segment[],
+    blockKey: string,
   ): void => {
     const table = readRecordsTableContract(settings);
     const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
-    if (registeredReleases.get(`${placement.block.block_id}:${placement.block.release_version}`)?.key === "platform.display.record_detail" &&
+    if (blockKey === "platform.display.record_detail" &&
         settings.detail_fields !== undefined && detail === undefined) {
       report("vortex.definition.application_block_settings", "required_value", [...location, ...keySegment("setting", "heading_field")]);
       return;
@@ -431,7 +432,7 @@ export function validateApplicationSourceCatalogue(
 
       const reading = readSourceItem(item, release);
       reportSettingFailures(reading.settingFailures, location);
-      validateDataContract(placement, alias, reading.settings, location);
+      validateDataContract(placement, alias, reading.settings, location, release.key);
       validateAccessibleName(reading.settings, release, location);
       validateResponsive(placement, release, location);
 
