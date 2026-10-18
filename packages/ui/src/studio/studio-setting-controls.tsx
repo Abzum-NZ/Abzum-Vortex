@@ -1169,7 +1169,7 @@ function SettingFields({
               )}
             </StudioField>
             {property === labelProperty && fieldProperty !== undefined && (
-              <div className="space-y-1 text-xs">
+              <div className="space-y-1 text-sm">
                 {field === undefined ? (
                   <p role="alert">Choose a field offered by this data to resolve its label.</p>
                 ) : label?.kind === "text" ? (
