@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   databaseRevision,
+  logRefusal,
   sameId,
   actorIdSchema,
   applicationRootIdSchema,
@@ -320,6 +321,7 @@ export const createDurableActorRequestService = (dependencies: DurableActorReque
         return { kind: "available", value };
       } catch (error) {
         const refused = error instanceof DurableActorRefusal || databaseCode(error) === "42501";
+        logRefusal("access", "durable actor request", refused ? "scope_unavailable" : "temporarily_unavailable", error);
         return refused ? { kind: "unavailable" } : { kind: "temporarily_unavailable" };
       }
     },
