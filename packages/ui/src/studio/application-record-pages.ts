@@ -287,8 +287,7 @@ const placed = (source: Source, alias: string): Readonly<{ item: SourceItem; sib
 
 /** Sets a row click on a records table: its row_click setting names the event the binding declares. */
 const openRows = (plan: Plan, tableAlias: string, resolved: Resolved, detail: Page): void => {
-  const binding = openFlow(plan, tableAlias, "row_clicked", `Open ${lowerFirst(resolved.record.name)}`, detail, resolved);
-  placed(plan.source, tableAlias)!.item.props.row_click = { event_id: binding.eventId };
+  openFlow(plan, tableAlias, "row_clicked", `Open ${lowerFirst(resolved.record.name)}`, detail, resolved);
 };
 
 /** A button that opens a page, placed beside `besideAlias` (before it) or at `items`' start, and its flow. */
