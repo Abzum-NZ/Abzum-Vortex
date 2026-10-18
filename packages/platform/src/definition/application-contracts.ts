@@ -50,7 +50,7 @@ import { applicationThemeSchema } from "./application-composition/theme";
 import { platformBlockDependenciesSchema } from "./application-composition/platform-block-release";
 import type { ComponentSettingValue } from "./application-composition/block-property-schema";
 import { componentFlowBindingSchema } from "./application-flow-bindings";
-import { flowSchema } from "../workflows/flow-contracts";
+import { flowSchema, maximumFlowConfirmationDetailLines } from "../workflows/flow-contracts";
 import { vortexIconNameSchema } from "../catalogue/icon-names";
 
 /** The typed inputs and shape of one Application-owned action. */
@@ -813,12 +813,13 @@ export const applicationRoleSchema = z
         message: "Compiled application-role permissions must be unique exact keys",
       });
   });
+/** Every role must fit in the one confirmation that reviews its installation or upgrade. */
+export const maximumApplicationRoles = maximumFlowConfirmationDetailLines;
+
 /**
  * An application's roles. Exactly one is its default member role: a first install offers that
  * role to the installer, and the installer's explicit acceptance makes it theirs.
  */
-export const maximumApplicationRoles = 500;
-
 export const applicationRolesSchema = z
   .array(applicationRoleSchema)
   .min(1)

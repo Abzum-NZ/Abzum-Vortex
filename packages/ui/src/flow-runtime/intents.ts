@@ -1,4 +1,8 @@
-import type { FormContinuationAnswer, JsonValue } from "@vortex/platform/schema";
+import {
+  maximumFlowConfirmationDetailLines,
+  type FormContinuationAnswer,
+  type JsonValue,
+} from "@vortex/platform/schema";
 
 /**
  * One typed interface intent, as the shared interpreter produces it in the page or the server
@@ -75,12 +79,11 @@ export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undef
   return message === undefined ? undefined : { text: message, tone: text(intent.properties.tone) };
 };
 
-const maximumDetailLines = 100;
-
 /** The detail lines of a confirmation: a list of bounded texts, or none. */
 const detailLines = (candidate: JsonValue | undefined): readonly string[] | undefined => {
   if (candidate === undefined || candidate === null) return [];
-  if (!Array.isArray(candidate) || candidate.length > maximumDetailLines) return undefined;
+  if (!Array.isArray(candidate) || candidate.length > maximumFlowConfirmationDetailLines)
+    return undefined;
   const lines = candidate.map((line) => text(line ?? undefined));
   return lines.every((line): line is string => line !== undefined) ? lines : undefined;
 };
