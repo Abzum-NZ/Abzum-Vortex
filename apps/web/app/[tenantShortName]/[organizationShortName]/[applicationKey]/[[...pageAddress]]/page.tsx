@@ -299,7 +299,7 @@ export default async function ApplicationAddressPage({
 
   // The page renders only its content; the frame around it is the shell part of the same
   // projection, which the layout shows (and which this page hands to the frame on a later change).
-  const { frame, content } = splitProjectedPage(page.model.page, page.model.applicationShell);
+  const { frame, content } = splitProjectedPage(page.model.page, page.applicationShell);
   // The page runtime keeps the whole projection, so shell placements keep their data and events;
   // only the rendering is split between the frame and the content.
   const adoptionOutcome =
