@@ -177,7 +177,7 @@ function NumberControl({ id, property, value, onChange, disabled }: ControlProps
 
 /** A closed choice among labelled options, with the unset state named by what it means (none when a value is always chosen). */
 export function StudioOptionControl({ id, value, options, unset, disabled, onChange }: Readonly<{
-  id: string; value: string; options: readonly Readonly<{ value: string; label: string }>[];
+  id: string; value: string; options: readonly Readonly<{ value: string; label: string; disabled?: boolean }>[];
   unset?: string | undefined; disabled: boolean; onChange: (value: string) => void;
 }>): ReactElement {
   const known = value === "" || options.some((option) => option.value === value);
@@ -185,7 +185,8 @@ export function StudioOptionControl({ id, value, options, unset, disabled, onCha
     aria-invalid={!known} onChange={(event) => onChange(event.target.value)}>
     {unset === undefined ? null : <NativeSelectOption value="">{unset}</NativeSelectOption>}
     {known ? null : <NativeSelectOption value={value}>{`${value} (not offered here)`}</NativeSelectOption>}
-    {options.map((option) => <NativeSelectOption key={option.value} value={option.value}>{option.label}</NativeSelectOption>)}
+    {options.map((option) => <NativeSelectOption key={option.value} value={option.value}
+      disabled={option.disabled}>{option.label}</NativeSelectOption>)}
   </NativeSelect>;
 }
 
