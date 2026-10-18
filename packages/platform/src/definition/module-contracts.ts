@@ -9,6 +9,7 @@ import {
 import {
   calculationMaximumNestingDepth,
   calculationMaximumOperandCount,
+  calculationResultTypesByOperation,
   jsonValueSchema,
   labelSchema,
   safeHttpsUrlSchema,
@@ -405,16 +406,9 @@ const calculationSettingsSchema = z
         path: ["evaluation"],
         message: "A deadline-passed calculation uses the current time and is read-time",
       });
-    const valid =
-      (value.expression.kind === "join_text" && value.resultType === "text") ||
-      (value.expression.kind === "condition" && value.resultType === "yes_no") ||
-      (value.expression.kind === "date_offset" &&
-        (value.resultType === "date" || value.resultType === "date_time")) ||
-      (value.expression.kind === "deadline_passed" && value.resultType === "yes_no") ||
-      (value.expression.kind === "numeric" &&
-        (value.resultType === "whole_number" ||
-          value.resultType === "decimal_number" ||
-          value.resultType === "money"));
+    const resultTypes: readonly string[] =
+      calculationResultTypesByOperation[value.expression.kind];
+    const valid = resultTypes.includes(value.resultType);
     if (
       value.expression.kind === "numeric" &&
       value.expression.operands.reduce(

@@ -129,11 +129,9 @@ begin
     and release.release_revision =
       (installation ->> 'applicationReleaseRevision')::bigint;
 
+  -- A record type holding a total saves here too: a save of the record itself never moves its
+  -- totals, so a new record starts with totals over no related records and an update keeps them.
   unsupported := exists (
-    select 1
-    from pg_catalog.jsonb_array_elements(meta -> 'recordType' -> 'fields') as field(value)
-    where field.value ->> 'type' = 'total'
-  ) or exists (
     -- #578: Record evaluates the owning Module release's rules (`beforeSaveRules`);
     -- an Application rule on this record type cannot be evaluated and refuses.
     select 1
