@@ -9,7 +9,7 @@ import { LAYOUT_ONLY_STYLES_CSS } from "../layout-styles";
  * contribute token values only.
  */
 const SHARED_COMPONENT_STYLES_CSS = `
-/* Theme roots: the runtime page or preview canvas, and each placement with declared overrides */
+/* Theme roots: the runtime page or preview canvas. */
 [data-vortex-theme] {
   /*
    * The six semantic motion tokens of the specification's animation implementation standard:
@@ -51,12 +51,11 @@ const SHARED_COMPONENT_STYLES_CSS = `
   --vortex-motion-row-settle-easing: cubic-bezier(0.16, 1, 0.3, 1);
   --vortex-motion-row-stagger: 13ms; /* the step between rows; the twentieth row and later share one */
   --vortex-motion-loader-fade: 200ms; /* the loader's fade in */
-  /* The platform loader: the brand mark's ink, its size and one draw-hold-erase cycle. */
-  --vortex-loader-ink: var(--primary, var(--vortex-accent));
+  /* The platform loader's size and one draw-hold-erase cycle. */
   --vortex-loader-size: 100px;
   --vortex-loader-cycle: 5s;
-  color: var(--vortex-text);
-  background-color: var(--vortex-surface);
+  color: var(--foreground);
+  background-color: var(--background);
   font-family: var(--vortex-font-family);
   font-size: var(--vortex-font-size);
   line-height: var(--vortex-line-height);
@@ -87,12 +86,12 @@ const SHARED_COMPONENT_STYLES_CSS = `
   width: 1.125rem;
   height: 1.125rem;
   margin: 0;
-  accent-color: var(--vortex-accent);
+  accent-color: var(--primary);
   cursor: pointer;
 }
 
 .vortex-selection-radio:hover:not(:disabled) {
-  box-shadow: 0 0 0 0.125rem var(--vortex-border-color);
+  box-shadow: 0 0 0 0.125rem var(--border);
 }
 
 /* Display cells and rich text */
@@ -108,12 +107,12 @@ const SHARED_COMPONENT_STYLES_CSS = `
 }
 
 .vortex-cell-empty {
-  color: var(--vortex-text-muted);
+  color: var(--muted-foreground);
 }
 
 .vortex-cell-link,
 .vortex-cell-rich-text a {
-  color: var(--vortex-text);
+  color: var(--foreground);
   text-decoration: underline;
   text-underline-offset: 0.125rem;
 }
@@ -126,8 +125,8 @@ const SHARED_COMPONENT_STYLES_CSS = `
 .vortex-cell-rich-text blockquote {
   margin: var(--vortex-space-sm) 0;
   padding-left: var(--vortex-space-sm);
-  border-left: 0.1875rem solid var(--vortex-border-color);
-  color: var(--vortex-text-muted);
+  border-left: 0.1875rem solid var(--border);
+  color: var(--muted-foreground);
 }
 
 .vortex-cell-rich-text code {
@@ -233,7 +232,7 @@ const SHARED_COMPONENT_STYLES_CSS = `
   inset-block: 0;
   left: 0;
   width: 40%;
-  background-color: var(--primary, var(--vortex-accent));
+  background-color: var(--primary);
   animation: vortex-page-progress calc(var(--vortex-motion-page) * 4)
     var(--vortex-motion-page-easing) infinite;
 }
@@ -273,7 +272,7 @@ const SHARED_COMPONENT_STYLES_CSS = `
 
 /* Visible focus is a platform safeguard: no component or theme state may remove it. */
 [data-vortex-theme] :focus-visible {
-  outline: var(--vortex-focus-width) solid var(--vortex-focus-color) !important;
+  outline: var(--vortex-focus-width) solid var(--ring) !important;
   outline-offset: 0.125rem !important;
 }
 `.trim();

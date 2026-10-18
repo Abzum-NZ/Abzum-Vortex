@@ -432,11 +432,11 @@ const sourceInterfaceOperationSchema = z
       z.record(builderKeySchema, sourceInterfaceOutputFieldSchema),
     ),
     authentication: sourceProvenanceTarget(
-      z.enum(["organisation_token", "partner_token", "public"]),
+      z.enum(["organization_token", "partner_token", "public"]),
       ["authentication"],
     ),
     permission: sourceProvenanceTarget(namespacedKeySchema, ["permissionKey"]),
-    visibility: sourceProvenanceTarget(z.enum(["organisation_private", "partner", "public"]), [
+    visibility: sourceProvenanceTarget(z.enum(["organization_private", "partner", "public"]), [
       "visibility",
     ]),
     rate_limit_per_minute: sourceProvenanceUnchanged(z.number().int().min(1).max(100_000)),

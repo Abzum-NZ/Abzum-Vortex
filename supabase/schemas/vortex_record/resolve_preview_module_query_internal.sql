@@ -111,7 +111,7 @@ begin
   where release.root_id = p_module_root_id
     and release.release_revision = query_release_revision;
   if not found
-    or query_validation_contract_version is distinct from '3.0.0'
+    or query_validation_contract_version <> all (vortex_definition.accepted_contract_version('module'))
     or query_source_contract_version is distinct from query_validation_contract_version
     or query_compilation_output #>> '{kind}' is distinct from 'module'
     or query_compilation_output #>> '{canonical,envelope,rootId}'
@@ -214,7 +214,7 @@ begin
       return null;
     end if;
   end if;
-  if record_type_validation_contract_version not in ('2.0.0', '3.0.0')
+  if record_type_validation_contract_version <> all (vortex_definition.accepted_contract_version('module'))
     or record_type_source_contract_version is distinct from record_type_validation_contract_version
     or record_type_compilation_output #>> '{kind}' is distinct from 'module'
     or record_type_compilation_output #>> '{canonical,envelope,rootId}'

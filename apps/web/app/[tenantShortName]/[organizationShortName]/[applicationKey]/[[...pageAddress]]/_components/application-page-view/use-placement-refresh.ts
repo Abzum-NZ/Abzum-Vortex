@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type Dispatch,
   type SetStateAction,
   type RefObject,
@@ -25,6 +26,10 @@ import {
 } from "../../../../../../_lib/mounted-record-pin-watch-client";
 import type { RefreshedPlacementData, TableContinuationTarget, EditFormBaseline } from "./types";
 import type { TablePageCache } from "./use-table-page-cache";
+
+const subscribeToNothing = (): (() => void) => () => undefined;
+const afterHydration = (): boolean => true;
+const duringServerRenderAndHydration = (): boolean => false;
 
 export function usePlacementRefresh({
   currentPageKey,
@@ -343,16 +348,25 @@ export function usePlacementRefresh({
   >({ owner: model.data, data: {} });
   // The reads that had settled before the page's first render (the page was held for its primary
   // data), so that render already shows them instead of a loading state for one frame. Later
-  // settlements arrive through `streamed`, so this runs once per model.
+  // settlements arrive through `streamed`, so this runs once per model. While the server HTML is
+  // hydrated no read counts as settled: the server rendered every streamed placement as loading,
+  // and a read the stream delivered before hydration must not change that first client render
+  // (React #418). The render right after hydration shows it.
+  const hydrated = useSyncExternalStore(
+    subscribeToNothing,
+    afterHydration,
+    duringServerRenderAndHydration,
+  );
   const settledStreams = useMemo(() => {
     const settled: Record<string, PageDataState> = {};
+    if (!hydrated) return settled;
     for (const [placementId, read] of Object.entries(model.streamedData ?? {})) {
       observeSettled(read);
       const state = settledValue(read);
       if (state !== undefined) settled[placementId] = state;
     }
     return settled;
-  }, [model.streamedData]);
+  }, [hydrated, model.streamedData]);
   useEffect(() => {
     if (model.streamedData === undefined) return;
     let current = true;

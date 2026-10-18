@@ -183,7 +183,7 @@ begin
     -- The writable system projection is prepared through its protected read
     -- model. Its final write remains inside apply_record_changes.
     loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'read', p_record_id, null
+      p_record_type_id, 'read', p_record_id, null, null::jsonb
     );
     if loaded ->> 'outcome' <> 'loaded' then
       return pg_catalog.jsonb_build_object('outcome', 'refused');
@@ -242,7 +242,7 @@ begin
 
   if p_operation = 'update' then
     loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'update', p_record_id, p_expected_concurrency_number
+      p_record_type_id, 'update', p_record_id, p_expected_concurrency_number, null::jsonb
     );
     if loaded ->> 'outcome' = 'conflict' then
       return pg_catalog.jsonb_build_object(

@@ -547,36 +547,8 @@ exception
 end
 $function$;
 
-create or replace function vortex_record.load_record_access_facts_from_installation_internal(
-  p_record_type_id uuid,
-  p_action_kind text,
-  p_record_id uuid,
-  p_expected_concurrency_number bigint,
-  p_installation jsonb
-)
-returns jsonb
-language sql volatile security invoker set search_path = ''
-as $function$
-  select vortex_record.load_record_access_facts_from_installation_internal(
-    p_record_type_id, p_action_kind, p_record_id, p_expected_concurrency_number,
-    p_installation, null::jsonb
-  )
-$function$;
-
 alter function vortex_record.load_record_access_facts_from_installation_internal(uuid,text,uuid,bigint,jsonb,jsonb) owner to vortex_record_adapter;
-alter function vortex_record.load_record_access_facts_from_installation_internal(uuid,text,uuid,bigint,jsonb) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.load_record_access_facts_from_installation_internal(
   uuid, text, uuid, bigint, jsonb, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-revoke all on function vortex_record.load_record_access_facts_from_installation_internal(
-  uuid, text, uuid, bigint, jsonb
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.load_record_access_facts_from_installation_internal(
-  uuid, text, uuid, bigint, jsonb
-) to vortex_record_adapter;
-
-comment on function vortex_record.load_record_access_facts_from_installation_internal(
-  uuid, text, uuid, bigint, jsonb
-) is
-  'Private adapter fact loader over one exact trusted installation or owner-validated preview, resolving definitions from the cached installation access plan.';

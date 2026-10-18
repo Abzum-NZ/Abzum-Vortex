@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { Button } from "../components/button";
+import { Checkbox } from "../components/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +22,7 @@ import type { LinkNavigationEnvironment } from "../launcher/link-navigation";
 import { performNavigateTask } from "../launcher/link-navigation";
 import type { ReferenceChoiceSelectionEvidenceMap } from "@vortex/platform/schema";
 import type {
+  FlowConfirmAnswer,
   FlowConfirmIntent,
   FlowFormAnswer,
   FlowFormIntent,
@@ -34,7 +36,7 @@ type Surface =
       id: number;
       kind: "confirm";
       confirmation: FlowConfirmIntent;
-      settle: (confirmed: boolean) => void;
+      settle: (answer: FlowConfirmAnswer) => void;
     }>
   | Readonly<{
       id: number;
@@ -115,6 +117,63 @@ function FlowDialog({
 }
 
 /**
+ * A confirmation: its message, the lines it covers, and its one opt-in, which starts unticked for
+ * every prompt and counts only with a yes. Any dismissal is a no.
+ */
+function ConfirmSurface({
+  confirmation,
+  settle,
+}: Readonly<{
+  confirmation: FlowConfirmIntent;
+  settle: (answer: FlowConfirmAnswer) => void;
+}>): ReactElement {
+  const [choice, setChoice] = useState(false);
+  const decline = (): void => settle({ confirmed: false });
+  return (
+    <FlowDialog
+      title={confirmation.title ?? "Confirm"}
+      onDismiss={decline}
+      actions={
+        <>
+          <Button type="button" variant="secondary" onClick={decline}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={() =>
+              settle(
+                confirmation.choice === undefined
+                  ? { confirmed: true }
+                  : { confirmed: true, choice },
+              )
+            }
+          >
+            {confirmation.confirmLabel ?? "Confirm"}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <p className="whitespace-pre-line">{confirmation.message}</p>
+        {confirmation.details.length === 0 ? null : (
+          <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
+            {confirmation.details.map((line, index) => (
+              <li key={index}>{line}</li>
+            ))}
+          </ul>
+        )}
+        {confirmation.choice === undefined ? null : (
+          <label className="flex items-start gap-2 text-sm">
+            <Checkbox checked={choice} onCheckedChange={(checked) => setChoice(checked === true)} />
+            <span>{confirmation.choice}</span>
+          </label>
+        )}
+      </div>
+    </FlowDialog>
+  );
+}
+
+/**
  * Presents the interface intents of a flow: messages, confirmations and the shell's form body in
  * modal dialogs, and navigation through the one Navigate task implementation. Render `element`
  * once inside the shell and pass `host` to `createFlowRuntime`. Message text is rendered as text,
@@ -179,7 +238,10 @@ export function useFlowIntentHost(
       showForm: (form, signal) =>
         enqueue<FlowFormAnswer>((id, settle) => ({ id, kind: "form", form, settle }), signal),
       confirm: (confirmation, signal) =>
-        enqueue<boolean>((id, settle) => ({ id, kind: "confirm", confirmation, settle }), signal),
+        enqueue<FlowConfirmAnswer>(
+          (id, settle) => ({ id, kind: "confirm", confirmation, settle }),
+          signal,
+        ),
       navigate: (intent) => performNavigateTask(intent, optionsRef.current.navigation),
       refresh: (component) => optionsRef.current.refresh?.(component),
       setPanel: (panel, state) => optionsRef.current.setPanel?.(panel, state),
@@ -208,25 +270,12 @@ export function useFlowIntentHost(
       </FlowDialog>
     );
   } else if (current?.kind === "confirm") {
-    const { confirmation, settle } = current;
     element = (
-      <FlowDialog
+      <ConfirmSurface
         key={current.id}
-        title={confirmation.title ?? "Confirm"}
-        onDismiss={() => settle(false)}
-        actions={
-          <>
-            <Button type="button" variant="secondary" onClick={() => settle(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={() => settle(true)}>
-              Confirm
-            </Button>
-          </>
-        }
-      >
-        <p>{confirmation.message}</p>
-      </FlowDialog>
+        confirmation={current.confirmation}
+        settle={current.settle}
+      />
     );
   } else if (current?.kind === "form") {
     const { form, settle } = current;

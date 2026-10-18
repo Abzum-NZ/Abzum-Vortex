@@ -398,6 +398,7 @@ export const arrangementRefusalReasonCodes = [
   "dataset_limit_exceeded",
   /** The installed Query could not be resolved for the current Application release. */
   "query_unavailable",
+  "read_forbidden",
   "input_invalid",
   "field_unbounded",
   "filter_invalid",

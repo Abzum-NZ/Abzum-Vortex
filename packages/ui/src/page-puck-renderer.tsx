@@ -34,7 +34,7 @@ import {
 } from "./registry";
 import {
   getVortexPuckConfig,
-  VortexPuckThemeScopeProvider,
+  VortexPuckThemeTokensProvider,
   type VortexPuckMetadata,
 } from "./puck-config";
 import { computeSlotOrderCss } from "./layout-styles";
@@ -280,7 +280,7 @@ export function PagePuckRenderer({
       ? -1
       : (guidedSteps?.findIndex((step) => step.id === activeStepId) ?? -1);
   const step = stepIndex < 0 ? undefined : guidedSteps?.[stepIndex];
-  const baseConfig = getVortexPuckConfig(registry, fieldInputControlReleases, platformThemeTokens);
+  const baseConfig = getVortexPuckConfig(registry, fieldInputControlReleases);
   const guidedSummary =
     step?.summary !== true || guidedSummaryValues === undefined ? null : (
       <section aria-label="Review your answers" className="mt-6">
@@ -355,10 +355,10 @@ export function PagePuckRenderer({
     <DateFormatProvider locale={locale} timeZone={timeZone}>
       {feedback == null ? null : <div data-vortex-page-feedback="">{feedback}</div>}
       <div className={className} style={style}>
-        <VortexPuckThemeScopeProvider scope={{ application: tokens, inherited: tokens }}>
+        <VortexPuckThemeTokensProvider tokens={tokens}>
           {order}
           {rendered}
-        </VortexPuckThemeScopeProvider>
+        </VortexPuckThemeTokensProvider>
       </div>
       {guidedSummary}
       {guidedNavigation}

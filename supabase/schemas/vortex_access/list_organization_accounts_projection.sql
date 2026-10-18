@@ -72,69 +72,6 @@ begin
 end
 $function$;
 
-create or replace function vortex_access.list_organization_accounts_projection(
-  p_record_id uuid, p_page_size integer, p_record_ids uuid[]
-)
-returns table (
-  organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
-)
-language sql volatile security definer set search_path = ''
-as $function$
-  select projected.*
-  from vortex_access.list_organization_accounts_projection(
-    case when p_record_ids is not null then p_record_ids
-      when p_record_id is not null then array[p_record_id] end,
-    'record_id', 'ascending', null, null
-  ) as projected
-  where p_record_id is null or p_record_id = projected.record_id
-$function$;
-
-create or replace function vortex_access.list_organization_accounts_projection(
-  p_record_id uuid,
-  p_page_size integer
-)
-returns table (
-  organization_id uuid,
-  record_id uuid,
-  revision bigint,
-  attribute_values jsonb
-)
-language sql
-volatile
-security definer
-set search_path = ''
-as $function$
-  select projected.*
-  from vortex_access.list_organization_accounts_projection(p_record_id, p_page_size, null) as projected
-$function$;
-
-revoke all on function vortex_access.list_organization_accounts_projection(uuid, integer)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-
-grant execute on function vortex_access.list_organization_accounts_projection(
-  uuid, integer
-) to vortex_owner, vortex_record_adapter;
-
-comment on function vortex_access.list_organization_accounts_projection(uuid, integer) is
-  'Registered organisation-account projection: returns every account of the organisation to a viewer the fixed accounts.read decision admits, otherwise only the active accounts with their display name and state to a live human member, with the organisation, the account identity, the account revision and the safe projected attribute values keyed by lowercase field key, or no row when neither rule admits the viewer.';
-
-alter function vortex_access.list_organization_accounts_projection(p_record_id uuid, p_page_size integer) owner to vortex_owner;
-
-grant execute on function vortex_access.list_organization_accounts_projection(p_record_id uuid, p_page_size integer) to postgres;
-
-revoke all on function vortex_access.list_organization_accounts_projection(uuid, integer, uuid[])
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-
-grant execute on function vortex_access.list_organization_accounts_projection(uuid, integer, uuid[])
-  to vortex_owner, vortex_record_adapter;
-
-comment on function vortex_access.list_organization_accounts_projection(uuid, integer, uuid[]) is
-  'The registered organisation-account projection with the same visibility as the two-argument form, optionally narrowed to the given account identities inside the scan.';
-
-alter function vortex_access.list_organization_accounts_projection(uuid, integer, uuid[]) owner to vortex_owner;
-
-grant execute on function vortex_access.list_organization_accounts_projection(uuid, integer, uuid[]) to postgres;
-
 revoke all on function vortex_access.list_organization_accounts_projection(
   uuid[], text, text, jsonb, integer
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
