@@ -20,6 +20,7 @@ export const CONTROL_EVENT_NAMES = Object.freeze([
   "form_submit",
   "tab_changed",
   "choices_requested",
+  "records_requested",
 ] as const);
 
 /** Declared semantic event names this form and action family can emit. */
@@ -72,6 +73,11 @@ export type ControlSemanticEvent =
       selectedKey?: string;
       selectedEvidence?: ReferenceChoiceSelectionEvidence;
     }>
+  | Readonly<{
+      event: "records_requested";
+      search?: string;
+      continuationToken?: string;
+    }>
   | Readonly<{ event: "form_ready" }>
   | Readonly<{ event: "form_reset" }>
   | Readonly<{
@@ -81,7 +87,12 @@ export type ControlSemanticEvent =
     }>
   | Readonly<{ event: "tab_changed"; tabKey: string }>;
 
-export type ControlEventHandler = (event: ControlSemanticEvent) => void | Promise<void>;
+/**
+ * A control's callback. Only `records_requested` answers with data: the page runtime reads one page
+ * of pickable records for the link input that asked and returns it, which the input parses
+ * fail-closed with {@link parseRecordChoicePage}.
+ */
+export type ControlEventHandler = (event: ControlSemanticEvent) => void | Promise<unknown>;
 
 /** Callbacks accepted by one control placement, keyed only by declared event name. */
 export type ControlEventHandlers = Readonly<
@@ -94,11 +105,30 @@ export type ChoiceOption = Readonly<{ key: string; label: string }>;
 /** The ready values a text input accepts. */
 export type TextInputPayload = Readonly<{ kind: "text_input"; value?: string; error?: string }>;
 
-/** The ready values a link input accepts: a stable record reference, never the record's values. */
+/**
+ * The ready values a link input accepts: a stable record reference and the title the viewer may
+ * read of it, never the record's other values.
+ */
 export type LinkInputPayload = Readonly<{
   kind: "link_input";
   value?: TypedRecordReference | null;
+  /** The linked record's title as the viewer may read it; present exactly with a value. */
+  title?: string;
   error?: string;
+}>;
+
+/** One record a link input offers: its identity, its title and its record type's name. */
+export type RecordChoiceOption = Readonly<{
+  recordTypeId: string;
+  recordId: string;
+  title: string;
+  typeLabel: string;
+}>;
+
+/** One page of pickable records, in the order the server read them. */
+export type RecordChoicePage = Readonly<{
+  choices: readonly RecordChoiceOption[];
+  nextContinuationToken?: string;
 }>;
 
 /** The ready values a structured rich-text input accepts. */
@@ -418,15 +448,64 @@ export const parseLinkInputPayload = (
   const record = requireRecord(value, "Projected control values must be an object", location);
   if (record.kind !== "link_input")
     return fail(`Expected 'link_input' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(record, ["kind", "value", "error"], location);
+  requireExactKeys(record, ["kind", "value", "title", "error"], location);
+  const reference =
+    record.value === undefined || record.value === null
+      ? undefined
+      : requireRecordReference(record.value, location);
+  if ((reference === undefined) !== (record.title === undefined))
+    return fail("A linked record carries its title, and only a linked record does", location);
   return Object.freeze({
     kind: "link_input",
     ...(record.value === undefined
       ? {}
-      : record.value === null
+      : reference === undefined
         ? { value: null }
-        : { value: requireRecordReference(record.value, location) }),
+        : {
+            value: reference,
+            title: requireNonEmptyString(record.title, "A linked record title must be text", location),
+          }),
     ...optionalError(record, location),
+  });
+};
+
+/** One page of pickable records as the page runtime returned it, validated fail-closed. */
+export const parseRecordChoicePage = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation = {},
+): RecordChoicePage => {
+  const record = requireRecord(value, "A record choice page must be an object", location);
+  requireExactKeys(record, ["choices", "nextContinuationToken"], location);
+  if (!Array.isArray(record.choices) || record.choices.length > 4_000)
+    return fail("Record choices must be a bounded array", location);
+  const choices = record.choices.map((item: unknown) => {
+    const choice = requireRecord(item, "A record choice must be an object", location);
+    requireExactKeys(choice, ["recordTypeId", "recordId", "title", "typeLabel"], location);
+    const reference = requireRecordReference(
+      { recordTypeId: choice.recordTypeId, recordId: choice.recordId },
+      location,
+    );
+    return Object.freeze({
+      ...reference,
+      title: requireNonEmptyString(choice.title, "A record choice title must be text", location),
+      typeLabel: requireNonEmptyString(
+        choice.typeLabel,
+        "A record type name must be text",
+        location,
+      ),
+    });
+  });
+  return Object.freeze({
+    choices: Object.freeze(choices),
+    ...(record.nextContinuationToken === undefined
+      ? {}
+      : {
+          nextContinuationToken: requireNonEmptyString(
+            record.nextContinuationToken,
+            "A continuation must be text",
+            location,
+          ),
+        }),
   });
 };
 
@@ -574,9 +653,9 @@ const parseDateTimeInputPayload = (
 export const parseChoiceInputPayload = (
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
-  releaseVersion?: "1.1.0" | "1.2.0" | "1.3.0",
+  releaseVersion?: "1.1.0" | "1.2.0",
 ): ChoiceInputPayload => {
-  if (releaseVersion === "1.2.0" || releaseVersion === "1.3.0")
+  if (releaseVersion === "1.2.0")
     return parseDependentChoiceInputPayload(value, location);
   const record = requireRecord(value, "Projected control values must be an object", location);
   if (record.kind !== "choice_input")

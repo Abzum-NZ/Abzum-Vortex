@@ -97,28 +97,6 @@ begin
 end
 $function$;
 
-create or replace function vortex_identity.list_organization_invitations_projection_internal(
-  p_organization_id uuid
-)
-returns table (
-  invitation_id uuid, invited_email text, invitation_state text,
-  invited_at timestamptz, expires_at timestamptz, revision bigint
-)
-language sql stable security definer set search_path = ''
-as $function$
-  select projected.*
-  from vortex_identity.list_organization_invitations_projection_internal(
-    p_organization_id, null, 'record_id', 'ascending', null, null
-  ) as projected
-$function$;
-
-revoke all on function vortex_identity.list_organization_invitations_projection_internal(uuid)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-comment on function vortex_identity.list_organization_invitations_projection_internal(uuid) is
-  'Identity-owned safe organisation-invitation projection with the original record-id ordering; delegates to the bounded scan.';
-alter function vortex_identity.list_organization_invitations_projection_internal(uuid) owner to vortex_owner;
-grant execute on function vortex_identity.list_organization_invitations_projection_internal(uuid) to postgres;
-
 revoke all on function vortex_identity.list_organization_invitations_projection_internal(
   uuid, uuid[], text, text, jsonb, integer
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

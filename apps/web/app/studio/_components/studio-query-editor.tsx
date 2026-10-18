@@ -4,7 +4,7 @@ import {
   changeInlineQuery, createInlineQuery, defaultQueryPageSize, deleteInlineQuery, deriveQueryKey, deriveQueryTotalAlias,
   inlineQueryRecordType, maximumQueryPageSize, queryGroupFieldTypes, queryTotalAccepts, queryTotalOperationLabels,
   type ApplicationSourceDocument, type ConditionNode, type InlineQuery, type InlineQueryAggregate, type InlineQueryInput,
-  type InlineQuerySort, type InlineRecordTypeReference,
+  type InlineQuerySort, type ApplicationUsePlace,
 } from "@vortex/platform/schema";
 import { StudioConditionControls, StudioOptionControl, validateStudioCondition } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
@@ -15,7 +15,7 @@ import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { Icon } from "@vortex/ui";
 import { StudioField } from "./studio-field";
-import { StudioReferencesAlert } from "./studio-references-alert";
+import { StudioReferencesAlert } from "./studio-used-in";
 import { readStudioQueryFilter, studioQueryFilterContext, writeStudioQueryFilter } from "../_lib/studio-query-filter";
 import type { StudioCompiledFields } from "../_lib/studio-data-model";
 
@@ -28,7 +28,7 @@ const inputTypes: readonly Readonly<{ value: InputType; label: string }>[] = [
   { value: "text", label: "Text" }, { value: "number", label: "Number" }, { value: "decimal_number", label: "Decimal number" },
   { value: "money", label: "Amount of money" },
   { value: "boolean", label: "Yes or no" }, { value: "date", label: "Date" }, { value: "date_time", label: "Date and time" },
-  { value: "record_reference", label: "A record" }, { value: "organisation_account_reference", label: "A person's account" },
+  { value: "record_reference", label: "A record" }, { value: "organization_account_reference", label: "A person's account" },
 ];
 const directions = [{ value: "ascending", label: "A to Z, low to high, old to new" }, { value: "descending", label: "Z to A, high to low, new to old" }];
 
@@ -102,7 +102,7 @@ function Section({ title, hint, children }: Readonly<{ title: string; hint?: str
  * inputs. Each Apply is one edit of the application draft. Delete is refused while anything uses it.
  */
 export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields, recordTypes, disabled, onPendingChange,
-  onApply, onDeleted, onShow }: Readonly<{
+  onApply, onDeleted }: Readonly<{
   source: Source; moduleKey: string; queryKey: string;
   /** The compiled fields of the saved draft, which the filter's typed controls need. */
   compiledFields: StudioCompiledFields | null;
@@ -113,7 +113,6 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
   /** Applies the changed source to the draft history; false when the draft moved on meanwhile. */
   onApply: (expected: Source, next: Source, message: string) => boolean;
   onDeleted: (recordKey: string | undefined) => void;
-  onShow: (reference: InlineRecordTypeReference) => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const module = source.body.modules.find((item) => item.key === moduleKey);
@@ -126,7 +125,7 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
   const [newInput, setNewInput] = useState<Readonly<{ label: string; type: InputType }>>({ label: "", type: "text" });
   const [issues, setIssues] = useState<readonly string[]>([]);
   const [message, setMessage] = useState("");
-  const [references, setReferences] = useState<readonly InlineRecordTypeReference[]>([]);
+  const [references, setReferences] = useState<readonly ApplicationUsePlace[]>([]);
   const [refusals, setRefusals] = useState(0);
   const pending = filterEdit !== null || JSON.stringify(form) !== JSON.stringify(initial);
   useEffect(() => { onPendingChange(pending); }, [pending, onPendingChange]);
@@ -388,7 +387,7 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
     </ul>}
     <section className="space-y-2 border-t border-border pt-3" aria-label="Delete">
       <Button type="button" size="sm" variant="destructive" disabled={disabled || pending} onClick={() => { void remove(); }}>Delete query</Button>
-      <StudioReferencesAlert key={refusals} name={form.label || query.key} action="deleted" references={references} onShow={onShow} />
+      <StudioReferencesAlert key={refusals} name={form.label || query.key} action="deleted" references={references} />
     </section>
     {confirmDialog}
   </form>;

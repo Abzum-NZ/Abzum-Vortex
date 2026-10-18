@@ -11,7 +11,7 @@
       "plural_name": "Store applications",
       "title_field": "name",
       "storage_contract_id": "srt_app_store_store_application",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": ["read"],
       "custom_actions": [],
@@ -140,7 +140,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {

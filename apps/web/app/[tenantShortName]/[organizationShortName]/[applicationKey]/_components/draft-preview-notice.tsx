@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Icon } from "@vortex/ui";
+import { FormattedTime, Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { DraftPreviewBoundNotice } from "./draft-preview-bound-notice";
 
@@ -22,10 +22,6 @@ export function DraftPreviewNotice({
   seedBound: number;
   seedBoundedPages: Readonly<Record<string, string>>;
 }>) {
-  const until = new Date(expiresAt).toLocaleString("en-NZ", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
   return (
     <div
       role="status"
@@ -36,7 +32,7 @@ export function DraftPreviewNotice({
       <p className="min-w-0 flex-1">
         <strong>Preview of draft revision {draftRevision}.</strong> It runs on a copy of the
         records you can see in the installed application; nothing saved here reaches it. It
-        ends{" "}{until}.
+        ends{" "}<FormattedTime iso={expiresAt} />.
       </p>
       <DraftPreviewBoundNotice seedBound={seedBound} seedBoundedPages={seedBoundedPages} />
       <Button variant="outline" size="sm" nativeButton={false} render={<Link href={studioHref} />}>
