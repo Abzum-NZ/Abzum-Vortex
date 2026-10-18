@@ -49,6 +49,10 @@ export function TextInput(props: TextInputProps): ReactElement {
     context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
   const note = inactiveNote(context);
 
+  // An optional email address, phone number or web address left blank has no value: it is cleared,
+  // never stored as empty text that is not an address.
+  const blankIsEmpty =
+    !required && (inputType === "email" || inputType === "tel" || inputType === "url");
   const [value, setValue] = useSeededState(context.values?.value ?? "");
   const invalidEmail =
     inputType === "email" &&
@@ -59,7 +63,7 @@ export function TextInput(props: TextInputProps): ReactElement {
   useFormField(
     fieldKey,
     props.placementId,
-    inputType === "email" && !required && value === "" ? null : value,
+    blankIsEmpty && value === "" ? null : value,
     missingRequired ? () => `${label} is required.` : undefined,
   );
   const validationError = useFormFieldError(fieldKey);
@@ -96,7 +100,7 @@ export function TextInput(props: TextInputProps): ReactElement {
     context.events?.field_changed?.({
       event: "field_changed",
       fieldKey,
-      value: inputType === "email" && !required && next === "" ? null : next,
+      value: blankIsEmpty && next === "" ? null : next,
     });
   };
 

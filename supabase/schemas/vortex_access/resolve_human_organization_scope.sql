@@ -22,6 +22,8 @@ declare
   resolved_organization_id uuid;
   resolved_account_id uuid;
 begin
+  perform pg_catalog.set_config('vortex_access.exclusive_organization_id', '', true);
+
   if p_identity_id is null
     or not vortex_platform.is_non_nil_uuid(p_identity_id::text)
     or p_organization_id is null

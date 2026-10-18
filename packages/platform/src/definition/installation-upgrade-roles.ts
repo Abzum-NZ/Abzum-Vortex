@@ -20,6 +20,16 @@ import {
 
 type AccessAdministration = ReturnType<typeof createOrganizationAccessAdministrationService>;
 
+const roleChangesJson = (changes: readonly ApplicationRoleChange[]): string =>
+  canonicalJson(
+    changes.map((change) => ({
+      ...change,
+      roleId: change.roleId ?? null,
+      liveRevision: change.liveRevision ?? null,
+      registrationRevision: change.registrationRevision ?? null,
+    })),
+  );
+
 /** What an upgrade that accepts role changes needs beyond the upgrade itself. */
 export type UpgradeRoleEnvironment = UpgradeEnvironment &
   Readonly<{ accessAdministration: AccessAdministration }>;
@@ -114,7 +124,7 @@ export const upgradeWithRoleChanges = async (
         const lockedChanges = applicationRoleChanges(locked.roles, state.selectedReleaseSet, [
           state.activeReleaseSet,
         ]);
-        if (canonicalJson(lockedChanges) !== canonicalJson(listed))
+        if (roleChangesJson(lockedChanges) !== roleChangesJson(listed))
           installationProblem("upgrade_role_revision_changed", "conflict");
       },
     );
