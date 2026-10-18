@@ -54,7 +54,7 @@ const listTemplates = async (
   let after: OrganizationAdministrationApplicationRoleTemplate["reference"] | undefined;
   for (;;) {
     const page = await administration.listApplicationRoleTemplates(session, selection, {
-      pageSize: 100,
+      pageSize: 40,
       ...(after === undefined ? {} : { after }),
     });
     if (page.kind !== "available")
