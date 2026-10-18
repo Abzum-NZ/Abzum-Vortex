@@ -341,7 +341,8 @@ export type DisplaySemanticEvent =
       value: string;
     }>;
 
-export type DisplayEventHandler = (event: DisplaySemanticEvent) => void;
+/** A handler may return the promise of the flow it started; the control stays busy until it settles. */
+export type DisplayEventHandler = (event: DisplaySemanticEvent) => void | Promise<unknown>;
 
 /** Callbacks accepted by one placement, keyed only by declared event name. */
 export type DisplayEventHandlers = Readonly<
