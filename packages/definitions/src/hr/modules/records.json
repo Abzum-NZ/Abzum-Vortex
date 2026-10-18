@@ -1237,6 +1237,7 @@
     {
       "id": "qry_hr_departments",
       "key": "hr_departments",
+      "label": "Departments",
       "record_type": "department",
       "inputs": [],
       "select": [
@@ -1258,6 +1259,7 @@
     {
       "id": "qry_hr_positions",
       "key": "hr_positions",
+      "label": "Positions",
       "record_type": "position",
       "inputs": [],
       "select": [
@@ -1280,6 +1282,7 @@
     {
       "id": "qry_hr_employees",
       "key": "hr_employees",
+      "label": "Employees",
       "record_type": "employee",
       "inputs": [],
       "select": [
@@ -1305,6 +1308,7 @@
     {
       "id": "qry_hr_leave_requests",
       "key": "hr_leave_requests",
+      "label": "Leave requests",
       "record_type": "leave_request",
       "inputs": [],
       "select": [
@@ -1364,6 +1368,7 @@
     {
       "id": "qry_hr_leave_entitlements",
       "key": "hr_leave_entitlements",
+      "label": "Leave entitlements",
       "record_type": "leave_entitlement",
       "inputs": [],
       "select": [

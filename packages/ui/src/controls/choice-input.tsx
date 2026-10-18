@@ -52,11 +52,11 @@ const SEARCHABLE_OPTION_THRESHOLD = 7;
 export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const context = resolveControlContext<ChoiceInputPayload>(props, [
     "field_changed",
-    ...(["1.1.0", "1.2.0", "1.3.0"].includes(props.metadata.releaseVersion)
+    ...(["1.1.0", "1.2.0"].includes(props.metadata.releaseVersion)
       ? ["choices_requested" as const]
       : []),
   ]);
-  const dependentRelease = ["1.2.0", "1.3.0"].includes(props.metadata.releaseVersion);
+  const dependentRelease = props.metadata.releaseVersion === "1.2.0";
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();

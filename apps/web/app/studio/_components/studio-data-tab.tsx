@@ -22,6 +22,7 @@ import { StudioRecordTypeSearch, StudioSearchOverview } from "./studio-search-se
 import { StudioRelationshipsSection } from "./studio-relationships-section";
 import { StudioModuleActions } from "./studio-module-actions";
 import { StudioRecordPipelines } from "./studio-record-pipelines";
+import { StudioRecordRules } from "./studio-record-rules";
 import {
   ModuleFieldsEditor, studioFieldPublication, type ModuleFieldEditorContext, type StudioLinkTarget,
   type StudioModuleOwnerApplication,
@@ -184,6 +185,8 @@ function RecordTypeInspector({ source, saved, moduleKey, recordKey, disabled, fi
       apply={(next, message) => apply(next, message)} />
     <StudioRecordPipelines source={source} moduleKey={moduleKey} recordKey={recordKey} publication={fieldContext.publication}
       disabled={disabled} apply={(next, message) => apply(next, message)} applyAction={applyInPlace} />
+    <StudioRecordRules source={source} moduleKey={moduleKey} recordKey={recordKey} disabled={disabled}
+      apply={(next, message) => apply(next, message)} />
     <section className="space-y-2 border-t border-border pt-3" aria-label="Delete">
       <Button type="button" size="sm" variant="destructive" disabled={disabled} onClick={() => { void remove(); }}>Delete record type</Button>
       <StudioReferencesAlert key={refusals} name={record.name} action="deleted" references={references} />

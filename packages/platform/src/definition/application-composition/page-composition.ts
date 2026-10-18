@@ -22,7 +22,7 @@ import {
   platformBlockReferenceSchema,
   releaseSettingDeclarations,
 } from "./platform-block-release";
-import { themeTokenValueSchema, applicationThemeSchema } from "./theme";
+import { applicationThemeSchema } from "./theme";
 
 const widthSchema = z.discriminatedUnion("kind", [
   z.object({ kind: sourceProvenanceUnchanged(z.literal("content")) }).strict(),
@@ -100,7 +100,9 @@ export const sourceResponsivePlacementSchema = z
   .strict();
 
 /** The canonical form of one authored placement layout: only a grid width changes its keys. */
-export const canonicalPlacementLayout = (value: Record<string, unknown>): Record<string, unknown> => {
+export const canonicalPlacementLayout = (
+  value: Record<string, unknown>,
+): Record<string, unknown> => {
   const width = value.width as Record<string, unknown>;
   return {
     visible: value.visible,
@@ -171,7 +173,6 @@ export type CompiledItemVortex = {
   usePermissionKey?: string | undefined;
   visibilityCondition?: z.infer<typeof conditionNodeSchema> | undefined;
   queryId?: string | undefined;
-  themeOverrides: Record<string, z.infer<typeof themeTokenValueSchema>>;
   responsive: z.infer<typeof responsivePlacementSchema>;
   slotOrders: Record<string, BreakpointOrder>;
 };
@@ -317,7 +318,6 @@ const compiledItemVortexSchema = z
     usePermissionKey: namespacedKeySchema.optional(),
     visibilityCondition: conditionNodeSchema.optional(),
     queryId: queryIdSchema.optional(),
-    themeOverrides: z.record(builderKeySchema, themeTokenValueSchema),
     responsive: responsivePlacementSchema,
     slotOrders: z.record(builderKeySchema, breakpointOrderSchema),
   })
@@ -363,7 +363,6 @@ export const compiledItemSchema: z.ZodType<CompiledItem> = z.lazy(() =>
 ) as unknown as z.ZodType<CompiledItem>;
 
 const compiledItemsSchema: z.ZodType<CompiledItem[]> = z.lazy(() => z.array(compiledItemSchema));
-
 
 /** The compiled root zone of a layout. */
 export const compiledRootZone = "content";

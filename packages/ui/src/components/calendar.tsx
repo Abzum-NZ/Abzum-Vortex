@@ -1,11 +1,26 @@
 "use client";
 
 import * as React from "react";
-import { DayPicker, getDefaultClassNames, type DayButton, type Locale } from "react-day-picker";
+import { DayPicker, getDefaultClassNames, type DayButton } from "react-day-picker";
 import { Icon } from "../icons/icon";
 import { cn } from "../lib/utils";
+import { formatIsoDate } from "../display/date-format";
+import { useDateFormatOptions } from "../display/date-format-context";
 
 import { Button, buttonVariants } from "./button";
+
+export const calendarDay = (date: Date): string =>
+  `${String(date.getFullYear()).padStart(4, "0")}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+const calendarLabel = (
+  date: Date,
+  locale: string | undefined,
+  style: "shortMonth" | "calendarDay",
+): string => {
+  const label = formatIsoDate(calendarDay(date), { locale }, style);
+  if (label === undefined) throw new Error("A calendar day must be a valid date");
+  return label;
+};
 
 function Calendar({
   className,
@@ -21,6 +36,8 @@ function Calendar({
   buttonVariant?: React.ComponentProps<typeof Button>["variant"];
 }) {
   const defaultClassNames = getDefaultClassNames();
+  const { locale: viewerLocale } = useDateFormatOptions();
+  const formatLocale = locale?.code ?? viewerLocale;
 
   return (
     <DayPicker
@@ -34,7 +51,7 @@ function Calendar({
       captionLayout={captionLayout}
       locale={locale}
       formatters={{
-        formatMonthDropdown: (date) => date.toLocaleString(locale?.code, { month: "short" }),
+        formatMonthDropdown: (date) => calendarLabel(date, formatLocale, "shortMonth"),
         ...formatters,
       }}
       classNames={{
@@ -128,7 +145,7 @@ function Calendar({
 
           return <Icon name="chevron-down" className={cn("size-4", className)} style={style} />;
         },
-        DayButton: ({ ...props }) => <CalendarDayButton locale={locale} {...props} />,
+        DayButton: ({ ...props }) => <CalendarDayButton locale={formatLocale} {...props} />,
         WeekNumber: ({ children, ...props }) => {
           return (
             <td {...props}>
@@ -151,7 +168,7 @@ function CalendarDayButton({
   modifiers,
   locale,
   ...props
-}: React.ComponentProps<typeof DayButton> & { locale?: Partial<Locale> | undefined }) {
+}: React.ComponentProps<typeof DayButton> & { locale?: string | undefined }) {
   const defaultClassNames = getDefaultClassNames();
 
   const ref = React.useRef<HTMLButtonElement>(null);
@@ -163,7 +180,7 @@ function CalendarDayButton({
     <Button
       variant="ghost"
       size="icon"
-      data-day={day.date.toLocaleDateString(locale?.code)}
+      data-day={calendarLabel(day.date, locale, "calendarDay")}
       data-selected-single={
         modifiers.selected &&
         !modifiers.range_start &&

@@ -22,7 +22,8 @@ begin
   end if;
 
   return vortex_record.load_record_access_facts_from_installation_internal(
-    p_record_type_id, 'transfer', p_record_id, p_expected_concurrency_number, p_installation
+    p_record_type_id, 'transfer', p_record_id, p_expected_concurrency_number, p_installation,
+    null::jsonb
   );
 end
 $function$;

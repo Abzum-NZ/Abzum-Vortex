@@ -1,5 +1,5 @@
 "use client";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent } from "react";
 import type { SourceApplicationThemeSelection } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
@@ -43,15 +43,13 @@ function Swatch({ dimension, value, disabled, onPick }: Readonly<{
  * publication runs before it reaches the draft, and the canvas then draws it; Studio's own frame
  * keeps the platform theme. Only options of the pinned shadcn 4.21.0 catalogue are offered.
  */
-export function StudioThemePanel({ selection, options, disabled, hidden, onChange, advanced }: Readonly<{
+export function StudioThemePanel({ selection, options, disabled, hidden, onChange }: Readonly<{
   selection: SourceApplicationThemeSelection;
   options: StudioThemeOptions;
   disabled: boolean;
   hidden: boolean;
   /** Puts a selection in the draft after it resolves, or says why it was refused. */
   onChange: (next: SourceApplicationThemeSelection, what: string) => Promise<StudioThemeChangeOutcome & Readonly<{ problems?: readonly string[] }>>;
-  /** The individual token settings, for fine adjustments. */
-  advanced: ReactNode;
 }>) {
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -132,9 +130,5 @@ export function StudioThemePanel({ selection, options, disabled, hidden, onChang
         {entry.options.map((option) => <NativeSelectOption key={option.id} value={option.id}>{option.label}</NativeSelectOption>)}
       </NativeSelect>}
     </StudioField>)}
-    <details className="rounded-md border border-border p-3">
-      <summary className="cursor-pointer text-sm font-medium">Fine-tune individual colours and type</summary>
-      <div className="mt-3">{advanced}</div>
-    </details>
   </StudioPanelShell>;
 }

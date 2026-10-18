@@ -130,9 +130,7 @@ const buildInstallationRuntimeBundleWriteCommand = (
         contentFingerprint: application.contentFingerprint,
         resolutionFingerprint: application.resolutionFingerprint,
         dependencyManifest: application.dependencyManifest,
-        ...(application.platformCompatibilityVersion === undefined
-          ? {}
-          : { platformCompatibilityVersion: application.platformCompatibilityVersion }),
+        platformCompatibilityVersion: application.platformCompatibilityVersion,
       },
       content: pageContent,
       shells,

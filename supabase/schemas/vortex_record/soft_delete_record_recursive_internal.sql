@@ -46,7 +46,7 @@ begin
   p_visited := pg_catalog.array_append(p_visited, identity_value);
 
   loaded := vortex_record.load_record_access_facts_internal(
-    p_record_type_id, 'delete', p_record_id, p_expected_concurrency_number
+    p_record_type_id, 'delete', p_record_id, p_expected_concurrency_number, null::jsonb
   );
   if loaded ->> 'outcome' = 'conflict' then
     raise exception using errcode = '40001', message = 'Record delete revision is stale';
@@ -138,7 +138,7 @@ begin
     end if;
     source_loaded := vortex_record.load_record_access_facts_internal(
       source_catalogue.record_type_id, source_action_kind, incoming.from_record_id,
-      source_concurrency
+      source_concurrency, null::jsonb
     );
     if source_loaded ->> 'outcome' <> 'loaded' then
       continue;

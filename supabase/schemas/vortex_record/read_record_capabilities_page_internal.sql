@@ -288,30 +288,11 @@ begin
 end
 $function$;
 
-create or replace function vortex_record.read_record_capabilities_page_internal(
-  p_record_type_id uuid,
-  p_rows jsonb
-)
-returns jsonb
-language sql
-volatile
-security invoker
-set search_path = ''
-as $function$
-  select vortex_record.read_record_capabilities_page_internal(p_record_type_id, p_rows, null::jsonb)
-$function$;
-
 alter function vortex_record.read_record_capabilities_page_internal(uuid,jsonb,jsonb)
-  owner to vortex_record_adapter;
-alter function vortex_record.read_record_capabilities_page_internal(uuid,jsonb)
   owner to vortex_record_adapter;
 
 revoke all on function vortex_record.read_record_capabilities_page_internal(uuid,jsonb,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-revoke all on function vortex_record.read_record_capabilities_page_internal(uuid,jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_record.read_record_capabilities_page_internal(uuid,jsonb,jsonb) is
   'Private list capability pass: evaluates simple action declarations across readable page rows together, while complex routes use their exact single-record path; a row from the page read pass carries only its compact record scope and shares the one page envelope, so the action jobs and the page-wide facts are worked out once for the page.';
-comment on function vortex_record.read_record_capabilities_page_internal(uuid,jsonb) is
-  'Private list capability pass over rows that each carry their complete read facts; delegates to the envelope variant.';

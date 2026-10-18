@@ -294,7 +294,7 @@ flowchart LR
     DEF[Record-type definition] -->|storage_contract_id| CATALOG[Record storage catalog]
     CATALOG --> TABLE[record_data.rt_storage_token]
     TABLE --> SCOPE{Declared storage scope}
-    SCOPE -->|organisation_shared| ORG[Keyed by organisation_id]
+    SCOPE -->|organization_shared| ORG[Keyed by organisation_id]
     SCOPE -->|application_contained| APP[Keyed by organisation_id and application_root_id]
     FIELD[Permanent field_id] --> COLUMN[f_storage_token column]
     COLUMN --> TABLE

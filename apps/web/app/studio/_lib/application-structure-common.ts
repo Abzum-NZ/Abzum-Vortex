@@ -84,7 +84,6 @@ export const blockItem = (release: StructureRelease, id: string, settings: Recor
     vortex: {
       block: { block_id: String(release.blockId), release_version: String(release.releaseVersion) },
       ...vortex,
-      theme_overrides: {},
       responsive: { desktop: { visible: true, width: { kind: "fill" }, height: { kind: "content" } } },
     },
   },

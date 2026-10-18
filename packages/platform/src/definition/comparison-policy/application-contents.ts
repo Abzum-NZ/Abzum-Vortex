@@ -1,5 +1,7 @@
 import type { ApplicationContent, VersionImpactReason } from "../../schema";
-import { placementSettings } from "../application-composition-catalogue";
+import { placementBlockRelease, placementSettings } from "../application-composition-catalogue";
+import { releaseSettingDeclarations } from "../application-composition/platform-block-release";
+import type { BlockPropertySchemaContract } from "../application-composition/block-property-schema";
 import {
   type RecordValue,
   compareUnknownText,
@@ -10,6 +12,7 @@ import {
   compareSet,
   compareKeyed,
   compareOrderedEntries,
+  presentationListEntry,
   presentationOnlyValue,
   finaliseReasons,
   sorted,
@@ -28,6 +31,7 @@ type PlacementContext = {
   item: RecordValue;
   vortex: RecordValue;
   settings: RecordValue;
+  declarations: readonly BlockPropertySchemaContract[];
   parent: string;
   order: Record<"desktop" | "tablet" | "phone", number>;
   publicPage: boolean;
@@ -46,13 +50,19 @@ const itemSlots = (item: RecordValue): [string, RecordValue[]][] => {
 const placementSubtreeIsOptionalPresentation = (item: RecordValue): boolean => {
   const props = asRecord(item.props);
   const vortex = asRecord(props.vortex);
+  const release = placementBlockRelease(vortex.block);
+  const declarations = releaseSettingDeclarations(release);
   return (
     vortex.viewPermissionKey === undefined &&
     vortex.usePermissionKey === undefined &&
     vortex.visibilityCondition === undefined &&
     vortex.queryId === undefined &&
     // Flow bindings for interactive entries are compared separately as major changes.
-    Object.values(placementSettings(props)).every((value) => presentationOnlyValue(value)) &&
+    Object.entries(placementSettings(props)).every(([key, value]) => {
+      const declaration = declarations.find((property) => property.key === key);
+      if (declaration === undefined) throw new Error(`Block release has no setting '${key}'`);
+      return presentationOnlyValue(value, declaration);
+    }) &&
     itemSlots(item).every(([, children]) =>
       children.every((child) => placementSubtreeIsOptionalPresentation(asRecord(child))),
     )
@@ -80,6 +90,7 @@ const collectPlacementSlot = (
       item,
       vortex,
       settings: placementSettings(props),
+      declarations: releaseSettingDeclarations(placementBlockRelease(vortex.block)),
       parent,
       order: {
         desktop: index,
@@ -243,16 +254,6 @@ const comparePlacements = (
       "configuration",
       id,
     );
-    pushChange(
-      reasons,
-      before.vortex.themeOverrides,
-      after.vortex.themeOverrides,
-      "patch",
-      "presentation_changed",
-      "block_placement",
-      "theme",
-      id,
-    );
     for (const key of ["viewPermissionKey", "usePermissionKey"])
       pushChange(
         reasons,
@@ -295,14 +296,32 @@ const comparePlacements = (
       id,
     );
     for (const key of new Set([...Object.keys(before.settings), ...Object.keys(after.settings)])) {
+      const declaration =
+        after.declarations.find((property) => property.key === key) ??
+        before.declarations.find((property) => property.key === key);
+      if (declaration === undefined) throw new Error(`Block release has no setting '${key}'`);
       const previousSetting = asRecord(before.settings[key]);
       const candidateSetting = asRecord(after.settings[key]);
       // Display list entries may be appended or have their text edited; other settings and
       // references remain behaviour changes. A list that exists on one side only compares as
       // an empty list on the other, so a whole new list is an append (minor), never a patch.
-      const previousItems = previousSetting?.kind === "list" ? (previousSetting.items as unknown[]) : previousSetting === undefined ? [] : undefined;
-      const candidateItems = candidateSetting?.kind === "list" ? (candidateSetting.items as unknown[]) : candidateSetting === undefined ? [] : undefined;
-      if (previousItems !== undefined && candidateItems !== undefined && (previousSetting !== undefined || candidateSetting !== undefined))
+      const previousItems =
+        previousSetting?.kind === "list"
+          ? (previousSetting.items as unknown[])
+          : previousSetting === undefined
+            ? []
+            : undefined;
+      const candidateItems =
+        candidateSetting?.kind === "list"
+          ? (candidateSetting.items as unknown[])
+          : candidateSetting === undefined
+            ? []
+            : undefined;
+      if (
+        previousItems !== undefined &&
+        candidateItems !== undefined &&
+        (previousSetting !== undefined || candidateSetting !== undefined)
+      )
         compareOrderedEntries(
           reasons,
           previousItems,
@@ -310,11 +329,15 @@ const comparePlacements = (
           "block_placement",
           id,
           "behavior",
-          (entry) => presentationOnlyValue(entry, undefined, key),
-          key,
+          (entry) => presentationListEntry(entry, declaration),
+          declaration,
         );
       else {
-        const presentationOnly = presentationOnlyValue(candidateSetting, previousSetting, key);
+        const presentationOnly = presentationOnlyValue(
+          candidateSetting,
+          declaration,
+          previousSetting,
+        );
         pushChange(
           reasons,
           before.settings[key],

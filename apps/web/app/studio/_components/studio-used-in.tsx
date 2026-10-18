@@ -26,7 +26,8 @@ export function StudioPlaceOpenerProvider({ opener, children }: Readonly<{ opene
   return <OpenerContext.Provider value={opener}>{children}</OpenerContext.Provider>;
 }
 
-const useOpener = (): StudioPlaceOpener => {
+/** The workspace's place opener, for a control that opens an item's place itself (a rule's flow). */
+export const useStudioPlaceOpener = (): StudioPlaceOpener => {
   const opener = useContext(OpenerContext);
   if (opener === null) throw new Error("Studio places are shown inside the Studio workspace only.");
   return opener;
@@ -38,7 +39,7 @@ const placesWord = (count: number) => count === 1 ? "one place" : `${count} plac
 export function StudioPlaceList({ places, label, onBeforeOpen }: Readonly<{
   places: readonly ApplicationUsePlace[]; label: string; onBeforeOpen?: (() => void) | undefined;
 }>) {
-  const opener = useOpener();
+  const opener = useStudioPlaceOpener();
   return <ul className="list-disc space-y-1 pl-5" aria-label={label}>
     {places.map((place, index) => {
       const name = opener.nameOf(place);

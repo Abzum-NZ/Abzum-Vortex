@@ -6,7 +6,7 @@ import {
   type ApplicationSourceDocument, type ConditionNode, type InlineQuery, type InlineQueryAggregate, type InlineQueryInput,
   type InlineQuerySort, type ApplicationUsePlace,
 } from "@vortex/platform/schema";
-import { StudioConditionControls, StudioOptionControl } from "@vortex/ui/studio";
+import { StudioConditionControls, StudioOptionControl, validateStudioCondition } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
@@ -26,8 +26,9 @@ type InputType = InlineQueryInput["type"];
 /** The input types a query offers, with the words the editor uses for them. */
 const inputTypes: readonly Readonly<{ value: InputType; label: string }>[] = [
   { value: "text", label: "Text" }, { value: "number", label: "Number" }, { value: "decimal_number", label: "Decimal number" },
+  { value: "money", label: "Amount of money" },
   { value: "boolean", label: "Yes or no" }, { value: "date", label: "Date" }, { value: "date_time", label: "Date and time" },
-  { value: "record_reference", label: "A record" }, { value: "organisation_account_reference", label: "A person's account" },
+  { value: "record_reference", label: "A record" }, { value: "organization_account_reference", label: "A person's account" },
 ];
 const directions = [{ value: "ascending", label: "A to Z, low to high, old to new" }, { value: "descending", label: "Z to A, high to low, new to old" }];
 
@@ -42,6 +43,22 @@ const formOf = (query: InlineQuery): Form => ({
   label: query.label ?? "", description: query.description ?? "", select: query.select, sort: query.sort,
   group_by: query.group_by, aggregates: query.aggregates, pageSize: String(query.page_size), inputs: query.inputs,
 });
+
+/** The input keys a filter compares a field with. */
+const filterParameters = (filter: unknown): Set<string> => {
+  const found = new Set<string>();
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) { value.forEach(visit); return; }
+    if (value === null || typeof value !== "object") return;
+    for (const [key, child] of Object.entries(value)) {
+      if (key === "value") continue;
+      if (key === "parameter" && typeof child === "string") found.add(child);
+      else visit(child);
+    }
+  };
+  visit(filter);
+  return found;
+};
 
 const moved = <T,>(items: readonly T[], index: number, by: -1 | 1): T[] => {
   const next = [...items];
@@ -65,6 +82,10 @@ function Entry({ label, index, count, disabled, onMove, onRemove, children }: Re
       <Icon name="close" /></Button>
   </li>;
 }
+
+/** A label read by screen readers only, for a control whose visible text already says what it does. */
+const ScreenReaderLabel = ({ id, children }: Readonly<{ id: string; children: string }>) =>
+  <Label htmlFor={id} className="sr-only">{children}</Label>;
 
 function Section({ title, hint, children }: Readonly<{ title: string; hint?: string; children: ReactNode }>) {
   return <fieldset className="space-y-2 border-t border-border pt-3">
@@ -138,6 +159,21 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
       .map((option) => `${option.value} (${option.label})`).join(", ")}`);
 
   const filterValue = filterEdit === null ? reading?.kind === "read" ? reading.condition : undefined : filterEdit.condition;
+  const retainedFilterProblems = (): string[] => {
+    if (reading?.kind === "read" && reading.condition !== undefined && context !== undefined) {
+      const validation = validateStudioCondition(reading.condition, context);
+      return validation.isValid ? []
+        : validation.issues.map((issue) => `Filter${issue.pointer === "" ? "" : ` (${issue.pointer})`}: ${issue.message}.`);
+    }
+    // Without the saved fields the filter can't be read here, so a changed input it uses is refused.
+    const before = new Map(query.inputs.map((input) => [input.key, input.type] as const));
+    return [...filterParameters(query.filter)].flatMap((key) => {
+      const now = form.inputs.find((input) => input.key === key);
+      return now !== undefined && before.get(key) !== undefined && before.get(key) !== now.type
+        ? [`Filter: it compares a field with the input ${now.label}, whose type changed. Save the draft to edit the filter, or put the type back.`]
+        : [];
+    });
+  };
   const reset = () => { setForm(initial); setFilterEdit(null); setFilterEpoch((value) => value + 1); setIssues([]); setMessage(""); };
   const apply = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -150,6 +186,14 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
     const filter = filterEdit === null ? query.filter
       : writeStudioQueryFilter(filterEdit.condition, (fieldId) => compiled?.find((field) => field.fieldId === fieldId)?.key);
     if (filter === undefined) { setIssues(["Filter: it names a field that is not in this record type any more."]); return; }
+    // A filter kept as it was is checked again against the inputs as they are now: an input whose
+    // type changed can leave a comparison with it that no longer fits.
+    const retained = filterEdit === null && query.filter !== null ? retainedFilterProblems() : [];
+    if (retained.length > 0) {
+      setIssues(retained);
+      setMessage("The query was not changed. Your entries are kept; change the filter or the input, or clear the filter.");
+      return;
+    }
     const result = changeInlineQuery(source, moduleKey, queryKey, {
       label: form.label, description: form.description, select: [...form.select], sort: [...form.sort],
       group_by: [...form.group_by], aggregates: [...form.aggregates], inputs: [...form.inputs], filter,
@@ -212,8 +256,9 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
           <span className="text-sm">{labelOf(key)}</span>
         </Entry>)}</ol>
       {unselected.length === 0 ? <p className="text-xs text-muted-foreground">Every field is a column.</p>
-        : <StudioOptionControl id={`query-${queryKey}-add-column`} value="" unset="Add a column…" disabled={disabled}
-          options={fieldOptions(unselected)} onChange={(key) => { if (key !== "") change({ select: [...form.select, key] }); }} />}
+        : <><ScreenReaderLabel id={`query-${queryKey}-add-column`}>Add a column</ScreenReaderLabel>
+          <StudioOptionControl id={`query-${queryKey}-add-column`} value="" unset="Add a column…" disabled={disabled}
+          options={fieldOptions(unselected)} onChange={(key) => { if (key !== "") change({ select: [...form.select, key] }); }} /></>}
     </Section>
 
     <Section title="Filter" hint="Which records the query lists. Compare a field with a fixed value or with one of the query's inputs.">
@@ -238,9 +283,10 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
             onChange={(direction) => change({ sort: form.sort.map((item, at) => at === index ? { ...item, direction: direction as InlineQuerySort["direction"] } : item) })} />
         </Entry>)}</ol>
       {sortable.filter((key) => !form.sort.some((sort) => sort.field === key)).length === 0 ? null
-        : <StudioOptionControl id={`query-${queryKey}-add-sort`} value="" unset="Add a sort…" disabled={disabled}
+        : <><ScreenReaderLabel id={`query-${queryKey}-add-sort`}>Add a sort</ScreenReaderLabel>
+          <StudioOptionControl id={`query-${queryKey}-add-sort`} value="" unset="Add a sort…" disabled={disabled}
           options={fieldOptions(sortable.filter((key) => !form.sort.some((sort) => sort.field === key)))}
-          onChange={(key) => { if (key !== "") change({ sort: [...form.sort, { field: key, direction: "ascending" }] }); }} />}
+          onChange={(key) => { if (key !== "") change({ sort: [...form.sort, { field: key, direction: "ascending" }] }); }} /></>}
     </Section>
 
     <Section title="Grouping and totals" hint="Groups and totals make the query a summary: it then feeds Summary values, Charts and Boards. A Records table lists a query without them.">
@@ -250,14 +296,15 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
           onRemove={() => change({ group_by: form.group_by.filter((item) => item !== key), sort: form.sort.filter((sort) => sort.field !== key) })}>
           <span className="text-sm">Group by {labelOf(key)}</span>
         </Entry>)}</ol>
-      {groupable.length === 0 ? null : <StudioOptionControl id={`query-${queryKey}-add-group`} value="" unset="Group by…" disabled={disabled}
+      {groupable.length === 0 ? null : <><ScreenReaderLabel id={`query-${queryKey}-add-group`}>Group by</ScreenReaderLabel>
+        <StudioOptionControl id={`query-${queryKey}-add-group`} value="" unset="Group by…" disabled={disabled}
         options={fieldOptions(groupable)} onChange={(key) => {
           if (key === "") return;
           const group_by = [...form.group_by, key];
           // A grouped query sorts by its groups only.
           const kept = form.sort.filter((sort) => group_by.includes(sort.field));
           change({ group_by, sort: kept.length > 0 ? kept : [{ field: key, direction: "ascending" }] });
-        }} />}
+        }} /></>}
       <ol className="list-none space-y-1" aria-label="Totals">{form.aggregates.map((total, index) =>
         <Entry key={total.alias} label={`total ${index + 1}`} index={index} count={form.aggregates.length} disabled={disabled}
           onMove={(by) => change({ aggregates: moved(form.aggregates, index, by) })}
@@ -273,13 +320,14 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
               const replaced = { operation, ...(field === undefined ? {} : { field }), alias: deriveQueryTotalAlias(operation, field, others) };
               change({ aggregates: form.aggregates.map((item, at) => at === index ? replaced as InlineQueryAggregate : item) });
             }} />
-          {total.operation === "count" ? null : <StudioOptionControl id={`query-${queryKey}-total-${index}-field`} value={total.field ?? ""}
+          {total.operation === "count" ? null : <><ScreenReaderLabel id={`query-${queryKey}-total-${index}-field`}>{`Field of total ${index + 1}`}</ScreenReaderLabel>
+            <StudioOptionControl id={`query-${queryKey}-total-${index}-field`} value={total.field ?? ""}
             unset="Choose a field…" disabled={disabled} options={fieldOptions(totalFields(total.operation))}
             onChange={(field) => {
               const others = new Set([...form.select, ...form.aggregates.filter((_, at) => at !== index).map((item) => item.alias)]);
               change({ aggregates: form.aggregates.map((item, at) => at === index
                 ? { ...item, ...(field === "" ? {} : { field }), alias: deriveQueryTotalAlias(item.operation, field === "" ? undefined : field, others) } : item) });
-            }} />}
+            }} /></>}
         </Entry>)}</ol>
       <Button type="button" size="sm" variant="outline" disabled={disabled || form.aggregates.length >= 20}
         onClick={() => change({ aggregates: [...form.aggregates, { operation: "count", alias: deriveQueryTotalAlias("count", undefined, takenColumns()) }] })}>
@@ -301,6 +349,7 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
               onClick={() => change({ inputs: form.inputs.filter((_, at) => at !== index) })}><Icon name="close" /></Button>
           </div>
           <p className="text-xs text-muted-foreground">Key: {input.key}</p>
+          <ScreenReaderLabel id={`query-${queryKey}-input-${index}-type`}>{`Type of input ${input.label}`}</ScreenReaderLabel>
           <StudioOptionControl id={`query-${queryKey}-input-${index}-type`} value={input.type} disabled={disabled} options={inputTypes}
             onChange={(type) => {
               // A new type starts without the old type's record types and validation.
@@ -308,9 +357,10 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
               change({ inputs: form.inputs.map((item, at) => at !== index ? item : { ...base, type,
                 ...(type === "record_reference" ? { record_types: [recordTypes[0]?.key ?? ""] } : {}) } as InlineQueryInput) });
             }} />
-          {input.type === "record_reference" && <StudioOptionControl id={`query-${queryKey}-input-${index}-record`}
+          {input.type === "record_reference" && <><ScreenReaderLabel id={`query-${queryKey}-input-${index}-record`}>{`Record type of input ${input.label}`}</ScreenReaderLabel>
+            <StudioOptionControl id={`query-${queryKey}-input-${index}-record`}
             value={(input as { record_types: string[] }).record_types[0] ?? ""} disabled={disabled} options={recordTypes.map((item) => ({ value: item.key, label: item.label }))}
-            onChange={(recordType) => setInput(index, { record_types: [recordType] })} />}
+            onChange={(recordType) => setInput(index, { record_types: [recordType] })} /></>}
           <div className="flex items-center gap-2">
             <Checkbox id={`query-${queryKey}-input-${index}-required`} checked={input.required} disabled={disabled}
               onCheckedChange={(checked) => setInput(index, { required: checked === true })} />
@@ -320,6 +370,7 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
       <div className="flex flex-wrap items-end gap-2">
         <Input aria-label="Name of a new input" placeholder="New input, for example Company" value={newInput.label} maxLength={60}
           disabled={disabled} className="min-w-0 flex-1" onChange={(event) => setNewInput({ ...newInput, label: event.target.value })} />
+        <ScreenReaderLabel id={`query-${queryKey}-new-input-type`}>Type of the new input</ScreenReaderLabel>
         <StudioOptionControl id={`query-${queryKey}-new-input-type`} value={newInput.type} disabled={disabled} options={inputTypes}
           onChange={(type) => setNewInput({ ...newInput, type: type as InputType })} />
         <Button type="button" size="sm" variant="outline" disabled={disabled || newInput.label.trim() === ""} onClick={addInput}>Add input</Button>

@@ -54,6 +54,7 @@ export { RichTextDocumentView, richTextToPlainText } from "./rich-text";
 // Cell Formatting & Display
 export { DisplayCellView, cellValueToText } from "./cell";
 export { formatIsoDate } from "./date-format";
+export { FormattedTime } from "./date-format-context";
 // Display State Container & Helpers
 export {
   DisplayStateContainer,
@@ -74,7 +75,7 @@ export { SummaryValuesDisplay } from "./summary-values";
 export { type DisplayRenderProps } from "./context";
 
 // Display Registrations & Registry
-export { DISPLAY_COMPONENT_REGISTRATIONS, createDisplayComponentRegistry } from "./registrations";
+export { DISPLAY_COMPONENT_REGISTRATIONS } from "./registrations";
 
 export {
   QueryNoticeDisplay,
