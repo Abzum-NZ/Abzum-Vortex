@@ -46,7 +46,7 @@ begin
       message = 'Record-share grant proposal requires an application context';
   end if;
 
-  -- Take the organisation governance lock before evaluating any authority, so a
+  -- Take the organisation's shared Access lock before evaluating any authority, so a
   -- concurrent authority change cannot land between the check and the write.
   select version.current_version into locked_access_version
   from vortex_access.organization_access_versions as version
@@ -55,7 +55,7 @@ begin
   join vortex_identity.tenants as tenant on tenant.tenant_id = organization.tenant_id
   where version.organization_id = context_organization_id
     and organization.state = 'active' and tenant.state = 'active'
-  for update of version;
+  for share of version;
   if not found or locked_access_version is distinct from context_access_version then
     raise exception using errcode = '42501',
       message = 'Record-share grant proposal is unavailable';

@@ -363,10 +363,34 @@ const currentIdentityLookupMatches = (
 };
 
 class DatabasePublicationReader implements DefinitionPublicationReader {
+  /**
+   * Module release reads within this transaction. A publication pass resolves the same used
+   * Modules for every inline Module and for the Application, and each read is parsed and
+   * verified, so one transaction reads each exact release and each release page once. A write
+   * that can move a current release, and the end of a rehearsal (whose releases are undone),
+   * forget them.
+   */
+  private readonly moduleReleaseReads = new Map<string, Promise<ResolvableModuleRelease | undefined>>();
+  private readonly moduleReleasePageReads = new Map<string, Promise<ResolvableModuleReleasePage>>();
+
   constructor(
     protected readonly transaction: RequestDatabaseTransaction,
     private readonly context: SessionContext,
   ) {}
+
+  protected forgetModuleReleaseReads(): void {
+    this.moduleReleaseReads.clear();
+    this.moduleReleasePageReads.clear();
+  }
+
+  /** A new release of one root moves only that root's current release. */
+  protected forgetModuleReleaseReadsOf(rootId: string, key: string): void {
+    const root = String(rootId).toLowerCase();
+    for (const memoKey of [...this.moduleReleaseReads.keys()])
+      if ((JSON.parse(memoKey) as unknown[])[1] === root) this.moduleReleaseReads.delete(memoKey);
+    for (const memoKey of [...this.moduleReleasePageReads.keys()])
+      if ((JSON.parse(memoKey) as unknown[])[1] === key) this.moduleReleasePageReads.delete(memoKey);
+  }
 
   async readOwnedModuleRoots(applicationRootId: string): Promise<readonly OwnedModuleRoot[]> {
     const rows = await this.transaction.query`
@@ -503,7 +527,20 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     return parsed.data;
   }
 
-  async readModuleReleasePage(
+  readModuleReleasePage(
+    organizationId: typeof this.context.organizationId,
+    key: string,
+    cursor?: ModuleReleasePageCursor,
+  ): Promise<ResolvableModuleReleasePage> {
+    const memoKey = JSON.stringify([organizationId, key, cursor ?? null]);
+    const known = this.moduleReleasePageReads.get(memoKey);
+    if (known !== undefined) return known;
+    const read = this.queryModuleReleasePage(organizationId, key, cursor);
+    this.moduleReleasePageReads.set(memoKey, read);
+    return read;
+  }
+
+  private async queryModuleReleasePage(
     organizationId: typeof this.context.organizationId,
     key: string,
     cursor?: ModuleReleasePageCursor,
@@ -563,7 +600,20 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     };
   }
 
-  async readModuleRelease(
+  readModuleRelease(
+    organizationId: typeof this.context.organizationId,
+    rootId: Parameters<DefinitionPublicationReader["readModuleRelease"]>[1],
+    releaseRevision: number,
+  ): Promise<ResolvableModuleRelease | undefined> {
+    const memoKey = JSON.stringify([organizationId, String(rootId).toLowerCase(), releaseRevision]);
+    const known = this.moduleReleaseReads.get(memoKey);
+    if (known !== undefined) return known;
+    const read = this.queryModuleRelease(organizationId, rootId, releaseRevision);
+    this.moduleReleaseReads.set(memoKey, read);
+    return read;
+  }
+
+  private async queryModuleRelease(
     organizationId: typeof this.context.organizationId,
     rootId: Parameters<DefinitionPublicationReader["readModuleRelease"]>[1],
     releaseRevision: number,
@@ -925,6 +975,7 @@ class DatabasePublicationTransaction
     applicationRootId: string,
     source: ModuleSourceDocument,
   ): Promise<OwnedModuleRoot> {
+    this.forgetModuleReleaseReads();
     const rows = await this.transaction.query`
       select root_id, definition_key, draft_revision, published_revision as current_release_revision,
         source_fingerprint
@@ -946,6 +997,7 @@ class DatabasePublicationTransaction
     root: OwnedModuleRoot,
     source: ModuleSourceDocument,
   ): Promise<OwnedModuleRoot> {
+    this.forgetModuleReleaseReads();
     const rows = await this.transaction.query`
       select root_id, definition_key, draft_revision, current_release_revision, source_fingerprint
       from vortex_definition.stage_owned_module_source(
@@ -964,11 +1016,16 @@ class DatabasePublicationTransaction
   async rehearse<Result>(operation: () => Promise<Result>): Promise<Result> {
     // Nested rehearsals reuse the name: rollback and release address the most recent savepoint.
     await this.transaction.query`savepoint vortex_publication_rehearsal`;
-    // A failure aborts the whole request transaction, so only success needs the rollback.
-    const result = await operation();
-    await this.transaction.query`rollback to savepoint vortex_publication_rehearsal`;
-    await this.transaction.query`release savepoint vortex_publication_rehearsal`;
-    return result;
+    try {
+      // A failure aborts the whole request transaction, so only success needs the rollback.
+      const result = await operation();
+      await this.transaction.query`rollback to savepoint vortex_publication_rehearsal`;
+      await this.transaction.query`release savepoint vortex_publication_rehearsal`;
+      return result;
+    } finally {
+      // The rehearsed releases are undone, and a later pass may release the same revisions.
+      this.forgetModuleReleaseReads();
+    }
   }
 
   async readRehearsedReleases(
@@ -1003,6 +1060,7 @@ class DatabasePublicationTransaction
   }
 
   private async appendRoot(release: DefinitionReleaseAppend): Promise<PublishDefinitionResult> {
+    this.forgetModuleReleaseReadsOf(String(release.draft.rootId), release.draft.key);
     if (
       release.compilationOutput.resolutionFingerprint !== release.resolutionSnapshot.fingerprint ||
       release.compilationOutput.artifact.resolutionFingerprint !==

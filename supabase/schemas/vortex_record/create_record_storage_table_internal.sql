@@ -3,7 +3,8 @@ create or replace function vortex_record.create_record_storage_table_internal(
   p_module_root_id uuid,
   p_record_type_id uuid,
   p_storage_scope text,
-  p_ownership_mode text
+  p_ownership_mode text,
+  p_platform_references boolean
 )
 returns void
 language plpgsql
@@ -16,12 +17,15 @@ declare
   scope_index_columns text;
   scope_check text;
   owner_check text;
+  organization_reference text := '';
+  owner_references text := '';
 begin
   if not vortex_platform.is_non_nil_uuid(p_storage_contract_id::text)
     or not vortex_platform.is_non_nil_uuid(p_module_root_id::text)
     or not vortex_platform.is_non_nil_uuid(p_record_type_id::text)
     or p_storage_scope not in ('organization_shared', 'application_contained')
-    or p_ownership_mode not in ('none', 'organization_account', 'group', 'inherited') then
+    or p_ownership_mode not in ('none', 'organization_account', 'group', 'inherited')
+    or p_platform_references is null then
     raise exception using errcode = '22023', message = 'Record storage identity is invalid';
   end if;
 
@@ -43,10 +47,23 @@ begin
       'owner_organisation_account_id is null and owner_group_id is not null'
     else 'owner_organisation_account_id is null and owner_group_id is null'
   end;
+  -- Installed storage references the platform's organisation, account and Group rows. A
+  -- preview's storage references none: a foreign key would lock those platform tables whenever
+  -- the preview's table is created or dropped (dropping takes ACCESS EXCLUSIVE on every table it
+  -- references), stopping every request of every organisation. The preview's own write paths
+  -- keep its records inside the preview.
+  if p_platform_references then
+    organization_reference := ' references vortex_identity.organizations (organization_id)';
+    owner_references := ',
+      foreign key (organisation_id, owner_organisation_account_id)
+        references vortex_identity.organization_accounts (organization_id, organization_account_id),
+      foreign key (organisation_id, owner_group_id)
+        references vortex_access.organization_groups (organization_id, group_id)';
+  end if;
 
   execute pg_catalog.format(
     'create table record_data.%I (
-      organisation_id uuid not null references vortex_identity.organizations (organization_id),
+      organisation_id uuid not null%s,
       module_root_id uuid not null check (module_root_id = %L::uuid),
       record_type_id uuid not null check (record_type_id = %L::uuid),
       storage_contract_id uuid not null check (storage_contract_id = %L::uuid),
@@ -64,17 +81,13 @@ begin
       deleted_at timestamptz,
       deleted_by uuid,
       removal_due_at timestamptz,
-      primary key (%s, record_id),
-      foreign key (organisation_id, owner_organisation_account_id)
-        references vortex_identity.organization_accounts (organization_id, organization_account_id),
-      foreign key (organisation_id, owner_group_id)
-        references vortex_access.organization_groups (organization_id, group_id),
+      primary key (%s, record_id)%s,
       check (%s), check (%s),
       check ((deleted_at is null) = (deleted_by is null)),
       check ((lifecycle_state = ''active'') = (deleted_at is null and deleted_by is null)),
       check (updated_at >= created_at)
-    )', table_token, p_module_root_id, p_record_type_id, p_storage_contract_id,
-    scope_index_columns, scope_check, owner_check
+    )', table_token, organization_reference, p_module_root_id, p_record_type_id,
+    p_storage_contract_id, scope_index_columns, owner_references, scope_check, owner_check
   );
   execute pg_catalog.format('alter table record_data.%I enable row level security', table_token);
   execute pg_catalog.format('alter table record_data.%I force row level security', table_token);
@@ -117,11 +130,11 @@ begin
 end
 $function$;
 
-alter function vortex_record.create_record_storage_table_internal(uuid,uuid,uuid,text,text) owner to vortex_owner;
+alter function vortex_record.create_record_storage_table_internal(uuid,uuid,uuid,text,text,boolean) owner to vortex_owner;
 
-revoke all on function vortex_record.create_record_storage_table_internal(uuid, uuid, uuid, text, text)
+revoke all on function vortex_record.create_record_storage_table_internal(uuid, uuid, uuid, text, text, boolean)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-grant execute on function vortex_record.create_record_storage_table_internal(uuid, uuid, uuid, text, text)
+grant execute on function vortex_record.create_record_storage_table_internal(uuid, uuid, uuid, text, text, boolean)
   to vortex_owner;
-comment on function vortex_record.create_record_storage_table_internal(uuid, uuid, uuid, text, text) is
-  'Creates one generated Record storage table with its fixed scope checks and request-adapter policies.';
+comment on function vortex_record.create_record_storage_table_internal(uuid, uuid, uuid, text, text, boolean) is
+  'Creates one generated Record storage table with its fixed scope checks and request-adapter policies; installed storage references the platform organisation, account and Group rows, preview storage references no platform table.';

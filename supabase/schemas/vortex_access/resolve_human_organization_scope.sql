@@ -111,7 +111,7 @@ grant execute on function vortex_access.resolve_human_organization_scope(uuid, u
   to vortex_runtime;
 
 comment on function vortex_access.resolve_human_organization_scope(uuid, uuid) is
-  'Resolves one active account-bound organisation scope under its Access lock, provisioning missing local accounts only for assigned Vortex super administrators.';
+  'Resolves one active account-bound organisation scope for every request that relies on the current Access version, reads and ordinary changes alike, holding that version with a shared lock (FOR SHARE) until commit: requests never wait for each other, and only a change that advances the version waits for them. Provisions missing local accounts only for assigned Vortex super administrators.';
 
 alter function vortex_access.resolve_human_organization_scope(p_identity_id uuid, p_organization_id uuid) owner to vortex_owner;
 

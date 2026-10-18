@@ -66,7 +66,14 @@ export type HumanOrganizationRequestDependencies = Readonly<{
   telemetry?: ServiceTelemetryPort;
 }>;
 
-type HumanOrganizationRequestMode = "read" | "change";
+/**
+ * The lock a request holds on its organisation's Access version until it commits. Every request
+ * that relies on the current version, a read or an ordinary change, holds it shared, so requests
+ * never wait for each other. Only a change that advances the version holds it exclusively, from
+ * its first statement: it waits for the requests that rely on the version it replaces, and two
+ * such changes queue instead of deadlocking on a lock upgrade.
+ */
+type HumanOrganizationRequestMode = "shared" | "access_change";
 
 type ScopeRow = DatabaseRow & {
   tenant_id: unknown;
@@ -135,6 +142,7 @@ export const createHumanOrganizationRequestService = (
     prepare?: ChangePreparation,
     suspendedAccountResult?: () => Special,
     mapDatabaseRefusal?: (code: string, error: unknown) => Result | undefined,
+    changedAccountId?: string,
   ): Promise<HumanOrganizationRequestResult<Result> | Special> => {
     const verifiedSession = identitySessionSchema.safeParse(session);
     const verifiedCandidate = organizationSelectionCandidateSchema.safeParse(candidate);
@@ -182,12 +190,22 @@ export const createHumanOrganizationRequestService = (
                 ${verifiedCandidate.data.previewInstallationId}, true
               )
             `;
+          // A profile change locks the accounts it writes before the scope holds the actor's
+          // account shared, so two saves of one account queue instead of deadlocking.
+          if (changedAccountId !== undefined)
+            await transaction.query`
+              select vortex_access.lock_organization_accounts_for_profile_change(
+                ${verifiedSession.data.identityId}::uuid,
+                ${verifiedCandidate.data.organizationId}::uuid,
+                ${changedAccountId}::uuid
+              )
+            `;
           const rows =
             verifiedCandidate.data.applicationRootId === undefined
-              ? mode === "change"
+              ? mode === "access_change"
                 ? await transaction.query<ScopeRow>`
                   select *
-                  from vortex_access.resolve_human_organization_change_scope(
+                  from vortex_access.resolve_human_organization_access_change_scope(
                     ${verifiedSession.data.identityId}::uuid,
                     ${verifiedCandidate.data.organizationId}::uuid
                   )
@@ -199,10 +217,10 @@ export const createHumanOrganizationRequestService = (
                     ${verifiedCandidate.data.organizationId}::uuid
                   )
                 `
-              : mode === "change"
+              : mode === "access_change"
                 ? await transaction.query<ScopeRow>`
                   select *
-                  from vortex_access.resolve_human_application_change_scope(
+                  from vortex_access.resolve_human_application_access_change_scope(
                     ${verifiedSession.data.identityId}::uuid,
                     ${verifiedCandidate.data.organizationId}::uuid,
                     ${verifiedCandidate.data.applicationRootId}::uuid
@@ -320,7 +338,7 @@ export const createHumanOrganizationRequestService = (
         issuedAt: string,
       ) => Promise<Result>,
     ): Promise<HumanOrganizationRequestResult<Result>> =>
-      runWithMode("read", session, candidate, operation),
+      runWithMode("shared", session, candidate, operation),
     runChange: <Result>(
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
@@ -330,7 +348,7 @@ export const createHumanOrganizationRequestService = (
         issuedAt: string,
       ) => Promise<Result>,
     ): Promise<HumanOrganizationRequestResult<Result>> =>
-      runWithMode("change", session, candidate, operation),
+      runWithMode("shared", session, candidate, operation),
     runChangeWithRefusal: <Result>(
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
@@ -342,7 +360,7 @@ export const createHumanOrganizationRequestService = (
       mapDatabaseRefusal: (code: string, error: unknown) => Result | undefined,
     ): Promise<HumanOrganizationRequestResult<Result>> =>
       runWithMode(
-        "change",
+        "shared",
         session,
         candidate,
         operation,
@@ -360,13 +378,72 @@ export const createHumanOrganizationRequestService = (
         issuedAt: string,
       ) => Promise<Result>,
     ): Promise<HumanOrganizationRequestResult<Result>> =>
-      runWithMode("change", session, candidate, operation, prepare),
+      runWithMode("shared", session, candidate, operation, prepare),
+    /**
+     * An ordinary change that writes one organisation account's profile. It holds the Access
+     * version shared like any ordinary change, but locks the account it writes first.
+     */
+    runProfileChange: <Result>(
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      organizationAccountId: string,
+      operation: (
+        transaction: RequestDatabaseTransaction,
+        scope: SelectedOrganizationScope,
+        issuedAt: string,
+      ) => Promise<Result>,
+      mapDatabaseRefusal: (code: string, error: unknown) => Result | undefined,
+    ): Promise<HumanOrganizationRequestResult<Result>> =>
+      runWithMode(
+        "shared",
+        session,
+        candidate,
+        operation,
+        undefined,
+        undefined,
+        mapDatabaseRefusal,
+        organizationAccountId,
+      ),
+    /**
+     * A change that advances the organisation's Access version (role, group, assignment,
+     * delegation, account, stewardship, installation access or direct-share changes). It holds
+     * the version exclusively from its first statement; see `HumanOrganizationRequestMode`.
+     */
+    runAccessChange: <Result>(
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      operation: (
+        transaction: RequestDatabaseTransaction,
+        scope: SelectedOrganizationScope,
+        issuedAt: string,
+      ) => Promise<Result>,
+    ): Promise<HumanOrganizationRequestResult<Result>> =>
+      runWithMode("access_change", session, candidate, operation),
+    runAccessChangeWithRefusal: <Result>(
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      operation: (
+        transaction: RequestDatabaseTransaction,
+        scope: SelectedOrganizationScope,
+        issuedAt: string,
+      ) => Promise<Result>,
+      mapDatabaseRefusal: (code: string, error: unknown) => Result | undefined,
+    ): Promise<HumanOrganizationRequestResult<Result>> =>
+      runWithMode(
+        "access_change",
+        session,
+        candidate,
+        operation,
+        undefined,
+        undefined,
+        mapDatabaseRefusal,
+      ),
     resolve: (
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
     ): Promise<OrganizationScopeResolutionResult> =>
       runWithMode(
-        "read",
+        "shared",
         session,
         candidate,
         async (transaction, scope) => {

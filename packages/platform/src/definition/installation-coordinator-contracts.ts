@@ -31,7 +31,7 @@ import type { PreparedInstallationRuntimeSourceReader } from "./installation-run
 
 type InstallerRequests = Pick<
   ReturnType<typeof createHumanOrganizationRequestService>,
-  "runChange"
+  "runAccessChange"
 >;
 export type InstallerTransaction = Parameters<typeof createModuleInstallationStorageRepository>[0];
 
