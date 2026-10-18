@@ -50,7 +50,7 @@ begin
   end if;
 
   loaded := vortex_record.load_record_access_facts_internal(
-    p_record_type_id, 'update', p_record_id, p_expected_concurrency_number
+    p_record_type_id, 'update', p_record_id, p_expected_concurrency_number, null::jsonb
   );
   if loaded ->> 'outcome' = 'conflict' then
     return pg_catalog.jsonb_build_object(

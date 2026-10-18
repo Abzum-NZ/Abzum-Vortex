@@ -5,11 +5,7 @@ import {
   type ApplicationSourceDocument,
 } from "./application-source-contracts";
 import { changeableByPeople } from "./module-field-shape";
-import {
-  describeSourcePlace,
-  walkSourceStrings,
-  type InlineRecordTypeReference,
-} from "./module-record-type-shape";
+import { applicationUses, type ApplicationUsePlace } from "./application-uses";
 
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
@@ -45,7 +41,7 @@ export type InlineModuleActionResult =
   | Readonly<{ kind: "changed"; source: ApplicationSourceDocument; actionKey: string }>
   | Readonly<{ kind: "invalid"; issues: readonly string[] }>
   /** A permission the change would leave behind is still used elsewhere; nothing was changed. */
-  | Readonly<{ kind: "referenced"; issue: string; references: readonly InlineRecordTypeReference[] }>;
+  | Readonly<{ kind: "referenced"; issue: string; references: readonly ApplicationUsePlace[] }>;
 
 const effectTaskId = "set_fields";
 
@@ -242,45 +238,16 @@ export const saveInlineModuleAction = (
   return parsed(source, actionKey);
 };
 
-/** Every place that uses a permission besides its own entry, the access groups that hold it and one action. */
+/**
+ * Every place that uses an action's own permission besides the access groups that hold it, the
+ * module's permissions and the action itself, which all let it go with the permission.
+ */
 const permissionReferences = (source: ApplicationSourceDocument, module: InlineModule, key: string,
-  action: ModuleAction): InlineRecordTypeReference[] => {
+  action: ModuleAction): readonly ApplicationUsePlace[] => {
   const moduleIndex = source.body.modules.indexOf(module);
   const actionIndex = module.actions.indexOf(action);
-  const found = new Map<string, InlineRecordTypeReference>();
-  // An action and its own permission share one key, so only a permission setting counts here.
-  walkSourceStrings(source, [], (text, path, property) => {
-    if (text !== key || path[1] === "roles" || property?.includes("permission") !== true) return;
-    if (path[1] === "modules" && path[2] === moduleIndex &&
-      (path[3] === "permissions" || (path[3] === "actions" && path[4] === actionIndex))) return;
-    const place = describeSourcePlace(source, path);
-    found.set(place.label, place);
-  });
-  return [...found.values()];
-};
-
-/** Every place in the Application source that uses one named action, except the action and its own permission. */
-export const inlineModuleActionReferences = (
-  source: ApplicationSourceDocument, moduleKey: string, actionKey: string,
-): readonly InlineRecordTypeReference[] => {
-  const moduleIndex = source.body.modules.findIndex((module) => module.key === moduleKey);
-  const module = source.body.modules[moduleIndex];
-  const actionIndex = module?.actions.findIndex((action) => action.key === actionKey) ?? -1;
-  if (module === undefined || actionIndex < 0) return [];
-  const action = module.actions[actionIndex]!;
-  const found = new Map<string, InlineRecordTypeReference>();
-  walkSourceStrings(source, [], (text, path) => {
-    if (path[1] === "modules" && path[2] === moduleIndex) {
-      if (path[3] === "actions" && path[4] === actionIndex) return;
-      if (path[3] === "permissions") return;
-      if (path[3] === "record_types" && path[5] === "custom_actions") return;
-    }
-    if (path[1] === "roles") return;
-    if (text !== actionKey && text !== action.id) return;
-    const place = describeSourcePlace(source, path);
-    found.set(place.label, place);
-  });
-  return [...found.values()];
+  return applicationUses(source, { kind: "permission", permissionKey: key }, (path) => path[1] === "roles" ||
+    (path[1] === "modules" && path[2] === moduleIndex && (path[3] === "permissions" || (path[3] === "actions" && path[4] === actionIndex))));
 };
 
 /**
@@ -289,8 +256,8 @@ export const inlineModuleActionReferences = (
  */
 export const deleteInlineModuleAction = (
   current: ApplicationSourceDocument, moduleKey: string, actionKey: string,
-): InlineModuleActionResult | Readonly<{ kind: "referenced"; references: readonly InlineRecordTypeReference[] }> => {
-  const references = inlineModuleActionReferences(current, moduleKey, actionKey);
+): InlineModuleActionResult | Readonly<{ kind: "referenced"; references: readonly ApplicationUsePlace[] }> => {
+  const references = applicationUses(current, { kind: "action", moduleKey, actionKey });
   if (references.length > 0) return { kind: "referenced", references };
   const source = structuredClone(current);
   const module = source.body.modules.find((item) => item.key === moduleKey);

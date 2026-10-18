@@ -8,22 +8,10 @@ import {
   sameId,
   saveDefinitionDraftCommandSchema,
   sourceApplicationThemeSchema,
-  sourceThemeTokenValueSchema,
   translateDefinitionRuleFailures,
-  type ApplicationContent,
 } from "@vortex/platform/schema";
 import { findPinnedPlatformThemeRelease } from "./_lib/pinned-platform-theme-release";
-import { checkPlacementThemeOverrides, fingerprintCanonicalValue, materialiseApplicationTheme, validateDefinitionSource } from "@vortex/platform/server";
-import {
-  parseStudioAppearanceRequest,
-  parseStudioPlacementThemeRequest,
-  studioAppearanceFailureCodes,
-  type StudioAppearanceFailure,
-  type StudioAppearanceResult,
-  type StudioPlacementThemeFailure,
-  type StudioPlacementThemeResult,
-  type StudioThemeTokenValue,
-} from "@vortex/ui/studio";
+import { fingerprintCanonicalValue, materialiseApplicationTheme, validateDefinitionSource } from "@vortex/platform/server";
 import { createHumanApplicationDraft, saveHumanApplicationDraft } from "../_lib/definition-draft-write";
 import { mapWebError } from "../_lib/web-error-mapper";
 import { loadStudioApplicationDraft } from "../_lib/studio-application-draft";
@@ -40,8 +28,11 @@ import {
   type StudioApplicationSourceReviewResult,
 } from "./_lib/application-source-import";
 import { platformPermissionSource } from "../_lib/platform-permission-source";
-import { tokenName } from "./_lib/studio-labels";
+import { tokenName } from "@vortex/ui/studio";
 import type { StudioThemeResolution } from "./_lib/studio-theme-options";
+import type { StudioStoredApplicationDraft } from "@vortex/ui/studio";
+import { readStudioPersonLabel } from "../_lib/studio-person-labels";
+import type { StudioPersonLabel } from "../_lib/studio-application-restore-contracts";
 
 const refuse = <Result>(operation: string, code: string, fallback: Result, cause?: unknown): Result =>
   mapWebError(cause, { route: "studio/actions", operation, code, fallback });
@@ -136,13 +127,39 @@ export async function createStudioApplication(organizationId: string, candidate:
   return createHumanApplicationDraft(organizationId, { source: source.data });
 }
 
+/** What one autosave came to: the platform's answer, or a conflict that names the newer saved draft. */
+export type StudioSaveApplicationResult =
+  | Awaited<ReturnType<typeof saveHumanApplicationDraft>>
+  | Readonly<{ kind: "conflict"; reason: "draft_changed"; elsewhere: StudioDraftChangedElsewhere }>;
+
+/** The saved draft another window or person wrote, which a save from this workspace no longer extends. */
+export type StudioDraftChangedElsewhere = Readonly<{
+  draft: StudioStoredApplicationDraft;
+  /** Who wrote it, as the saving person may see them. */
+  changedBy: StudioPersonLabel;
+}>;
+
 /**
- * Saves the draft and nothing else. The draft is compiled for the canvas by the separate
- * `reopenStudioApplication` request the workspace sends once the save is in, so Save itself does
- * not wait for a compile; the workspace shows nothing compiled for the new revision as current
- * until that compile answers for exactly this revision.
+ * Saves the draft and nothing else: Studio autosaves each batch of edits through this one action.
+ * The draft is compiled for the canvas by the separate `reopenStudioApplication` request the
+ * workspace sends once its saves are idle, so a save never waits for a compile. A save that no
+ * longer extends the saved revision is refused as a conflict that names who wrote the newer
+ * revision and carries it, so the workspace can say what changed.
  */
-export async function saveStudioApplication(organizationId: string, candidate: unknown) {
+export async function saveStudioApplication(organizationId: string, candidate: unknown): Promise<StudioSaveApplicationResult> {
+  const saved = await saveApplicationDraft(organizationId, candidate);
+  if (saved.kind !== "conflict" || saved.reason !== "draft_changed") return saved;
+  const command = saveDefinitionDraftCommandSchema.parse(candidate);
+  const latest = await loadStudioApplicationDraft(organizationId, command.rootId, { compile: false });
+  if (latest.kind !== "available") {
+    console.error(`[studio] the newer saved draft could not be read after a conflict: STUDIO_SAVE_CONFLICT_READ_${latest.kind.toUpperCase()}`);
+    return saved;
+  }
+  const changedBy = await readStudioPersonLabel(organizationId, latest.draft.updatedBy);
+  return { kind: "conflict", reason: "draft_changed", elsewhere: { draft: latest.draft, changedBy } };
+}
+
+const saveApplicationDraft = async (organizationId: string, candidate: unknown) => {
   const command = saveDefinitionDraftCommandSchema.safeParse(candidate);
   if (!command.success)
     return refuse("save-application", "STUDIO_SAVE_COMMAND_SCHEMA_INVALID",
@@ -154,9 +171,8 @@ export async function saveStudioApplication(organizationId: string, candidate: u
   if (!validation.valid)
     return refuse("save-application", `STUDIO_SAVE_SOURCE_INVALID:${failureCodes(validation)}`,
       { kind: "refused", reason: "source_invalid" } as const);
-  const saved = await saveHumanApplicationDraft(organizationId, command.data);
-  return saved;
-}
+  return saveHumanApplicationDraft(organizationId, command.data);
+};
 
 /** The saved draft compiled for the canvas: its page slots, frames, choices and compile failure. */
 export async function reopenStudioApplication(organizationId: string, applicationRootId: string) {
@@ -184,104 +200,6 @@ export async function readStudioDataRecords(organizationId: string, candidate: u
     return await readStudioDataRecordsWithSession(resolved.session, organizationId, candidate);
   } catch (error) {
     return refuse("read-data-records", "STUDIO_DATA_RECORDS_FAILED", { kind: "temporarily_unavailable" } as const, error);
-  }
-}
-
-/** Current protected read precedes all theme-specific descriptors and advisory feedback. */
-export async function validateStudioApplicationAppearance(
-  organizationId: string,
-  candidate: unknown,
-): Promise<StudioAppearanceResult> {
-  const request = parseStudioAppearanceRequest(candidate);
-  if (request === undefined)
-    return refuse("validate-appearance", "STUDIO_APPEARANCE_REQUEST_INVALID", { kind: "refused" } as const);
-  const loaded = await loadStudioApplicationDraft(organizationId, request.rootId, { compile: false });
-  if (loaded.kind !== "available") return loaded;
-  const draft = loaded.draft;
-  if (draft.rootId !== request.rootId)
-    return refuse("validate-appearance", "STUDIO_APPEARANCE_ROOT_MISMATCH", { kind: "refused" } as const);
-  if (draft.draftRevision !== request.expectedDraftRevision) return { kind: "conflict" };
-  try {
-    const authored = draft.source.body.theme;
-    const pin = authored.base;
-    const release = findPinnedPlatformThemeRelease(pin);
-    if (release === undefined)
-      return refuse("validate-appearance", "STUDIO_APPEARANCE_RELEASE_UNKNOWN", { kind: "refused" } as const);
-    const inherited = materialiseApplicationTheme({ ...authored, token_overrides: {} }, draft.key, release);
-    if (!inherited.valid)
-      return refuse("validate-appearance", "STUDIO_APPEARANCE_INHERITED_THEME_INVALID", { kind: "refused" } as const);
-    const sourceValue = (value: ApplicationContent["theme"]["tokens"][string]): StudioThemeTokenValue => {
-      switch (value.kind) {
-        case "color_pair": return { kind: value.kind, light: value.light, dark: value.dark };
-        case "typography": return { kind: value.kind, family: value.family, size_rem: value.sizeRem,
-          line_height: value.lineHeight, weight: value.weight };
-        case "border": return { kind: value.kind, width_rem: value.widthRem, style: value.style,
-          color_token: value.colorToken };
-        case "focus": return { kind: value.kind, width_rem: value.widthRem, color_token: value.colorToken };
-        case "asset": return { kind: value.kind, asset_id: value.assetId };
-        default: return value;
-      }
-    };
-    const tokens = Object.entries(inherited.theme.tokens).sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, value]) => ({ key, inherited: sourceThemeTokenValueSchema.parse(sourceValue(value)) }));
-    const keys = new Set(tokens.map((token) => token.key));
-    const theme = { ...authored, token_overrides: request.tokenOverrides };
-    const result = materialiseApplicationTheme(theme, draft.key, release);
-    const failures: StudioAppearanceFailure[] = [];
-    if (!result.valid) {
-      // The finite registered token set bounds every engine pair and per-token check. Refuse an
-      // impossible output instead of dropping contrast failures or claiming a partial success.
-      if (result.failures.length > 4 * tokens.length ** 2 + 8 * tokens.length + 64)
-        return refuse("validate-appearance", "STUDIO_APPEARANCE_FAILURES_UNBOUNDED",
-          { kind: "temporarily_unavailable" } as const);
-      for (const failure of result.failures) {
-        const code = studioAppearanceFailureCodes.find((item) => item === failure.code) ?? "VALIDATION_FAILED";
-        const family = failure.family === "broken_reference" || failure.family === "unsafe_content"
-          ? failure.family : "invalid_value";
-        failures.push({ code, ruleCode: "vortex.definition.application_block_settings", family,
-          ...(failure.tokenKey !== undefined && keys.has(failure.tokenKey) ? { tokenKey: failure.tokenKey } : {}) });
-      }
-      if (failures.length === 0)
-        return refuse("validate-appearance", "STUDIO_APPEARANCE_FAILURES_EMPTY",
-          { kind: "temporarily_unavailable" } as const);
-    }
-    const publicAssetIds = [...new Set(Object.values(release.tokens)
-      .flatMap((token) => token.kind === "asset" ? [String(token.assetId)] : []))].sort();
-    return { kind: "available", rootId: draft.rootId, draftRevision: draft.draftRevision,
-      theme, tokens, publicAssetIds, valid: result.valid, failures };
-  } catch (error) {
-    return refuse("validate-appearance", "STUDIO_APPEARANCE_FAILED", { kind: "refused" } as const, error);
-  }
-}
-
-/** Judges placement theme overrides with the checks publication applies, before the person saves. */
-export async function validateStudioPlacementThemeOverrides(
-  organizationId: string,
-  candidate: unknown,
-): Promise<StudioPlacementThemeResult> {
-  const request = parseStudioPlacementThemeRequest(candidate);
-  if (request === undefined) return { kind: "refused" };
-  const loaded = await loadStudioApplicationDraft(organizationId, request.rootId, { compile: false });
-  if (loaded.kind !== "available") return loaded;
-  const draft = loaded.draft;
-  if (draft.rootId !== request.rootId) return { kind: "refused" };
-  if (draft.draftRevision !== request.expectedDraftRevision) return { kind: "conflict" };
-  try {
-    const release = findPinnedPlatformThemeRelease(draft.source.body.theme.base);
-    if (release === undefined) return { kind: "refused" };
-    const failures: StudioPlacementThemeFailure[] = [];
-    for (const placement of request.placements)
-      for (const failure of checkPlacementThemeOverrides(
-        request.theme, placement.themeOverrides, draft.key, release,
-      )) {
-        const code = studioAppearanceFailureCodes.find((item) => item === failure.code) ?? "VALIDATION_FAILED";
-        failures.push({ alias: placement.alias, code,
-          ...(failure.tokenKey === undefined ? {} : { tokenKey: failure.tokenKey }) });
-      }
-    return { kind: "available", failures };
-  } catch (error) {
-    console.error("STUDIO_PLACEMENT_THEME_CHECK_FAILED", error);
-    return { kind: "temporarily_unavailable" };
   }
 }
 

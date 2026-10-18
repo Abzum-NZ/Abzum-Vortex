@@ -35,7 +35,6 @@ type SourceDiagnostics = Readonly<{
 type Props = Readonly<{
   disabled: boolean;
   readSnapshot: () => StudioApplicationSourceImportSnapshot | null;
-  onPendingChange: (pending: boolean) => void;
   onApply: (expected: StudioApplicationSourceImportSnapshot, source: ApplicationSourceDocument) =>
     "applied" | "unchanged" | "stale";
 }>;
@@ -59,7 +58,7 @@ function SourceChangeTable({ current, next }: { current: ApplicationSourceDocume
   </Table>;
 }
 
-export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChange, onApply }: Props) {
+export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Props) {
   const [confirm, confirmDialog] = useConfirm();
   const [text, setText] = useState("");
   const [operation, setOperation] = useState<"reading" | "reviewing" | null>(null);
@@ -71,8 +70,6 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
   const epoch = useRef(0);
   const active = useRef(false);
   const acceptedReview = useRef<ReviewedSource | null>(null);
-  const pendingCallback = useRef(onPendingChange);
-  pendingCallback.current = onPendingChange;
   const fileInput = useRef<HTMLInputElement | null>(null);
   const currentDisabled = useRef(disabled);
   currentDisabled.current = disabled;
@@ -92,11 +89,9 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
     return () => {
       active.current = false;
       epoch.current += 1;
-      pendingCallback.current(false);
     };
   }, []);
 
-  const reportPending = () => pendingCallback.current(raw.current.length > 0 || busy.current !== null);
 
   const replaceText = (value: string) => {
     epoch.current += 1;
@@ -107,7 +102,6 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
     setOperation(null);
     raw.current = value;
     setText(value);
-    reportPending();
   };
 
   const readFile = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -122,14 +116,12 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
     setDiagnostics(null);
     busy.current = null;
     setOperation(null);
-    reportPending();
     if (file.size > maximumApplicationSourceImportBytes) {
       setMessage("The JSON source must be at most 2 MiB. Your existing input is preserved.");
       return;
     }
     busy.current = "reading";
     setOperation("reading");
-    reportPending();
     setMessage("Reading the selected local JSON file…");
     try {
       const value = new TextDecoder("utf-8", { fatal: true }).decode(await file.arrayBuffer());
@@ -153,7 +145,6 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
       if (active.current && epoch.current === requestEpoch) {
         busy.current = null;
         setOperation(null);
-        reportPending();
       }
     }
   };
@@ -170,7 +161,6 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
     if (candidate.kind !== "valid") { setMessage(candidate.message); return; }
     busy.current = "reviewing";
     setOperation("reviewing");
-    reportPending();
     setMessage("Reviewing the source against the current protected draft…");
     const responseIsCurrent = () => active.current && !currentDisabled.current &&
       requestEpoch === epoch.current && raw.current === submittedText &&
@@ -234,7 +224,6 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
       if (active.current && epoch.current === requestEpoch) {
         busy.current = null;
         setOperation(null);
-        reportPending();
       }
     }
   };
@@ -254,14 +243,14 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
     }
     if (!await confirm({
       title: "Replace the draft with the imported file?",
-      description: "The imported file replaces your current draft, including your unsaved changes. Save keeps the result.",
+      description: "The imported file replaces your current draft. Undo brings your draft back.",
       confirmLabel: "Replace the draft",
     })) return;
     if (!isCurrent()) { setMessage("The draft changed, so nothing was replaced."); return; }
     const result = onApply(candidate.snapshot, candidate.source);
     if (result === "applied") {
       replaceText("");
-      setMessage("Imported. Save to keep it.");
+      setMessage("Imported. Your draft is the imported file now.");
     } else setMessage(result === "unchanged" ? "Your draft already matches this file. Nothing was changed."
       : "The editor changed. What you typed is kept; review again.");
   };
@@ -279,11 +268,11 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
         onChange={(event) => {
           if (disabled || readSnapshot() === null) return;
           replaceText(event.target.value);
-          setMessage("The file changed. Check it again before applying.");
+          setMessage("The file changed. Check it again before replacing the draft.");
         }} />}
     </StudioField>
     {reviewed !== null && <div className="space-y-2">
-      <p>Applying replaces everything in your draft, including permissions, access groups, pages and flows.
+      <p>Replacing the draft replaces everything in it, including permissions, access groups, pages and flows.
         Checking the file does not decide whether it can be published.</p>
       <SourceChangeTable current={reviewed.snapshot.source} next={reviewed.source} />
       <TechnicalDetails title="View source">
@@ -311,13 +300,13 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
       <Button type="button" disabled={disabled || operation !== null || text.length === 0}
         onClick={() => { void review(); }}>Check the file</Button>
       <Button type="button" disabled={disabled || operation !== null || reviewed === null}
-        onClick={apply}>Apply to the draft</Button>
+        onClick={apply}>Replace the draft</Button>
       <Button type="button" disabled={text.length === 0 && operation === null}
         onClick={() => {
           replaceText("");
           if (fileInput.current !== null) fileInput.current.value = "";
-          setMessage("Discarded. Your draft is unchanged.");
-        }}>Discard</Button>
+          setMessage("Cleared. Your draft is unchanged.");
+        }}>Clear</Button>
     </div>
     <p role="status" aria-live="polite">{message}</p>
     {confirmDialog}

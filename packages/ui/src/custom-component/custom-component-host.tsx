@@ -8,14 +8,7 @@ import {
   type CustomComponentRelease,
   isRecord,
 } from "@vortex/platform/schema";
-import { Button } from "../components/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../components/dialog";
+import { useConfirm } from "../components/confirm-dialog";
 import { DefinitionRenderError } from "../definition-error";
 import type { PlatformBlockRenderProps } from "../registry";
 import { getAccessibleName } from "../display/display-state-container";
@@ -75,18 +68,8 @@ const UPDATE_MESSAGE_TYPE = "vortex:custom-component:update";
 const EVENT_MESSAGE_TYPE = "vortex:custom-component:event";
 const GRAPHICS_CONTEXT_LOST_MESSAGE_TYPE = "vortex:custom-component:graphics-context-lost";
 
-/** One host-rendered confirmation waiting for the person's answer. */
-type PendingConfirmation = Readonly<{
-  id: number;
-  eventLabel: string;
-  settle: (confirmed: boolean) => void;
-}>;
-
 const EMPTY_RECORD: Readonly<Record<string, unknown>> = Object.freeze({});
 const EMPTY_BINDINGS: CustomComponentEventBindings = Object.freeze({});
-
-/** Confirmation width, the same 36rem the theme's medium dialog scale used. */
-const CONFIRMATION_CLASS = "max-h-[calc(100%-2rem)] overflow-y-auto sm:max-w-xl";
 
 /**
  * Validates one untrusted event payload against its declared event. An undeclared field, a missing
@@ -130,52 +113,6 @@ const contractValues = (
       sent[field.key] = values[field.key];
   return Object.freeze(sent);
 };
-
-/**
- * The host-rendered confirmation on the shadcn Dialog (Base UI), like every other surface in the
- * product. The host renders it as a sibling of the sandboxed frame, never inside it, so the
- * untrusted component can neither draw nor read it. The primitive traps focus inside the surface,
- * makes the rest of the page inert and returns focus to the element that had it when the surface
- * opened, and the title it renders is the surface's accessible name. Escape is the only way the
- * primitive can dismiss a surface, because a press outside it is not a dismissal, and a dismissal
- * declines the change just as the Cancel button does.
- */
-function ConfirmationDialog({
-  eventLabel,
-  onConfirm,
-  onCancel,
-}: Readonly<{ eventLabel: string; onConfirm: () => void; onCancel: () => void }>): ReactElement {
-  return (
-    <Dialog
-      open
-      disablePointerDismissal
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen) onCancel();
-      }}
-    >
-      <DialogContent
-        showCloseButton={false}
-        data-vortex-custom-component-confirmation="true"
-        className={CONFIRMATION_CLASS}
-      >
-        <DialogHeader>
-          <DialogTitle>Confirm</DialogTitle>
-        </DialogHeader>
-        <div>
-          <p>{`“${eventLabel}” may change data. Continue?`}</p>
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="secondary" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={onConfirm}>
-            Confirm
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 /**
  * Renders one custom component through the sandboxed bootstrap document. The frame title is the
@@ -241,12 +178,10 @@ export function CustomComponentHost(props: CustomComponentHostProps): ReactEleme
   // frame navigated away from the bootstrap document, so it receives no second port or data.
   const handshakeFrameRef = useRef<HTMLIFrameElement | undefined>(undefined);
   const mountedRef = useRef(true);
-  const confirmationsRef = useRef<PendingConfirmation[]>([]);
-  const nextConfirmationId = useRef(0);
   const runningRef = useRef(new Set<string>());
   const queuedRef = useRef(new Map<string, CustomComponentEventPayload>());
   const [generation, setGeneration] = useState(0);
-  const [confirmation, setConfirmation] = useState<PendingConfirmation | undefined>(undefined);
+  const [confirm, confirmDialog] = useConfirm();
 
   const closePort = useCallback(() => {
     const port = portRef.current;
@@ -257,26 +192,17 @@ export function CustomComponentHost(props: CustomComponentHostProps): ReactEleme
     }
   }, []);
 
-  // Confirmations are shown one at a time, in the order their events arrived. An answer settles
-  // only the confirmation it was given for, so a late answer from a surface that has already
-  // settled never answers the next one.
-  const settleConfirmation = useCallback((id: number, confirmed: boolean) => {
-    const [pending, ...rest] = confirmationsRef.current;
-    if (pending === undefined || pending.id !== id) return;
-    confirmationsRef.current = rest;
-    setConfirmation(rest[0]);
-    pending.settle(confirmed);
-  }, []);
-
+  // The one shared confirmation prompt, rendered as a sibling of the sandboxed frame, never inside
+  // it, so the untrusted component can neither draw nor read it. A prompt asked while another is
+  // open waits for it, so the events are answered in the order they arrived.
   const requestConfirmation = useCallback(
     (eventLabel: string) =>
-      new Promise<boolean>((resolve) => {
-        const id = (nextConfirmationId.current += 1);
-        const pending: PendingConfirmation = Object.freeze({ id, eventLabel, settle: resolve });
-        confirmationsRef.current = [...confirmationsRef.current, pending];
-        if (confirmationsRef.current.length === 1) setConfirmation(pending);
+      confirm({
+        title: "Confirm",
+        description: `“${eventLabel}” may change data. Continue?`,
+        confirmLabel: "Confirm",
       }),
-    [],
+    [confirm],
   );
 
   const runBinding = useCallback(
@@ -377,10 +303,7 @@ export function CustomComponentHost(props: CustomComponentHostProps): ReactEleme
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      const pending = confirmationsRef.current;
-      confirmationsRef.current = [];
       queuedRef.current.clear();
-      for (const entry of pending) entry.settle(false);
       closePort();
     };
   }, [closePort]);
@@ -429,14 +352,7 @@ export function CustomComponentHost(props: CustomComponentHostProps): ReactEleme
         style={{ display: "block", width: "100%", height: "100%", border: 0 }}
         onLoad={handleLoad}
       />
-      {confirmation === undefined ? null : (
-        <ConfirmationDialog
-          key={confirmation.id}
-          eventLabel={confirmation.eventLabel}
-          onConfirm={() => settleConfirmation(confirmation.id, true)}
-          onCancel={() => settleConfirmation(confirmation.id, false)}
-        />
-      )}
+      {confirmDialog}
     </div>
   );
 }

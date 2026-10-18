@@ -197,7 +197,7 @@ begin
     end if;
     target_loaded := vortex_record.load_record_access_facts_internal(
       (lock_entry ->> 'recordTypeId')::uuid, 'read',
-      (lock_entry ->> 'recordId')::uuid, null
+      (lock_entry ->> 'recordId')::uuid, null, null::jsonb
     );
     if target_loaded ->> 'outcome' <> 'loaded'
       or pg_catalog.jsonb_typeof(target_loaded -> 'declaration') <> 'object' then

@@ -6,10 +6,10 @@ import type {
   PlatformBlockRelease,
 } from "../../schema";
 import { canonicalJson } from "../canonical-json-definition";
+import { peopleDirectory } from "../module-links";
 import { explicitSourceTargets } from "./explicit-source-targets";
 import {
   applicationCompositionProvenance,
-  applicationThemeValueTargets,
   compiledSettingStart,
   isApplicationCompositionSourcePath,
 } from "./application-composition-provenance";
@@ -95,12 +95,6 @@ function applicationSpecialSourceTargets(
             .map((segment) => (typeof segment === "number" ? segment : camelCase(segment))),
         ],
       ];
-    if (sourcePath[2] === "token_overrides" && typeof sourcePath[3] === "string")
-      return applicationThemeValueTargets(
-        sourcePath,
-        ["body", "theme", "token_overrides", sourcePath[3]],
-        ["content", "theme", "tokens", sourcePath[3]],
-      );
   }
   if (sourcePath[1] === "shells" && typeof sourcePath[2] === "number") {
     const shell = source.body.shells[sourcePath[2]];
@@ -310,6 +304,29 @@ export function applicationProvenance(
         canonicalPath,
         origin: "resolved",
         sourcePath: ["body", "platform_block_dependencies", dependencyIndex, "release_version"],
+        ruleCode: RESOLUTION_RULE,
+      });
+      continue;
+    }
+    // A role's people-name grant is derived from its reads of Person links, never authored: it
+    // follows from the Application's use of the people directory.
+    if (
+      canonicalPath[0] === "content" &&
+      canonicalPath[1] === "roles" &&
+      typeof canonicalPath[2] === "number" &&
+      canonicalPath[3] === "permissionKeys" &&
+      typeof canonicalPath[4] === "number" &&
+      canonicalPath.length === 5 &&
+      valueAtPath(canonical, canonicalPath) === peopleDirectory.readPermission
+    ) {
+      const directoryUse = source.body.uses.findIndex(
+        (use) => use.module === peopleDirectory.module,
+      );
+      if (directoryUse < 0) fail("vortex.definition.invalid_compilation_output", "invalid_value");
+      entries.push({
+        canonicalPath,
+        origin: "resolved",
+        sourcePath: ["body", "uses", directoryUse, "module"],
         ruleCode: RESOLUTION_RULE,
       });
       continue;

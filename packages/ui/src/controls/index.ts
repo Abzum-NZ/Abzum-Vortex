@@ -13,6 +13,7 @@ export {
   parseFieldInputPayload,
   parseFormPayload,
   parseLinkInputPayload,
+  parseRecordChoicePage,
   parseNumberInputPayload,
   parseRichTextInputPayload,
 
@@ -46,6 +47,8 @@ export {
   type FormPayload,
   type LinkInputData,
   type LinkInputPayload,
+  type RecordChoiceOption,
+  type RecordChoicePage,
   type NumberInputData,
   type NumberInputPayload,
   type RichTextInputData,

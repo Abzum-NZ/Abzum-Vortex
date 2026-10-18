@@ -714,7 +714,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     summary: "Requires a field to have a value before the record can be saved.",
     runLocations: ["browser", "transaction"],
     effect: "pure",
-    properties: { field: required("field_id"), message: optional("message_text") },
+    properties: { field: required("field_id"), message: required("message_text") },
     kestra: "not_compiled",
   },
   "rule.warn": {
@@ -722,7 +722,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     summary: "Shows a warning that does not stop the save.",
     runLocations: ["browser", "transaction"],
     effect: "pure",
-    properties: { field: optional("field_id"), message: required("message_text") },
+    properties: { message: required("message_text") },
     kestra: "not_compiled",
   },
   "rule.refuse": {
