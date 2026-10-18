@@ -409,13 +409,15 @@ function compileApplication(
       // Every action belongs to a Module; an Application declares none of its own.
       actions: [],
       events: (body.events as JsonObject[]).map((event) => {
-        const record = String(event.record_type);
+        const record = event.record_type === undefined ? undefined : String(event.record_type);
         return {
           eventId: resolution.id(definitionKey, "event", String(event.id), "content"),
           key: event.key,
-          recordTypeId: resolution.recordType(record).recordTypeId,
+          ...(record === undefined
+            ? {}
+            : { recordTypeId: resolution.recordType(record).recordTypeId }),
           carriedFieldIds: (event.carries as string[])
-            .map((alias) => resolution.field(record, alias))
+            .map((alias) => resolution.field(record!, alias))
             .sort(compareCanonicalStrings),
           personalOrSensitiveValuesAllowed: false,
         };

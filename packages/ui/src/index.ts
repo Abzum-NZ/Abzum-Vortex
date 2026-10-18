@@ -349,6 +349,7 @@ export {
   VORTEX_MENU_ACCENTS,
   VORTEX_MENU_COLORS,
   VORTEX_STYLES,
+  VortexStyleRoot,
   type AppearanceRootProps,
   type ThemeMode,
   type ThemeRootProps,

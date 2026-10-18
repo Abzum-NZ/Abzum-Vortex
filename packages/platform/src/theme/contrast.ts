@@ -351,13 +351,13 @@ export function validateThemeContrast(
 
     // The renderer also paints the brand fill directly on the surface as the accent
     // (selection bars, checked controls, active tabs), so it must stay visible there.
-    if (key === ACCENT_TOKEN_KEY) {
+    if (key === ACCENT_TOKEN_KEY || key === "ring") {
       const lightRatio = contrastRatio(token.light, lightSurface, DEFAULT_LIGHT_SURFACE);
       if (lightRatio < WCAG_AA_NON_TEXT_MIN_CONTRAST) {
         addFailure({
           code: "INSUFFICIENT_CONTRAST",
           family: "invalid_value",
-          message: `Brand color token "${key}" has insufficient light mode contrast ratio (${lightRatio.toFixed(2)}:1 < ${WCAG_AA_NON_TEXT_MIN_CONTRAST}:1) against ${surfaceName} (${lightSurface})`,
+          message: `Non-text color token "${key}" has insufficient light mode contrast ratio (${lightRatio.toFixed(2)}:1 < ${WCAG_AA_NON_TEXT_MIN_CONTRAST}:1) against ${surfaceName} (${lightSurface})`,
           tokenKey: key,
         });
       }
@@ -366,7 +366,7 @@ export function validateThemeContrast(
         addFailure({
           code: "INSUFFICIENT_CONTRAST",
           family: "invalid_value",
-          message: `Brand color token "${key}" has insufficient dark mode contrast ratio (${darkRatio.toFixed(2)}:1 < ${WCAG_AA_NON_TEXT_MIN_CONTRAST}:1) against ${surfaceName} (${darkSurface})`,
+          message: `Non-text color token "${key}" has insufficient dark mode contrast ratio (${darkRatio.toFixed(2)}:1 < ${WCAG_AA_NON_TEXT_MIN_CONTRAST}:1) against ${surfaceName} (${darkSurface})`,
           tokenKey: key,
         });
       }
