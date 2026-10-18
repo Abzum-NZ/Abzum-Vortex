@@ -30,12 +30,10 @@ export const moduleFieldTypeLabels: Readonly<Record<ModuleFieldType, string>> = 
   attachment: "Attachment",
 };
 
-/** What a field's settings can refer to: the other fields of its record type and of related ones. */
+/** What a field's settings can refer to: the other fields of its record type. */
 export type ModuleFieldSettingsContext = Readonly<{
   /** The other fields of the field's own record type, by local key. */
   fields: readonly Readonly<{ key: string; label: string; type: string }>[];
-  /** The fields of the record type a total's relationship comes from, by local key. */
-  relatedFields: readonly Readonly<{ key: string; label: string; type: string }>[];
 }>;
 
 const base = (key: string, label: string, required: boolean, help?: string) =>
@@ -63,8 +61,6 @@ const fieldChoices = (fields: ModuleFieldSettingsContext["fields"], types?: read
   fields.filter((field) => types === undefined || types.includes(field.type)).map((field) => [field.key, field.label] as const);
 const deleteRules = [["refuse", "Refuse to delete the linked record"], ["empty_optional", "Clear this link"],
   ["soft_delete_dependent", "Delete this record too"]] as const;
-const resultTypes = [["text", "Text"], ["whole_number", "Whole number"], ["decimal_number", "Decimal number"],
-  ["money", "Money"], ["yes_no", "Yes or no"], ["date", "Date"], ["date_time", "Date and time"]] as const;
 const currencyModes = [["organization_default", "The organisation's currency"], ["fixed", "One fixed currency"]] as const;
 const optionItem = (): Declaration => group("option", "Option", [
   text("value", "Stored value", true, 1, 120, "What is stored. It cannot change once records hold it."),
@@ -75,7 +71,6 @@ const tableColumnTypes = [["text", "Text"], ["whole_number", "Whole number"], ["
   ["money", "Money"], ["yes_no", "Yes or no"], ["date", "Date"], ["date_time", "Date and time"], ["choice", "Choice"]] as const;
 const timeZones = [["person", "The person's time zone"], ["organization", "The organisation's time zone"], ["utc", "UTC"]] as const;
 const textFormats = [["email_address", "Email address"], ["web_address", "Secure web address"], ["uuid", "Identifier (UUID)"]] as const;
-const numericOperations = [["add", "Add"], ["subtract", "Subtract"], ["multiply", "Multiply"], ["divide", "Divide"]] as const;
 
 /** One table column, with every column type's settings: the column's type picks the ones it keeps. */
 const tableColumnItem = (): Declaration => group("column", "Column", [
@@ -99,45 +94,12 @@ const tableColumnItem = (): Declaration => group("column", "Column", [
   list("options", "Options (choice)", false, 0, 200, optionItem()),
 ]);
 
-/** A calculation's formula, with every operation's parts: its operation picks the ones it keeps. */
-const expressionGroup = (context: ModuleFieldSettingsContext): Declaration => {
-  const fields = fieldChoices(context.fields);
-  const operandParts = (): Declaration[] => [
-    choice("source", "Value comes from", true, [["field", "A field"], ["literal", "A fixed number"]]),
-    choice("field", "Field", false, fieldChoices(context.fields, ["whole_number", "decimal_number", "money"])),
-    decimalText("value", "Fixed number"),
-  ];
-  const operand = group("operand", "Value", operandParts());
-  return group("expression", "Formula", [
-    choice("operation", "What it works out", true, [["join_text", "Joins text of fields"], ["numeric", "Works out a number"],
-      ["date_offset", "Moves a date"], ["deadline_passed", "Whether a deadline has passed"]]),
-    list("fields", "Fields joined (joins text)", false, 0, 20, choice("field", "Field", true, fields)),
-    text("separator", "Between the joined values (joins text)", false, 0, 20),
-    choice("numeric_operation", "Operation (works out a number)", false, numericOperations),
-    list("operands", "Values (works out a number)", false, 0, 20, operand),
-    choice("date_field", "Date field (moves a date)", false, fieldChoices(context.fields, ["date", "date_time"])),
-    group("amount", "By how much (moves a date)", operandParts(), false),
-    choice("unit", "Unit (moves a date)", false, [["days", "Days"], ["weeks", "Weeks"], ["months", "Months"], ["years", "Years"]]),
-    choice("due_field", "Due field (deadline)", false, fieldChoices(context.fields, ["date", "date_time"])),
-    choice("status_field", "Status field (deadline)", false, fieldChoices(context.fields, ["choice"])),
-    list("terminal_status_values", "Statuses that end the deadline (deadline)", false, 0, 20, text("status", "Status", true, 1, 120)),
-  ]);
-};
-
-/** The operations a calculation's formula is edited for here; another formula is kept as it is. */
-const editableExpression = (expression: unknown): boolean => {
-  const value = expression as { operation?: unknown; operands?: { source?: unknown }[] } | undefined;
-  if (value === undefined) return true;
-  if (value.operation === "numeric") return (value.operands ?? []).every((operand) => operand.source !== "numeric");
-  return ["join_text", "date_offset", "deadline_passed"].includes(String(value.operation));
-};
-
 /**
- * The typed settings one field type declares. `settings` is the field's current plain settings,
- * used only to keep a formula Studio does not edit (a condition or nested numbers) as it is.
+ * The typed settings one field type declares. A calculation and a total declare none here: the
+ * Data tab edits them with its formula and total editors (`module-field-formulas.ts`).
  */
 export const moduleFieldSettingDeclarations = (
-  type: ModuleFieldType, context: ModuleFieldSettingsContext, settings: Readonly<Record<string, unknown>> = {},
+  type: ModuleFieldType, context: ModuleFieldSettingsContext,
 ): readonly Declaration[] => {
   switch (type) {
     case "text":
@@ -196,18 +158,6 @@ export const moduleFieldSettingDeclarations = (
         boolean("application_root_required", "Only people of this application", false),
         choice("on_person_deactivation", "When the person is deactivated", true, [["retain_reference", "Keep the link"],
           ["empty_optional", "Clear the link"], ["refuse_deactivation", "Refuse the deactivation"]])];
-    case "calculation":
-      return [choice("result_type", "Result", true, resultTypes),
-        choice("evaluation", "When it is worked out", false, [["read_time", "Each time it is read"], ["stored", "When the record is saved"]]),
-        number("decimal_places", "Decimal places of the result", false, { minimum: 0, maximum: 12, help: "Only for decimal and money results." }),
-        ...(editableExpression(settings.expression) ? [expressionGroup(context)] : [])];
-    case "total":
-      return [{ ...base("relationship", "Related records", true), kind: "relationship_reference" },
-        choice("operation", "Total", true, [["count", "Count"], ["sum", "Sum"], ["minimum", "Smallest"], ["maximum", "Largest"], ["average", "Average"]]),
-        choice("result_type", "Result", true, resultTypes),
-        choice("field", "Field of the related records", false, fieldChoices(context.relatedFields), "Every total except a count needs one."),
-        text("currency", "Currency", false, 3, 3, "Only for a sum of money."),
-        number("decimal_places", "Decimal places", false, { minimum: 0, maximum: 12, help: "Only for an average." })];
     case "attachment":
       return [list("allowed_kinds", "Kinds of file allowed", true, 1, 9, choice("kind", "Kind", true, [["image", "Images"], ["document", "Documents"],
         ["spreadsheet", "Spreadsheets"], ["presentation", "Presentations"], ["audio", "Audio"], ["video", "Video"],
@@ -217,17 +167,11 @@ export const moduleFieldSettingDeclarations = (
         boolean("multiple", "Several files", false), number("max_files", "Most files", false, { minimum: 2, maximum: 100, help: "Only for several files." })];
     case "yes_no":
     case "email_address":
+    case "calculation":
+    case "total":
       return [];
   }
 };
-
-/** Why a setting the field holds is kept as it is rather than edited here, one line per setting. */
-export const moduleFieldKeptSettings = (type: ModuleFieldType, settings: Readonly<Record<string, unknown>>): readonly string[] => [
-  ...(type === "calculation" && !editableExpression(settings.expression)
-    ? ["Its formula uses a condition or nested numbers. It is kept as it is; change it in the application source."] : []),
-  ...(type === "total" && settings.filter !== undefined
-    ? ["Its filter of the related records is kept as it is; change it in the application source."] : []),
-];
 
 const columnSettingKeys: Readonly<Record<string, readonly string[]>> = {
   text: ["max_length", "format"], whole_number: ["minimum", "maximum", "step"],
@@ -252,24 +196,6 @@ const storedColumn = (flat: Record<string, unknown>): Record<string, unknown> =>
     if (flat[key] !== undefined) settings[key.endsWith("_amount") ? key.slice(0, -"_amount".length) : key] = flat[key];
   return { key: flat.key, required: flat.required === true, type, settings };
 };
-const expressionKeys: Readonly<Record<string, readonly string[]>> = {
-  join_text: ["fields", "separator"], numeric: ["numeric_operation", "operands"],
-  date_offset: ["date_field", "amount", "unit"], deadline_passed: ["due_field", "status_field", "terminal_status_values"],
-};
-const storedOperand = (operand: Record<string, unknown>): Record<string, unknown> =>
-  operand.source === "literal" ? { source: "literal", value: operand.value } : { source: "field", field: operand.field };
-const storedExpression = (flat: Record<string, unknown>): Record<string, unknown> => {
-  const operation = String(flat.operation);
-  const expression: Record<string, unknown> = { operation };
-  for (const key of expressionKeys[operation] ?? []) if (flat[key] !== undefined) expression[key] = flat[key];
-  if (operation === "join_text") expression.separator ??= "";
-  if (operation === "deadline_passed") expression.terminal_status_values ??= [];
-  if (operation === "numeric") expression.operands = ((expression.operands ?? []) as Record<string, unknown>[]).map(storedOperand);
-  if (operation === "date_offset" && expression.amount !== undefined)
-    expression.amount = storedOperand(expression.amount as Record<string, unknown>);
-  return expression;
-};
-
 /** Where a field's current settings could not be read as typed settings, as located failures. */
 export type ModuleFieldSettingsReading = Readonly<{ values: ModuleFieldTypedSettings; failures: readonly ComponentSettingFailure[] }>;
 
@@ -292,7 +218,7 @@ export const readModuleFieldSettings = (
 
 /**
  * The typed values as the plain settings the field contract stores. A setting the declarations do
- * not edit (a kept formula or filter) is carried over from `current` unchanged.
+ * not edit is carried over from `current` unchanged.
  */
 export const writeModuleFieldSettings = (
   type: ModuleFieldType, values: ModuleFieldTypedSettings, declarations: readonly Declaration[],
@@ -304,7 +230,6 @@ export const writeModuleFieldSettings = (
     if (!declared.has(key)) continue;
     let plain = plainSourceSettingValue(value);
     if (type === "table" && key === "columns") plain = (plain as Record<string, unknown>[]).map(storedColumn);
-    if (type === "calculation" && key === "expression") plain = storedExpression(plain as Record<string, unknown>);
     settings[key] = plain;
   }
   return settings;
@@ -330,7 +255,7 @@ export const starterModuleFieldSettings = (
       reverse_key: `${start.recordKey}_${start.fieldKey}`.slice(0, 40).replace(/_+$/u, ""), on_parent_delete: "empty_optional" };
     case "link_to_one_of_several": return { targets: start.recordTypes.slice(0, 2), on_parent_delete: "empty_optional" };
     case "link_to_person": return { audience: "organization_accounts", application_root_required: false, on_person_deactivation: "retain_reference" };
-    case "calculation": return { result_type: "text", expression: { operation: "join_text", fields: [start.titleField], separator: " " } };
+    case "calculation": return { result_type: "text", evaluation: "stored", expression: { operation: "join_text", fields: [start.titleField], separator: " " } };
     case "total": return { ...(start.relationships[0] === undefined ? {} : { relationship: start.relationships[0] }),
       operation: "count", result_type: "whole_number" };
     case "attachment": return { allowed_kinds: ["document", "image"], max_file_size_mb: 10, multiple: false };

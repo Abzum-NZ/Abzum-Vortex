@@ -28,7 +28,7 @@ import {
   releaseSetContainsCustomComponents,
 } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";
-import { DefinitionError } from "@vortex/platform/server";
+import { backfillActivatedApplication, DefinitionError } from "@vortex/platform/server";
 import { platformPermissionSource } from "./platform-permission-source";
 
 /**
@@ -178,4 +178,5 @@ export const adoptApplicationRelease = async (
   )
     throw new DefinitionError("APPLICATION_INSTALLATION_STALE");
   await coordinator().activate(session, activation);
+  await backfillActivatedApplication(requests(), session, activation);
 };

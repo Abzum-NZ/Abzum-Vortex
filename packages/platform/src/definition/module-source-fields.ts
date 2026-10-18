@@ -12,6 +12,7 @@ import {
 import {
   calculationMaximumNestingDepth,
   calculationMaximumOperandCount,
+  calculationResultTypesByOperation,
   jsonValueSchema,
   labelSchema,
   safeHttpsUrlSchema,
@@ -345,14 +346,16 @@ type SourceCalculationNumberValue =
 const inspectSourceCalculationNumberValue = (
   value: SourceCalculationNumberValue,
   depth = 1,
-): { depth: number; values: number } => {
-  if (value.source !== "numeric") return { depth, values: 1 };
+): { depth: number; values: number; fields: number } => {
+  if (value.source !== "numeric")
+    return { depth, values: 1, fields: value.source === "field" ? 1 : 0 };
   const inspected = value.operands.map((operand) =>
     inspectSourceCalculationNumberValue(operand, depth + 1),
   );
   return {
     depth: Math.max(depth, ...inspected.map((operand) => operand.depth)),
     values: 1 + inspected.reduce((total, operand) => total + operand.values, 0),
+    fields: inspected.reduce((total, operand) => total + operand.fields, 0),
   };
 };
 const sourceCalculationNumberValueSchema: z.ZodType<SourceCalculationNumberValue> = z.lazy(() =>
@@ -449,14 +452,8 @@ const sourceCalculationSettingsSchema = z
   .strict()
   .superRefine((value, context) => {
     const operation = value.expression.operation;
-    const validResultTypes: Readonly<Record<typeof operation, readonly string[]>> = {
-      join_text: ["text"],
-      numeric: ["whole_number", "decimal_number", "money"],
-      condition: ["yes_no"],
-      date_offset: ["date", "date_time"],
-      deadline_passed: ["yes_no"],
-    };
-    if (!validResultTypes[operation].includes(value.result_type))
+    const validResultTypes: readonly string[] = calculationResultTypesByOperation[operation];
+    if (!validResultTypes.includes(value.result_type))
       context.addIssue({
         code: "custom",
         path: ["result_type"],
@@ -473,6 +470,17 @@ const sourceCalculationSettingsSchema = z
         code: "custom",
         path: ["expression", "operands"],
         message: `A numeric calculation cannot exceed ${calculationMaximumOperandCount} values`,
+      });
+    if (
+      value.expression.operation === "numeric" &&
+      value.expression.operands.every(
+        (operand) => inspectSourceCalculationNumberValue(operand).fields === 0,
+      )
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["expression", "operands"],
+        message: "A numeric calculation reads at least one field",
       });
     if (value.evaluation === "stored" && operation === "deadline_passed")
       context.addIssue({
