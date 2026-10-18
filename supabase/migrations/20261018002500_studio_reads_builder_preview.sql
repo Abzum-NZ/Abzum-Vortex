@@ -25,6 +25,8 @@ alter table vortex_definition.preview_installations
 drop function vortex_definition.create_preview_installation(uuid, bigint, jsonb);
 drop function vortex_definition.read_preview_runtime_source();
 
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.resolve_installation_access_plan_internal(
   p_installation jsonb
 )
@@ -484,6 +486,8 @@ grant execute on function vortex_record.resolve_installation_access_plan_interna
 
 comment on function vortex_record.resolve_installation_access_plan_internal(jsonb) is
   'Private installation access plan builder and cache: resolves definitions, column maps, permission alternatives and saved conditions once per all-active installation binding revision; a detached pin set is resolved afresh.';
+
+set local role vortex_owner;
 
 create or replace function vortex_record.resolve_preview_seed_source_internal(
   p_organization_id uuid,
@@ -1868,6 +1872,8 @@ grant execute on function vortex_definition.read_preview_runtime_source(bigint)
 comment on function vortex_definition.read_preview_runtime_source(bigint) is
   'The installation, draft revision, expiry and stored release set of the preview the validated human Application request runs, for the runtime to render it as an installed Application. The release set is left out when the caller already holds the one for the draft revision the preview runs.';
 
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.copy_live_records_to_preview_internal(
   p_preview_installation_id uuid,
   p_record_type_id uuid,
@@ -2057,6 +2063,8 @@ grant execute on function vortex_record.copy_live_records_to_preview_internal(uu
   to vortex_owner;
 comment on function vortex_record.copy_live_records_to_preview_internal(uuid, uuid, uuid, uuid) is
   'Seeds one preview record table with the live records of the same record type that the request''s builder reads in the installed Application, each with only the fields they read there, and reference counters that continue after the copied records: the first 2,000 they read, in record order, and whether they read more.';
+
+set local role vortex_owner;
 
 create or replace function vortex_definition.seed_preview_installation(
   p_preview_installation_id uuid
