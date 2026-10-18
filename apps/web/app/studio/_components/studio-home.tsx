@@ -200,9 +200,10 @@ export function StudioHome({
                       </CardContent>
                       <CardFooter className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-xs text-muted-foreground">
-                          Edited <FormattedTime iso={root.editedAt} /> by{" "}
-                          {organization.editorNames[root.editedBy.toLowerCase()] ??
-                            "a restricted person"}
+                          Edited <FormattedTime iso={root.editedAt} />
+                          {organization.editorNames[root.editedBy.toLowerCase()] !== undefined && (
+                            <> by {organization.editorNames[root.editedBy.toLowerCase()]}</>
+                          )}
                         </p>
                         <Badge variant="outline">
                           {root.currentReleaseRevision === null

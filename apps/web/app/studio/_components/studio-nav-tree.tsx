@@ -3,6 +3,19 @@
 import { useEffect, useId, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { Icon, type VortexIconName } from "@vortex/ui";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
+import { Button } from "@vortex/ui/components/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@vortex/ui/components/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@vortex/ui/components/dropdown-menu";
 import { Item } from "@vortex/ui/components/item";
 import {
   Empty,
@@ -13,9 +26,23 @@ import {
 } from "@vortex/ui/components/empty";
 import { cn } from "@vortex/ui/lib/utils";
 
+type NavAction = Readonly<{
+  label: string;
+  icon: VortexIconName;
+  onClick: () => void;
+  disabled?: boolean;
+  destructive?: boolean;
+}>;
+
 type NavProps = Omit<ComponentProps<"button">, "children"> &
   Readonly<{
     label: string;
+    dragHandle?: ComponentProps<"button">;
+    actions?: readonly NavAction[];
+    moreActions?: readonly NavAction[];
+    settings?: ReactNode;
+    settingsOpen?: boolean;
+    onSettingsOpenChange?: (open: boolean) => void;
     icon?: VortexIconName | undefined;
     meta?: ReactNode;
     description?: string | undefined;
@@ -50,6 +77,12 @@ export function StudioNavEmpty({
 /** A single selectable row, shared by every Studio navigator. */
 export function StudioNavItem({
   label,
+  dragHandle,
+  actions,
+  moreActions,
+  settings,
+  settingsOpen,
+  onSettingsOpenChange,
   icon,
   meta,
   description,
@@ -66,7 +99,7 @@ export function StudioNavItem({
       variant="navigation"
       data-two-line={description !== undefined ? "true" : undefined}
       className={cn(
-        "flex-nowrap text-left text-sm hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring",
+        "min-w-0 flex-1 flex-nowrap text-left text-sm hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring",
         selected && "bg-accent font-medium text-accent-foreground",
         className,
       )}
@@ -79,7 +112,7 @@ export function StudioNavItem({
         />
       }
     >
-      {(onToggle !== undefined || props.role === "treeitem") && (
+      {(onToggle !== undefined || (props.role === "treeitem" && dragHandle === undefined)) && (
         <span
           className="flex size-6 shrink-0 items-center justify-center"
           aria-hidden="true"
@@ -137,13 +170,118 @@ export function StudioNavItem({
       )}
     </Item>
   );
-  return hint === undefined ? (
-    row
-  ) : (
-    <Tooltip>
-      <TooltipTrigger render={row} />
-      <TooltipContent>{hint}</TooltipContent>
-    </Tooltip>
+  const selectable =
+    hint === undefined ? (
+      row
+    ) : (
+      <Tooltip>
+        <TooltipTrigger render={row} />
+        <TooltipContent>{hint}</TooltipContent>
+      </Tooltip>
+    );
+  return (
+    <div
+      className={cn(
+        "group/nav-row flex min-w-0 items-center rounded-md hover:bg-accent focus-within:bg-accent",
+        selected && "bg-accent",
+      )}
+    >
+      {dragHandle !== undefined && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                {...dragHandle}
+                className="shrink-0 cursor-grab active:cursor-grabbing"
+                aria-label={`Move ${label}`}
+              />
+            }
+          >
+            <Icon name="grip-vertical" className="size-4" />
+          </TooltipTrigger>
+          <TooltipContent>Drag to move. Alt + arrow keys also move this entry.</TooltipContent>
+        </Tooltip>
+      )}
+      {settings === undefined ? (
+        selectable
+      ) : (
+        <Popover open={settingsOpen} onOpenChange={onSettingsOpenChange}>
+          <PopoverTrigger render={selectable} />
+          <PopoverContent
+            side="right"
+            align="start"
+            className="max-h-(--available-height) w-80 overflow-y-auto"
+          >
+            <PopoverTitle className="mb-4">{label}</PopoverTitle>
+            {settings}
+          </PopoverContent>
+        </Popover>
+      )}
+      {(actions !== undefined || moreActions !== undefined) && (
+        <div className="flex shrink-0 items-center opacity-0 group-hover/nav-row:opacity-100 group-focus-within/nav-row:opacity-100 has-data-popup-open:opacity-100">
+          {actions?.map((action) => (
+            <Tooltip key={action.label}>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="icon-xs"
+                    variant="ghost"
+                    aria-label={action.label}
+                    disabled={action.disabled}
+                    onClick={action.onClick}
+                    className={action.destructive ? "hover:text-destructive" : undefined}
+                  />
+                }
+              >
+                <Icon name={action.icon} className="size-4" />
+              </TooltipTrigger>
+              <TooltipContent>{action.label}</TooltipContent>
+            </Tooltip>
+          ))}
+          {moreActions !== undefined && (
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          aria-label={`More actions for ${label}`}
+                          disabled={props.disabled}
+                        />
+                      }
+                    />
+                  }
+                >
+                  <Icon name="more-horizontal" className="size-4" />
+                </TooltipTrigger>
+                <TooltipContent>More actions for {label}</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end">
+                {moreActions.map((action) => (
+                  <DropdownMenuItem
+                    key={action.label}
+                    onClick={action.onClick}
+                    disabled={action.disabled}
+                    variant={action.destructive ? "destructive" : "default"}
+                  >
+                    <Icon name={action.icon} className="size-4" />
+                    {action.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

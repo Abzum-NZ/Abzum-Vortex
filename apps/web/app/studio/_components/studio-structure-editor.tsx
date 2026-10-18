@@ -83,7 +83,10 @@ export function StudioStructureEditor({
   const [newName, setNewName] = useState("");
   const [shellChoice, setShellChoice] = useState("");
   const [addToMenu, setAddToMenu] = useState(true);
-  const [layoutChange, setLayoutChange] = useState<{ pageAlias: string; shellAlias: string | null } | null>(null);
+  const [layoutChange, setLayoutChange] = useState<{
+    pageAlias: string;
+    shellAlias: string | null;
+  } | null>(null);
   const choices = useMemo(() => studioStructureShellChoices(source), [source]);
 
   const page =
@@ -301,10 +304,7 @@ export function StudioStructureEditor({
             </Tooltip>
           </div>
           {page !== undefined && (
-            <StudioField
-              label="Layout"
-              hint="Choose where your blocks go when you change layout."
-            >
+            <StudioField label="Layout" hint="Choose where your blocks go when you change layout.">
               {(control) => (
                 <NativeSelect
                   {...control}
@@ -312,7 +312,8 @@ export function StudioStructureEditor({
                   disabled={disabled}
                   onChange={(event) => {
                     const shellAlias = event.target.value === "" ? null : event.target.value;
-                    if (shellAlias !== pageShell) setLayoutChange({ pageAlias: page.id, shellAlias });
+                    if (shellAlias !== pageShell)
+                      setLayoutChange({ pageAlias: page.id, shellAlias });
                   }}
                 >
                   {choices.map((choice) => (
@@ -356,12 +357,22 @@ export function StudioStructureEditor({
           />
         </DialogContent>
       </Dialog>
-      {layoutChange !== null && movingPage !== undefined && <StudioPageLayoutDialog
-        key={`${layoutChange.pageAlias}:${layoutChange.shellAlias ?? ""}`} pageAlias={layoutChange.pageAlias}
-        pageName={movingPage.name} shellAlias={layoutChange.shellAlias}
-        layoutName={choices.find((choice) => choice.shellAlias === layoutChange.shellAlias)!.label}
-        plan={onLayoutPlan(layoutChange.pageAlias, layoutChange.shellAlias)} disabled={disabled}
-        onPreview={onPreview} onCommand={onCommand} onClose={() => setLayoutChange(null)} />}
+      {layoutChange !== null && movingPage !== undefined && (
+        <StudioPageLayoutDialog
+          key={`${layoutChange.pageAlias}:${layoutChange.shellAlias ?? ""}`}
+          pageAlias={layoutChange.pageAlias}
+          pageName={movingPage.name}
+          shellAlias={layoutChange.shellAlias}
+          layoutName={
+            choices.find((choice) => choice.shellAlias === layoutChange.shellAlias)!.label
+          }
+          plan={onLayoutPlan(layoutChange.pageAlias, layoutChange.shellAlias)}
+          disabled={disabled}
+          onPreview={onPreview}
+          onCommand={onCommand}
+          onClose={() => setLayoutChange(null)}
+        />
+      )}
       {confirmDialog}
     </div>
   );

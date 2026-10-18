@@ -2,6 +2,7 @@
 import {
   Suspense,
   useMemo,
+  useRef,
   useState,
   type DragEvent,
   type FormEvent,
@@ -41,7 +42,7 @@ const kindWords = (item: StudioMenuItem) =>
 /**
  * The Menu tab: the application's navigation as an editable tree. An entry is selected with a
  * click, moved by dragging it onto another entry (onto a heading puts it under that heading) or with
- * Alt and the arrow keys, and changed in the form below the tree. Every change is one command on the
+ * Alt and the arrow keys, and changed in a popover anchored to its row. Every change is one command on the
  * draft; a refusal is shown here and nothing changes.
  */
 export function StudioMenuPanel({
@@ -66,6 +67,9 @@ export function StudioMenuPanel({
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [confirm, confirmDialog] = useConfirm();
+  const [editing, setEditing] = useState<string | null>(null);
+  const treeHost = useRef<HTMLDivElement>(null);
   const [newPage, setNewPage] = useState("");
   const pages = useMemo(() => studioMenuPageChoices(source), [source]);
   const library = source.body.theme.selection.icon_library;
@@ -148,45 +152,164 @@ export function StudioMenuPanel({
     run({ kind: "move", alias, headingAlias: at.headingAlias, index: at.index - shift });
   };
 
-  const row = (item: StudioMenuItem): StudioNavNode => ({
-    key: item.id,
-    label: item.label,
-    icon: item.icon,
-    meta:
-      item.type === "page"
-        ? source.body.pages.find((page) => page.key === item.page)?.name
-        : kindWords(item),
-    selected: item.id === selectedAlias,
-    onSelect: () => onSelect(item.id),
-    children: item.type === "heading" ? item.children.map(row) : [],
-    props: {
-      draggable: !disabled,
+  const focusRow = (alias: string | undefined) => {
+    requestAnimationFrame(() => {
+      const rows = treeHost.current?.querySelectorAll<HTMLButtonElement>('[role="treeitem"]');
+      rows?.forEach((row) => {
+        if (row.dataset.treeKey === alias) row.focus();
+      });
+    });
+  };
+  const remove = async (item: StudioMenuItem) => {
+    if (
+      !(await confirm({
+        title: `Remove "${item.label}" from the menu?`,
+        description:
+          item.type === "heading"
+            ? "The heading goes; the entries under it stay in the menu."
+            : "The page itself stays; only its menu entry goes. Undo brings it back.",
+        confirmLabel: "Remove entry",
+      }))
+    )
+      return;
+    const entries = source.body.navigation.flatMap((entry) =>
+      entry.type === "heading" ? [entry, ...entry.children] : [entry],
+    );
+    const index = entries.findIndex((entry) => entry.id === item.id);
+    const next = entries[index + 1]?.id ?? entries[index - 1]?.id;
+    if (run({ kind: "remove", alias: item.id })) {
+      setEditing(null);
+      onSelect(next ?? null);
+      focusRow(next);
+    }
+  };
+  const row = (item: StudioMenuItem): StudioNavNode => {
+    const position = studioMenuPosition(source, item.id)!;
+    const move = (key: string) => {
+      if (moveBy(item.id, key)) focusRow(item.id);
+    };
+    const moveActions = [
+      {
+        label: `Move ${item.label} up`,
+        icon: "arrow-up" as const,
+        disabled: disabled || position.index === 0,
+        onClick: () => move("ArrowUp"),
+      },
+      {
+        label: `Move ${item.label} down`,
+        icon: "arrow-down" as const,
+        disabled: disabled || position.index === position.length - 1,
+        onClick: () => move("ArrowDown"),
+      },
+    ];
+    const removeAction = {
+      label: `Remove ${item.label}`,
+      icon: "close" as const,
       disabled,
-      "aria-description": "Alt and the arrow keys move this entry.",
-      onKeyDown: (event) => keyMove(event, item.id),
-      onDragStart: (event) => {
-        event.dataTransfer.setData("text/plain", item.id);
-        event.dataTransfer.effectAllowed = "move";
-        setDragging(item.id);
+      destructive: true,
+      onClick: () => {
+        void remove(item);
       },
-      onDragEnd: () => {
-        setDragging(null);
-        setDropTarget(null);
+    };
+    return {
+      key: item.id,
+      label: item.label,
+      icon: item.icon,
+      selected: item.id === selectedAlias,
+      onSelect: () => {
+        onSelect(item.id);
+        setEditing(item.id);
       },
-      onDragOver: (event) => {
-        if (dragging !== null && dragging !== item.id) {
-          event.preventDefault();
-          setDropTarget(item.id);
-        }
+      children: item.type === "heading" ? item.children.map(row) : [],
+      props: {
+        disabled,
+        description:
+          item.type === "page"
+            ? source.body.pages.find((page) => page.key === item.page)?.name
+            : kindWords(item),
+        "aria-description": "Alt and the arrow keys move this entry. Enter opens settings.",
+        onKeyDown: (event) => {
+          keyMove(event, item.id);
+          if (event.defaultPrevented) focusRow(item.id);
+        },
+        dragHandle: {
+          draggable: !disabled,
+          disabled,
+          onKeyDown: (event) => {
+            keyMove(event, item.id);
+            if (event.defaultPrevented) focusRow(item.id);
+          },
+          onDragStart: (event) => {
+            event.dataTransfer.setData("text/plain", item.id);
+            event.dataTransfer.effectAllowed = "move";
+            setEditing(null);
+            setDragging(item.id);
+          },
+          onDragEnd: () => {
+            setDragging(null);
+            setDropTarget(null);
+            focusRow(item.id);
+          },
+        },
+        actions: [...moveActions, removeAction],
+        moreActions: [
+          {
+            label: `Edit ${item.label}`,
+            icon: "sliders-horizontal",
+            disabled,
+            onClick: () => {
+              onSelect(item.id);
+              setEditing(item.id);
+            },
+          },
+          ...moveActions,
+          ...(position.headingAlias !== null
+            ? [
+                {
+                  label: "Move out of heading",
+                  icon: "chevron-left" as const,
+                  disabled,
+                  onClick: () => move("ArrowLeft"),
+                },
+              ]
+            : []),
+          removeAction,
+        ],
+        settingsOpen: editing === item.id && !hidden,
+        onSettingsOpenChange: (open) => {
+          setEditing(open ? item.id : null);
+          if (open) onSelect(item.id);
+        },
+        settings:
+          editing === item.id ? (
+            <StudioMenuEntryEditor
+              key={item.id}
+              source={source}
+              item={item}
+              position={position}
+              disabled={disabled}
+              run={run}
+              onOpenAccess={onOpenAccess}
+            />
+          ) : null,
+        onDragOver: (event) => {
+          if (dragging !== null && dragging !== item.id) {
+            event.preventDefault();
+            setDropTarget(item.id);
+          }
+        },
+        onDragLeave: () => setDropTarget((current) => (current === item.id ? null : current)),
+        onDrop: (event) => {
+          drop(event, item);
+          focusRow(dragging ?? undefined);
+        },
+        className: cn(
+          dropTarget === item.id && "ring-1 ring-primary",
+          dragging === item.id && "opacity-50",
+        ),
       },
-      onDragLeave: () => setDropTarget((current) => (current === item.id ? null : current)),
-      onDrop: (event) => drop(event, item),
-      className: cn(
-        dropTarget === item.id && "ring-1 ring-primary",
-        dragging === item.id && "opacity-50",
-      ),
-    },
-  });
+    };
+  };
 
   const addEntry = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -208,11 +331,7 @@ export function StudioMenuPanel({
             Lucide. Choose an icon library in Theme.
           </p>
         )}
-        <form
-          onSubmit={addEntry}
-          className="flex items-end gap-2"
-          aria-label="New menu entry"
-        >
+        <form onSubmit={addEntry} className="flex items-end gap-2" aria-label="New menu entry">
           <StudioField
             label={
               selectedHeading === null
@@ -254,11 +373,13 @@ export function StudioMenuPanel({
             </p>
           ) : (
             <StudioSection title="Menu entries" count={source.body.navigation.length}>
-              <StudioNavTree
-                label="Menu entries"
-                nodes={source.body.navigation.map(row)}
-                disabled={disabled}
-              />
+              <div ref={treeHost}>
+                <StudioNavTree
+                  label="Menu entries"
+                  nodes={source.body.navigation.map(row)}
+                  disabled={disabled}
+                />
+              </div>
             </StudioSection>
           )}
           {dragging !== null && (
@@ -289,32 +410,20 @@ export function StudioMenuPanel({
               {feedback.message}
             </p>
           )}
-          {selected !== undefined && (
-            <StudioMenuEntryEditor
-              key={selected.item.id}
-              source={source}
-              item={selected.item}
-              position={selected}
-              disabled={disabled}
-              run={run}
-              moveBy={moveBy}
-              onOpenAccess={onOpenAccess}
-            />
-          )}
+          {confirmDialog}
         </Suspense>
       </IconLibraryProvider>
     </StudioPanelShell>
   );
 }
 
-/** The selected entry's settings: label, icon, page, who can see it, where it sits, and removal. */
+/** The selected entry's settings, anchored to its row. */
 function StudioMenuEntryEditor({
   source,
   item,
   position,
   disabled,
   run,
-  moveBy,
   onOpenAccess,
 }: Readonly<{
   source: ApplicationSourceDocument;
@@ -322,10 +431,8 @@ function StudioMenuEntryEditor({
   position: NonNullable<ReturnType<typeof studioMenuPosition>>;
   disabled: boolean;
   run: (command: StudioMenuCommand, merge?: string) => boolean;
-  moveBy: (alias: string, key: string) => boolean;
   onOpenAccess: () => void;
 }>) {
-  const [confirm, confirmDialog] = useConfirm();
   const label = useStudioDraftText(item.label, (next) =>
     next.trim().length === 0
       ? "Enter a label."
@@ -351,25 +458,8 @@ function StudioMenuEntryEditor({
       ? undefined
       : permissions.find((choice) => choice.key === item.permission);
   const change = (command: Extract<StudioMenuCommand, { kind: "change" }>) => run(command);
-  const remove = async () => {
-    if (
-      !(await confirm({
-        title: `Remove “${item.label}” from the menu?`,
-        description:
-          item.type === "heading"
-            ? "The heading goes; the entries under it stay in the menu."
-            : "The page itself stays; only its menu entry goes. Undo brings it back.",
-        confirmLabel: "Remove entry",
-      }))
-    )
-      return;
-    run({ kind: "remove", alias: item.id });
-  };
   return (
-    <section
-      aria-label={`Menu entry ${item.label}`}
-      className="space-y-4"
-    >
+    <section aria-label={`Menu entry ${item.label}`} className="space-y-4">
       <p className="text-sm font-medium">
         {kindWords(item)} “{item.label}”
       </p>
@@ -476,40 +566,6 @@ function StudioMenuEntryEditor({
           A heading shows when a person can see at least one entry under it.
         </p>
       )}
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Move">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={disabled || position.index === 0}
-          onClick={() => moveBy(item.id, "ArrowUp")}
-        >
-          <Icon name="arrow-up" />
-          Up
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={disabled || position.index >= position.length - 1}
-          onClick={() => moveBy(item.id, "ArrowDown")}
-        >
-          <Icon name="arrow-down" />
-          Down
-        </Button>
-        {position.headingAlias !== null && (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={disabled}
-            onClick={() => moveBy(item.id, "ArrowLeft")}
-          >
-            <Icon name="chevron-left" />
-            Out of heading
-          </Button>
-        )}
-      </div>
       {item.type !== "heading" && headings.length > 0 && (
         <StudioField label="Put under a heading">
           {(control) => (
@@ -577,18 +633,6 @@ function StudioMenuEntryEditor({
           </Button>
         </form>
       )}
-      <Button
-        type="button"
-        size="sm"
-        variant="destructive"
-        disabled={disabled}
-        onClick={() => {
-          void remove();
-        }}
-      >
-        {item.type === "heading" ? "Remove heading" : "Remove entry"}
-      </Button>
-      {confirmDialog}
     </section>
   );
 }

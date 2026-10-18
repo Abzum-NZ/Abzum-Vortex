@@ -110,7 +110,13 @@ export function useStudioStructureTab({
           selected={selected}
           onCommand={command}
           onPreview={preview}
-          onLayoutPlan={(pageAlias, shellAlias) => studioPageLayoutPlan({ source, catalogue, describePlacement, publishedFields }, pageAlias, shellAlias)}
+          onLayoutPlan={(pageAlias, shellAlias) =>
+            studioPageLayoutPlan(
+              { source, catalogue, describePlacement, publishedFields },
+              pageAlias,
+              shellAlias,
+            )
+          }
           onOpenAccess={openAccessPages}
           disabled={draft.locked}
         />

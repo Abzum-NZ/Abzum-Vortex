@@ -546,7 +546,7 @@ export function StudioPanelShell({
                   />
                 }
               >
-                <Icon name="circle" className="size-4" />
+                <Icon name="info" className="size-4" />
               </TooltipTrigger>
               <TooltipContent>{description}</TooltipContent>
             </Tooltip>

@@ -28,7 +28,7 @@ export function StudioOutline({
       node.selection?.kind === "shell"
         ? "grid"
         : node.selection?.kind === "page"
-          ? "panel-left"
+          ? "file-text"
           : "blocks",
     selected: node.selection !== null && selectedKey === studioSemanticSelectionKey(node.selection),
     meta:
