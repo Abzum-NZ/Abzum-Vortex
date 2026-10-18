@@ -124,8 +124,9 @@ const refuse = (reason: string): never => { throw new FlowCreateRefusal(reason);
  * Binds one control event to a flow: a fresh binding alias and event alias, and, for a control on
  * a page of a record type, the event's declaration for that record type.
  */
-const bindControl = (body: ApplicationSourceDocument["body"], controlAlias: string, event: StudioFlowControlEvent,
+const bindControl = (source: ApplicationSourceDocument, controlAlias: string, event: StudioFlowControlEvent,
   flowKey: string, inputs: SourceBinding["inputs"]): Readonly<{ id: string; eventId: string }> => {
+  const body = source.body;
   if (body.flow_bindings.some((binding) => binding.control === controlAlias && binding.event === event))
     refuse(event === "action" ? "This control already runs a flow when it is used. Open that flow and change it instead."
       : event === "card_moved" ? "This board already runs a flow when a card is moved. Open that flow and change it instead."
@@ -137,10 +138,9 @@ const bindControl = (body: ApplicationSourceDocument["body"], controlAlias: stri
   const page = body.pages.find((candidate) => sourcePageItems(candidate.composition).some((item) => item.props.id === controlAlias));
   const item = page === undefined ? undefined : sourcePageItems(page.composition).find((entry) => entry.props.id === controlAlias);
   const queryRef = item?.props.vortex.query;
-  const module = typeof queryRef === "string" ? body.modules.find((entry) => queryRef.startsWith(`${entry.key}:`)) : undefined;
-  const query = module?.queries.find((entry) => `${module.key}:${entry.key}` === queryRef);
+  const query = studioQueryChoices(source, null).find((entry) => entry.reference === queryRef);
   const choiceField = item?.props.choice_field;
-  let recordType = query !== undefined ? `${module!.key}:${query.record_type}`
+  let recordType = query !== undefined ? query.recordType
     : typeof choiceField === "string" && choiceField.includes(".") ? choiceField.slice(0, choiceField.lastIndexOf("."))
       : page !== undefined && "record_type" in page && typeof page.record_type === "string" ? page.record_type : undefined;
   if (event === "card_moved") {
@@ -200,7 +200,7 @@ export const applyStudioFlowCreate = (
     if (command.kind === "bind") {
       const flow = body.flows.find((entry) => entry.key === command.flowKey);
       if (flow === undefined) return { kind: "refused", reason: "That flow is no longer in the draft." };
-      return created(candidate, flow, null, bindControl(body, command.controlAlias, command.event, flow.key, command.bindingInputs));
+      return created(candidate, flow, null, bindControl(candidate, command.controlAlias, command.event, flow.key, command.bindingInputs));
     }
     const name = command.name.trim();
     if (name.length < 1 || name.length > 100) return { kind: "refused", reason: "Name the flow, in at most 100 characters." };
@@ -235,7 +235,7 @@ export const applyStudioFlowCreate = (
           record_type: { kind: "literal", literal: { type: "text", value: command.recordType } },
           record: { kind: "reference", reference: { source: "input", name: "record" } },
           values: { kind: "reference", reference: { source: "input", name: "values" } } } }] as SourceFlow["tasks"] });
-      binding = bindControl(body, command.controlAlias, "card_moved", key,
+      binding = bindControl(candidate, command.controlAlias, "card_moved", key,
         { record: { kind: "caller", name: "record_id" }, values: { kind: "caller", name: "values" } });
     } else if (command.kind === "action") {
       flow = interactiveFlow(key, name, { outputs: {}, ...(command.recordType === null ? {} : { recordInput: "record_id" }),
@@ -245,14 +245,14 @@ export const applyStudioFlowCreate = (
       if (command.event === "form_submit") {
         flow.inputs = { ...flow.inputs, values: { type: "json", required: true } };
       }
-      binding = bindControl(body, command.controlAlias, command.event, key,
+      binding = bindControl(candidate, command.controlAlias, command.event, key,
         command.event === "form_submit"
           ? { values: { kind: "caller", name: "values" }, ...(command.recordType === null ? {}
             : { record_id: { kind: "caller" as const, name: "record" } }) }
           : command.recordType === null ? {} : { record_id: { kind: "caller", name: "record_id" } });
     } else {
       flow = interactiveFlow(key, name, { description: command.description, inputs: command.inputs, tasks: command.tasks, outputs: command.outputs });
-      binding = bindControl(body, command.controlAlias, command.event, key, command.bindingInputs);
+      binding = bindControl(candidate, command.controlAlias, command.event, key, command.bindingInputs);
     }
     body.flows.push(flow);
     return created(candidate, flow, null, binding);

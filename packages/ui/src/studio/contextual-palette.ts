@@ -218,16 +218,19 @@ export const studioUsesSignature = (source: ApplicationSourceDocument): string =
 /** The queries of the application's own Modules: they are in its source. */
 const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
   (source.body.modules ?? []).flatMap((module) => module.queries.map((query) => {
-    const record = module.record_types.find((candidate) => candidate.key === query.record_type);
+    const recordType = query.record_type.includes(":") ? query.record_type : `${module.key}:${query.record_type}`;
+    const [moduleKey, recordKey] = recordType.split(":");
+    const record = source.body.modules.find((candidate) => candidate.key === moduleKey)
+      ?.record_types.find((candidate) => candidate.key === recordKey);
     const selected = query.select.length === 0 ? (record?.fields ?? []).map((field) => field.key) : query.select;
     const fields = selected.flatMap((key) => {
       const field = record?.fields.find((candidate) => candidate.key === key);
       return field === undefined ? [] : [Object.freeze({
-        reference: `${module.key}:${query.record_type}.${field.key}`, label: field.label, type: field.type,
+        reference: `${recordType}.${field.key}`, label: field.label, type: field.type,
       })];
     });
     return Object.freeze({ reference: `${module.key}:${query.key}`, label: query.label ?? query.key,
-      recordType: `${module.key}:${query.record_type}`, fields: Object.freeze(fields) });
+      recordType, fields: Object.freeze(fields) });
   }));
 
 /** The record types of the application's own Modules in the draft, as `<module>:<record>`. */
