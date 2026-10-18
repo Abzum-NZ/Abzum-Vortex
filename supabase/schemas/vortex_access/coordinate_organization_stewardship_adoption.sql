@@ -81,6 +81,10 @@ begin
       message = 'Organization stewardship adoption scope is unavailable';
   end if;
 
+  perform pg_catalog.set_config(
+    'vortex_access.exclusive_organization_id', p_organization_id::text, true
+  );
+
   select stored.* into stewardship
   from vortex_access.organization_stewardship_requirements as stored
   where stored.organization_id = p_organization_id
