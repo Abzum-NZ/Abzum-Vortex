@@ -109,10 +109,12 @@ function InputName({ input, disabled, commit }: Readonly<{
  * name, page size or filter that is not valid yet stays in its control with why. Delete is refused
  * while anything uses the query.
  */
-export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields, recordTypes, disabled, edit, onDeleted }: Readonly<{
+export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields, draftCompiles, recordTypes, disabled, edit, onDeleted }: Readonly<{
   source: Source; moduleKey: string; queryKey: string;
   /** The compiled fields of the saved draft, which the filter's typed controls need. */
   compiledFields: StudioCompiledFields | null;
+  /** Whether the saved draft compiled: without a compile the filter can only be removed. */
+  draftCompiles: boolean;
   /** Every record type of the application, which a record input may name. */
   recordTypes: readonly Readonly<{ key: string; label: string }>[];
   disabled: boolean;
@@ -266,7 +268,13 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
 
     <Section title="Filter" hint="Which records the query lists. Compare a field with a fixed value or with one of the query's inputs.">
       {reading?.kind === "unreadable" || context === undefined
-        ? <p role="note" className="text-sm">{reading?.kind === "unreadable" ? reading.reason : "The filter can't be edited here."} The filter stays as it is.</p>
+        ? <div className="space-y-2">
+          <p role="note" className="text-sm">{!draftCompiles
+            ? "The draft does not compile right now, so the filter controls can't read the record type's fields. Fix what the notice above names, or remove the filter."
+            : reading?.kind === "unreadable" ? reading.reason : "The filter can't be edited here."} Until then the filter stays as it is.</p>
+          {query.filter === null ? null : <Button type="button" size="sm" variant="outline" disabled={disabled}
+            onClick={() => change({ filter: null })}>Remove the filter</Button>}
+        </div>
         : <StudioConditionControls key={filter.epoch} label="Filter" context={context}
           {...(filter.value === undefined ? {} : { value: filter.value })}
           onChange={(condition, validation) => changeFilter(condition, validation.isValid)} />}
