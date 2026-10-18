@@ -6,6 +6,7 @@ import {
 } from "./application-source-contracts";
 import { changeableByPeople } from "./module-field-shape";
 import { applicationUses, type ApplicationUsePlace } from "./application-uses";
+import { fullRecordAccessRoleKeys } from "./module-permission-shape";
 
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
@@ -119,8 +120,8 @@ const parsed = (source: ApplicationSourceDocument, actionKey: string): InlineMod
 
 /**
  * Creates or changes one named action of an owned Module's record type. A new action gets its own
- * named permission, granted to every access group of the Application as the standard permissions
- * are; its own permission follows the fields the action reads and sets. Tasks the action has besides
+ * named permission, granted only to roles holding every existing record permission across the
+ * Application's owned Modules; its permission follows the fields the action reads and sets. Tasks besides
  * setting fields (announcing events, linking records) are kept as they are.
  */
 export const saveInlineModuleAction = (
@@ -222,6 +223,7 @@ export const saveInlineModuleAction = (
   if (change.permission.kind === "own") {
     const policy = { readable_fields: readable, changeable_fields: changeable };
     if (own === undefined) {
+      const fullAccessRoles = fullRecordAccessRoleKeys(current);
       module.permissions.push({
         id: uniqueAlias(`perm_${record.key}_${newName}`, taken), key: actionKey,
         label: `${label} (${record.name})`.slice(0, 60),
@@ -231,7 +233,7 @@ export const saveInlineModuleAction = (
       } as unknown as ModulePermission);
       for (const role of source.body.roles) {
         const entries = role.permissions as string[];
-        if (!entries.includes("*") && !entries.includes(actionKey)) entries.push(actionKey);
+        if (fullAccessRoles.has(role.key) && !entries.includes("*") && !entries.includes(actionKey)) entries.push(actionKey);
       }
     } else (own as { field_policy?: unknown }).field_policy = policy;
   }
