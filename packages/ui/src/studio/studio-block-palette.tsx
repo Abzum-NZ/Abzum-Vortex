@@ -3,7 +3,8 @@
 import { Icon, resolveVortexIconName } from "../icons";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "../components/empty";
 import { Drawer } from "@puckeditor/core";
-import { useId, useMemo, useState, type CSSProperties } from "react";
+import { useId, useMemo, useState } from "react";
+import { studioPuckStyle } from "./studio-puck-style";
 import { Button } from "../components/button";
 import { Input } from "../components/input";
 import { Label } from "../components/label";
@@ -76,11 +77,7 @@ export function StudioBlockPalette({
     });
 
   return (
-    <div
-      className="space-y-3"
-      data-vortex-studio-palette=""
-      style={{ "--puck-font-family": "var(--font-sans)" } as CSSProperties}
-    >
+    <div className="space-y-3" data-vortex-studio-palette="" style={studioPuckStyle}>
       <div className="flex flex-col gap-2">
         <Label htmlFor={targetSelectId}>Add to</Label>
         <NativeSelect
