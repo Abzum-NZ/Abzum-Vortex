@@ -1572,29 +1572,6 @@
                             },
                             "cases": [
                               {
-                                "key": "recent_sign_in_required",
-                                "when": {
-                                  "type": "text",
-                                  "value": "recent_sign_in_required"
-                                },
-                                "tasks": [
-                                  {
-                                    "id": "unavailable_recent_sign_in_required",
-                                    "type": "interface.show_message",
-                                    "version": "1.0.0",
-                                    "properties": {
-                                      "message": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "Installing and upgrading need a sign-in within the last 15 minutes. Sign out, sign in again and try once more."
-                                        }
-                                      }
-                                    }
-                                  }
-                                ]
-                              },
-                              {
                                 "key": "not_published",
                                 "when": {
                                   "type": "text",
