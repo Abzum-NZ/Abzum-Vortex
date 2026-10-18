@@ -417,6 +417,23 @@ const deriveFieldInputContract = (field: FieldInputSourceField): DerivedFieldInp
             : {}),
         },
       };
+    case "attachment": {
+      const attachment = field.attachmentSettings;
+      if (attachment === undefined)
+        return reject("vortex.definition.unsupported_field_type", "required_value");
+      return {
+        control: "attachment",
+        settings: {
+          multiple: { kind: "boolean", value: attachment.multiple },
+          maximum_files: { kind: "number", value: attachment.multiple ? attachment.maxFiles : 1 },
+          maximum_size_mb: { kind: "number", value: attachment.maxFileSizeMb },
+          accepted_extensions: {
+            kind: "text",
+            value: attachment.allowedExtensions?.join(",") ?? "",
+          },
+        },
+      };
+    }
     case "table": {
       const table = field.tableSettings;
       if (table === undefined)

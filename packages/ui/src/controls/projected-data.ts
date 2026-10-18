@@ -48,6 +48,14 @@ type TypedSeveralChoicesValue = readonly string[];
 
 export type TypedTableValue = ReturnType<typeof moduleFieldValueSchemas.table.parse>;
 
+export type AttachmentInputPayload = Readonly<{
+  kind: "attachment_input";
+  value: readonly string[];
+  files: readonly Readonly<{ fileId: string; name: string }>[];
+  uploadUrl: string;
+  error?: string;
+}>;
+
 export type TableInputPayload = Readonly<{
   kind: "table_input";
   value?: TypedTableValue | null;
@@ -203,6 +211,7 @@ export type SeveralChoicesInputPayload = Readonly<{
  * referenced module field selected, so a projected value is validated as that control's own shape.
  */
 export type FieldInputPayload =
+  | AttachmentInputPayload
   | TextInputPayload
   | LinkInputPayload
   | RichTextInputPayload
@@ -817,12 +826,46 @@ export const parseTableInputPayload = (
   };
 };
 
+export const parseAttachmentInputPayload = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation = {},
+): AttachmentInputPayload => {
+  const record = requireRecord(value, "Attachment values must be an object", location);
+  requireExactKeys(record, ["kind", "value", "files", "uploadUrl", "error"], location);
+  if (
+    record.kind !== "attachment_input" ||
+    !Array.isArray(record.value) ||
+    !record.value.every((id) => typeof id === "string") ||
+    !Array.isArray(record.files) ||
+    typeof record.uploadUrl !== "string" ||
+    !record.uploadUrl.startsWith("/api/files/upload?")
+  )
+    return fail("Attachment values are invalid", location);
+  const files = record.files.map((item) => {
+    const file = requireRecord(item, "Attachment file must be an object", location);
+    requireExactKeys(file, ["fileId", "name"], location);
+    return {
+      fileId: requireNonEmptyString(file.fileId, "Attachment identity is required", location),
+      name: requireNonEmptyString(file.name, "Attachment name is required", location),
+    };
+  });
+  return {
+    kind: "attachment_input",
+    value: record.value as string[],
+    files,
+    uploadUrl: record.uploadUrl,
+    ...optionalError(record, location),
+  };
+};
+
 export const parseFieldInputPayload = (
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
 ): FieldInputPayload => {
   const record = requireRecord(value, "Projected control values must be an object", location);
   switch (record.kind) {
+    case "attachment_input":
+      return parseAttachmentInputPayload(value, location);
     case "table_input":
       return parseTableInputPayload(value, location);
     case "text_input":

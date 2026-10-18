@@ -25,6 +25,7 @@ as $function$
     'activatedAt', vortex_platform.format_timestamp_utc(p_file.activated_at),
     'deletedAt', vortex_platform.format_timestamp_utc(p_file.deleted_at),
     'removalDueAt', vortex_platform.format_timestamp_utc(p_file.removal_due_at),
+    'removedAt', vortex_platform.format_timestamp_utc(p_file.removed_at),
     'owningAttachmentReferences', pg_catalog.to_jsonb(p_file.owning_attachment_references),
     'ownerRecordTypeId', p_file.owner_record_type_id,
     'ownerRecordId', p_file.owner_record_id,

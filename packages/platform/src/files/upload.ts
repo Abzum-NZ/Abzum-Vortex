@@ -7,7 +7,6 @@ import {
   PRIVATE_FILE_BUCKET,
   fileIdSchema,
   fileRecordSchema,
-  fileUploadScanOutcomeSchema,
   fingerprintSchema,
   platformIdSchema,
   trustedFileInspectionSchema,
@@ -17,11 +16,9 @@ import {
   type FieldId,
   type FileId,
   type FileRecord,
-  type FileUploadActivationRefusalReason,
   type FileUploadAdmissionRefusalReason,
   type FileUploadCompletionRefusalReason,
   type FileUploadRenewalRefusalReason,
-  type FileUploadScanOutcome,
   type Fingerprint,
   type OrganizationId,
   type PlatformId,
@@ -32,7 +29,6 @@ import {
   type UploadGrant,
   type VerifiedFileActor,
 } from "../schema";
-import type { CapabilityReservationResult } from "../access/index";
 import { createUnguessableStorageKey } from "./storage-policy";
 import {
   expectedContentKindsForExtension,
@@ -54,11 +50,6 @@ import type {
   ResolveCurrentStorageAuthority,
   StorageCredentialBridge,
 } from "./storage-credentials";
-import {
-  runUploadCapabilityAdmission,
-  type UploadCapabilityAdmissionRequest,
-  type UploadCapabilityReservationPorts,
-} from "./upload-capability-admission";
 
 /**
  * How long an admitted upload may stay pending, across every resumable renewal.
@@ -77,15 +68,15 @@ const PENDING_CHECKSUM = fingerprintSchema.parse(`sha256:${"0".repeat(64)}`);
  */
 export type UploadAttachmentSettings = Readonly<{
   allowedKinds: readonly ContentKind[];
-  allowedExtensions?: readonly string[];
+  allowedExtensions?: readonly string[] | undefined;
   maxFileSizeMb: number;
   multiple: boolean;
-  maxFiles?: number;
+  maxFiles?: number | undefined;
 }>;
 
 type AttachmentOwner = Readonly<{
   recordTypeId: RecordTypeId;
-  recordId: RecordId;
+  recordId?: RecordId | undefined;
   fieldId: FieldId;
 }>;
 
@@ -100,7 +91,7 @@ type CurrentUploadAuthority = Readonly<{
   sessionContext: SessionContext;
   /** The record the field permissions below were resolved for. */
   recordTypeId: RecordTypeId;
-  recordId: RecordId;
+  recordId?: RecordId | undefined;
   readableFieldIds: readonly FieldId[];
   changeableFieldIds: readonly FieldId[];
 }>;
@@ -111,9 +102,9 @@ export type PendingUploadState = Readonly<{
   uploader: VerifiedFileActor;
   maximumBytes: number;
   uploadExpiresAt: string;
-  replacingFileId?: FileId;
+  replacingFileId?: FileId | undefined;
   /** The one unsuperseded upload grant, while the upload still accepts bytes. */
-  currentGrantId?: PlatformId;
+  currentGrantId?: PlatformId | undefined;
   correlationId: CorrelationId;
   revision: number;
 }>;
@@ -123,8 +114,7 @@ export type PendingUploadReservation = Readonly<{
   grant: UploadGrant;
   correlationId: CorrelationId;
   uploadExpiresAt: string;
-  capabilityReservationId: PlatformId;
-  replacingFileId?: FileId;
+  replacingFileId?: FileId | undefined;
   existingAttachmentCount: number;
   maxFiles: number;
 }>;
@@ -136,28 +126,23 @@ export type ClaimedUploadGrant = Readonly<{
 }>;
 
 /**
- * Durable upload store, bound by trusted wiring to the same request transaction
- * as the capability reservation ports and the Storage credential bridge's
- * resolver. Every write is a compare-and-set against the upload's revision, runs
+ * Durable upload store, bound to the Storage credential bridge's resolver and
+ * the protected request transaction. Every write checks the upload's revision, runs
  * inside the request's own organisation and verifies that the request actor is
  * the uploader. The `vortex_platform` upload functions are the canonical
  * implementation.
  */
 export type FileUploadRepository = Readonly<{
   /**
-   * Under a lock on the owning record field: refuses a capability reservation
-   * that is not a live, unconsumed reservation of this request or is already
-   * used by another upload, a replacement target that is not an active file of
-   * the same field, and a field whose active attachments (counted by the store,
-   * not taken from `existingAttachmentCount`) plus unexpired in-flight uploads
-   * already reach `maxFiles`; otherwise inserts the pending file, its
-   * reservation and its first grant together.
+   * Locks the owning field and checks current authority and active capacity,
+   * including the replacement target. Pending metadata and its first grant are
+   * inserted together. The record save enforces the final attachment capacity.
    */
   reservePendingUpload(reservation: PendingUploadReservation): Promise<
     | Readonly<{ outcome: "reserved"; fileRecord: FileRecord }>
     | Readonly<{
         outcome: "refused";
-        reason: "field_capacity_exceeded" | "replacement_file_not_found" | "capability_refused";
+        reason: "field_capacity_exceeded" | "replacement_file_not_found";
       }>
   >;
   readPendingUpload(fileId: FileId): Promise<PendingUploadState | null>;
@@ -197,26 +182,6 @@ export type FileUploadRepository = Readonly<{
         >;
       }>
   >;
-  /**
-   * Activates a clean scanned upload for the record save that attaches it,
-   * recording the attachment reference. A replacement still requires its
-   * replaced file to be active in the same field.
-   */
-  activateUploadedFile(
-    input: Readonly<{
-      fileId: FileId;
-      expectedRevision: number;
-      owner: AttachmentOwner;
-      attachmentReferenceId: PlatformId;
-      replacingFileId?: FileId;
-    }>,
-  ): Promise<
-    | Readonly<{ outcome: "activated"; fileRecord: FileRecord }>
-    | Readonly<{
-        outcome: "refused";
-        reason: Exclude<FileUploadActivationRefusalReason, "field_not_writable">;
-      }>
-  >;
 }>;
 
 export type UploadedObjectLocation = Readonly<{
@@ -235,16 +200,10 @@ export type UploadedObjectInspector = (
   location: UploadedObjectLocation,
 ) => Promise<TrustedFileInspection | null>;
 
-/** Isolated safety scanning; it never executes the content it scans. */
-export type IsolatedFileScanner = (
-  input: Readonly<{ location: UploadedObjectLocation; inspection: TrustedFileInspection }>,
-) => Promise<FileUploadScanOutcome>;
-
 export type FileUploadCoordinatorDependencies = Readonly<{
   repository: FileUploadRepository;
   bridge: StorageCredentialBridge;
   inspectUploadedObject: UploadedObjectInspector;
-  scanUploadedObject: IsolatedFileScanner;
   clock?: () => Date;
 }>;
 
@@ -259,16 +218,11 @@ export type FileUploadAdmissionInput = CurrentUploadAuthority &
      * service. Used only to refuse early; the store counts the field itself.
      */
     existingAttachmentCount: number;
-    replacingFileId?: FileId;
+    replacingFileId?: FileId | undefined;
     /** Browser-supplied values: used only to refuse early, never to accept content. */
     rawFilename: string;
     claimedSizeBytes: number;
     claimedMediaType?: string;
-    capability: Readonly<{
-      request: UploadCapabilityAdmissionRequest;
-      reservation: CapabilityReservationResult;
-      ports: UploadCapabilityReservationPorts;
-    }>;
     ttlSeconds?: number;
   }>;
 
@@ -316,23 +270,10 @@ export type FileUploadCompletionResult =
     }>
   | Readonly<{ outcome: "refused"; reason: FileUploadCompletionRefusalReason; message: string }>;
 
-export type FileUploadActivationInput = CurrentUploadAuthority &
-  Readonly<{
-    fileId: FileId;
-    owner: AttachmentOwner;
-    attachmentReferenceId: PlatformId;
-    replacingFileId?: FileId;
-  }>;
-
-export type FileUploadActivationResult =
-  | Readonly<{ outcome: "activated"; fileRecord: FileRecord }>
-  | Readonly<{ outcome: "refused"; reason: FileUploadActivationRefusalReason; message: string }>;
-
 export type FileUploadCoordinator = Readonly<{
   admitUpload(input: FileUploadAdmissionInput): Promise<FileUploadAdmissionResult>;
   renewUpload(input: FileUploadRenewalInput): Promise<FileUploadRenewalResult>;
   completeUpload(input: FileUploadCompletionInput): Promise<FileUploadCompletionResult>;
-  activateUpload(input: FileUploadActivationInput): Promise<FileUploadActivationResult>;
 }>;
 
 const REFUSAL_MESSAGES = {
@@ -342,7 +283,6 @@ const REFUSAL_MESSAGES = {
   file_size_exceeded: "The file is larger than the attachment field allows",
   disallowed_extension: "The file name's extension is not accepted by the attachment field",
   executable_content_refused: "Executable content is refused by platform safety policy",
-  capability_refused: "Upload capacity was not admitted",
   replacement_file_not_found: "The file being replaced is not a current attachment of this field",
   malformed_request: "The upload request is malformed",
   file_not_found: "The upload was not found",
@@ -492,7 +432,7 @@ const authorizeUploader = (
   if (
     fieldId === undefined ||
     !sameId(state.fileRecord.ownerRecordTypeId, authority.recordTypeId) ||
-    !sameId(state.fileRecord.ownerRecordId, authority.recordId) ||
+    state.fileRecord.ownerRecordId !== authority.recordId ||
     !verifyAttachmentFieldAuthority({
       fieldId,
       readableFieldIds: authority.readableFieldIds,
@@ -516,25 +456,11 @@ const objectLocation = (fileRecord: FileRecord): UploadedObjectLocation =>
     objectPath: fileRecord.storageKey,
   });
 
-type ReservationRefusalReason = Extract<
-  Awaited<ReturnType<FileUploadRepository["reservePendingUpload"]>>,
-  { outcome: "refused" }
->["reason"];
-
-/** Carries a store refusal out of the admission workflow, which then releases the reservation. */
-class UploadReservationRefused extends Error {
-  constructor(readonly reason: ReservationRefusalReason) {
-    super("FILE_UPLOAD_RESERVATION_REFUSED");
-  }
-}
-
 /**
  * Admits one upload. After current record/field authority and the field's
- * canonical settings accept the request, the exact capability reservation
- * funds one pending file: its pending metadata and first exact-object grant are
- * reserved before any byte is accepted, and the browser receives only a
- * short-lived INSERT credential for that pending object. The reservation is
- * consumed only once the pending upload exists; a refusal or failure releases it.
+ * canonical settings accept the request, its pending metadata and first grant
+ * are persisted before any bytes are accepted. The browser receives only a
+ * short-lived INSERT credential for that pending object.
  */
 export const reservePendingUpload = async (
   dependencies: FileUploadCoordinatorDependencies,
@@ -549,9 +475,7 @@ export const reservePendingUpload = async (
     input.claimedSizeBytes < 0 ||
     !Number.isSafeInteger(input.existingAttachmentCount) ||
     input.existingAttachmentCount < 0 ||
-    !areUsableSettings(settings) ||
-    input.capability === undefined ||
-    input.capability === null
+    !areUsableSettings(settings)
   ) {
     return refuse("malformed_request");
   }
@@ -588,20 +512,11 @@ export const reservePendingUpload = async (
       : input.existingAttachmentCount - 1;
   if (remainingCount >= maximumFiles(settings)) return refuse("field_capacity_exceeded");
 
-  const entitlement = input.capability.request?.entitlement;
-  if (
-    entitlement === undefined ||
-    !sameId(entitlement.tenantId, input.sessionContext.tenantId) ||
-    !sameId(entitlement.organizationId, input.organizationId)
-  ) {
-    return refuse("capability_refused");
-  }
-
   const fileId = fileIdSchema.parse(randomUUID());
   const oneTimeId = platformIdSchema.parse(randomUUID());
   const owner: AttachmentOwner = {
     recordTypeId: input.recordTypeId,
-    recordId: input.recordId,
+    ...(input.recordId === undefined ? {} : { recordId: input.recordId }),
     fieldId: input.fieldId,
   };
   const maximumBytes = Math.max(1, input.claimedSizeBytes);
@@ -647,52 +562,34 @@ export const reservePendingUpload = async (
     oneTimeId,
   });
 
-  const admission = await runUploadCapabilityAdmission(
-    input.capability.ports,
-    input.capability.request,
-    input.capability.reservation,
-    async (reservation) => {
-      const reserved = await dependencies.repository.reservePendingUpload({
-        fileRecord: pendingRecord.data,
-        grant: uploadGrant,
-        correlationId: input.sessionContext.correlationId,
-        uploadExpiresAt,
-        capabilityReservationId: reservation.reservationId,
-        ...(input.replacingFileId === undefined ? {} : { replacingFileId: input.replacingFileId }),
-        existingAttachmentCount: input.existingAttachmentCount,
-        maxFiles: maximumFiles(settings),
-      });
-      if (reserved.outcome === "refused") throw new UploadReservationRefused(reserved.reason);
-
-      const fileRecord = fileRecordSchema.parse(reserved.fileRecord);
-      if (
-        fileRecord.fileId !== fileId ||
-        fileRecord.storageKey !== pendingRecord.data.storageKey ||
-        fileRecord.lifecycleState !== "pending"
-      ) {
-        throw new Error("FILE_UPLOAD_RESERVATION_INCONSISTENT");
-      }
-      const browserUploadGrant = await dependencies.bridge.mintBrowserUploadGrant({
-        request: { operation: "upload", grant: uploadGrant },
-        ttlSeconds,
-      });
-      return { fileRecord, browserUploadGrant };
-    },
-  ).catch((error: unknown) => {
-    // The admission workflow has already released the reservation.
-    if (error instanceof UploadReservationRefused) return error;
-    throw error;
+  const reserved = await dependencies.repository.reservePendingUpload({
+    fileRecord: pendingRecord.data,
+    grant: uploadGrant,
+    correlationId: input.sessionContext.correlationId,
+    uploadExpiresAt,
+    ...(input.replacingFileId === undefined ? {} : { replacingFileId: input.replacingFileId }),
+    existingAttachmentCount: input.existingAttachmentCount,
+    maxFiles: maximumFiles(settings),
   });
-  if (admission instanceof UploadReservationRefused) return refuse(admission.reason);
-  if (admission.outcome === "refused") return refuse("capability_refused");
-
+  if (reserved.outcome === "refused") return refuse(reserved.reason);
+  const fileRecord = fileRecordSchema.parse(reserved.fileRecord);
+  if (
+    fileRecord.fileId !== fileId ||
+    fileRecord.storageKey !== pendingRecord.data.storageKey ||
+    fileRecord.lifecycleState !== "pending"
+  )
+    throw new Error("FILE_UPLOAD_RESERVATION_INCONSISTENT");
+  const browserUploadGrant = await dependencies.bridge.mintBrowserUploadGrant({
+    request: { operation: "upload", grant: uploadGrant },
+    ttlSeconds,
+  });
   return Object.freeze({
     outcome: "admitted" as const,
     fileId,
     uploadGrant,
-    browserUploadGrant: admission.value.browserUploadGrant,
+    browserUploadGrant,
     uploadExpiresAt,
-    fileRecord: admission.value.fileRecord,
+    fileRecord,
   });
 };
 
@@ -830,8 +727,7 @@ const completionOf = (fileRecord: FileRecord): FileUploadCompletionResult =>
 /**
  * Completes an upload from its stored bytes. After rechecking the uploader's
  * current authority, trusted inspection supplies the actual size, detected media
- * type, content extension and checksum; the field settings and the isolated
- * scanner then leave the file scanning with a clean result, ready for the record
+ * type, content extension and checksum; the field settings and content inspection then leave the file scanning with a clean result, ready for the record
  * save that activates it, or quarantine it (refused content included). Browser
  * metadata plays no part. A repeated completion returns the recorded result.
  */
@@ -883,16 +779,11 @@ export const completeFileUpload = async (
     state.maximumBytes,
     settings,
   );
-  const safetyResult =
-    decision.outcome === "clean"
-      ? fileUploadScanOutcomeSchema.parse(
-          await dependencies.scanUploadedObject({ location, inspection }),
-        )
-      : {
-          scannerName: PREFLIGHT_SCANNER_NAME,
-          scannerVersion: PREFLIGHT_SCANNER_VERSION,
-          scannerResult: decision.outcome,
-        };
+  const safetyResult = {
+    scannerName: PREFLIGHT_SCANNER_NAME,
+    scannerVersion: PREFLIGHT_SCANNER_VERSION,
+    scannerResult: decision.outcome,
+  };
 
   const recorded = await dependencies.repository.recordUploadOutcome({
     fileId: fileRecord.fileId,
@@ -923,64 +814,6 @@ export const completeFileUpload = async (
  * file it replaces: that attachment stays current until this save commits, and
  * the save's own detachment then retires it through the ordinary lifecycle.
  */
-export const activateUploadedFile = async (
-  dependencies: FileUploadCoordinatorDependencies,
-  input: FileUploadActivationInput,
-): Promise<FileUploadActivationResult> => {
-  const now = (dependencies.clock ?? defaultClock)();
-
-  const state = await dependencies.repository.readPendingUpload(input.fileId);
-  if (state === null) return refuse("file_not_found");
-
-  const authority = authorizeUploader(state, input);
-  if (!authority.authorized) return refuse(authority.reason);
-
-  const fileRecord = state.fileRecord;
-  if (
-    !sameId(fileRecord.ownerRecordTypeId, input.owner.recordTypeId) ||
-    !sameId(fileRecord.ownerRecordId, input.owner.recordId) ||
-    !sameId(fileRecord.ownerFieldId, input.owner.fieldId)
-  ) {
-    return refuse("owner_mismatch");
-  }
-  if (
-    fileRecord.lifecycleState === "active" &&
-    fileRecord.owningAttachmentReferences.some((reference) =>
-      sameId(reference, input.attachmentReferenceId),
-    )
-  ) {
-    return Object.freeze({ outcome: "activated" as const, fileRecord });
-  }
-  if (fileRecord.lifecycleState !== "scanning" || fileRecord.scannerResult !== "clean") {
-    return refuse("invalid_lifecycle_state");
-  }
-  if (!isOpen(state, now)) return refuse("upload_expired");
-  if (!sameId(state.replacingFileId, input.replacingFileId)) {
-    return refuse("replacement_file_not_found");
-  }
-
-  const activated = await dependencies.repository.activateUploadedFile({
-    fileId: fileRecord.fileId,
-    expectedRevision: state.revision,
-    owner: input.owner,
-    attachmentReferenceId: input.attachmentReferenceId,
-    ...(input.replacingFileId === undefined ? {} : { replacingFileId: input.replacingFileId }),
-  });
-  if (activated.outcome === "refused") return refuse(activated.reason);
-
-  const stored = fileRecordSchema.parse(activated.fileRecord);
-  if (
-    stored.fileId !== fileRecord.fileId ||
-    stored.lifecycleState !== "active" ||
-    !stored.owningAttachmentReferences.some((reference) =>
-      sameId(reference, input.attachmentReferenceId),
-    )
-  ) {
-    throw new Error("FILE_UPLOAD_ACTIVATION_INCONSISTENT");
-  }
-  return Object.freeze({ outcome: "activated" as const, fileRecord: stored });
-};
-
 /**
  * The Storage credential bridge's authority for upload-side operations. An
  * upload credential is issued once per current, unexpired grant of a pending
@@ -1050,8 +883,8 @@ export const createUploadStorageAuthorityResolver = (
 };
 
 /**
- * Composes current attachment authority, field settings, capability admission,
- * the Storage credential bridge, trusted inspection and isolated scanning into one
+ * Composes current attachment authority, field settings, admission,
+ * the Storage credential bridge, trusted inspection and content inspection into one
  * upload lifecycle: admit, renew, complete, and activate in the record save.
  */
 export const createFileUploadCoordinator = (
@@ -1061,5 +894,4 @@ export const createFileUploadCoordinator = (
     admitUpload: (input) => reservePendingUpload(dependencies, input),
     renewUpload: (input) => renewPendingUpload(dependencies, input),
     completeUpload: (input) => completeFileUpload(dependencies, input),
-    activateUpload: (input) => activateUploadedFile(dependencies, input),
   });
