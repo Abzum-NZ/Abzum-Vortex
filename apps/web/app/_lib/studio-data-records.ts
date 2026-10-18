@@ -1,14 +1,11 @@
 import "server-only";
 
 import {
-  BuilderAuthorityError,
   collectRecordLinks,
   collectRecordLinkValues,
-  createBuilderAuthority,
   protectedQueryCommandSchema,
   protectedQuerySummaryCommandSchema,
   recordLinkPlainText,
-  requireBuilderAuthority,
   type ProjectedRecordLinks,
 } from "@vortex/platform/server";
 import {
@@ -18,22 +15,19 @@ import {
   isRecord,
   namespacedKeySchema,
   organizationIdSchema,
+  revisionSchema,
   sameId,
   type IdentitySession,
   type JsonValue,
 } from "@vortex/platform/schema";
 import { z } from "zod";
-import { humanOrganizationRequests } from "./server-composition";
-import { platformPermissionSource } from "./platform-permission-source";
-import { studioDraftTargetFacts } from "./studio-application-draft";
-import { loadInstalledContext, requestDependencies } from "./application-page/load";
-import { createPlacementReadServices } from "./application-page/placement-services";
-import { loadOrganizationLauncher } from "./organization-context";
-import { getQueryContinuationKey } from "./query-continuation-key";
+import { openStudioPreviewRead } from "./studio-preview-read";
 import type { ModuleRelease } from "./application-page/types";
 
 const requestSchema = z.object({
   rootId: applicationRootIdSchema,
+  /** The saved draft revision whose preview the records are read from. */
+  draftRevision: revisionSchema,
   moduleKey: namespacedKeySchema,
   recordKey: builderKeySchema,
   /** A query of the record type's module; absent to read the record type through its first plain query. */
@@ -60,6 +54,8 @@ export type StudioDataRecordsResult =
       rows: readonly Readonly<{ id: string; cells: Readonly<Record<string, string>> }>[];
       next?: string;
       previous?: string;
+      /** Read from the preview while it still runs an older revision's data shape: read again shortly. */
+      behind: boolean;
     }>
   /** A query that groups records or adds totals: its groups, each with its count and totals, and its overall totals. */
   | Readonly<{
@@ -76,10 +72,15 @@ export type StudioDataRecordsResult =
       previous?: string;
       totalRowCount: number;
       totals: readonly StudioDataTotal[];
+      behind: boolean;
     }>
-  /** The running application does not have this module, record type or query yet: preview or publish first. */
-  | Readonly<{ kind: "not_installed" }>
-  /** The record type is installed, but has no query without inputs to read its records through. */
+  /** The saved draft revision does not have this module, record type or query: save first. */
+  | Readonly<{ kind: "not_saved" }>
+  /** The preview is still moving to the saved revision that has this: read again shortly. */
+  | Readonly<{ kind: "following" }>
+  /** The saved draft changed since the revision the request names: read again for the current one. */
+  | Readonly<{ kind: "conflict" }>
+  /** The record type has no query without inputs to read its records through. */
   | Readonly<{ kind: "no_query" }>
   /** The query refused this read, for example because it needs inputs or the builder may not read it. */
   | Readonly<{ kind: "query_refused"; reason: string }>
@@ -134,10 +135,11 @@ const cellText = (field: ModuleField, value: JsonValue | undefined, links: Proje
 };
 
 /**
- * Reads, with the builder's own access, one page of the records of a record type, or of one query,
- * in the running application. It reads through the running application's own query service against
- * the installed release, so the builder sees exactly the records and fields they may read there.
- * A module, record type or query that is only in the draft has no records to read yet.
+ * Reads one page of the records of a record type, or of one query, through the builder's own
+ * preview installation of exactly the saved draft revision. It reads through the running
+ * application's own query service against the preview, so a record type or query that is only in
+ * the saved draft has its records too, and the builder sees exactly the records and fields their
+ * preview access lets them read. A page is at most 200 records, read with keyset paging.
  */
 export const readStudioDataRecords = async (
   session: IdentitySession,
@@ -149,47 +151,26 @@ export const readStudioDataRecords = async (
   if (!organization.success || !parsed.success) return { kind: "refused" };
   const request = parsed.data;
   try {
-    const allowed = await humanOrganizationRequests().run(session, { organizationId: organization.data },
-      async (transaction, scope) => {
-        const authority = createBuilderAuthority({ transaction, scope, targetFacts: studioDraftTargetFacts,
-          permissions: platformPermissionSource });
-        try {
-          await requireBuilderAuthority(authority, { kind: "draft_change", rootId: request.rootId });
-        } catch (error) {
-          if (error instanceof BuilderAuthorityError) return false;
-          throw error;
-        }
-        return true;
-      });
-    if (allowed.kind !== "available")
-      return allowed.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };
-    if (!allowed.value) return { kind: "refused" };
+    // The builder's draft authority is checked where the saved draft and their preview are read.
+    const preview = await openStudioPreviewRead(session, organization.data, request.rootId, request.draftRevision);
+    if (preview.kind !== "available") return preview;
 
-    const dependencies = requestDependencies();
-    const selection = { organizationId: organization.data, applicationRootId: request.rootId };
-    const installed = await loadInstalledContext(session, dependencies, selection);
-    if (installed.kind !== "available") return { kind: "not_installed" };
-    const context = installed.value;
+    const { context, selection, services, behind } = preview;
+    // What the preview does not have yet, while it still moves to this revision, follows shortly.
+    const missing = behind ? { kind: "following" } as const : { kind: "not_saved" } as const;
     const module = context.releaseSet.modules.find((candidateModule) => candidateModule.definitionKey === request.moduleKey);
     const record = module?.content.recordTypes.find((candidateRecord) => candidateRecord.key === request.recordKey);
-    if (module === undefined || record === undefined) return { kind: "not_installed" };
+    if (module === undefined || record === undefined) return missing;
     const query = request.queryKey === undefined ? plainQueryOf(module, record)
       : module.content.queries.find((candidateQuery) => candidateQuery.key === request.queryKey);
-    if (query === undefined) return request.queryKey === undefined ? { kind: "no_query" } : { kind: "not_installed" };
+    if (query === undefined) return request.queryKey === undefined && !behind ? { kind: "no_query" } : missing;
     const queryRecord = query.recordType.state === "resolved"
       ? context.releaseSet.modules.flatMap((candidateModule) => candidateModule.content.recordTypes)
         .find((candidateRecord) => sameId(String(candidateRecord.recordTypeId), String((query.recordType as { recordTypeId: string }).recordTypeId)))
       : undefined;
-    if (queryRecord === undefined) return { kind: "not_installed" };
+    if (queryRecord === undefined) return missing;
 
     const summary = query.groupByFieldIds.length > 0 || query.aggregates.length > 0;
-    const launcher = await loadOrganizationLauncher(session);
-    const entry = launcher.kind === "available"
-      ? launcher.entries.find((candidateEntry) => sameId(candidateEntry.organizationId, organization.data)) : undefined;
-    if (entry === undefined) return { kind: "refused" };
-    const services = createPlacementReadServices({ session, selection, dependencies,
-      continuationKey: getQueryContinuationKey(), tenantShortName: entry.tenantShortName,
-      organizationShortName: entry.organizationShortName });
     const label = query.label ?? sentence(query.key);
     if (summary) {
       const summaryCommand = protectedQuerySummaryCommandSchema.safeParse({ moduleRootId: module.rootId, queryId: query.queryId, inputValues: {} });
@@ -223,7 +204,7 @@ export const readStudioDataRecords = async (
             value: result === undefined ? "None" : totalText(result) };
         });
       return {
-        kind: "summary", queryLabel: label, totalRowCount: completed.totalRowCount, totals: totalsOf(completed.aggregates),
+        kind: "summary", behind, queryLabel: label, totalRowCount: completed.totalRowCount, totals: totalsOf(completed.aggregates),
         groupColumns: groupFields.map((field) => ({ key: field.key, label: field.label })),
         groupCount: completed.groups.length,
         ...(end < completed.groups.length && shown.length > 0 ? { next: `g:${shown.at(-1)!.groupKey}` } : {}),
@@ -257,6 +238,7 @@ export const readStudioDataRecords = async (
     const title = fields.find((field) => sameId(String(field.fieldId), String(queryRecord.titleFieldId)));
     return {
       kind: "available",
+      behind,
       queryLabel: label,
       columns: fields.map((field) => ({ key: field.key, label: field.label })),
       ...(title === undefined ? {} : { titleColumn: title.key }),

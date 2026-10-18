@@ -3236,6 +3236,30 @@
                             {
                               "type": "platform.renderer.field_input",
                               "props": {
+                                "id": "input_crm_opportunity_edit_value",
+                                "field": "vortex.crm.opportunities:opportunity.value",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
                                 "id": "input_crm_opportunity_edit_primary_contact",
                                 "field": "vortex.crm.opportunities:opportunity.primary_contact",
                                 "vortex": {

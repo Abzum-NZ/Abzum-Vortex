@@ -28,6 +28,7 @@ export type OrganizationAccessAdministrationDependencies = HumanOrganizationRequ
     groupId?: () => string;
     membershipId?: () => string;
     roleAssignmentId?: () => string;
+    delegationAuthorityId?: () => string;
     activityId?: () => string;
   }>;
 
@@ -39,6 +40,7 @@ export const createOrganizationAccessAdministrationService = (
     newGroupId: dependencies.groupId ?? randomUUID,
     newMembershipId: dependencies.membershipId ?? randomUUID,
     newRoleAssignmentId: dependencies.roleAssignmentId ?? randomUUID,
+    newDelegationAuthorityId: dependencies.delegationAuthorityId ?? randomUUID,
     newActivityId: dependencies.activityId ?? randomUUID,
   };
   // Organisation-account lifecycle and invitation operations are complete in the local

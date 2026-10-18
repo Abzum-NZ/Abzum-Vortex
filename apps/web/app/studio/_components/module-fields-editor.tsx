@@ -13,18 +13,20 @@ import {
   type StudioCompositionContext, type StudioRecordReader, type StudioSettingChoices, type StudioSettingValues,
 } from "@vortex/ui/studio";
 import {
-  changeInlineModuleField, deleteInlineModuleField, deriveFieldKey, fieldTypeKeys, moduleFieldDefaultDeclaration,
-  moduleFieldKeptSettings, moduleFieldSettingDeclarations, moduleFieldTypeLabels, moveInlineModuleField,
-  peopleDirectory, readModuleFieldDefault, readModuleFieldSettings, starterModuleFieldSettings, writeModuleFieldDefault,
+  calculationProblems, changeInlineModuleField, deleteInlineModuleField, deriveFieldKey, fieldTypeKeys, moduleFieldDefaultDeclaration,
+  moduleFieldSettingDeclarations, moduleFieldTypeLabels, moveInlineModuleField,
+  peopleDirectory, readModuleFieldDefault, readModuleFieldSettings, settledCalculation, starterModuleFieldSettings, totalProblems, totalRelationships, writeModuleFieldDefault,
   writeModuleFieldSettings, type ApplicationSourceDocument, type ApplicationUsePlace, type LinkCardinality,
-  type ModuleFieldPublication, type ModuleFieldType, type PeopleDirectoryOwner,
+  type CalculationSettings, type FormulaField, type ModuleFieldPublication, type ModuleFieldType, type PeopleDirectoryOwner, type TotalSettings,
 } from "@vortex/platform/schema";
 import { StudioField } from "./studio-field";
 import { StudioReferencesAlert } from "./studio-used-in";
 import { StudioLinkSection } from "./studio-link-section";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
-import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
+import { studioEditProblem, type StudioCompiledFields, type StudioDataEdit } from "../_lib/studio-data-model";
+import { StudioCalculationEditor } from "./studio-calculation-editor";
+import { StudioTotalEditor } from "./studio-total-editor";
 
 /** An application in this organisation, for the link to the owner of a used module. */
 export type StudioModuleOwnerApplication = Readonly<{ key: string; rootId: string; name: string }>;
@@ -48,16 +50,21 @@ export type ModuleFieldEditorContext = Readonly<{
   usedRecordTypes: readonly StudioLinkTarget[];
   peopleDirectory: PeopleDirectoryOwner | null;
   readRecords: StudioRecordReader | null;
+  /** The saved draft's compiled fields, which a calculation's condition and a total's filter need. */
+  compiledFields: StudioCompiledFields | null;
 }>;
 
 type FormState = Readonly<{
   label: string; helpText: string; type: ModuleFieldType;
   required: boolean; unique: boolean; filterable: boolean; sortable: boolean;
   settings: StudioSettingValues; defaultValue: StudioSettingValues;
+  /** A calculation's or a total's settings, as its formula or total editor holds them; empty for other types. */
+  computed: Plain;
   /** How many records may link to one linked record; read only for a link. */
   cardinality: LinkCardinality;
 }>;
 
+const computedTypes: ReadonlySet<ModuleFieldType> = new Set(["calculation", "total"]);
 const linkTypes: ReadonlySet<string> = new Set(["link", "link_to_one_of_several"]);
 /** A person is linked with a Link to a record whose target is the people directory's Person, not this older type. */
 const replacedFieldTypes: ReadonlySet<string> = new Set(["link_to_person"]);
@@ -103,25 +110,20 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
     return { ...item, titleLabel: target?.fields.find((field) => field.key === target.title_field)?.label };
   }), ...context.usedRecordTypes], [source, context.usedRecordTypes]);
   const relationships = useMemo(() => studioRelationshipChoices(source, null), [source]);
-  const otherFields = (record?.fields ?? []).filter((item) => item.key !== existing?.key)
-    .map((item) => ({ key: item.key, label: item.label, type: item.type }));
-  const fieldsOf = (reference: string | undefined) => {
-    if (reference === undefined) return [];
-    const [owner, rest = ""] = reference.split(":");
-    const [relatedRecord] = rest.split(".");
-    return (source.body.modules.find((item) => item.key === owner)?.record_types.find((item) => item.key === relatedRecord)?.fields ?? [])
-      .map((item) => ({ key: item.key, label: item.label, type: item.type }));
-  };
-  const declarationsFor = (type: ModuleFieldType, settings: StudioSettingValues, plain: Plain) => {
-    const relationship = settings.relationship?.kind === "relationship_reference" ? settings.relationship.relationship : undefined;
-    return moduleFieldSettingDeclarations(type, { fields: otherFields, relatedFields: fieldsOf(relationship) }, plain);
-  };
+  const totalLinks = useMemo(() => totalRelationships(source, moduleKey, recordKey), [source, moduleKey, recordKey]);
+  const formulaFields: readonly FormulaField[] = useMemo(() => (record?.fields ?? []).filter((item) => item.key !== existing?.key)
+    .map((item) => ({ key: item.key, label: item.label, type: item.type, settings: item.settings })), [record, existing]);
+  const formulaFieldsByKey = useMemo(() => new Map(formulaFields.map((item) => [item.key, item])), [formulaFields]);
+  const otherFields = formulaFields.map(({ key, label, type }) => ({ key, label, type }));
+  const declarationsFor = (type: ModuleFieldType) => moduleFieldSettingDeclarations(type, { fields: otherFields });
   const startSettings = (type: ModuleFieldType): Record<string, unknown> => {
     const start = starterModuleFieldSettings(type, {
       fieldKey: deriveFieldKey(existing?.label ?? "field", new Set()) ?? "field", recordKey,
       recordTypes: recordTypes.map((item) => item.key), titleField: record?.title_field ?? "",
-      relationships: relationships.map((item) => item.reference),
+      relationships: totalLinks.map((item) => item.reference),
     });
+    // A new calculation is settled like every edit of its formula, so it is read-time when it must be.
+    if (type === "calculation") return settledCalculation(start as CalculationSettings, formulaFieldsByKey);
     // A new link reads back from the linked record by this record type's plural name, for example assets.
     const back = type === "link" && record !== undefined ? deriveFieldKey(record.plural_name, new Set()) : undefined;
     return back === undefined ? start : { ...start, reverse_key: back };
@@ -130,12 +132,10 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
   const plainOf = (type: ModuleFieldType): Plain =>
     existing !== undefined && existing.type === type ? existing.settings as Plain : startSettings(type);
   const read = (type: ModuleFieldType, plain: Plain, stored: unknown) => {
-    const first = readModuleFieldSettings(type, plain, moduleFieldSettingDeclarations(type, { fields: otherFields, relatedFields: [] }, plain));
-    const declarations = declarationsFor(type, first.values, plain);
-    const reading = readModuleFieldSettings(type, plain, declarations);
+    const reading = readModuleFieldSettings(type, plain, declarationsFor(type));
     const defaultDeclaration = moduleFieldDefaultDeclaration(type, plain);
     const typedDefault = defaultDeclaration.kind === "declared" ? readModuleFieldDefault(type, stored, defaultDeclaration.declaration) : undefined;
-    return { reading, defaultValue: typedDefault === undefined ? {} : { default: typedDefault } };
+    return { reading, defaultValue: typedDefault === undefined ? {} : { default: typedDefault }, computed: computedTypes.has(type) ? plain : {} };
   };
   const storedDefault = (existing as { default?: unknown } | undefined)?.default;
   // The field as the draft holds it, or a new field's starting form.
@@ -147,7 +147,7 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
       label: existing?.label ?? "", helpText: existing?.help_text ?? "", type,
       required: existing?.required ?? false, unique: existing?.unique ?? false,
       filterable: existing?.filterable ?? false, sortable: existing?.sortable ?? false,
-      settings: reading.reading.values, defaultValue: reading.defaultValue,
+      settings: reading.reading.values, defaultValue: reading.defaultValue, computed: reading.computed,
       cardinality: relationship?.cardinality === "one_to_one" ? "one_to_one" : "many_to_one",
     };
   };
@@ -157,6 +157,12 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
   const [placements, setPlacements] = useState<ReadonlySet<string>>(new Set());
   const [issues, setIssues] = useState<readonly string[]>([]);
   const [references, setReferences] = useState<readonly ApplicationUsePlace[]>([]);
+  const [computedValid, setComputedValid] = useState(true);
+
+  const computedProblems = (type: ModuleFieldType, settings: Plain): readonly string[] => type === "calculation"
+    ? calculationProblems(settings as CalculationSettings, formulaFieldsByKey, existing?.key)
+    : type === "total" ? totalProblems(settings as TotalSettings,
+      totalLinks.find((item) => item.reference === (settings as TotalSettings).relationship)) : [];
 
   /** One edit of the field: the patch over the field as the draft holds it. */
   const commit = (patch: Partial<FormState>, merge?: string): string | undefined => {
@@ -164,9 +170,14 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
     const next: FormState = { ...stored, ...patch };
     const typeChanged = next.type !== existing.type;
     const plain = plainOf(next.type);
-    const declarations = declarationsFor(next.type, next.settings, plain);
+    const declarations = declarationsFor(next.type);
     let settings: Plain;
-    if (patch.settings === undefined && !typeChanged) settings = existing.settings as Plain;
+    if (computedTypes.has(next.type) && (patch.computed !== undefined || typeChanged)) {
+      const problems = computedProblems(next.type, next.computed);
+      if (problems.length > 0) return problems.join(" ");
+      settings = next.computed;
+    }
+    else if (patch.settings === undefined && !typeChanged) settings = existing.settings as Plain;
     else if (readFailures.length > 0 && !typeChanged) settings = plain;
     else {
       const problems = studioSettingProblems(next.settings, declarations);
@@ -193,12 +204,16 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
     adding ? true : commit({ helpText: next }, mergeKey("help")) ?? true);
   const settingsValue = useStudioDraftHeld(stored.settings);
   const defaultValue = useStudioDraftHeld(stored.defaultValue);
-  const form: FormState = { ...stored, label: label.text, helpText: helpText.text, settings: settingsValue.value, defaultValue: defaultValue.value };
+  const computedValue = useStudioDraftHeld(stored.computed);
+  const form: FormState = { ...stored, label: label.text, helpText: helpText.text, settings: settingsValue.value,
+    defaultValue: defaultValue.value, computed: computedValue.value };
 
   const plainBase = plainOf(form.type);
-  const declarations = declarationsFor(form.type, form.settings, plainBase);
-  const defaultModel = moduleFieldDefaultDeclaration(form.type, writeModuleFieldSettings(form.type, form.settings, declarations, plainBase));
-  const kept = moduleFieldKeptSettings(form.type, plainBase);
+  const computed = computedTypes.has(form.type);
+  const declarations = declarationsFor(form.type);
+  const plainSettings = computed ? form.computed : writeModuleFieldSettings(form.type, form.settings, declarations, plainBase);
+  const defaultModel = moduleFieldDefaultDeclaration(form.type, plainSettings);
+  const compiledOf = (recordType: string) => context.compiledFields?.recordTypes[recordType];
   const choices: StudioSettingChoices = { fields: [], queries: [], pages: [], recordTypes, actions: [],
     relationships, records: context.readRecords };
   const offered = adding ? studioFieldPlacements({ ...context.composition, source }, moduleKey, recordKey, form.type) : [];
@@ -218,7 +233,8 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
   const changeType = (type: ModuleFieldType) => {
     // A field that is not published takes the new type's starting settings; no value is converted.
     const fresh = read(type, plainOf(type), existing !== undefined && existing.type === type ? storedDefault : undefined);
-    change({ type, settings: fresh.reading.values, defaultValue: fresh.defaultValue });
+    setComputedValid(true);
+    change({ type, settings: fresh.reading.values, defaultValue: fresh.defaultValue, computed: fresh.computed });
   };
   const changeSettings = (settings: StudioSettingValues) => {
     if (adding) { setCreated({ ...created, settings }); setIssues([]); return; }
@@ -230,16 +246,26 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
     const problem = commit({ defaultValue: value }, mergeKey("default"));
     if (problem === undefined) defaultValue.applied(value); else defaultValue.hold(value, problem);
   };
+  const changeComputed = (next: Plain, valid: boolean) => {
+    if (adding) {
+      setComputedValid(valid); setCreated({ ...created, computed: next }); computedValue.applied(next); setIssues([]); return;
+    }
+    const problem = valid ? commit({ computed: next }, mergeKey("computed"))
+      : `${form.type === "total" ? "Filter" : "Condition"}: complete or remove the comparisons marked above.`;
+    if (problem === undefined) computedValue.applied(next); else computedValue.hold(next, problem);
+  };
 
   const add = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (disabled || !adding) return;
     const problems = [
       ...studioSettingProblems(form.settings, declarations).map((problem) => `Settings: ${problem}`),
+      ...(computed && !computedValid ? [`${form.type === "total" ? "Filter" : "Condition"}: complete or remove the comparisons marked above.`] : []),
+      ...computedProblems(form.type, form.computed),
       ...(defaultModel.kind === "declared" ? studioSettingProblems(form.defaultValue, [defaultModel.declaration]) : []),
     ];
     if (problems.length > 0) { setIssues(problems); return; }
-    const settings = writeModuleFieldSettings(form.type, form.settings, declarations, plainBase);
+    const settings = plainSettings;
     const result = edit((current) => {
       const added = changeInlineModuleField(current, {
         moduleKey, recordAlias: record.id, label: form.label, helpText: form.helpText, required: form.required, unique: form.unique,
@@ -325,7 +351,14 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
     <section className="space-y-2" aria-label="Settings">
       <h3 className="text-sm font-semibold">Settings of {moduleFieldTypeLabels[form.type].toLowerCase()}</h3>
       {shapeHint === undefined ? null : <p className="text-sm text-muted-foreground" role="note">{shapeHint}</p>}
-      {unreadable
+      {form.type === "calculation"
+        ? <StudioCalculationEditor key={`calculation:${computedValue.epoch}`} idPrefix="module-field-formula"
+          settings={form.computed as CalculationSettings} fields={formulaFields}
+          compiled={compiledOf(`${moduleKey}:${recordKey}`)} disabled={disabled || shapeLocked} onChange={changeComputed} />
+      : form.type === "total"
+        ? <StudioTotalEditor key={`total:${computedValue.epoch}`} settings={form.computed as TotalSettings}
+          relationships={totalLinks} compiledOf={compiledOf} disabled={disabled || shapeLocked} onChange={changeComputed} />
+      : unreadable
         ? <Alert variant="destructive" role="alert"><AlertTitle>These settings can&apos;t be read</AlertTitle>
           <AlertDescription>{`${[...new Set(readFailures.map((failure) => failure.path.join(", ")))].join("; ")}: ` +
             "not in a form Studio edits, so the settings are not changed here. Change them in the application source."}</AlertDescription></Alert>
@@ -334,7 +367,7 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
           : <StudioSettingFields idPrefix="module-field-setting" properties={declarations} values={form.settings}
             choices={choices} disabled={disabled || shapeLocked} onChange={changeSettings} />}
       {settingsValue.problem === "" ? null : <p role="alert" className="text-sm text-destructive">{settingsValue.problem}</p>}
-      {kept.map((note) => <p key={note} className="text-sm text-muted-foreground" role="note">{note}</p>)}
+      {computedValue.problem === "" ? null : <p role="alert" className="text-sm text-destructive">{computedValue.problem}</p>}
     </section>
     {linkTypes.has(form.type) && <StudioLinkSection settings={form.settings} cardinality={form.cardinality} label={form.label}
       recordName={record.name} recordPlural={record.plural_name} targets={recordTypes} disabled={disabled || shapeLocked}

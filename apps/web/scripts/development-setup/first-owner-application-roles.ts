@@ -306,7 +306,7 @@ export const grantFirstOwnerApplicationRoles = async (
         startsAt: new Date(Date.now() - 1_000).toISOString(),
       }),
     );
-    if (assigned.kind !== "available")
+    if (assigned.kind !== "available" || !("assignment" in assigned.value))
       throw new Error(
         `Role ${role.key} for ${applicationName} could not be assigned to the first owner (${assigned.kind})`,
       );

@@ -415,5 +415,6 @@ export type AccessAdministrationContext = Readonly<{
   newGroupId: () => string;
   newMembershipId: () => string;
   newRoleAssignmentId: () => string;
+  newDelegationAuthorityId: () => string;
   newActivityId: () => string;
 }>;

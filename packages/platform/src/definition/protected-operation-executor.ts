@@ -26,6 +26,7 @@ import {
   retireOrganizationAdministrationGroupCommandSchema,
   retireOrganizationAdministrationRoleCommandSchema,
   revokeOrganizationAdministrationDelegationAuthorityCommandSchema,
+  grantOrganizationAdministrationDelegationAuthorityCommandSchema,
   revokeOrganizationAdministrationRoleAssignmentCommandSchema,
   revokeOrganizationInvitationForAdministrationCommandSchema,
   reviseOrganizationAdministrationRoleMetadataCommandSchema,
@@ -223,6 +224,7 @@ type ProtectedOperationServices = Readonly<{
     | "revokeRoleAssignment"
     | "deactivateRoleActivation"
     | "revokeDelegationAuthority"
+    | "grantDelegationAuthority"
     | "suspendOrganizationAccount"
     | "reactivateOrganizationAccount"
     | "closeOrganizationAccount"
@@ -672,6 +674,7 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
   }),
   prepare_role_change_evidence: operation({
     schema: prepareOrganizationAdministrationRoleChangeCommandSchema,
+    inputAliases: { privilegeClassification: "privilege_classification" },
     command: (inputs) => ({
       operation: inputs.operation,
       roleKey: inputs.role_key,
@@ -687,15 +690,20 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
       ...(inputs.source_role_id === undefined ? {} : { sourceRoleId: inputs.source_role_id }),
       acceptBroadenedAuthority: inputs.accept_broadened_authority,
     }),
-    run: async (services, caller, command) =>
-      mapAvailable(
-        await services.accessAdministration.prepareRoleChange(
-          caller.session,
-          caller.selection,
-          command,
-        ),
-        (evidence) => ({ evidence: evidence as unknown as JsonValue }),
-      ),
+    run: async (services, caller, command) => {
+      const result = await services.accessAdministration.prepareRoleChange(
+        caller.session,
+        caller.selection,
+        command,
+      );
+      if (result.kind === "invalid_privilege_classification")
+        return {
+          kind: "confirmed_failure",
+          outcome: "validation",
+          diagnostic: invalidCommandFeedback("privilege_classification"),
+        };
+      return mapAvailable(result, (evidence) => ({ evidence: evidence as unknown as JsonValue }));
+    },
   }),
   prepare_application_role_revision_acceptance: operation({
     schema: prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema,
@@ -810,19 +818,31 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
       startsAt: optionalText(inputs.starts_at),
       expiresAt: optionalText(inputs.expires_at),
     }),
-    run: async (services, caller, command) =>
-      mapAvailable(
-        await services.accessAdministration.assignRoleAssignment(
-          caller.session,
-          caller.selection,
-          command,
-        ),
-        (value) => ({
+    run: async (services, caller, command) => {
+      const result = await services.accessAdministration.assignRoleAssignment(
+        caller.session,
+        caller.selection,
+        command,
+      );
+      if (result.kind === "available" && "outcome" in result.value) {
+        return {
+          kind: "confirmed_failure",
+          outcome: "refused",
+          diagnostic: flowRefusalFeedbackSchema.parse({ code: result.value.code }),
+        };
+      }
+      if (result.kind !== "available") return result;
+      const value = result.value;
+      if (!("assignment" in value)) throw new Error("INVALID_ROLE_ASSIGNMENT_RESULT");
+      return {
+        kind: "available",
+        value: {
           role_assignment_id: value.assignment.roleAssignmentId,
           revision: value.assignment.revision,
           access_version: value.accessVersion,
-        }),
-      ),
+        },
+      };
+    },
   }),
   revoke_role_assignment: operation({
     schema: revokeOrganizationAdministrationRoleAssignmentCommandSchema,
@@ -860,6 +880,27 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         (value) => ({
           role_activation_id: value.activation.roleActivationId,
           revision: value.activation.revision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
+  grant_delegation_authority: operation({
+    schema: grantOrganizationAdministrationDelegationAuthorityCommandSchema,
+    command: (inputs) => ({
+      holderKind: inputs.holder_kind,
+      holderId: inputs.holder_id,
+      expectedHolderRevision: inputs.expected_holder_revision,
+    }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.grantDelegationAuthority(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          delegation_authority_id: value.delegation.delegationAuthorityId,
+          revision: value.delegation.revision,
           access_version: value.accessVersion,
         }),
       ),
@@ -1137,6 +1178,8 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
   review_application_installation: applicationStoreOperation("review"),
   install_application: applicationStoreOperation("install"),
   upgrade_application: applicationStoreOperation("upgrade"),
+  review_application_removal: applicationStoreOperation("reviewRemoval"),
+  remove_application: applicationStoreOperation("remove"),
 } satisfies Record<PlatformServiceOperationKey, Operation>);
 
 /** A value of a declared type the executor does not carry yet is refused, never coerced. */

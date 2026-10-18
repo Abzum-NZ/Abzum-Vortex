@@ -332,7 +332,8 @@ export function useRuntimeInputs({
           );
         };
       // A form container emits its one submission for a gesture; it runs the bound flow once
-      // through the runtime, which resumes every pause with the server-issued continuation.
+      // through the runtime, which resumes every pause with the server-issued continuation. The
+      // handler returns that run, so the form shows busy from the press until the run settles.
       const submitBinding = bindings.find((binding) => binding.event === "form_submit");
       if (
         submitBinding !== undefined ||
@@ -344,17 +345,18 @@ export function useRuntimeInputs({
             const requested = requestedStepId.current;
             requestedStepId.current = undefined;
             if (model.guidedForm.activeStepId === guidedSummaryStepId) {
-              if (submitBinding === undefined) setNotice(unavailableNotice);
-              else void submitGuidedSummary(
+              if (submitBinding === undefined) {
+                setNotice(unavailableNotice);
+                return;
+              }
+              return submitGuidedSummary(
                 placementId,
                 submitBinding,
                 event.values,
                 event.selectedOwnerGroupId,
               );
             }
-            else
-              void advanceGuidedStep(model.guidedForm.activeStepId, event.values, requested);
-            return;
+            return advanceGuidedStep(model.guidedForm.activeStepId, event.values, requested);
           }
           if (submitBinding === undefined) return;
           const baseline = currentEditFormBaselines[placementId];
@@ -381,7 +383,7 @@ export function useRuntimeInputs({
             values: event.values,
             ...(choiceEvidence === undefined ? {} : { choiceEvidence }),
           });
-          void applyDispatch(
+          return applyDispatch(
             formBlock.submit(
               asComponentBinding(placementId, submitBinding),
               values,

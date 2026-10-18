@@ -193,13 +193,7 @@ begin
       'outcome', 'refused_recorded', 'correlationId', context_value -> 'correlationId'
     );
   end if;
-  bounds := vortex_access.resolve_record_field_bounds_internal(decision);
-  bounds := bounds || pg_catalog.jsonb_build_object(
-    'readableFieldIds', vortex_record.filter_calculated_readable_field_ids(
-      loaded -> 'facts' -> 'recordTypes', p_record_type_id,
-      bounds -> 'readableFieldIds'
-    )
-  );
+  bounds := vortex_record.decide_record_field_bounds_internal(decision);
   -- Use the same locked copy plan the writer re-derives. Only rows with an
   -- actual new edge are evaluated; a no-op copy does not save its target.
   copy_plan := vortex_record.prepare_named_action_relationship_copies_internal(
@@ -251,7 +245,7 @@ begin
       select 1 from pg_catalog.jsonb_object_keys(copy_target.submitted_values) field_id
       where not exists (
         select 1 from pg_catalog.jsonb_array_elements_text(
-          vortex_access.resolve_record_field_bounds_internal(target_decision)
+          vortex_record.decide_record_field_bounds_internal(target_decision)
             -> 'changeableFieldIds'
         ) allowed(value)
         where pg_catalog.lower(allowed.value) = pg_catalog.lower(field_id)

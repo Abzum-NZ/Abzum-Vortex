@@ -102,7 +102,7 @@ export function useConfirm(): readonly [(prompt: ConfirmPrompt) => Promise<boole
     <AlertDialogContent>
       <AlertDialogHeader>
         <AlertDialogTitle>{prompt?.title ?? ""}</AlertDialogTitle>
-        <AlertDialogDescription>{prompt?.description ?? ""}</AlertDialogDescription>
+        <AlertDialogDescription className="whitespace-pre-line">{prompt?.description ?? ""}</AlertDialogDescription>
       </AlertDialogHeader>
       {prompt?.details !== undefined && <div className="max-h-80 space-y-2 overflow-y-auto text-sm">{prompt.details}</div>}
       <AlertDialogFooter>
