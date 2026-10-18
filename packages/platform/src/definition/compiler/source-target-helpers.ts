@@ -200,7 +200,15 @@ export function conditionSourceTargets(
       return segment;
     });
   if (suffix[0] === "operator")
-    return [...targets, [...canonicalPath, "kind"], [...canonicalPath, "operator"]];
+    return [
+      ...targets,
+      [...canonicalPath, "kind"],
+      [...canonicalPath, "operator"],
+      // Empty literal containers have no leaves to own the generated operand source.
+      ...(!("left" in comparison) && "value" in comparison
+        ? [[...canonicalPath, "right", "source"] as Path]
+        : []),
+    ];
   if (suffix[0] === "field")
     return [
       ...targets,
@@ -210,13 +218,7 @@ export function conditionSourceTargets(
   if (suffix[0] === "parameter")
     return [...targets, [...canonicalPath, "right", "source"], [...canonicalPath, "right", "key"]];
   if (suffix[0] === "value")
-    return [
-      ...targets,
-      ...(pathKey(leafPaths(comparison.value, ["value"])[0] ?? []) === pathKey(suffix)
-        ? [[...canonicalPath, "right", "source"] as Path]
-        : []),
-      [...canonicalPath, "right", "value", ...valueSuffix(suffix.slice(1))],
-    ];
+    return [...targets, [...canonicalPath, "right", "value", ...valueSuffix(suffix.slice(1))]];
   if ((suffix[0] === "left" || suffix[0] === "right") && typeof suffix[1] === "string") {
     const operandPath = [...canonicalPath, suffix[0]];
     const mappedKey =
