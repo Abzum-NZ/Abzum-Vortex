@@ -131,7 +131,10 @@ export type InlineRecordTypeCreation = Readonly<{
  * created in its minimum valid shape: a reference number that identifies each record, a required
  * title field, every standard action with its standard permission (granted only to roles holding
  * every existing record permission in the Application's owned Modules), and organisation-shared
- * storage of its own. When the Application owns no Module yet, its first Module is created with it.
+ * storage of its own. Each record belongs to the account that created it, so anyone whose role
+ * holds the create permission can create one without being in a Group; who may act on records is
+ * decided by the roles alone. When the Application owns no Module yet, its first Module is created
+ * with it.
  */
 export const createInlineRecordType = (
   current: ApplicationSourceDocument,
@@ -185,7 +188,7 @@ export const createInlineRecordType = (
   const record = {
     id: uniqueAlias(`rt_${key}`, taken), key, name, plural_name: pluralName, title_field: titleKey,
     storage_contract_id: uniqueAlias(`srt_${aliasPart(module.key)}_${key}`, taken),
-    storage_scope: "organization_shared", ownership_mode: "group",
+    storage_scope: "organization_shared", ownership_mode: "organization_account",
     standard_actions: standardActions.map((entry) => entry.action), custom_actions: [], fields, pipelines: [], relationships: [],
   } as unknown as RecordType;
   module.record_types.push(record);
