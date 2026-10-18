@@ -15,10 +15,10 @@ type Comparison = Extract<ConditionNode, { kind: "comparison" }>;
 
 const parameterType = (fieldType: string): StudioConditionParameterType => {
   switch (studioFieldValueType(fieldType)) {
-    case "whole_number": return "number";
+    case "whole_number": return "whole_number";
     case "decimal_number": return "decimal_number";
     case "money": return "money";
-    case "yes_no": return "boolean";
+    case "yes_no": return "yes_no";
     case "date": return "date";
     case "date_time": return "date_time";
     case "organization_account_reference": return "organization_account_reference";

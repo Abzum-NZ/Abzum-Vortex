@@ -29,9 +29,9 @@ type QueryPatch = Partial<InlineQueryChange>;
 
 /** The input types a query offers, with the words the editor uses for them. */
 const inputTypes: readonly Readonly<{ value: InputType; label: string }>[] = [
-  { value: "text", label: "Text" }, { value: "number", label: "Number" }, { value: "decimal_number", label: "Decimal number" },
+  { value: "text", label: "Text" }, { value: "whole_number", label: "Whole number" }, { value: "decimal_number", label: "Decimal number" },
   { value: "money", label: "Amount of money" },
-  { value: "boolean", label: "Yes or no" }, { value: "date", label: "Date" }, { value: "date_time", label: "Date and time" },
+  { value: "yes_no", label: "Yes or no" }, { value: "date", label: "Date" }, { value: "date_time", label: "Date and time" },
   { value: "record_reference", label: "A record" }, { value: "organization_account_reference", label: "A person's account" },
 ];
 const directions = [{ value: "ascending", label: "A to Z, low to high, old to new" }, { value: "descending", label: "Z to A, high to low, new to old" }];

@@ -2,6 +2,7 @@ import { sourceProvenanceUnchanged } from "../definition/definition-source-commo
 import { z } from "zod";
 import { builderKeySchema } from "../catalogue/identifiers";
 import { authoredSourceBase, sourceProvenanceTarget } from "../definition/definition-source-common";
+import { connectionShapeFieldSchema } from "./integration-contracts";
 
 export const connectionTypeSourceDocumentSchema = z
   .object({
@@ -69,15 +70,7 @@ export const connectionTypeSourceDocumentSchema = z
                             .object({
                               key: sourceProvenanceUnchanged(builderKeySchema),
                               type: sourceProvenanceUnchanged(
-                                z.enum([
-                                  "text",
-                                  "number",
-                                  "boolean",
-                                  "date",
-                                  "date_time",
-                                  "record_reference",
-                                  "json",
-                                ]),
+                                connectionShapeFieldSchema.shape.type,
                               ),
                               required: sourceProvenanceUnchanged(z.boolean()),
                             })

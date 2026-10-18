@@ -153,8 +153,8 @@ const inputValue = (
       return undefined;
     return parsed.data;
   }
-  if (input.type === "number") {
-    if (typeof candidate !== "number" || !Number.isFinite(candidate)) return undefined;
+  if (input.type === "whole_number") {
+    if (typeof candidate !== "number" || !Number.isSafeInteger(candidate)) return undefined;
     return (input.validation?.minimum === undefined || candidate >= input.validation.minimum) &&
       (input.validation?.maximum === undefined || candidate <= input.validation.maximum)
       ? candidate
@@ -184,7 +184,7 @@ const inputValue = (
         : undefined;
     return exactWithin(parsed.data.amount, validation) ? parsed.data : undefined;
   }
-  if (input.type === "boolean") return typeof candidate === "boolean" ? candidate : undefined;
+  if (input.type === "yes_no") return typeof candidate === "boolean" ? candidate : undefined;
   if (input.type === "date") {
     const parsed = dateValueSchema.safeParse(candidate);
     if (!parsed.success) return undefined;

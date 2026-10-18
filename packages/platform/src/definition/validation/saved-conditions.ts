@@ -1,9 +1,4 @@
-import {
-  platformIdSchema,
-  type ModuleField,
-  type ConditionNode,
-  savedSharingConditionSchema,
-} from "../../schema";
+import { type ModuleField, type ConditionNode, savedSharingConditionSchema } from "../../schema";
 import {
   evaluateTypedCondition,
   type TypedConditionParameterDeclaration,
@@ -11,15 +6,6 @@ import {
 } from "../../rules/index";
 import { DefinitionCompilationError } from "../compilation-error";
 import { object } from "./helpers";
-
-export function valueMatchesType(value: unknown, type: string): boolean {
-  if (type === "text") return typeof value === "string";
-  if (type === "number") return typeof value === "number" && Number.isFinite(value);
-  if (type === "boolean") return typeof value === "boolean";
-  if (type === "organization_account_reference") return platformIdSchema.safeParse(value).success;
-  if (type === "date") return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
-  return typeof value === "string" && !Number.isNaN(Date.parse(value));
-}
 
 export function evaluateSavedSharingCondition(
   input: unknown,
