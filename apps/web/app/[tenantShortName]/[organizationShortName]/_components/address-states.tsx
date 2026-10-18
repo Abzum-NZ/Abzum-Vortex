@@ -17,6 +17,27 @@ export const unavailableAddress = (
   </AuthShell>
 );
 
+/**
+ * A page of an application the viewer may open, which their role cannot open or which does not
+ * exist: the two stay indistinguishable, and the way back leads to the application's home page.
+ */
+export function PageNotOpenAddress({
+  applicationName,
+  homeHref,
+}: Readonly<{ applicationName: string; homeHref: string }>): ReactElement {
+  return (
+    <AuthShell
+      eyebrow={applicationName}
+      title="You don't have access to this page"
+      description="Your role can't open this page, or it no longer exists. Ask an administrator if you need it."
+    >
+      <Button variant="outline" nativeButton={false} render={<Link href={homeHref} />}>
+        {`Back to ${applicationName}`}
+      </Button>
+    </AuthShell>
+  );
+}
+
 /** The address could not be read right now; the sign-in itself is still active. */
 export function TemporarilyUnavailableAddress({
   retryHref,

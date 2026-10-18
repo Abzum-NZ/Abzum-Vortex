@@ -58,7 +58,6 @@ export {
   readIdentityProjection,
   listOffboardingOwnedRecords,
   transferOffboardingOwnedRecords,
-  beginOrganizationAccountClosing,
   finalizeOrganizationAccountDeletion,
   OrganizationAccountError,
   organizationAccountErrorCodes,
@@ -86,8 +85,6 @@ export {
   type OffboardingTransferBatchResult,
   type AccountDeletionFenceOutcome,
   type AccountDeletionFenceResult,
-  type BeginOrganizationAccountClosingCommand,
-  type OrganizationAccountClosingResult,
   type OrganizationAccountLifecycleState,
 } from "./organization-accounts";
 export {

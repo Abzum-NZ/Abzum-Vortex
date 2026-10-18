@@ -38,6 +38,7 @@ export const fieldInputControlKeys = [
   "choice",
   "several_choices",
   "link",
+  "table",
 ] as const;
 export type FieldInputControlKey = (typeof fieldInputControlKeys)[number];
 
