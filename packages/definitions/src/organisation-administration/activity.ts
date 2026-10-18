@@ -15,6 +15,7 @@ const fields = [
     settings: {
       target: "vortex.system_directory:person",
       reverse_key: "activity_entries",
+      reverse_name: "Activity entries",
       on_parent_delete: "empty_optional",
       application_root_required: false,
     },
