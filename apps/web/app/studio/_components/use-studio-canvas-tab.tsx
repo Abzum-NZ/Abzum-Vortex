@@ -84,6 +84,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
   const { organizationId, source, selected, state, view } = draft;
   const rootId = state.rootId;
   const key = draft.saved.key;
+  const [fitZoom, setFitZoom] = useState(0);
   const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>("fit");
   const [breakpoint, setBreakpoint] = useState<StudioCanvasBreakpoint>("desktop");
   // The canvas previews the application in light or dark; the running application keeps its own toggle.
@@ -379,7 +380,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
             onSelectPlacement={(alias) => Promise.resolve(alias !== null
               ? draft.select({ kind: "placement", placementAlias: alias })
               : canvasPageRef.current !== undefined && draft.select({ kind: "page", pageAlias: canvasPageRef.current }))}
-            breakpoint={breakpoint} zoom={canvasZoom} appearance={appearance} disabled={draft.locked} compileFailure={view.failure}
+            breakpoint={breakpoint} zoom={canvasZoom} onFitZoom={setFitZoom} appearance={appearance} disabled={draft.locked} compileFailure={view.failure}
             onChange={applyPuckPageEdit} readRecords={readCanvasRecords} updating={draft.updatingCanvas}
             palette={addTargets === null ? undefined : { host: paletteHost, targets: addTargets, message: paletteMessage, onAdd: addBlock }} />
         </Suspense>
@@ -389,7 +390,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
   const toolbar = (inspectorOpen: boolean, toggleInspector: (() => void) | undefined, centreTitle: string, showsCanvas: boolean,
     focused: boolean, focusCanvas: () => void) =>
     <StudioCanvasToolbar title={centreTitle} breakpoint={breakpoint} onBreakpoint={setBreakpoint}
-      zoom={canvasZoom} onZoom={setCanvasZoom} showsCanvas={showsCanvas && canvasPage !== undefined}
+      zoom={canvasZoom} fitZoom={fitZoom} onZoom={setCanvasZoom} showsCanvas={showsCanvas && canvasPage !== undefined}
       appearance={appearance} onAppearance={setAppearance}
       viewAs={{ value: viewAsRole === undefined ? null : viewAs, onChange: setViewAs,
         roles: source.body.roles.filter((role) => view.frames?.roles[role.key] !== undefined) }}

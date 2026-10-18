@@ -18,7 +18,7 @@ const devices: readonly Readonly<{
 ];
 
 /** The canvas zoom steps, in percent. */
-export const studioCanvasZooms = [50, 75, 100, 125] as const;
+const studioCanvasZooms = [50, 75, 100, 125] as const;
 export type StudioCanvasZoom = (typeof studioCanvasZooms)[number] | "fit";
 
 /**
@@ -30,6 +30,7 @@ export function StudioCanvasToolbar({
   breakpoint,
   onBreakpoint,
   zoom,
+  fitZoom,
   onZoom,
   showsCanvas,
   inspectorOpen,
@@ -53,6 +54,7 @@ export function StudioCanvasToolbar({
   breakpoint: StudioCanvasBreakpoint;
   onBreakpoint: (breakpoint: StudioCanvasBreakpoint) => void;
   zoom: StudioCanvasZoom;
+  fitZoom: number;
   onZoom: (zoom: StudioCanvasZoom) => void;
   /** Screen size and zoom apply to the page canvas only. */
   showsCanvas: boolean;
@@ -61,6 +63,9 @@ export function StudioCanvasToolbar({
   focused: boolean;
   onFocusCanvas: () => void;
 }>) {
+  const effectiveZoom = zoom === "fit" ? fitZoom : zoom;
+  const zoomOut = [...studioCanvasZooms].reverse().find((step) => step < effectiveZoom);
+  const zoomIn = studioCanvasZooms.find((step) => step > effectiveZoom);
   return (
     <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-4">
       <h2 className="min-w-0 flex-1 truncate text-sm font-semibold" title={title}>
@@ -141,14 +146,10 @@ export function StudioCanvasToolbar({
                 size="icon-sm"
                 variant="ghost"
                 aria-label="Zoom out"
-                disabled={zoom === studioCanvasZooms[0]}
-                onClick={() =>
-                  onZoom(
-                    zoom === "fit"
-                      ? 50
-                      : studioCanvasZooms[Math.max(0, studioCanvasZooms.indexOf(zoom) - 1)]!,
-                  )
-                }
+                disabled={zoomOut === undefined}
+                onClick={() => {
+                  if (zoomOut !== undefined) onZoom(zoomOut);
+                }}
               >
                 <Icon name="minus" />
               </Button>
@@ -176,19 +177,10 @@ export function StudioCanvasToolbar({
                 size="icon-sm"
                 variant="ghost"
                 aria-label="Zoom in"
-                disabled={zoom === studioCanvasZooms[studioCanvasZooms.length - 1]}
-                onClick={() =>
-                  onZoom(
-                    zoom === "fit"
-                      ? 100
-                      : studioCanvasZooms[
-                          Math.min(
-                            studioCanvasZooms.length - 1,
-                            studioCanvasZooms.indexOf(zoom) + 1,
-                          )
-                        ]!,
-                  )
-                }
+                disabled={zoomIn === undefined}
+                onClick={() => {
+                  if (zoomIn !== undefined) onZoom(zoomIn);
+                }}
               >
                 <Icon name="plus" />
               </Button>
@@ -214,25 +206,27 @@ export function StudioCanvasToolbar({
             Focus canvas <Kbd>Ctrl \\</Kbd>
           </TooltipContent>
         </Tooltip>
-        {onToggleInspector !== undefined && <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type="button"
-                size="icon-sm"
-                variant={inspectorOpen ? "secondary" : "ghost"}
-                aria-label="Inspector"
-                aria-pressed={inspectorOpen}
-                onClick={onToggleInspector}
-              />
-            }
-          >
-            <Icon name="panel-left" className="rotate-180" />
-          </TooltipTrigger>
-          <TooltipContent>
-            Inspector <Kbd>Ctrl .</Kbd>
-          </TooltipContent>
-        </Tooltip>}
+        {onToggleInspector !== undefined && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant={inspectorOpen ? "secondary" : "ghost"}
+                  aria-label="Inspector"
+                  aria-pressed={inspectorOpen}
+                  onClick={onToggleInspector}
+                />
+              }
+            >
+              <Icon name="panel-left" className="rotate-180" />
+            </TooltipTrigger>
+            <TooltipContent>
+              Inspector <Kbd>Ctrl .</Kbd>
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
     </div>
   );

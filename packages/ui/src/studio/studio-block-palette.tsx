@@ -149,7 +149,7 @@ export function StudioBlockPalette({
                                 className="size-5"
                               />
                               <span className="text-sm font-medium">{choice.name}</span>
-                              <span className="line-clamp-2 text-xs text-muted-foreground">
+                              <span className="line-clamp-2 text-sm text-muted-foreground">
                                 {choice.unavailable ?? choice.description}
                               </span>
                             </div>

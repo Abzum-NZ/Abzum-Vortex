@@ -182,6 +182,8 @@ export type ApplicationPagePuckEditorProps = Readonly<{
   breakpoint: Breakpoint;
   /** Device width is preserved while the page frame scales inside the well. */
   zoom: number | "fit";
+  /** Reports the measured Fit percentage to the workspace zoom controls. */
+  onFitZoom: (percent: number) => void;
   appearance: "light" | "dark";
   /** The application frame the page is drawn inside, when the draft compiled. */
   frame?: StudioCanvasFrame | undefined;
@@ -358,6 +360,7 @@ function ApplicationPageSlotPuckEditor({
   frame,
   breakpoint,
   zoom,
+  onFitZoom,
   appearance,
   palette,
   readRecords,
@@ -515,15 +518,16 @@ function ApplicationPageSlotPuckEditor({
     if (element === null) return;
     const measure = () => {
       const style = getComputedStyle(element);
-      setAvailableWidth(
-        element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
-      );
+      const available =
+        element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      setAvailableWidth(available);
+      onFitZoom(Math.min(1, available / width) * 100);
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [shown !== undefined]);
+  }, [shown !== undefined, width, onFitZoom]);
   const editable = !disabled && readOnlyCause === undefined && breakpoint === "desktop";
 
   // Every canvas change goes back through the definition: Puck's data is converted to the
