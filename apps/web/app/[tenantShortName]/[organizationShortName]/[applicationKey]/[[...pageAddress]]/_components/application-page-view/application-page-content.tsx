@@ -610,7 +610,14 @@ export function ApplicationPageViewContent({
                     aria-live="polite"
                     data-vortex-notice={notice.tone}
                   >
-                    <AlertDescription>{notice.text}</AlertDescription>
+                    <AlertDescription>
+                      {notice.text}
+                      {notice.recovery === "sign_in" ? (
+                        <a className="mt-2 block font-medium underline underline-offset-4" href="/auth/session-ended">
+                          Sign in again
+                        </a>
+                      ) : null}
+                    </AlertDescription>
                   </Alert>
                 )}
               </>

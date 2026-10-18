@@ -2,11 +2,14 @@ import { z } from "zod";
 import { builderKeySchema } from "../catalogue/identifiers";
 import { tenantOrganizationMutationRefusalCodeSchema } from "../identity/tenant-governance";
 
-/** Only these existing public tenant results may supply a confirmed flow refusal reason. */
-export const flowRefusalFeedbackCodeSchema = tenantOrganizationMutationRefusalCodeSchema.extract([
-  "invalid_command",
-  "duplicate_conflict",
-  "stale_revision",
+/** Confirmed public refusal reasons from protected operations. */
+export const flowRefusalFeedbackCodeSchema = z.enum([
+  ...tenantOrganizationMutationRefusalCodeSchema.extract([
+    "invalid_command",
+    "duplicate_conflict",
+    "stale_revision",
+  ]).options,
+  "recent_authentication_required",
 ]);
 
 /** The closed reasons a submitted form field needs correcting. */

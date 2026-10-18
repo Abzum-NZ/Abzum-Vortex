@@ -52,4 +52,9 @@ export const refusalNotices: Readonly<
   invalid_command: { tone: "problem", text: "The supplied inputs are invalid." },
   duplicate_conflict: { tone: "problem", text: "A conflicting item already exists." },
   stale_revision: { tone: "problem", text: "This item changed. Refresh and try again." },
+  recent_authentication_required: {
+    tone: "problem",
+    text: "For your organisation’s security, this change needs a sign-in within the last 15 minutes. Sign in again, then retry the change.",
+    recovery: "sign_in",
+  },
 };

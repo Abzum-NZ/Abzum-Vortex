@@ -83,6 +83,8 @@ const refusalFeedbackText = (feedback: Extract<FormFlowFeedback, { kind: "refusa
       return "A conflicting item already exists.";
     case "stale_revision":
       return "This item changed. Refresh and try again.";
+    case "recent_authentication_required":
+      return "For your organisation?s security, this change needs a sign-in within the last 15 minutes. Sign in again, then retry the change.";
     default:
       return "The supplied inputs are invalid.";
   }

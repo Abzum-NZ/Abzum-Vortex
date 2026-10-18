@@ -48,7 +48,7 @@ export type EventHandlers = Record<string, (event: never) => void> & {
   form_reset?: (event: FormResetEvent) => void | Promise<void>;
 };
 
-export type Notice = Readonly<{ tone: "info" | "problem"; text: string }>;
+export type Notice = Readonly<{ tone: "info" | "problem"; text: string; recovery?: "sign_in" }>;
 
 export type SubmittedForm = Readonly<{
   formId: string;
