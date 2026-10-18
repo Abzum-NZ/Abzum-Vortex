@@ -27,6 +27,7 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
   TABLE_BLOCK_RELEASE_1_2_0: { blockId: "39ab6f28-c166-47cf-91a7-f0b864ded4ff", key: "platform.display.table", rendererKey: "platform.renderer.table", releaseVersion: "1.2.0" },
   TABLE_BLOCK_RELEASE_1_3_0: { blockId: "39ab6f28-c166-47cf-91a7-f0b864ded4ff", key: "platform.display.table", rendererKey: "platform.renderer.table", releaseVersion: "1.3.0" },
   RECORD_DETAIL_BLOCK_RELEASE_1_2_0: { blockId: "e2569df0-2f10-4b20-b41d-177b66cd136c", key: "platform.display.record_detail", rendererKey: "platform.renderer.record_detail", releaseVersion: "1.2.0" },
+  TABLE_INPUT_BLOCK_RELEASE: { blockId: "f40dc797-ac89-4687-8aa2-157c639be233", key: "platform.form.table_input", rendererKey: "platform.renderer.table_input", releaseVersion: "1.0.0" },
   TEXT_INPUT_BLOCK_RELEASE: { blockId: "15b2d6f6-228d-4248-84be-1f8f45e204fc", key: "platform.form.text_input", rendererKey: "platform.renderer.text_input", releaseVersion: "1.0.0" },
   NUMBER_INPUT_BLOCK_RELEASE: { blockId: "c8645b41-48b5-489c-bd2e-02283535a7c5", key: "platform.form.number_input", rendererKey: "platform.renderer.number_input", releaseVersion: "1.0.0" },
   BOOLEAN_INPUT_BLOCK_RELEASE: { blockId: "e9418c36-3234-4806-a05a-0f259482238d", key: "platform.form.boolean_input", rendererKey: "platform.renderer.boolean_input", releaseVersion: "1.0.0" },

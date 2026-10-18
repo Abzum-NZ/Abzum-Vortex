@@ -343,6 +343,16 @@ const deriveFieldInputContract = (field: FieldInputSourceField): DerivedFieldInp
         control: "text",
         settings: { input_type: { kind: "choice", value: "email" } },
       };
+    case "phone_number":
+      return {
+        control: "text",
+        settings: { input_type: { kind: "choice", value: "tel" } },
+      };
+    case "web_address":
+      return {
+        control: "text",
+        settings: { input_type: { kind: "choice", value: "url" } },
+      };
     case "long_text":
       return { control: "text", settings: { multiline: { kind: "boolean", value: true } } };
     case "formatted_text":
@@ -394,6 +404,46 @@ const deriveFieldInputContract = (field: FieldInputSourceField): DerivedFieldInp
             : {}),
         },
       };
+    case "table": {
+      const table = field.tableSettings;
+      if (table === undefined)
+        return reject("vortex.definition.unsupported_field_type", "required_value");
+      return {
+        control: "table",
+        settings: {
+          minimum_rows: { kind: "number", value: table.minimumRows },
+          maximum_rows: { kind: "number", value: table.maximumRows },
+          columns: {
+            kind: "list",
+            items: table.columns.map((column) => ({
+              kind: "group",
+              properties: {
+                key: { kind: "text", value: column.key },
+                type: { kind: "choice", value: column.type },
+                required: { kind: "boolean", value: column.required },
+                ...(column.type === "choice"
+                  ? {
+                      options: {
+                        kind: "list",
+                        items: column.settings.options.map((option) => ({
+                          kind: "group",
+                          properties: {
+                            key: { kind: "text", value: option.value },
+                            label: { kind: "text", value: option.label },
+                          },
+                        })),
+                      },
+                    }
+                  : {}),
+                ...(column.type === "money" && column.settings.currency !== undefined
+                  ? { currency: { kind: "text", value: column.settings.currency } }
+                  : {}),
+              },
+            })),
+          },
+        },
+      };
+    }
     case "link":
     case "link_to_one_of_several":
       return {
