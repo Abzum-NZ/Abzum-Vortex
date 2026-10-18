@@ -421,7 +421,8 @@ const addDetail = (context: StudioStructureContext, plan: Plan, resolved: Resolv
   const shown = record.fields.filter((entry) => entry.type !== "attachment" && resolved.readable.has(entry.key));
   const detailAlias = freshAlias(plan, `detail_${record.key}`);
   const detail = blockItem(release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE, "record detail"), detailAlias, {
-    title: record.name, detail_fields: shown.map((entry) => ({ field: field(resolved, entry), label: entry.label })),
+    title: record.name, heading_source: "field", heading_field: field(resolved, resolved.title),
+    detail_fields: shown.map((entry) => ({ field: field(resolved, entry), label: entry.label })),
   }, {});
   const name = record.name.slice(0, 60);
   const related = relatedTables(context, plan, resolved);

@@ -10,6 +10,7 @@ import {
 import { applicationUses, type ApplicationUsePlace } from "./application-uses";
 import { fullRecordAccessRoleKeys } from "./module-permission-shape";
 import { recordTitleFieldEligible } from "./record-title-field";
+import { sourcePageItems } from "./application-composition/source-composition";
 
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
@@ -264,6 +265,11 @@ export const setInlineRecordTitleField = (
   (record as { title_field: string }).title_field = field.key;
   // Search results that followed the old record title keep following its chosen title.
   const reference = `${change.moduleKey}:${record.key}`;
+  for (const page of source.body.pages)
+    for (const item of sourcePageItems(page.composition))
+      if (item.type === "platform.renderer.record_detail" && item.props.heading_source === "field" &&
+          item.props.heading_field === `${reference}.${previousTitle}`)
+        item.props.heading_field = `${reference}.${field.key}`;
   for (const entry of source.body.search?.record_types ?? [])
     if (entry.record_type === reference && entry.title_field === `${reference}.${previousTitle}`)
       entry.title_field = `${reference}.${field.key}`;

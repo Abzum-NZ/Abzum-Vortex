@@ -944,7 +944,8 @@ export const readPlacement = async (
     const value = raw === undefined ? undefined : coerceInput(raw, declared);
     if (value !== undefined) inputValues[declared.key] = value;
   }
-  const fieldIds = [...new Set(detailContract!.fields.map((field) => field.field))];
+  const fieldIds = [...new Set([...detailContract!.fields.map((field) => field.field),
+    ...(detailContract!.headingField === undefined ? [] : [detailContract!.headingField])])];
   const command = protectedQueryCommandSchema.safeParse({
     moduleRootId: bound.module.rootId,
     queryId: bound.query.queryId,

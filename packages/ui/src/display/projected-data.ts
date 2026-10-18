@@ -164,6 +164,7 @@ export type RecordDetailPayload = Readonly<{
   kind: "record_detail";
   recordId: string;
   fields: readonly DisplayField[];
+  heading?: DisplayCellValue;
 }>;
 
 /** The ready values a grouped-data block renders. */
@@ -1190,7 +1191,7 @@ export const parseRecordDetailPayload = (
       `Expected 'record_detail' projected values, got '${String(record.kind)}'`,
       location,
     );
-  requireExactKeys(record, ["kind", "recordId", "fields"], location);
+  requireExactKeys(record, ["kind", "recordId", "fields", "heading"], location);
   return Object.freeze({
     kind: "record_detail",
     recordId: requireNonEmptyString(
@@ -1199,6 +1200,7 @@ export const parseRecordDetailPayload = (
       location,
     ),
     fields: parseFields(record.fields, location),
+    ...(record.heading === undefined ? {} : { heading: parseCellValue(record.heading, location) }),
   });
 };
 
