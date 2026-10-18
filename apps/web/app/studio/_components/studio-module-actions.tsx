@@ -223,7 +223,7 @@ export function ActionDialog({ module, record, action, open, onOpenChange, edit,
         </fieldset>
         <div className="space-y-1.5"><Label htmlFor="action-permission">Permission</Label>
           <NativeSelect id="action-permission" className="w-full" value={stored.permission} onChange={(event) => change({ permission: event.target.value })}>
-            <NativeSelectOption value="own">{action === undefined ? "Its own permission, given to every access group" : "Its own permission"}</NativeSelectOption>
+            <NativeSelectOption value="own">{action === undefined ? "Its own permission, given to full-access groups" : "Its own permission"}</NativeSelectOption>
             {named.filter((entry) => entry.key !== action?.key).map((entry) =>
               <NativeSelectOption key={entry.key} value={entry.key}>{entry.label}</NativeSelectOption>)}
           </NativeSelect>

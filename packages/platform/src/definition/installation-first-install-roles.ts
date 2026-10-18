@@ -152,7 +152,8 @@ const applyFirstInstallRoles = async (
     choice.kind === "accept" &&
     member !== undefined &&
     member.installerAssignment === null &&
-    (member.lifecycle !== "active" || member.assignmentPolicy !== "standing")
+    (!["active", "acceptance_required"].includes(member.lifecycle) ||
+      member.assignmentPolicy !== "standing")
   )
     refusedFor("first_install_member_role_unavailable_role", "role_unavailable");
 

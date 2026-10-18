@@ -5,7 +5,7 @@
   "kind": "application",
   "body": {
     "name": "App Store",
-    "description": "The one place to install applications in this organisation and to upgrade them to their latest published version.",
+    "description": "The one place to install, upgrade and remove applications in this organisation.",
     "icon": "blocks",
     "home_page": "app_store_catalogue",
     "uses": [],
@@ -69,6 +69,13 @@
       {
         "id": "event_open_store_application",
         "key": "vortex.app.app_store.open_application",
+        "record_type": "vortex.app_store:store_application",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_remove_application",
+        "key": "vortex.app.app_store.remove_application",
         "record_type": "vortex.app_store:store_application",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -284,6 +291,10 @@
                       {
                         "event_id": "event_install_or_upgrade",
                         "label": "Install or upgrade"
+                      },
+                      {
+                        "event_id": "event_remove_application",
+                        "label": "Remove"
                       }
                     ],
                     "vortex": {
@@ -1840,6 +1851,334 @@
         "outputs": {},
         "errors": [],
         "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_remove_application",
+        "key": "remove_application",
+        "description": "Removes an installed ordinary application after confirming the retained records and withdrawn access.",
+        "labels": {
+          "name": "Remove application"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "application_root_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.app_store:store_application"]
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "review_removal",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "allowRefusal": true,
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.review_application_removal"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "application_root_id": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "application_root_id"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "removal_review_result",
+            "type": "switch",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "review_removal",
+                "key": "outcome"
+              }
+            },
+            "cases": [
+              {
+                "key": "completed",
+                "when": {
+                  "type": "choice",
+                  "value": "completed"
+                },
+                "tasks": [
+                  {
+                    "id": "confirm_removal",
+                    "type": "interface.confirm",
+                    "version": "1.0.0",
+                    "properties": {
+                      "title": {
+                        "kind": "formula",
+                        "formula": {
+                          "op": "join",
+                          "parts": [
+                            {
+                              "op": "literal",
+                              "type": "text",
+                              "value": "Remove "
+                            },
+                            {
+                              "op": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "review_removal",
+                                "key": "result",
+                                "path": ["application_name"]
+                              }
+                            },
+                            {
+                              "op": "literal",
+                              "type": "text",
+                              "value": "?"
+                            }
+                          ]
+                        }
+                      },
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Its pages and launcher entry will be removed from this organisation. Its application roles and existing assignments will stop granting access. Records and storage are kept, along with published definitions, so the app can be reinstalled from the App Store. Reinstalling requires accepting roles and assigning access again."
+                        }
+                      },
+                      "confirm_label": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Remove"
+                        }
+                      },
+                      "destructive": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "yes_no",
+                          "value": true
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "id": "removal_declined",
+                    "type": "if",
+                    "condition": {
+                      "op": "not",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "confirm_removal",
+                          "key": "confirmed"
+                        }
+                      }
+                    },
+                    "then": [
+                      {
+                        "id": "stop_removal_declined",
+                        "type": "stop",
+                        "outcome": "declined"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "remove",
+                    "type": "operation.call",
+                    "version": "1.0.0",
+                    "allowRefusal": true,
+                    "properties": {
+                      "operation": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "platform.remove_application"
+                        }
+                      },
+                      "inputs": {
+                        "kind": "map",
+                        "entries": {
+                          "application_root_id": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "application_root_id"
+                            }
+                          },
+                          "expected": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "task_output",
+                              "task": "review_removal",
+                              "key": "result",
+                              "path": ["expected"]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "id": "remove_result",
+                    "type": "switch",
+                    "value": {
+                      "kind": "reference",
+                      "reference": {
+                        "source": "task_output",
+                        "task": "remove",
+                        "key": "outcome"
+                      }
+                    },
+                    "cases": [
+                      {
+                        "key": "committed",
+                        "when": {
+                          "type": "choice",
+                          "value": "committed"
+                        },
+                        "tasks": [
+                          {
+                            "id": "removal_done",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The application has been removed. Its records are kept. Refresh the App Store to reinstall it."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "key": "conflict",
+                        "when": {
+                          "type": "choice",
+                          "value": "conflict"
+                        },
+                        "tasks": [
+                          {
+                            "id": "removal_conflict",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The installation changed while you were reviewing it. Refresh the App Store and choose Remove again."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "key": "refused",
+                        "when": {
+                          "type": "choice",
+                          "value": "refused"
+                        },
+                        "tasks": [
+                          {
+                            "id": "removal_refused",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "You cannot remove this application with your current authority."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "default": [
+                      {
+                        "id": "removal_failed",
+                        "type": "interface.show_message",
+                        "version": "1.0.0",
+                        "properties": {
+                          "message": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "The removal could not be confirmed. Refresh the App Store before trying again."
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "key": "refused",
+                "when": {
+                  "type": "choice",
+                  "value": "refused"
+                },
+                "tasks": [
+                  {
+                    "id": "removal_review_refused",
+                    "type": "interface.show_message",
+                    "version": "1.0.0",
+                    "properties": {
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Only installed ordinary applications can be removed. You need the current installation authority for this organisation."
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "default": [
+              {
+                "id": "removal_review_failed",
+                "type": "interface.show_message",
+                "version": "1.0.0",
+                "properties": {
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "The installed application could not be read. Refresh the App Store before trying again."
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "outputs": {},
+        "errors": [],
+        "finally": []
       }
     ],
     "flow_bindings": [
@@ -1862,6 +2201,19 @@
         "event_id": "event_open_store_application",
         "event": "row_clicked",
         "flow": "flow_open_store_application",
+        "inputs": {
+          "application_root_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_remove_application",
+        "control": "store_applications_region",
+        "event_id": "event_remove_application",
+        "event": "row_action",
+        "flow": "flow_remove_application",
         "inputs": {
           "application_root_id": {
             "kind": "caller",
