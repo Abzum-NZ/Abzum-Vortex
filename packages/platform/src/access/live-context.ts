@@ -106,51 +106,41 @@ export const readLiveHumanContext = async (
   const hasAuthenticationEvidence =
     session.primaryAuthenticatedAt !== undefined ||
     session.multiFactorAuthenticatedAt !== undefined;
-  if (
-    !Number.isFinite(now) ||
-    (scope.applicationRootId === undefined
-      ? Object.hasOwn(context, "applicationRootId")
-      : !sameId(context.applicationRootId, scope.applicationRootId)) ||
-    context.delegatedContext !== undefined ||
-    context.supportContext !== undefined ||
-    (identityAuthorityId !== undefined &&
-      !sameId(context.identityAuthorityId, identityAuthorityId)) ||
-    !sameId(context.tenantId, scope.tenantId) ||
-    !sameId(context.organizationId, scope.organizationId) ||
-    !sameId(context.organizationAccountId, scope.organizationAccountId) ||
-    context.accessVersion !== scope.accessVersion ||
-    !sameId(context.identityId, session.identityId) ||
-    !sameId(context.sessionId, session.sessionId) ||
-    context.authenticationStrength !== session.authenticationStrength ||
-    context.issuedAt !== issuedAt ||
-    context.expiresAt !== session.accessTokenExpiresAt ||
-    context.accessTokenIssuedAt !==
-      (hasAuthenticationEvidence ? session.accessTokenIssuedAt : undefined) ||
-    context.primaryAuthenticatedAt !== session.primaryAuthenticatedAt ||
-    context.multiFactorAuthenticatedAt !== session.multiFactorAuthenticatedAt ||
-    Date.parse(context.issuedAt) > now ||
-    Date.parse(context.expiresAt) <= now ||
-    Date.parse(context.issuedAt) >= Date.parse(context.expiresAt)
-  )
-    throw refuse("session_context_mismatch", new Error(JSON.stringify({
-      mismatchedFields: Object.entries({
-        tenantId: !sameId(context.tenantId, scope.tenantId),
-        organizationId: !sameId(context.organizationId, scope.organizationId),
-        organizationAccountId: !sameId(context.organizationAccountId, scope.organizationAccountId),
-        accessVersion: context.accessVersion !== scope.accessVersion,
-        identityId: !sameId(context.identityId, session.identityId),
-        sessionId: !sameId(context.sessionId, session.sessionId),
-        authenticationStrength: context.authenticationStrength !== session.authenticationStrength,
-        issuedAt: context.issuedAt !== issuedAt,
-        expiresAt: context.expiresAt !== session.accessTokenExpiresAt,
-        accessTokenIssuedAt: context.accessTokenIssuedAt !== (hasAuthenticationEvidence ? session.accessTokenIssuedAt : undefined),
-        primaryAuthenticatedAt: context.primaryAuthenticatedAt !== session.primaryAuthenticatedAt,
-        multiFactorAuthenticatedAt: context.multiFactorAuthenticatedAt !== session.multiFactorAuthenticatedAt,
-      }).filter(([, mismatch]) => mismatch).map(([field]) => field),
-      issuedInFutureMs: Math.max(0, Date.parse(context.issuedAt) - now),
-      expired: Date.parse(context.expiresAt) <= now,
-      invalidWindow: Date.parse(context.issuedAt) >= Date.parse(context.expiresAt),
-    })));
+  const mismatches = {
+    applicationRootId:
+      scope.applicationRootId === undefined
+        ? Object.hasOwn(context, "applicationRootId")
+        : !sameId(context.applicationRootId, scope.applicationRootId),
+    delegatedContext: context.delegatedContext !== undefined,
+    supportContext: context.supportContext !== undefined,
+    identityAuthorityId:
+      identityAuthorityId !== undefined &&
+      !sameId(context.identityAuthorityId, identityAuthorityId),
+    tenantId: !sameId(context.tenantId, scope.tenantId),
+    organizationId: !sameId(context.organizationId, scope.organizationId),
+    organizationAccountId: !sameId(context.organizationAccountId, scope.organizationAccountId),
+    accessVersion: context.accessVersion !== scope.accessVersion,
+    identityId: !sameId(context.identityId, session.identityId),
+    sessionId: !sameId(context.sessionId, session.sessionId),
+    authenticationStrength: context.authenticationStrength !== session.authenticationStrength,
+    issuedAt: context.issuedAt !== issuedAt,
+    expiresAt: context.expiresAt !== session.accessTokenExpiresAt,
+    accessTokenIssuedAt:
+      context.accessTokenIssuedAt !==
+      (hasAuthenticationEvidence ? session.accessTokenIssuedAt : undefined),
+    primaryAuthenticatedAt: context.primaryAuthenticatedAt !== session.primaryAuthenticatedAt,
+    multiFactorAuthenticatedAt:
+      context.multiFactorAuthenticatedAt !== session.multiFactorAuthenticatedAt,
+    invalidClock: !Number.isFinite(now),
+    issuedInFuture: Date.parse(context.issuedAt) > now,
+    expired: Date.parse(context.expiresAt) <= now,
+    invalidWindow: Date.parse(context.issuedAt) >= Date.parse(context.expiresAt),
+  };
+  const mismatchedFields = Object.entries(mismatches)
+    .filter(([, mismatch]) => mismatch)
+    .map(([field]) => field);
+  if (mismatchedFields.length > 0)
+    throw refuse("session_context_mismatch", new Error(JSON.stringify({ mismatchedFields })));
   return context;
 };
 
