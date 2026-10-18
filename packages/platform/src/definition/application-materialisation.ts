@@ -356,6 +356,16 @@ const deriveFieldInputContract = (field: FieldInputSourceField): DerivedFieldInp
         control: "text",
         settings: { input_type: { kind: "choice", value: "email" } },
       };
+    case "phone_number":
+      return {
+        control: "text",
+        settings: { input_type: { kind: "choice", value: "tel" } },
+      };
+    case "web_address":
+      return {
+        control: "text",
+        settings: { input_type: { kind: "choice", value: "url" } },
+      };
     case "long_text":
       return { control: "text", settings: { multiline: { kind: "boolean", value: true } } };
     case "formatted_text":

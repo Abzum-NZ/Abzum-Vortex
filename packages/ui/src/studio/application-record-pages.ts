@@ -54,8 +54,8 @@ export const studioRecordPageChoices = (source: Source): readonly Readonly<{ rec
 
 /** Field types an automatic field input draws; any other type has no input to put in a form. */
 const inputTypes: ReadonlySet<string> = new Set([
-  "text", "email_address", "long_text", "formatted_text", "whole_number", "decimal_number", "money", "yes_no",
-  "date", "date_time", "choice", "several_choices", "link", "link_to_one_of_several",
+  "text", "email_address", "phone_number", "web_address", "long_text", "formatted_text", "whole_number", "decimal_number",
+  "money", "yes_no", "date", "date_time", "choice", "several_choices", "link", "link_to_one_of_several",
 ]);
 /** Field types a table column shows compactly. */
 const columnTypes: ReadonlySet<string> = new Set([
@@ -212,6 +212,16 @@ const keyColumns = (record: RecordType, title: Field, readable: ReadonlySet<stri
   return [...numbers, title, ...rest].slice(0, columnLimit);
 };
 
+/**
+ * A table column of one field, with its responsive priority: the numbers and the title never hide,
+ * the first choice field (the record's state) stays on a phone, and the rest hide on narrow screens.
+ */
+const tableColumns = (reference: (entry: Field) => string, columns: readonly Field[], titleKey: string) => {
+  const state = columns.find((entry) => entry.type === "choice")?.key;
+  return columns.map((entry) => ({ field: reference(entry), label: entry.label,
+    priority: entry.type === "reference_number" || entry.key === titleKey ? "essential" : entry.key === state ? "high" : "medium" }));
+};
+
 /** Puts the page's blocks in its frame's first content area, judged as stored data and by what the area admits. */
 const pageData = (context: StudioStructureContext, source: Source, shellAlias: string | null, items: SourceItem[], pageName: string) => {
   const data = emptyPageData(source, shellAlias);
@@ -332,7 +342,7 @@ const addList = (context: StudioStructureContext, plan: Plan, resolved: Resolved
   const tableAlias = freshAlias(plan, `table_${record.key}`);
   const table = blockItem(release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE, "records table"), tableAlias, {
     title: record.plural_name, empty_message: `There are no ${record.plural_name.toLowerCase()} yet.`,
-    columns: columns.map((entry) => ({ field: field(resolved, entry), label: entry.label })),
+    columns: tableColumns((entry) => field(resolved, entry), columns, title.key),
   }, {}, { query: query.reference });
   const name = record.plural_name.slice(0, 60);
   const items = [table];
@@ -341,6 +351,9 @@ const addList = (context: StudioStructureContext, plan: Plan, resolved: Resolved
   plan.source = judged(placedPage.source);
   plan.details.unshift(`A page ${quoted(name)}, for people who can read ${record.plural_name.toLowerCase()}${command.addToMenu ? ", with a menu entry" : ""}.`);
   plan.details.push(`A records table shows ${listing(columns.map((entry) => entry.label))}.`);
+  const phoneColumns = (table.props.columns as ReturnType<typeof tableColumns>).filter((entry) => entry.priority !== "medium");
+  if (phoneColumns.length < columns.length)
+    plan.details.push(`On a phone it shows ${listing(phoneColumns.map((entry) => entry.label))}.`);
   const found = companions(plan.source, resolved.qualified);
   if (found.detail !== undefined) {
     openRows(plan, tableAlias, resolved, found.detail);
@@ -402,7 +415,7 @@ const relatedTables = (context: StudioStructureContext, plan: Plan, resolved: Re
       return [blockItem(release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE, "records table"),
         freshAlias(plan, `table_${child.key}_of_${resolved.record.key}`), {
           title: child.plural_name, empty_message: `No ${child.plural_name.toLowerCase()} link to this ${lowerFirst(resolved.record.name)} yet.`,
-          columns: shown.map((entry) => ({ field: `${module.key}:${child.key}.${entry.key}`, label: entry.label })),
+          columns: tableColumns((entry) => `${module.key}:${child.key}.${entry.key}`, shown, childResolved.title.key),
           query_parameters: [{ input, source: "page", page_parameter: "record_id" }],
         }, {}, { query: `${module.key}:${query.key}`, view_permission: viewPermission })];
     })));
@@ -414,14 +427,21 @@ const addDetail = (context: StudioStructureContext, plan: Plan, resolved: Resolv
   const detail = blockItem(release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE, "record detail"), detailAlias, {
     title: record.name, detail_fields: shown.map((entry) => ({ field: field(resolved, entry), label: entry.label })),
   }, {});
+  const attachments = record.fields.filter((entry) => entry.type === "attachment" && resolved.readable.has(entry.key))
+    .map((entry) => blockItem(release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.ATTACHMENT_LIST_BLOCK_RELEASE, "attachment list"),
+      freshAlias(plan, `attachments_${record.key}_${entry.key}`), {
+        title: entry.label.slice(0, 120), field: field(resolved, entry),
+        empty_message: `Nothing is attached to ${entry.label} yet.`.slice(0, 200),
+      }, {}));
   const name = record.name.slice(0, 60);
   const related = relatedTables(context, plan, resolved);
   const placedPage = placeNewPage(plan.source, name, { type: "detail", record_type: resolved.qualified, permission: resolved.permission(plan.source, "read", plan.details) },
-    pageData(context, plan.source, command.shellAlias, [detail, ...related], name), command.addToMenu);
+    pageData(context, plan.source, command.shellAlias, [detail, ...attachments, ...related], name), command.addToMenu);
   plan.source = judged(placedPage.source);
   const page = placedPage.page;
   plan.details.unshift(`A page ${quoted(name)} that shows one ${lowerFirst(record.name)}, for people who can read ${record.plural_name.toLowerCase()}.`);
-  plan.details.splice(1, 0, `A record detail shows ${listing(shown.map((entry) => entry.label))}.`);
+  plan.details.splice(1, 0, `A record detail shows ${listing(shown.map((entry) => entry.label))}.`,
+    ...attachments.map((item) => `An attachment list shows the files in ${String(item.props.title)}.`));
   if (related.length === 0) plan.details.push(`No related tables: no record type of this application links to ${record.plural_name.toLowerCase()}.`);
   const found = companions(plan.source, resolved.qualified);
   if (found.edit !== undefined) {

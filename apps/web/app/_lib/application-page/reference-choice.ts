@@ -274,7 +274,9 @@ export const projectEditField = (
       kind === "text_input" &&
       stored === null &&
       isRecord(settings.input_type) &&
-      settings.input_type.value === "email"
+      (settings.input_type.value === "email" ||
+        settings.input_type.value === "tel" ||
+        settings.input_type.value === "url")
         ? null
         : displayed,
     data: {
