@@ -187,6 +187,11 @@ begin
     ) then
     target_decision := pg_catalog.jsonb_build_object('outcome', 'allowed');
   else
+    if pg_catalog.jsonb_array_length(
+      target_loaded #> '{declaration,requiredPermissions}'
+    ) = 0 then
+      raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+    end if;
     target_decision := vortex_access.evaluate_organization_record_access_internal(
       pg_catalog.jsonb_set(target_loaded -> 'declaration', '{authority}',
         '{"kind":"permission"}'::jsonb), target_record_id, target_loaded -> 'facts'

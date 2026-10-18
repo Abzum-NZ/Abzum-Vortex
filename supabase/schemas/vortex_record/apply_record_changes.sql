@@ -1109,6 +1109,14 @@ begin
           ) then
           target_decision := pg_catalog.jsonb_build_object('outcome', 'allowed');
         else
+          if pg_catalog.jsonb_array_length(
+            target_loaded #> '{declaration,requiredPermissions}'
+          ) = 0 then
+            perform vortex_record.release_command_receipt_internal(receipt_kind, effective_command_id);
+            return pg_catalog.jsonb_build_object(
+              'outcome', 'refused', 'reasonCode', 'relationship_unavailable'
+            );
+          end if;
           target_decision := vortex_access.evaluate_organization_record_access_internal(
             pg_catalog.jsonb_set(target_loaded -> 'declaration', '{authority}',
               '{"kind":"permission"}'::jsonb), target_record_id, target_loaded -> 'facts'
