@@ -15,7 +15,7 @@ const unary = (operator: unknown): boolean => operator === "is_empty" || operato
 
 /** The query input types a filter can compare a field with, as the typed condition controls name them. */
 const parameterTypes: Readonly<Record<string, StudioConditionParameterType>> = {
-  text: "text", number: "number", decimal_number: "decimal_number", money: "money", boolean: "boolean",
+  text: "text", whole_number: "whole_number", decimal_number: "decimal_number", money: "money", yes_no: "yes_no",
   date: "date", date_time: "date_time", record_reference: "record_reference",
   organization_account_reference: "organization_account_reference",
 };

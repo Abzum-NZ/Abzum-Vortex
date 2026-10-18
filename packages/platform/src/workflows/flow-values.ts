@@ -6,8 +6,7 @@ import {
   jsonValueSchema,
 } from "../catalogue/common";
 import type { JsonValue } from "../catalogue/common";
-import { parseExactDecimal } from "../records/exact-decimal";
-import { recordRichTextDocumentSchema } from "../records/module-field-values";
+import { typedValueMatchesType } from "../rules/condition-types";
 import { builderKeySchema, fieldIdSchema } from "../catalogue/identifiers";
 
 /**
@@ -134,50 +133,11 @@ export const flowReferenceSchema = z.union([referenceTextSchema, flowReferenceOb
 
 // ─── Typed literals ────────────────────────────────────────────────────────────────────────
 
-const isoDateSchema = z.iso.date();
-const isoDateTimeSchema = z.iso.datetime({ offset: true });
-const isNonEmptyText = (value: JsonValue) => typeof value === "string" && value.length > 0;
-
-const literalMatchesType = (type: string, value: JsonValue): boolean => {
-  switch (type) {
-    case "yes_no":
-      return typeof value === "boolean";
-    case "whole_number":
-      return typeof value === "number" && Number.isSafeInteger(value);
-    case "decimal_number":
-    case "money":
-      return parseExactDecimal(value) !== undefined;
-    case "date":
-      return isoDateSchema.safeParse(value).success;
-    case "date_time":
-      return isoDateTimeSchema.safeParse(value).success;
-    case "text":
-      return typeof value === "string";
-    case "formatted_text":
-      return recordRichTextDocumentSchema.safeParse(value).success;
-    case "choice":
-    case "record_reference":
-    case "organization_account_reference":
-    case "workflow_run_reference":
-    case "relationship_reference":
-    case "file_reference":
-      return isNonEmptyText(value);
-    case "several_choices":
-    case "record_reference_list":
-    case "relationship_reference_list":
-      return Array.isArray(value) && value.every(isNonEmptyText);
-    case "json":
-      return true;
-    default:
-      return false;
-  }
-};
-
 export const flowLiteralSchema = z
   .object({ type: workflowValueTypeSchema, value: jsonValueSchema })
   .strict()
   .superRefine((literal, context) => {
-    if (!literalMatchesType(literal.type, literal.value))
+    if (!typedValueMatchesType(literal.value, literal.type, "flow"))
       context.addIssue({
         code: "custom",
         path: ["value"],

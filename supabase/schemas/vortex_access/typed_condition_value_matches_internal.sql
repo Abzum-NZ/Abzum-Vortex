@@ -3,10 +3,16 @@ CREATE OR REPLACE FUNCTION vortex_access.typed_condition_value_matches_internal(
     SET search_path TO ''
     AS $_$
 declare
-  numeric_value double precision;
+  numeric_value numeric;
   canonical_decimal constant text :=
     '^(?:(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?|-(?:0\.[0-9]*[1-9]|[1-9][0-9]*(?:\.[0-9]*[1-9])?))$';
 begin
+  if p_semantic_type is null or p_semantic_type not in (
+    'text', 'whole_number', 'decimal_number', 'money', 'yes_no', 'date', 'date_time',
+    'text_collection', 'opaque_json', 'record_reference', 'organization_account_reference'
+  ) then
+    return false;
+  end if;
   if p_value is null then
     return false;
   end if;
@@ -16,18 +22,19 @@ begin
 
   if p_semantic_type = 'text' then
     return pg_catalog.jsonb_typeof(p_value) = 'string';
-  elsif p_semantic_type = 'number' then
+  elsif p_semantic_type = 'whole_number' then
     if pg_catalog.jsonb_typeof(p_value) is distinct from 'number' then
       return false;
     end if;
     begin
-      numeric_value := (p_value #>> '{}')::double precision;
+      numeric_value := (p_value #>> '{}')::numeric;
     exception when numeric_value_out_of_range or invalid_text_representation then
       return false;
     end;
-    return numeric_value::text not in ('Infinity', '-Infinity', 'NaN');
+    return numeric_value = pg_catalog.trunc(numeric_value)
+      and numeric_value between -9007199254740991 and 9007199254740991;
   elsif p_semantic_type = 'decimal_number' then
-    -- Integer JSON literals and legacy number parameters can participate in an
+    -- Safe whole-number JSON literals can participate in an
     -- exact comparison. Trusted field values and explicit exact parameters are
     -- separately required to use canonical text by the outer evaluator.
     return (
@@ -36,6 +43,7 @@ begin
     ) or (
       pg_catalog.jsonb_typeof(p_value) = 'number'
       and (p_value #>> '{}') ~ '^-?(?:0|[1-9][0-9]*)$'
+      and (p_value #>> '{}')::numeric between -9007199254740991 and 9007199254740991
     );
   elsif p_semantic_type = 'money' then
     return pg_catalog.jsonb_typeof(p_value) = 'object'
@@ -48,7 +56,7 @@ begin
       and (p_value ->> 'amount') ~ canonical_decimal
       and pg_catalog.jsonb_typeof(p_value -> 'currency') = 'string'
       and (p_value ->> 'currency') ~ '^[A-Z]{3}$';
-  elsif p_semantic_type = 'boolean' then
+  elsif p_semantic_type = 'yes_no' then
     return pg_catalog.jsonb_typeof(p_value) = 'boolean';
   elsif p_semantic_type = 'date' then
     return pg_catalog.jsonb_typeof(p_value) = 'string'

@@ -1,0 +1,1319 @@
+-- Installing or upgrading an application accepts its roles (#2911, #2912, #2883).
+-- Accepting an application's role template, or the changed template of an upgrade, is part of
+-- installing that application: it needs Manage applications (with the delegated scope over every
+-- permission and the recent primary sign-in the writer already checks), not role management.
+-- The installer reads the application's own roles under the installation authority, so the App
+-- Store can show and accept every role change without a roles.read grant. The first-install
+-- member-role read is replaced by that read.
+set local role vortex_owner;
+
+drop function vortex_access.read_first_install_member_role(uuid, uuid);
+create or replace function vortex_access.read_application_roles_for_installation(
+  p_application_root_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  installer record;
+  roles_value jsonb;
+begin
+  if p_application_root_id is null
+    or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid then
+    raise exception using errcode = '22023',
+      message = 'Installation role read input is invalid',
+      detail = 'vortex_access.read_application_roles_for_installation';
+  end if;
+
+  -- The installation authority (applications.manage plus delegated management over the whole
+  -- organisation catalogue) is what entitles this read; it needs no separate roles.read grant.
+  select locked.* into strict installer
+  from vortex_access.lock_application_installation_authority() as locked;
+
+  -- One organisation role per role template of this application: a live one before a retired
+  -- one, so a retired role is reported instead of being accepted a second time. Each carries the
+  -- permissions it accepted (with the meaning it accepted), how many live assignments hold it,
+  -- and the installer's own live standing assignment of it.
+  select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'roleId', selected.role_id,
+      'sourceRoleId', selected.source_role_id,
+      'label', selected.label,
+      'liveRevision', selected.live_revision,
+      'lifecycle', selected.lifecycle,
+      'assignmentPolicy', selected.assignment_policy,
+      'liveAssignmentCount', (
+        select pg_catalog.count(*)
+        from vortex_access.organization_role_assignments as assignment
+        where assignment.organization_id = installer.organization_id
+          and assignment.role_id = selected.role_id
+          and assignment.state = 'live'
+      ),
+      'installerAssignment', (
+        select pg_catalog.jsonb_build_object(
+          'roleAssignmentId', assignment.role_assignment_id,
+          'revision', assignment.revision,
+          'selfGranted', assignment.granted_by = installer.organization_account_id
+        )
+        from vortex_access.organization_role_assignments as assignment
+        where assignment.organization_id = installer.organization_id
+          and assignment.role_id = selected.role_id
+          and assignment.assignee_kind = 'organization_account'
+          and assignment.organization_account_id = installer.organization_account_id
+          and assignment.assignment_kind = 'standing'
+          and assignment.state = 'live'
+          and assignment.starts_at <= pg_catalog.clock_timestamp()
+          and (assignment.expires_at is null
+            or assignment.expires_at > pg_catalog.clock_timestamp())
+        order by assignment.granted_at, assignment.role_assignment_id
+        limit 1
+      ),
+      'acceptedPermissions', (
+        select coalesce(
+          pg_catalog.jsonb_agg(
+            pg_catalog.jsonb_strip_nulls(
+              pg_catalog.jsonb_build_object(
+                'reference', pg_catalog.jsonb_strip_nulls(
+                  pg_catalog.jsonb_build_object(
+                    'applicationRootId', permission.application_root_id,
+                    'ownerKind', permission.owner_kind,
+                    'ownerId', permission.owner_id,
+                    'permissionId', permission.permission_id
+                  )
+                ),
+                'key', catalogue.permission_key,
+                'label', catalogue.label,
+                'description', catalogue.description,
+                'recordTypeId', catalogue.record_type_id,
+                'action', pg_catalog.jsonb_strip_nulls(
+                  pg_catalog.jsonb_build_object(
+                    'actionKind', catalogue.action_kind,
+                    'namedAction', catalogue.named_action
+                  )
+                ),
+                'administrative', catalogue.administrative,
+                -- The meaning the role accepted, which may be older than the registered one.
+                'recordScope', catalogue.record_scope,
+                'fieldPolicy', catalogue.field_policy
+              )
+            ) order by permission.entry_ordinal
+          ),
+          '[]'::jsonb
+        )
+        from vortex_access.organization_role_permission_entries as permission
+        join vortex_access.permission_catalogue_entries as catalogue
+          on catalogue.organization_id = permission.organization_id
+          and catalogue.registration_kind = permission.registration_kind
+          and catalogue.registration_owner_id = permission.registration_owner_id
+          and catalogue.registration_revision = permission.accepted_registration_revision
+          and catalogue.owner_kind = permission.owner_kind
+          and catalogue.owner_id = permission.owner_id
+          and catalogue.permission_id = permission.permission_id
+        where permission.organization_id = installer.organization_id
+          and permission.role_id = selected.role_id
+          and permission.role_revision = selected.live_revision
+      )
+    ) order by selected.source_role_id), '[]'::jsonb)
+  into roles_value
+  from (
+    select distinct on (role.source_role_id)
+      role.role_id, role.source_role_id, role.live_revision, revision.label,
+      revision.lifecycle, revision.assignment_policy
+    from vortex_access.organization_roles as role
+    join vortex_access.organization_role_revisions as revision
+      on revision.organization_id = role.organization_id
+      and revision.role_id = role.role_id
+      and revision.revision = role.live_revision
+    where role.organization_id = installer.organization_id
+      and role.role_kind = 'application'
+      and role.application_root_id = p_application_root_id
+    order by role.source_role_id, (revision.lifecycle = 'retired'), role.created_at desc,
+      role.role_id
+  ) as selected;
+
+  return pg_catalog.jsonb_build_object(
+    'organizationId', installer.organization_id,
+    'organizationAccountId', installer.organization_account_id,
+    'roles', roles_value
+  );
+end
+$function$;
+
+alter function vortex_access.read_application_roles_for_installation(uuid) owner to vortex_owner;
+
+revoke all on function vortex_access.read_application_roles_for_installation(uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
+grant execute on function vortex_access.read_application_roles_for_installation(uuid)
+  to vortex_request;
+
+comment on function vortex_access.read_application_roles_for_installation(uuid) is
+  'Installation role read under the installation authority: for each role template of one application, the organisation role accepted from it (a live one before a retired one) with its accepted permissions and their accepted meaning, its live assignment count and the installer''s own live standing assignment. Reads only that application''s roles; needs no roles.read grant.';
+
+create or replace function vortex_access.read_organization_role_change_evidence_for_administration(
+  p_preparation jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  decision record;
+  context_organization_id uuid;
+  operation_name text;
+  accepted_truth text;
+  requested jsonb;
+  refs jsonb;
+  permissions_value jsonb;
+  has_administrative_permissions boolean;
+  target_application_root_id uuid;
+  target_source_role_id uuid;
+  application_registration vortex_access.permission_registrations%rowtype;
+  selected_continuity vortex_access.application_role_template_continuities%rowtype;
+  live_permissions jsonb;
+  template_source jsonb;
+  role_identity vortex_access.organization_roles%rowtype;
+  current_revision vortex_access.organization_role_revisions%rowtype;
+  role_configuration jsonb;
+  target_role_id uuid;
+  expected_role_revision bigint;
+  target_lifecycle text := 'active';
+  authority_broadened boolean := false;
+  manifest_required boolean := false;
+  affected_assignments jsonb;
+begin
+  -- New-role callers supply bounded configuration only. Existing-Application-revision callers
+  -- supply only the selected role identity and expected revision; this function derives that
+  -- role's configuration and application source from the verified organisation's stored rows.
+  -- Neither path accepts a fingerprint or organisation from its caller.
+  if p_preparation is null
+    or pg_catalog.jsonb_typeof(p_preparation) is distinct from 'object'
+    or pg_catalog.jsonb_typeof(p_preparation -> 'operation') is distinct from 'string'
+    or p_preparation ->> 'operation' not in (
+      'create_custom', 'accept_new_application_role', 'accept_application_role_revision'
+    ) then
+    raise exception using errcode = '22023',
+      message = 'Organization role-change preparation input is invalid';
+  end if;
+  operation_name := p_preparation ->> 'operation';
+
+  if operation_name = 'accept_application_role_revision' then
+    if p_preparation - array[
+      'operation', 'roleId', 'expectedRoleRevision', 'acceptBroadenedAuthority'
+    ]::text[] <> '{}'::jsonb
+      or not (p_preparation ?& array[
+        'operation', 'roleId', 'expectedRoleRevision', 'acceptBroadenedAuthority'
+      ])
+      or pg_catalog.jsonb_typeof(p_preparation -> 'roleId') is distinct from 'string'
+      or vortex_platform.is_non_nil_uuid(p_preparation ->> 'roleId') is not true
+      or (p_preparation ->> 'roleId') <> (p_preparation ->> 'roleId')::uuid::text
+      or pg_catalog.jsonb_typeof(p_preparation -> 'expectedRoleRevision')
+        is distinct from 'number'
+      or (p_preparation ->> 'expectedRoleRevision')::numeric not between
+        1 and 9007199254740991
+      or (p_preparation ->> 'expectedRoleRevision')::numeric <>
+        pg_catalog.trunc((p_preparation ->> 'expectedRoleRevision')::numeric)
+      or pg_catalog.jsonb_typeof(p_preparation -> 'acceptBroadenedAuthority')
+        is distinct from 'string'
+      or p_preparation ->> 'acceptBroadenedAuthority' not in ('accept', 'decline') then
+      raise exception using errcode = '22023',
+        message = 'Organization role-change preparation input is invalid';
+    end if;
+  elsif pg_catalog.jsonb_typeof(p_preparation -> 'roleKey') is distinct from 'string'
+    or pg_catalog.jsonb_typeof(p_preparation -> 'label') is distinct from 'string'
+    or pg_catalog.jsonb_typeof(p_preparation -> 'description') is distinct from 'string'
+    or pg_catalog.jsonb_typeof(p_preparation -> 'privilegeClassification') is distinct from 'string'
+    or p_preparation ->> 'privilegeClassification' not in ('standard', 'privileged')
+    or pg_catalog.jsonb_typeof(p_preparation -> 'acceptBroadenedAuthority') is distinct from 'string'
+    or p_preparation ->> 'acceptBroadenedAuthority' not in ('accept', 'decline') then
+    raise exception using errcode = '22023',
+      message = 'Organization role-change preparation input is invalid';
+  end if;
+  accepted_truth := p_preparation ->> 'acceptBroadenedAuthority';
+
+  -- Explicit acceptance of broadened authority is a visible choice, never inferred from a
+  -- submitted form. Declining is an ordinary unavailability, not an error.
+  if accepted_truth is distinct from 'accept' then
+    return pg_catalog.jsonb_build_object('outcome', 'unavailable');
+  end if;
+
+  -- The verified request context and the caller's own current authority decide the organisation;
+  -- the caller never names it. A custom role needs role management. Accepting an application's
+  -- role template or role revision is part of installing or upgrading that application, so it
+  -- needs the installation permission instead; the writer keeps the delegated-scope and recent
+  -- sign-in checks for both.
+  select evaluated.* into strict decision
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', case when operation_name = 'create_custom'
+        then 'platform.organization.roles.manage'
+        else 'platform.organization.applications.manage' end,
+      'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', vortex_access.required_platform_permission(
+        case when operation_name = 'create_custom'
+          then 'platform.organization.roles.manage'
+          else 'platform.organization.applications.manage' end
+      ),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+    )
+  ) as evaluated;
+  if decision.outcome is distinct from 'eligible' then
+    raise exception using errcode = '42501',
+      message = 'Organization role-change preparation is unavailable';
+  end if;
+  context_organization_id := decision.organization_id;
+
+  if operation_name = 'accept_application_role_revision' then
+    target_role_id := (p_preparation ->> 'roleId')::uuid;
+    expected_role_revision :=
+      (p_preparation ->> 'expectedRoleRevision')::numeric::bigint;
+    select stored.* into role_identity
+    from vortex_access.organization_roles as stored
+    where stored.organization_id = context_organization_id
+      and stored.role_id = target_role_id;
+    if not found
+      or role_identity.role_kind <> 'application'
+      or role_identity.application_root_id is null
+      or role_identity.application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
+      or role_identity.source_role_id is null
+      or role_identity.source_role_id = '00000000-0000-0000-0000-000000000000'::uuid
+      or role_identity.live_revision <> expected_role_revision then
+      return pg_catalog.jsonb_build_object('outcome', 'unavailable');
+    end if;
+    if role_identity.live_revision = 9007199254740991 then
+      return pg_catalog.jsonb_build_object('outcome', 'unavailable');
+    end if;
+
+    select revision.* into current_revision
+    from vortex_access.organization_role_revisions as revision
+    where revision.organization_id = context_organization_id
+      and revision.role_id = target_role_id
+      and revision.revision = expected_role_revision;
+    if not found
+      or current_revision.lifecycle is null
+      or current_revision.lifecycle not in ('active', 'acceptance_required') then
+      return pg_catalog.jsonb_build_object('outcome', 'unavailable');
+    end if;
+
+    target_application_root_id := role_identity.application_root_id;
+    target_source_role_id := role_identity.source_role_id;
+    role_configuration := pg_catalog.jsonb_build_object(
+      'roleId', role_identity.role_id,
+      'expectedRoleRevision', current_revision.revision,
+      'key', current_revision.role_key,
+      'label', current_revision.label,
+      'description', current_revision.description,
+      'privilegeClassification', current_revision.privilege_classification,
+      'assignmentPolicy', case current_revision.assignment_policy
+        when 'standing' then pg_catalog.jsonb_build_object('kind', 'standing')
+        else pg_catalog.jsonb_build_object(
+          'kind', 'activation_required',
+          'activationPolicy', pg_catalog.jsonb_build_object(
+            'selection', 'existing',
+            'reference', pg_catalog.jsonb_build_object(
+              'activationPolicyId', current_revision.activation_policy_id,
+              'revision', current_revision.activation_policy_revision
+            )
+          )
+        )
+      end,
+      'sourceRoleId', role_identity.source_role_id
+    );
+  end if;
+
+  if operation_name = 'create_custom' then
+    requested := p_preparation -> 'permissions';
+    if pg_catalog.jsonb_typeof(requested) is distinct from 'array'
+      or pg_catalog.jsonb_array_length(requested) = 0 then
+      raise exception using errcode = '22023',
+        message = 'Organization role-change preparation input is invalid';
+    end if;
+    if exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(requested) as item(value)
+      where pg_catalog.jsonb_typeof(item.value) is distinct from 'object'
+        or not (item.value ?& array['ownerKind', 'ownerId', 'permissionId'])
+        or pg_catalog.jsonb_typeof(item.value -> 'ownerKind') is distinct from 'string'
+        or item.value ->> 'ownerKind' not in ('platform', 'application', 'module')
+        or pg_catalog.jsonb_typeof(item.value -> 'ownerId') is distinct from 'string'
+        or vortex_platform.is_non_nil_uuid(item.value ->> 'ownerId') is not true
+        or pg_catalog.jsonb_typeof(item.value -> 'permissionId') is distinct from 'string'
+        or vortex_platform.is_non_nil_uuid(item.value ->> 'permissionId') is not true
+        or ((item.value ->> 'ownerKind' = 'platform') = (item.value ? 'applicationRootId'))
+        or (
+          item.value ->> 'ownerKind' <> 'platform'
+          and (
+            pg_catalog.jsonb_typeof(item.value -> 'applicationRootId') is distinct from 'string'
+            or vortex_platform.is_non_nil_uuid(item.value ->> 'applicationRootId') is not true
+            or (item.value ->> 'ownerKind' = 'application'
+              and (item.value ->> 'ownerId')::uuid
+                <> (item.value ->> 'applicationRootId')::uuid)
+          )
+        )
+    ) then
+      raise exception using errcode = '22023',
+        message = 'Organization role-change preparation input is invalid';
+    end if;
+    select pg_catalog.jsonb_agg(distinct pg_catalog.jsonb_strip_nulls(
+      pg_catalog.jsonb_build_object(
+        'applicationRootId', case when item.value ->> 'ownerKind' = 'platform'
+          then null else (item.value ->> 'applicationRootId')::uuid end,
+        'ownerKind', item.value ->> 'ownerKind',
+        'ownerId', (item.value ->> 'ownerId')::uuid,
+        'permissionId', (item.value ->> 'permissionId')::uuid
+      )
+    ))
+    into refs
+    from pg_catalog.jsonb_array_elements(requested) as item(value);
+    if refs is null
+      or pg_catalog.jsonb_array_length(refs) <> pg_catalog.jsonb_array_length(requested) then
+      raise exception using errcode = '22023',
+        message = 'Organization role-change preparation input is invalid';
+    end if;
+  else
+    if operation_name <> 'accept_application_role_revision' then
+      if pg_catalog.jsonb_typeof(p_preparation -> 'applicationRootId') is distinct from 'string'
+        or vortex_platform.is_non_nil_uuid(p_preparation ->> 'applicationRootId') is not true
+        or pg_catalog.jsonb_typeof(p_preparation -> 'sourceRoleId') is distinct from 'string'
+        or vortex_platform.is_non_nil_uuid(p_preparation ->> 'sourceRoleId') is not true then
+        raise exception using errcode = '22023',
+          message = 'Organization role-change preparation input is invalid';
+      end if;
+      target_application_root_id := (p_preparation ->> 'applicationRootId')::uuid;
+      target_source_role_id := (p_preparation ->> 'sourceRoleId')::uuid;
+    end if;
+
+    select registration.* into application_registration
+    from vortex_access.permission_registrations as registration
+    where registration.organization_id = context_organization_id
+      and registration.registration_kind = 'application'
+      and registration.registration_owner_id = target_application_root_id
+      and registration.state = 'active';
+    if not found then
+      return pg_catalog.jsonb_build_object('outcome', 'unavailable');
+    end if;
+
+    select continuity.* into selected_continuity
+    from vortex_access.application_role_template_continuities as continuity
+    where continuity.organization_id = context_organization_id
+      and continuity.application_root_id = target_application_root_id
+      and continuity.source_role_id = target_source_role_id
+      and continuity.state = 'available'
+      and continuity.last_processed_registration_revision = application_registration.revision;
+    if not found then
+      return pg_catalog.jsonb_build_object('outcome', 'unavailable');
+    end if;
+
+    -- The writer reads the same projection, so the evidence names the registration revision and
+    -- its catalogue fingerprint instead of carrying the registered entries.
+    live_permissions := vortex_access.application_role_template_live_permissions_internal(
+      context_organization_id, target_application_root_id, application_registration.revision,
+      target_source_role_id
+    );
+    if live_permissions is null then
+      return pg_catalog.jsonb_build_object('outcome', 'unavailable');
+    end if;
+    template_source := pg_catalog.jsonb_build_object(
+      'applicationRootId', target_application_root_id,
+      'registrationRevision', application_registration.revision,
+      'catalogueFingerprint', application_registration.permission_catalogue_fingerprint
+    );
+
+    select pg_catalog.jsonb_agg(pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
+        'applicationRootId', item.value -> 'applicationRootId',
+        'ownerKind', item.value ->> 'ownerKind',
+        'ownerId', item.value ->> 'ownerId',
+        'permissionId', item.value ->> 'permissionId'
+      )))
+    into refs
+    from pg_catalog.jsonb_array_elements(live_permissions) as item(value);
+  end if;
+
+  -- Every requested identity must still resolve to exactly one current, available accepted
+  -- permission. The returned scope is exactly the references the role entry names, never wider.
+  select pg_catalog.jsonb_agg(pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
+      'kind', 'exact',
+      'applicationRootId', continuity.application_root_id,
+      'ownerKind', continuity.owner_kind,
+      'ownerId', continuity.owner_id,
+      'permissionId', continuity.permission_id,
+      'acceptedRegistrationRevision', registration.revision,
+      'catalogueFingerprint', registration.permission_catalogue_fingerprint,
+      'continuityRevision', continuity.continuity_revision,
+      'meaningFingerprint', continuity.meaning_fingerprint
+    )) order by continuity.application_root_id nulls last,
+      continuity.owner_kind collate "C", continuity.owner_id, continuity.permission_id),
+    pg_catalog.bool_or(catalogue.administrative)
+  into permissions_value, has_administrative_permissions
+  from pg_catalog.jsonb_array_elements(refs) as requested_permission(value)
+  join vortex_access.permission_continuities as continuity
+    on continuity.organization_id = context_organization_id
+    and continuity.state = 'available'
+    and continuity.application_scope_id = coalesce(case when requested_permission.value ? 'applicationRootId'
+        then (requested_permission.value ->> 'applicationRootId')::uuid else null end, '00000000-0000-0000-0000-000000000000'::uuid)
+      and (requested_permission.value ->> 'applicationRootId') is distinct from '00000000-0000-0000-0000-000000000000'
+    and continuity.owner_kind = requested_permission.value ->> 'ownerKind'
+    and continuity.owner_id = (requested_permission.value ->> 'ownerId')::uuid
+    and continuity.permission_id = (requested_permission.value ->> 'permissionId')::uuid
+  join vortex_access.permission_registrations as registration
+    on registration.organization_id = continuity.organization_id
+    and registration.registration_kind = continuity.registration_kind
+    and registration.registration_owner_id = continuity.registration_owner_id
+    and registration.state = 'active'
+  join vortex_access.permission_catalogue_entries as catalogue
+    on catalogue.organization_id = continuity.organization_id
+    and catalogue.registration_kind = continuity.registration_kind
+    and catalogue.registration_owner_id = continuity.registration_owner_id
+    and catalogue.registration_revision = registration.revision
+    and catalogue.owner_kind = continuity.owner_kind
+    and catalogue.owner_id = continuity.owner_id
+    and catalogue.permission_id = continuity.permission_id
+    and catalogue.application_root_id is not distinct from continuity.application_root_id
+    and catalogue.meaning_fingerprint = continuity.meaning_fingerprint;
+  if permissions_value is null
+    or pg_catalog.jsonb_array_length(permissions_value)
+      <> pg_catalog.jsonb_array_length(refs) then
+    raise exception using errcode = '40001',
+      message = 'Organization role permission evidence is stale or unavailable';
+  end if;
+
+  -- Reject the submitted classification before sealing evidence for a write whose deferred
+  -- revision constraint would reject the same administrative permissions at commit.
+  if operation_name <> 'accept_application_role_revision'
+    and p_preparation ->> 'privilegeClassification' = 'standard'
+    and has_administrative_permissions then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'invalid_privilege_classification',
+      'organizationId', context_organization_id
+    );
+  end if;
+
+  if operation_name = 'accept_application_role_revision' then
+    select exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(permissions_value) as proposed(value)
+      where not exists (
+        select 1
+        from vortex_access.organization_role_permission_entries as existing
+        where existing.organization_id = context_organization_id
+          and existing.role_id = target_role_id
+          and existing.role_revision = current_revision.revision
+          and existing.application_root_id is not distinct from
+            case when proposed.value ? 'applicationRootId'
+              then (proposed.value ->> 'applicationRootId')::uuid else null end
+          and existing.owner_kind = proposed.value ->> 'ownerKind'
+          and existing.owner_id = (proposed.value ->> 'ownerId')::uuid
+          and existing.permission_id = (proposed.value ->> 'permissionId')::uuid
+          and existing.continuity_revision =
+            (proposed.value ->> 'continuityRevision')::numeric::bigint
+          and existing.meaning_fingerprint = proposed.value ->> 'meaningFingerprint'
+      )
+    ) into authority_broadened;
+
+    -- The candidate preserves the current assignment policy and either moves from
+    -- acceptance_required to active or keeps an active revision active. This is the writer's
+    -- manifest predicate, so the only additional true term for this operation is a broadened
+    -- permission projection.
+    manifest_required :=
+      current_revision.assignment_policy is distinct from
+        (role_configuration #>> '{assignmentPolicy,kind}')
+      or (
+        current_revision.lifecycle in ('unavailable', 'retired')
+        and target_lifecycle in ('active', 'acceptance_required')
+      )
+      or authority_broadened;
+
+    if manifest_required then
+      select coalesce(
+        pg_catalog.jsonb_agg(
+          pg_catalog.jsonb_build_object(
+            'roleAssignmentId', assignment.role_assignment_id,
+            'expectedRevision', assignment.revision,
+            'assignee', case
+              when assignment.assignee_kind = 'organization_account' then
+                pg_catalog.jsonb_build_object(
+                  'kind', 'organization_account',
+                  'organizationAccountId', assignment.organization_account_id
+                )
+              else pg_catalog.jsonb_build_object(
+                'kind', 'group',
+                'groupId', assignment.group_id
+              )
+            end
+          ) order by assignment.role_assignment_id
+        ),
+        '[]'::jsonb
+      ) into affected_assignments
+      from vortex_access.organization_role_assignments as assignment
+      where assignment.organization_id = context_organization_id
+        and assignment.role_id = target_role_id
+        and assignment.state = 'live';
+    end if;
+
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'available',
+      'organizationId', context_organization_id,
+      'roleConfiguration', role_configuration,
+      'permissions', permissions_value,
+      'templateContinuityRevision', selected_continuity.continuity_revision,
+      'templateSource', template_source,
+      'manifestRequired', manifest_required,
+      'affectedAssignments', affected_assignments
+    );
+  end if;
+
+  if operation_name = 'create_custom' then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'available',
+      'organizationId', context_organization_id,
+      'permissions', permissions_value,
+      'templateContinuityRevision', null,
+      'templateSource', null
+    );
+  end if;
+
+  return pg_catalog.jsonb_build_object(
+    'outcome', 'available',
+    'organizationId', context_organization_id,
+    'permissions', permissions_value,
+    'templateContinuityRevision', selected_continuity.continuity_revision,
+    'templateSource', template_source
+  );
+exception
+  when invalid_text_representation or invalid_parameter_value
+      or numeric_value_out_of_range then
+    raise exception using errcode = '22023',
+      message = 'Organization role-change preparation input is invalid';
+end
+$function$;
+
+revoke execute on function vortex_access.read_organization_role_change_evidence_for_administration(jsonb)
+from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+grant execute on function vortex_access.read_organization_role_change_evidence_for_administration(jsonb)
+to vortex_request;
+
+comment on function vortex_access.read_organization_role_change_evidence_for_administration(jsonb) is
+  'Server-side preparation read: given bounded role configuration or an existing Application role identity and expected revision, it returns complete, fingerprinted permission and template evidence for the verified caller organisation only, deriving stored role configuration, actor and organisation from protected context and including an exact live-assignment snapshot only when the writer requires it.';
+
+alter function vortex_access.read_organization_role_change_evidence_for_administration(p_preparation jsonb) owner to vortex_owner;
+
+grant execute on function vortex_access.read_organization_role_change_evidence_for_administration(p_preparation jsonb) to postgres;
+
+create or replace function vortex_access.coordinate_private_organization_role_authority_change(
+  p_prepared_evidence jsonb,
+  p_activity_id uuid
+)
+returns table (
+  outcome text,
+  operation text,
+  role jsonb,
+  created_activation_policy jsonb,
+  access_version bigint,
+  correlation_id uuid
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  context_organization_id uuid;
+  context_account_id uuid;
+  context_access_version bigint;
+  context_correlation_id uuid;
+  locked_access_version bigint;
+  candidate jsonb;
+  operation_name text;
+  operation_key text;
+  target_organization_id uuid;
+  target_role_id uuid;
+  expected_role_revision bigint;
+  role_identity vortex_access.organization_roles%rowtype;
+  current_revision vortex_access.organization_role_revisions%rowtype;
+  authority_before jsonb;
+  authority_after jsonb;
+  policy_choice jsonb;
+  policy_changed boolean;
+  decision record;
+  changed record;
+  activity_result text;
+begin
+  if p_prepared_evidence is null
+    or pg_catalog.jsonb_typeof(p_prepared_evidence) is distinct from 'object'
+    or pg_catalog.jsonb_typeof(p_prepared_evidence -> 'candidate')
+      is distinct from 'object'
+    or vortex_platform.is_non_nil_uuid(p_activity_id::text) is not true then
+    raise exception using errcode = '22023',
+      message = 'Private Organization role-authority input is invalid';
+  end if;
+
+  candidate := p_prepared_evidence -> 'candidate';
+  operation_name := candidate ->> 'operation';
+  if operation_name is null or operation_name not in (
+    'create_custom', 'create_custom_from_template',
+    'accept_new_application_role', 'revise_metadata_policy',
+    'revise_custom_permissions', 'accept_application_role_revision'
+  )
+    or pg_catalog.jsonb_typeof(candidate -> 'organizationId')
+      is distinct from 'string'
+    or not vortex_platform.is_non_nil_uuid(candidate ->> 'organizationId')
+    or pg_catalog.jsonb_typeof(candidate -> 'roleId') is distinct from 'string'
+    or not vortex_platform.is_non_nil_uuid(candidate ->> 'roleId') then
+    raise exception using errcode = '22023',
+      message = 'Private Organization role-authority input is invalid';
+  end if;
+  target_organization_id := (candidate ->> 'organizationId')::uuid;
+  target_role_id := (candidate ->> 'roleId')::uuid;
+
+  context_value := vortex_access.validated_human_request_context();
+  context_organization_id := (context_value ->> 'organizationId')::uuid;
+  context_account_id := (context_value ->> 'organizationAccountId')::uuid;
+  context_access_version := (context_value ->> 'accessVersion')::bigint;
+  context_correlation_id := (context_value ->> 'correlationId')::uuid;
+  if target_organization_id is distinct from context_organization_id then
+    raise exception using errcode = '42501',
+      message = 'Private Organization role-authority change is unavailable';
+  end if;
+
+  select version.current_version into locked_access_version
+  from vortex_access.organization_access_versions as version
+  join vortex_identity.organizations as organization
+    on organization.organization_id = version.organization_id
+  join vortex_identity.tenants as tenant
+    on tenant.tenant_id = organization.tenant_id
+  where version.organization_id = context_organization_id
+    and organization.state = 'active'
+    and tenant.state = 'active'
+  for update of version;
+  if not found or locked_access_version is distinct from context_access_version then
+    raise exception using errcode = '42501',
+      message = 'Private Organization role-authority change is unavailable';
+  end if;
+
+  if operation_name in (
+    'create_custom', 'create_custom_from_template', 'accept_new_application_role'
+  ) then
+    if exists (
+      select 1 from vortex_access.organization_roles as stored
+      where stored.organization_id = context_organization_id
+        and stored.role_id = target_role_id
+    ) then
+      raise exception using errcode = '40001',
+        message = 'Private Organization role-authority change is stale or unavailable';
+    end if;
+    authority_before := pg_catalog.jsonb_build_object('kind', 'none');
+  else
+    if pg_catalog.jsonb_typeof(candidate -> 'expectedRoleRevision')
+        is distinct from 'number'
+      or (candidate ->> 'expectedRoleRevision')::numeric not between
+        1 and 9007199254740991
+      or (candidate ->> 'expectedRoleRevision')::numeric <>
+        pg_catalog.trunc((candidate ->> 'expectedRoleRevision')::numeric) then
+      raise exception using errcode = '22023',
+        message = 'Private Organization role-authority input is invalid';
+    end if;
+    expected_role_revision :=
+      (candidate ->> 'expectedRoleRevision')::numeric::bigint;
+    select identity.* into role_identity
+    from vortex_access.organization_roles as identity
+    where identity.organization_id = context_organization_id
+      and identity.role_id = target_role_id
+    for update of identity;
+    if not found or role_identity.live_revision is distinct from expected_role_revision then
+      raise exception using errcode = '40001',
+        message = 'Private Organization role-authority change is stale or unavailable';
+    end if;
+    select revision.* into current_revision
+    from vortex_access.organization_role_revisions as revision
+    where revision.organization_id = context_organization_id
+      and revision.role_id = target_role_id
+      and revision.revision = role_identity.live_revision;
+    if not found then
+      raise exception using errcode = '40001',
+        message = 'Private Organization role-authority change is stale or unavailable';
+    end if;
+    authority_before := vortex_access.private_current_role_management_scope(
+      context_organization_id, target_role_id, expected_role_revision
+    );
+  end if;
+
+  -- Installation acceptance changes the supplied permissions, never the organization's local
+  -- role settings. Compare the complete policy choice, including the immutable activation-policy
+  -- revision, under the same Access lock as the write. Changing settings uses role management.
+  if operation_name = 'accept_application_role_revision' and (
+    candidate -> 'key' is distinct from pg_catalog.to_jsonb(current_revision.role_key)
+    or candidate -> 'label' is distinct from pg_catalog.to_jsonb(current_revision.label)
+    or candidate -> 'description' is distinct from pg_catalog.to_jsonb(current_revision.description)
+    or candidate -> 'privilegeClassification' is distinct from
+      pg_catalog.to_jsonb(current_revision.privilege_classification)
+    or candidate -> 'assignmentPolicy' is distinct from case current_revision.assignment_policy
+      when 'standing' then pg_catalog.jsonb_build_object('kind', 'standing')
+      else pg_catalog.jsonb_build_object(
+        'kind', 'activation_required',
+        'activationPolicy', pg_catalog.jsonb_build_object(
+          'selection', 'existing',
+          'reference', pg_catalog.jsonb_build_object(
+            'activationPolicyId', current_revision.activation_policy_id,
+            'revision', current_revision.activation_policy_revision
+          )
+        )
+      )
+    end
+  ) then
+    raise exception using errcode = 'V3151',
+      message = 'Accepting application role changes must keep the role settings. Use Manage roles to change its name, description, classification or assignment and activation settings.';
+  end if;
+
+  if operation_name = 'revise_metadata_policy' then
+    policy_choice := candidate -> 'assignmentPolicy';
+    if pg_catalog.jsonb_typeof(policy_choice) is distinct from 'object'
+      or pg_catalog.jsonb_typeof(policy_choice -> 'kind') is distinct from 'string'
+      or policy_choice ->> 'kind' not in ('standing', 'activation_required') then
+      raise exception using errcode = '22023',
+        message = 'Private Organization role-authority input is invalid';
+    end if;
+    if policy_choice ->> 'kind' = 'standing' then
+      policy_changed := current_revision.assignment_policy <> 'standing';
+    elsif policy_choice #>> '{activationPolicy,selection}' = 'new' then
+      policy_changed := true;
+    elsif policy_choice #>> '{activationPolicy,selection}' = 'existing'
+      and vortex_platform.is_non_nil_uuid(
+        policy_choice #>> '{activationPolicy,reference,activationPolicyId}'
+      )
+      and pg_catalog.jsonb_typeof(
+        policy_choice #> '{activationPolicy,reference,revision}'
+      ) = 'number'
+      and (policy_choice #>>
+        '{activationPolicy,reference,revision}')::numeric between
+        1 and 9007199254740991
+      and (policy_choice #>>
+        '{activationPolicy,reference,revision}')::numeric =
+        pg_catalog.trunc((policy_choice #>>
+          '{activationPolicy,reference,revision}')::numeric) then
+      policy_changed := current_revision.assignment_policy <> 'activation_required'
+        or current_revision.activation_policy_id is distinct from
+          (policy_choice #>>
+            '{activationPolicy,reference,activationPolicyId}')::uuid
+        or current_revision.activation_policy_revision is distinct from
+          (policy_choice #>> '{activationPolicy,reference,revision}')::numeric::bigint;
+    else
+      raise exception using errcode = '22023',
+        message = 'Private Organization role-authority input is invalid';
+    end if;
+    if policy_changed is not true then
+      raise exception using errcode = '40001',
+        message = 'Private Organization role-authority candidate changes no authority';
+    end if;
+    authority_after := authority_before;
+  else
+    authority_after := vortex_access.private_management_scope_from_permission_evidence(
+      candidate -> 'permissions'
+    );
+  end if;
+
+  if authority_before ->> 'kind' = 'none'
+    and authority_after ->> 'kind' = 'none' then
+    raise exception using errcode = '40001',
+      message = 'Private Organization role-authority scope is unavailable';
+  end if;
+
+  -- Accepting an application's role template or role revision is part of installing or upgrading
+  -- that application, so it needs the installation permission (Manage applications) instead of
+  -- role management; the delegated scope over every permission and the recent sign-in stay.
+  operation_key := 'platform.organization.roles.' || operation_name;
+  select evaluated.* into strict decision
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', operation_key,
+      'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', pg_catalog.jsonb_build_object(
+        'ownerKind', 'platform',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
+        'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+        'permissionId', case
+          when operation_name in ('accept_new_application_role', 'accept_application_role_revision')
+            -- guard-allow: function-uuid fixed installation permission identity without declaration-table read access
+            then '7ecd3304-f16c-47d4-94db-0964980091ba'
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
+          else '87c96495-c806-4692-9bc2-250ddb10613c'
+        end
+      ),
+      'recentAuthentication', case
+        when operation_name in (
+          'create_custom_from_template', 'accept_new_application_role',
+          'accept_application_role_revision'
+        ) then pg_catalog.jsonb_build_object(
+          'kind', 'primary', 'maximumAgeSeconds', 900
+        )
+        else pg_catalog.jsonb_build_object('kind', 'none')
+      end,
+      'authority', pg_catalog.jsonb_build_object(
+        'kind', 'delegated_management',
+        'before', authority_before,
+        'after', authority_after
+      )
+    )
+  ) as evaluated;
+  if decision.operation_key is distinct from operation_key
+    or decision.organization_id is distinct from context_organization_id
+    or decision.organization_account_id is distinct from context_account_id
+    or decision.access_version is distinct from context_access_version
+    or decision.correlation_id is distinct from context_correlation_id then
+    raise exception using errcode = '42501',
+      message = 'Private Organization role-authority change is unavailable';
+  end if;
+
+  if decision.outcome = 'refused' and decision.reason_code = 'authentication_unsatisfied' then
+    raise exception using errcode = 'V3150',
+      message = 'Organization role-authority change requires recent primary authentication';
+  end if;
+  if decision.outcome is distinct from 'eligible' then
+    raise exception using errcode = '42501',
+      message = 'Private Organization role-authority change is unavailable';
+  end if;
+
+  select result.* into strict changed
+  from vortex_access.coordinate_organization_role_change(
+    p_prepared_evidence, context_account_id, context_correlation_id
+  ) as result;
+
+  activity_result := vortex_record.append_organization_activity_entry(
+    context_organization_id, p_activity_id,
+    (changed.role ->> 'changedAt')::timestamptz,
+    'organization_account', context_account_id, operation_name,
+    array[target_role_id]::uuid[], array[]::uuid[], vortex_platform.channel(),
+    context_correlation_id, 'completed'
+  );
+  if activity_result is distinct from 'inserted' then
+    raise exception using errcode = '40001',
+      message = 'Private Organization role-authority Activity is stale';
+  end if;
+
+  return query select changed.outcome, changed.operation, changed.role,
+    changed.created_activation_policy, changed.access_version,
+    changed.correlation_id;
+exception
+  when invalid_text_representation or invalid_parameter_value
+      or numeric_value_out_of_range then
+    raise exception using errcode = '22023',
+      message = 'Private Organization role-authority input is invalid';
+end
+$function$;
+
+revoke execute on function vortex_access.coordinate_private_organization_role_authority_change(jsonb, uuid)
+from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+comment on function vortex_access.coordinate_private_organization_role_authority_change(jsonb, uuid) is
+  'Owner-only authority-establishing role composition. It checks exact current/candidate permission scope, then reuses canonical role evidence, manifests, stewardship and Activity without exposing a grant endpoint.';
+
+alter function vortex_access.coordinate_private_organization_role_authority_change(p_prepared_evidence jsonb, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.coordinate_private_organization_role_authority_change(p_prepared_evidence jsonb, p_activity_id uuid) to postgres;
+
+create or replace function vortex_access.list_application_role_templates_projection(
+  p_record_ids uuid[], p_sort_key text, p_direction text,
+  p_after jsonb, p_limit integer
+)
+returns table (
+  organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
+)
+language plpgsql volatile security definer
+set search_path = ''
+set enable_sort = off
+set max_parallel_workers_per_gather = 0
+as $function$
+declare
+  scope_row record;
+  candidate record;
+  template_value jsonb;
+  selected_template jsonb;
+  source_role_id_value uuid;
+  seen_role_ids uuid[];
+  valid_roles boolean;
+  after_record_id uuid;
+  after_text text;
+  emitted integer := 0;
+  scan_sql text;
+  comparison text;
+  sort_column text;
+begin
+  if p_sort_key not in ('record_id', 'source_role_id', 'application_root_id', 'key', 'label')
+    or p_direction not in ('ascending', 'descending')
+    or p_sort_key is null or p_direction is null
+    or (p_limit is not null and p_limit < 1) then
+    raise exception using errcode = '22023',
+      message = 'Application role template projection bounds are invalid';
+  end if;
+  if p_after is not null then
+    if pg_catalog.jsonb_typeof(p_after) is distinct from 'object'
+      or pg_catalog.jsonb_typeof(p_after -> 'recordId') is distinct from 'string'
+      or (p_sort_key in ('source_role_id', 'key', 'label') and (
+        pg_catalog.jsonb_typeof(p_after -> 'sortKey') is distinct from 'array'
+        or pg_catalog.jsonb_array_length(p_after -> 'sortKey') is distinct from 1
+        or pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0)
+          not in ('string', 'null')
+      )) then
+      raise exception using errcode = '22023',
+        message = 'Application role template projection cursor is invalid';
+    end if;
+    begin
+      after_record_id := (p_after ->> 'recordId')::uuid;
+    exception when invalid_text_representation then
+      raise exception using errcode = '22023',
+        message = 'Application role template projection cursor is invalid';
+    end;
+    after_text := p_after -> 'sortKey' ->> 0;
+    if p_sort_key = 'source_role_id'
+      and after_text is distinct from after_record_id::text then
+      raise exception using errcode = '22023',
+        message = 'Application role template projection cursor is invalid';
+    end if;
+  end if;
+
+  begin
+    select authorized.* into strict scope_row
+    from vortex_access.organization_roles_administration_scope() as authorized;
+  exception when insufficient_privilege then
+    return;
+  end;
+
+  comparison := case when p_direction = 'ascending' then '>' else '<' end;
+  sort_column := case p_sort_key
+    when 'key' then 'continuity.key collate "C"'
+    when 'label' then 'continuity.label collate "C"'
+    else null end;
+  scan_sql := $scan$
+    select continuity.application_root_id, continuity.source_role_id,
+      continuity.key, continuity.label, continuity.continuity_revision,
+      registration.revision as registration_revision,
+      release.compilation_output #> '{canonical,content,roles}' as roles
+    from vortex_access.application_role_template_continuities as continuity
+    join vortex_access.permission_registrations as registration
+      on registration.organization_id = continuity.organization_id
+      and registration.registration_owner_id = continuity.application_root_id
+      and registration.registration_kind = 'application'
+      and registration.state = 'active'
+      and registration.revision = continuity.last_processed_registration_revision
+    join vortex_definition.roots as root
+      on root.root_id = registration.registration_owner_id
+      and root.organization_id = registration.organization_id
+      and root.kind = 'application'
+      and root.key = registration.source_definition_key
+    join vortex_definition.releases as release
+      on release.root_id = root.root_id
+      and release.release_revision = registration.source_revision
+      and release.release_version = registration.source_version
+      and release.validation_contract_version = registration.validation_contract_version
+    where continuity.organization_id = $1
+      and continuity.state = 'available'
+      and ($2 is null or continuity.source_role_id = any($2))
+      and release.application_address ->> 'kind' = 'application'
+      and release.compilation_output ->> 'kind' = 'application'
+      and exists (
+        select 1 from vortex_definition.installation_bindings as binding
+        where binding.organization_id = $1
+          and binding.application_root_id = root.root_id
+          and binding.application_release_revision = registration.source_revision
+          and binding.state = 'active'
+      )
+  $scan$;
+  if p_after is not null and p_sort_key in ('record_id', 'source_role_id') then
+    scan_sql := scan_sql || pg_catalog.format(
+      ' and continuity.source_role_id %s $3', comparison
+    );
+  elsif p_after is not null and sort_column is not null then
+    if after_text is null then
+      scan_sql := scan_sql || pg_catalog.format(
+        ' and ((%1$s is null and continuity.source_role_id %2$s $3)%3$s)',
+        sort_column, comparison,
+        case when p_direction = 'ascending'
+          then pg_catalog.format(' or %s is not null', sort_column)
+          else '' end
+      );
+    else
+      scan_sql := scan_sql || pg_catalog.format(
+        ' and ((%1$s, continuity.source_role_id) %2$s ($4 collate "C", $3)%3$s)',
+        sort_column, comparison,
+        case when p_direction = 'descending'
+          then pg_catalog.format(' or %s is null', sort_column)
+          else '' end
+      );
+    end if;
+  elsif p_after is not null then
+    -- Only the delegating old signature uses this order without a cursor.
+    raise exception using errcode = '22023',
+      message = 'Application role template projection cursor is invalid';
+  end if;
+  scan_sql := scan_sql || case when p_sort_key in ('record_id', 'source_role_id')
+    then pg_catalog.format(' order by continuity.source_role_id %s',
+      case when p_direction = 'ascending' then 'asc' else 'desc' end)
+    when sort_column is not null then pg_catalog.format(
+      ' order by %s %s nulls %s, continuity.source_role_id %s',
+      sort_column,
+      case when p_direction = 'ascending' then 'asc' else 'desc' end,
+      case when p_direction = 'ascending' then 'first' else 'last' end,
+      case when p_direction = 'ascending' then 'asc' else 'desc' end)
+    else pg_catalog.format(
+      ' order by continuity.application_root_id %s, continuity.source_role_id %s',
+      case when p_direction = 'ascending' then 'asc' else 'desc' end,
+      case when p_direction = 'ascending' then 'asc' else 'desc' end)
+    end;
+  -- No limit in the scan: a candidate whose release roles fail validation is skipped, as the
+  -- legacy reader skipped it, so the loop reads on until the page is full (the scan is an
+  -- ordered index walk, so only the rows consumed are read).
+
+  for candidate in execute scan_sql using scope_row.organization_id, p_record_ids,
+    after_record_id, after_text, p_limit
+  loop
+    if pg_catalog.jsonb_typeof(candidate.roles) is distinct from 'array' then
+      continue;
+    end if;
+    -- Keep in step with maximumApplicationRoles; p_limit remains the independent page bound.
+    if pg_catalog.jsonb_array_length(candidate.roles) not between 1 and 500 then
+      continue;
+    end if;
+    seen_role_ids := array[]::uuid[];
+    valid_roles := true;
+    selected_template := null;
+    -- The entire registered array must be valid even when only one role is read.
+    for template_value in
+      select template.value
+      from pg_catalog.jsonb_array_elements(candidate.roles) as template(value)
+    loop
+      if pg_catalog.jsonb_typeof(template_value) is distinct from 'object'
+        or pg_catalog.jsonb_typeof(template_value -> 'roleId') is distinct from 'string'
+        or not vortex_platform.is_non_nil_uuid(template_value ->> 'roleId')
+        or pg_catalog.jsonb_typeof(template_value -> 'key') is distinct from 'string'
+        or pg_catalog.char_length(template_value ->> 'key') not between 1 and 40
+        or (template_value ->> 'key') !~ '^[a-z][a-z0-9]*(_[a-z0-9]+)*$'
+        or pg_catalog.jsonb_typeof(template_value -> 'name') is distinct from 'string'
+        or pg_catalog.char_length(template_value ->> 'name') not between 1 and 60 then
+        valid_roles := false;
+        exit;
+      end if;
+      source_role_id_value := (template_value ->> 'roleId')::uuid;
+      if source_role_id_value = any(seen_role_ids)
+        or not vortex_definition.application_role_identity_is_exact_for_human_request_internal(
+          candidate.application_root_id, source_role_id_value
+        ) then
+        valid_roles := false;
+        exit;
+      end if;
+      seen_role_ids := pg_catalog.array_append(seen_role_ids, source_role_id_value);
+      if source_role_id_value = candidate.source_role_id then
+        selected_template := template_value;
+      end if;
+    end loop;
+    if not valid_roles or selected_template is null then
+      continue;
+    end if;
+    return query select scope_row.organization_id,
+      candidate.source_role_id, candidate.registration_revision,
+      pg_catalog.jsonb_build_object(
+        'application_root_id', candidate.application_root_id,
+        'source_role_id', candidate.source_role_id,
+        'key', candidate.key,
+        'label', candidate.label,
+        'continuity_revision', candidate.continuity_revision
+      );
+    emitted := emitted + 1;
+    exit when p_limit is not null and emitted >= p_limit;
+  end loop;
+end
+$function$;
+
+revoke all on function vortex_access.list_application_role_templates_projection(
+  uuid[], text, text, jsonb, integer
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_access.list_application_role_templates_projection(
+  uuid[], text, text, jsonb, integer
+) to vortex_owner, vortex_record_adapter, postgres;
+alter function vortex_access.list_application_role_templates_projection(
+  uuid[], text, text, jsonb, integer
+) owner to vortex_owner;
+
+create or replace function vortex_platform.issue_flow_continuation(
+  p_token_hash text,
+  p_run_id uuid,
+  p_organization_id uuid,
+  p_identity_id uuid,
+  p_flow_id uuid,
+  p_release_key text,
+  p_state jsonb,
+  p_elapsed_milliseconds integer,
+  p_lifetime_seconds integer
+)
+returns timestamptz
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  expiry timestamptz;
+begin
+  if p_token_hash is null or p_token_hash !~ '^[a-f0-9]{64}$'
+    or not vortex_platform.is_non_nil_uuid(p_run_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_identity_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_flow_id::text)
+    or p_release_key is null
+    or pg_catalog.length(p_release_key) not between 1 and 200
+    or p_state is null
+    or pg_catalog.jsonb_typeof(p_state) <> 'object'
+    -- One bounded release, 500 independently retained historical roles and 256 KiB of flow state.
+    or pg_catalog.pg_column_size(p_state) > 100663296
+    or p_elapsed_milliseconds is null
+    or p_elapsed_milliseconds not between 0 and 3600000
+    or p_lifetime_seconds is null
+    or p_lifetime_seconds not between 60 and 3600 then
+    raise exception using errcode = '22023', message = 'Flow continuation is invalid';
+  end if;
+
+  -- Expired continuations are useless; remove a bounded few on every issue so the table never
+  -- needs a separate sweeper.
+  delete from vortex_platform.flow_continuations as stale
+  where stale.ctid in (
+    select candidate.ctid
+    from vortex_platform.flow_continuations as candidate
+    where candidate.expires_at < pg_catalog.statement_timestamp() - interval '1 day'
+    limit 100
+  );
+
+  expiry := pg_catalog.statement_timestamp() + pg_catalog.make_interval(secs => p_lifetime_seconds);
+
+  insert into vortex_platform.flow_continuations (
+    token_hash, run_id, organization_id, identity_id, flow_id, release_key, state,
+    elapsed_milliseconds, created_at, expires_at
+  ) values (
+    p_token_hash, p_run_id, p_organization_id, p_identity_id, p_flow_id, p_release_key, p_state,
+    p_elapsed_milliseconds, pg_catalog.statement_timestamp(), expiry
+  );
+
+  return expiry;
+end
+$function$;
+
+alter function vortex_platform.issue_flow_continuation(text,uuid,uuid,uuid,uuid,text,jsonb,integer,integer) owner to vortex_owner;
+
+revoke all on function vortex_platform.issue_flow_continuation(
+  text, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_platform.issue_flow_continuation(
+  text, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
+) to vortex_runtime;
+
+comment on function vortex_platform.issue_flow_continuation(
+  text, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
+) is
+  'Private flow-continuation issue: stores the suspended state of one server-driven flow run bound to its run, initiator, organisation and exact flow release, expiring, under the hash of a server-generated token.';
+
+reset role;
+
+set local role vortex_owner;
+
+-- Replace the single-role payload with the complete atomic role set.
+drop function vortex_access.change_organization_role_authority_for_administration(jsonb, uuid);
+create or replace function vortex_access.change_organization_role_authority_for_administration(
+  p_changes jsonb
+)
+returns table (
+  outcome text,
+  organization_id uuid,
+  role_summary jsonb,
+  access_version bigint
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  context_organization_id uuid;
+  item jsonb;
+  evidence jsonb;
+  activity_id uuid;
+  target_role_id uuid;
+  operation_name text;
+  changed record;
+  changed_summary jsonb;
+  seen_role_ids uuid[] := array[]::uuid[];
+begin
+  if p_changes is null or pg_catalog.jsonb_typeof(p_changes) is distinct from 'array'
+    or pg_catalog.jsonb_array_length(p_changes) not between 1 and 500 then
+    raise exception using errcode = '22023', message = 'Organization role-authority change input is invalid';
+  end if;
+
+  context_value := vortex_access.validated_human_request_context();
+  context_organization_id := (context_value ->> 'organizationId')::uuid;
+  -- The caller holds the exclusive organisation Access lock for this entire request.
+  -- Each iteration uses the existing protected coordinator, including its current authority,
+  -- revision, template, recent-authentication, affected-assignment and stewardship checks.
+  for item in select value from pg_catalog.jsonb_array_elements(p_changes) loop
+    evidence := item -> 'evidence';
+    operation_name := evidence #>> '{candidate,operation}';
+    if pg_catalog.jsonb_typeof(item) is distinct from 'object'
+      or pg_catalog.jsonb_typeof(evidence) is distinct from 'object'
+      or pg_catalog.jsonb_typeof(evidence -> 'candidate') is distinct from 'object'
+      or operation_name is null
+      or operation_name not in ('create_custom', 'create_custom_from_template',
+        'accept_new_application_role', 'accept_application_role_revision')
+      or (pg_catalog.jsonb_array_length(p_changes) > 1
+        and operation_name not in ('accept_new_application_role', 'accept_application_role_revision'))
+      or vortex_platform.is_non_nil_uuid(item ->> 'activityId') is not true
+      or vortex_platform.is_non_nil_uuid(evidence #>> '{candidate,organizationId}') is not true
+      or vortex_platform.is_non_nil_uuid(evidence #>> '{candidate,roleId}') is not true then
+      raise exception using errcode = '22023', message = 'Organization role-authority change input is invalid';
+    end if;
+    if (evidence #>> '{candidate,organizationId}')::uuid is distinct from context_organization_id then
+      raise exception using errcode = '42501', message = 'Organization role-authority change is unavailable';
+    end if;
+    activity_id := (item ->> 'activityId')::uuid;
+    target_role_id := (evidence #>> '{candidate,roleId}')::uuid;
+    if target_role_id = any(seen_role_ids) then
+      raise exception using errcode = '22023', message = 'Organization role-authority role is repeated';
+    end if;
+    seen_role_ids := pg_catalog.array_append(seen_role_ids, target_role_id);
+
+    select result.* into strict changed
+    from vortex_access.coordinate_private_organization_role_authority_change(evidence, activity_id) as result;
+    changed_summary := vortex_access.project_organization_role_change_summary(context_organization_id, target_role_id);
+    if changed_summary is null then
+      raise exception using errcode = '40001', message = 'Changed organization role projection is unavailable';
+    end if;
+    -- Only this protected writer advances its established context, to the version its own
+    -- successful change just produced. Identity, organisation, session and authentication stay pinned.
+    context_value := pg_catalog.jsonb_set(context_value, '{accessVersion}', pg_catalog.to_jsonb(changed.access_version));
+    update vortex_platform.request_contexts as established
+    set context = context_value
+    where established.backend_pid = pg_catalog.pg_backend_pid()
+      and established.transaction_id = pg_catalog.pg_current_xact_id();
+    if not found then
+      raise exception using errcode = '55000', message = 'Organization role-authority context is unavailable';
+    end if;
+    return query select 'completed'::text, context_organization_id, changed_summary, changed.access_version;
+  end loop;
+exception
+  when invalid_text_representation or invalid_parameter_value or numeric_value_out_of_range then
+    raise exception using errcode = '22023', message = 'Organization role-authority change input is invalid';
+end
+$function$;
+
+revoke execute on function vortex_access.change_organization_role_authority_for_administration(jsonb)
+from public, anon, authenticated, service_role, vortex_runtime;
+grant execute on function vortex_access.change_organization_role_authority_for_administration(jsonb) to vortex_request;
+alter function vortex_access.change_organization_role_authority_for_administration(jsonb) owner to vortex_owner;
+grant execute on function vortex_access.change_organization_role_authority_for_administration(jsonb) to postgres;
+comment on function vortex_access.change_organization_role_authority_for_administration(jsonb) is
+  'One atomic role-authority writer: applies a complete reviewed set through the protected coordinator and rolls back all roles and activity on any refusal.';
+
+reset role;

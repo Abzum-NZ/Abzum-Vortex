@@ -1,4 +1,4 @@
-﻿create or replace function vortex_access.list_application_role_templates_projection(
+create or replace function vortex_access.list_application_role_templates_projection(
   p_record_ids uuid[], p_sort_key text, p_direction text,
   p_after jsonb, p_limit integer
 )
@@ -156,7 +156,8 @@ begin
     if pg_catalog.jsonb_typeof(candidate.roles) is distinct from 'array' then
       continue;
     end if;
-    if pg_catalog.jsonb_array_length(candidate.roles) not between 1 and 100 then
+    -- Keep in step with maximumApplicationRoles; p_limit remains the independent page bound.
+    if pg_catalog.jsonb_array_length(candidate.roles) not between 1 and 500 then
       continue;
     end if;
     seen_role_ids := array[]::uuid[];

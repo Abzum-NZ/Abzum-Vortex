@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { tenantOrganizationMutationRefusalCodeSchema } from "../identity/tenant-governance";
-import { builderKeySchema, recordIdSchema } from "../catalogue/identifiers";
+import { builderKeySchema, namespacedKeySchema } from "../catalogue/identifiers";
 
 /** Stable, public reasons a protected operation can confirm. */
 export const flowRefusalFeedbackCodeSchema = z.enum([
@@ -11,15 +11,18 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
   ]).options,
   "role_acceptance_required",
   "recent_authentication_required",
+  "role_settings_change_required",
 ]);
 
-/** Definition-authored guidance and a link to the affected row on the current page. */
+/** Definition-authored guidance and a page to open within the current organization. */
 export const flowRefusalPresentationSchema = z
   .object({
     code: flowRefusalFeedbackCodeSchema,
     message: z.string().min(1).max(300),
     link_label: z.string().min(1).max(100),
-    record_id: recordIdSchema,
+    destination: z
+      .object({ application_key: namespacedKeySchema, page_key: builderKeySchema })
+      .strict(),
   })
   .strict();
 
