@@ -112,13 +112,8 @@ const sourceDirectories = new Map(
   ),
 );
 const systemApplicationFiles = new Set(
-  [
-    ...shippedSources.matchAll(
-      /source: (\w+),\s*applicationOriginKind: "platform_system_application"/g,
-    ),
-  ].map(
-    ([, name]) =>
-      `${paths.applicationSources}${sourceDirectories.get(name ?? "") ?? "?"}/application.json`,
+  [...shippedSources.matchAll(/source: (\w+),\s*applicationOriginKind: "platform_system_application"/g)].map(
+    ([, name]) => `${paths.applicationSources}${sourceDirectories.get(name ?? "") ?? "?"}/application.json`,
   ),
 );
 const names = new Set<string>();
@@ -252,10 +247,7 @@ for (const file of codeFiles) {
   const isClassNameContext = (node: ts.Node): boolean => {
     for (let current = node.parent; current !== undefined; current = current.parent) {
       if (ts.isJsxAttribute(current)) return current.name.getText(source) === "className";
-      if (
-        ts.isCallExpression(current) &&
-        /^(?:cn|cva|clsx)$/.test(current.expression.getText(source))
-      )
+      if (ts.isCallExpression(current) && /^(?:cn|cva|clsx)$/.test(current.expression.getText(source)))
         return true;
       if (ts.isStatement(current) || ts.isFunctionLike(current)) return false;
     }
@@ -445,8 +437,7 @@ function argumentType(argument: string): string | undefined {
   const rest = value.slice(firstToken.length).trim();
   // A first identifier followed by a dot is a schema-qualified type, never an argument name.
   const qualified = /^"?[\w$]+"?\s*\./.test(value);
-  if (rest && !qualified && (/^(?:p_|arg_|v_)/i.test(firstToken) || !typeHeadPattern.test(value)))
-    value = rest;
+  if (rest && !qualified && (/^(?:p_|arg_|v_)/i.test(firstToken) || !typeHeadPattern.test(value))) value = rest;
   return normalizedType(value);
 }
 function functions(
@@ -765,21 +756,11 @@ for (const file of files.filter(
     .update(read(sqlFile).replace(/\s+/g, " ").trim(), "utf8")
     .digest("hex")}`;
   if (sqlFingerprint !== recorded.sqlFingerprint)
-    add(
-      "derived-id-parity",
-      sqlFile,
-      1,
-      `SQL changed since the vectors were recorded (${sqlFingerprint})`,
-    );
+    add("derived-id-parity", sqlFile, 1, `SQL changed since the vectors were recorded (${sqlFingerprint})`);
   for (const [index, vector] of recorded.vectors.entries()) {
     const derived = derivedDefinitionId(vector.parts);
     if (derived !== vector.id)
-      add(
-        "derived-id-parity",
-        vectorsFile,
-        index + 1,
-        `${JSON.stringify(vector.parts)}: TypeScript ${derived}, SQL ${vector.id}`,
-      );
+      add("derived-id-parity", vectorsFile, index + 1, `${JSON.stringify(vector.parts)}: TypeScript ${derived}, SQL ${vector.id}`);
   }
 }
 
@@ -791,34 +772,18 @@ for (const file of files.filter(
   const sql = read(sqlFile);
   const accepted = new Map<string, string[]>();
   for (const match of sql.matchAll(/when '(\w+)' then\s+return array\[([^\]]*)\];/g))
-    accepted.set(
-      match[1]!,
-      [...match[2]!.matchAll(/'([^']+)'/g)].map((version) => version[1]!),
-    );
+    accepted.set(match[1]!, [...match[2]!.matchAll(/'([^']+)'/g)].map((version) => version[1]!));
   for (const kind of ["application", "module", "record_type"]) {
     const versions = accepted.get(kind);
     if (versions?.length !== 1)
-      add(
-        "contract-version-parity",
-        sqlFile,
-        1,
-        `${kind} must accept exactly one version, found ${JSON.stringify(versions)}`,
-      );
+      add("contract-version-parity", sqlFile, 1, `${kind} must accept exactly one version, found ${JSON.stringify(versions)}`);
   }
   const constant = (file: string, name: string): string | undefined =>
     new RegExp(`export const ${name} = "([^"]+)"`).exec(read(file))?.[1];
   const definitionDir = "packages/platform/src/definition";
   const expectations: Array<[string, string, string]> = [
-    [
-      "application",
-      `${definitionDir}/application-contract-versions.ts`,
-      "applicationSourceContractVersion",
-    ],
-    [
-      "application",
-      `${definitionDir}/application-contract-versions.ts`,
-      "applicationValidationContractVersion",
-    ],
+    ["application", `${definitionDir}/application-contract-versions.ts`, "applicationSourceContractVersion"],
+    ["application", `${definitionDir}/application-contract-versions.ts`, "applicationValidationContractVersion"],
     ["module", `${definitionDir}/module-source-contracts.ts`, "moduleSourceContractVersion"],
     ["module", `${definitionDir}/module-contracts.ts`, "moduleValidationContractVersion"],
     ["record_type", `${definitionDir}/module-contracts.ts`, "moduleValidationContractVersion"],
@@ -826,12 +791,7 @@ for (const file of files.filter(
   for (const [kind, file, name] of expectations) {
     const value = constant(file, name);
     if (value === undefined || value !== accepted.get(kind)?.[0])
-      add(
-        "contract-version-parity",
-        file,
-        1,
-        `${name} is ${value}, SQL accepts ${accepted.get(kind)?.[0]} for ${kind}`,
-      );
+      add("contract-version-parity", file, 1, `${name} is ${value}, SQL accepts ${accepted.get(kind)?.[0]} for ${kind}`);
   }
 }
 
