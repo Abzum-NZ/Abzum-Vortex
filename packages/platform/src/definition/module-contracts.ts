@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { recordTitleFieldEligible } from "./record-title-field";
 import {
   actionInputValueTypes,
   personalDataClassSchema,
@@ -1139,11 +1140,11 @@ export const recordTypeDefinitionSchema = z
         path: ["ownershipRelationshipId"],
         message: "Inherited ownership relationship must belong to this record type",
       });
-    if (!value.fields.some((field) => field.fieldId === value.titleFieldId))
+    if (!value.fields.some((field) => field.fieldId === value.titleFieldId && recordTitleFieldEligible(field)))
       context.addIssue({
         code: "custom",
         path: ["titleFieldId"],
-        message: "Title field must belong to the record type",
+        message: "Title field must belong to the record type and hold a sortable text, number, choice or date value",
       });
     const ids = new Set<string>();
     const keys = new Set<string>();
