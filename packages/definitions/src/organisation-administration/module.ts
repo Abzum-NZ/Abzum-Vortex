@@ -282,9 +282,10 @@ export const organisationAdministrationModule: SourceApplicationModule =
             personal_data: "none",
             public_display: "refused",
             type: "date_time",
-            settings: { display_time_zone: "organisation" },
+            settings: { display_time_zone: "organization" },
           },
         ],
+        pipelines: [],
         relationships: [],
       },
       {
@@ -382,7 +383,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             personal_data: "none",
             public_display: "refused",
             type: "date_time",
-            settings: { display_time_zone: "organisation" },
+            settings: { display_time_zone: "organization" },
           },
           {
             id: "fld_case_closed_at",
@@ -395,9 +396,10 @@ export const organisationAdministrationModule: SourceApplicationModule =
             personal_data: "none",
             public_display: "refused",
             type: "date_time",
-            settings: { display_time_zone: "organisation" },
+            settings: { display_time_zone: "organization" },
           },
         ],
+        pipelines: [],
         relationships: [],
       },
       {
@@ -407,7 +409,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
         plural_name: "Permissions",
         title_field: "label",
         storage_contract_id: "srt_org_admin_permission",
-        storage_scope: "organisation_shared",
+        storage_scope: "organization_shared",
         ownership_mode: "none",
         standard_actions: ["read"],
         custom_actions: [],
@@ -558,6 +560,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             settings: {},
           },
         ],
+        pipelines: [],
         relationships: [],
       },
       {
@@ -567,7 +570,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
         plural_name: "Organisation settings",
         title_field: "organization_id",
         storage_contract_id: "srt_org_admin_settings",
-        storage_scope: "organisation_shared",
+        storage_scope: "organization_shared",
         ownership_mode: "none",
         standard_actions: ["read", "update"],
         custom_actions: [],
@@ -692,6 +695,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             settings: { max_length: 36 },
           },
         ],
+        pipelines: [],
         relationships: [],
       },
       {
@@ -701,7 +705,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
         plural_name: "Installed applications",
         title_field: "key",
         storage_contract_id: "srt_org_admin_installed_application",
-        storage_scope: "organisation_shared",
+        storage_scope: "organization_shared",
         ownership_mode: "none",
         standard_actions: ["read"],
         custom_actions: [],
@@ -780,6 +784,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             settings: {},
           },
         ],
+        pipelines: [],
         relationships: [],
       },
       {
@@ -789,7 +794,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
         plural_name: "Application role templates",
         title_field: "label",
         storage_contract_id: "srt_org_admin_application_role_template",
-        storage_scope: "organisation_shared",
+        storage_scope: "organization_shared",
         ownership_mode: "none",
         standard_actions: ["read"],
         custom_actions: [],
@@ -894,6 +899,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             settings: {},
           },
         ],
+        pipelines: [],
         relationships: [],
       },
       activityRecordType,
@@ -1339,6 +1345,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
       {
         "id": "qry_organisation_notices",
         "key": "organisation_notices",
+        "label": "Notices",
         "record_type": "organisation_notice",
         "inputs": [],
         "select": [
@@ -1362,6 +1369,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
       {
         "id": "qry_privacy_request_cases",
         "key": "privacy_request_cases",
+        "label": "Privacy requests",
         "record_type": "privacy_request_case",
         "inputs": [],
         "select": [
@@ -1386,6 +1394,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
       {
         "id": "qry_organization_settings",
         "key": "organization_settings",
+        "label": "Organisation settings",
         "record_type": "organization_settings",
         "inputs": [],
         "select": [
@@ -1411,6 +1420,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
       {
         "id": "qry_installed_applications",
         "key": "installed_applications",
+        "label": "Installed applications",
         "record_type": "installed_application",
         "inputs": [],
         "select": [

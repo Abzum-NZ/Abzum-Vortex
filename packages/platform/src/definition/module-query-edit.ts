@@ -4,11 +4,11 @@ import {
   type ApplicationSourceDocument,
 } from "./application-source-contracts";
 import {
+  applicationUses,
   describeSourcePlace,
   walkSourceStrings,
-  type InlineRecordTypeReference,
-  type SourcePath,
-} from "./module-record-type-shape";
+  type ApplicationUsePlace,
+} from "./application-uses";
 
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
@@ -279,29 +279,11 @@ export const changeInlineQuery = (
   return parsed(source, moduleKey, queryKey, label);
 };
 
-/** Every place in the Application source that uses one query of an owned Module, by its qualified key. */
-export const inlineQueryReferences = (
-  source: ApplicationSourceDocument, moduleKey: string, queryKey: string,
-): readonly InlineRecordTypeReference[] => {
-  const moduleIndex = source.body.modules.findIndex((module) => module.key === moduleKey);
-  const queryIndex = source.body.modules[moduleIndex]?.queries.findIndex((query) => query.key === queryKey) ?? -1;
-  if (queryIndex < 0) return [];
-  const qualified = `${moduleKey}:${queryKey}`;
-  const found = new Map<string, InlineRecordTypeReference>();
-  const isSelf = (path: SourcePath) => path[1] === "modules" && path[2] === moduleIndex && path[3] === "queries" && path[4] === queryIndex;
-  walkSourceStrings(source, [], (text, path) => {
-    if (text !== qualified || isSelf(path)) return;
-    const place = describeSourcePlace(source, path);
-    found.set(place.label, place);
-  });
-  return [...found.values()];
-};
-
 /** The Application source without one query of an owned Module; refused while anything uses it. */
 export const deleteInlineQuery = (
   current: ApplicationSourceDocument, moduleKey: string, queryKey: string,
-): InlineQueryResult | Readonly<{ kind: "referenced"; references: readonly InlineRecordTypeReference[] }> => {
-  const references = inlineQueryReferences(current, moduleKey, queryKey);
+): InlineQueryResult | Readonly<{ kind: "referenced"; references: readonly ApplicationUsePlace[] }> => {
+  const references = applicationUses(current, { kind: "query", moduleKey, queryKey });
   if (references.length > 0) return { kind: "referenced", references };
   const source = structuredClone(current);
   const module = source.body.modules.find((item) => item.key === moduleKey);

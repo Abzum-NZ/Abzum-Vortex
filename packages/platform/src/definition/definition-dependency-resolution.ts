@@ -255,17 +255,40 @@ const verifyParsedModuleRelease = (
     refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
 };
 
+// A release read once is the same object for the rest of a draft compile, which checks it from
+// several steps. The check is a pure function of the object and of what it is checked against,
+// and a read release is never modified, so the same object passes the same check once. A release
+// read again is a new object and is checked again; a refusal is never remembered.
+const verifiedReleases = new WeakMap<ResolvableModuleRelease, Set<string>>();
+
+const verifyOnce = (
+  check: "current" | "historical",
+  candidate: DefinitionCandidateDraft,
+  expectedKey: string,
+  release: ResolvableModuleRelease,
+  verify: () => void,
+): void => {
+  const expectation = JSON.stringify([check, candidate.draft.organizationId, expectedKey]);
+  const passed = verifiedReleases.get(release);
+  if (passed?.has(expectation)) return;
+  verify();
+  if (passed === undefined) verifiedReleases.set(release, new Set([expectation]));
+  else passed.add(expectation);
+};
+
 /** Every selected, pinned or transitive dependency must satisfy the current Module contract. */
 const verifyModuleRelease = (
   candidate: DefinitionCandidateDraft,
   expectedKey: string,
   release: ResolvableModuleRelease,
 ): void =>
-  verifyParsedModuleRelease(
-    candidate,
-    expectedKey,
-    release,
-    definitionCompilationOutputSchema.safeParse(release.compilationOutput),
+  verifyOnce("current", candidate, expectedKey, release, () =>
+    verifyParsedModuleRelease(
+      candidate,
+      expectedKey,
+      release,
+      definitionCompilationOutputSchema.safeParse(release.compilationOutput),
+    ),
   );
 
 /** Historical enumeration preserves stored semantics before current dependency selection. */
@@ -274,11 +297,13 @@ const verifyHistoricalModuleRelease = (
   expectedKey: string,
   release: ResolvableModuleRelease,
 ): void =>
-  verifyParsedModuleRelease(
-    candidate,
-    expectedKey,
-    release,
-    moduleCompilationOutputSchema.safeParse(release.compilationOutput),
+  verifyOnce("historical", candidate, expectedKey, release, () =>
+    verifyParsedModuleRelease(
+      candidate,
+      expectedKey,
+      release,
+      moduleCompilationOutputSchema.safeParse(release.compilationOutput),
+    ),
   );
 
 const sameModuleReleaseLocator = (

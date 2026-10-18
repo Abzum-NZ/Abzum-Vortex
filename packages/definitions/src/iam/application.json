@@ -324,8 +324,7 @@
           "vortex.iam.core.access_request.update_own",
           "vortex.iam.core.access_request.soft_delete_own",
           "vortex.iam.core.access_request_item.create_own",
-          "vortex.iam.core.access_request_item.read_own",
-          "vortex.system_directory.person.reference_read"
+          "vortex.iam.core.access_request_item.read_own"
         ]
       },
       {
@@ -474,7 +473,6 @@
         ]
       }
     ],
-    "pipelines": [],
     "connection_bindings": [],
     "interfaces": [],
     "events": [
@@ -610,6 +608,20 @@
         "record_type": "vortex.system_directory:role",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_grant_install_authority_person",
+        "key": "vortex.app.iam.grant_install_authority_person",
+        "record_type": "vortex.system_directory:person",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_grant_install_authority_group",
+        "key": "vortex.app.iam.grant_install_authority_group",
+        "record_type": "vortex.system_directory:group",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
       }
     ],
     "public_addresses": [],
@@ -661,7 +673,6 @@
                           "block_id": "d5ecf8af-a6c4-4f0a-93e1-2c6d0a56a726",
                           "release_version": "1.0.0"
                         },
-                        "theme_overrides": {},
                         "responsive": {
                           "desktop": {
                             "visible": true,
@@ -701,7 +712,6 @@
                                 "block_id": "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
                                 "release_version": "1.0.0"
                               },
-                              "theme_overrides": {},
                               "responsive": {
                                 "desktop": {
                                   "visible": true,
@@ -723,7 +733,6 @@
                           "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
                           "release_version": "1.2.0"
                         },
-                        "theme_overrides": {},
                         "responsive": {
                           "desktop": {
                             "visible": true,
@@ -744,7 +753,6 @@
                     "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
                     "release_version": "1.3.0"
                   },
-                  "theme_overrides": {},
                   "responsive": {
                     "desktop": {
                       "visible": true,
@@ -804,7 +812,6 @@
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -831,7 +838,6 @@
                         "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -864,7 +870,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -891,7 +896,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -918,7 +922,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -939,7 +942,6 @@
                         "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": false,
@@ -985,7 +987,6 @@
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1033,7 +1034,6 @@
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1060,6 +1060,10 @@
                       {
                         "event_id": "event_make_steward",
                         "label": "Make steward"
+                      },
+                      {
+                        "event_id": "event_grant_install_authority_person",
+                        "label": "Grant app-installation authority"
                       }
                     ],
                     "columns": [
@@ -1086,7 +1090,6 @@
                         "release_version": "1.3.0"
                       },
                       "query": "vortex.system_directory:people",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1150,7 +1153,6 @@
                         "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
                         "release_version": "1.2.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1196,7 +1198,6 @@
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1274,7 +1275,6 @@
                         "release_version": "1.4.0"
                       },
                       "query": "vortex.system_directory:roles",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1320,6 +1320,10 @@
                       {
                         "event_id": "event_add_group_membership",
                         "label": "Add member"
+                      },
+                      {
+                        "event_id": "event_grant_install_authority_group",
+                        "label": "Grant app-installation authority"
                       }
                     ],
                     "vortex": {
@@ -1328,7 +1332,6 @@
                         "release_version": "1.4.0"
                       },
                       "query": "vortex.system_directory:groups",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1382,7 +1385,6 @@
                         "release_version": "1.4.0"
                       },
                       "query": "vortex.system_directory:group_memberships",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1419,7 +1421,6 @@
                               "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
                               "release_version": "1.1.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -1446,7 +1447,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -1473,7 +1473,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -1494,7 +1493,6 @@
                         "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1527,7 +1525,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -1555,7 +1552,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -1576,7 +1572,6 @@
                         "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": false,
@@ -1609,7 +1604,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -1630,7 +1624,6 @@
                         "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": false,
@@ -1673,7 +1666,6 @@
                               "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -1694,7 +1686,6 @@
                         "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1731,7 +1722,6 @@
                               "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
                               "release_version": "1.1.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -1768,7 +1758,6 @@
                               "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -1795,7 +1784,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -1822,7 +1810,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -1843,7 +1830,6 @@
                         "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1880,7 +1866,6 @@
                               "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
                               "release_version": "1.1.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -1917,7 +1902,6 @@
                               "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -1944,7 +1928,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -1971,7 +1954,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -1992,7 +1974,6 @@
                         "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2038,7 +2019,6 @@
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2120,7 +2100,6 @@
                         "release_version": "1.4.0"
                       },
                       "query": "vortex.system_directory:role_assignments",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2174,7 +2153,6 @@
                         "release_version": "1.4.0"
                       },
                       "query": "vortex.system_directory:delegations",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2220,7 +2198,6 @@
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2253,7 +2230,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -2280,7 +2256,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -2307,7 +2282,6 @@
                               "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -2328,7 +2302,6 @@
                         "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2361,7 +2334,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -2388,7 +2360,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -2416,7 +2387,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -2437,14 +2407,13 @@
                           "id": "input_create_custom_role_privilege_classification",
                           "name": "privilege_classification",
                           "label": "Privilege classification",
-                          "help_text": "standard or privileged",
+                          "help_text": "standard or privileged. Administrative permissions require privileged.",
                           "required": true,
                           "vortex": {
                             "block": {
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -2473,7 +2442,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -2493,14 +2461,13 @@
                         "props": {
                           "id": "button_create_custom_role",
                           "label": "Create custom role",
-                          "action_kind": "action",
+                          "action_kind": "submit",
                           "variant": "primary",
                           "vortex": {
                             "block": {
                               "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -2521,7 +2488,6 @@
                         "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2548,7 +2514,6 @@
                         "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2585,7 +2550,6 @@
                               "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
                               "release_version": "1.2.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -2620,7 +2584,6 @@
                               "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
                               "release_version": "1.2.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -2647,7 +2610,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -2674,7 +2636,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -2702,7 +2663,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -2730,7 +2690,6 @@
                               "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -2751,7 +2710,6 @@
                         "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": false,
@@ -2797,7 +2755,6 @@
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2851,7 +2808,6 @@
                         "release_version": "1.4.0"
                       },
                       "query": "vortex.system_directory:role_activations",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2928,7 +2884,6 @@
                         "release_version": "1.3.0"
                       },
                       "query": "vortex.iam.core:iam_access_requests",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -2956,7 +2911,6 @@
                         "release_version": "1.0.0"
                       },
                       "view_permission": "application.iam.request",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -3060,7 +3014,6 @@
                         "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
                         "release_version": "1.2.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -3088,7 +3041,6 @@
                         "release_version": "1.0.0"
                       },
                       "view_permission": "application.iam.request",
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -3140,7 +3092,6 @@
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3165,7 +3116,6 @@
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3190,7 +3140,6 @@
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3215,7 +3164,6 @@
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3231,21 +3179,15 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "iam_request_new_group_record",
-                          "name": "target_group",
-                          "label": "Target group record",
-                          "choice_source": {
-                            "query": "vortex.system_directory:groups",
-                            "label_field": "vortex.system_directory:group.label"
-                          },
+                          "field": "vortex.iam.core:access_request.target_group",
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.3.0"
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3271,7 +3213,6 @@
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3296,7 +3237,6 @@
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3321,7 +3261,6 @@
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3346,7 +3285,6 @@
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3373,7 +3311,6 @@
                               "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3394,7 +3331,6 @@
                         "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -3446,7 +3382,6 @@
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3471,7 +3406,6 @@
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3496,7 +3430,6 @@
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3521,7 +3454,6 @@
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3537,21 +3469,15 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "iam_request_edit_group_record",
-                          "name": "target_group",
-                          "label": "Target group record",
-                          "choice_source": {
-                            "query": "vortex.system_directory:groups",
-                            "label_field": "vortex.system_directory:group.label"
-                          },
+                          "field": "vortex.iam.core:access_request.target_group",
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.3.0"
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3577,7 +3503,6 @@
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3602,7 +3527,6 @@
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3627,7 +3551,6 @@
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3652,7 +3575,6 @@
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3679,7 +3601,6 @@
                               "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                               "release_version": "1.0.0"
                             },
-                            "theme_overrides": {},
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -3700,7 +3621,6 @@
                         "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
                         "release_version": "1.0.0"
                       },
-                      "theme_overrides": {},
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -5160,6 +5080,39 @@
                           "value": "platform.assign_role_assignment"
                         }
                       },
+                      "refusal_feedback": {
+                        "kind": "map",
+                        "entries": {
+                          "code": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "role_acceptance_required"
+                            }
+                          },
+                          "message": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "This role changed in the latest release and needs accepting in IAM before it can be assigned."
+                            }
+                          },
+                          "link_label": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Review and accept this role in IAM"
+                            }
+                          },
+                          "record_id": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "role_id"
+                            }
+                          }
+                        }
+                      },
                       "inputs": {
                         "kind": "map",
                         "entries": {
@@ -5361,6 +5314,39 @@
                         "literal": {
                           "type": "text",
                           "value": "platform.assign_role_assignment"
+                        }
+                      },
+                      "refusal_feedback": {
+                        "kind": "map",
+                        "entries": {
+                          "code": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "role_acceptance_required"
+                            }
+                          },
+                          "message": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "This role changed in the latest release and needs accepting in IAM before it can be assigned."
+                            }
+                          },
+                          "link_label": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Review and accept this role in IAM"
+                            }
+                          },
+                          "record_id": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "role_id"
+                            }
+                          }
                         }
                       },
                       "inputs": {
@@ -5640,6 +5626,20 @@
         },
         "tasks": [
           {
+            "id": "prepare",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.prepare_role_change_evidence"
+                }
+              }
+            }
+          },
+          {
             "id": "confirm",
             "type": "interface.confirm",
             "version": "1.0.0",
@@ -5723,20 +5723,6 @@
                 "outcome": "declined"
               }
             ]
-          },
-          {
-            "id": "prepare",
-            "type": "operation.call",
-            "version": "1.0.0",
-            "properties": {
-              "operation": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "platform.prepare_role_change_evidence"
-                }
-              }
-            }
           },
           {
             "id": "commit",
@@ -6567,6 +6553,486 @@
           }
         ],
         "outputs": {}
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_grant_install_authority_person",
+        "key": "grant_install_authority_person",
+        "labels": {
+          "name": "Grant app-installation authority"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "holder_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.system_directory:person"]
+          },
+          "expected_holder_revision": {
+            "type": "whole_number",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "confirm",
+            "type": "interface.confirm",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Grant app-installation authority"
+                }
+              },
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Grant organisation-catalogue delegation to this person? With Manage applications permission, this allows installing and upgrading apps and accepting their roles. This grants no stewardship or Studio permissions. Revoke the delegation in Assignments to remove this authority."
+                }
+              }
+            }
+          },
+          {
+            "id": "confirmation",
+            "type": "switch",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "confirm",
+                "key": "confirmed"
+              }
+            },
+            "cases": [
+              {
+                "key": "confirmed",
+                "when": {
+                  "type": "yes_no",
+                  "value": true
+                },
+                "tasks": [
+                  {
+                    "id": "call",
+                    "type": "operation.call",
+                    "version": "1.0.0",
+                    "properties": {
+                      "operation": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "platform.grant_delegation_authority"
+                        }
+                      },
+                      "inputs": {
+                        "kind": "map",
+                        "entries": {
+                          "holder_kind": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "organization_account"
+                            }
+                          },
+                          "holder_id": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "holder_id"
+                            }
+                          },
+                          "expected_holder_revision": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "expected_holder_revision"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "allowRefusal": true
+                  },
+                  {
+                    "id": "grant_result",
+                    "type": "switch",
+                    "value": {
+                      "kind": "reference",
+                      "reference": {
+                        "source": "task_output",
+                        "task": "call",
+                        "key": "outcome"
+                      }
+                    },
+                    "cases": [
+                      {
+                        "key": "committed",
+                        "when": {
+                          "type": "choice",
+                          "value": "committed"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_committed",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "App-installation authority granted. Manage applications permission is assigned separately through Roles."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "key": "refused",
+                        "when": {
+                          "type": "choice",
+                          "value": "refused"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_refused",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The grant was refused. You need assignment management permission and current organisation-catalogue delegation, and you cannot grant it to yourself."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "key": "conflict",
+                        "when": {
+                          "type": "choice",
+                          "value": "conflict"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_conflict",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The selected holder changed or already has catalogue delegation. Refresh before trying again."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "key": "validation",
+                        "when": {
+                          "type": "choice",
+                          "value": "validation"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_validation",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The grant input was invalid. Refresh before trying again."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "default": [
+                      {
+                        "id": "show_failed",
+                        "type": "interface.show_message",
+                        "version": "1.0.0",
+                        "properties": {
+                          "message": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "The grant could not be confirmed. Refresh Assignments before trying again."
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "default": [
+              {
+                "id": "stop_cancelled",
+                "type": "stop",
+                "outcome": "cancelled"
+              }
+            ]
+          }
+        ],
+        "description": "Grants organisation-catalogue delegation only. Manage applications permission must be assigned separately through Roles. Grants no stewardship or Studio permissions."
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_grant_install_authority_group",
+        "key": "grant_install_authority_group",
+        "labels": {
+          "name": "Grant app-installation authority"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "holder_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.system_directory:group"]
+          },
+          "expected_holder_revision": {
+            "type": "whole_number",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "confirm",
+            "type": "interface.confirm",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Grant app-installation authority"
+                }
+              },
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Grant organisation-catalogue delegation to this Group? With Manage applications permission, this allows installing and upgrading apps and accepting their roles. This grants no stewardship or Studio permissions. Revoke the delegation in Assignments to remove this authority."
+                }
+              }
+            }
+          },
+          {
+            "id": "confirmation",
+            "type": "switch",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "confirm",
+                "key": "confirmed"
+              }
+            },
+            "cases": [
+              {
+                "key": "confirmed",
+                "when": {
+                  "type": "yes_no",
+                  "value": true
+                },
+                "tasks": [
+                  {
+                    "id": "call",
+                    "type": "operation.call",
+                    "version": "1.0.0",
+                    "properties": {
+                      "operation": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "platform.grant_delegation_authority"
+                        }
+                      },
+                      "inputs": {
+                        "kind": "map",
+                        "entries": {
+                          "holder_kind": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "group"
+                            }
+                          },
+                          "holder_id": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "holder_id"
+                            }
+                          },
+                          "expected_holder_revision": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "expected_holder_revision"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "allowRefusal": true
+                  },
+                  {
+                    "id": "grant_result",
+                    "type": "switch",
+                    "value": {
+                      "kind": "reference",
+                      "reference": {
+                        "source": "task_output",
+                        "task": "call",
+                        "key": "outcome"
+                      }
+                    },
+                    "cases": [
+                      {
+                        "key": "committed",
+                        "when": {
+                          "type": "choice",
+                          "value": "committed"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_committed",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "App-installation authority granted. Manage applications permission is assigned separately through Roles."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "key": "refused",
+                        "when": {
+                          "type": "choice",
+                          "value": "refused"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_refused",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The grant was refused. You need assignment management permission and current organisation-catalogue delegation."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "key": "conflict",
+                        "when": {
+                          "type": "choice",
+                          "value": "conflict"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_conflict",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The selected holder changed or already has catalogue delegation. Refresh before trying again."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "key": "validation",
+                        "when": {
+                          "type": "choice",
+                          "value": "validation"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_validation",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The grant input was invalid. Refresh before trying again."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "default": [
+                      {
+                        "id": "show_failed",
+                        "type": "interface.show_message",
+                        "version": "1.0.0",
+                        "properties": {
+                          "message": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "The grant could not be confirmed. Refresh Assignments before trying again."
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "default": [
+              {
+                "id": "stop_cancelled",
+                "type": "stop",
+                "outcome": "cancelled"
+              }
+            ]
+          }
+        ],
+        "description": "Grants organisation-catalogue delegation only. Manage applications permission must be assigned separately through Roles. Grants no stewardship or Studio permissions."
       }
     ],
     "flow_bindings": [
@@ -6691,9 +7157,9 @@
       },
       {
         "id": "binding_create_custom_role",
-        "control": "button_create_custom_role",
+        "control": "form_create_custom_role",
         "event_id": "event_iam_administration_action",
-        "event": "action",
+        "event": "form_submit",
         "flow": "flow_create_custom_role",
         "inputs": {
           "operation": {
@@ -6920,6 +7386,40 @@
           "record_id": {
             "kind": "caller",
             "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_grant_install_authority_person",
+        "control": "iam_people_region",
+        "event_id": "event_grant_install_authority_person",
+        "event": "row_action",
+        "flow": "flow_grant_install_authority_person",
+        "inputs": {
+          "holder_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "expected_holder_revision": {
+            "kind": "caller",
+            "name": "revision"
+          }
+        }
+      },
+      {
+        "id": "binding_grant_install_authority_group",
+        "control": "iam_groups_region",
+        "event_id": "event_grant_install_authority_group",
+        "event": "row_action",
+        "flow": "flow_grant_install_authority_group",
+        "inputs": {
+          "holder_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "expected_holder_revision": {
+            "kind": "caller",
+            "name": "revision"
           }
         }
       }

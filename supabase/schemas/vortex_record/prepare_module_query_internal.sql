@@ -111,6 +111,11 @@ begin
   end if;
   if p_prior_plan is not null then
     prepared_plan := p_prior_plan;
+    -- A plan for a system projection is a live plan, in a preview too: see below.
+    if preview_mode and not (prepared_plan ? 'preview')
+      and prepared_plan -> 'recordType' ? 'systemProjection' then
+      preview_mode := false;
+    end if;
     if preview_mode then
       if pg_catalog.jsonb_typeof(prepared_plan) is distinct from 'object'
         or prepared_plan ->> 'outcome' is distinct from 'prepared'
@@ -254,6 +259,17 @@ begin
   if preview_mode then
     begin
       resolved := vortex_record.resolve_preview_module_query_internal(p_module_root_id, p_query_id);
+      -- A system projection has no preview copy: it is the platform's live read model, which a
+      -- preview reads on the live path, under the reader's own live access and never under the
+      -- preview's roles.
+      if resolved is null then
+        resolved := vortex_record.resolve_installed_module_query_internal(p_module_root_id, p_query_id);
+        if resolved -> 'recordType' ? 'systemProjection' then
+          preview_mode := false;
+        else
+          resolved := null;
+        end if;
+      end if;
     exception
       -- A refused access context or a stale preview is the expected refusal; any
       -- other failure is logged with its cause before the same safe refusal.
@@ -387,6 +403,42 @@ begin
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
       end if;
 
+      -- A record type of a Module the previewed Application only uses is shared data: the preview
+      -- takes the same read plan decision as the installed path, in the preview's registration,
+      -- where that Module's own permissions follow the builder's live access. No eligible read
+      -- alternative is the same refusal, never an empty preview table. A row the RLS policy does
+      -- not show counts as used, so the decision is never skipped.
+      if not exists (
+        select 1
+        from vortex_definition.roots as root
+        where root.root_id = (resolved ->> 'recordTypeModuleRootId')::uuid
+          and root.kind = 'module'
+          and root.owner_application_root_id = context_application_root_id
+      ) then
+        begin
+          select plan.* into access_plan
+          from vortex_record.plan_record_read_scan_internal(record_type_id_value) as plan;
+        exception
+          -- A refused access context or a stale preview is the expected refusal; any
+          -- other failure is logged with its cause before the same safe refusal.
+          when sqlstate '42501' or sqlstate '40001' then
+            return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+          when others then
+            get stacked diagnostics failure_sqlstate = returned_sqlstate,
+              failure_message = message_text;
+            raise warning 'Query preview preparation failed (read plan): SQLSTATE %, %',
+              failure_sqlstate, failure_message;
+            return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+        end;
+        if access_plan.access_predicate is null then
+          raise warning 'Query preview preparation failed (read plan): no access predicate';
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+        end if;
+        if access_plan.access_predicate = 'false' then
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'read_forbidden');
+        end if;
+      end if;
+
       for field_item in
         select item.value from pg_catalog.jsonb_array_elements(record_type_item -> 'fields') as item(value)
       loop
@@ -454,6 +506,11 @@ begin
       -- examined. A planning failure propagates; it never widens the scan.
       select plan.* into access_plan
       from vortex_record.plan_record_read_scan_internal(record_type_id_value) as plan;
+      -- No eligible read alternative admits any record. Report a refusal before
+      -- an empty scan can be mistaken for an empty query result.
+      if access_plan.access_predicate = 'false' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'read_forbidden');
+      end if;
       readable_field_ids := coalesce(access_plan.readable_field_ids, array[]::text[]);
       prepared_plan := prepared_plan || pg_catalog.jsonb_build_object(
         'storage', pg_catalog.jsonb_build_object(
@@ -738,4 +795,4 @@ grant execute on function vortex_record.prepare_module_query_internal(uuid, uuid
   to vortex_owner;
 
 comment on function vortex_record.prepare_module_query_internal(uuid, uuid, bigint, jsonb, jsonb, jsonb, text, jsonb) is
-  'Shared owner-only Module query preparation for list and summary reads: derives organisation and application authority from validated_human_request_context(), resolves one installed query or the exact current human-owned preview pins, revalidates preview prior plans, exact active field mappings and preview catalogue/field bounds without using the installed read-scan routes, validates declared inputs and the published filter narrowed by the declared user filter, and returns the exact access predicate, pushed filter and residual per-row condition with bound inputs; it never accepts authority or identity from caller values.';
+  'Shared owner-only Module query preparation for list and summary reads: derives organisation and application authority from validated_human_request_context(), resolves one installed query or the exact current human-owned preview pins, revalidates preview prior plans, exact active field mappings and preview catalogue/field bounds without using the installed read-scan routes, refuses a preview of a used Module''s record type with read_forbidden when the same read plan decision admits no read alternative, validates declared inputs and the published filter narrowed by the declared user filter, and returns the exact access predicate, pushed filter and residual per-row condition with bound inputs; it never accepts authority or identity from caller values.';

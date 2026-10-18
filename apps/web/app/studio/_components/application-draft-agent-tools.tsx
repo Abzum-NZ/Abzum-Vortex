@@ -10,8 +10,6 @@ import {
   projectStudioSemanticOutline,
   type StudioCompositionOutcome,
   type StudioQueryChoice,
-  type StudioApplicationDraftHistoryController,
-  type StudioApplicationDraftSaveOutcome,
   type StudioCompositionCommand,
   type StudioCompositionSettings,
   type StudioCompositionContext,
@@ -21,9 +19,10 @@ import {
 } from "@vortex/ui/studio";
 import { z } from "zod";
 import { WebMcpAdapter, type WebMcpToolDescriptor } from "../../_components/webmcp-adapter";
-import { applyStudioItemLabels } from "../_lib/application-item-labels";
+import { applyStudioItemLabels } from "@vortex/ui/studio";
 import { previewStudioApplication } from "../preview-actions";
-import { conflictMessage, previewProblem, refusalMessage, unavailableMessage } from "./studio-refusal-messages";
+import { previewProblem, unavailableMessage } from "./studio-refusal-messages";
+import type { StudioDraft } from "./use-studio-draft";
 
 /** The saved draft a preview runs; null while edits or requests are pending. */
 export type SavedDraftContext = Readonly<{
@@ -34,7 +33,7 @@ export type SavedDraftContext = Readonly<{
 }>;
 
 type ToolName = "read_application_draft" | "rename_application_item" | "add_placement" | "change_placement_settings"
-  | "remove_placement" | "save_application_draft" | "preview_saved_application" | "prepare_application_publication"
+  | "remove_placement" | "preview_saved_application" | "prepare_application_publication"
   | "publish_application_release";
 type StudioApplicationTool = WebMcpToolDescriptor & Readonly<{ name: ToolName; input: z.ZodType }>;
 
@@ -69,13 +68,13 @@ const tool = (name: ToolName, description: string, input: z.ZodType, readOnly: b
   ({ name, description, input, readOnly, inputSchema: inputSchema(input) });
 
 const applicationTools: readonly StudioApplicationTool[] = [
-  tool("read_application_draft", "Read the Application draft as it is in the workspace now: revision, unsaved state, the outline of pages, placements, flows and navigation, for each page the places a new block can go with the blocks each admits, the queries a data block can read, and for each placement its declared settings. Call it first and after any refusal.", z.object({}).strict(), true),
-  tool("rename_application_item", "Rename the Application (with its description) or one page, the same edit as the inspector's Apply labels. It changes the workspace draft; call save_application_draft to persist it.",
+  tool("read_application_draft", "Read the Application draft as it is in the workspace now: revision, whether an edit is still being saved, the outline of pages, placements, flows and navigation, for each page the places a new block can go with the blocks each admits, the queries a data block can read, and for each placement its declared settings. Call it first and after any refusal.", z.object({}).strict(), true),
+  tool("rename_application_item", "Rename the Application (with its description) or one page, the same edit as the inspector's name fields. Studio saves the change automatically.",
     z.discriminatedUnion("target", [
       z.object({ target: z.literal("application"), name: z.string().min(1), description: z.string().min(1) }).strict(),
       z.object({ target: z.literal("page"), pageAlias: alias("The page alias from read_application_draft."), name: z.string().min(1) }).strict(),
     ]), false),
-  tool("add_placement", "Add a new block to one place on a page, the same edit as dropping it from the Blocks palette. Take the place (area and destination) and the block's blockId and releaseVersion from the page's addTargets in read_application_draft. Give its setup settings (each required one without a default, as typed values), and for a block that needs a query, one of the queries listed. Every other setting starts with its default. It changes the workspace draft; call save_application_draft to persist it.",
+  tool("add_placement", "Add a new block to one place on a page, the same edit as dropping it from the Blocks palette. Take the place (area and destination) and the block's blockId and releaseVersion from the page's addTargets in read_application_draft. Give its setup settings (each required one without a default, as typed values), and for a block that needs a query, one of the queries listed. Every other setting starts with its default. Studio saves the change automatically.",
     z.object({
       pageAlias: alias("The page alias from read_application_draft."), area: z.string().min(1),
       destination: z.discriminatedUnion("kind", [z.object({ kind: z.literal("root") }).strict(),
@@ -85,7 +84,7 @@ const applicationTools: readonly StudioApplicationTool[] = [
       settings: z.record(z.string(), settingValue).optional().describe("Setting key to its typed value, of the kind its declaration has."),
       query: z.string().min(1).optional().describe("The query reference a data block reads."),
     }).strict(), false),
-  tool("change_placement_settings", "Set or clear the declared settings of a placement, or choose the query a data block reads, the same edit as the inspector's Settings form. Settings you do not name keep their current values. It changes the workspace draft; call save_application_draft to persist it.",
+  tool("change_placement_settings", "Set or clear the declared settings of a placement, or choose the query a data block reads, the same edit as the inspector's Settings form. Settings you do not name keep their current values. Studio saves the change automatically.",
     z.object({
       placementAlias: alias("The placement alias from read_application_draft."),
       set: z.record(z.string(), settingValue).optional().describe("Setting key to its new typed value, as read_application_draft shows the current ones."),
@@ -93,14 +92,13 @@ const applicationTools: readonly StudioApplicationTool[] = [
       query: z.string().min(1).optional().describe("For a data block: one of the queries read_application_draft lists."),
     }).strict().refine((value) => value.set !== undefined || value.clear !== undefined || value.query !== undefined,
       { message: "Give set, clear or query." }), false),
-  tool("remove_placement", "Remove an unreferenced released placement, the same edit as the Remove placement control. It changes the workspace draft; call save_application_draft to persist it.",
+  tool("remove_placement", "Remove an unreferenced released placement, the same edit as the Remove placement control. Studio saves the change automatically.",
     z.object({ placementAlias: alias("The placement alias from read_application_draft.") }).strict(), false),
-  tool("save_application_draft", "Save the workspace draft into the saved Application draft, the same action as Save draft. Nothing is published.", z.object({}).strict(), false),
-  tool("preview_saved_application", "Run the saved draft as an isolated preview of the application, the same action as Preview, and report the address it runs at. Its pages, navigation, forms and flows run on a copy of the organisation's records; nothing it saves reaches the installed application. It replaces this application's previous preview. Needs a saved draft with no unsaved or pending edits; name the exact draftRevision from read_application_draft. Nothing is published or installed.",
+  tool("preview_saved_application", "Run the saved draft as an isolated preview of the application, the same action as Preview, and report the address it runs at. Its pages, navigation, forms and flows run on a copy of the organisation's records; nothing it saves reaches the installed application. It replaces this application's previous preview. It first waits for the latest edits to be saved; name the exact draftRevision read_application_draft shows once they are. Nothing is published or installed.",
     z.object({
       draftRevision: z.number().int().describe("The saved draft revision from read_application_draft."),
     }).strict(), false),
-  tool("prepare_application_publication", "Check the saved draft against its published dependencies, permissions and version rules and propose the release, the same request as Prepare publication. Needs a saved draft with no unsaved edits; name the exact draftRevision. Nothing is published; the reply names the release version to confirm with publish_application_release.",
+  tool("prepare_application_publication", "Check the saved draft against its published dependencies, permissions and version rules and propose the release, the same request as Prepare publication. It first waits for the latest edits to be saved; name the exact draftRevision. Nothing is published; the reply names the release version to confirm with publish_application_release.",
     z.object({ draftRevision: z.number().int().describe("The saved draft revision from read_application_draft.") }).strict(), false),
   tool("publish_application_release", "Publish the prepared release, the same action as Publish after Prepare publication. It appends a release that cannot be undone and installs nothing. Name the exact draftRevision and releaseVersion that prepare_application_publication proposed, and give the release note.",
     z.object({
@@ -119,11 +117,6 @@ const trimOutline = (node: StudioSemanticOutlineNode): object => ({
   ...(node.children.length === 0 ? {} : { children: node.children.map(trimOutline) }),
 });
 
-const saveMessage = (outcome: StudioApplicationDraftSaveOutcome): string =>
-  outcome.kind === "conflict" ? `${conflictMessage(outcome.reason, "Nothing was saved.")} Call read_application_draft.`
-    : outcome.kind === "refused" ? refusalMessage(outcome.reason, "Nothing was saved.")
-      : outcome.kind === "busy" ? "A save is already in progress."
-        : "The save could not be verified, so nothing is known to be saved. Call read_application_draft.";
 
 /** What one prepare or publish request came to, for the control's message and for the agent tools. */
 export type StudioPublicationOutcome =
@@ -137,7 +130,7 @@ const publicationFailure = (operation: "prepare" | "publish", outcome: StudioPub
   switch (outcome.kind) {
     case "not_started":
       return { outcome: outcome.reason, message: outcome.reason === "busy" ? "A publication request is already running. Try again in a moment."
-        : outcome.reason === "not_saved" ? "The workspace draft is not the saved draft: it has unsaved changes or a request is pending. Nothing was done. Call save_application_draft, then read_application_draft."
+        : outcome.reason === "not_saved" ? "The workspace draft is not the saved draft yet: an edit is still being saved, or its save was refused. Nothing was done. Call read_application_draft."
           : outcome.reason === "not_prepared" ? "Nothing is prepared for the current saved draft. Call prepare_application_publication first. Nothing was published."
             : "The release note must be between 1 and 2000 characters. Nothing was published." };
     case "declined": {
@@ -155,20 +148,15 @@ const publicationFailure = (operation: "prepare" | "publish", outcome: StudioPub
 };
 
 /** Registers the Application draft tools in the browser agent interface; each one runs the edit its workspace control runs. */
-export function ApplicationDraftAgentTools({ organizationId, history, catalogue, readLifetime, blockedReason, select, command, readQueries, save,
+export function ApplicationDraftAgentTools({ draft, catalogue, command, readQueries,
   readPreparedConfirmation, prepare, publish, readSavedDraft }: {
-  organizationId: string;
-  history: StudioApplicationDraftHistoryController;
+  /** The workspace's one draft: the agent edits it through the same envelope as the person. */
+  draft: StudioDraft;
   catalogue: ImmutablePlatformBlockCatalogue;
-  readLifetime: () => number;
-  /** Why a person's unapplied edit or a running request stops the agent from changing the draft, if it does. */
-  blockedReason: () => string | undefined;
-  select: (next: StudioSemanticSelection | null) => boolean;
   command: (expected: StudioCompositionContext, expectedSelection: StudioSemanticSelection,
     command: StudioCompositionCommand) => StudioCompositionOutcome;
   /** The queries a data block can read now: the application's own, then the borrowed ones. */
   readQueries: () => readonly StudioQueryChoice[];
-  save: () => Promise<StudioApplicationDraftSaveOutcome | undefined>;
   /** The confirmation the last successful Prepare publication produced for the current saved draft, if still valid. */
   readPreparedConfirmation: () => DefinitionPublicationConfirmation | undefined;
   prepare: () => Promise<StudioPublicationOutcome>;
@@ -179,6 +167,11 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
   const [runtime, setRuntime] = useState<ApplicationWebMcpRuntime>();
   const running = useRef(false);
   const tools = useMemo(() => descriptors, []);
+  const { history, organizationId, select } = draft;
+  const latest = useRef(draft);
+  latest.current = draft;
+  const readLifetime = useCallback(() => latest.current.lifetime, []);
+  const blockedReason = useCallback(() => latest.current.blockedReason(), []);
 
   const contextNow = useCallback((): StudioCompositionContext => {
     const state = history.getState();
@@ -191,7 +184,7 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
     const context = contextNow();
     const outline = projectStudioSemanticOutline({ rootId: state.rootId, source: applicationSourceDocumentSchema.parse(state.source), catalogue });
     return {
-      draftRevision: state.draftRevision, unsavedChanges: state.isDirty,
+      draftRevision: state.draftRevision, savingEdits: state.isDirty || state.isSaving,
       application: { name: state.source.body.name, description: state.source.body.description },
       outline: trimOutline(outline),
       pages: collect(outline, "page").flatMap((page) => {
@@ -223,7 +216,7 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
 
   const commandOutcome = useCallback((result: StudioCompositionOutcome, operation: string, invalidHint: string) => {
     const kind = result.kind;
-    if (kind === "applied") return { outcome: "applied", message: "Applied to the workspace draft. It is not saved until you call save_application_draft.", ...describeNow() };
+    if (kind === "applied") return { outcome: "applied", message: "Applied to the workspace draft. Studio saves it automatically.", ...describeNow() };
     console.error(`[studio] agent ${operation} refused: STUDIO_AGENT_COMPOSITION_${kind.toUpperCase()}`);
     return { outcome: kind, message: kind === "stale" ? "The draft or selection changed while the edit was checked. Nothing changed; call read_application_draft and retry."
       : kind === "unsupported" ? "This release or region is unsupported for this edit. Nothing changed." : result.reason ?? invalidHint };
@@ -241,20 +234,10 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
       if (found.name === "read_application_draft") return { outcome: "read", ...describeNow() };
       const blocked = blockedReason();
       if (blocked !== undefined) return { outcome: "blocked", message: blocked };
-      if (found.name === "save_application_draft") {
-        if (!history.getState().isDirty) return { outcome: "unchanged", message: "The workspace draft has no unsaved changes, so nothing was saved." };
-        const outcome = await save();
-        if (outcome === undefined) return { outcome: "unavailable", message: "The save did not report a result, so it is unknown whether it completed. Call read_application_draft and compare the draft revision before saving again." };
-        if (outcome.kind !== "saved") {
-          console.error(`[studio] agent save refused: STUDIO_AGENT_SAVE_${outcome.kind.toUpperCase()}${"reason" in outcome && outcome.reason !== undefined ? `:${outcome.reason}` : ""}`);
-          return { outcome: outcome.kind, ...("reason" in outcome && outcome.reason !== undefined ? { reason: outcome.reason } : {}), message: saveMessage(outcome) };
-        }
-        return { outcome: "saved", ...describeNow() };
-      }
       if (found.name === "preview_saved_application") {
         const input = parsed.data as { draftRevision: number };
-        const context = readSavedDraft();
-        if (context === null) return { outcome: "blocked", message: "Preview needs the saved draft with no unsaved changes or pending requests. Call save_application_draft, then read_application_draft." };
+        const context = await latest.current.flush() ? readSavedDraft() : null;
+        if (context === null) return { outcome: "blocked", message: "Preview needs the saved draft, and the latest edits are not saved. Call read_application_draft." };
         if (input.draftRevision !== context.draftRevision) {
           console.error("[studio] agent preview refused: STUDIO_AGENT_PREVIEW_STALE_REVISION");
           return { outcome: "conflict", message: `The saved draft is at revision ${context.draftRevision}, not ${input.draftRevision}. Nothing was previewed. Call read_application_draft.` };
@@ -271,6 +254,7 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
       if (found.name === "prepare_application_publication" || found.name === "publish_application_release") {
         const input = parsed.data as { draftRevision: number; releaseVersion?: string; releaseNote?: string };
         const operation = found.name === "publish_application_release" ? "publish" : "prepare";
+        if (!await latest.current.flush()) return publicationFailure(operation, { kind: "not_started", reason: "not_saved" });
         const current = history.getState();
         if (input.draftRevision !== current.draftRevision) {
           console.error(`[studio] agent ${operation} refused: STUDIO_AGENT_PUBLICATION_STALE_REVISION`);
@@ -306,11 +290,12 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
           input.description ?? history.getState().source.body.description);
         if (result.kind === "not_found") return { outcome: "not_found", message: "That item is not in the current draft. Call read_application_draft." };
         if (result.kind === "invalid") return { outcome: "validation_failed", issues: result.issues, message: "Enter a valid non-empty label and description within their limits." };
-        if (!select(target) || !history.edit(result.source)) {
+        const edited = select(target) ? latest.current.run(() => ({ kind: "edit", source: result.source, result: true })) : null;
+        if (edited?.kind !== "done") {
           console.error("[studio] agent rename was not accepted by the draft history");
-          return { outcome: "invalid", message: "The draft history did not accept this change, so nothing was changed." };
+          return { outcome: "invalid", message: edited?.message ?? "That item cannot be selected, so nothing was changed." };
         }
-        return { outcome: "applied", message: "Applied to the workspace draft. It is not saved until you call save_application_draft.", ...describeNow() };
+        return { outcome: "applied", message: "Applied to the workspace draft. Studio saves it automatically.", ...describeNow() };
       }
       if (found.name === "add_placement") {
         const input = parsed.data as { pageAlias: string; area: string; destination: StudioCompositionDestination;
@@ -359,7 +344,7 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
       running.current = false;
     }
   }, [applyCommand, blockedReason, commandOutcome, contextNow, describeNow, history, organizationId, prepare, publish,
-    readPreparedConfirmation, readSavedDraft, save, select]);
+    readPreparedConfirmation, readSavedDraft, select]);
 
   return <>
     <WebMcpAdapter contextKey={`${organizationId}:${history.getState().rootId}`} tools={tools} onInvoke={invoke} onStatusChange={setRuntime} />

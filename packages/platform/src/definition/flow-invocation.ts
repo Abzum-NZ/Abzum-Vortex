@@ -46,13 +46,16 @@ import { createRecordSaveService } from "../records/save-record";
 import type { createDatabaseApplicationBoundReleaseSetService } from "./application-bound-release-set";
 import { readPermittedApplicationsAtAddress } from "./application-address";
 import { createDatabaseFlowStores } from "./flow-continuation-store";
+import { createFlowCurrentRecordReader } from "./flow-current-record";
 import { createFlowOrchestrator } from "./flow-orchestrator";
 import type { FlowNamedAction, FlowRecordType, FlowRelease } from "./flow-orchestrator-types";
 import { createFormContinuationService } from "./form-continuation";
 import { flowReadFieldsScalarTypeForField } from "./flow-compilation";
 import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
+import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import { installedNamedActionDescriptors, installedNamedActions } from "./installed-named-actions";
 import { createProtectedOperationExecutor } from "./protected-operation-executor";
+import type { ApplicationStoreService } from "./installation-application-store";
 import { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";
 import type { QueryContinuationKey } from "../queries/continuation-token";
 import {
@@ -64,7 +67,7 @@ import {
 type ProjectedFormField = Readonly<{
   fieldKey: string;
   command: RecordReferenceChoiceCommand;
-  releaseVersion: "1.1.0" | "1.2.0" | "1.3.0";
+  releaseVersion: "1.1.0" | "1.2.0";
   dependency?: Readonly<{ key: string; fromField: string }>;
 }>;
 type ProjectedForm = Readonly<{ fields: ReadonlyMap<string, ProjectedFormField> }>;
@@ -98,6 +101,8 @@ type GuidedInvocationPage = Readonly<{
 
 type InvocationDependencies = Readonly<{
   authorityId: IdentityAuthorityId;
+  /** The application catalogue's install and upgrade journeys, run under the initiator's authority. */
+  applicationStore: ApplicationStoreService;
   channel: ProtectedOperationChannel;
   telemetry: NonNullable<Parameters<typeof createRecordSaveService>[0]["telemetry"]>;
   releaseCatalogue: Parameters<typeof createDatabaseApplicationBoundReleaseSetService>[0];
@@ -154,6 +159,11 @@ type InvocationDependencies = Readonly<{
 export type FlowInvocationAddress = Readonly<{
   read: Extract<PermittedApplicationsRead, { kind: "available" }>;
   application: PermittedApplication;
+  /**
+   * The installed context this same request's own HUMAN address read authorized the application
+   * against. The invocation reuses it instead of reading the installation again.
+   */
+  installedContext?: InstalledRuntimeContext;
 }>;
 export type FlowInvocationRequest = Readonly<{
   tenantShortName: string;
@@ -516,7 +526,9 @@ export async function invokeInstalledFlow(
         scope: {
           organizationId: scope.organizationId,
           applicationRootId: scope.applicationRootId,
-          ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
+          ...(scope.previewInstallationId === undefined
+            ? {}
+            : { previewInstallationId: scope.previewInstallationId }),
         },
       });
     },
@@ -550,6 +562,7 @@ export async function invokeInstalledFlow(
   });
   const executor = createProtectedOperationExecutor({
     accessAdministration: createOrganizationAccessAdministrationService(requestDependencies),
+    applicationStore: dependencies.applicationStore,
     tenantGovernance: {
       run: (session, selection, operation) =>
         requests.runChange(session, selection, (transaction, scope) =>
@@ -636,6 +649,12 @@ export async function invokeInstalledFlow(
           (await subjectReader.read(session, selection, subject)).kind,
       },
       selectedRecordReads: selectedRecordReadsFor(installation),
+      currentRecords: createFlowCurrentRecordReader({
+        requests,
+        reader: selectedRecordReader,
+        installation,
+        identityId: identity.session.identityId,
+      }),
       recordPins: {
         acquireIdentity: async (session, selection, selector) => {
           if (
@@ -661,7 +680,9 @@ export async function invokeInstalledFlow(
               scope: {
                 organizationId: scope.organizationId,
                 applicationRootId: scope.applicationRootId,
-                ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
+                ...(scope.previewInstallationId === undefined
+                  ? {}
+                  : { previewInstallationId: scope.previewInstallationId }),
               },
             }).load();
             const application = current.releaseSet.application;
@@ -752,7 +773,9 @@ export async function invokeInstalledFlow(
               scope: {
                 organizationId: scope.organizationId,
                 applicationRootId: scope.applicationRootId,
-                ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
+                ...(scope.previewInstallationId === undefined
+                  ? {}
+                  : { previewInstallationId: scope.previewInstallationId }),
               },
             }).load();
             const application = current.releaseSet.application;
@@ -881,110 +904,125 @@ export async function invokeInstalledFlow(
     }> | null
   >();
 
+  /** The flow bindings, flows and record types of one trusted installed context. */
+  const installedFlowBindings = (installation: InstalledRuntimeContext): InstalledFlowBindings => {
+    const releaseSet = installation.releaseSet;
+    const application = releaseSet.application;
+    guidedControls.clear();
+    for (const page of application.content.pages) {
+      if (page.type !== "guided_form") continue;
+      const controls = dependencies.guidedFormControls(page, application.content.shells);
+      if (controls === undefined) throw new Error("INVALID_GUIDED_FORM_CONTROLS");
+      const flowId = dependencies.guidedFormFlowId(
+        page,
+        application.content.flowBindings,
+        application.content.shells,
+      );
+      for (const controlId of controls.all) {
+        const key = controlId.toLowerCase();
+        guidedControls.set(
+          key,
+          guidedControls.has(key)
+            ? null
+            : {
+                pageKey: page.key,
+                pageId: String(page.pageId),
+                ...(flowId === undefined ? {} : { flowId }),
+                summary: key === controls.summary,
+              },
+        );
+      }
+    }
+    const flows = new Map<string, unknown>();
+    for (const flow of [
+      ...application.content.flows,
+      ...releaseSet.modules.flatMap((module) => module.content.flows),
+    ]) {
+      // One flow per identity: a Module flow never shadows an Application flow, and an
+      // ambiguous release is refused rather than run.
+      if (flows.has(String(flow.id))) throw new Error("FLOW_IDENTITY_AMBIGUOUS");
+      flows.set(String(flow.id), flow);
+    }
+    const selectedReadContext = installedSelectedRecordReadContext(application, releaseSet.modules);
+    if (selectedReadContext === undefined)
+      throw new Error("SELECTED_RECORD_READ_BINDING_UNAVAILABLE");
+    const installedActions = installedNamedActionDescriptors(application, releaseSet.modules);
+    // Each record type's fields by key and by identity, for the values of a Save record task,
+    // and the named action that declares it sets each choice option.
+    const recordTypes = new Map<string, FlowRecordType>();
+    for (const recordType of releaseSet.modules.flatMap((module) => module.content.recordTypes)) {
+      const fieldIds = new Map<string, string>();
+      const optionActions = new Map<string, ReadonlyMap<string, FlowNamedAction>>();
+      for (const field of recordType.fields) {
+        fieldIds.set(String(field.key).toLowerCase(), String(field.fieldId));
+        fieldIds.set(String(field.fieldId).toLowerCase(), String(field.fieldId));
+      }
+      for (const { named, setsChoice } of installedActions) {
+        if (
+          setsChoice === undefined ||
+          named.subjectRecordTypeId.toLowerCase() !== String(recordType.recordTypeId).toLowerCase()
+        )
+          continue;
+        const linked = new Map(optionActions.get(setsChoice.fieldId.toLowerCase()));
+        linked.set(setsChoice.option, named);
+        optionActions.set(setsChoice.fieldId.toLowerCase(), linked);
+      }
+      recordTypes.set(String(recordType.recordTypeId).toLowerCase(), { fieldIds, optionActions });
+    }
+    const namedActions = installedNamedActions(application, releaseSet.modules);
+    const installed: InstalledFlowBindings = {
+      organizationId: installation.organizationId,
+      applicationRootId: address.application.applicationRootId,
+      installationRevision: installation.applicationReleaseRevision,
+      releaseKey: [
+        application.releaseVersion,
+        application.contentFingerprint,
+        application.resolutionFingerprint,
+      ].join(":"),
+      bindings: application.content.flowBindings,
+      flows,
+      recordTypes,
+      namedActions,
+      selectedRecordReadProjections: selectedReadContext.projections,
+      selectedRecordReadInputs: selectedReadContext.inputs,
+      selectedRecordReadModules: selectedReadContext.modules,
+      applicationContent: application.content,
+      modules: releaseSet.modules,
+    };
+    return installed;
+  };
+
   /** The trusted active installation for the initiator's own selection; never from the request. */
   const readInstalled = async (
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
   ): Promise<InstalledFlowBindings | undefined> => {
+    // The address resolution of this same request already read the installed context under the
+    // person's own verified scope for exactly this organisation and application; it is reused, so
+    // the request does not decide the same access twice. The next request reads again.
+    const carried = address.installedContext;
+    if (
+      carried !== undefined &&
+      selection.applicationRootId !== undefined &&
+      sameId(carried.organizationId, selection.organizationId) &&
+      sameId(carried.applicationRootId, selection.applicationRootId)
+    )
+      return installedFlowBindings(carried);
     const read = await requests.run(session, selection, async (transaction, scope) => {
       if (scope.applicationRootId === undefined)
         throw new Error("INSTALLED_FLOW_BINDINGS_SCOPE_UNAVAILABLE");
-      const installation = await createHumanInstalledPageBundleContextLoader({
-        transaction,
-        scope: {
-          organizationId: scope.organizationId,
-          applicationRootId: scope.applicationRootId,
-          ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
-        },
-      }).load();
-      const releaseSet = installation.releaseSet;
-      const application = releaseSet.application;
-      guidedControls.clear();
-      for (const page of application.content.pages) {
-        if (page.type !== "guided_form") continue;
-        const controls = dependencies.guidedFormControls(page, application.content.shells);
-        if (controls === undefined) throw new Error("INVALID_GUIDED_FORM_CONTROLS");
-        const flowId = dependencies.guidedFormFlowId(
-          page,
-          application.content.flowBindings,
-          application.content.shells,
-        );
-        for (const controlId of controls.all) {
-          const key = controlId.toLowerCase();
-          guidedControls.set(
-            key,
-            guidedControls.has(key)
-              ? null
-              : {
-                  pageKey: page.key,
-                  pageId: String(page.pageId),
-                  ...(flowId === undefined ? {} : { flowId }),
-                  summary: key === controls.summary,
-                },
-          );
-        }
-      }
-      const flows = new Map<string, unknown>();
-      for (const flow of [
-        ...application.content.flows,
-        ...releaseSet.modules.flatMap((module) => module.content.flows),
-      ]) {
-        // One flow per identity: a Module flow never shadows an Application flow, and an
-        // ambiguous release is refused rather than run.
-        if (flows.has(String(flow.id))) throw new Error("FLOW_IDENTITY_AMBIGUOUS");
-        flows.set(String(flow.id), flow);
-      }
-      const selectedReadContext = installedSelectedRecordReadContext(
-        application,
-        releaseSet.modules,
+      return installedFlowBindings(
+        await createHumanInstalledPageBundleContextLoader({
+          transaction,
+          scope: {
+            organizationId: scope.organizationId,
+            applicationRootId: scope.applicationRootId,
+            ...(scope.previewInstallationId === undefined
+              ? {}
+              : { previewInstallationId: scope.previewInstallationId }),
+          },
+        }).load(),
       );
-      if (selectedReadContext === undefined)
-        throw new Error("SELECTED_RECORD_READ_BINDING_UNAVAILABLE");
-      const installedActions = installedNamedActionDescriptors(application, releaseSet.modules);
-      // Each record type's fields by key and by identity, for the values of a Save record task,
-      // and the named action that declares it sets each choice option.
-      const recordTypes = new Map<string, FlowRecordType>();
-      for (const recordType of releaseSet.modules.flatMap((module) => module.content.recordTypes)) {
-        const fieldIds = new Map<string, string>();
-        const optionActions = new Map<string, ReadonlyMap<string, FlowNamedAction>>();
-        for (const field of recordType.fields) {
-          fieldIds.set(String(field.key).toLowerCase(), String(field.fieldId));
-          fieldIds.set(String(field.fieldId).toLowerCase(), String(field.fieldId));
-        }
-        for (const { named, setsChoice } of installedActions) {
-          if (
-            setsChoice === undefined ||
-            named.subjectRecordTypeId.toLowerCase() !==
-              String(recordType.recordTypeId).toLowerCase()
-          )
-            continue;
-          const linked = new Map(optionActions.get(setsChoice.fieldId.toLowerCase()));
-          linked.set(setsChoice.option, named);
-          optionActions.set(setsChoice.fieldId.toLowerCase(), linked);
-        }
-        recordTypes.set(String(recordType.recordTypeId).toLowerCase(), { fieldIds, optionActions });
-      }
-      const namedActions = installedNamedActions(application, releaseSet.modules);
-      const installed: InstalledFlowBindings = {
-        organizationId: installation.organizationId,
-        applicationRootId: address.application.applicationRootId,
-        installationRevision: installation.applicationReleaseRevision,
-        releaseKey: [
-          application.releaseVersion,
-          application.contentFingerprint,
-          application.resolutionFingerprint,
-        ].join(":"),
-        bindings: application.content.flowBindings,
-        flows,
-        recordTypes,
-        namedActions,
-        selectedRecordReadProjections: selectedReadContext.projections,
-        selectedRecordReadInputs: selectedReadContext.inputs,
-        selectedRecordReadModules: selectedReadContext.modules,
-        applicationContent: application.content,
-        modules: releaseSet.modules,
-      };
-      return installed;
     });
     return read.kind === "available" ? read.value : undefined;
   };
@@ -1109,7 +1147,9 @@ export async function invokeInstalledFlow(
   const selection = {
     organizationId: address.read.organizationId,
     applicationRootId: address.application.applicationRootId,
-    ...(address.application.previewInstallationId === undefined ? {} : { previewInstallationId: address.application.previewInstallationId }),
+    ...(address.application.previewInstallationId === undefined
+      ? {}
+      : { previewInstallationId: address.application.previewInstallationId }),
   };
   // Use the same installed snapshot for this gate and the endpoint. A crafted action on a
   // guided page must not start a flow before its final form submit is confirmed.

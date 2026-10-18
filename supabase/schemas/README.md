@@ -53,8 +53,10 @@ follow it. `vortex_record_adapter` and `vortex_record_inventory` remain separate
 `pnpm guard` runs the check in [`tooling/guard/guard.ts`](../../tooling/guard/guard.ts): it compares
 each canonical function definition with the latest matching definition found in the ordered
 migrations, and rejects non-nil hard-coded UUIDs in new function bodies. The generated baseline's
-legacy UUIDs are exempt only while the canonical definition matches that fixed baseline. The
-comparison normalizes whitespace. It does not inspect the live database or verify the canonical
+legacy UUIDs are exempt only while the canonical definition matches that fixed baseline. It also
+rejects a canonical function name declared with more than one signature, since a call would then
+resolve by argument types instead of by name. The comparison normalizes whitespace. It does not
+inspect the live database or verify the canonical
 file's comment, grants, revokes, owner statement, filename, or one-function-per-file layout. Review
 those details manually, including owner and privilege changes. Do not read a stored function
 definition (`pg_get_functiondef`, `prosrc`, `routine_definition`) or patch one with `replace()`;

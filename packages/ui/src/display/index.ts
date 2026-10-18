@@ -1,8 +1,8 @@
 // Per-Block Payload & Event Contracts
+export { parseBoardPayload } from "./board-payload";
 export type { ChartPayload } from "./chart";
 export {
   DISPLAY_EVENT_NAMES,
-  parseBoardPayload,
   parseDisplayData,
   parseDisplayEventHandlers,
   parseGroupedPayload,
@@ -54,6 +54,7 @@ export { RichTextDocumentView, richTextToPlainText } from "./rich-text";
 // Cell Formatting & Display
 export { DisplayCellView, cellValueToText } from "./cell";
 export { formatIsoDate } from "./date-format";
+export { FormattedTime } from "./date-format-context";
 // Display State Container & Helpers
 export {
   DisplayStateContainer,

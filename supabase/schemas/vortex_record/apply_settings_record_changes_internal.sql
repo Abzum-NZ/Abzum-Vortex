@@ -84,7 +84,7 @@ begin
   end if;
 
   loaded := vortex_record.load_record_access_facts_internal(
-    p_record_type_id, 'read', p_record_id, null
+    p_record_type_id, 'read', p_record_id, null, null::jsonb
   );
   if loaded ->> 'outcome' <> 'loaded' then
     perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
@@ -103,7 +103,7 @@ begin
       'correlationId', correlation_id_value
     );
   end if;
-  read_bounds := vortex_access.resolve_record_field_bounds_internal(read_decision);
+  read_bounds := vortex_record.decide_record_field_bounds_internal(read_decision);
   if exists (
     select 1
     from (

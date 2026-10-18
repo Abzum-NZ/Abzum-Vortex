@@ -153,16 +153,7 @@ begin
         decision_item -> 'organizationId', decision_item -> 'matchedContributions')::text;
       bounds := bounds_by_route -> bounds_key;
       if bounds is null then
-        bounds := vortex_access.resolve_record_field_bounds_internal(decision_item);
-        if p_narrowed then
-          -- Without a total field the derived readable set depends only on the
-          -- record type and these bounds, not on the record.
-          bounds := bounds || pg_catalog.jsonb_build_object('projectedReadableFieldIds',
-            vortex_record.project_derived_readable_field_ids_internal(
-              vortex_record.read_record_page_row_facts_internal(p_envelope, loaded),
-              p_record_type_id, record_id, bounds -> 'readableFieldIds',
-              bounds -> 'readableFieldIds', '[]'::jsonb));
-        end if;
+        bounds := vortex_record.decide_record_field_bounds_internal(decision_item);
         bounds_by_route := bounds_by_route || pg_catalog.jsonb_build_object(bounds_key, bounds);
       end if;
     end if;
@@ -171,40 +162,10 @@ begin
 end
 $function$;
 
-create or replace function vortex_record.read_record_page_decisions_internal(
-  p_record_type_id uuid,
-  p_first_loaded jsonb,
-  p_page_declaration jsonb,
-  p_page_eligibility jsonb,
-  p_record_ids uuid[]
-)
-returns table (record_id uuid, loaded jsonb, decision jsonb, bounds jsonb)
-language sql
-volatile
-security invoker
-set search_path = ''
-as $function$
-  select decided.record_id,
-    vortex_record.read_record_page_row_facts_internal(page.envelope, decided.loaded),
-    decided.decision, decided.bounds
-  from vortex_record.read_record_page_envelope_internal(p_record_type_id, p_first_loaded) as page
-  cross join lateral vortex_record.read_record_page_decisions_internal(
-    p_record_type_id, p_first_loaded, p_page_declaration, p_page_eligibility, p_record_ids,
-    page.envelope, page.narrowed
-  ) as decided
-$function$;
-
 alter function vortex_record.read_record_page_decisions_internal(uuid,jsonb,jsonb,jsonb,uuid[],jsonb,boolean)
   owner to vortex_record_adapter;
 revoke all on function vortex_record.read_record_page_decisions_internal(uuid,jsonb,jsonb,jsonb,uuid[],jsonb,boolean)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-alter function vortex_record.read_record_page_decisions_internal(uuid,jsonb,jsonb,jsonb,uuid[])
-  owner to vortex_record_adapter;
-revoke all on function vortex_record.read_record_page_decisions_internal(uuid,jsonb,jsonb,jsonb,uuid[])
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_record.read_record_page_decisions_internal(uuid,jsonb,jsonb,jsonb,uuid[],jsonb,boolean) is
   'Private page read pass for the fixed record adapter: loads the stored facts of every candidate record of one page in one statement, decides them together through the set-based exact decision with the page eligibility computed once in this invocation, and resolves field bounds once per distinct contribution set; each decided record is returned as its compact record scope, which with the page envelope built once for the page is the facts the exact loader would give it; returns only records it decided, so every other record keeps the exact single-record path.';
-
-comment on function vortex_record.read_record_page_decisions_internal(uuid,jsonb,jsonb,jsonb,uuid[]) is
-  'Private page read pass with each decided record carrying its complete read facts: builds the page envelope from the first record''s facts and delegates to the envelope variant.';

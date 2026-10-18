@@ -155,6 +155,11 @@ const parsePreparation = (candidate: unknown): PreparationOutcome => {
     return { outcome: "conflict", ...(correlationId ? { correlationId } : {}) };
   if (value.outcome === "refused")
     return { outcome: "unavailable", ...(correlationId ? { correlationId } : {}) };
+  if (value.outcome === "unsupported") {
+    // An Application-owned rule names this record type; only a Module's own rules run on a save.
+    console.error("[record] save refused RECORD_SAVE_UNSUPPORTED: an Application rule names the record type");
+    return { outcome: "unavailable", ...(correlationId ? { correlationId } : {}) };
+  }
   if (value.outcome !== "prepared")
     throw contractError("RECORD_SAVE_PREPARATION_INVALID", value.outcome);
   const recordType = recordTypeDefinitionSchema.safeParse(value.recordType);
@@ -211,6 +216,7 @@ const correctionCode = (code: string): RecordSaveFieldCorrection["code"] => {
   if (
     code === "unknown_field" ||
     code === "generated_field_input" ||
+    code === "stage_move_refused" ||
     code === beforeSaveRuleRefusedIssueCode
   )
     return "field_refused";
@@ -245,8 +251,10 @@ const correctionsFor = (
       ...(nested.length === 0
         ? {}
         : { nestedPath: nested as RecordSaveFieldCorrection["nestedPath"] }),
-      // A rule's authored message is the one text that leaves with a located correction.
-      ...(issue.code === beforeSaveRuleRefusedIssueCode && issue.requirement !== undefined
+      // A rule's authored message, and a refused stage move's labels, are the only text that
+      // leaves with a located correction.
+      ...((issue.code === beforeSaveRuleRefusedIssueCode || issue.code === "stage_move_refused") &&
+      issue.requirement !== undefined
         ? { message: issue.requirement.message }
         : {}),
     };

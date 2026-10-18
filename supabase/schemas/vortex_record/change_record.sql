@@ -50,7 +50,7 @@ begin
   end if;
 
   loaded := vortex_record.load_record_access_facts_internal(
-    p_record_type_id, 'update', p_record_id, p_expected_concurrency_number
+    p_record_type_id, 'update', p_record_id, p_expected_concurrency_number, null::jsonb
   );
   if loaded ->> 'outcome' = 'conflict' then
     return pg_catalog.jsonb_build_object(
@@ -89,7 +89,7 @@ begin
         'outcome', 'refused', 'reasonCode', 'record_unavailable'
       );
     end if;
-    bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+    bounds := vortex_record.decide_record_field_bounds_internal(decision);
   end if;
   select coalesce(pg_catalog.array_agg(item.value #>> '{}'), array[]::text[])
   into changeable
@@ -182,7 +182,7 @@ begin
         'outcome', 'refused', 'reasonCode', 'proposed_record_refused'
       );
     end if;
-    bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+    bounds := vortex_record.decide_record_field_bounds_internal(decision);
   end if;
 
   update_sql := pg_catalog.format(

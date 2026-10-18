@@ -3,8 +3,10 @@ import {
   describeFailure,
   executeNamedActionCommandSchema,
   flowRefusalFeedbackSchema,
+  flowRefusalPresentationSchema,
   groupIdSchema,
   isRecord,
+  jsonValueSchema,
   platformOperationKey,
   recordIdSchema,
   recordTypeIdSchema,
@@ -117,7 +119,10 @@ export const createFlowTaskRunner = (
 
   /** The rule's authored refusal of a protected record path, when its safe error carries one. */
   const ruleRefusalResult = (
-    error: Readonly<{ code: string; reason?: Readonly<{ code: string; message: string }> | undefined }>,
+    error: Readonly<{
+      code: string;
+      reason?: Readonly<{ code: string; message: string }> | undefined;
+    }>,
   ): Pick<TaskResult, "diagnostic"> => {
     if (error.reason === undefined) return {};
     const diagnostic = flowRefusalFeedbackSchema.safeParse({
@@ -314,7 +319,13 @@ export const createFlowTaskRunner = (
     const entry = Object.values(PLATFORM_SERVICE_OPERATIONS).find(
       (candidate) => platformOperationKey(candidate.key) === operationKey,
     );
-    if (entry !== undefined) return { plan: { kind: "operation", entry, inputs } };
+    if (entry !== undefined) {
+      // A platform operation acts on the organisation's live data or an outside service; a
+      // preview changes only its own copy of the records, so it never runs one.
+      if (run.authority.kind === "person" && run.authority.selection.previewInstallationId !== undefined)
+        return { outcome: "refused" };
+      return { plan: { kind: "operation", entry, inputs } };
+    }
 
     // Otherwise the key may name one named action of the exact release, run for the surface's
     // subject record through the same path as its binding (`executeAction`).
@@ -516,13 +527,19 @@ export const createFlowTaskRunner = (
       ? { result: { ...executed.outputs } }
       : {};
     const sensitive = plan.entry.descriptor.sensitiveOutputs ?? [];
-    if (operationSucceeded)
-      run.sensitive.push(...sensitiveValues(executed.outputs, sensitive));
-    const stored: Record<string, JsonValue> =
-      operationSucceeded
-        ? { result: redactSensitiveOutputs(executed.outputs, sensitive) }
-        : {};
-    const diagnostic = "diagnostic" in executed ? executed.diagnostic : undefined;
+    if (operationSucceeded) run.sensitive.push(...sensitiveValues(executed.outputs, sensitive));
+    const stored: Record<string, JsonValue> = operationSucceeded
+      ? { result: redactSensitiveOutputs(executed.outputs, sensitive) }
+      : {};
+    let diagnostic = "diagnostic" in executed ? executed.diagnostic : undefined;
+    if (diagnostic !== undefined && call.properties.refusal_feedback !== undefined) {
+      const presentation = flowRefusalPresentationSchema.parse(
+        call.properties.refusal_feedback.value,
+      );
+      if (presentation.code === diagnostic.code)
+        diagnostic = flowRefusalFeedbackSchema.parse({ ...diagnostic, presentation });
+    }
+    if (diagnostic !== undefined) stored.diagnostic = jsonValueSchema.parse(diagnostic);
     return {
       result: {
         outcome,
@@ -665,17 +682,27 @@ export const createFlowTaskRunner = (
           }
         }
         const replayedDiagnostic =
-          claim.outcome === "validation" ? storedCorrectionDiagnostic(claim.outputs) : undefined;
+          claim.outcome === "validation" || claim.outcome === "refused"
+            ? storedCorrectionDiagnostic(claim.outputs)
+            : undefined;
         if (replayedDiagnostic !== undefined)
-          return { outcome: "validation", diagnostic: replayedDiagnostic };
+          return {
+            outcome: claim.outcome as "validation" | "refused",
+            diagnostic: replayedDiagnostic,
+          };
         return isEmptyEffectOutput(claim.outputs)
           ? { outcome: claim.outcome as FlowTaskOutcome }
           : { outcome: "refused" };
       }
       const replayedDiagnostic =
-        claim.outcome === "validation" ? storedCorrectionDiagnostic(claim.outputs) : undefined;
+        claim.outcome === "validation" || claim.outcome === "refused"
+          ? storedCorrectionDiagnostic(claim.outputs)
+          : undefined;
       if (replayedDiagnostic !== undefined)
-        return { outcome: "validation", diagnostic: replayedDiagnostic };
+        return {
+          outcome: claim.outcome as "validation" | "refused",
+          diagnostic: replayedDiagnostic,
+        };
       return {
         outcome: claim.outcome as FlowTaskOutcome,
         outputs: isRecord(claim.outputs) ? (claim.outputs as Record<string, JsonValue>) : {},

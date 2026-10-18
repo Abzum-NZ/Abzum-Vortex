@@ -23,7 +23,6 @@ declare
   context_account_id uuid;
   plan jsonb;
   target_meta jsonb;
-  required_permissions jsonb;
   declaration jsonb;
   field_bounds jsonb;
   ownership_mode text;
@@ -52,7 +51,6 @@ declare
   semantic_type text;
   column_entry jsonb;
   database_value_type text;
-  exact_values boolean;
   parameter_offset integer;
   supported boolean;
   compiled jsonb;
@@ -97,50 +95,15 @@ begin
   end if;
   ownership_mode := target_meta ->> 'ownershipMode';
 
-  -- The declaration the record loader builds for a read: every record-scoped
-  -- read permission declared for this exact record type by the context
-  -- Application or the record type's own Module, in canonical order.
-  select pg_catalog.jsonb_agg(
-    pg_catalog.jsonb_build_object(
-      'applicationRootId', context_application_root_id,
-      'ownerKind', declared.value ->> 'ownerKind',
-      'ownerId', (declared.value ->> 'ownerId')::uuid,
-      'permissionId', declared.key::uuid
-    )
-    order by declared.value ->> 'ownerKind' collate "C", declared.key collate "C"
-  )
-  into required_permissions
-  from pg_catalog.jsonb_each(plan -> 'permissions') as declared(key, value)
-  where pg_catalog.lower(declared.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text)
-    and declared.value ->> 'actionKind' = 'read'
-    and (declared.value ->> 'namedAction') is null
-    and (
-      (declared.value ->> 'ownerKind') = 'application'
-      or (declared.value ->> 'ownerId')::uuid = (target_meta ->> 'moduleRootId')::uuid
-    );
-
-  if required_permissions is null then
+  -- The declaration the record loader builds for a read.
+  declaration := vortex_record.record_type_read_declaration_internal(
+    plan, p_record_type_id, context_application_root_id
+  );
+  if declaration is null then
     return query select false, null::uuid, array[]::uuid[], array[]::uuid[],
-      array[]::text[], 'true'::text, '[]'::jsonb;
+      array[]::text[], 'false'::text, '[]'::jsonb;
     return;
   end if;
-
-  declaration := pg_catalog.jsonb_build_object(
-    'operationKey', 'record.read',
-    'action', pg_catalog.jsonb_build_object('actionKind', 'read'),
-    'target', pg_catalog.jsonb_build_object(
-      'kind', 'application', 'applicationRootId', context_application_root_id
-    ),
-    'requiredPermissions', required_permissions,
-    'recordBinding', pg_catalog.jsonb_build_object(
-      'moduleRootId', (target_meta ->> 'moduleRootId')::uuid,
-      'recordTypeId', p_record_type_id,
-      'storageContractId', (target_meta ->> 'storageContractId')::uuid,
-      'storageScope', target_meta ->> 'storageScope'
-    ),
-    'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
-    'authority', pg_catalog.jsonb_build_object('kind', 'permission')
-  );
 
   -- The owner, owner-group and direct-share routes the scan can narrow, and the
   -- eligible alternatives reduced to their route lists and saved-condition
@@ -151,19 +114,13 @@ begin
   ) as routes;
 
   -- The fields this reader is guaranteed to see on every record the read
-  -- decision admits. A refused access context yields no fields, so the scan
-  -- pushes neither an order nor a filter on a value it cannot prove is visible;
-  -- any other failure propagates.
-  begin
-    field_bounds := vortex_access.resolve_record_read_field_bounds_internal(declaration);
-  exception
-    when sqlstate '42501' then
-      get stacked diagnostics failure_sqlstate = returned_sqlstate,
-        failure_message = message_text;
-      raise warning 'Record read scan field bounds were refused: SQLSTATE %, %',
-        failure_sqlstate, failure_message;
-      field_bounds := '{}'::jsonb;
-  end;
+  -- decision admits, after the field-read decision for produced fields. A
+  -- refused access context yields no fields, so the scan pushes neither an
+  -- order nor a filter on a value it cannot prove is visible; any other
+  -- failure propagates.
+  field_bounds := vortex_record.decide_record_type_read_bounds_internal(
+    plan, p_record_type_id, '[]'::jsonb
+  );
 
   -- Those fields may drive the scan only when every row the scan examines is a
   -- row the exact decision admits: an unconditioned all-records alternative
@@ -268,8 +225,6 @@ begin
         limit 1;
 
         if condition_entry is not null then
-          exact_values := coalesce(target_meta ->> 'validationContractVersion', '')
-            in ('2.0.0', '3.0.0');
           condition_field_types := '{}'::jsonb;
           condition_field_columns := '{}'::jsonb;
           condition_field_database_types := '{}'::jsonb;
@@ -286,9 +241,9 @@ begin
               -- saved-condition evaluator: calculation and total fields have no
               -- fixed stored value here and stay out of the map.
               semantic_type := case
-                when exact_values and field_kind = 'decimal_number' then 'decimal_number'
-                when exact_values and field_kind = 'money' then 'money'
-                when field_kind in ('whole_number', 'decimal_number', 'money') then 'number'
+                when field_kind = 'decimal_number' then 'decimal_number'
+                when field_kind = 'money' then 'money'
+                when field_kind = 'whole_number' then 'number'
                 when field_kind = 'yes_no' then 'boolean'
                 when field_kind = 'date' then 'date'
                 when field_kind = 'date_time' then 'date_time'

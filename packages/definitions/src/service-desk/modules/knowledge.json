@@ -208,6 +208,7 @@
           }
         }
       ],
+      "pipelines": [],
       "relationships": [
         {
           "id": "fld_article_author_person_relationship",
@@ -286,6 +287,7 @@
           "settings": {}
         }
       ],
+      "pipelines": [],
       "relationships": [
         {
           "id": "fld_article_case_article_relationship",
@@ -782,6 +784,7 @@
     {
       "id": "qry_sd_knowledge",
       "key": "service_desk_knowledge",
+      "label": "Knowledge articles",
       "record_type": "article",
       "inputs": [],
       "select": [

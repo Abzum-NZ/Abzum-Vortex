@@ -333,7 +333,7 @@ begin
     end loop;
 
     loaded := vortex_record.load_record_access_facts_internal(
-      record_type_id_value, 'create', record_id_value, null
+      record_type_id_value, 'create', record_id_value, null, null::jsonb
     );
     if pg_catalog.jsonb_typeof(loaded) is distinct from 'object'
       or loaded ->> 'outcome' is distinct from 'loaded'
@@ -468,7 +468,7 @@ begin
       raise exception using errcode = '42501',
         message = 'Named action creation authority is unavailable';
     end if;
-    bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+    bounds := vortex_record.decide_record_field_bounds_internal(decision);
     if pg_catalog.jsonb_typeof(bounds) is distinct from 'object'
       or pg_catalog.jsonb_typeof(bounds -> 'readableFieldIds') is distinct from 'array'
       or pg_catalog.jsonb_typeof(bounds -> 'changeableFieldIds') is distinct from 'array'

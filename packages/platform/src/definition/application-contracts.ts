@@ -27,7 +27,6 @@ import {
   moduleRootIdSchema,
   namespacedKeySchema,
   pageIdSchema,
-  pipelineIdSchema,
   queryIdSchema,
   recordTypeIdSchema,
   roleIdSchema,
@@ -457,15 +456,30 @@ export const readBoardPlacementContract = (
 };
 
 /**
- * Whether the exact published Query and record type can back the declared board. Installed option
- * permissions remain a protected Query concern; publication validates only the bounded published
- * option set, and the Query producer returns the viewer's current installed subset.
+ * Whether the exact published Query and record type can back the declared board. A board's columns
+ * and moves come from the pipeline of its choice field, so that field must have exactly one.
+ * Installed option permissions remain a protected Query concern; publication validates only the
+ * bounded published option set, and the Query producer returns the viewer's current subset.
  */
 export const boardBlockSourceIsSupported = (
   queryCandidate: unknown,
   fieldsCandidate: readonly unknown[],
+  pipelinesCandidate: readonly unknown[],
   contract: BoardPlacementContract,
 ): boolean => {
+  if (
+    !Array.isArray(pipelinesCandidate) ||
+    pipelinesCandidate.filter((candidate) => {
+      if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate))
+        return false;
+      const stageFieldId = (candidate as Record<string, unknown>).stageFieldId;
+      return (
+        typeof stageFieldId === "string" &&
+        stageFieldId.toLowerCase() === contract.choiceField.toLowerCase()
+      );
+    }).length !== 1
+  )
+    return false;
   if (
     queryCandidate === null ||
     typeof queryCandidate !== "object" ||
@@ -830,76 +844,6 @@ export const publicAddressSchema = z
   })
   .strict();
 
-export const pipelineSchema = z
-  .object({
-    pipelineId: pipelineIdSchema,
-    key: builderKeySchema,
-    name: labelSchema,
-    recordType: recordTypeReferenceSchema,
-    stageFieldId: fieldIdSchema,
-    stages: z
-      .array(
-        z
-          .object({
-            key: builderKeySchema,
-            label: labelSchema,
-            entryActionKeys: z.array(namespacedKeySchema).max(10),
-            exitActionKeys: z.array(namespacedKeySchema).max(10),
-          })
-          .strict(),
-      )
-      .min(1),
-    transitions: z
-      .array(
-        z
-          .object({
-            from: builderKeySchema,
-            to: builderKeySchema,
-            permissionKey: namespacedKeySchema.optional(),
-            actionKey: namespacedKeySchema.optional(),
-            gate: conditionNodeSchema.optional(),
-          })
-          .strict(),
-      )
-      .min(1),
-    timeTargets: z.array(
-      z
-        .object({
-          stageKey: builderKeySchema,
-          dateTimeFieldId: fieldIdSchema,
-          escalationEventKey: namespacedKeySchema,
-        })
-        .strict(),
-    ),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    const stageKeys = new Set(value.stages.map((stage) => stage.key));
-    if (stageKeys.size !== value.stages.length)
-      context.addIssue({ code: "custom", path: ["stages"], message: "Stage keys must be unique" });
-    for (const [index, transition] of value.transitions.entries()) {
-      if (!stageKeys.has(transition.from))
-        context.addIssue({
-          code: "custom",
-          path: ["transitions", index, "from"],
-          message: "Transition source stage must resolve inside this pipeline",
-        });
-      if (!stageKeys.has(transition.to))
-        context.addIssue({
-          code: "custom",
-          path: ["transitions", index, "to"],
-          message: "Transition target stage must resolve inside this pipeline",
-        });
-    }
-    for (const [index, target] of value.timeTargets.entries())
-      if (!stageKeys.has(target.stageKey))
-        context.addIssue({
-          code: "custom",
-          path: ["timeTargets", index, "stageKey"],
-          message: "Time-target stage must resolve inside this pipeline",
-        });
-  });
-
 /** An installed Application selects existing published index fields and one record Page. */
 export const applicationSearchSchema = z
   .object({
@@ -970,7 +914,6 @@ const applicationSharedContentSchema = z
     experiences: z.array(applicationExperienceSchema).max(3).optional(),
     roles: applicationRolesSchema,
     queries: z.array(queryDefinitionSchema),
-    pipelines: z.array(pipelineSchema),
     permissions: z.array(permissionDeclarationSchema),
     actions: z.array(applicationActionDefinitionSchema),
     events: z.array(eventDefinitionSchema),

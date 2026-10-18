@@ -26,6 +26,7 @@ import {
   organizationAccessExactPermissionSchema,
 } from "./organization-access-decision";
 import { preparedOrganizationRoleChangeSchema } from "./organization-role-changes";
+import { permissionFieldPolicySchema, permissionRecordScopeSchema } from "./permissions";
 
 export const organizationAdministrationGroupSchema = z
   .object({
@@ -329,8 +330,17 @@ export const organizationAdministrationRoleDetailSchema = z
   .object({
     ...organizationAdministrationRoleFields,
     description: descriptionSchema,
-    /** Stored accepted configuration only; this is not an effective-access result. */
-    acceptedPermissions: z.array(organizationAdministrationPermissionSchema),
+    /**
+     * Stored accepted configuration only; this is not an effective-access result. Each entry
+     * carries the meaning the role accepted (its record scope and field policy), which may be
+     * older than the registered one until the role revision is accepted.
+     */
+    acceptedPermissions: z.array(
+      organizationAdministrationPermissionSchema.safeExtend({
+        recordScope: permissionRecordScopeSchema.optional(),
+        fieldPolicy: permissionFieldPolicySchema.optional(),
+      }),
+    ),
   })
   .strict()
   .superRefine((value, context) => {
@@ -663,6 +673,10 @@ export const changeOrganizationAdministrationRoleAssignmentResultSchema = z
   })
   .strict();
 
+export type AssignOrganizationAdministrationRoleAssignmentResult =
+  | ChangeOrganizationAdministrationRoleAssignmentResult
+  | Readonly<{ outcome: "refused"; code: "role_acceptance_required"; roleId: string }>;
+
 export const assignOrganizationAdministrationRoleAssignmentCommandSchema = z
   .object({
     roleId: roleIdSchema,
@@ -770,6 +784,15 @@ export const readOrganizationAdministrationDelegationAuthorityResultSchema = z.d
       .strict(),
   ],
 );
+
+/** Catalogue delegation is separate from role permissions and stewardship. */
+export const grantOrganizationAdministrationDelegationAuthorityCommandSchema = z
+  .object({
+    holderKind: z.enum(["organization_account", "group"]),
+    holderId: z.union([organizationAccountIdSchema, groupIdSchema]),
+    expectedHolderRevision: revisionSchema,
+  })
+  .strict();
 
 export const revokeOrganizationAdministrationDelegationAuthorityCommandSchema = z
   .object({
@@ -1101,4 +1124,8 @@ export type AddOrganizationAdministrationMembershipCommand = z.infer<
 >;
 export type AssignOrganizationAdministrationRoleAssignmentCommand = z.infer<
   typeof assignOrganizationAdministrationRoleAssignmentCommandSchema
+>;
+
+export type GrantOrganizationAdministrationDelegationAuthorityCommand = z.infer<
+  typeof grantOrganizationAdministrationDelegationAuthorityCommandSchema
 >;

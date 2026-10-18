@@ -339,11 +339,14 @@ const isReadable = (field: string, input: ComponentDataProjectionInput): boolean
   input.readableFieldIds === undefined ||
   input.readableFieldIds.some((readable) => sameField(readable, field));
 
+/** The cell of a declared field the viewer may not read: never blank, never the stored value. */
+const RESTRICTED_CELL: ProjectedCellValue = Object.freeze({ kind: "restricted" });
+
 /**
  * Projects a Records table's query rows into its display payload. Columns and headings come only
- * from the declared contract. A declared column appears only when every returned row carries its
- * field, because the Query engine omits a field the viewer cannot read; a column with any missing
- * value is withheld whole, heading included, and is never blanked. Undeclared fields the engine
+ * from the declared contract. The Query engine omits a field the viewer cannot read, including a
+ * calculation or total whose inputs the viewer cannot read, so a row without a declared field
+ * shows it as Restricted, never blank and never inferred. Undeclared fields the engine
  * returned are dropped, and each row keeps only the record identity, revision and per-row
  * capabilities the engine returned. Returns undefined when the placement declares no data
  * contract, a heading is missing, a row carries no revision or capabilities, or the rows are not a
@@ -368,8 +371,6 @@ export const projectRecordsTableData = (
   const columns: { key: string; label: string; format: RecordsDisplayFormat }[] = [];
   for (const column of contract.columns) {
     if (columns.some((shown) => sameField(shown.key, column.field))) continue;
-    if (!isReadable(column.field, input)) continue;
-    if (!rows.every((row) => valueOf(row, column.field) !== undefined)) continue;
     const label = headingFor(column.field, column.label, input.fieldLabels);
     if (label === undefined) return undefined;
     columns.push({ key: column.field, label, format: column.format });
@@ -386,17 +387,22 @@ export const projectRecordsTableData = (
         revision: row.revision,
         capabilities: row.capabilities,
         cells: Object.fromEntries(
-          columns.map((column) => [
-            column.key,
-            projectCell(
-              valueOf(row, column.key)?.value ?? null,
-              column.format,
-              input.fieldChoiceLabels?.[column.key.toLowerCase()],
-              input.fieldDateTypes?.[column.key.toLowerCase()],
-              input.recordLinks,
-              input.fieldLinkTypes?.[column.key.toLowerCase()],
-            ),
-          ]),
+          columns.map((column) => {
+            const stored = isReadable(column.key, input) ? valueOf(row, column.key) : undefined;
+            return [
+              column.key,
+              stored === undefined
+                ? RESTRICTED_CELL
+                : projectCell(
+                    stored.value,
+                    column.format,
+                    input.fieldChoiceLabels?.[column.key.toLowerCase()],
+                    input.fieldDateTypes?.[column.key.toLowerCase()],
+                    input.recordLinks,
+                    input.fieldLinkTypes?.[column.key.toLowerCase()],
+                  ),
+            ];
+          }),
         ),
       })),
     },
@@ -405,8 +411,8 @@ export const projectRecordsTableData = (
 
 /**
  * Projects the one record a Record detail placement reads into its display payload, using the same
- * rules as the table: declared fields in declared order, a field the viewer cannot read is omitted
- * with its label, nothing undeclared is included. The query must return exactly one record; any
+ * rules as the table: declared fields in declared order, a field the viewer cannot read shows as
+ * Restricted under its label, nothing undeclared is included. The query must return exactly one record; any
  * other count returns undefined so the caller refuses neutrally rather than guessing a record.
  */
 export const projectRecordDetailData = (
@@ -427,21 +433,23 @@ export const projectRecordDetailData = (
   for (const declared of contract.fields) {
     if (fields.some((shown) => sameField(shown.key, declared.field))) continue;
     const stored = isReadable(declared.field, input) ? valueOf(row, declared.field) : undefined;
-    if (stored === undefined) continue;
     const label = headingFor(declared.field, declared.label, input.fieldLabels);
     if (label === undefined) return undefined;
     const choiceLabels = input.fieldChoiceLabels?.[declared.field.toLowerCase()];
     fields.push({
       key: declared.field,
       label,
-      value: projectCell(
-        stored.value,
-        declared.format,
-        choiceLabels,
-        input.fieldDateTypes?.[declared.field.toLowerCase()],
-        input.recordLinks,
-        input.fieldLinkTypes?.[declared.field.toLowerCase()],
-      ),
+      value:
+        stored === undefined
+          ? RESTRICTED_CELL
+          : projectCell(
+              stored.value,
+              declared.format,
+              choiceLabels,
+              input.fieldDateTypes?.[declared.field.toLowerCase()],
+              input.recordLinks,
+              input.fieldLinkTypes?.[declared.field.toLowerCase()],
+            ),
     });
   }
   return fields.length === 0

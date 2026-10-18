@@ -13,9 +13,10 @@ import {
   type PermissionDeclaration,
   type PermissionRegistryEntryCandidate,
   type ProjectedNavigation,
-  type ProjectedNavigationItem,
   type SelectedOrganizationScope,
   type PlatformId,
+  collectNavigationPermissionKeys,
+  projectNavigation,
 } from "../schema";
 import type { RequestDatabaseTransaction } from "../db/index";
 import {
@@ -25,73 +26,6 @@ import {
   type HumanOrganizationRequestResult,
 } from "../access/index";
 import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "../definition/app-index";
-
-/**
- * The projected navigation shape is shared with the browser renderer in `@vortex/contracts`: the
- * server projects into it and the client renders it, so both use the same type.
- */
-export type { ProjectedNavigation, ProjectedNavigationItem };
-
-/** One permission decision per distinct navigation permission key, from the viewer's live access. */
-export type NavigationPermissionDecisions = Readonly<Record<string, boolean>>;
-
-const held = (decisions: NavigationPermissionDecisions, permissionKey: string): boolean =>
-  Object.hasOwn(decisions, permissionKey) && decisions[permissionKey] === true;
-
-const projectNavigationItem = (
-  item: NavigationItem,
-  decisions: NavigationPermissionDecisions,
-): ProjectedNavigationItem | undefined => {
-  switch (item.type) {
-    case "page":
-      return held(decisions, item.permissionKey)
-        ? { type: "page", id: item.id, label: item.label, icon: item.icon, pageId: item.pageId }
-        : undefined;
-    case "external":
-      return held(decisions, item.permissionKey)
-        ? { type: "external", id: item.id, label: item.label, icon: item.icon, address: item.address }
-        : undefined;
-    case "heading": {
-      const children = item.children.flatMap((child) => {
-        const projected = projectNavigationItem(child, decisions);
-        return projected === undefined ? [] : [projected];
-      });
-      // An empty heading is not a navigation item: it disappears with its children.
-      return children.length === 0
-        ? undefined
-        : { type: "heading", id: item.id, label: item.label, icon: item.icon, children };
-    }
-  }
-};
-
-/**
- * Filters one compiled navigation tree to the items the viewer holds, preserving definition
- * order. A missing decision is treated exactly like a refusal, so the pure projection fails
- * closed when it is handed incomplete evidence.
- */
-export const projectNavigation = (
-  navigation: readonly NavigationItem[],
-  decisions: NavigationPermissionDecisions,
-): ProjectedNavigation =>
-  navigation.flatMap((item) => {
-    const projected = projectNavigationItem(item, decisions);
-    return projected === undefined ? [] : [projected];
-  });
-
-/** Every distinct permission key the compiled navigation declares, for one evaluation each. */
-export const collectNavigationPermissionKeys = (
-  navigation: readonly NavigationItem[],
-): readonly string[] => {
-  const keys = new Set<string>();
-  const visit = (items: readonly NavigationItem[]): void => {
-    for (const item of items) {
-      if (item.type === "heading") visit(item.children);
-      else keys.add(item.permissionKey);
-    }
-  };
-  visit(navigation);
-  return [...keys];
-};
 
 export type NavigationPermissionBinding = Readonly<{
   permissionKey: string;

@@ -155,9 +155,9 @@ type MemberRoleState = z.infer<typeof memberRoleStateSchema>;
 
 /** Runs one installer request transaction; a failure inside it is rethrown with its own cause. */
 const inInstallerRequest = async <Value>(
-  environment: FirstInstallFlowEnvironment,
+  environment: Pick<FirstInstallFlowEnvironment, "requests">,
   session: IdentitySession,
-  selector: FirstInstallSelector,
+  selector: Pick<FirstInstallSelector, "organizationId">,
   operation: (
     transaction: RequestDatabaseTransaction,
     scope: SelectedOrganizationScope,
@@ -335,10 +335,10 @@ const declined = async (
  * installer's delegated scope. A stale sign-in is refused as `authentication_required`, which the
  * install screen shows as "Sign in again to install". The acceptance operation re-checks both.
  */
-const requireAcceptanceAuthority = (
-  environment: FirstInstallFlowEnvironment,
+export const requireRoleAcceptanceAuthority = (
+  environment: Pick<FirstInstallFlowEnvironment, "requests" | "permissions">,
   session: IdentitySession,
-  selector: FirstInstallSelector,
+  selector: Pick<FirstInstallSelector, "organizationId" | "rootId">,
   containsCustomComponents: boolean,
   conferred: readonly BuilderConferredPermission[],
 ): Promise<void> =>
@@ -443,7 +443,7 @@ const applyFirstInstallMemberRoleChoice = async (
     const candidate = prepared.candidate;
     if (candidate.operation !== "accept_new_application_role")
       installationProblem("first_install_member_role_preparation_invalid", "failed");
-    await requireAcceptanceAuthority(
+    await requireRoleAcceptanceAuthority(
       environment,
       session,
       selector,
@@ -494,7 +494,7 @@ const applyFirstInstallMemberRoleChoice = async (
       assignmentKind: "standing",
     }),
   );
-  if (assignResult.kind !== "available")
+  if (assignResult.kind !== "available" || !("assignment" in assignResult.value))
     return declined(
       environment,
       session,

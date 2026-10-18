@@ -425,10 +425,11 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         }
       ],
+      "pipelines": [],
       "relationships": []
     }
   ],
@@ -1066,6 +1067,7 @@
     {
       "id": "qry_operations_open_incidents",
       "key": "operations_open_incidents",
+      "label": "Open incidents",
       "record_type": "incident",
       "inputs": [],
       "select": [

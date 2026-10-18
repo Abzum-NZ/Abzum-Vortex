@@ -129,11 +129,9 @@ begin
     and release.release_revision =
       (installation ->> 'applicationReleaseRevision')::bigint;
 
+  -- A record type holding a total saves here too: a save of the record itself never moves its
+  -- totals, so a new record starts with totals over no related records and an update keeps them.
   unsupported := exists (
-    select 1
-    from pg_catalog.jsonb_array_elements(meta -> 'recordType' -> 'fields') as field(value)
-    where field.value ->> 'type' = 'total'
-  ) or exists (
     -- #578: Record evaluates the owning Module release's rules (`beforeSaveRules`);
     -- an Application rule on this record type cannot be evaluated and refuses.
     select 1
@@ -183,7 +181,7 @@ begin
     -- The writable system projection is prepared through its protected read
     -- model. Its final write remains inside apply_record_changes.
     loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'read', p_record_id, null
+      p_record_type_id, 'read', p_record_id, null, null::jsonb
     );
     if loaded ->> 'outcome' <> 'loaded' then
       return pg_catalog.jsonb_build_object('outcome', 'refused');
@@ -209,7 +207,7 @@ begin
           'correlationId', correlation_id_value
         );
       end if;
-      bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+      bounds := vortex_record.decide_record_field_bounds_internal(decision);
     else
       preview_bounds := vortex_record.preview_record_field_bounds_internal(
         p_record_type_id, (meta ->> 'storageContractId')::uuid,
@@ -220,12 +218,6 @@ begin
       end if;
       bounds := preview_bounds;
     end if;
-    bounds := bounds || pg_catalog.jsonb_build_object(
-      'readableFieldIds', vortex_record.filter_calculated_readable_field_ids(
-        loaded -> 'facts' -> 'recordTypes', p_record_type_id,
-        bounds -> 'readableFieldIds'
-      )
-    );
     return pg_catalog.jsonb_build_object(
       'outcome', 'prepared',
       'recordType', meta -> 'recordType',
@@ -242,7 +234,7 @@ begin
 
   if p_operation = 'update' then
     loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'update', p_record_id, p_expected_concurrency_number
+      p_record_type_id, 'update', p_record_id, p_expected_concurrency_number, null::jsonb
     );
     if loaded ->> 'outcome' = 'conflict' then
       return pg_catalog.jsonb_build_object(
@@ -277,14 +269,8 @@ begin
           'correlationId', correlation_id_value
         );
       end if;
-      bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+      bounds := vortex_record.decide_record_field_bounds_internal(decision);
     end if;
-    bounds := bounds || pg_catalog.jsonb_build_object(
-      'readableFieldIds', vortex_record.filter_calculated_readable_field_ids(
-        loaded -> 'facts' -> 'recordTypes', p_record_type_id,
-        bounds -> 'readableFieldIds'
-      )
-    );
   end if;
 
   return pg_catalog.jsonb_build_object(

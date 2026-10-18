@@ -8,9 +8,9 @@ import {
   type PlatformComponentRegistration,
 } from "../registry";
 import type { DefinitionRenderErrorLocation } from "../definition-error";
+import { parseBoardPayload } from "./board-payload";
 import {
   parseCalendarPayload,
-  parseBoardPayload,
   parseDisplayData,
   parseDisplayEventHandlers,
   parseGroupedPayload,

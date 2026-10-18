@@ -5,11 +5,13 @@ import { createContext, useContext, type ReactElement, type ReactNode } from "re
 import type { ComponentConfig, Config, Field } from "@puckeditor/core";
 import {
   canonicalResponsivePlacement,
-  canonicalThemeTokenValue,
   findFieldInputBinding,
+  holdsPermission,
+  placementViewShown,
   plainSettingValue,
   releaseSettingDeclarations,
   typedSettingValue,
+  type NavigationPermissionDecisions,
   type PlatformBlockRelease,
 } from "@vortex/platform/schema";
 import type { PlatformComponentRegistry } from "../registry";
@@ -38,15 +40,14 @@ export function StudioCanvasCompiledSettings({
 }
 
 /**
- * The records the canvas's data blocks show: read for one saved draft revision with the builder's
- * own access, by block name, with what each block looked like in that saved revision. A block is
- * given its records only while it is still exactly as it was saved; a block edited since shows
- * that it needs a save, never the records of its old settings.
+ * The records the canvas's data blocks show: read from the builder's preview of one saved draft
+ * revision with their preview access, by block name, with what each block looked like in that
+ * saved revision. A block is given its records only while it is still exactly as it was saved; a
+ * block edited since shows that it needs a save, never the records of its old settings.
+ * `refused` means the builder may not preview this application, so no records are read.
  */
 export type StudioCanvasRecords = Readonly<{
-  state: "loading" | "ready" | "not_installed" | "unavailable";
-  /** Blocks whose query the installed application does not have yet. */
-  notInstalled: readonly string[];
+  state: "loading" | "ready" | "refused" | "unavailable";
   /** The records of each data block of the saved revision, by block name. */
   records: Readonly<Record<string, unknown>>;
   /** Each block's release, settings and query in the saved revision the records were read for. */
@@ -58,7 +59,7 @@ export type StudioCanvasRecords = Readonly<{
 }>;
 
 const NO_RECORDS: StudioCanvasRecords = Object.freeze({
-  state: "loading", records: {}, notInstalled: [], saved: new Map<string, string>(), current: new Map<string, string>(),
+  state: "loading", records: {}, saved: new Map<string, string>(), current: new Map<string, string>(),
   updating: false,
 });
 const CanvasRecordsContext = createContext<StudioCanvasRecords>(NO_RECORDS);
@@ -71,12 +72,27 @@ export function StudioCanvasRecordsProvider({
   return <CanvasRecordsContext.Provider value={records}>{children}</CanvasRecordsContext.Provider>;
 }
 
+/**
+ * Studio's "who can see this" preview: the role whose view the canvas shows and the permissions it
+ * holds. A block is judged with the page projection's own view rule, so the canvas hides exactly the
+ * blocks the running application drops for that role; `null` is the design view, where all show.
+ */
+export type StudioCanvasViewer = Readonly<{ roleName: string; decisions: NavigationPermissionDecisions }>;
+const CanvasViewerContext = createContext<StudioCanvasViewer | null>(null);
+
+/** Supplies the role the canvas previews, or `null` for the design view. */
+export function StudioCanvasViewerProvider({
+  viewer,
+  children,
+}: Readonly<{ viewer: StudioCanvasViewer | null; children: ReactNode }>): ReactElement {
+  return <CanvasViewerContext.Provider value={viewer}>{children}</CanvasViewerContext.Provider>;
+}
+
 /** What the canvas says in place of a current data block's records, or nothing when it has them. */
 const recordsNote = (records: StudioCanvasRecords, id: string): string | undefined => {
   if (records.state === "loading") return "Reading records…";
-  if (records.state === "not_installed") return "Install this application to show its records here.";
+  if (records.state === "refused") return "Showing records here needs permission to preview this application.";
   if (records.state === "unavailable") return "Records could not be read just now.";
-  if (records.notInstalled.includes(id)) return "This query is not installed yet. Publish and upgrade to show its records here.";
   return Object.hasOwn(records.records, id) ? undefined : "This block shows its records in the running application.";
 };
 
@@ -84,7 +100,6 @@ type StoredBlock = Readonly<{ block_id?: unknown; release_version?: unknown }>;
 type StoredVortex = Readonly<{
   block?: StoredBlock;
   responsive?: Readonly<Record<string, unknown>>;
-  theme_overrides?: Readonly<Record<string, Record<string, unknown>>>;
 }>;
 
 /** The props one block's render function takes, read from a stored item's props. */
@@ -110,9 +125,6 @@ const renderProps = (
   }
   result.vortex = {
     block: { blockId: vortex.block?.block_id, releaseVersion: vortex.block?.release_version },
-    themeOverrides: Object.fromEntries(
-      Object.entries(vortex.theme_overrides ?? {}).map(([key, value]) => [key, canonicalThemeTokenValue(value)]),
-    ),
     responsive: vortex.responsive === undefined ? undefined : canonicalResponsivePlacement(vortex.responsive),
   };
   return result;
@@ -154,6 +166,7 @@ function CanvasBlock({
 }>): ReactElement {
   const compiled = useContext(CompiledSettingsContext);
   const records = useContext(CanvasRecordsContext);
+  const viewer = useContext(CanvasViewerContext);
   const id = typeof props.id === "string" ? props.id : "";
   // A block just dropped from the palette is shown as a placeholder until Studio adds it.
   if (props.vortex === undefined)
@@ -164,6 +177,14 @@ function CanvasBlock({
         </ItemContent>
       </Item>
     );
+  const viewKey = (props.vortex as { view_permission?: unknown }).view_permission;
+  if (viewer !== null && !placementViewShown(viewKey,
+    typeof viewKey === "string" && holdsPermission(viewer.decisions, viewKey)))
+    return <Item variant="outline" size="sm" className="border-dashed opacity-60" data-vortex-canvas-hidden={id}>
+      <ItemContent>
+        <ItemDescription>Hidden from {viewer.roleName}</ItemDescription>
+      </ItemContent>
+    </Item>;
   const render = component.render as (props: Record<string, unknown>) => ReactElement;
   const release = releaseOf(registry, props);
   // A block whose drawing needs what the compiler derives (an automatic field input's control, a

@@ -44,17 +44,12 @@ export {
   type StoredPageCapabilitySelection,
 } from "./stored-page-capability";
 export {
-  collectNavigationPermissionKeys,
   createAuthenticatedNavigationProjectionService,
   createStoredNavigationProjectionService,
-  projectNavigation,
   type AuthenticatedNavigationProjectionDependencies,
   type FixedAuthenticatedNavigationProjection,
   type FixedAuthenticatedNavigationProjectionAdapter,
   type NavigationPermissionBinding,
-  type NavigationPermissionDecisions,
-  type ProjectedNavigation,
-  type ProjectedNavigationItem,
   type StoredNavigationProjectionDependencies,
 } from "./navigation-projection";
 export { recordLinkLabelKey } from "../definition/app-index";

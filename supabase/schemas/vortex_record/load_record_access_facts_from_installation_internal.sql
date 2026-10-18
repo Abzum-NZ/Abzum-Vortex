@@ -30,6 +30,7 @@ declare
   target_module_root_id uuid;
   target_release_revision bigint;
   target_is_system_projection boolean;
+  preview_target boolean;
   target_source_sql text;
   target_projection_definition jsonb;
   target_projection_sort_key text;
@@ -185,6 +186,11 @@ begin
     );
   end if;
 
+  -- A preview reads its own copy of every record type except a system projection: that is the
+  -- platform's live read model, which a preview reads on the live path under the reader's own
+  -- live access, never as the preview's owner.
+  preview_target := p_installation ? 'previewInstallationId' and not target_is_system_projection;
+
   -- Step 4: the declaration. Every record-scoped permission of this action
   -- kind declared for this exact record type, owned by the context Application
   -- or by the record type's own Module, in the canonical order the eligibility
@@ -213,7 +219,7 @@ begin
 
   declaration := case
     when required_permissions is null
-      and not (p_installation ? 'previewInstallationId') then null
+      and not preview_target then null
     else pg_catalog.jsonb_build_object(
       'operationKey', 'record.' || p_action_kind,
       'action', pg_catalog.jsonb_build_object('actionKind', p_action_kind),
@@ -229,7 +235,7 @@ begin
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object(
-        'kind', case when p_installation ? 'previewInstallationId'
+        'kind', case when preview_target
           then 'preview_owner' else 'permission' end
       )
     )
@@ -526,7 +532,7 @@ begin
     'definitionRevision', target_definition_revision,
     'moduleReleaseRevision', target_release_revision,
     'fieldValues', target_fact -> 'fieldValues'
-  ) || case when p_installation ? 'previewInstallationId'
+  ) || case when preview_target
     then pg_catalog.jsonb_build_object(
       'previewInstallationId', p_installation -> 'previewInstallationId'
     )
@@ -541,36 +547,8 @@ exception
 end
 $function$;
 
-create or replace function vortex_record.load_record_access_facts_from_installation_internal(
-  p_record_type_id uuid,
-  p_action_kind text,
-  p_record_id uuid,
-  p_expected_concurrency_number bigint,
-  p_installation jsonb
-)
-returns jsonb
-language sql volatile security invoker set search_path = ''
-as $function$
-  select vortex_record.load_record_access_facts_from_installation_internal(
-    p_record_type_id, p_action_kind, p_record_id, p_expected_concurrency_number,
-    p_installation, null::jsonb
-  )
-$function$;
-
 alter function vortex_record.load_record_access_facts_from_installation_internal(uuid,text,uuid,bigint,jsonb,jsonb) owner to vortex_record_adapter;
-alter function vortex_record.load_record_access_facts_from_installation_internal(uuid,text,uuid,bigint,jsonb) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.load_record_access_facts_from_installation_internal(
   uuid, text, uuid, bigint, jsonb, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-revoke all on function vortex_record.load_record_access_facts_from_installation_internal(
-  uuid, text, uuid, bigint, jsonb
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.load_record_access_facts_from_installation_internal(
-  uuid, text, uuid, bigint, jsonb
-) to vortex_record_adapter;
-
-comment on function vortex_record.load_record_access_facts_from_installation_internal(
-  uuid, text, uuid, bigint, jsonb
-) is
-  'Private adapter fact loader over one exact trusted installation or owner-validated preview, resolving definitions from the cached installation access plan.';

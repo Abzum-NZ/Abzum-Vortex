@@ -560,7 +560,11 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     runLocations: protectedLocations,
     effect: "change",
     effectDeclaredBy: "operation_descriptor",
-    properties: { operation: required("protected_operation_key"), inputs: optional("input_map") },
+    properties: {
+      operation: required("protected_operation_key"),
+      inputs: optional("input_map"),
+      refusal_feedback: optional("input_map"),
+    },
     outputs: [output("result", "json")],
     kestra: "protected_callback",
     retry: durableRetry,
@@ -714,7 +718,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     summary: "Requires a field to have a value before the record can be saved.",
     runLocations: ["browser", "transaction"],
     effect: "pure",
-    properties: { field: required("field_id"), message: optional("message_text") },
+    properties: { field: required("field_id"), message: required("message_text") },
     kestra: "not_compiled",
   },
   "rule.warn": {
@@ -722,7 +726,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     summary: "Shows a warning that does not stop the save.",
     runLocations: ["browser", "transaction"],
     effect: "pure",
-    properties: { field: optional("field_id"), message: required("message_text") },
+    properties: { message: required("message_text") },
     kestra: "not_compiled",
   },
   "rule.refuse": {
@@ -758,11 +762,20 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
   },
   "interface.confirm": {
     title: "Confirm",
-    summary: "Asks the person to confirm before the flow continues.",
+    summary:
+      "Asks the person to confirm before the flow continues, optionally listing what it covers and offering one opt-in.",
     runLocations: ["browser"],
     effect: "interface",
-    properties: { title: optional("message_text"), message: required("message_text") },
-    outputs: [output("confirmed", "yes_no")],
+    // `details` is a list of short lines shown under the message; `choice` labels one opt-in the
+    // person may tick with a yes, answered as `choice` (always no when no choice is offered).
+    properties: {
+      title: optional("message_text"),
+      message: required("message_text"),
+      details: optional("json"),
+      choice: optional("message_text"),
+      confirm_label: optional("message_text"),
+    },
+    outputs: [output("confirmed", "yes_no"), output("choice", "yes_no")],
     kestra: "not_compiled",
   },
   "interface.navigate": {

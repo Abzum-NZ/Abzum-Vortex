@@ -39,7 +39,6 @@ import {
   readInstallationDatabaseTime,
   readInstallationHumanContext,
   readInstallationOrdinaryRoot,
-  readInstallationPermissionDeadline,
   requireInstallationAuthority,
   type InstallationHumanContext,
   type InstallationProblemShape,
@@ -54,6 +53,7 @@ import {
   type InstallationBindings,
 } from "./installation-binding-reader";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
+import { backfillActivatedApplication } from "../records/derived-field-backfill";
 
 type HumanOrganizationRequests = ReturnType<typeof createHumanOrganizationRequestService>;
 
@@ -338,13 +338,6 @@ const installationDeadline = async (
   rootId: string,
   releaseSet: SystemApplicationBoundReleaseSetResult,
 ): Promise<Readonly<{ deadline: number; completedAt: string }>> => {
-  const draftDeadline = await readInstallationPermissionDeadline(
-    transaction,
-    scope,
-    context,
-    environment.permissions,
-    "platform.organization.definition_drafts.manage",
-  );
   const installationDeadlines = await readInstallationAuthorityDeadlines(
     transaction,
     scope,
@@ -356,7 +349,6 @@ const installationDeadline = async (
   const completedAt = await readInstallationDatabaseTime(transaction);
   const deadline = Math.min(
     Date.parse(context.expiresAt),
-    Date.parse(draftDeadline),
     ...installationDeadlines.map((validUntil) => Date.parse(validUntil)),
   );
   if (!Number.isFinite(deadline) || Date.parse(completedAt) >= deadline)
@@ -390,10 +382,6 @@ export const readUpgradeAuthorizedState = async (
           issuedAt,
           scopeCandidate,
         );
-        await requireInstallationAuthority(transaction, scope, environment.permissions, {
-          kind: "draft_change",
-          rootId: selector.rootId,
-        });
         const firstState = await readCurrentState(environment, transaction, selector, context);
         assertStateEligible(selector, firstState, allowEqual);
         await requireInstallationAuthority(
@@ -419,10 +407,6 @@ export const readUpgradeAuthorizedState = async (
         assertStateEligible(selector, finalState, allowEqual);
         if (!same(firstState, finalState))
           installationProblem("installation_state_changed", "conflict");
-        await requireInstallationAuthority(transaction, scope, environment.permissions, {
-          kind: "draft_change",
-          rootId: selector.rootId,
-        });
         await requireInstallationAuthority(
           transaction,
           scope,
@@ -486,10 +470,6 @@ export const readUpgradeActiveObservation = async (
           issuedAt,
           scopeCandidate,
         );
-        await requireInstallationAuthority(transaction, scope, environment.permissions, {
-          kind: "draft_change",
-          rootId,
-        });
         const active = await createActiveApplicationInstallationRepository(transaction).readCurrent();
         if (!sameId(active.organizationId, organizationId) || !sameId(active.applicationRootId, rootId))
           installationProblem("observed_installation_mismatch", "refused");
@@ -547,10 +527,6 @@ export const readUpgradeActiveObservation = async (
           scopeCandidate,
         );
         if (!same(context, finalContext)) installationProblem("human_context_changed", "refused");
-        await requireInstallationAuthority(transaction, scope, environment.permissions, {
-          kind: "draft_change",
-          rootId,
-        });
         await installationDeadline(environment, transaction, scope, finalContext, rootId, releaseSet);
         return releaseIdentity(releaseSet.application);
       } catch (error) {
@@ -664,10 +640,6 @@ const coordinatorFor = (
               organizationId: selector.organizationId,
             });
             await readInstallationOrdinaryRoot(transaction, selector.rootId);
-            await requireInstallationAuthority(transaction, scope, environment.permissions, {
-              kind: "draft_change",
-              rootId: selector.rootId,
-            });
             await currentInstallationStateForCoordinator(
               transaction,
               selector,
@@ -765,5 +737,9 @@ export const activateUpgradeRelease = async (
     expectedActiveReleaseRevision: priorRevision,
   });
   const verified = verifyCoordinatorActivation(result, selector, priorRevision, state.selectedReleaseSet);
+  await backfillActivatedApplication(environment.requests, session, {
+    organizationId: state.active.organizationId,
+    applicationRootId: selector.rootId,
+  });
   return { ...verified, activeAtCommitRevision: result.installation.applicationReleaseRevision };
 };

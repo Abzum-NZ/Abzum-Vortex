@@ -42,6 +42,7 @@ import type { ApplicationPageModel } from "../../../../../../_lib/application-pa
 import type { SubmittedForm, Notice } from "./types";
 import { formSurfaceComposition, runtimeInputWithFormDefault } from "./form-surface";
 import { choiceScopeKey } from "./event-values";
+import { requestRecordChoices } from "./record-choices";
 import { unavailableNotice } from "./notices";
 
 /** The keyed Show Form body owns its choice request lifetime, including Escape dismissal. */
@@ -357,6 +358,11 @@ export function useFlowRuntime({
             if (event.event !== "choices_requested") return;
             return requestChoicePageRef.current(placementId, event, form.formId);
           };
+        else if (model.linkInputPlacementIds.includes(placementId))
+          events.records_requested = (event: ControlSemanticEvent) => {
+            if (event.event !== "records_requested") return;
+            return requestRecordChoices(model, placementId, event, () => router.refresh());
+          };
         if (isReferenceChoice)
           events.field_changed = (event: ControlSemanticEvent) =>
             changeChoiceField(placementId, event, form.formId);
@@ -417,6 +423,7 @@ export function useFlowRuntime({
       initializeChoiceForm,
       model,
       resolvePageHref,
+      router,
     ],
   );
   const { host, element: intentHostElement } = useFlowIntentHost({

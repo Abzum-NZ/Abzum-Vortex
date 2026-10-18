@@ -24,7 +24,6 @@ import {
 import {
   CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
   CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
-  CHOICE_INPUT_BLOCK_RELEASE_1_3_0,
   FORM_CONTAINER_BLOCK_RELEASE,
   placementSettings as typedPlacementSettings,
 } from "@vortex/platform/server";
@@ -40,17 +39,15 @@ type ChoicePlacementSettings = Readonly<{
   fieldKey: string;
   queryId: string;
   labelFieldId: string;
-  releaseVersion: "1.1.0" | "1.2.0" | "1.3.0";
+  releaseVersion: "1.1.0" | "1.2.0";
   dependency?: Readonly<{ key: string; fromField: string }>;
-  initialValue?: Readonly<{ pageParameter: string }>;
 }>;
 
 export type ReferenceChoiceFormField = Readonly<{
   fieldKey: string;
   command: RecordReferenceChoiceCommand;
-  releaseVersion: "1.1.0" | "1.2.0" | "1.3.0";
+  releaseVersion: "1.1.0" | "1.2.0";
   dependency?: Readonly<{ key: string; fromField: string }>;
-  initialValue?: Readonly<{ pageParameter: string }>;
 }>;
 
 type ReferenceChoiceFormFieldIndex = ReadonlyMap<string, ReferenceChoiceFormField>;
@@ -79,8 +76,7 @@ export const hasReferenceChoiceSource = (placement: PlacedParts): boolean => {
     typeof block.blockId === "string" &&
     sameId(block.blockId, CHOICE_INPUT_BLOCK_RELEASE_1_1_0.blockId) &&
     (block.releaseVersion === CHOICE_INPUT_BLOCK_RELEASE_1_1_0.releaseVersion ||
-      block.releaseVersion === CHOICE_INPUT_BLOCK_RELEASE_1_2_0.releaseVersion ||
-      block.releaseVersion === CHOICE_INPUT_BLOCK_RELEASE_1_3_0.releaseVersion) &&
+      block.releaseVersion === CHOICE_INPUT_BLOCK_RELEASE_1_2_0.releaseVersion) &&
     Object.hasOwn(settings, "choice_source")
   );
 };
@@ -98,12 +94,9 @@ const placementSettings = (placement: PlacedParts): ChoicePlacementSettings | un
   )
     return undefined;
   const fieldKey = builderKeySchema.safeParse(name.value);
-  const releaseVersion = blockOf(placement)?.releaseVersion as "1.1.0" | "1.2.0" | "1.3.0";
+  const releaseVersion = blockOf(placement)?.releaseVersion as "1.1.0" | "1.2.0";
   let dependency: ChoicePlacementSettings["dependency"];
-  if (
-    (releaseVersion === "1.2.0" || releaseVersion === "1.3.0") &&
-    source.properties.input !== undefined
-  ) {
+  if (releaseVersion === "1.2.0" && source.properties.input !== undefined) {
     const input = source.properties.input;
     if (
       input.kind !== "group" ||
@@ -117,20 +110,6 @@ const placementSettings = (placement: PlacedParts): ChoicePlacementSettings | un
     if (!key.success || !from.success) return undefined;
     dependency = { key: key.data, fromField: from.data };
   }
-  let initialValue: ChoicePlacementSettings["initialValue"];
-  const initial = settings?.initial_value;
-  if (initial !== undefined) {
-    // An initial record can only seed a Choice that lists its own records, never a dependent one.
-    if (
-      releaseVersion !== "1.3.0" ||
-      dependency !== undefined ||
-      initial.kind !== "group" ||
-      Object.keys(initial.properties).length !== 1 ||
-      initial.properties.page_parameter?.kind !== "text"
-    )
-      return undefined;
-    initialValue = { pageParameter: initial.properties.page_parameter.value };
-  }
   return fieldKey.success
     ? {
         fieldKey: fieldKey.data,
@@ -138,7 +117,6 @@ const placementSettings = (placement: PlacedParts): ChoicePlacementSettings | un
         labelFieldId: source.properties.label_field.fieldId,
         releaseVersion,
         ...(dependency === undefined ? {} : { dependency }),
-        ...(initialValue === undefined ? {} : { initialValue }),
       }
     : undefined;
 };
@@ -193,7 +171,6 @@ const referenceChoiceFieldForPlacement = (
     command,
     releaseVersion: settings.releaseVersion,
     ...(settings.dependency === undefined ? {} : { dependency: settings.dependency }),
-    ...(settings.initialValue === undefined ? {} : { initialValue: settings.initialValue }),
   };
 };
 
@@ -407,6 +384,7 @@ export const resolveReferenceChoiceFormValues = async (
   }>,
 ): Promise<Readonly<Record<string, JsonValue>> | undefined> => {
   if (!isRecord(args.values)) return undefined;
+  const values = args.values;
   const authoredFields = referenceChoiceFieldsForForm(args.application, args.modules, args.formId);
   if (authoredFields === undefined) return undefined;
   const fields = args.projectedFields;
@@ -422,17 +400,13 @@ export const resolveReferenceChoiceFormValues = async (
 
   const resolved: Record<string, unknown> = { ...args.values };
   const parents = new Map<string, ReferenceChoiceOption>();
-  const ordered = [...fields].sort(
-    ([, left], [, right]) =>
-      Number(left.dependency !== undefined) - Number(right.dependency !== undefined),
-  );
-  for (const [fieldKey, field] of ordered) {
-    if (!Object.hasOwn(args.values, fieldKey)) continue;
-    const submitted = args.values[fieldKey];
-    if (submitted === null) {
-      if (Object.hasOwn(parsedEvidence.data, fieldKey)) return undefined;
-      continue;
-    }
+  // One field's submitted key, rechecked against the page its evidence names. Undefined refuses.
+  const resolveField = async (
+    fieldKey: string,
+    field: ReferenceChoiceFormField,
+  ): Promise<Readonly<{ value: unknown; selected: ReferenceChoiceOption }> | null | undefined> => {
+    const submitted = values[fieldKey];
+    if (submitted === null) return Object.hasOwn(parsedEvidence.data, fieldKey) ? undefined : null;
     if (typeof submitted !== "string") return undefined;
     const evidence: ReferenceChoiceSelectionEvidence | undefined = parsedEvidence.data[fieldKey];
     if (evidence === undefined) return undefined;
@@ -455,9 +429,26 @@ export const resolveReferenceChoiceFormValues = async (
     const value = resolveReferenceChoiceSelection(choices, submitted);
     if (value === undefined || value === null) return undefined;
     const selected = choices.find((choice) => choice.key === submitted);
-    if (selected === undefined) return undefined;
-    if (field.dependency === undefined) parents.set(fieldKey, selected);
-    resolved[fieldKey] = value;
+    return selected === undefined ? undefined : { value, selected };
+  };
+  // Independent fields are rechecked together, each in its own request; a dependent field is
+  // rechecked after the parent it is bound to, so it is read for that parent's verified choice.
+  const submittedFields = [...fields].filter(([fieldKey]) => Object.hasOwn(values, fieldKey));
+  for (const dependent of [false, true]) {
+    const round = submittedFields.filter(
+      ([, field]) => (field.dependency !== undefined) === dependent,
+    );
+    const results = await Promise.all(
+      round.map(
+        async ([fieldKey, field]) => [fieldKey, await resolveField(fieldKey, field)] as const,
+      ),
+    );
+    for (const [fieldKey, result] of results) {
+      if (result === undefined) return undefined;
+      if (result === null) continue;
+      if (!dependent) parents.set(fieldKey, result.selected);
+      resolved[fieldKey] = result.value;
+    }
   }
   const parsedValues = jsonValueSchema.safeParse(resolved);
   if (!parsedValues.success || !isRecord(parsedValues.data)) return undefined;

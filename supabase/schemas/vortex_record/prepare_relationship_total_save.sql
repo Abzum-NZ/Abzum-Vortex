@@ -85,7 +85,7 @@ begin
   -- which owns the existing content-free refusal Activity.
   if p_operation = 'update' then
     access_loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'update', p_record_id, null
+      p_record_type_id, 'update', p_record_id, null, null::jsonb
     );
     if access_loaded ->> 'outcome' <> 'loaded'
       or pg_catalog.jsonb_typeof(access_loaded -> 'declaration') <> 'object' then
@@ -106,7 +106,7 @@ begin
       );
       return pg_catalog.jsonb_build_object('outcome', 'refused_recorded');
     end if;
-    access_bounds := vortex_access.resolve_record_field_bounds_internal(access_decision);
+    access_bounds := vortex_record.decide_record_field_bounds_internal(access_decision);
   end if;
 
   before_closure := vortex_record.discover_relationship_total_closure_internal(
@@ -174,7 +174,7 @@ begin
 
   if p_operation = 'update' then
     access_loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'update', p_record_id, p_expected_concurrency_number
+      p_record_type_id, 'update', p_record_id, p_expected_concurrency_number, null::jsonb
     );
     if access_loaded ->> 'outcome' <> 'loaded' then
       return pg_catalog.jsonb_build_object('outcome', 'restart');
@@ -185,7 +185,7 @@ begin
     if access_decision ->> 'outcome' <> 'allowed' then
       return pg_catalog.jsonb_build_object('outcome', 'restart');
     end if;
-    access_bounds := vortex_access.resolve_record_field_bounds_internal(access_decision);
+    access_bounds := vortex_record.decide_record_field_bounds_internal(access_decision);
   end if;
 
   -- Materialize only the declared aggregate sources for each locked affected

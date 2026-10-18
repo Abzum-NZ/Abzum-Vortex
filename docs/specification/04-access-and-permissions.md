@@ -350,6 +350,8 @@ Newly published record permissions require an explicit policy; empty lists are v
 
 Field lists only narrow an already authorised operation: a read permission cannot authorise an update merely because its policy names changeable fields. Before projection or mutation, the engine binds the result to the exact organisation, application, module, record type, storage contract, record and operation using the current request's Access evidence. It omits unreadable values and field-derived labels, choices and validation metadata rather than returning blank or CSS-hidden data. An unauthorised changed field refuses the entire attempted mutation; filtering, sorting, grouping, field aggregates, action inputs and error details cannot bypass the same bounds. Later Record, Query, Interface and MCP consumers reuse this boundary rather than calculating a different policy. [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) owns the field-enforcement work; later interfaces have separate owners.
 
+Pages list their fields once, in their definition, and the runtime applies each person's field policy when it renders them ([#2858](https://github.com/Abzum-NZ/Abzum-Vortex/issues/2858)). Lists and detail pages leave out the fields the person cannot read. An edit form leaves out the fields the person cannot read and shows the fields they read but cannot change as read-only, from the same record read and per-record capabilities the writer decides. A create form leaves out the fields none of the person's current create permissions lets them set. A form is refused only when one of its required fields cannot be filled in by that person, and the refusal names the field; record-level access is unchanged. Rendering only narrows what is shown: every save is still decided by the record writer. A field the role changes in the Studio Access tab is one it may set when creating a record and change when updating one.
+
 Fields marked `sensitive` in [modules, fields and relationships](05-modules-fields-and-relationships.md) require an explicit read grant and are never copied to general search.
 
 ## Shared-record access
@@ -373,7 +375,7 @@ flowchart TD
 
 ### Between applications in one organisation
 
-For `organisation_shared` storage, each application must bind the module and grant its own roles the required permissions; a separate sharing grant is unnecessary. For `application_contained` storage, another application also needs an active inter-application grant. The recipient application must bind a compatible version of the module so it can validate and display the records.
+For `organization_shared` storage, each application must bind the module and grant its own roles the required permissions; a separate sharing grant is unnecessary. For `application_contained` storage, another application also needs an active inter-application grant. The recipient application must bind a compatible version of the module so it can validate and display the records.
 
 An inter-application grant may provide collaborative access when the use case requires it. The grant names the readable fields, the smaller or equal set of changeable fields, and any published shareable actions. The recipient uses ordinary record components, but those components expose only the granted capabilities. The record remains owned and saved by its source application; collaboration does not create a recipient copy or permit ownership, deletion, restoration, permission administration, or re-sharing.
 

@@ -9,10 +9,12 @@ import {
 import {
   identitySessionSchema,
   previewInstallationCreateRequestSchema,
+  previewInstallationRefreshRequestSchema,
   type IdentitySession,
   type OrganizationSelectionCandidate,
   type PreviewInstallation,
   type PreviewInstallationCreateRequest,
+  type PreviewInstallationRefreshRequest,
   type SelectedOrganizationScope,
   type SessionContext,
   sameId,
@@ -21,6 +23,7 @@ import { readLiveHumanContext } from "../access/live-context";
 import { createPreviewInstallationRepository } from "./module-index";
 import type { RehearsedPreviewRelease } from "./application-publication";
 import { writePreviewRuntimeReleaseSet } from "./preview-runtime-context";
+import { backfillDerivedFields } from "../records/derived-field-backfill";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
 import type { RequestDatabaseTransaction } from "../db/index";
 import {
@@ -46,6 +49,7 @@ const previewInstallationCoordinatorErrorCodes = [
   "PREVIEW_INSTALLATION_REFUSED",
   "PREVIEW_INSTALLATION_PERMISSION_REFUSED",
   "PREVIEW_INSTALLATION_STALE",
+  "PREVIEW_INSTALLATION_SHAPE_INCOMPATIBLE",
   "PREVIEW_INSTALLATION_TEMPORARILY_UNAVAILABLE",
   "PREVIEW_INSTALLATION_FAILED",
 ] as const;
@@ -87,6 +91,8 @@ const toCoordinatorError = (
   if (error instanceof BuilderAuthorityError)
     return new DefinitionError("PREVIEW_INSTALLATION_PERMISSION_REFUSED", { cause: error });
   switch (errorCode(error)) {
+    case "PREVIEW_INSTALLATION_SHAPE_INCOMPATIBLE":
+      return new DefinitionError("PREVIEW_INSTALLATION_SHAPE_INCOMPATIBLE", { cause: error });
     case "PREVIEW_INSTALLATION_STALE":
     case "DEFINITION_DRAFT_STALE_OR_MISSING":
     case "DEFINITION_SOURCE_EVIDENCE_MISMATCH":
@@ -115,13 +121,24 @@ const toCoordinatorError = (
 };
 
 /**
- * Provisions the preview of an Application draft for the requesting builder in two human
- * requests. The organisation request rehearses the draft's publication, which only it may: it
- * writes the inline Modules' drafts, as preparing a publication does, and returns the release
- * rows the undone rehearsal wrote. The Application request then provisions the preview from
- * exactly those rows, atomically, and refuses them unless the draft is still at the revision they
- * were rehearsed from. No live installation, permission registration or external service is
- * touched.
+ * Provisions the preview of an Application draft for the requesting builder in a series of human
+ * requests, each checking the builder's authority:
+ * 1. An organisation request rehearses the draft's publication, which only it may. It writes the
+ *    inline Modules' drafts, as preparing a publication does, and returns the release rows the
+ *    undone rehearsal wrote.
+ * 2. A second organisation request creates the preview from exactly those rows. It refuses them
+ *    unless the draft is still at the revision they were rehearsed from. It writes the preview's
+ *    own permission registration (the draft's roles, which only this builder holds) and empty
+ *    storage. The Application may not be installed yet.
+ * 3. When the Application is installed, a request in its own context seeds the storage. The seed
+ *    holds only the live records the builder reads there, with only the fields the builder reads.
+ * 4. A request in the preview writes the release set it runs.
+ * A refresh moves the builder's existing preview to the current draft revision instead:
+ * 1. An organisation request rehearses the draft's publication, as above.
+ * 2. One request in the preview itself replaces its releases, pins and registration, evolves its
+ *    Record storage in place, keeping the records it holds, and writes the release set it runs.
+ *    A change those records cannot take refuses with PREVIEW_INSTALLATION_SHAPE_INCOMPATIBLE.
+ * No live installation, live registration or external service is touched.
  */
 export const createPreviewInstallationCoordinator = (
   dependencies: PreviewInstallationCoordinatorDependencies,
@@ -193,23 +210,84 @@ export const createPreviewInstallationCoordinator = (
               expectedDraftRevision,
             }),
       );
+      // The preview is created in the organisation's context, as its Application may not be
+      // installed yet: its releases, Module pins, own permission registration and empty storage.
+      const created = await builderRequest(
+        session.data,
+        { organizationId },
+        applicationRootId,
+        (transaction) =>
+          createPreviewInstallationRepository(transaction).create(request.data, releases),
+      );
+      const { previewInstallationId } = created.installation;
+      // The builder's live records are read as the builder reads them in the installed
+      // Application; an Application with no installation has none to seed.
+      if (created.seedable)
+        await builderRequest(
+          session.data,
+          { organizationId, applicationRootId },
+          applicationRootId,
+          (transaction) => createPreviewInstallationRepository(transaction).seed(previewInstallationId),
+        );
+      // Last, in the preview itself: the release set it runs. A preview without it never runs.
       return builderRequest(
         session.data,
-        { organizationId, applicationRootId },
+        { organizationId, applicationRootId, previewInstallationId },
         applicationRootId,
         async (transaction) => {
-          const preview = await createPreviewInstallationRepository(transaction).create(
+          await writePreviewRuntimeReleaseSet(
+            transaction,
+            dependencies.releaseCatalogue,
+            previewInstallationId,
+          );
+          // The copied records hold the live values only: their totals and stored calculations
+          // are worked out afresh for the draft's definitions.
+          if (created.seedable) await backfillDerivedFields(transaction, new Date().toISOString());
+          return created.installation;
+        },
+      );
+    },
+
+    async refresh(
+      sessionCandidate: IdentitySession,
+      requestCandidate: PreviewInstallationRefreshRequest,
+    ): Promise<PreviewInstallation> {
+      const session = identitySessionSchema.safeParse(sessionCandidate);
+      const request = previewInstallationRefreshRequestSchema.safeParse(requestCandidate);
+      if (!session.success || !request.success)
+        throw new DefinitionError("INVALID_PREVIEW_INSTALLATION_COMMAND");
+      const { organizationId, applicationRootId, previewInstallationId, expectedDraftRevision } =
+        request.data;
+      const releases = await builderRequest(
+        session.data,
+        { organizationId },
+        applicationRootId,
+        (transaction, authority, context) =>
+          dependencies
+            .draftRehearsal(transaction, authority)
+            .rehearseApplicationPreview(context, {
+              rootId: applicationRootId,
+              expectedDraftRevision,
+            }),
+      );
+      const result = await builderRequest(
+        session.data,
+        { organizationId, applicationRootId, previewInstallationId },
+        applicationRootId,
+        async (transaction) => {
+          const refreshed = await createPreviewInstallationRepository(transaction).refresh(
             request.data,
             releases,
           );
           await writePreviewRuntimeReleaseSet(
             transaction,
             dependencies.releaseCatalogue,
-            preview.previewInstallationId,
+            previewInstallationId,
           );
-          return preview;
+          return refreshed;
         },
       );
+      return result;
     },
   });
 };

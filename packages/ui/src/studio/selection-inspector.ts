@@ -49,7 +49,8 @@ type ParsedSelection =
   | Readonly<{ kind: "navigation"; alias: string }>
   | Readonly<{ kind: "flow"; alias: string; moduleKey: string | null }>
   | Readonly<{ kind: "flow_step"; alias: string; moduleKey: string | null; taskId: string }>
-  | Readonly<{ kind: "placement"; alias: string }>;
+  | Readonly<{ kind: "placement"; alias: string }>
+  | Readonly<{ kind: "role"; alias: string }>;
 
 const result = <Resolution extends StudioSelectionInspectorResolution>(
   resolution: Resolution,
@@ -101,7 +102,8 @@ const parseSelection = (
     case "page":
     case "shell":
     case "navigation":
-    case "placement": {
+    case "placement":
+    case "role": {
       const aliasField =
         selection.kind === "navigation"
           ? "navigationItemAlias"
@@ -109,7 +111,7 @@ const parseSelection = (
               ? "placementAlias"
               : selection.kind === "shell"
                 ? "shellAlias"
-                : "pageAlias";
+                : selection.kind === "role" ? "roleKey" : "pageAlias";
       if (!hasExactKeys(selection, ["kind", aliasField])) return undefined;
       const alias =
         selection[aliasField];
@@ -285,6 +287,10 @@ export const resolveStudioSelectionInspectorContext = (
       }
       case "placement":
         candidates = placementCandidates(source, parsedSelection.alias);
+        break;
+      case "role":
+        candidates = source.body.roles.flatMap((role, index) => role.key === parsedSelection.alias
+          ? [{ alias: role.key, label: role.name, sourcePath: ["body", "roles", index] }] : []);
         break;
     }
 

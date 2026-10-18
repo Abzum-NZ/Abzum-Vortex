@@ -11,11 +11,17 @@ type HistoryLoad =
   | Readonly<{ kind: "unavailable"; failure: StudioUnavailableKind; reason?: string | undefined }>;
 
 /** Loads the first page of published versions when the tab opens, so the workspace does not pay for it earlier. */
-export function StudioHistoryTab({ organizationId, rootId, savedRevision }: Readonly<{
+export function StudioHistoryTab({ organizationId, rootId, savedRevision, restoreBlocked, hold, onRestored }: Readonly<{
   organizationId: string;
   rootId: string;
   /** Changes when the draft is saved, so the list is read again against the new saved state. */
   savedRevision: number;
+  /** Why a version cannot be restored into the draft now, or nothing. */
+  restoreBlocked: string | undefined;
+  /** Holds the workspace's draft while a restore runs. */
+  hold: (on: boolean) => void;
+  /** Loads the restored saved draft into the workspace, saying what happened. */
+  onRestored: (message: string) => void;
 }>) {
   const [load, setLoad] = useState<HistoryLoad>({ kind: "loading" });
   useEffect(() => {
@@ -37,5 +43,5 @@ export function StudioHistoryTab({ organizationId, rootId, savedRevision }: Read
   const snapshot = load.page.snapshot;
   return <ApplicationReleaseHistory
     key={`${snapshot.organizationId}:${snapshot.rootId}:${snapshot.draftRevision}:${snapshot.sourceFingerprint}:${snapshot.anchorReleaseRevision}`}
-    initialPage={load.page} />;
+    initialPage={load.page} restoreBlocked={restoreBlocked} hold={hold} onRestored={onRestored} />;
 }

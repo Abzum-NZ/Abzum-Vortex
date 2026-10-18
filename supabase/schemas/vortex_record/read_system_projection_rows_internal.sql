@@ -14,7 +14,6 @@ as $function$
 declare
   reader_schema text;
   reader_function text;
-  bounded_reader regprocedure;
 begin
   select registered.reader_schema, registered.reader_function
   into reader_schema, reader_function
@@ -29,23 +28,11 @@ begin
       message = 'Protected projection reader is unavailable';
   end if;
 
-  bounded_reader := pg_catalog.to_regprocedure(pg_catalog.format(
-    '%I.%I(uuid[],text,text,jsonb,integer)', reader_schema, reader_function
-  ));
-  if bounded_reader is not null then
-    return query execute pg_catalog.format(
-      'select projected.* from %I.%I($1, $2, $3, $4, $5) as projected',
-      reader_schema, reader_function
-    ) using p_record_ids, p_sort_key, p_direction, p_after, p_limit;
-  else
-    -- Readers without a bounded signature retain their existing visibility
-    -- and view path until their bounded implementation is published.
-    return query execute pg_catalog.format(
-      'select projected.* from %I.%I(null::uuid, null::integer) as projected
-       where $1 is null or projected.record_id = any($1)',
-      reader_schema, reader_function
-    ) using p_record_ids;
-  end if;
+  -- Every registered protected projection reader has the one bounded signature.
+  return query execute pg_catalog.format(
+    'select projected.* from %I.%I($1, $2, $3, $4, $5) as projected',
+    reader_schema, reader_function
+  ) using p_record_ids, p_sort_key, p_direction, p_after, p_limit;
 end
 $function$;
 

@@ -41,6 +41,7 @@ import type {
 } from "./types";
 import { bindingFor, suppliedValues, bindingOfEvent, asComponentBinding } from "./event-values";
 import { cancelledMoveNotice, unavailableNotice } from "./notices";
+import { requestRecordChoices } from "./record-choices";
 
 export function useRuntimeInputs({
   currentData,
@@ -150,6 +151,7 @@ export function useRuntimeInputs({
       ...guidedActiveFormIds,
       ...model.referenceChoiceInputs.filter((field) => field.dependency !== undefined)
         .map((field) => field.formId),
+      ...model.linkInputPlacementIds,
     ]);
     if (guidedActivePlacementIds !== undefined)
       for (const placementId of placementIds)
@@ -306,6 +308,12 @@ export function useRuntimeInputs({
         };
       if (model.referenceChoiceInputs.some((field) => field.placementId === placementId))
         events.field_changed = (event: ControlSemanticEvent) => changeChoiceField(placementId, event);
+      // A link field's picker asks for its records; the page reads them under the person's access.
+      if (model.linkInputPlacementIds.includes(placementId))
+        events.records_requested = (event: ControlSemanticEvent) => {
+          if (event.event !== "records_requested") return;
+          return requestRecordChoices(model, placementId, event, () => router.refresh());
+        };
       // An action button runs its bound flow through the same path as a display event. Inside a
       // form it reports the form's current values. A record page also supplies its verified page
       // subject for declared navigation bindings; the binding receives only the inputs it declares.
@@ -324,7 +332,8 @@ export function useRuntimeInputs({
           );
         };
       // A form container emits its one submission for a gesture; it runs the bound flow once
-      // through the runtime, which resumes every pause with the server-issued continuation.
+      // through the runtime, which resumes every pause with the server-issued continuation. The
+      // handler returns that run, so the form shows busy from the press until the run settles.
       const submitBinding = bindings.find((binding) => binding.event === "form_submit");
       if (
         submitBinding !== undefined ||
@@ -336,17 +345,18 @@ export function useRuntimeInputs({
             const requested = requestedStepId.current;
             requestedStepId.current = undefined;
             if (model.guidedForm.activeStepId === guidedSummaryStepId) {
-              if (submitBinding === undefined) setNotice(unavailableNotice);
-              else void submitGuidedSummary(
+              if (submitBinding === undefined) {
+                setNotice(unavailableNotice);
+                return;
+              }
+              return submitGuidedSummary(
                 placementId,
                 submitBinding,
                 event.values,
                 event.selectedOwnerGroupId,
               );
             }
-            else
-              void advanceGuidedStep(model.guidedForm.activeStepId, event.values, requested);
-            return;
+            return advanceGuidedStep(model.guidedForm.activeStepId, event.values, requested);
           }
           if (submitBinding === undefined) return;
           const baseline = currentEditFormBaselines[placementId];
@@ -373,7 +383,7 @@ export function useRuntimeInputs({
             values: event.values,
             ...(choiceEvidence === undefined ? {} : { choiceEvidence }),
           });
-          void applyDispatch(
+          return applyDispatch(
             formBlock.submit(
               asComponentBinding(placementId, submitBinding),
               values,
@@ -558,6 +568,7 @@ export function useRuntimeInputs({
     changeChoiceField,
     initializeChoiceForm,
     activeChoicePages,
+    model,
     model.referenceChoiceInputs,
     currentData,
     application,

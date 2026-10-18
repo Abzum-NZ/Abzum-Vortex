@@ -9,6 +9,7 @@ import {
 import {
   calculationMaximumNestingDepth,
   calculationMaximumOperandCount,
+  calculationResultTypesByOperation,
   jsonValueSchema,
   labelSchema,
   safeHttpsUrlSchema,
@@ -59,8 +60,13 @@ import { protectedOperationReferenceSchema } from "./application-flow-bindings";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { protectedReadModelKeySchema } from "./application-composition/protected-read-models";
 import { flowSchema } from "../workflows/flow-contracts";
-import { recordOwnershipModeSchema } from "../records/record-ownership-compatibility";
+import { recordOwnershipModeSchema } from "../records/record-ownership-mode";
 import { ruleGraphSchema } from "../rules/rule-graph-contracts";
+import {
+  maximumRecordTypePipelines,
+  pipelineShapeProblems,
+  recordTypePipelineSchema,
+} from "./record-type-pipelines";
 
 export const moduleValidationContractVersion = "3.0.0" as const;
 
@@ -400,16 +406,9 @@ const calculationSettingsSchema = z
         path: ["evaluation"],
         message: "A deadline-passed calculation uses the current time and is read-time",
       });
-    const valid =
-      (value.expression.kind === "join_text" && value.resultType === "text") ||
-      (value.expression.kind === "condition" && value.resultType === "yes_no") ||
-      (value.expression.kind === "date_offset" &&
-        (value.resultType === "date" || value.resultType === "date_time")) ||
-      (value.expression.kind === "deadline_passed" && value.resultType === "yes_no") ||
-      (value.expression.kind === "numeric" &&
-        (value.resultType === "whole_number" ||
-          value.resultType === "decimal_number" ||
-          value.resultType === "money"));
+    const resultTypes: readonly string[] =
+      calculationResultTypesByOperation[value.expression.kind];
+    const valid = resultTypes.includes(value.resultType);
     if (
       value.expression.kind === "numeric" &&
       value.expression.operands.reduce(
@@ -1085,8 +1084,41 @@ export const recordTypeDefinitionSchema = z
       .min(1),
     customActionIds: z.array(actionIdSchema),
     systemProjection: moduleSystemProjectionSchema.optional(),
+    pipelines: z.array(recordTypePipelineSchema).max(maximumRecordTypePipelines),
   })
   .strict()
+  .superRefine((value, context) => {
+    const pipelineIds = new Set<string>();
+    const pipelineKeys = new Set<string>();
+    const stageFields = new Set<string>();
+    for (const [index, pipeline] of value.pipelines.entries()) {
+      const stageField = String(pipeline.stageFieldId).toLowerCase();
+      if (
+        pipelineIds.has(String(pipeline.pipelineId).toLowerCase()) ||
+        pipelineKeys.has(pipeline.key) ||
+        stageFields.has(stageField)
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["pipelines", index],
+          message: "Each pipeline has its own identity, key and stage field",
+        });
+      pipelineIds.add(String(pipeline.pipelineId).toLowerCase());
+      pipelineKeys.add(pipeline.key);
+      stageFields.add(stageField);
+      const field = value.fields.find(
+        (candidate) => String(candidate.fieldId).toLowerCase() === stageField,
+      );
+      const options =
+        field?.type === "choice" ? field.settings.options.map((option) => option.value) : undefined;
+      for (const problem of pipelineShapeProblems(pipeline, options))
+        context.addIssue({
+          code: "custom",
+          path: ["pipelines", index, ...problem.path],
+          message: problem.message,
+        });
+    }
+  })
   .superRefine((value, context) => {
     // The eight-sortable-field limit is a publish rule (module-source-contracts.ts). Stored releases
     // are immutable, so this reader accepts every release that was publishable when it was made.
