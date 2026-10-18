@@ -31,7 +31,7 @@ import {
  * The request presented to the trusted, server-injected authority resolver.
  * Transfer grants are required for upload and read; delete is resolved from its
  * exact file identifier. Inspect is the File service's own server-side read of a
- * pending uploaded object for trusted inspection and isolated scanning; it signs
+ * pending uploaded object for trusted content inspection; it signs
  * a Storage read of that exact object and is never projected to a browser. None
  * of these values is accepted as authority by itself.
  */
@@ -65,6 +65,12 @@ export type CurrentStorageAuthority =
         transferGrantId: UploadGrant["oneTimeId"];
       }>)
   | (CurrentStorageAuthorityBase & Readonly<{ operation: "inspect" }>)
+  | (CurrentStorageAuthorityBase &
+      Readonly<{
+        operation: "delete";
+        /** Expiry loaded while atomically claiming a never-activated upload for cleanup. */
+        abandonedUploadExpiresAt: string;
+      }>)
   | (CurrentStorageAuthorityBase &
       Readonly<{
         operation: "delete";
@@ -411,6 +417,20 @@ const validateCurrentAuthority = (
         fileRecord.lifecycleState === "removed"
       ) {
         throw new Error("Storage credential minting refused: removal scope is not current");
+      }
+      if ("abandonedUploadExpiresAt" in resolution) {
+        const expiredAt = timestampSeconds(resolution.abandonedUploadExpiresAt);
+        if (
+          expiredAt === undefined ||
+          expiredAt > nowSeconds ||
+          fileRecord.lifecycleState !== "abandoned" ||
+          fileRecord.activatedAt !== undefined ||
+          fileRecord.owningAttachmentReferences.length !== 0 ||
+          fileRecord.previewReferences.length !== 0 ||
+          fileRecord.legalHold.isHeld
+        )
+          throw new Error("Storage credential minting refused: upload is not abandoned");
+        break;
       }
       if (!("removalAuthority" in resolution)) {
         throw new Error("Storage credential minting refused: removal authority is unavailable");

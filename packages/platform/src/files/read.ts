@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
   applicationRootIdSchema,
@@ -40,8 +40,6 @@ import type {
   StorageCredentialRequest,
   StorageOperationCredential,
 } from "./storage-credentials";
-import type { FileRemovalCoordinator, FileRemovalResult } from "./object-removal";
-import type { FileRemovalEligibilityService } from "./removal-eligibility";
 
 /** Closed refusal reasons for private file download, range and preview requests. */
 export type FileReadRefusalReason =
@@ -1123,161 +1121,4 @@ export const createFileReadCoordinator = (
   };
 
   return Object.freeze({ readFile });
-};
-
-/** One pending upload whose window closed, or an abandoned upload whose removal has not finished. */
-export type AbandonedUploadCandidate = Readonly<{
-  fileRecord: FileRecord;
-  revision: number;
-  uploadExpiresAt: string;
-}>;
-
-/**
- * The owning upload store's abandonment boundary. Neither method touches a
- * record, its revision or its activity history.
- */
-export type AbandonedUploadCleanupRepository = Readonly<{
-  /**
-   * A bounded, oldest-first batch: pending uploads whose window closed before
-   * `expiredBefore`, and abandoned uploads that are not yet removed.
-   */
-  listAbandonmentCandidates(
-    input: Readonly<{ limit: number; expiredBefore: string }>,
-  ): Promise<readonly AbandonedUploadCandidate[]>;
-  /**
-   * Compare-and-set of an expired pending upload to abandoned, superseding every
-   * upload grant so no further credential can be issued for it.
-   */
-  abandonExpiredUpload(
-    input: Readonly<{ fileId: FileId; expectedRevision: number; abandonedAt: string }>,
-  ): Promise<
-    | Readonly<{ outcome: "abandoned" }>
-    | Readonly<{ outcome: "refused"; reason: "not_pending" | "window_open" | "revision_conflict" }>
-  >;
-}>;
-
-export type AbandonedUploadCleanupDependencies = Readonly<{
-  repository: AbandonedUploadCleanupRepository;
-  /** The #657 removal decision boundary; abandoned files are removal-eligible there. */
-  removalEligibility: Pick<FileRemovalEligibilityService, "decideFileRemovalEligibility">;
-  /** The owning removal coordinator, which deletes previews and the object through the bridge's delete authority. */
-  removalCoordinator: FileRemovalCoordinator;
-  clock?: () => Date;
-}>;
-
-export type AbandonedUploadCleanupOutcome = Readonly<{
-  fileId: FileId;
-  outcome: "removed" | "in_progress" | "skipped" | "failed";
-}>;
-
-export type AbandonedUploadCleanupResult = Readonly<{
-  examined: number;
-  abandoned: number;
-  removed: number;
-  outcomes: readonly AbandonedUploadCleanupOutcome[];
-}>;
-
-export const MAXIMUM_ABANDONED_UPLOAD_BATCH = 100;
-
-/** A stable identifier derived from the removal decision, formatted as a version 8 UUID. */
-const derivedUuid = (material: string): string => {
-  const hex = createHash("sha256").update(material, "utf8").digest("hex");
-  const variant = ((parseInt(hex[16] ?? "0", 16) & 0x3) | 0x8).toString(16);
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
-};
-
-const isTerminalRemoval = (result: FileRemovalResult): boolean => result.status === "completed";
-
-/**
- * Removes a bounded batch of abandoned uploads. Expired pending uploads are
- * first marked abandoned in the owning upload store; each abandoned upload is
- * then removed through the #657 eligibility decision and the owning removal
- * coordinator, which cleans previews, the private object and metadata. No
- * record or record activity is touched, and a failure of one upload does not
- * stop the batch.
- */
-export const cleanupAbandonedUploads = async (
-  dependencies: AbandonedUploadCleanupDependencies,
-  options?: Readonly<{ limit?: number }>,
-): Promise<AbandonedUploadCleanupResult> => {
-  const clock = dependencies.clock ?? (() => new Date());
-  const now = clock();
-  if (!Number.isFinite(now.getTime())) throw new Error("Abandoned upload cleanup clock is invalid");
-  const limit = Math.min(
-    positiveLimit(options?.limit, MAXIMUM_ABANDONED_UPLOAD_BATCH),
-    MAXIMUM_ABANDONED_UPLOAD_BATCH,
-  );
-  const candidates = (
-    await dependencies.repository.listAbandonmentCandidates({
-      limit,
-      expiredBefore: now.toISOString(),
-    })
-  ).slice(0, limit);
-
-  let abandoned = 0;
-  let removed = 0;
-  const outcomes: AbandonedUploadCleanupOutcome[] = [];
-  for (const candidate of candidates) {
-    const parsed = fileRecordSchema.safeParse(candidate.fileRecord);
-    if (!parsed.success) continue;
-    const fileRecord = parsed.data;
-    try {
-      if (fileRecord.lifecycleState === "pending") {
-        if (!(Date.parse(candidate.uploadExpiresAt) <= now.getTime())) {
-          outcomes.push({ fileId: fileRecord.fileId, outcome: "skipped" });
-          continue;
-        }
-        const marked = await dependencies.repository.abandonExpiredUpload({
-          fileId: fileRecord.fileId,
-          expectedRevision: candidate.revision,
-          abandonedAt: now.toISOString(),
-        });
-        if (marked.outcome !== "abandoned") {
-          outcomes.push({ fileId: fileRecord.fileId, outcome: "skipped" });
-          continue;
-        }
-        abandoned += 1;
-      } else if (fileRecord.lifecycleState !== "abandoned") {
-        outcomes.push({ fileId: fileRecord.fileId, outcome: "skipped" });
-        continue;
-      }
-
-      const decision = await dependencies.removalEligibility.decideFileRemovalEligibility({
-        fileId: fileRecord.fileId,
-      });
-      if (!decision.eligible) {
-        outcomes.push({ fileId: fileRecord.fileId, outcome: "skipped" });
-        continue;
-      }
-      const material = [
-        "vortex:file:abandoned-upload",
-        fileRecord.fileId,
-        decision.binding.authorityFingerprint,
-        decision.binding.fileRevision,
-        decision.decidedAt,
-      ].join(":");
-      const result = await dependencies.removalCoordinator.coordinateFileRemoval({
-        fileId: fileRecord.fileId,
-        deletionKey: `abandoned-upload:${createHash("sha256").update(material, "utf8").digest("hex")}`,
-        decision,
-        correlationId: derivedUuid(material),
-      });
-      if (isTerminalRemoval(result)) {
-        removed += 1;
-        outcomes.push({ fileId: fileRecord.fileId, outcome: "removed" });
-      } else {
-        outcomes.push({ fileId: fileRecord.fileId, outcome: "in_progress" });
-      }
-    } catch (error) {
-      console.error("FILE_REMOVAL_SWEEP_FAILED", { fileId: fileRecord.fileId, cause: error });
-      outcomes.push({ fileId: fileRecord.fileId, outcome: "failed" });
-    }
-  }
-
-  return Object.freeze({
-    examined: candidates.length,
-    abandoned,
-    removed,
-    outcomes: Object.freeze(outcomes),
-  });
 };

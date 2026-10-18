@@ -19,23 +19,14 @@ grant usage on schema vortex_platform to authenticated;
 
 create or replace function vortex_platform.storage_destination_project()
 returns text
-language plpgsql
+language sql
 stable
 security definer
 set search_path = ''
 as $function$
-declare
-  project text;
-begin
-  select destination.project_ref into project
+  select destination.project_ref
   from vortex_platform.storage_destination as destination
   where destination.singleton;
-  if project is null then
-    raise exception using errcode = '55000',
-      message = 'Storage destination has not been provisioned';
-  end if;
-  return project;
-end
 $function$;
 
 alter function vortex_platform.storage_destination_project() owner to vortex_owner;
@@ -55,12 +46,19 @@ CREATE POLICY vortex_component_bundle_upload ON storage.objects FOR INSERT TO au
 DROP POLICY vortex_private_file_delete ON storage.objects;
 CREATE POLICY vortex_private_file_delete ON storage.objects FOR DELETE TO authenticated USING (((bucket_id = 'private_files'::text) AND ((auth.jwt() ->> 'tokenKind'::text) = 'vortex_file_storage_operation'::text) AND ((auth.jwt() ->> 'role'::text) = 'authenticated'::text) AND ((auth.jwt() ->> 'destinationProject'::text) = vortex_platform.storage_destination_project()) AND ((auth.jwt() ->> 'bucketId'::text) = bucket_id) AND ((auth.jwt() ->> 'objectPath'::text) = name) AND (name ~~ ((auth.jwt() ->> 'organizationId'::text) || '/%'::text)) AND ((auth.jwt() ->> 'organizationId'::text) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'::text) AND ((auth.jwt() ->> 'operation'::text) = 'delete'::text) AND ((auth.jwt() ->> 'iat'::text) ~ '^[0-9]{1,18}$'::text) AND ((auth.jwt() ->> 'exp'::text) ~ '^[0-9]{1,18}$'::text) AND (((auth.jwt() ->> 'exp'::text))::bigint > ((auth.jwt() ->> 'iat'::text))::bigint) AND ((((auth.jwt() ->> 'exp'::text))::bigint - ((auth.jwt() ->> 'iat'::text))::bigint) <= 60) AND (((auth.jwt() ->> 'iat'::text))::bigint <= ((floor(date_part('epoch'::text, clock_timestamp())))::bigint + 5)) AND (((auth.jwt() ->> 'exp'::text))::bigint >= (floor(date_part('epoch'::text, clock_timestamp())))::bigint)));
 DROP POLICY vortex_private_file_read ON storage.objects;
-CREATE POLICY vortex_private_file_read ON storage.objects FOR SELECT TO authenticated USING (((bucket_id = 'private_files'::text) AND ((auth.jwt() ->> 'tokenKind'::text) = 'vortex_file_storage_operation'::text) AND ((auth.jwt() ->> 'role'::text) = 'authenticated'::text) AND ((auth.jwt() ->> 'destinationProject'::text) = vortex_platform.storage_destination_project()) AND ((auth.jwt() ->> 'bucketId'::text) = bucket_id) AND ((auth.jwt() ->> 'objectPath'::text) = name) AND (name ~~ ((auth.jwt() ->> 'organizationId'::text) || '/%'::text)) AND ((auth.jwt() ->> 'organizationId'::text) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'::text) AND ((auth.jwt() ->> 'operation'::text) = 'read'::text) AND ((auth.jwt() ->> 'iat'::text) ~ '^[0-9]{1,18}$'::text) AND ((auth.jwt() ->> 'exp'::text) ~ '^[0-9]{1,18}$'::text) AND (((auth.jwt() ->> 'exp'::text))::bigint > ((auth.jwt() ->> 'iat'::text))::bigint) AND ((((auth.jwt() ->> 'exp'::text))::bigint - ((auth.jwt() ->> 'iat'::text))::bigint) <= 60) AND (((auth.jwt() ->> 'iat'::text))::bigint <= ((floor(date_part('epoch'::text, clock_timestamp())))::bigint + 5)) AND (((auth.jwt() ->> 'exp'::text))::bigint >= (floor(date_part('epoch'::text, clock_timestamp())))::bigint)));
+-- Storage deletion needs SELECT to locate its object. Permit that lookup only
+-- during delete_many, so a server-only delete token cannot download the bytes.
+CREATE POLICY vortex_private_file_read ON storage.objects FOR SELECT TO authenticated USING (((bucket_id = 'private_files'::text) AND ((auth.jwt() ->> 'tokenKind'::text) = 'vortex_file_storage_operation'::text) AND ((auth.jwt() ->> 'role'::text) = 'authenticated'::text) AND ((auth.jwt() ->> 'destinationProject'::text) = vortex_platform.storage_destination_project()) AND ((auth.jwt() ->> 'bucketId'::text) = bucket_id) AND ((auth.jwt() ->> 'objectPath'::text) = name) AND (name ~~ ((auth.jwt() ->> 'organizationId'::text) || '/%'::text)) AND ((auth.jwt() ->> 'organizationId'::text) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'::text) AND (((auth.jwt() ->> 'operation'::text) = 'read'::text) OR (((auth.jwt() ->> 'operation'::text) = 'delete'::text) AND storage.allow_only_operation('object.delete_many'::text))) AND ((auth.jwt() ->> 'iat'::text) ~ '^[0-9]{1,18}$'::text) AND ((auth.jwt() ->> 'exp'::text) ~ '^[0-9]{1,18}$'::text) AND (((auth.jwt() ->> 'exp'::text))::bigint > ((auth.jwt() ->> 'iat'::text))::bigint) AND ((((auth.jwt() ->> 'exp'::text))::bigint - ((auth.jwt() ->> 'iat'::text))::bigint) <= 60) AND (((auth.jwt() ->> 'iat'::text))::bigint <= ((floor(date_part('epoch'::text, clock_timestamp())))::bigint + 5)) AND (((auth.jwt() ->> 'exp'::text))::bigint >= (floor(date_part('epoch'::text, clock_timestamp())))::bigint)));
 DROP POLICY vortex_private_file_upload ON storage.objects;
 CREATE POLICY vortex_private_file_upload ON storage.objects FOR INSERT TO authenticated WITH CHECK (((bucket_id = 'private_files'::text) AND ((auth.jwt() ->> 'tokenKind'::text) = 'vortex_file_storage_operation'::text) AND ((auth.jwt() ->> 'role'::text) = 'authenticated'::text) AND ((auth.jwt() ->> 'destinationProject'::text) = vortex_platform.storage_destination_project()) AND ((auth.jwt() ->> 'bucketId'::text) = bucket_id) AND ((auth.jwt() ->> 'objectPath'::text) = name) AND (name ~~ ((auth.jwt() ->> 'organizationId'::text) || '/%'::text)) AND ((auth.jwt() ->> 'organizationId'::text) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'::text) AND ((auth.jwt() ->> 'operation'::text) = 'upload'::text) AND ((auth.jwt() ->> 'iat'::text) ~ '^[0-9]{1,18}$'::text) AND ((auth.jwt() ->> 'exp'::text) ~ '^[0-9]{1,18}$'::text) AND (((auth.jwt() ->> 'exp'::text))::bigint > ((auth.jwt() ->> 'iat'::text))::bigint) AND ((((auth.jwt() ->> 'exp'::text))::bigint - ((auth.jwt() ->> 'iat'::text))::bigint) <= 60) AND (((auth.jwt() ->> 'iat'::text))::bigint <= ((floor(date_part('epoch'::text, clock_timestamp())))::bigint + 5)) AND (((auth.jwt() ->> 'exp'::text))::bigint >= (floor(date_part('epoch'::text, clock_timestamp())))::bigint)));
 
 
 set local role vortex_owner;
+alter table vortex_platform.file_records add column removed_at timestamptz;
+alter table vortex_platform.file_records add constraint file_records_removed_shape check (
+  lifecycle_state <> 'removed' or (removed_at is not null and owning_attachment_references = '{}'::uuid[]
+    and preview_references = '[]'::jsonb)
+);
 alter table vortex_platform.file_records drop constraint file_records_owner_complete;
 alter table vortex_platform.file_records add constraint file_records_owner_complete check (
   pg_catalog.num_nonnulls(owner_record_type_id, owner_record_id, owner_field_id) in (0, 3)
@@ -77,8 +75,11 @@ create table vortex_platform.file_uploads (
   grant_value jsonb not null,
   grant_claimed boolean not null default false,
   completed_settings jsonb,
-  revision bigint not null default 1
+  revision bigint not null default 1,
+  cleanup_claim_id uuid,
+  cleanup_claim_until timestamptz
 );
+create index file_uploads_expiry on vortex_platform.file_uploads(upload_expires_at, file_id);
 alter table vortex_platform.file_uploads enable row level security;
 alter table vortex_platform.file_uploads force row level security;
 revoke all on vortex_platform.file_uploads from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
@@ -2590,5 +2591,139 @@ comment on function vortex_record.apply_record_changes(
 ) is
   'The one protected Record-change operation: claims one command receipt (a preview command carries its own preview-scoped id) and applies an ordered mutation list under one canonical lock order. Live changes keep their access decisions, Activity, Event and background effects; preview changes belong only to the validated preview owner and append no live effects. Named-action and lifecycle commands are refused in previews.';
 
+
+
+reset role;
+set local role vortex_owner;
+
+create or replace function vortex_platform.upload_file_record(p_file vortex_platform.file_records)
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
+    'fileId', p_file.file_id,
+    'organizationId', p_file.organization_id,
+    'applicationRootId', p_file.application_root_id,
+    'lifecycleState', p_file.lifecycle_state,
+    'originalSafeDisplayName', p_file.original_safe_display_name,
+    'detectedMediaType', p_file.detected_media_type,
+    'extension', p_file.extension,
+    'sizeBytes', p_file.size_bytes,
+    'checksum', p_file.checksum,
+    'storageKey', p_file.storage_key,
+    'bucketId', p_file.bucket_id,
+    'scannerName', p_file.scanner_name,
+    'scannerVersion', p_file.scanner_version,
+    'scannerResult', p_file.scanner_result,
+    'previewReferences', p_file.preview_references,
+    'uploadedBy', p_file.uploaded_by,
+    'createdAt', vortex_platform.format_timestamp_utc(p_file.created_at),
+    'activatedAt', vortex_platform.format_timestamp_utc(p_file.activated_at),
+    'deletedAt', vortex_platform.format_timestamp_utc(p_file.deleted_at),
+    'removalDueAt', vortex_platform.format_timestamp_utc(p_file.removal_due_at),
+    'removedAt', vortex_platform.format_timestamp_utc(p_file.removed_at),
+    'owningAttachmentReferences', pg_catalog.to_jsonb(p_file.owning_attachment_references),
+    'ownerRecordTypeId', p_file.owner_record_type_id,
+    'ownerRecordId', p_file.owner_record_id,
+    'ownerFieldId', p_file.owner_field_id,
+    'legalHold', pg_catalog.jsonb_build_object('isHeld', p_file.legal_hold)
+  ))
+$function$;
+
+revoke execute on function vortex_platform.upload_file_record(vortex_platform.file_records) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+grant execute on function vortex_platform.upload_file_record(vortex_platform.file_records)
+  to vortex_owner;
+
+comment on function vortex_platform.upload_file_record(vortex_platform.file_records) is
+  'Returns the canonical FileRecord projection with UTC timestamp values.';
+
+alter function vortex_platform.upload_file_record(p_file vortex_platform.file_records) owner to vortex_owner;
+
+grant execute on function vortex_platform.upload_file_record(p_file vortex_platform.file_records) to postgres;
+
+create or replace function vortex_platform.claim_abandoned_file_uploads_internal(p_limit integer, p_storage_project text)
+returns jsonb language plpgsql volatile security definer set search_path = ''
+as $function$
+declare
+  candidate record;
+  file_value vortex_platform.file_records%rowtype;
+  claim_id uuid;
+  claim_until timestamptz := pg_catalog.clock_timestamp() + interval '5 minutes';
+  result jsonb := '[]'::jsonb;
+begin
+  if p_storage_project is null or (select project_ref from vortex_platform.storage_destination where singleton)
+    is distinct from p_storage_project then
+    raise exception using errcode = '55000', message = 'Upload cleanup Storage destination has not been provisioned';
+  end if;
+  if p_limit is null or p_limit < 1 or p_limit > 25 then
+    raise exception using errcode = '22023', message = 'Upload cleanup batch must be between 1 and 25';
+  end if;
+  -- Lock in the same order as completion and record activation: file, then upload.
+  -- Abandonment commits before Storage deletion and permanently excludes activation.
+  for candidate in
+    select f.file_id, u.upload_expires_at, u.correlation_id
+    from vortex_platform.file_uploads u
+    join vortex_platform.file_records f on f.file_id = u.file_id
+    where u.upload_expires_at <= pg_catalog.clock_timestamp()
+      and (u.cleanup_claim_until is null or u.cleanup_claim_until <= pg_catalog.clock_timestamp())
+      and f.lifecycle_state in ('pending', 'uploaded', 'scanning', 'quarantined', 'abandoned')
+      and f.activated_at is null and pg_catalog.cardinality(f.owning_attachment_references) = 0
+      and f.preview_references = '[]'::jsonb and not f.legal_hold
+    order by u.upload_expires_at, f.file_id
+    limit p_limit for update of f skip locked
+  loop
+    perform 1 from vortex_platform.file_uploads u
+    where u.file_id = candidate.file_id and u.upload_expires_at <= pg_catalog.clock_timestamp()
+      and (u.cleanup_claim_until is null or u.cleanup_claim_until <= pg_catalog.clock_timestamp())
+    for update;
+    if not found then continue; end if;
+    claim_id := pg_catalog.gen_random_uuid();
+    update vortex_platform.file_uploads set cleanup_claim_id = claim_id,
+      cleanup_claim_until = claim_until, grant_claimed = true, revision = revision + 1
+    where file_id = candidate.file_id;
+    update vortex_platform.file_records set lifecycle_state = 'abandoned'
+    where file_id = candidate.file_id returning * into file_value;
+    result := result || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'fileRecord', vortex_platform.upload_file_record(file_value),
+      'uploadExpiresAt', vortex_platform.format_timestamp_utc(candidate.upload_expires_at),
+      'correlationId', candidate.correlation_id, 'claimId', claim_id,
+      'validUntil', vortex_platform.format_timestamp_utc(claim_until)));
+  end loop;
+  return result;
+end
+$function$;
+alter function vortex_platform.claim_abandoned_file_uploads_internal(integer,text) owner to vortex_owner;
+revoke all on function vortex_platform.claim_abandoned_file_uploads_internal(integer,text)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+grant execute on function vortex_platform.claim_abandoned_file_uploads_internal(integer,text) to vortex_runtime;
+comment on function vortex_platform.claim_abandoned_file_uploads_internal(integer,text) is
+  'Claims a bounded batch of expired never-activated uploads, including clean and rejected inspections; abandoned claims retry after five minutes.';
+
+create or replace function vortex_platform.finish_abandoned_file_upload_internal(p_file_id uuid, p_claim_id uuid)
+returns boolean language plpgsql volatile security definer set search_path = ''
+as $function$
+declare
+  file_value vortex_platform.file_records%rowtype;
+begin
+  select * into file_value from vortex_platform.file_records where file_id = p_file_id for update;
+  if not found or file_value.lifecycle_state <> 'abandoned' or file_value.activated_at is not null
+    or pg_catalog.cardinality(file_value.owning_attachment_references) <> 0
+    or file_value.preview_references <> '[]'::jsonb or file_value.legal_hold then return false; end if;
+  -- The caller reaches this boundary only after the exact-object Storage API delete succeeds.
+  delete from vortex_platform.file_uploads where file_id = p_file_id and cleanup_claim_id = p_claim_id;
+  if not found then return false; end if;
+  update vortex_platform.file_records set lifecycle_state = 'removed', removed_at = pg_catalog.clock_timestamp()
+  where file_id = p_file_id;
+  return true;
+end
+$function$;
+alter function vortex_platform.finish_abandoned_file_upload_internal(uuid,uuid) owner to vortex_owner;
+revoke all on function vortex_platform.finish_abandoned_file_upload_internal(uuid,uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+grant execute on function vortex_platform.finish_abandoned_file_upload_internal(uuid,uuid) to vortex_runtime;
+comment on function vortex_platform.finish_abandoned_file_upload_internal(uuid,uuid) is
+  'Finalizes only the matching abandoned-upload cleanup claim after confirmed Storage deletion; leaves terminal file metadata and removes upload state.';
 
 reset role;

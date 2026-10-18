@@ -14,6 +14,10 @@ stateDiagram-v2
     Scanning --> Active: safety checks pass and record save commits
     Scanning --> Quarantined: safety check fails
     Pending --> Abandoned: upload expires
+    Uploaded --> Abandoned: upload expires before Save
+    Scanning --> Abandoned: upload expires before Save
+    Quarantined --> Abandoned: never-activated upload expires
+    Abandoned --> Removed: scheduled Storage cleanup succeeds
     Active --> SoftDeleted: record or attachment removed
     SoftDeleted --> Active: restored in recovery period
     SoftDeleted --> Removed: retention period expires
@@ -41,7 +45,7 @@ Attachment fields are not directly filterable, sortable, or searchable. File nam
 3. The client uploads directly to organisation-scoped [Supabase Storage](https://supabase.com/docs/guides/storage). Large or interruption-prone files use its resumable upload path rather than restarting the complete transfer.
 4. The platform verifies actual size, detected content type, extension, checksum and safety result, then rechecks current authority before activation. A still-valid upload token does not authorise attachment after access revocation. Browser-supplied metadata is not trusted.
 5. The record save attaches the active file by identifier.
-6. Unattached pending uploads expire and are removed.
+6. Never-activated uploads expire after 24 hours, including clean inspections awaiting Save and rejected content. Scheduled maintenance marks a bounded batch abandoned under the same file-row lock as record activation, removes their private objects through the Storage API, and then removes upload state. Failed deletions retry after their cleanup claim expires. Active attachments and held files are excluded.
 
 A flow file task calls this same File-service boundary for the flow's Access-resolved effective actor. Specified-user or system execution authority never bypasses record, field, file, storage, safety, retention or entitlement checks, and no service-role credential acts as a file grant. File references or metadata returned to a different initiating viewer are projected through that viewer's current authority before display or later use.
 

@@ -1,22 +1,13 @@
 create or replace function vortex_platform.storage_destination_project()
 returns text
-language plpgsql
+language sql
 stable
 security definer
 set search_path = ''
 as $function$
-declare
-  project text;
-begin
-  select destination.project_ref into project
+  select destination.project_ref
   from vortex_platform.storage_destination as destination
   where destination.singleton;
-  if project is null then
-    raise exception using errcode = '55000',
-      message = 'Storage destination has not been provisioned';
-  end if;
-  return project;
-end
 $function$;
 
 alter function vortex_platform.storage_destination_project() owner to vortex_owner;

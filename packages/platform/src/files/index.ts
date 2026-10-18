@@ -78,9 +78,7 @@ export {
   type UploadedObjectLocation,
 } from "./upload";
 export {
-  MAXIMUM_ABANDONED_UPLOAD_BATCH,
   buildContentDisposition,
-  cleanupAbandonedUploads,
   composeStorageAuthorityResolvers,
   createDefaultUpstreamStorageReader,
   createFileReadCoordinator,
@@ -90,11 +88,6 @@ export {
   isExecutableOrActiveBrowserContent,
   parseRangeHeader,
   privateFileResponseHeaders,
-  type AbandonedUploadCandidate,
-  type AbandonedUploadCleanupDependencies,
-  type AbandonedUploadCleanupOutcome,
-  type AbandonedUploadCleanupRepository,
-  type AbandonedUploadCleanupResult,
   type ClaimedDownloadGrant,
   type CurrentReadAuthority,
   type FilePreviewRenderer,
@@ -184,3 +177,5 @@ export {
 } from "./component-bootstrap-serving";
 
 export { admitAttachmentUpload, completeAttachmentUpload } from "./upload-file";
+
+export { cleanupAbandonedUploads } from "./upload-cleanup";

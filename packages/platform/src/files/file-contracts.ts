@@ -640,17 +640,6 @@ export const trustedFileInspectionSchema = z
 
 export type TrustedFileInspection = z.infer<typeof trustedFileInspectionSchema>;
 
-/** The outcome of the isolated safety scanner for one uploaded object. */
-export const fileUploadScanOutcomeSchema = z
-  .object({
-    scannerName: z.string().min(1).max(120),
-    scannerVersion: z.string().min(1).max(120),
-    scannerResult: z.enum(["clean", "quarantined", "refused"]),
-  })
-  .strict();
-
-export type FileUploadScanOutcome = z.infer<typeof fileUploadScanOutcomeSchema>;
-
 export const fileUploadAdmissionRefusalReasonSchema = z.enum([
   "caller_not_authorized",
   "field_not_writable",
