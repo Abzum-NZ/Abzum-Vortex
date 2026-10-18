@@ -4,12 +4,7 @@ import {
   type ApplicationSourceDocument,
 } from "./application-source-contracts";
 import type { ModuleFieldPublication } from "./module-field-edit";
-import {
-  describeSourcePlace,
-  walkSourceStrings,
-  type InlineRecordTypeReference,
-  type SourcePath,
-} from "./module-record-type-shape";
+import { applicationUses, type ApplicationUsePlace } from "./application-uses";
 import type { PipelineStageTone } from "./record-type-pipelines";
 
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
@@ -45,7 +40,7 @@ export type InlinePipelineResult =
   | Readonly<{
       kind: "referenced";
       issue: string;
-      references: readonly InlineRecordTypeReference[];
+      references: readonly ApplicationUsePlace[];
     }>;
 
 type Located = Readonly<{
@@ -120,127 +115,6 @@ export const inlineOptionOwner = (
       action.sets_choice_field === fieldKey &&
       action.sets_choice_option === option,
   );
-
-/**
- * Every place that uses one option of a choice field: an action that owns or sets it, a flow step
- * that saves it, and a condition, filter or rule that compares the field with it. The field's own
- * options and the record type's pipelines do not count; they go with the option.
- */
-export const inlineChoiceOptionReferences = (
-  source: ApplicationSourceDocument,
-  moduleKey: string,
-  recordKey: string,
-  fieldKey: string,
-  option: string,
-): readonly InlineRecordTypeReference[] => {
-  const located = locate(source, moduleKey, recordKey);
-  if (located === undefined) return [];
-  const { module, moduleIndex, record, recordIndex } = located;
-  const qualified = `${moduleKey}:${recordKey}`;
-  const found = new Map<string, InlineRecordTypeReference>();
-  const add = (path: SourcePath) => {
-    const place = describeSourcePlace(source, path);
-    found.set(place.label, place);
-  };
-  // A node names the field when a field-ish property holds its key, or a values map is keyed by it.
-  const namesField = (node: Record<string, unknown>, parentKey: string | undefined): boolean =>
-    node.field === fieldKey ||
-    node.sets_choice_field === fieldKey ||
-    ((parentKey === "values" || parentKey === "entries" || parentKey === "field_values") &&
-      Object.hasOwn(node, fieldKey));
-  const mentions = (value: unknown): boolean => {
-    let hit = false;
-    walkSourceStrings(value, [], (text) => {
-      if (text === option) hit = true;
-    });
-    return hit;
-  };
-  // Inside a component of this record type, an object that names the field and, with its siblings,
-  // holds the option uses it.
-  const scan = (
-    value: unknown,
-    path: SourcePath,
-    parent: unknown,
-    parentKey: string | undefined,
-  ): void => {
-    if (Array.isArray(value)) {
-      value.forEach((item, index) => scan(item, [...path, index], value, parentKey));
-      return;
-    }
-    if (value === null || typeof value !== "object") return;
-    const node = value as Record<string, unknown>;
-    if (namesField(node, parentKey) && (mentions(node) || mentions(parent))) {
-      add(path);
-      return;
-    }
-    for (const [key, child] of Object.entries(node)) scan(child, [...path, key], node, key);
-  };
-  const scoped = (value: unknown): boolean => {
-    let inScope = false;
-    walkSourceStrings(value, [], (text, _path, key) => {
-      if (
-        (key === "record_type" || key === "recordTypeId" || key === "record_types") &&
-        (text === qualified || text === recordKey)
-      )
-        inScope = true;
-    });
-    return inScope;
-  };
-  for (const section of [
-    "actions",
-    "permissions",
-    "queries",
-    "flows",
-    "sharing_conditions",
-  ] as const)
-    (module[section] as unknown[]).forEach((item, index) => {
-      if (scoped(item))
-        scan(item, ["body", "modules", moduleIndex, section, index], undefined, undefined);
-    });
-  for (const section of ["pages", "flows"] as const)
-    (source.body[section] as unknown[]).forEach((item, index) => {
-      if (scoped(item)) scan(item, ["body", section, index], undefined, undefined);
-    });
-  // The record type's own fields: a default, or a calculation or rule that compares the field.
-  record.fields.forEach((field, index) => {
-    const path: SourcePath = [
-      "body",
-      "modules",
-      moduleIndex,
-      "record_types",
-      recordIndex,
-      "fields",
-      index,
-    ];
-    if (field.key === fieldKey) {
-      if (field.default === option) add(path);
-      return;
-    }
-    scan(field, path, undefined, undefined);
-  });
-  return [...found.values()];
-};
-
-/** Every page block that shows a board over the pipeline's choice field. */
-export const inlinePipelineReferences = (
-  source: ApplicationSourceDocument,
-  moduleKey: string,
-  recordKey: string,
-  pipelineKey: string,
-): readonly InlineRecordTypeReference[] => {
-  const located = locate(source, moduleKey, recordKey);
-  const pipeline = located?.record.pipelines.find((candidate) => candidate.key === pipelineKey);
-  if (pipeline === undefined) return [];
-  const choiceField = `${moduleKey}:${recordKey}.${pipeline.stage_field}`;
-  const found = new Map<string, InlineRecordTypeReference>();
-  for (const section of ["pages", "shells"] as const)
-    walkSourceStrings(source.body[section], ["body", section], (text, path, key) => {
-      if (key !== "choice_field" || text !== choiceField) return;
-      const place = describeSourcePlace(source, path);
-      found.set(place.label, place);
-    });
-  return [...found.values()];
-};
 
 const nameFrom = (label: string): string => {
   const words = label
@@ -345,13 +219,13 @@ export const saveInlinePipeline = (
         ],
       };
     for (const option of removed) {
-      const references = inlineChoiceOptionReferences(
-        current,
-        module.key,
-        record.key,
-        field.key,
+      const references = applicationUses(current, {
+        kind: "choice_option",
+        moduleKey: module.key,
+        recordKey: record.key,
+        fieldKey: field.key,
         option,
-      );
+      });
       if (references.length > 0)
         return {
           kind: "referenced",
@@ -456,7 +330,7 @@ export const deleteInlinePipeline = (
   recordKey: string,
   pipelineKey: string,
 ): InlinePipelineResult => {
-  const references = inlinePipelineReferences(current, moduleKey, recordKey, pipelineKey);
+  const references = applicationUses(current, { kind: "pipeline", moduleKey, recordKey, pipelineKey });
   if (references.length > 0)
     return {
       kind: "referenced",
