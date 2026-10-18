@@ -16,10 +16,6 @@ const read = async <Result>(
   return response.json() as Promise<Result>;
 };
 
-export const reopenStudioApplication: typeof Operations.reopenStudioApplication = (
-  organizationId,
-  rootId,
-) => read("draft", organizationId, rootId);
 export const resolveStudioApplicationConditionContext: typeof Operations.resolveStudioApplicationConditionContext =
   (organizationId, candidate) => read("condition-context", organizationId, candidate);
 export const resolveStudioApplicationTheme: typeof Operations.resolveStudioApplicationTheme = (

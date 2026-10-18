@@ -1,7 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import {
-  reopenStudioApplication,
   resolveStudioApplicationConditionContext,
   resolveStudioApplicationTheme,
 } from "../../../_lib/studio-read-operations";
@@ -21,12 +20,6 @@ export async function GET(
     const candidate: unknown = JSON.parse(request.nextUrl.searchParams.get("request") ?? "null");
     let result: unknown;
     switch (operation) {
-      case "draft":
-        result = await reopenStudioApplication(
-          organizationId,
-          typeof candidate === "string" ? candidate : "",
-        );
-        break;
       case "condition-context":
         result = await resolveStudioApplicationConditionContext(organizationId, candidate);
         break;

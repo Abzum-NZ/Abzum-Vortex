@@ -115,7 +115,7 @@ export type StudioDraftChangedElsewhere = Readonly<{
 
 /**
  * Saves the draft and nothing else: Studio autosaves each batch of edits through this one action.
- * The draft is compiled for the canvas by the separate independent draft fetch request the
+ * The draft is compiled for the canvas by the separate `reopenStudioApplication` request the
  * workspace sends once its saves are idle, so a save never waits for a compile. A save that no
  * longer extends the saved revision is refused as a conflict that names who wrote the newer
  * revision and carries it, so the workspace can say what changed.
@@ -131,6 +131,11 @@ export async function saveStudioApplication(organizationId: string, candidate: u
   }
   const changedBy = await readStudioPersonLabel(organizationId, latest.draft.updatedBy);
   return { kind: "conflict", reason: "draft_changed", elsewhere: { draft: latest.draft, changedBy } };
+}
+
+/** The saved draft compiled for the canvas: its page slots, frames, choices and compile failure. */
+export async function reopenStudioApplication(organizationId: string, applicationRootId: string) {
+  return loadStudioApplicationDraft(organizationId, applicationRootId);
 }
 
 /** The records the data blocks of one saved draft page area show, read with the builder's own access. */

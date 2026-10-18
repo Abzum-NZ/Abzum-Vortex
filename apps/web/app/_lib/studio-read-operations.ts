@@ -47,11 +47,6 @@ export async function resolveStudioApplicationConditionContext(
   }
 }
 
-/** The saved draft compiled for the canvas: its page slots, frames, choices and compile failure. */
-export async function reopenStudioApplication(organizationId: string, applicationRootId: string) {
-  return loadStudioApplicationDraft(organizationId, applicationRootId);
-}
-
 const themeFailureWords: Readonly<Record<string, string>> = {
   INSUFFICIENT_CONTRAST: "does not have enough contrast to be read",
   HIDDEN_FOCUS: "would hide the focus outline",
