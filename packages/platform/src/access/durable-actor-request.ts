@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   databaseRevision,
+  logRefusal,
   sameId,
   actorIdSchema,
   applicationRootIdSchema,
@@ -184,6 +185,7 @@ export const createDurableActorRequestService = (dependencies: DurableActorReque
      */
     run: async <Result>(
       verifiedCandidate: VerifiedDurableActorRequestContext,
+      mode: "shared" | "access_change",
       operation: (
         transaction: RequestDatabaseTransaction,
         scope: DurableActorRequestScope,
@@ -213,20 +215,25 @@ export const createDurableActorRequestService = (dependencies: DurableActorReque
         const value = await runTransaction(
           async (transaction) => {
             if (policy.kind === "initiating_person") {
-              // A durable person actor runs only platform-service operations (Access, accounts and
-              // tenants), most of which advance the Access version. It holds that
-              // version exclusively from the first statement, as every access change does, so two
-              // never deadlock on a lock upgrade.
-              const row = single(
-                await transaction.query<PersonScopeRow>`
-                  select *
-                  from vortex_access.resolve_human_application_access_change_scope(
-                    ${policy.initiator.identityId}::uuid,
-                    ${purpose.organizationId}::uuid,
-                    ${purpose.applicationRootId}::uuid
-                  )
-                `,
-              );
+              // The registered operation chooses its lock before any scope is resolved.
+              // Reads share Access; version-changing operations enter exclusively.
+              const rows =
+                mode === "access_change"
+                  ? await transaction.query<PersonScopeRow>`
+                    select * from vortex_access.resolve_human_application_access_change_scope(
+                      ${policy.initiator.identityId}::uuid,
+                      ${purpose.organizationId}::uuid,
+                      ${purpose.applicationRootId}::uuid
+                    )
+                  `
+                  : await transaction.query<PersonScopeRow>`
+                    select * from vortex_access.resolve_human_application_scope(
+                      ${policy.initiator.identityId}::uuid,
+                      ${purpose.organizationId}::uuid,
+                      ${purpose.applicationRootId}::uuid
+                    )
+                  `;
+              const row = single(rows);
               const account = organizationAccountIdSchema.parse(row.organization_account_id);
               const organizationId = organizationIdSchema.parse(row.organization_id);
               const applicationRootId = applicationRootIdSchema.parse(row.application_root_id);
@@ -314,6 +321,7 @@ export const createDurableActorRequestService = (dependencies: DurableActorReque
         return { kind: "available", value };
       } catch (error) {
         const refused = error instanceof DurableActorRefusal || databaseCode(error) === "42501";
+        logRefusal("access", "durable actor request", refused ? "scope_unavailable" : "temporarily_unavailable", error);
         return refused ? { kind: "unavailable" } : { kind: "temporarily_unavailable" };
       }
     },

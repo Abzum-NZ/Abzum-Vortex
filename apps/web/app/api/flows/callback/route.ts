@@ -134,7 +134,7 @@ const createCallbackService = () => {
             operations: RequestBoundTenantGovernanceService;
           }>) => Promise<Result>,
         ) =>
-          durableRequests.runChange(session, selection, (transaction, scope) =>
+          durableRequests.runAccessChange(session, selection, (transaction, scope) =>
             operation({
               tenantId: scope.tenantId,
               operations: createRequestBoundTenantGovernanceService(transaction, scope),

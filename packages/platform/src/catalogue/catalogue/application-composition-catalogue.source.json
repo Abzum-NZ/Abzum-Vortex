@@ -295,10 +295,22 @@
         "help": "Announcement and visual severity of the notice",
         "required": true,
         "options": [
-          { "key": "info", "label": "Information" },
-          { "key": "success", "label": "Success" },
-          { "key": "warning", "label": "Warning" },
-          { "key": "critical", "label": "Critical" }
+          {
+            "key": "info",
+            "label": "Information"
+          },
+          {
+            "key": "success",
+            "label": "Success"
+          },
+          {
+            "key": "warning",
+            "label": "Warning"
+          },
+          {
+            "key": "critical",
+            "label": "Critical"
+          }
         ]
       },
       {
@@ -307,7 +319,10 @@
         "label": "Dismissible",
         "help": "Whether this rendered notice can be dismissed",
         "required": false,
-        "defaultValue": { "kind": "boolean", "value": false }
+        "defaultValue": {
+          "kind": "boolean",
+          "value": false
+        }
       },
       {
         "kind": "list",
@@ -332,8 +347,14 @@
               "help": "Whether this part is plain text or a link",
               "required": true,
               "options": [
-                { "key": "text", "label": "Text" },
-                { "key": "link", "label": "Link" }
+                {
+                  "key": "text",
+                  "label": "Text"
+                },
+                {
+                  "key": "link",
+                  "label": "Link"
+                }
               ]
             },
             {
@@ -2816,7 +2837,10 @@
         "label": "Severity",
         "help": "Visual alert severity level",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "error" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "error"
+        },
         "options": [
           {
             "key": "error",
@@ -3383,7 +3407,10 @@
         "label": "Direction",
         "help": "Arrange child slots stacked in a column or side by side in a row",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "column" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "column"
+        },
         "options": [
           {
             "key": "column",
@@ -3401,7 +3428,10 @@
         "label": "Gap",
         "help": "Space between child slots",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "medium" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "medium"
+        },
         "options": [
           {
             "key": "none",
@@ -3493,7 +3523,10 @@
         "label": "Direction",
         "help": "Arrange child slots stacked in a column or side by side in a row",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "column" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "column"
+        },
         "options": [
           {
             "key": "column",
@@ -3511,7 +3544,10 @@
         "label": "Gap",
         "help": "Space between child slots",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "medium" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "medium"
+        },
         "options": [
           {
             "key": "none",
@@ -3547,7 +3583,10 @@
         "label": "Menu placement",
         "help": "How the menu region follows the page",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "flow" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "flow"
+        },
         "options": [
           {
             "key": "flow",
@@ -3569,7 +3608,10 @@
         "label": "Tablet direction",
         "help": "Override the direction on tablet widths",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "inherit" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "inherit"
+        },
         "options": [
           {
             "key": "inherit",
@@ -3601,7 +3643,10 @@
         "label": "Tablet menu placement",
         "help": "Override menu placement on tablet widths",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "inherit" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "inherit"
+        },
         "options": [
           {
             "key": "inherit",
@@ -3627,7 +3672,10 @@
         "label": "Phone direction",
         "help": "Override the direction on phone widths",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "inherit" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "inherit"
+        },
         "options": [
           {
             "key": "inherit",
@@ -3659,7 +3707,10 @@
         "label": "Phone menu placement",
         "help": "Override menu placement on phone widths",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "inherit" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "inherit"
+        },
         "options": [
           {
             "key": "inherit",
@@ -3760,7 +3811,10 @@
         "label": "Level",
         "help": "Heading importance: one is the most important, four is the least",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "two" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "two"
+        },
         "options": [
           {
             "key": "one",
@@ -4277,6 +4331,10 @@
           {
             "key": "link",
             "label": "Link"
+          },
+          {
+            "key": "table",
+            "label": "Table"
           }
         ]
       },
@@ -4403,6 +4461,139 @@
           "label": "Record type",
           "required": true
         }
+      },
+      {
+        "kind": "number",
+        "key": "minimum_rows",
+        "label": "Minimum rows",
+        "required": true,
+        "integer": true,
+        "minimum": 0,
+        "maximum": 1000
+      },
+      {
+        "kind": "number",
+        "key": "maximum_rows",
+        "label": "Maximum rows",
+        "required": true,
+        "integer": true,
+        "minimum": 1,
+        "maximum": 1000
+      },
+      {
+        "kind": "list",
+        "key": "columns",
+        "label": "Columns",
+        "required": true,
+        "minimumItems": 1,
+        "maximumItems": 40,
+        "item": {
+          "kind": "group",
+          "key": "column",
+          "label": "Column",
+          "required": true,
+          "properties": [
+            {
+              "kind": "text",
+              "key": "key",
+              "label": "Column key",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 40
+            },
+            {
+              "kind": "choice",
+              "key": "type",
+              "label": "Column type",
+              "required": true,
+              "options": [
+                {
+                  "key": "text",
+                  "label": "Text"
+                },
+                {
+                  "key": "whole_number",
+                  "label": "Whole number"
+                },
+                {
+                  "key": "decimal_number",
+                  "label": "Decimal number"
+                },
+                {
+                  "key": "money",
+                  "label": "Money"
+                },
+                {
+                  "key": "yes_no",
+                  "label": "Yes no"
+                },
+                {
+                  "key": "date",
+                  "label": "Date"
+                },
+                {
+                  "key": "date_time",
+                  "label": "Date time"
+                },
+                {
+                  "key": "choice",
+                  "label": "Choice"
+                }
+              ]
+            },
+            {
+              "kind": "boolean",
+              "key": "required",
+              "label": "Required",
+              "required": true
+            },
+            {
+              "kind": "list",
+              "key": "options",
+              "presentation": true,
+              "presentationIdentity": "key",
+              "label": "Options",
+              "help": "Declared field values offered by this input",
+              "required": false,
+              "minimumItems": 0,
+              "maximumItems": 200,
+              "item": {
+                "kind": "group",
+                "key": "option",
+                "label": "Option",
+                "required": true,
+                "properties": [
+                  {
+                    "kind": "text",
+                    "key": "key",
+                    "label": "Value",
+                    "help": "Exact option value declared by the module field",
+                    "required": true,
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  {
+                    "kind": "text",
+                    "key": "label",
+                    "presentation": true,
+                    "label": "Label",
+                    "required": true,
+                    "minLength": 1,
+                    "maxLength": 120
+                  }
+                ]
+              }
+            },
+            {
+              "kind": "text",
+              "key": "currency",
+              "label": "Fixed currency",
+              "required": false,
+              "minLength": 1,
+              "maxLength": 3
+            }
+          ]
+        }
       }
     ],
     "slots": [],
@@ -4513,7 +4704,10 @@
         "required": false,
         "minLength": 1,
         "maxLength": 40,
-        "defaultValue": { "kind": "text", "value": "label" }
+        "defaultValue": {
+          "kind": "text",
+          "value": "label"
+        }
       },
       {
         "kind": "text",
@@ -4523,7 +4717,10 @@
         "required": false,
         "minLength": 1,
         "maxLength": 40,
-        "defaultValue": { "kind": "text", "value": "address" }
+        "defaultValue": {
+          "kind": "text",
+          "value": "address"
+        }
       },
       {
         "kind": "text",
@@ -4533,7 +4730,10 @@
         "required": false,
         "minLength": 1,
         "maxLength": 40,
-        "defaultValue": { "kind": "text", "value": "description" }
+        "defaultValue": {
+          "kind": "text",
+          "value": "description"
+        }
       }
     ],
     "slots": [
@@ -4584,7 +4784,10 @@
         "required": false,
         "minLength": 1,
         "maxLength": 40,
-        "defaultValue": { "kind": "text", "value": "label" }
+        "defaultValue": {
+          "kind": "text",
+          "value": "label"
+        }
       },
       {
         "kind": "text",
@@ -4594,7 +4797,10 @@
         "required": false,
         "minLength": 1,
         "maxLength": 40,
-        "defaultValue": { "kind": "text", "value": "address" }
+        "defaultValue": {
+          "kind": "text",
+          "value": "address"
+        }
       },
       {
         "kind": "text",
@@ -4604,7 +4810,10 @@
         "required": false,
         "minLength": 1,
         "maxLength": 40,
-        "defaultValue": { "kind": "text", "value": "description" }
+        "defaultValue": {
+          "kind": "text",
+          "value": "description"
+        }
       },
       {
         "kind": "text",
@@ -4745,7 +4954,10 @@
         "required": false,
         "minLength": 1,
         "maxLength": 40,
-        "defaultValue": { "kind": "text", "value": "label" }
+        "defaultValue": {
+          "kind": "text",
+          "value": "label"
+        }
       },
       {
         "kind": "text",
@@ -4755,7 +4967,10 @@
         "required": false,
         "minLength": 1,
         "maxLength": 40,
-        "defaultValue": { "kind": "text", "value": "address" }
+        "defaultValue": {
+          "kind": "text",
+          "value": "address"
+        }
       },
       {
         "kind": "text",
@@ -4765,7 +4980,10 @@
         "required": false,
         "minLength": 1,
         "maxLength": 40,
-        "defaultValue": { "kind": "text", "value": "description" }
+        "defaultValue": {
+          "kind": "text",
+          "value": "description"
+        }
       },
       {
         "kind": "text",
@@ -5600,7 +5818,10 @@
         "label": "Direction",
         "help": "Arrange child slots stacked in a column or side by side in a row",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "column" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "column"
+        },
         "options": [
           {
             "key": "column",
@@ -5618,7 +5839,10 @@
         "label": "Gap",
         "help": "Space between child slots",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "medium" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "medium"
+        },
         "options": [
           {
             "key": "none",
@@ -5654,7 +5878,10 @@
         "label": "Menu placement",
         "help": "How the menu region follows the page",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "flow" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "flow"
+        },
         "options": [
           {
             "key": "flow",
@@ -5676,7 +5903,10 @@
         "label": "Tablet direction",
         "help": "Override the direction on tablet widths",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "inherit" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "inherit"
+        },
         "options": [
           {
             "key": "inherit",
@@ -5708,7 +5938,10 @@
         "label": "Tablet menu placement",
         "help": "Override menu placement on tablet widths",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "inherit" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "inherit"
+        },
         "options": [
           {
             "key": "inherit",
@@ -5734,7 +5967,10 @@
         "label": "Phone direction",
         "help": "Override the direction on phone widths",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "inherit" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "inherit"
+        },
         "options": [
           {
             "key": "inherit",
@@ -5766,7 +6002,10 @@
         "label": "Phone menu placement",
         "help": "Override menu placement on phone widths",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "inherit" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "inherit"
+        },
         "options": [
           {
             "key": "inherit",
@@ -5883,8 +6122,14 @@
             "help": "Whether each item has an end field or a duration",
             "required": true,
             "options": [
-              { "key": "start_end", "label": "Start and end" },
-              { "key": "start_duration", "label": "Start and duration" }
+              {
+                "key": "start_end",
+                "label": "Start and end"
+              },
+              {
+                "key": "start_duration",
+                "label": "Start and duration"
+              }
             ]
           },
           {
@@ -5915,9 +6160,18 @@
             "help": "Unit used by the duration field",
             "required": false,
             "options": [
-              { "key": "minutes", "label": "Minutes" },
-              { "key": "hours", "label": "Hours" },
-              { "key": "days", "label": "Days" }
+              {
+                "key": "minutes",
+                "label": "Minutes"
+              },
+              {
+                "key": "hours",
+                "label": "Hours"
+              },
+              {
+                "key": "days",
+                "label": "Days"
+              }
             ]
           }
         ]
@@ -5936,11 +6190,23 @@
         "help": "View shown when the address has no valid view parameter",
         "required": false,
         "options": [
-          { "key": "month", "label": "Month" },
-          { "key": "week", "label": "Week" },
-          { "key": "agenda", "label": "Agenda" }
+          {
+            "key": "month",
+            "label": "Month"
+          },
+          {
+            "key": "week",
+            "label": "Week"
+          },
+          {
+            "key": "agenda",
+            "label": "Agenda"
+          }
         ],
-        "defaultValue": { "kind": "choice", "value": "month" }
+        "defaultValue": {
+          "kind": "choice",
+          "value": "month"
+        }
       },
       {
         "kind": "text",
@@ -6290,7 +6556,10 @@
         "label": "Direction",
         "help": "Arrange child slots stacked in a column or side by side in a row",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "column" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "column"
+        },
         "options": [
           {
             "key": "column",
@@ -6308,7 +6577,10 @@
         "label": "Gap",
         "help": "Space between child slots",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "medium" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "medium"
+        },
         "options": [
           {
             "key": "none",
@@ -6344,7 +6616,10 @@
         "label": "Menu placement",
         "help": "How the menu region follows the page",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "flow" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "flow"
+        },
         "options": [
           {
             "key": "flow",
@@ -6366,7 +6641,10 @@
         "label": "Tablet direction",
         "help": "Override the direction on tablet widths",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "inherit" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "inherit"
+        },
         "options": [
           {
             "key": "inherit",
@@ -6398,7 +6676,10 @@
         "label": "Tablet menu placement",
         "help": "Override menu placement on tablet widths",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "inherit" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "inherit"
+        },
         "options": [
           {
             "key": "inherit",
@@ -6424,7 +6705,10 @@
         "label": "Phone direction",
         "help": "Override the direction on phone widths",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "inherit" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "inherit"
+        },
         "options": [
           {
             "key": "inherit",
@@ -6456,7 +6740,10 @@
         "label": "Phone menu placement",
         "help": "Override menu placement on phone widths",
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "inherit" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "inherit"
+        },
         "options": [
           {
             "key": "inherit",
@@ -6485,7 +6772,10 @@
       },
       {
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "none" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "none"
+        },
         "help": "Inset all container regions using the active style spacing scale",
         "options": [
           {
@@ -6511,7 +6801,10 @@
       },
       {
         "required": false,
-        "defaultValue": { "kind": "choice", "value": "fill" },
+        "defaultValue": {
+          "kind": "choice",
+          "value": "fill"
+        },
         "help": "Keep this container full width or bound it to a readable centered frame",
         "options": [
           {
@@ -6954,6 +7247,223 @@
       "accessibleNamePropertyPath": ["text"]
     },
     "supportedEvents": [],
+    "supportedStateOperations": []
+  },
+  "TABLE_INPUT_BLOCK_RELEASE": {
+    "blockId": "f40dc797-ac89-4687-8aa2-157c639be233",
+    "key": "platform.form.table_input",
+    "releaseVersion": "1.0.0",
+    "name": "Table input",
+    "description": "An editor for the rows and typed columns of a record table field.",
+    "icon": "table",
+    "paletteGroup": "input",
+    "rendererKey": "platform.renderer.table_input",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "name",
+        "label": "Field name",
+        "help": "Key of this field in form values and events: lowercase words separated by underscores",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 40
+      },
+      {
+        "kind": "text",
+        "key": "label",
+        "presentation": true,
+        "label": "Label",
+        "help": "Accessible name and visual field label",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "text",
+        "key": "placeholder",
+        "presentation": true,
+        "label": "Placeholder",
+        "help": "Placeholder hint text",
+        "required": false,
+        "minLength": 0,
+        "maxLength": 200
+      },
+      {
+        "kind": "text",
+        "key": "help_text",
+        "presentation": true,
+        "label": "Help text",
+        "help": "Descriptive help text below the input",
+        "required": false,
+        "minLength": 0,
+        "maxLength": 500
+      },
+      {
+        "kind": "boolean",
+        "key": "required",
+        "label": "Required",
+        "help": "Whether the field is required",
+        "required": false
+      },
+      {
+        "kind": "boolean",
+        "key": "disabled",
+        "label": "Disabled",
+        "help": "Whether the field is disabled",
+        "required": false
+      },
+      {
+        "kind": "boolean",
+        "key": "read_only",
+        "label": "Read-only",
+        "help": "Whether the field is read-only",
+        "required": false
+      },
+      {
+        "kind": "number",
+        "key": "minimum_rows",
+        "label": "Minimum rows",
+        "required": true,
+        "integer": true,
+        "minimum": 0,
+        "maximum": 1000
+      },
+      {
+        "kind": "number",
+        "key": "maximum_rows",
+        "label": "Maximum rows",
+        "required": true,
+        "integer": true,
+        "minimum": 1,
+        "maximum": 1000
+      },
+      {
+        "kind": "list",
+        "key": "columns",
+        "label": "Columns",
+        "required": true,
+        "minimumItems": 1,
+        "maximumItems": 40,
+        "item": {
+          "kind": "group",
+          "key": "column",
+          "label": "Column",
+          "required": true,
+          "properties": [
+            {
+              "kind": "text",
+              "key": "key",
+              "label": "Column key",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 40
+            },
+            {
+              "kind": "choice",
+              "key": "type",
+              "label": "Column type",
+              "required": true,
+              "options": [
+                {
+                  "key": "text",
+                  "label": "Text"
+                },
+                {
+                  "key": "whole_number",
+                  "label": "Whole number"
+                },
+                {
+                  "key": "decimal_number",
+                  "label": "Decimal number"
+                },
+                {
+                  "key": "money",
+                  "label": "Money"
+                },
+                {
+                  "key": "yes_no",
+                  "label": "Yes no"
+                },
+                {
+                  "key": "date",
+                  "label": "Date"
+                },
+                {
+                  "key": "date_time",
+                  "label": "Date time"
+                },
+                {
+                  "key": "choice",
+                  "label": "Choice"
+                }
+              ]
+            },
+            {
+              "kind": "boolean",
+              "key": "required",
+              "label": "Required",
+              "required": true
+            },
+            {
+              "kind": "list",
+              "key": "options",
+              "presentation": true,
+              "presentationIdentity": "key",
+              "label": "Options",
+              "help": "Declared field values offered by this input",
+              "required": false,
+              "minimumItems": 0,
+              "maximumItems": 200,
+              "item": {
+                "kind": "group",
+                "key": "option",
+                "label": "Option",
+                "required": true,
+                "properties": [
+                  {
+                    "kind": "text",
+                    "key": "key",
+                    "label": "Value",
+                    "help": "Exact option value declared by the module field",
+                    "required": true,
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  {
+                    "kind": "text",
+                    "key": "label",
+                    "presentation": true,
+                    "label": "Label",
+                    "required": true,
+                    "minLength": 1,
+                    "maxLength": 120
+                  }
+                ]
+              }
+            },
+            {
+              "kind": "text",
+              "key": "currency",
+              "label": "Fixed currency",
+              "required": false,
+              "minLength": 1,
+              "maxLength": 3
+            }
+          ]
+        }
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content",
+      "publicSurface": "allowed",
+      "accessibleName": "required",
+      "accessibleNamePropertyPath": ["label"]
+    },
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   }
 }
