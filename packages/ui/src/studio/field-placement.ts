@@ -34,6 +34,8 @@ export type StudioFieldPlacement = Readonly<{
   settingKey?: string;
   /** Why the field cannot be shown here, when it cannot. */
   unavailable?: string;
+  /** The existing field is already declared in this place. */
+  shown?: boolean;
 }>;
 
 type Release = StudioCompositionContext["catalogue"]["releases"][number];
@@ -97,8 +99,10 @@ export const studioFieldPlacements = (
   moduleKey: string,
   recordKey: string,
   fieldType: string,
+  fieldKey?: string,
 ): readonly StudioFieldPlacement[] => {
   const qualified = `${moduleKey}:${recordKey}`;
+  const reference = fieldKey === undefined ? undefined : `${qualified}.${fieldKey}`;
   const result: StudioFieldPlacement[] = [];
   for (const page of context.source.body.pages) {
     if (
@@ -114,20 +118,25 @@ export const studioFieldPlacements = (
       for (const item of sourceItemTree(zone.items)) {
         const release = releaseOf(context, item);
         if (release === undefined) continue;
-        for (const setting of fieldListSettings(release))
+        for (const setting of fieldListSettings(release)) {
+          const entries = item.props[setting.key];
           result.push({
             id: `${page.id}|${item.props.id}|${setting.key}`,
             pageAlias: page.id,
             kind: "list_entry",
             placementAlias: item.props.id,
             settingKey: setting.key,
+            shown: reference !== undefined && Array.isArray(entries) && entries.some((entry: unknown) =>
+              entry !== null && typeof entry === "object" && "field" in entry && entry.field === reference),
             label: `${pageLabel}: ${blockTitle(item, release)}, ${setting.label}`,
           });
+        }
         if (page.type === "form" && release.key === formContainerKey)
           result.push({
             id: `${page.id}|${item.props.id}|input`,
             pageAlias: page.id,
             kind: "form_input",
+            shown: reference !== undefined && sourceItemTree([item]).some((child) => child.props.field === reference),
             placementAlias: item.props.id,
             label: `${pageLabel}: ${blockTitle(item, release)}, a new input`,
             ...(formInputTypes.has(fieldType) && changeableByPeople({ type: fieldType as never })
@@ -171,7 +180,7 @@ const selectInQuery = (
   const target = owner?.queries.find((candidate) => candidate.key === query.slice(separator + 1));
   if (target === undefined)
     return "its data comes from a query of another application, which is changed there";
-  if (!(target.select as string[]).includes(fieldKey)) (target.select as string[]).push(fieldKey);
+  if (target.select.length > 0 && !(target.select as string[]).includes(fieldKey)) (target.select as string[]).push(fieldKey);
   return applicationSourceDocumentSchema.parse(next);
 };
 
