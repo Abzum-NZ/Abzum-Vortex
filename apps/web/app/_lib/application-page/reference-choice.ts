@@ -13,6 +13,7 @@ import {
   exactDecimalTextSchema,
   timestampSchema,
   richTextDocumentSchema,
+  moduleFieldValueSchemas,
   sameId,
   isRecord,
 } from "@vortex/platform/schema";
@@ -260,6 +261,12 @@ export const projectEditField = (
           return undefined;
       }
       kind = "link_input";
+      break;
+    case "table":
+      if (stored !== null && !moduleFieldValueSchemas.table.safeParse(stored).success)
+        return undefined;
+      displayed = stored ?? [];
+      kind = "table_input";
       break;
     case "rich_text":
       if (stored !== null && !richTextDocumentSchema.safeParse(stored).success) return undefined;

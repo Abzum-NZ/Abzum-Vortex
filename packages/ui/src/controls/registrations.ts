@@ -29,6 +29,8 @@ import {
   parseRichTextInputPayload,
   parseTabsPayload,
   parseTextInputPayload,
+  parseTableInputPayload,
+  type TableInputPayload,
   parseTypedFieldValue,
   parseValidationPayload,
   type BooleanInputPayload,
@@ -79,8 +81,7 @@ const requireExactKeys = (
   location: DefinitionRenderErrorLocation,
 ): void => {
   for (const key of Object.keys(value))
-    if (!allowed.includes(key))
-      fail(`Unexpected supplied draft-feedback field '${key}'`, location);
+    if (!allowed.includes(key)) fail(`Unexpected supplied draft-feedback field '${key}'`, location);
 };
 
 const requireNonEmptyString = (
@@ -88,9 +89,7 @@ const requireNonEmptyString = (
   message: string,
   location: DefinitionRenderErrorLocation,
 ): string =>
-  typeof value === "string" && value.trim().length > 0
-    ? value
-    : fail(message, location);
+  typeof value === "string" && value.trim().length > 0 ? value : fail(message, location);
 
 const requireBoolean = (
   value: unknown,
@@ -357,6 +356,10 @@ export const CONTROL_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
       parsePayload: controlPayloadParser<ChoiceInputPayload>(parseDependentChoiceInputPayload),
+    }),
+    Object.freeze({
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_INPUT_BLOCK_RELEASE,
+      parsePayload: controlPayloadParser<TableInputPayload>(parseTableInputPayload),
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.FIELD_INPUT_BLOCK_RELEASE,

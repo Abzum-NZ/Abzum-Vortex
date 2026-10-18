@@ -291,10 +291,7 @@ function compileApplication(
         output.artifact.rootId === expected.rootId &&
         output.artifact.exactVersion === expected.exactVersion,
     );
-    if (
-      release?.kind !== "module" ||
-      release.canonical.content.ownerApplication !== owner
-    )
+    if (release?.kind !== "module" || release.canonical.content.ownerApplication !== owner)
       fail(
         "vortex.definition.application_module_bindings",
         "scope_conflict",
@@ -331,7 +328,12 @@ function compileApplication(
       // Application never changes which release of a shared Module another Application uses.
       moduleBindings: applicationModuleKeysOf(body).map((moduleKey) => {
         const target = resolution.definition(moduleKey, "module");
-        const resolvedVersion = exactVersion(resolution, moduleKey, "module", CURRENT_MODULE_RELEASE);
+        const resolvedVersion = exactVersion(
+          resolution,
+          moduleKey,
+          "module",
+          CURRENT_MODULE_RELEASE,
+        );
         return {
           moduleRootId: target.rootId,
           version: { selection: "exact", version: resolvedVersion },
@@ -645,6 +647,13 @@ const applicationCompositionResolution = (
           : {}),
         ...(type === "several_choices" && typeof settings.maximumSelections === "number"
           ? { maximumSelections: settings.maximumSelections }
+          : {}),
+        ...(type === "table"
+          ? {
+              tableSettings: settings as unknown as NonNullable<
+                FieldInputSourceField["tableSettings"]
+              >,
+            }
           : {}),
         choices,
         recordTypes,

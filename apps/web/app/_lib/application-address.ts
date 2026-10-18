@@ -15,6 +15,7 @@ import { loadPermittedApplicationsAtAddress } from "./organization-context";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import type { IdentitySession } from "@vortex/platform/schema";
 import { platformPermissionSource } from "./platform-permission-source";
+import { mapWebError } from "./web-error-mapper";
 
 type ApplicationAddressResult =
   | Readonly<{
@@ -60,8 +61,13 @@ const loadAddressedApplicationAtAddress = cache(
     let authorityId;
     try {
       authorityId = getIdentityAuthorityConfiguration().authorityId;
-    } catch {
-      return { read: { kind: "temporarily_unavailable" }, experiences: [] };
+    } catch (error) {
+      return mapWebError<AddressedApplicationBundleRead>(error, {
+        route: "application-address",
+        operation: "load_addressed_application",
+        code: "identity_authority_configuration_failed",
+        fallback: { read: { kind: "temporarily_unavailable" }, experiences: [] },
+      });
     }
     return readAddressedApplicationFromInstalledBundleAtAddress(
       platformPermissionSource,

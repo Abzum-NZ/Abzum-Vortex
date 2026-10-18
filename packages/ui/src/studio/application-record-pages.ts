@@ -55,7 +55,7 @@ export const studioRecordPageChoices = (source: Source): readonly Readonly<{ rec
 /** Field types an automatic field input draws; any other type has no input to put in a form. */
 const inputTypes: ReadonlySet<string> = new Set([
   "text", "email_address", "phone_number", "web_address", "long_text", "formatted_text", "whole_number", "decimal_number",
-  "money", "yes_no", "date", "date_time", "choice", "several_choices", "link", "link_to_one_of_several",
+  "money", "yes_no", "date", "date_time", "choice", "several_choices", "link", "link_to_one_of_several", "table",
 ]);
 /** Field types a table column shows compactly. */
 const columnTypes: ReadonlySet<string> = new Set([
