@@ -45,15 +45,18 @@ begin
   for storage_identity in
     select identity.value
     from pg_catalog.jsonb_array_elements(preview_row.storage_identities) as identity(value)
-    where exists (
-      select 1
-      from vortex_record.storage_catalogue as catalogue
-      where catalogue.storage_contract_id = (identity.value ->> 'releaseStorageContractId')::uuid
-        and catalogue.physical_schema_token = 'record_data'
-        and catalogue.state = 'active'
-    )
     order by identity.value ->> 'previewStorageContractId'
   loop
+    -- Only an installed live type is seedable. New draft types start empty; an existing
+    -- catalogue entry alone never makes a source readable through this installation.
+    if vortex_record.resolve_preview_seed_source_internal(
+      preview_row.organization_id, preview_row.application_root_id,
+      (storage_identity ->> 'moduleRootId')::uuid,
+      (storage_identity ->> 'recordTypeId')::uuid,
+      (storage_identity ->> 'releaseStorageContractId')::uuid
+    ) is null then
+      continue;
+    end if;
     copy_result := vortex_record.copy_live_records_to_preview_internal(
       p_preview_installation_id,
       (storage_identity ->> 'recordTypeId')::uuid,

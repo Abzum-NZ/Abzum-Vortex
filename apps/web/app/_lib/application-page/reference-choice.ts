@@ -31,6 +31,8 @@ export type ReferenceChoiceAddress = Readonly<{
   read: Extract<PermittedApplicationsRead, { kind: "available" }>;
   application: PermittedApplication;
   pageKey: string;
+  /** The installed context this same request's own HUMAN address read authorized. */
+  installedContext?: InstalledRuntimeContext;
 }>;
 
 /** Reprojects the current addressed page under the actor and the exact installed release. */
@@ -56,7 +58,15 @@ export const projectReferenceChoicePage = async (
       ? {}
       : { previewInstallationId: address.application.previewInstallationId }),
   };
-  const loaded = await loadInstalledContext(session, dependencies, selection);
+  // The address resolution of this same request already read the installed context under the
+  // person's own verified scope for exactly this organisation and application; it is reused.
+  const carried = address.installedContext;
+  const loaded =
+    carried !== undefined &&
+    sameId(carried.organizationId, selection.organizationId) &&
+    sameId(carried.applicationRootId, address.application.applicationRootId)
+      ? ({ kind: "available", value: carried } as const)
+      : await loadInstalledContext(session, dependencies, selection);
   if (loaded.kind !== "available")
     return loaded.kind === "temporarily_unavailable"
       ? { kind: "temporarily_unavailable" }

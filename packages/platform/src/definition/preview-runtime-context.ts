@@ -12,6 +12,7 @@ import {
   type OrganizationSelectionCandidate,
   type SystemApplicationBoundReleaseSetResult,
 } from "../schema";
+import type { PreparedApplicationPermissionRegistration } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   assembleHumanInstalledRuntimeContext,
@@ -64,28 +65,48 @@ const deepFreeze = <Value>(value: Value): Value => {
   return value;
 };
 
-/** A preview's release set is written once, so it is parsed once per preview and then shared. */
+/**
+ * A preview's release set is written once for each draft revision it follows, so it is read and
+ * parsed once per preview and draft revision and then shared, with the permission registration
+ * prepared from it. The database sends the set only when this cache does not hold the revision the
+ * preview runs. Preparation is a pure function of the frozen release content, organisation,
+ * Application and release revision, so a cached registration is exactly the one a request would
+ * prepare; it decides nothing, and every request still checks its installation against the set.
+ */
+type CachedPreviewRelease = {
+  readonly draftRevision: number;
+  readonly releaseSet: SystemApplicationBoundReleaseSetResult;
+  registration?: PreparedApplicationPermissionRegistration;
+};
 const previewReleaseSetCacheSize = 16;
-const previewReleaseSets = new Map<string, SystemApplicationBoundReleaseSetResult>();
+const previewReleaseSets = new Map<string, CachedPreviewRelease>();
 
-const previewReleaseSet = (
+const cachedPreviewRelease = (previewInstallationId: string): CachedPreviewRelease | undefined =>
+  previewReleaseSets.get(previewInstallationId.toLowerCase());
+
+const previewRelease = (
   previewInstallationId: string,
+  draftRevision: number,
   candidate: unknown,
-): SystemApplicationBoundReleaseSetResult => {
+): CachedPreviewRelease => {
   const key = previewInstallationId.toLowerCase();
   const cached = previewReleaseSets.get(key);
-  if (cached !== undefined) {
+  if (cached !== undefined && cached.draftRevision === draftRevision && candidate === null) {
     previewReleaseSets.delete(key);
     previewReleaseSets.set(key, cached);
     return cached;
   }
-  const parsed = deepFreeze(systemApplicationBoundReleaseSetResultSchema.parse(candidate));
-  previewReleaseSets.set(key, parsed);
+  const entry: CachedPreviewRelease = {
+    draftRevision,
+    releaseSet: deepFreeze(systemApplicationBoundReleaseSetResultSchema.parse(candidate)),
+  };
+  previewReleaseSets.delete(key);
+  previewReleaseSets.set(key, entry);
   for (const oldest of previewReleaseSets.keys()) {
     if (previewReleaseSets.size <= previewReleaseSetCacheSize) break;
     previewReleaseSets.delete(oldest);
   }
-  return parsed;
+  return entry;
 };
 
 const runtimePreviews = new WeakMap<object, RuntimePreview>();
@@ -99,8 +120,12 @@ export const loadHumanPreviewRuntimeContext = async (
   transaction: RequestDatabaseTransaction,
   scope: HumanInstalledRuntimeContextDependencies["scope"],
 ): Promise<InstalledRuntimeContext> => {
+  const held = scope.previewInstallationId === undefined
+    ? undefined : cachedPreviewRelease(scope.previewInstallationId);
   const rows = await transaction.query<DatabaseRow & { readonly source: unknown }>`
-    select vortex_definition.read_preview_runtime_source() as source
+    select vortex_definition.read_preview_runtime_source(
+      ${held?.draftRevision ?? null}::bigint
+    ) as source
   `;
   const source = previewRuntimeSourceSchema.safeParse(
     rows.length === 1 ? rows[0]?.source : undefined,
@@ -118,7 +143,18 @@ export const loadHumanPreviewRuntimeContext = async (
     !sameId(installation.applicationRootId, scope.applicationRootId)
   )
     throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
-  const releaseSet = previewReleaseSet(installation.previewInstallationId, source.data.releaseSet);
+  // The set left out is the cached one of exactly this revision; one evicted meanwhile is read again.
+  const kept = source.data.releaseSet === null ? cachedPreviewRelease(installation.previewInstallationId) : undefined;
+  if (source.data.releaseSet === null && kept?.draftRevision !== source.data.draftRevision) {
+    previewReleaseSets.delete(installation.previewInstallationId.toLowerCase());
+    return loadHumanPreviewRuntimeContext(transaction, scope);
+  }
+  const release = previewRelease(
+    installation.previewInstallationId,
+    source.data.draftRevision,
+    source.data.releaseSet,
+  );
+  const { releaseSet } = release;
   const context = assembleHumanInstalledRuntimeContext(
     installation,
     {
@@ -126,6 +162,12 @@ export const loadHumanPreviewRuntimeContext = async (
       modules: releaseSet.modules.map((module) => Object.freeze({ ...module, correlationId })),
     },
     scope,
+    (validated, prepare) => {
+      if (release.registration !== undefined) return release.registration;
+      const prepared = deepFreeze(prepare(validated));
+      release.registration = prepared;
+      return prepared;
+    },
   );
   runtimePreviews.set(context, {
     previewInstallationId: installation.previewInstallationId,

@@ -83,7 +83,7 @@ begin
       'outcome', 'refused', 'reasonCode', 'record_unavailable'
     );
   end if;
-  bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+  bounds := vortex_record.decide_record_field_bounds_internal(decision);
   select coalesce(pg_catalog.array_agg(item.value #>> '{}'), array[]::text[])
   into changeable
   from pg_catalog.jsonb_array_elements(bounds -> 'changeableFieldIds') as item(value);
@@ -187,7 +187,7 @@ begin
       'outcome', 'refused', 'reasonCode', 'proposed_record_refused'
     );
   end if;
-  bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+  bounds := vortex_record.decide_record_field_bounds_internal(decision);
 
   -- The write: the typed columns, the next concurrency number, and the change
   -- stamp from the verified context and the installed binding. Owner columns
