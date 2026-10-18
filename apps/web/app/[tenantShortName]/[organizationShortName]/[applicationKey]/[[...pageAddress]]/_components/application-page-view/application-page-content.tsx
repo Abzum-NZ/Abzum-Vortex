@@ -325,6 +325,8 @@ export function ApplicationPageViewContent({
     clearChoiceForm,
     dialogFormRef,
     platformThemeTokens,
+    committed: (bindingId) =>
+      void refreshPlacements(refreshTargetsForBinding(bindingId), undefined, { content: true }),
   });
 
   /** A page's own view state (sort, filter, search) lives in its address, so it can be shared and reloaded. */
