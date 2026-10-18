@@ -1,7 +1,15 @@
 import "server-only";
 
 import { isDeepStrictEqual } from "node:util";
-import { recordTypeDefinitionSchema, type JsonValue, type RecordTypeDefinition } from "../schema";
+import {
+  recordTypeDefinitionSchema,
+  type ApplicationRootId,
+  type IdentitySession,
+  type JsonValue,
+  type OrganizationId,
+  type RecordTypeDefinition,
+} from "../schema";
+import type { createHumanOrganizationRequestService } from "../access/index";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { evaluateRecordCalculations } from "./calculations";
 import { operationClock } from "./field-candidate";
@@ -140,4 +148,27 @@ export const backfillDerivedFields = async (
     }
   }
   return written;
+};
+
+/**
+ * Works out the derived fields a release brought into storage once an upgrade has activated it,
+ * in the upgraded Application's own context. Every upgrade path calls this after its activation
+ * commits. The upgrade stands if this fails; the cause is logged.
+ */
+export const backfillActivatedApplication = async (
+  requests: Pick<ReturnType<typeof createHumanOrganizationRequestService>, "runChange">,
+  session: IdentitySession,
+  target: Readonly<{ organizationId: OrganizationId; applicationRootId: ApplicationRootId }>,
+): Promise<void> => {
+  const failed = `[record] derived field backfill of application ${target.applicationRootId} failed APPLICATION_RELEASE_DERIVED_FIELD_BACKFILL_FAILED`;
+  try {
+    const result = await requests.runChange(
+      session,
+      { organizationId: target.organizationId, applicationRootId: target.applicationRootId },
+      (transaction, _scope, issuedAt) => backfillDerivedFields(transaction, issuedAt),
+    );
+    if (result.kind !== "available") console.error(`${failed}: ${result.kind}`);
+  } catch (error) {
+    console.error(failed, error);
+  }
 };
