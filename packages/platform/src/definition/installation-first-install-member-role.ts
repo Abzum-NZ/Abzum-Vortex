@@ -518,7 +518,7 @@ const applyFirstInstallMemberRoleChoice = async (
       assignmentKind: "standing",
     }),
   );
-  if (assignResult.kind !== "available")
+  if (assignResult.kind !== "available" || !("assignment" in assignResult.value))
     return declined(
       environment,
       session,

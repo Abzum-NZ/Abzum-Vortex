@@ -14,7 +14,6 @@ as $function$
 declare
   declaration_binding jsonb := p_declaration -> 'recordBinding';
   facts_binding jsonb;
-  relationship_item jsonb;
   condition_item jsonb;
   record_item jsonb;
   record_scope_item jsonb;
@@ -23,6 +22,7 @@ declare
   seen_type_ids text[] := array[]::text[];
   record_types_invalid boolean;
   seen_relationship_ids text[] := array[]::text[];
+  relationships_invalid boolean;
   seen_condition_ids text[] := array[]::text[];
   seen_record_ids text[] := array[]::text[];
   ctx jsonb;
@@ -162,47 +162,64 @@ begin
 
   -- Relationships: unique identity, well-formed endpoints. `toRecordTypes`
   -- is every declared target: one for a link, several for a link to one of
-  -- several record types.
-  for relationship_item in
-    select value from pg_catalog.jsonb_array_elements(p_facts -> 'relationships') as item(value)
-  loop
-    if pg_catalog.jsonb_typeof(relationship_item) <> 'object'
-      or not (relationship_item ?& array[
+  -- several record types. The whole set is checked in one statement, like the
+  -- type set: every relationship receives the same shape, identity and
+  -- duplicate checks without a PL/pgSQL round trip for each one.
+  select coalesce(pg_catalog.array_agg(
+      pg_catalog.lower(relationship_item.value ->> 'relationshipId')
+      order by relationship_item.ordinality
+    ), array[]::text[]),
+    coalesce(pg_catalog.bool_or(
+      pg_catalog.jsonb_typeof(relationship_item.value) <> 'object'
+      or not (relationship_item.value ?& array[
         'relationshipId', 'fromModuleRootId', 'fromRecordTypeId', 'toRecordTypes'
       ])
       or exists (
-        select 1 from pg_catalog.jsonb_object_keys(relationship_item) as supplied(key)
+        select 1
+        from pg_catalog.jsonb_object_keys(case
+          when pg_catalog.jsonb_typeof(relationship_item.value) = 'object'
+            then relationship_item.value else '{}'::jsonb end
+        ) as supplied(key)
         where supplied.key <> all (array[
           'relationshipId', 'fromModuleRootId', 'fromRecordTypeId', 'toRecordTypes'
         ])
       )
-      or not vortex_platform.is_non_nil_uuid(relationship_item ->> 'relationshipId')
-      or not vortex_platform.is_non_nil_uuid(relationship_item ->> 'fromModuleRootId')
-      or not vortex_platform.is_non_nil_uuid(relationship_item ->> 'fromRecordTypeId')
-      or pg_catalog.jsonb_typeof(relationship_item -> 'toRecordTypes') is distinct from 'array'
-      or pg_catalog.jsonb_array_length(relationship_item -> 'toRecordTypes') = 0
+      or not vortex_platform.is_non_nil_uuid(relationship_item.value ->> 'relationshipId')
+      or not vortex_platform.is_non_nil_uuid(relationship_item.value ->> 'fromModuleRootId')
+      or not vortex_platform.is_non_nil_uuid(relationship_item.value ->> 'fromRecordTypeId')
+      or pg_catalog.jsonb_typeof(relationship_item.value -> 'toRecordTypes') is distinct from 'array'
+      or pg_catalog.jsonb_array_length(case
+        when pg_catalog.jsonb_typeof(relationship_item.value -> 'toRecordTypes') = 'array'
+          then relationship_item.value -> 'toRecordTypes' else '[]'::jsonb end
+      ) = 0
       or exists (
         select 1
-        from pg_catalog.jsonb_array_elements(relationship_item -> 'toRecordTypes') as target(value)
+        from pg_catalog.jsonb_array_elements(case
+          when pg_catalog.jsonb_typeof(relationship_item.value -> 'toRecordTypes') = 'array'
+            then relationship_item.value -> 'toRecordTypes' else '[]'::jsonb end
+        ) as target(value)
         where pg_catalog.jsonb_typeof(target.value) <> 'object'
           or not (target.value ?& array['moduleRootId', 'recordTypeId'])
           or exists (
-            select 1 from pg_catalog.jsonb_object_keys(target.value) as supplied(key)
+            select 1
+            from pg_catalog.jsonb_object_keys(case
+              when pg_catalog.jsonb_typeof(target.value) = 'object'
+                then target.value else '{}'::jsonb end
+            ) as supplied(key)
             where supplied.key <> all (array['moduleRootId', 'recordTypeId'])
           )
           or not vortex_platform.is_non_nil_uuid(target.value ->> 'moduleRootId')
           or not vortex_platform.is_non_nil_uuid(target.value ->> 'recordTypeId')
-      ) then
-      raise exception using errcode = '22023', message = 'Record access facts are invalid';
-    end if;
-
-    if pg_catalog.lower(relationship_item ->> 'relationshipId') = any (seen_relationship_ids) then
-      raise exception using errcode = '22023', message = 'Record access facts are invalid';
-    end if;
-    seen_relationship_ids := pg_catalog.array_append(
-      seen_relationship_ids, pg_catalog.lower(relationship_item ->> 'relationshipId')
-    );
-  end loop;
+      )
+    ), false)
+      or pg_catalog.count(*) <> pg_catalog.count(distinct
+        pg_catalog.lower(relationship_item.value ->> 'relationshipId'))
+  into seen_relationship_ids, relationships_invalid
+  from pg_catalog.jsonb_array_elements(p_facts -> 'relationships')
+    with ordinality as relationship_item(value, ordinality);
+  if relationships_invalid then
+    raise exception using errcode = '22023', message = 'Record access facts are invalid';
+  end if;
 
   -- Sharing conditions: unique identity, the fields the row-scope composition
   -- and the saved-condition predicate actually consume. Extra compiled-release

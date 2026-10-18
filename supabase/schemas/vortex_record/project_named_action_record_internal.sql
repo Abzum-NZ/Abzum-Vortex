@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.project_named_action_record_internal(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_record_id uuid) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.project_named_action_record_internal(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_record_id uuid) RETURNS jsonb
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
@@ -22,13 +22,7 @@ begin
   if decision ->> 'outcome' <> 'allowed' then
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;
-  bounds := vortex_access.resolve_record_field_bounds_internal(decision);
-  bounds := bounds || pg_catalog.jsonb_build_object(
-    'readableFieldIds', vortex_record.filter_calculated_readable_field_ids(
-      loaded -> 'facts' -> 'recordTypes', p_record_type_id,
-      bounds -> 'readableFieldIds'
-    )
-  );
+  bounds := vortex_record.decide_record_field_bounds_internal(decision);
   for field_id in
     select item.value #>> '{}'
     from pg_catalog.jsonb_array_elements(bounds -> 'readableFieldIds') item(value)

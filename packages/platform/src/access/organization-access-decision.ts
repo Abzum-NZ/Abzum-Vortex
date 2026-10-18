@@ -109,14 +109,41 @@ const exactPermissionIdentity = (permission: {
     permission.permissionId.toLowerCase(),
   ].join(":");
 
-const boundedManagementScopeSchema = z
+const managedPermissionSchema = z
   .object({
-    kind: z.literal("bounded"),
-    permissions: z.array(organizationAccessExactPermissionSchema).min(1),
+    applicationRootId: rolePermissionEntrySchema.shape.applicationRootId,
+    ownerKind: rolePermissionEntrySchema.shape.ownerKind,
+    ownerId: rolePermissionEntrySchema.shape.ownerId,
+    permissionId: rolePermissionEntrySchema.shape.permissionId,
+    acceptedRegistrationRevision:
+      rolePermissionEntrySchema.shape.acceptedRegistrationRevision.optional(),
+    meaningFingerprint: rolePermissionEntrySchema.shape.meaningFingerprint.optional(),
   })
   .strict()
   .superRefine((value, context) => {
-    const identities = value.permissions.map(exactPermissionIdentity);
+    addExactPermissionScopeIssue(value, context);
+    if (
+      (value.acceptedRegistrationRevision === undefined) !==
+      (value.meaningFingerprint === undefined)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["meaningFingerprint"],
+        message: "An accepted permission meaning needs its registration revision and fingerprint",
+      });
+  });
+
+const boundedManagementScopeSchema = z
+  .object({
+    kind: z.literal("bounded"),
+    permissions: z.array(managedPermissionSchema).min(1),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const identities = value.permissions.map(
+      (permission) =>
+        `${exactPermissionIdentity(permission)}:${permission.acceptedRegistrationRevision ?? "current"}:${permission.meaningFingerprint ?? "current"}`,
+    );
     if (new Set(identities).size !== identities.length)
       context.addIssue({
         code: "custom",
@@ -125,7 +152,7 @@ const boundedManagementScopeSchema = z
       });
   });
 
-/** Minimal current management scope; it is not accepted-registration or continuity evidence. */
+/** A current management request names its meaning; retained role revisions carry accepted meaning. */
 export const organizationAccessManagementScopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("none") }).strict(),
   z.object({ kind: z.literal("organization_catalogue") }).strict(),

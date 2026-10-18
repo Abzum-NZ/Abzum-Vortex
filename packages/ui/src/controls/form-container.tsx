@@ -29,6 +29,7 @@ import {
   type FormScope,
 } from "./form-context";
 import { useUnsavedWorkRegistry } from "./unsaved-work";
+import { usePendingGesture } from "./pending-gesture";
 import type { FormPayload } from "./projected-data";
 import { Alert, AlertDescription } from "../components/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/card";
@@ -122,7 +123,8 @@ const FIRST_FIELD_SELECTOR =
 /**
  * Accessible form boundary. It emits `form_ready` once when mounted, and one `form_submit` with
  * the typed values of its fields for Enter in a field or a Submit button; it never saves or
- * submits anywhere itself. Submission is refused while projected as pending or unavailable.
+ * submits anywhere itself. Submission is refused while projected as pending or unavailable, and
+ * while the flow its previous submission started is still running (the form shows busy).
  * Reset emits `form_reset` and restores every field to its projected value. Nested forms and
  * two fields with one key fail closed.
  */
@@ -153,9 +155,12 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   const [, setFeedbackTick] = useState(0);
   // The located corrections the person has edited past; a new submission shows them afresh.
   const [editedPastCorrections, setEditedPastCorrections] = useState<string | undefined>();
+  // The submission's flow: the form is pending from the submit gesture until that flow settles.
+  const submission = usePendingGesture();
+  const pending = context.pending || submission.pending;
   useEffect(() => {
-    if (context.pending) setEditedPastCorrections(undefined);
-  }, [context.pending]);
+    if (pending) setEditedPastCorrections(undefined);
+  }, [pending]);
   const validationAttemptedRef = useRef(false);
   const supply = props.draftFeedback;
   const supplied = supply !== undefined;
@@ -181,8 +186,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     if (settled?.kind === "refusal" && settled.corrections !== undefined)
       setEditedPastCorrections(JSON.stringify(settled.corrections));
     if (supplied) setFeedbackTick((current) => current + 1);
-    if (validationAttemptedRef.current)
-      setValidationErrors(registry.validationErrors());
+    if (validationAttemptedRef.current) setValidationErrors(registry.validationErrors());
     const baseline = baselineRef.current;
     if (baseline !== undefined)
       unsavedWorkRegistry?.setDirty(
@@ -214,7 +218,9 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       // A required value the server found missing is named by the field's own located message.
       return (
         correction.message ??
-        (correction.code === "required_value" ? registry.validationErrors()[fieldKey] : undefined) ??
+        (correction.code === "required_value"
+          ? registry.validationErrors()[fieldKey]
+          : undefined) ??
         fieldCorrectionText[correction.code]
       );
     },
@@ -223,7 +229,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
 
   const scope: FormScope = useMemo(
     () => ({
-      pending: context.pending,
+      pending,
       inactive: context.inactive,
       register: registry.register,
       values: registry.values,
@@ -231,7 +237,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       draftFeedbackFor,
       reportFieldChanged,
     }),
-    [context.pending, context.inactive, registry, fieldErrorFor, draftFeedbackFor, reportFieldChanged],
+    [pending, context.inactive, registry, fieldErrorFor, draftFeedbackFor, reportFieldChanged],
   );
 
   const events = context.events;
@@ -260,7 +266,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
 
   const onSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
-    if (context.inactive) return;
+    if (context.inactive || submission.running()) return;
     validationAttemptedRef.current = true;
     const nextValidationErrors = registry.validationErrors();
     setValidationErrors(nextValidationErrors);
@@ -269,11 +275,13 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       setOwnerGroupError(true);
       return;
     }
-    events?.form_submit?.({
-      event: "form_submit",
-      values: registry.values(),
-      ...(selectedOwnerGroupId === undefined ? {} : { selectedOwnerGroupId }),
-    });
+    submission.track(
+      events?.form_submit?.({
+        event: "form_submit",
+        values: registry.values(),
+        ...(selectedOwnerGroupId === undefined ? {} : { selectedOwnerGroupId }),
+      }),
+    );
   };
 
   // Enter in a single-line field always uses the one submit path, with or without a Submit button.
@@ -306,49 +314,45 @@ export function FormContainer(props: FormContainerProps): ReactElement {
 
   const title = context.accessibleName;
   const ownerGroups = props.data?.status === "ready" ? props.data.values.ownerGroups : undefined;
-  const selectedOwnerGroupId = ownerGroups?.length === 1
-    ? ownerGroups[0]?.groupId
-    : ownerGroups?.some((group) => group.groupId === ownerGroupChoice)
-      ? ownerGroupChoice
-      : undefined;
-  const fieldsDisabled = context.unavailable || props.data?.status === "disabled" ||
-    ownerGroups?.length === 0;
-  const note = context.unavailable ? "Unavailable" : context.disabledReason;
-  const flowFeedback = props.flowFeedback === undefined
-    ? undefined
-    : formFlowFeedbackPresentation(props.flowFeedback);
-  if (props.data?.status === "disabled" && props.data.reason === "Record unavailable")
-    return (
-      <p
-        role="alert"
-        data-vortex-control="form-container"
-        data-vortex-placement-id={props.placementId}
-      >
-        Record unavailable.
-      </p>
-    );
+  const selectedOwnerGroupId =
+    ownerGroups?.length === 1
+      ? ownerGroups[0]?.groupId
+      : ownerGroups?.some((group) => group.groupId === ownerGroupChoice)
+        ? ownerGroupChoice
+        : undefined;
+  const fieldsDisabled =
+    context.unavailable || props.data?.status === "disabled" || ownerGroups?.length === 0;
+  // Why the form cannot be used now, such as a required field this person cannot fill in.
+  const refusal = context.unavailable ? undefined : context.disabledReason;
+  const flowFeedback =
+    props.flowFeedback === undefined ? undefined : formFlowFeedbackPresentation(props.flowFeedback);
   return (
     <Card>
-      {title === undefined && note === undefined ? null : (
+      {title === undefined && !context.unavailable ? null : (
         <CardHeader>
           {title === undefined ? null : (
             <CardTitle id={titleId} role="heading" aria-level={2}>
               {title}
             </CardTitle>
           )}
-          {note === undefined ? null : (
-            <CardDescription data-vortex-field-note="">{note}</CardDescription>
-          )}
+          {context.unavailable ? (
+            <CardDescription data-vortex-field-note="">Unavailable</CardDescription>
+          ) : null}
         </CardHeader>
       )}
       <CardContent>
+        {refusal === undefined ? null : (
+          <Alert role="alert" className="mb-4" data-vortex-form-refusal="">
+            <AlertDescription>{refusal}</AlertDescription>
+          </Alert>
+        )}
         <form
           ref={formRef}
           noValidate
           onSubmit={onSubmit}
           onReset={onReset}
           onKeyDown={onKeyDown}
-          aria-busy={context.pending}
+          aria-busy={pending}
           {...(title === undefined ? {} : { "aria-labelledby": titleId })}
           data-vortex-control="form-container"
           data-vortex-placement-id={props.placementId}
@@ -362,7 +366,8 @@ export function FormContainer(props: FormContainerProps): ReactElement {
             <Field>
               {ownerGroups.length === 1 ? (
                 <p className="text-sm">
-                  <span className="font-medium">Owner Group: </span>{ownerGroups[0]?.label}
+                  <span className="font-medium">Owner Group: </span>
+                  {ownerGroups[0]?.label}
                 </p>
               ) : (
                 <>
@@ -404,7 +409,9 @@ export function FormContainer(props: FormContainerProps): ReactElement {
                   </Select>
                 </>
               )}
-              {ownerGroupError ? <FieldError role="alert">Select an owner Group.</FieldError> : null}
+              {ownerGroupError ? (
+                <FieldError role="alert">Select an owner Group.</FieldError>
+              ) : null}
             </Field>
           )}
           <FormScopeContext.Provider value={scope}>

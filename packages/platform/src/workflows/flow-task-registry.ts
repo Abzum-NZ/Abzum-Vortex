@@ -560,7 +560,11 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     runLocations: protectedLocations,
     effect: "change",
     effectDeclaredBy: "operation_descriptor",
-    properties: { operation: required("protected_operation_key"), inputs: optional("input_map") },
+    properties: {
+      operation: required("protected_operation_key"),
+      inputs: optional("input_map"),
+      refusal_feedback: optional("input_map"),
+    },
     outputs: [output("result", "json")],
     kestra: "protected_callback",
     retry: durableRetry,
