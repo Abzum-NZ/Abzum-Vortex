@@ -525,12 +525,12 @@ export const applicationRoleChanges = (
       templatePermissions(releaseSet, template.sourceRoleId),
       names,
     );
-    if (changed.length > 0)
+    if (changed.length > 0 || role.lifecycle === "acceptance_required")
       changes.push({
         sourceRoleId: template.sourceRoleId,
         roleId: String(role.roleId),
         name: role.label,
-        changes: changed,
+        changes: changed.length > 0 ? changed : ["Accept this role again"],
         holders: role.liveAssignmentCount,
       });
   }

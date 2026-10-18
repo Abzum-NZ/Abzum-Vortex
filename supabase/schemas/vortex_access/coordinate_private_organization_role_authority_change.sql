@@ -228,12 +228,20 @@ begin
       )
     )
   ) as evaluated;
-  if decision.outcome is distinct from 'eligible'
-    or decision.operation_key is distinct from operation_key
+  if decision.operation_key is distinct from operation_key
     or decision.organization_id is distinct from context_organization_id
     or decision.organization_account_id is distinct from context_account_id
     or decision.access_version is distinct from context_access_version
     or decision.correlation_id is distinct from context_correlation_id then
+    raise exception using errcode = '42501',
+      message = 'Private Organization role-authority change is unavailable';
+  end if;
+
+  if decision.outcome = 'refused' and decision.reason_code = 'authentication_unsatisfied' then
+    raise exception using errcode = 'V3150',
+      message = 'Organization role-authority change requires recent primary authentication';
+  end if;
+  if decision.outcome is distinct from 'eligible' then
     raise exception using errcode = '42501',
       message = 'Private Organization role-authority change is unavailable';
   end if;
