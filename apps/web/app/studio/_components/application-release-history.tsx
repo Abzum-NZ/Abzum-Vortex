@@ -306,7 +306,7 @@ export function ApplicationReleaseHistory({
             </EmptyHeader>
           </Empty>
         ) : (
-          <ol className="space-y-2" aria-busy={pending !== null}>
+          <ol className="m-0 list-none space-y-2 p-0" aria-busy={pending !== null}>
             {page.entries.map((entry) => (
               <li
                 key={entry.releaseRevision}
@@ -318,7 +318,7 @@ export function ApplicationReleaseHistory({
                       <Badge variant="outline">Version {entry.releaseVersion}</Badge>
                       {entry.isCurrent && <Badge variant="secondary">Current</Badge>}
                     </div>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="m-0 text-sm text-muted-foreground">
                       Published <FormattedTime iso={entry.publishedAt} /> by {author(entry)}
                     </p>
                   </div>
@@ -345,7 +345,7 @@ export function ApplicationReleaseHistory({
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-                <p className="whitespace-pre-wrap break-words text-sm">{entry.releaseNote}</p>
+                <p className="m-0 whitespace-pre-wrap break-words text-sm">{entry.releaseNote}</p>
                 <Collapsible
                   open={expandedRelease === entry.releaseRevision}
                   onOpenChange={(open) => setExpandedRelease(open ? entry.releaseRevision : null)}
