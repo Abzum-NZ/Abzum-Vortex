@@ -44,8 +44,8 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
 
   const context = useMemo((): StudioFlowContext => ({
     organizationId: draft.organizationId, rootId: state.rootId, key: draft.saved.key, draftRevision: state.draftRevision,
-    localLifetime: draft.lifetime, source: state.source as ApplicationSourceDocument,
-  }), [draft.organizationId, state.rootId, draft.saved.key, state.draftRevision, state.source, draft.lifetime]);
+    localLifetime: draft.lifetime, catalogue, source: state.source as ApplicationSourceDocument,
+  }), [draft.organizationId, state.rootId, draft.saved.key, state.draftRevision, state.source, draft.lifetime, catalogue]);
   const controlLabel = useCallback((alias: string) =>
     labels.get(studioSemanticSelectionKey({ kind: "placement", placementAlias: alias })) ?? "a control", [labels]);
   const outline = useMemo(() => {
@@ -70,6 +70,9 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
   const starts = useMemo(() => flowSelection === null ? [] : describeStudioFlowStarts(source, flowSelection, controlLabel),
     [source, flowSelection, controlLabel]);
   const draftChoices = useMemo(() => projectStudioFlowDraftChoices({ rootId: state.rootId, source, catalogue }), [state.rootId, source, catalogue]);
+  const flowChoices = useMemo(() => outline === null ? draftChoices : projectStudioFlowDraftChoices({
+    rootId: state.rootId, source, catalogue, flow: outline.flow,
+  }), [outline, draftChoices, state.rootId, source, catalogue]);
   const start = useMemo(() => flowSelection === null ? null : projectStudioFlowStart(source, flowSelection,
     (control) => draftChoices.forms.find((form) => form.alias === control)?.fields ?? []), [source, flowSelection, draftChoices]);
   const createChoices = useMemo(() => projectStudioFlowCreateChoices({ rootId: state.rootId, source, catalogue }, controlLabel),
@@ -79,7 +82,7 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
   const live = (): StudioFlowContext => {
     const current = draft.history.getState();
     return { organizationId: draft.organizationId, rootId: current.rootId, key: draft.saved.key, draftRevision: current.draftRevision,
-      localLifetime: draft.lifetime, source: current.source as ApplicationSourceDocument };
+      localLifetime: draft.lifetime, catalogue, source: current.source as ApplicationSourceDocument };
   };
 
   /**
@@ -147,7 +150,7 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
   // Keyed by flow and step only: an applied edit never remounts it, so typing keeps its focus.
   const inspector: ReactNode = flowSelection === null || outline === null || start === null ? null
     : <StudioFlowInspector key={`${selectionKey}:${stepId ?? ""}`} context={context} selection={flowSelection}
-      lists={outline.lists} stepPath={stepPath} choices={draftChoices} start={start} controlLabel={controlLabel} disabled={disabled}
+      lists={outline.lists} stepPath={stepPath} choices={flowChoices} start={start} controlLabel={controlLabel} disabled={disabled}
       onStart={startCommand}
       ownerNote={owner === undefined ? undefined : `This flow belongs to the module ${owner.name}, which this application owns.`}
       onCommand={command} onSelectStep={selectStep} />;
