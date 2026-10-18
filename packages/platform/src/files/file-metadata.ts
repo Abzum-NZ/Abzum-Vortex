@@ -17,7 +17,7 @@ import {
 } from "../schema";
 import type { ContentKind } from "./content-safety";
 
-/** The preflight safety check this module performs before any external scanner runs. */
+/** The stored-content safety inspection used by upload completion. */
 export const PREFLIGHT_SCANNER_NAME = "vortex_file_preflight";
 export const PREFLIGHT_SCANNER_VERSION = "1";
 
@@ -27,10 +27,7 @@ export const PREFLIGHT_SCANNER_VERSION = "1";
  * result is bounded to the 255 characters the file contract stores. The display
  * name is metadata only; it never becomes part of a storage path.
  */
-export const sanitizeFileDisplayName = (
-  rawFilename: string,
-  fallbackExtension = "",
-): string => {
+export const sanitizeFileDisplayName = (rawFilename: string, fallbackExtension = ""): string => {
   const fallback = `unnamed_file${fallbackExtension}`;
   if (typeof rawFilename !== "string" || rawFilename.trim().length === 0) {
     return fallback;
@@ -66,9 +63,9 @@ const ALLOWED_LIFECYCLE_TRANSITIONS: ReadonlyMap<
 > = new Map([
   ["pending", new Set<FileLifecycleState>(["uploaded", "abandoned"])],
   ["uploaded", new Set<FileLifecycleState>(["scanning", "abandoned"])],
-  ["scanning", new Set<FileLifecycleState>(["active", "quarantined"])],
+  ["scanning", new Set<FileLifecycleState>(["active", "quarantined", "abandoned"])],
   ["active", new Set<FileLifecycleState>(["soft_deleted"])],
-  ["quarantined", new Set<FileLifecycleState>(["removed"])],
+  ["quarantined", new Set<FileLifecycleState>(["abandoned", "removed"])],
   ["abandoned", new Set<FileLifecycleState>(["removed"])],
   ["soft_deleted", new Set<FileLifecycleState>(["active", "removed"])],
   ["removed", new Set<FileLifecycleState>()],

@@ -23,21 +23,21 @@ import {
   type FileReadRefusalReason,
   type FileReadResult,
   type StorageKeySigner,
+  type FileStorageDestination,
 } from "@vortex/platform/server";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import {
   getIdentityAuthorityConfiguration,
   getIdentityJourneyConfiguration,
 } from "../../../auth/_lib/authority-configuration";
-import { hostedStorageSigningConfiguration } from "../../../_lib/server-configuration";
+import { fileStorageSigningConfiguration } from "../../../_lib/server-configuration";
 import { humanOrganizationRequests } from "../../../_lib/server-composition";
 
 /** How long one protected read decision may be relied on before its grant is recorded. */
 const READ_DECISION_SECONDS = 30;
 
 type StorageSigningConfiguration = Readonly<{
-  destinationProject: string;
-  issuer: string;
+  destination: FileStorageDestination;
   keyId: string;
   signer: StorageKeySigner;
 }>;
@@ -46,18 +46,14 @@ let signingConfiguration: StorageSigningConfiguration | undefined;
 
 /**
  * The destination project's File Storage signing key, held only in the server
- * secret store. The destination is the configured Supabase project; a local
- * or non-Supabase address has no Storage bridge, so private reads fail closed.
+ * secret store. Local file reads use the lane's existing key; hosted reads
+ * retain their hosted origin and secret-store requirements.
  */
 const storageSigningConfiguration = (): StorageSigningConfiguration => {
   if (signingConfiguration !== undefined) return signingConfiguration;
-  const signing = hostedStorageSigningConfiguration(
-    getIdentityJourneyConfiguration().supabaseUrl,
-    "File Storage",
-  );
+  const signing = fileStorageSigningConfiguration(getIdentityJourneyConfiguration().supabaseUrl);
   signingConfiguration = Object.freeze({
-    destinationProject: signing.destinationProject,
-    issuer: signing.issuer,
+    destination: signing.destination,
     keyId: signing.keyId,
     signer: createStorageSignerFromPrivateKey(signing.privateKey),
   });
@@ -187,8 +183,7 @@ export const handleFileReadRequest = async (
       // same current request context that just decided authority.
       const repository = createSqlFileReadRepository(transaction);
       const bridge = createStorageCredentialBridge({
-        destinationProject: signing.destinationProject,
-        issuer: signing.issuer,
+        destination: signing.destination,
         activeKeyId: signing.keyId,
         keys: [{ keyId: signing.keyId, signer: signing.signer }],
         resolveCurrentAuthority: composeStorageAuthorityResolvers({
@@ -215,9 +210,7 @@ export const handleFileReadRequest = async (
           recordId: decision.recordId,
           fieldId: decision.fieldId,
           readableFieldIds: [decision.fieldId],
-          validUntil: new Date(
-            Date.parse(issuedAt) + READ_DECISION_SECONDS * 1_000,
-          ).toISOString(),
+          validUntil: new Date(Date.parse(issuedAt) + READ_DECISION_SECONDS * 1_000).toISOString(),
         },
         {
           fileId: targetFileId,

@@ -13,13 +13,15 @@ type BoundedRequestText =
  * while it is read, so a chunked or understated body is cancelled as soon as it passes the limit
  * instead of being buffered in full.
  */
-export const readBoundedRequestText = async (
+export const readBoundedRequestBytes = async (
   request: Request,
   maximumBytes: number,
-): Promise<BoundedRequestText> => {
+): Promise<
+  Readonly<{ kind: "read"; bytes: Uint8Array }> | Readonly<{ kind: "too_large" | "unreadable" }>
+> => {
   if (Number(request.headers.get("content-length") ?? 0) > maximumBytes)
     return { kind: "too_large" };
-  if (request.body === null) return { kind: "read", text: "" };
+  if (request.body === null) return { kind: "read", bytes: new Uint8Array() };
 
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -46,5 +48,15 @@ export const readBoundedRequestText = async (
     body.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return { kind: "read", text: new TextDecoder().decode(body) };
+  return { kind: "read", bytes: body };
+};
+
+export const readBoundedRequestText = async (
+  request: Request,
+  maximumBytes: number,
+): Promise<BoundedRequestText> => {
+  const result = await readBoundedRequestBytes(request, maximumBytes);
+  return result.kind === "read"
+    ? { kind: "read", text: new TextDecoder().decode(result.bytes) }
+    : result;
 };
