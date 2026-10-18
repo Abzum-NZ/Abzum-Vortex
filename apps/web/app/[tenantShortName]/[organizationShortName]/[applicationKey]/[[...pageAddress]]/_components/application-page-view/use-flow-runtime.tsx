@@ -96,6 +96,7 @@ export function useFlowRuntime({
   clearChoiceForm,
   dialogFormRef,
   platformThemeTokens,
+  committed,
 }: Readonly<{
   application: ApplicationPageModel["invocation"];
   subject: ApplicationPageModel["subject"];
@@ -143,6 +144,8 @@ export function useFlowRuntime({
   clearChoiceForm: (formId: string, dialogFormId?: string) => void;
   dialogFormRef: RefObject<HTMLDivElement | null>;
   platformThemeTokens: PlatformThemeTokens;
+  /** Re-reads what a binding writes once one of its server runs committed. */
+  committed: (bindingId: string) => void;
 }>) {
   /**
    * The one browser flow client and host (#1013): a form submit starts the bound flow on the server
@@ -430,15 +433,27 @@ export function useFlowRuntime({
     renderForm,
     navigation: navigationEnvironment,
   });
+  const committedRef = useRef(committed);
+  committedRef.current = committed;
   // One flow runtime per host, shared by every event of the page: a gesture dispatches its bound
   // flow once through the one invoke client, and every pause and presentation intent is carried out
   // by the same host before the next answer is sent.
   const flowRuntime = useMemo(
-    () => createFlowRuntime({ client: flowClient, host }),
+    () =>
+      createFlowRuntime({
+        client: flowClient,
+        host,
+        committed: (bindingId) => committedRef.current(bindingId),
+      }),
     [flowClient, host],
   );
   const webMcpRuntime = useMemo(
-    () => createFlowRuntime({ client: webMcpClient, host }),
+    () =>
+      createFlowRuntime({
+        client: webMcpClient,
+        host,
+        committed: (bindingId) => committedRef.current(bindingId),
+      }),
     [webMcpClient, host],
   );
   const formBlock = useMemo(() => createFormBlockRuntime(flowRuntime), [flowRuntime]);

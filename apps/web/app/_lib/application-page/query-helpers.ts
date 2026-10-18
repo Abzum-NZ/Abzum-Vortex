@@ -35,11 +35,11 @@ type ModuleQueryInput = ModuleRelease["content"]["queries"][number]["inputs"][nu
  */
 export const coerceInput = (raw: string, declared: ModuleQueryInput): JsonValue | undefined => {
   switch (declared.type) {
-    case "number": {
+    case "whole_number": {
       const value = Number(raw);
-      return raw.trim() !== "" && Number.isFinite(value) ? value : undefined;
+      return raw.trim() !== "" && Number.isSafeInteger(value) ? value : undefined;
     }
-    case "boolean":
+    case "yes_no":
       return raw === "true" ? true : raw === "false" ? false : undefined;
     case "record_reference": {
       const targets = declared.recordTypes.filter((target) => target.state === "resolved");
