@@ -5,7 +5,6 @@ import {
   prepareDefinitionPublicationCommandSchema,
   type ExactDefinitionDependency,
   type PrepareDefinitionPublicationCommand,
-  type PublishDefinitionResult,
   type SessionContext,
   type VersionImpact,
   type VersionImpactReason,
@@ -60,7 +59,6 @@ export type ApplicationPublicationState = PreparedState &
 type ModuleStep = Readonly<{
   output: ModuleOutput;
   reasons: readonly VersionImpactReason[];
-  release: PublishDefinitionResult;
   append: DefinitionReleaseAppend;
 }>;
 
@@ -86,7 +84,7 @@ const inlineModuleSources = (candidate: DefinitionCandidateDraft) =>
  * creating the roots that are missing. A Module whose source changed, or whose draft is already
  * released, gets a new draft revision so that this publication can release it. The writes record
  * the Module's permanent identities, which compilation needs, so they are kept even when a
- * preparation only rehearses the publication itself.
+ * preparation only plans the publication itself.
  */
 export const materializeInlineModules = async (
   transaction: DefinitionPublicationTransaction,
@@ -204,8 +202,8 @@ const releaseInlineModules = async (
       validationContractVersion: "3.0.0",
       releaseNote,
     };
-    const release = await transaction.appendModuleRelease(append);
-    steps.push({ output, reasons, release, append });
+    await transaction.appendModuleRelease(append);
+    steps.push({ output, reasons, append });
   }
   return steps;
 };
@@ -318,14 +316,16 @@ export const planApplicationPublication = async (
       reasons: publicationReasons(candidate, roots, application.modules, application),
     };
   };
-  const rehearsed = (await pass(provisional, false)).reasons;
-  if (latestVersion !== undefined && rehearsed.length === 0) refuse("DEFINITION_NO_CHANGE");
+  const provisionalReasons = (await pass(provisional, false)).reasons;
+  if (latestVersion !== undefined && provisionalReasons.length === 0)
+    refuse("DEFINITION_NO_CHANGE");
   const version =
     latestVersion === undefined
       ? "1.0.0"
-      : assignNextDefinitionVersion(latestVersion, highestImpact(rehearsed));
+      : assignNextDefinitionVersion(latestVersion, highestImpact(provisionalReasons));
   const { modules, application, reasons } = await pass(version, true, pinned);
-  if (canonicalJson(reasons) !== canonicalJson(rehearsed)) refuse("DEFINITION_VERSION_REFUSED");
+  if (canonicalJson(reasons) !== canonicalJson(provisionalReasons))
+    refuse("DEFINITION_VERSION_REFUSED");
   const confirmation = definitionPublicationConfirmationSchema.parse({
     outcome: latestVersion === undefined ? "initial_release" : "release_required",
     rootId: candidate.draft.rootId,

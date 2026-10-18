@@ -380,12 +380,6 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     private readonly context: SessionContext,
   ) {}
 
-  protected forgetModuleReleaseReads(): void {
-    this.materializedModules.clear();
-    this.moduleReleaseReads.clear();
-    this.moduleReleasePageReads.clear();
-  }
-
   /** A new release of one root moves only that root's current release. */
   protected forgetModuleReleaseReadsOf(rootId: string, key: string): void {
     const root = String(rootId).toLowerCase();
@@ -708,14 +702,18 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     `;
     if (rows.length !== locators.length)
       return invalidStorage("readModuleReleases found inconsistent stored evidence");
-    return rows.map((raw) => {
+    return rows.map((raw, index) => {
       const row = moduleReleaseRowSchema.safeParse(raw);
       if (!row.success) return invalidStorage(row.error);
       if (row.data.module_release === null) return undefined;
       const parsed = rawModuleReleaseSchema.safeParse(row.data.module_release);
       if (!parsed.success) return invalidStorage(parsed.error);
       const release = this.materializeModuleRelease(parsed.data);
-      if (release.organizationId !== organizationId)
+      if (
+        release.organizationId !== organizationId ||
+        release.rootId !== locators[index]!.rootId ||
+        release.releaseRevision !== locators[index]!.releaseRevision
+      )
         return invalidStorage("readModuleReleases found inconsistent stored evidence");
       return release;
     });
@@ -1055,7 +1053,6 @@ class DatabasePublicationTransaction
     applicationRootId: string,
     source: ModuleSourceDocument,
   ): Promise<OwnedModuleRoot> {
-    this.forgetModuleReleaseReads();
     const rows = await this.transaction.query`
       select root_id, definition_key, draft_revision, published_revision as current_release_revision,
         source_fingerprint
@@ -1077,7 +1074,6 @@ class DatabasePublicationTransaction
     root: OwnedModuleRoot,
     source: ModuleSourceDocument,
   ): Promise<OwnedModuleRoot> {
-    this.forgetModuleReleaseReads();
     const rows = await this.transaction.query`
       select root_id, definition_key, draft_revision, current_release_revision, source_fingerprint
       from vortex_definition.stage_owned_module_source(
