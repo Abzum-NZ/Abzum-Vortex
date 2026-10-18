@@ -433,7 +433,7 @@ export function useStudioReleasesTab({
     />
   );
   const centre: ReactNode = (
-    <div className="mx-auto max-w-4xl px-8 py-6">
+    <div className="mx-auto max-w-4xl px-8 py-6 text-foreground">
       {!hidden && section === "history" && (
         <StudioHistoryTab
           key={historyGeneration}

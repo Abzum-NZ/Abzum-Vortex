@@ -166,7 +166,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
       selectionKey={draft.selected === null ? "" : studioSemanticSelectionKey(draft.selected)}
       topBar={<StudioTopBar
         location={{ organizationName: place.organizationName, organizationHref: `/studio/${encodeURIComponent(organizationId)}`,
-          applicationName: source.body.name, item: canvas.breadcrumbItem,
+          applicationName: source.body.name, item: tab === "releases" ? releases.title : canvas.breadcrumbItem,
           applications: applications.map((app) => ({ name: app.name, href: `/studio/${encodeURIComponent(organizationId)}/${encodeURIComponent(app.rootId)}` })),
           onApplication: () => { draft.select({ kind: "application", applicationRootId: state.rootId }); } }}
         saveState={<StudioSaveState draft={draft} />}
@@ -185,7 +185,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
         {access.panel}
         {releases.panel}
       </>}
-      inspector={tab === "access" ? null : tab === "data" ? data.inspector : canvas.inspector}
+      inspector={tab === "access" || tab === "releases" ? null : tab === "data" ? data.inspector : canvas.inspector}
       canvas={({ inspectorOpen, toggleInspector, focused, focusCanvas }) => <>
         {canvas.toolbar(inspectorOpen, toggleInspector, centreTitle, canvasShown, focused, focusCanvas)}
         <div className="min-h-0 flex-1 overflow-auto p-4">

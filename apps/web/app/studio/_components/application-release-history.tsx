@@ -2,6 +2,7 @@
 import { Button } from "@vortex/ui/components/button";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { Badge } from "@vortex/ui/components/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import {
   Collapsible,
   CollapsibleContent,
@@ -323,18 +324,24 @@ export function ApplicationReleaseHistory({
                     </p>
                   </div>
                   <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`More for version ${entry.releaseVersion}`}
-                          title={`More for version ${entry.releaseVersion}`}
-                        />
-                      }
-                    >
-                      <Icon name="more-horizontal" />
-                    </DropdownMenuTrigger>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <DropdownMenuTrigger
+                            render={
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={`More for version ${entry.releaseVersion}`}
+                              />
+                            }
+                          />
+                        }
+                      >
+                        <Icon name="more-horizontal" />
+                      </TooltipTrigger>
+                      <TooltipContent>More for version {entry.releaseVersion}</TooltipContent>
+                    </Tooltip>
                     <DropdownMenuContent align="end" className="w-56">
                       <DropdownMenuItem
                         disabled={blocked || restoreBlocked !== undefined}
