@@ -48,6 +48,8 @@ type BlockPropertySchemaBase = {
   label: string;
   help?: string | undefined;
   required: boolean;
+  /** Show this control only for the declared choices of a sibling setting. */
+  showWhen?: { property: string; values: string[] } | undefined;
   defaultValue?: BlockPropertyValueContract | undefined;
   /** This declaration contains display content whose edits may keep a patch version. */
   presentation?: true | undefined;
@@ -105,6 +107,15 @@ const propertySchemaBase = {
   label: sourceProvenanceUnchanged(labelSchema),
   help: sourceProvenanceUnchanged(z.string().min(1).max(1_000).optional()),
   required: sourceProvenanceUnchanged(z.boolean()),
+  showWhen: sourceProvenanceUnchanged(
+    z
+      .object({
+        property: builderKeySchema,
+        values: z.array(z.string().min(1)).min(1),
+      })
+      .strict()
+      .optional(),
+  ),
   defaultValue: sourceProvenanceUnchanged(blockPropertyValueSchema.optional()),
   presentation: sourceProvenanceUnchanged(z.literal(true).optional()),
   presentationIdentity: sourceProvenanceUnchanged(builderKeySchema.optional()),
@@ -719,6 +730,88 @@ const defaultMatchesProperty = (schema: BlockPropertySchemaContract): boolean =>
     return true;
   };
   return validateComponentSettingValue(value, schema).length === 0 && complete(value, schema);
+};
+
+export type BlockPropertyVisibilityIssue = Readonly<{
+  path: [number, ...(string | number)[]];
+  message: string;
+}>;
+
+/**
+ * Visibility conditions must refer to an earlier sibling choice and one or more of its options.
+ * The editor clears hidden settings in declaration order, so this also keeps chained conditions
+ * deterministic and prevents a malformed reference from hiding a control and deleting its value.
+ */
+export const blockPropertyVisibilityIssues = (
+  properties: readonly BlockPropertySchemaContract[],
+): readonly BlockPropertyVisibilityIssue[] => {
+  const issues: BlockPropertyVisibilityIssue[] = [];
+  const extendPath = (
+    path: BlockPropertyVisibilityIssue["path"],
+    ...parts: (string | number)[]
+  ): BlockPropertyVisibilityIssue["path"] => [path[0], ...path.slice(1), ...parts];
+  function inspect(
+    declarations: readonly BlockPropertySchemaContract[],
+    prefix?: BlockPropertyVisibilityIssue["path"],
+  ): void {
+    for (const [index, property] of declarations.entries()) {
+      const path: BlockPropertyVisibilityIssue["path"] =
+        prefix === undefined ? [index] : extendPath(prefix, index);
+      const condition = property.showWhen;
+      if (condition !== undefined) {
+        const controllingIndex = declarations.findIndex(
+          (candidate) => candidate.key === condition.property,
+        );
+        const controller = declarations[controllingIndex];
+        if (controller === undefined) {
+          issues.push({
+            path: extendPath(path, "showWhen", "property"),
+            message: "A visibility condition must name a sibling choice property",
+          });
+        } else if (controller.kind !== "choice") {
+          issues.push({
+            path: extendPath(path, "showWhen", "property"),
+            message: "A visibility condition must name a sibling choice property",
+          });
+        } else {
+          if (controllingIndex >= index)
+            issues.push({
+              path: extendPath(path, "showWhen", "property"),
+              message: "A visibility condition must use an earlier sibling choice property",
+            });
+          const optionKeys = new Set(controller.options.map((option) => option.key));
+          if (
+            new Set(condition.values).size !== condition.values.length ||
+            condition.values.some((value) => !optionKeys.has(value))
+          )
+            issues.push({
+              path: extendPath(path, "showWhen", "values"),
+              message: "Visibility values must be unique options of the sibling choice property",
+            });
+        }
+      }
+
+      if (property.kind === "group") {
+        inspect(property.properties, extendPath(path, "properties"));
+      } else if (property.kind === "list") {
+        inspectListItem(property.item, extendPath(path, "item"));
+      }
+    }
+  }
+  function inspectListItem(
+    item: BlockPropertySchemaContract,
+    path: BlockPropertyVisibilityIssue["path"],
+  ): void {
+    if (item.showWhen !== undefined)
+      issues.push({
+        path: extendPath(path, "showWhen"),
+        message: "A list item cannot have a visibility condition",
+      });
+    if (item.kind === "group") inspect(item.properties, extendPath(path, "properties"));
+    else if (item.kind === "list") inspectListItem(item.item, extendPath(path, "item"));
+  }
+  inspect(properties);
+  return issues;
 };
 
 /** Recursive platform-owned property declaration, including only closed safe value kinds. */
