@@ -2,6 +2,7 @@
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 import { AppearanceToggle, Icon } from "@vortex/ui";
+import { Spinner } from "@vortex/ui/components/spinner";
 import { Button } from "@vortex/ui/components/button";
 import {
   Breadcrumb,
@@ -197,7 +198,7 @@ export function StudioTopBar({
           disabled={previewDisabled || previewPending}
           onClick={onPreview}
         >
-          <Icon name="eye" />
+          {previewPending ? <Spinner /> : <Icon name="eye" />}
           {previewPending ? "Starting…" : "Preview"}
         </ToolbarButton>
         <ToolbarButton

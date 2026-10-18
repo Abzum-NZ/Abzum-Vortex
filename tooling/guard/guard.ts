@@ -230,8 +230,12 @@ for (const file of codeFiles) {
     for (const match of text.matchAll(/\S+/g)) {
       const token = match[0];
       const utility = token.slice(token.lastIndexOf(":") + 1).replace(/^!/, "");
+      // Studio chrome has a fixed theme and uses the radius scale specified by its design.
+      // Runtime block renderers still take their radius from the shadcn component variants.
+      const studioRadius = file.startsWith("packages/ui/src/studio/") &&
+        /^rounded-(?:md|lg|xl|full)$/.test(utility);
       if (
-        /^-?rounded(?:-[a-z0-9]+)*$/.test(utility) ||
+        (/^-?rounded(?:-[a-z0-9]+)*$/.test(utility) && !studioRadius) ||
         /^-?[a-z][a-z0-9-]*-\[[^\]]*\d(?:\.\d+)?px[^\]]*\]$/.test(utility) ||
         /^font-\[[^\]]+\]$/.test(utility)
       )

@@ -335,7 +335,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                   Loading this editor…
                 </p>
               ) : null}
-              <div className="min-h-0 flex-1 overflow-auto p-4">
+              <div className={canvasShown ? "min-h-0 flex-1 overflow-auto" : "min-h-0 flex-1 overflow-auto p-4"}>
                 {canvasShown && canvas.centre}
                 {tab === "flows" && flows.centre}
                 {/* The Data tab's centre keeps its paging and reads while another tab is open. */}
@@ -352,4 +352,5 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
       </div>
     </StudioPlaceOpenerProvider>
   );
+
 }
