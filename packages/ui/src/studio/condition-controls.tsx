@@ -94,7 +94,7 @@ function TreeEditor({
       <fieldset>
         <legend>{condition.kind === "all" ? "All of these conditions" : "Any of these conditions"}</legend>
         <label>
-          Group logic
+          Match when
           <NativeSelect
             value={condition.kind}
             onChange={(event) => {
@@ -102,8 +102,8 @@ function TreeEditor({
               onReplace({ kind, conditions: condition.conditions });
             }}
           >
-            <option value="all">All must match</option>
-            <option value="any">Any may match</option>
+            <option value="all">Every condition matches</option>
+            <option value="any">At least one condition matches</option>
           </NativeSelect>
         </label>
         {condition.conditions.map((child, index) => {

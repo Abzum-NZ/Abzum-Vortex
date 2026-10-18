@@ -161,9 +161,9 @@ export type ConditionPath = readonly (string | number)[];
 const roleLabels: Readonly<Record<StudioConditionOperandRole, string>> = {
   current_field: "Current fields",
   previous_field: "Previous values",
-  declared_input: "Input",
-  event_value: "Event values",
-  variable: "Variables",
+  declared_input: "Flow inputs",
+  event_value: "From the triggering event",
+  variable: "Saved values",
   step_output: "Earlier steps",
   record_field: "Record fields",
   run_value: "The run",
@@ -700,7 +700,7 @@ export const describeCondition = (
       : `${left} ${operator} ${describeOperand(condition.right, context, condition.left, condition.operator)}`;
   }
   if (condition.kind === "not")
-    return `not (${describeCondition(condition.condition, context)})`;
+    return `Exclude records matching ${describeCondition(condition.condition, context)}`;
   const joiningWord = condition.kind === "all" ? " and " : " or ";
   return `(${condition.conditions.map((child) => describeCondition(child, context)).join(joiningWord)})`;
 };
