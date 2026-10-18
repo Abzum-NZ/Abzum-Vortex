@@ -37,7 +37,7 @@ export function StudioNavItem({
       variant="navigation"
       data-two-line={description !== undefined ? "true" : undefined}
       className={cn(
-        "flex-nowrap text-left text-sm hover:bg-accent hover:text-accent-foreground",
+        "flex-nowrap text-left text-sm hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring",
         selected && "bg-accent font-medium text-accent-foreground",
         className,
       )}
@@ -61,17 +61,41 @@ export function StudioNavItem({
           <Icon name={expanded ? "chevron-down" : "chevron-right"} className="size-4" />
         </span>
       )}
-      {icon !== undefined && <Icon name={icon} className="size-4 shrink-0 text-muted-foreground" />}
+      {icon !== undefined && (
+        <Icon
+          name={icon}
+          className={cn(
+            "size-4 shrink-0",
+            selected
+              ? "text-accent-foreground"
+              : "text-muted-foreground group-hover/item:text-accent-foreground",
+          )}
+        />
+      )}
       <span className="min-w-0 flex-1">
         <span className="block truncate">{label}</span>
         {description !== undefined && (
-          <span className="block truncate text-xs font-normal text-muted-foreground">
+          <span
+            className={cn(
+              "block truncate text-xs font-normal",
+              selected
+                ? "text-accent-foreground"
+                : "text-muted-foreground group-hover/item:text-accent-foreground",
+            )}
+          >
             {description}
           </span>
         )}
       </span>
       {meta !== undefined && (
-        <span className="shrink-0 text-xs font-normal tabular-nums text-muted-foreground">
+        <span
+          className={cn(
+            "shrink-0 text-xs font-normal tabular-nums",
+            selected
+              ? "text-accent-foreground"
+              : "text-muted-foreground group-hover/item:text-accent-foreground",
+          )}
+        >
           {meta}
         </span>
       )}
