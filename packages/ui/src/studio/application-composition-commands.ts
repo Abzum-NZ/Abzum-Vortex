@@ -31,7 +31,7 @@ import {
   type SourcePageZone,
   type SourceSlotOrder,
 } from "@vortex/platform/schema";
-import { boardBlockKey, createStudioBoardQuery, studioBoardSourceProblem } from "./board-source";
+import { createStudioBoardQuery, studioBoardSourceProblem } from "./board-source";
 import { applyStudioFlowCreate } from "./application-flow-create";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
 import { studioPaletteChoices, studioQueryOffered, studioReleaseReadsQuery, type StudioPaletteChoice } from "./contextual-palette";
@@ -647,14 +647,17 @@ const applyAdd = (current: StudioCompositionContext, command: unknown): StudioCo
   // The settings the person gave (the setup asks for each required one without a default), each
   // of its declared kind; every other setting takes its catalogue default.
   const settings = commandSettings(input.settings, release.properties);
-  const query = release.key === boardBlockKey && input.query === null
-    ? createStudioBoardQuery(source, settings, sourceNames(source)) ?? null : input.query;
-  if (release.key === boardBlockKey && query === null)
-    return { kind: "refused", reason: "Choose a pipeline for this board. Its record type must have room for a board query." };
+  const pipelineSetup = release.studioSetup?.kind === "pipeline" ? release.studioSetup : undefined;
+  if (pipelineSetup !== undefined && input.query !== null) return { kind: "invalid" };
+  const query = pipelineSetup === undefined ? input.query
+    : createStudioBoardQuery(source, settings, sourceNames(source), pipelineSetup) ?? null;
+  if (pipelineSetup !== undefined && query === null)
+    return { kind: "refused", reason: pipelineSetup.queryUnavailable };
   if (choice.needsQuery !== (query !== null) || (query !== null && !studioQueryOffered(source, query)))
     return { kind: "invalid" };
 
-  const boardProblem = release.key === boardBlockKey ? studioBoardSourceProblem(source, settings, query) : undefined;
+  const boardProblem = pipelineSetup === undefined ? undefined
+    : studioBoardSourceProblem(source, settings, query, pipelineSetup);
   if (boardProblem !== undefined) return { kind: "refused", reason: `${choice.name} can't be added. ${boardProblem}.` };
 
   const alias = freshBlockName(release.key.split(".").at(-1) ?? "block", sourceNames(source));
@@ -698,11 +701,12 @@ const applyAdd = (current: StudioCompositionContext, command: unknown): StudioCo
     dependencies.sort((left, right) => left.block_id < right.block_id ? -1 : left.block_id > right.block_id ? 1
       : left.release_version < right.release_version ? -1 : left.release_version > right.release_version ? 1 : 0);
   }
-  if (release.key === boardBlockKey) {
-    const stage = settings.choice_field;
+  if (release.supportedEvents.includes("card_moved")) {
+    if (pipelineSetup === undefined) return { kind: "invalid" };
+    const stage = settings[pipelineSetup.fieldProperty];
     if (stage?.kind !== "field_reference") return { kind: "invalid" };
     const moved = applyStudioFlowCreate(source, { kind: "action", controlAlias: alias,
-      name: `Move card on ${alias}`.slice(0, 100), recordType: stage.field.slice(0, stage.field.lastIndexOf(".")), event: "card_moved" });
+      name: pipelineSetup.moveFlowName, recordType: stage.field.slice(0, stage.field.lastIndexOf(".")), event: "card_moved" });
     if (moved.kind !== "applied") return moved;
     return { kind: "applied", source: moved.source, placementAlias: alias };
   }
@@ -810,7 +814,9 @@ const applySettings = (current: StudioCompositionContext, selection: StudioSeman
   const query = input.query;
   if (query !== null && (!readsQuery(release, target.item) || !studioQueryOffered(source, query)))
     return { kind: "invalid" };
-  const boardProblem = release.key === boardBlockKey ? studioBoardSourceProblem(source, settings, query) : undefined;
+  const pipelineSetup = release.studioSetup?.kind === "pipeline" ? release.studioSetup : undefined;
+  const boardProblem = pipelineSetup === undefined ? undefined
+    : studioBoardSourceProblem(source, settings, query, pipelineSetup);
   if (boardProblem !== undefined) return { kind: "refused", reason: `${release.name} can't take these settings. ${boardProblem}.` };
   try {
     const working = workingCopy(target.region);
