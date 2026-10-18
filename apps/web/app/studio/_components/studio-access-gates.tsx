@@ -126,7 +126,7 @@ export function StudioAccessPageGates({
       </p>
       <Table
         containerClassName="rounded-xl overflow-hidden"
-        className="[&_tr]:h-11 [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:normal-case [&_th]:tracking-normal [&_th]:text-foreground"
+        className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:normal-case [&_th]:tracking-normal [&_th]:text-foreground"
         aria-label="Who opens each page"
       >
         <TableHeader>
@@ -179,7 +179,7 @@ export function StudioAccessPageGates({
       {external.length > 0 && (
         <Table
           containerClassName="rounded-xl overflow-hidden"
-          className="[&_tr]:h-11 [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:normal-case [&_th]:tracking-normal [&_th]:text-foreground"
+          className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:normal-case [&_th]:tracking-normal [&_th]:text-foreground"
           aria-label="Who sees each link"
         >
           <TableHeader>
@@ -259,7 +259,7 @@ export function StudioAccessPermissionList({
       </form>
       <Table
         containerClassName="rounded-xl overflow-hidden"
-        className="[&_tr]:h-11 [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:normal-case [&_th]:tracking-normal [&_th]:text-foreground"
+        className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:normal-case [&_th]:tracking-normal [&_th]:text-foreground"
         aria-label="Permissions of the application"
       >
         <TableHeader>

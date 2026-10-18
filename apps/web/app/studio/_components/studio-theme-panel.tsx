@@ -17,6 +17,7 @@ import {
 import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
 import { ToggleGroup, ToggleGroupItem } from "@vortex/ui/components/toggle-group";
+import { toast } from "@vortex/ui/components/sonner";
 import { cn } from "@vortex/ui/lib/utils";
 import {
   decodeStudioThemePreset,
@@ -174,7 +175,10 @@ export function StudioThemePanel({
     setPending(true);
     try {
       const outcome = await onChange(next, what);
-      setFeedback(outcome);
+      if (outcome.kind === "applied") {
+        setFeedback(null);
+        toast.success(outcome.message);
+      } else setFeedback(outcome);
       return outcome.kind === "applied";
     } finally {
       setPending(false);
@@ -206,7 +210,8 @@ export function StudioThemePanel({
       try {
         const outcome = await onChange(next, "Shuffled");
         if (outcome.kind === "applied") {
-          setFeedback(outcome);
+          setFeedback(null);
+          toast.success(outcome.message);
           return;
         }
         if (outcome.problems === undefined) {
@@ -226,7 +231,8 @@ export function StudioThemePanel({
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(current);
-      setFeedback({ kind: "applied", message: "Preset code copied." });
+      setFeedback(null);
+      toast.success("Preset code copied.");
     } catch (error) {
       console.error("[studio] could not copy the theme preset", error);
       setFeedback({
@@ -388,7 +394,7 @@ export function StudioThemePanel({
             aria-label="Current preset code"
             value={current}
             readOnly
-            className="font-mono tabular-nums"
+            className="tabular-nums"
           />
           <InputGroupAddon align="inline-end">
             <InputGroupButton

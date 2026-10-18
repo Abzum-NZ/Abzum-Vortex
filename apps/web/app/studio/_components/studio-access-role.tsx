@@ -134,7 +134,7 @@ function FieldAccess({
     <Table
       aria-label={`Field access for ${recordName}`}
       containerClassName="border-0"
-      className="[&_tr]:h-11 [&_tr]:hover:bg-muted/40 [&_th]:text-xs [&_th]:text-foreground [&_th]:normal-case [&_th]:tracking-normal [&_th]:font-medium"
+      className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:text-xs [&_th]:text-foreground [&_th]:normal-case [&_th]:tracking-normal [&_th]:font-medium"
     >
       <TableHeader>
         <TableRow>
@@ -374,7 +374,7 @@ export function StudioAccessRoleEditor({
         <>
           <Section
             title="Records"
-            description="What people with this role can do with each record type. Choose Fields for which fields they can see and change."
+            description="Choose record permissions, then Fields for what this role can see and change."
           >
             {rows.length === 0 ? (
               <p className="text-sm text-muted-foreground">
@@ -385,7 +385,7 @@ export function StudioAccessRoleEditor({
                 <Table
                   aria-label="Record access"
                   containerClassName="border-0"
-                  className="[&_tr]:h-11 [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:text-xs [&_th]:normal-case [&_th]:tracking-normal [&_th]:font-medium [&_th]:text-foreground"
+                  className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:text-xs [&_th]:normal-case [&_th]:tracking-normal [&_th]:font-medium [&_th]:text-foreground"
                 >
                   <TableHeader>
                     <TableRow>
@@ -552,21 +552,18 @@ export function StudioAccessRoleEditor({
             )}
           </Section>
 
-          <Section
-            title="Pages"
-            description="The pages people with this role can open. A page opens with one permission; pages that share it open together."
-          >
+          <Section title="Pages" description="Pages with the same permission open together.">
             <div className="overflow-hidden rounded-xl border">
               <Table
                 aria-label="Page access"
                 containerClassName="border-0"
-                className="[&_tr]:h-11 [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:text-xs [&_th]:normal-case [&_th]:tracking-normal [&_th]:font-medium [&_th]:text-foreground"
+                className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:text-xs [&_th]:normal-case [&_th]:tracking-normal [&_th]:font-medium [&_th]:text-foreground"
               >
                 <TableHeader>
                   <TableRow>
                     <TableHead>Page</TableHead>
                     <TableHead>Opens with</TableHead>
-                    <TableHead className="text-center">Can open</TableHead>
+                    <TableHead className="w-20 text-center">Can open</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -610,7 +607,7 @@ export function StudioAccessRoleEditor({
               <Table
                 aria-label="Menu access"
                 containerClassName="rounded-xl overflow-hidden"
-                className="[&_tr]:h-11 [&_tr]:hover:bg-muted/40 [&_th]:normal-case [&_th]:tracking-normal [&_th]:text-foreground"
+                className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:normal-case [&_th]:tracking-normal [&_th]:text-foreground"
               >
                 <TableHeader>
                   <TableRow>
@@ -657,12 +654,12 @@ export function StudioAccessRoleEditor({
                 <Table
                   aria-label="Action access"
                   containerClassName="border-0"
-                  className="[&_tr]:h-11 [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:text-xs [&_th]:normal-case [&_th]:tracking-normal [&_th]:font-medium [&_th]:text-foreground"
+                  className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:text-xs [&_th]:normal-case [&_th]:tracking-normal [&_th]:font-medium [&_th]:text-foreground"
                 >
                   <TableHeader>
                     <TableRow>
                       <TableHead>Permission</TableHead>
-                      <TableHead className="text-center">Can use</TableHead>
+                      <TableHead className="w-20 text-center">Can use</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

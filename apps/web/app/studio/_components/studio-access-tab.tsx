@@ -4,6 +4,7 @@ import type { ApplicationSourceDocument, ApplicationUsePlace } from "@vortex/pla
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@vortex/ui/components/item";
+import { toast } from "@vortex/ui/components/sonner";
 import type {
   StudioAccessCommand,
   StudioAccessResult,
@@ -108,11 +109,10 @@ export function useStudioAccessTab({
   };
   const run = (command: StudioAccessCommand, merge?: string): boolean => {
     const result = onCommand(command, merge);
-    setFeedback(
-      result.kind === "applied"
-        ? { kind: "applied", message: result.message }
-        : { kind: "refused", message: result.message, where: result.where },
-    );
+    if (result.kind === "applied") {
+      setFeedback(null);
+      if (command.kind !== "rename_role") toast.success(result.message);
+    } else setFeedback({ kind: "refused", message: result.message, where: result.where });
     if (result.kind === "applied" && result.roleKey !== undefined) {
       setView("role");
       select({ kind: "role", roleKey: result.roleKey });
@@ -202,7 +202,7 @@ export function useStudioAccessTab({
   );
 
   const centre = (
-    <div className="mx-auto w-full max-w-4xl space-y-6 px-8 py-6">
+    <div className="mx-auto w-full max-w-4xl space-y-6 px-4 py-2">
       <AccessFeedback feedback={feedback} />
       {view === "role" && role !== undefined && (
         <StudioAccessRoleEditor
