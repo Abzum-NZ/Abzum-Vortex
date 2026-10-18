@@ -290,6 +290,19 @@ export const createDefinitionPublicationService = (
         parsedCommand,
       );
       const roots = await materializeInlineModules(transaction, candidate);
+      // Removed fields no longer occur in the compiled draft. Read their names from the exact
+      // Module releases the previous Application pinned, within the same authorised transaction.
+      const previousModules = await transaction.readModuleReleases(
+        context.organizationId,
+        (candidate.historyEvidence.latestRelease?.dependencyManifest ?? [])
+          .filter((dependency) => dependency.kind === "module")
+          .map((dependency) => ({
+            rootId: dependency.rootId,
+            releaseRevision: dependency.revision,
+          })),
+      );
+      if (previousModules.some((release) => release === undefined))
+        refuse("DEFINITION_DEPENDENCY_MISSING");
       const state = await transaction.rehearse(() =>
         planApplicationPublication(
           context,
@@ -300,13 +313,32 @@ export const createDefinitionPublicationService = (
           preparationReleaseNote,
         ),
       );
+      const inlineRootIds = new Set(
+        state.moduleOutputs.map((output) => String(output.canonical.envelope.rootId)),
+      );
+      const usedModules = await transaction.readModuleReleases(
+        context.organizationId,
+        state.confirmation.dependencyManifest
+          .filter(
+            (dependency) =>
+              dependency.kind === "module" && !inlineRootIds.has(String(dependency.rootId)),
+          )
+          .map((dependency) => {
+            if (dependency.kind !== "module") return refuse("DEFINITION_DEPENDENCY_MISSING");
+            return { rootId: dependency.rootId, releaseRevision: dependency.releaseRevision };
+          }),
+      );
+      if (usedModules.some((release) => release === undefined))
+        refuse("DEFINITION_DEPENDENCY_MISSING");
       return prepareDefinitionPublicationResultSchema.parse({
         confirmation: state.confirmation,
         componentLabels: await componentLabelsOf(
           (blockId, releaseVersion) => catalogue.readPlatformBlockRelease(blockId, releaseVersion),
           state.compilationOutput.canonical,
           ...state.moduleOutputs.map((output) => output.canonical),
+          ...usedModules.map((release) => release!.compilationOutput.canonical),
           candidate.historyEvidence.latestRelease?.content,
+          ...previousModules.map((release) => release!.compilationOutput.canonical),
         ),
       });
     });
