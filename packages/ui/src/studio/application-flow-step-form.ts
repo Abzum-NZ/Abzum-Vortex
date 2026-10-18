@@ -3,6 +3,7 @@ import {
   flowFormulaSchema,
   flowLiteralSchema,
   flowRoundingModeSchema,
+  sourcePageShell,
   type ApplicationSourceDocument,
   type FlowFormula,
   type FlowLiteral,
@@ -13,7 +14,7 @@ import {
   type SourceFlow,
   type SourceFlowTask,
 } from "@vortex/platform/schema";
-import { traverseStudioSemanticSelectionDraft } from "./semantic-selection";
+import { traverseStudioSemanticSelectionDraft, type StudioSemanticPlacementOwner } from "./semantic-selection";
 import {
   describeStudioFlowLocation,
   studioFlowDefinitionOf,
@@ -114,7 +115,7 @@ const calculationFormula = (flow: SourceFlow, calculation: StudioFlowCalculation
 
 // ─── What the draft offers a step ────────────────────────────────────────────────────────────
 
-export type StudioFlowNamedEntry = Readonly<{ name: string; label: string; type: string | undefined; required: boolean }>;
+export type StudioFlowNamedEntry = Readonly<{ name: string; label: string; type: string | undefined; required: boolean; initialValue?: FlowValue }>;
 
 /** The parts of the draft a step setting can point at, read from the draft being edited. */
 export type StudioFlowDraftChoices = Readonly<{
@@ -132,32 +133,57 @@ const actionInputType = (type: string): string =>
 /** Everything a step setting can point at in the draft: record types, pages, forms, module actions, queries and connections. */
 export const projectStudioFlowDraftChoices = (draft: Readonly<{
   rootId: Parameters<typeof traverseStudioSemanticSelectionDraft>[0]["rootId"];
-  source: ApplicationSourceDocument; catalogue: ImmutablePlatformBlockCatalogue }>): StudioFlowDraftChoices => {
+  source: ApplicationSourceDocument; catalogue: ImmutablePlatformBlockCatalogue; flow?: SourceFlow }>): StudioFlowDraftChoices => {
   const source = draft.source;
   const forms: { alias: string; label: string; fields: StudioFlowNamedEntry[] }[] = [];
   const open: { alias: string; fields: StudioFlowNamedEntry[] }[] = [];
+  const owners = new Map<string, StudioSemanticPlacementOwner>();
+  const pagesFor = (owner: StudioSemanticPlacementOwner): string[] => owner.kind === "page" ? [owner.pageAlias]
+    : source.body.pages.filter((page) => sourcePageShell(page.composition) === owner.shellAlias).map((page) => page.id);
   traverseStudioSemanticSelectionDraft(draft, ({ phase, node }) => {
     if (node.kind !== "placement") return;
     const release = draft.catalogue.releases.find((candidate) => String(candidate.blockId) === node.block.block_id &&
       String(candidate.releaseVersion) === node.block.release_version);
     const isForm = release?.supportedEvents.includes("form_submit") === true;
     if (phase === "exit") { if (isForm) open.pop(); return; }
+    owners.set(node.selection.placementAlias, node.owner);
     const name = node.settings.name;
-    if (!isForm && typeof name === "string" && open.length > 0)
-      open[open.length - 1]!.fields.push({ name, label: typeof node.settings.label === "string" ? node.settings.label : studioWords(name),
+    const fieldProperty = release?.properties.find((property) => property.kind === "field_reference" && property.derivesFieldInput === true);
+    const reference = fieldProperty === undefined ? undefined : node.settings[fieldProperty.key];
+    const dot = typeof reference === "string" ? reference.lastIndexOf(".") : -1;
+    const found = typeof reference === "string" && dot > 0 ? studioDraftRecordType(source, reference.slice(0, dot), null) : undefined;
+    const field = found?.record.fields.find((field) => field.key === String(reference).slice(dot + 1));
+    if (!isForm && open.length > 0) {
+      if (field !== undefined) open[open.length - 1]!.fields.push({ name: field.key, label: field.label,
+        type: studioFieldValueType(field.type), required: field.required,
+        initialValue: { kind: "literal", literal: { type: "json", value: field.default ?? null } } });
+      else if (typeof name === "string") open[open.length - 1]!.fields.push({ name,
+        label: typeof node.settings.label === "string" ? node.settings.label : studioWords(name),
         type: undefined, required: node.settings.required === true });
+    }
     if (isForm) {
       const entry = { alias: node.selection.placementAlias, label: node.label, fields: [] as StudioFlowNamedEntry[] };
       forms.push(entry);
       open.push(entry);
     }
   });
+  const controls = source.body.flow_bindings.filter((binding) => draft.flow !== undefined &&
+    (binding.flow === draft.flow.id || binding.flow === draft.flow.key)).map((binding) => binding.control);
+  const invokingPages = [...new Set(controls.flatMap((control) => {
+    const owner = owners.get(control); return owner === undefined ? [] : pagesFor(owner);
+  }))];
+  const availableForms = draft.flow === undefined ? forms : forms.filter((form) => {
+    const owner = owners.get(form.alias);
+    if (owner === undefined || invokingPages.length === 0) return false;
+    const pages = pagesFor(owner);
+    return invokingPages.every((page) => pages.includes(page));
+  });
   return {
     recordTypes: source.body.modules.flatMap((module) => module.record_types.map((record) =>
       ({ key: `${module.key}:${record.key}`, label: `${record.name} (${module.name})` }))),
     pages: source.body.pages.map((page) => ({ key: page.key, label: page.name,
       recordType: page.type === "detail" && "record_type" in page && typeof page.record_type === "string" ? page.record_type : null })),
-    forms,
+    forms: availableForms,
     actions: source.body.modules.flatMap((module) => module.actions.map((action) => ({
       key: action.key, label: action.label, recordType: `${module.key}:${action.record_type}`,
       inputs: action.inputs.map((input) => ({ name: input.key, label: input.label, type: actionInputType(input.type), required: input.required })),
@@ -407,11 +433,17 @@ export const projectStudioFlowStepForm = (
     return { kind: "unavailable", reason: `${where}, ${studioWords(unknown)}: the step catalogue does not declare this setting, so the step cannot be edited. Remove the step or replace it.` };
   const recordType = stepRecordType(flow, task.properties);
   const fields = Object.entries(definition.properties).map(([key, declaration]): StudioFlowPropertyField => {
-    const control = controlFor(declaration.type)!;
+    const control = task.type === "event.announce" && key === "event" ? "field" : controlFor(declaration.type)!;
     const entries = control === "input_map" ? expectedEntries(task, key, choices, source) : undefined;
     const recordFieldList = control === "field_values" ? recordFields(source, recordType, moduleKey) : undefined;
-    const options = control === "field" ? fieldOptions(source, flow, moduleKey, task.properties) : undefined;
-    const valueType = control === "value" && declaration.type !== "any_value" && declaration.type !== "record_change_list"
+    const subjectType = stepRecordType(flow, task.properties) ?? (flow.recordInput === undefined ? undefined : flow.inputs?.[flow.recordInput]?.recordTypeIds?.[0]);
+    const qualifiedSubject = subjectType === undefined ? undefined : subjectType.includes(":") ? subjectType : `${moduleKey}:${subjectType}`;
+    const options = task.type === "event.announce" && key === "event"
+      ? source.body.modules.flatMap((module) => module.events.filter((event) => qualifiedSubject === undefined || `${module.key}:${event.record_type}` === qualifiedSubject)
+        .map((event) => ({ value: event.key, label: event.key })))
+      : control === "field" ? fieldOptions(source, flow, moduleKey, task.properties) : undefined;
+    const valueType = control === "value" && declaration.type === "record_change_list" ? "json"
+      : control === "value" && declaration.type !== "any_value"
       ? declaration.type : control === "message" ? "text" : undefined;
     const hint = help[`${task.type} ${key}`];
     return { key, label: propertyLabels[key] ?? studioWords(key), required: declaration.required, control, valueType,
