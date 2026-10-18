@@ -243,6 +243,7 @@ as $function$
 declare
   rehearsed_type record;
   application_release_revision_value bigint;
+  current_release_revision_value bigint;
   releases_value jsonb := p_releases -> 'releases';
   checked_context jsonb;
   locked_access_version bigint;
@@ -278,7 +279,7 @@ begin
     and (root.root_id = p_application_root_id or root.owner_application_root_id = p_application_root_id)
   order by draft.root_id for share of draft;
 
-  perform 1
+  select root.current_release_revision into current_release_revision_value
   from vortex_definition.roots as root
   join vortex_definition.drafts as draft on draft.root_id = root.root_id
   where root.root_id = p_application_root_id and root.organization_id = p_organization_id
@@ -388,6 +389,18 @@ begin
     from pg_catalog.jsonb_array_elements(releases_value) as item(value)
     where (item.value #>> '{release,root_id}')::uuid = p_application_root_id
   );
+  -- Only an unchanged, already published draft reuses the current immutable Application.
+  -- Its source was verified by the reader and its exact dependency pins remain immutable.
+  if application_release_revision_value is null
+    and current_release_revision_value = (p_releases #>> '{application,draftRevision}')::bigint
+    and exists (
+      select 1 from vortex_definition.releases as release
+      where release.root_id = p_application_root_id
+        and release.release_revision = current_release_revision_value
+        and release.authored_source_fingerprint = p_releases #>> '{application,sourceFingerprint}'
+    ) then
+    application_release_revision_value := current_release_revision_value;
+  end if;
   if application_release_revision_value is null then
     raise exception using errcode = 'P0002', message = 'Preview plan has no compiled Application release';
   end if;

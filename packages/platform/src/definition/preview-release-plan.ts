@@ -163,6 +163,22 @@ export const planApplicationPreview = async (
   const ownedRoots = await snapshot.readOwnedModuleRoots(String(candidate.draft.rootId));
   const source = candidate.draft.source;
   if (source.kind !== "application") return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+  const application = {
+    rootId: candidate.draft.rootId,
+    draftRevision: candidate.draft.draftRevision,
+    sourceFingerprint: candidate.draft.sourceFingerprint,
+    currentReleaseRevision: candidate.draft.publishedRevision ?? null,
+  };
+  // A released draft already has a validated immutable release and exact pins. Reuse it;
+  // publication's new-revision comparison deliberately refuses republishing that revision.
+  if (candidate.draft.publishedRevision === candidate.draft.draftRevision)
+    return {
+      accessVersion: context.accessVersion,
+      application,
+      ownedRoots,
+      usedRoots: [],
+      releases: [],
+    };
   const inlineKeys = new Set(applicationModuleSources(source).map((source) => source.key));
   const usedKeys = applicationModuleKeys(source).filter((key) => !inlineKeys.has(key));
   const usedPages = await Promise.all(
@@ -182,12 +198,7 @@ export const planApplicationPreview = async (
   );
   return {
     accessVersion: context.accessVersion,
-    application: {
-      rootId: candidate.draft.rootId,
-      draftRevision: candidate.draft.draftRevision,
-      sourceFingerprint: candidate.draft.sourceFingerprint,
-      currentReleaseRevision: candidate.draft.publishedRevision ?? null,
-    },
+    application,
     ownedRoots,
     usedRoots,
     releases: [

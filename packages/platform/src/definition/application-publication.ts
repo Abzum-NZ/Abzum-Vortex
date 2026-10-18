@@ -28,7 +28,6 @@ import {
   type ModuleOutput,
   type OwnedModuleRoot,
   type PreparedState,
-  type ResolvableModuleRelease,
   refuse,
 } from "./definition-publication-contracts";
 import {
@@ -89,13 +88,10 @@ const inlineModuleSources = (candidate: DefinitionCandidateDraft) =>
 export const materializeInlineModules = async (
   transaction: DefinitionPublicationTransaction,
   candidate: DefinitionCandidateDraft,
+  ownedRoots: readonly OwnedModuleRoot[],
   unchanged: ReadonlySet<string> = new Set(),
 ): Promise<ReadonlyMap<string, OwnedModuleRoot>> => {
-  const owned = new Map(
-    (await transaction.readOwnedModuleRoots(String(candidate.draft.rootId))).map(
-      (root) => [root.key, root] as const,
-    ),
-  );
+  const owned = new Map(ownedRoots.map((root) => [root.key, root] as const));
   const roots = new Map<string, OwnedModuleRoot>();
   for (const source of inlineModuleSources(candidate)) {
     if (unchanged.has(source.key)) continue;
@@ -358,15 +354,51 @@ export const planApplicationPublication = async (
 export const releasedUnchangedModules = async (
   transaction: DefinitionPublicationReader,
   candidate: DefinitionCandidateDraft,
+  ownedRoots: readonly OwnedModuleRoot[],
 ): Promise<ReadonlySet<string>> => {
-  const owned = new Map(
-    (await transaction.readOwnedModuleRoots(String(candidate.draft.rootId))).map(
-      (root) => [root.key, root] as const,
-    ),
-  );
+  const owned = new Map(ownedRoots.map((root) => [root.key, root] as const));
   const sources = inlineModuleSources(candidate);
   const inlineKeys = new Set(sources.map((source) => source.key));
-  const usedReleases = new Map<string, ResolvableModuleRelease>();
+  const releasedRoots = ownedRoots.filter((root) => root.currentReleaseRevision !== null);
+  const releases = await transaction.readModuleReleases(
+    candidate.draft.organizationId,
+    releasedRoots.map((root) => ({
+      rootId: root.rootId,
+      releaseRevision: root.currentReleaseRevision!,
+    })),
+  );
+  const currentReleases = new Map(releasedRoots.map((root, index) => [root.key, releases[index]]));
+  const dependenciesByKey = new Map(
+    sources.map((source) => [
+      source.key,
+      moduleDependencies(source).map((dependency) => dependency.module),
+    ]),
+  );
+  const usedKeys = [
+    ...new Set(
+      sources
+        .filter((source) => {
+          const root = owned.get(source.key);
+          return (
+            root !== undefined &&
+            root.currentReleaseRevision !== null &&
+            root.draftRevision === root.currentReleaseRevision &&
+            root.sourceFingerprint === fingerprintCanonicalValue(source)
+          );
+        })
+        .flatMap((source) =>
+          dependenciesByKey.get(source.key)!.filter((key) => !inlineKeys.has(key)),
+        ),
+    ),
+  ];
+  const usedReleases = new Map(
+    await Promise.all(
+      usedKeys.map(
+        async (key) =>
+          [key, await selectCurrentModuleRelease(transaction, candidate, key)] as const,
+      ),
+    ),
+  );
   const unchanged = new Set<string>();
   for (const source of sources) {
     const root = owned.get(source.key);
@@ -377,13 +409,9 @@ export const releasedUnchangedModules = async (
       root.sourceFingerprint !== fingerprintCanonicalValue(source)
     )
       continue;
-    const dependencies = moduleDependencies(source).map((dependency) => dependency.module);
+    const dependencies = dependenciesByKey.get(source.key)!;
     if (dependencies.some((key) => inlineKeys.has(key) && !unchanged.has(key))) continue;
-    const release = await transaction.readModuleRelease(
-      candidate.draft.organizationId,
-      root.rootId,
-      root.currentReleaseRevision,
-    );
+    const release = currentReleases.get(source.key);
     if (release === undefined) continue;
     const pinned = new Set(
       release.published.dependencyManifest.map((dependency) =>
@@ -401,11 +429,8 @@ export const releasedUnchangedModules = async (
         );
         continue;
       }
-      let used = usedReleases.get(key);
-      if (used === undefined) {
-        used = await selectCurrentModuleRelease(transaction, candidate, key);
-        usedReleases.set(key, used);
-      }
+      const used = usedReleases.get(key);
+      if (used === undefined) return refuse("DEFINITION_DEPENDENCY_MISSING");
       expected.push(`${String(used.rootId).toLowerCase()}:${String(used.releaseRevision)}`);
     }
     if (pinned.size === expected.length && expected.every((pin) => pinned.has(pin)))
@@ -431,8 +456,9 @@ export const compileApplicationWithInlineModules = async (
   }> = {},
 ) => {
   const transaction = createDraftModuleOverlay(reader, context, candidate.draft);
-  const unchanged = await releasedUnchangedModules(transaction, candidate);
-  const roots = await materializeInlineModules(transaction, candidate, unchanged);
+  const ownedRoots = await transaction.readOwnedModuleRoots(String(candidate.draft.rootId));
+  const unchanged = await releasedUnchangedModules(transaction, candidate, ownedRoots);
+  const roots = await materializeInlineModules(transaction, candidate, ownedRoots, unchanged);
   const latestVersion =
     "currentReleaseVersion" in candidate
       ? candidate.currentReleaseVersion

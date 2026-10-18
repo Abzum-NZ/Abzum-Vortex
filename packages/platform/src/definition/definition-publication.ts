@@ -387,7 +387,8 @@ export const createDefinitionPublicationService = (
         await transaction.lockCandidate(parsedCommand.rootId),
         parsedCommand,
       );
-      const roots = await materializeInlineModules(transaction, candidate);
+      const ownedRoots = await transaction.readOwnedModuleRoots(String(candidate.draft.rootId));
+      const roots = await materializeInlineModules(transaction, candidate, ownedRoots);
       const state = await planApplicationPublication(
         context,
         transaction,
@@ -494,13 +495,17 @@ export const createDefinitionPublicationService = (
     if (!command.success) return refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     await authorize(authority, context, { kind: "publication", rootId: command.data.rootId });
     await repository.transaction(context, async (transaction) => {
-      const candidate = applicationCandidate(
+      const candidate = validateDraftCandidate(
         context,
-        await transaction.readCandidate(command.data.rootId),
+        await transaction.readDraftCandidate(command.data.rootId),
         command.data,
       );
-      const unchanged = await releasedUnchangedModules(transaction, candidate);
-      await materializeInlineModules(transaction, candidate, unchanged);
+      if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
+        return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+      if (candidate.draft.publishedRevision === candidate.draft.draftRevision) return;
+      const ownedRoots = await transaction.readOwnedModuleRoots(String(candidate.draft.rootId));
+      const unchanged = await releasedUnchangedModules(transaction, candidate, ownedRoots);
+      await materializeInlineModules(transaction, candidate, ownedRoots, unchanged);
     });
   },
 
@@ -533,7 +538,8 @@ export const createDefinitionPublicationService = (
         await transaction.lockCandidate(confirmation.rootId),
         { rootId: confirmation.rootId, expectedDraftRevision: confirmation.expectedDraftRevision },
       );
-      const roots = await materializeInlineModules(transaction, candidate);
+      const ownedRoots = await transaction.readOwnedModuleRoots(String(candidate.draft.rootId));
+      const roots = await materializeInlineModules(transaction, candidate, ownedRoots);
       // The inline Modules that changed are released here, before the Application, which is last.
       const recomputed = await planApplicationPublication(
         context,
