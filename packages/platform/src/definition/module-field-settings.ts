@@ -70,9 +70,9 @@ const optionItem = (): Declaration => group("option", "Option", [
 const tableColumnTypes = [["text", "Text"], ["whole_number", "Whole number"], ["decimal_number", "Decimal number"],
   ["money", "Money"], ["yes_no", "Yes or no"], ["date", "Date"], ["date_time", "Date and time"], ["choice", "Choice"]] as const;
 const timeZones = [["person", "The person's time zone"], ["organization", "The organisation's time zone"], ["utc", "UTC"]] as const;
-const textFormats = [["email_address", "Email address"], ["web_address", "Secure web address"], ["uuid", "Identifier (UUID)"]] as const;
+const textFormats = [["uuid", "Identifier (UUID)"]] as const;
 
-/** One table column, with every column type's settings: the column's type picks the ones it keeps. */
+/** One table column: its declared type selects both the controls and the settings it stores. */
 const tableColumnItem = (): Declaration => group("column", "Column", [
   text("key", "Key", true, 1, 40, "Lowercase words separated by underscores."),
   boolean("required", "A value is required", false),
@@ -92,7 +92,13 @@ const tableColumnItem = (): Declaration => group("column", "Column", [
   isoDate("latest", "Latest date (date)"),
   choice("display_time_zone", "Time zone shown (date and time)", false, timeZones),
   list("options", "Options (choice)", false, 0, 200, optionItem()),
-]);
+].map((property): Declaration => {
+  if (["key", "required", "type"].includes(property.key)) return property;
+  return { ...property, showWhen: property.key === "currency"
+    ? { property: "currency_mode", values: ["fixed"] }
+    : { property: "type", values: Object.entries(columnSettingKeys)
+      .filter(([, keys]) => keys.includes(property.key)).map(([type]) => type) } };
+}));
 
 /**
  * The typed settings one field type declares. A calculation and a total declare none here: the

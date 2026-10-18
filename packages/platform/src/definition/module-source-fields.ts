@@ -52,7 +52,7 @@ const sourceOptionSchema = z
   })
   .strict();
 const emptySettingsSchema = z.object({}).strict();
-const sourceTextFormatSchema = z.enum(["email_address", "web_address", "uuid"]);
+const sourceTextFormatSchema = z.enum(["uuid"]);
 const sourceTextSettingsSchema = z
   .object({
     max_length: sourceProvenanceUnchanged(z.number().int().min(1).max(100_000)),
@@ -648,10 +648,6 @@ const textFormatValid = (
   value: string,
 ) =>
   format === undefined ||
-  (format === "email_address" && z.email().safeParse(value).success) ||
-  (format === "web_address" &&
-    z.url().safeParse(value).success &&
-    new URL(value).protocol === "https:") ||
   (format === "uuid" && z.uuid().safeParse(value).success);
 const wholeNumberValid = (
   value: number,
