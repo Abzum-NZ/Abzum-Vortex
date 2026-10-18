@@ -36,7 +36,7 @@ export function StudioCanvasToolbar({ title, breakpoint, onBreakpoint, zoom, onZ
   /** Screen size and zoom apply to the page canvas only. */
   showsCanvas: boolean;
   inspectorOpen: boolean;
-  onToggleInspector: () => void;
+  onToggleInspector: (() => void) | undefined;
   focused: boolean;
   onFocusCanvas: () => void;
 }>) {
@@ -74,13 +74,13 @@ export function StudioCanvasToolbar({ title, breakpoint, onBreakpoint, zoom, onZ
           aria-label="Focus canvas" aria-pressed={focused} onClick={onFocusCanvas} />}><Icon name="monitor" /></TooltipTrigger>
         <TooltipContent>Focus canvas <Kbd>Ctrl \\</Kbd></TooltipContent>
       </Tooltip>
-      <Tooltip>
+      {onToggleInspector !== undefined && <Tooltip>
         <TooltipTrigger render={<Button type="button" size="icon-sm" variant={inspectorOpen ? "secondary" : "ghost"}
           aria-label="Inspector" aria-pressed={inspectorOpen} onClick={onToggleInspector} />}>
           <Icon name="panel-left" className="rotate-180" />
         </TooltipTrigger>
         <TooltipContent>Inspector <Kbd>Ctrl .</Kbd></TooltipContent>
-      </Tooltip>
+      </Tooltip>}
     </div>
   </div>;
 }

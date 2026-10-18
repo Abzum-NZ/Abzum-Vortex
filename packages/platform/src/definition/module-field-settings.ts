@@ -155,7 +155,7 @@ export const moduleFieldSettingDeclarations = (
         list("columns", "Columns", true, 1, 40, tableColumnItem(context.permissions))];
     case "link":
       return [{ ...base("target", "Linked record type", true), kind: "record_type_reference" },
-        text("reverse_key", "Name of the link back", true, 1, 40, "Lowercase words separated by underscores, for example contacts."),
+        text("reverse_name", "Name of the link back", true, 1, 60, "The name people see on the linked record, for example Items. Its key is made automatically and stays the same when you rename it."),
         choice("on_parent_delete", "When the linked record is deleted", true, deleteRules),
         boolean("application_root_required", "Only records of this application", false),
         choice("legacy_person_field", "Person field it mirrors", false, fieldChoices(context.fields, ["link_to_person"]))];
@@ -249,7 +249,7 @@ export const writeModuleFieldSettings = (
 /** The settings a field of a type starts with when it is added or its type changes. */
 export const starterModuleFieldSettings = (
   type: ModuleFieldType,
-  start: Readonly<{ fieldKey: string; recordKey: string; recordTypes: readonly string[]; titleField: string;
+  start: Readonly<{ recordTypes: readonly string[]; titleField: string;
     relationships: readonly string[] }>,
 ): Record<string, unknown> => {
   switch (type) {
@@ -263,7 +263,7 @@ export const starterModuleFieldSettings = (
     case "reference_number": return { digits: 6 };
     case "table": return { minimum_rows: 0, maximum_rows: 50, columns: [{ key: "item", required: true, type: "text", settings: { max_length: 255 } }] };
     case "link": return { ...(start.recordTypes[0] === undefined ? {} : { target: start.recordTypes[0] }),
-      reverse_key: `${start.recordKey}_${start.fieldKey}`.slice(0, 40).replace(/_+$/u, ""), on_parent_delete: "empty_optional" };
+      reverse_name: "Related records", on_parent_delete: "empty_optional" };
     case "link_to_one_of_several": return { targets: start.recordTypes.slice(0, 2), on_parent_delete: "empty_optional" };
     case "link_to_person": return { audience: "organization_accounts", application_root_required: false, on_person_deactivation: "retain_reference" };
     case "calculation": return { result_type: "text", evaluation: "stored", expression: { operation: "join_text", fields: [start.titleField], separator: " " } };

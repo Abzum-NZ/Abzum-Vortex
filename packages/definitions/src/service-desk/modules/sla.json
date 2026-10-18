@@ -226,6 +226,7 @@
           "settings": {
             "target": "vortex.service_desk.sla:business_calendar",
             "reverse_key": "service_levels",
+            "reverse_name": "Service levels",
             "on_parent_delete": "refuse"
           }
         },
