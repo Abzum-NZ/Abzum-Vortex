@@ -94,8 +94,8 @@ const readWideOnServer = () => false;
 /**
  * Attaches a pane's persistent host element to whichever slot is currently on screen. The pane's
  * React content is portalled into the host once, so moving it between the side-by-side layout and
- * a sheet changes where it is drawn without remounting the editors inside it (their unapplied
- * input and pending flags stay consistent).
+ * a sheet changes where it is drawn without remounting the editors inside it (what is typed in
+ * them stays).
  */
 function PaneSlot({ host }: Readonly<{ host: HTMLDivElement | null }>) {
   const attach = useCallback((slot: HTMLDivElement | null) => {
@@ -189,8 +189,8 @@ export function StudioFrame<Key extends string>({
   topBar: ReactNode;
   tabs: readonly StudioRailTab<Key>[];
   activeTab: Key;
-  /** Switches the rail tab; resolves false when the switch was declined (for example to keep unapplied input). */
-  onTabChange: (key: Key) => Promise<boolean> | boolean;
+  /** Switches the rail tab. */
+  onTabChange: (key: Key) => void;
   /** Every tab's panel content; the caller shows the active one, so the others keep their state. */
   panel: ReactNode;
   canvas: (controls: Readonly<{ inspectorOpen: boolean; toggleInspector: () => void }>) => ReactNode;
@@ -205,7 +205,7 @@ export function StudioFrame<Key extends string>({
   const [narrowInspectorOpen, setNarrowInspectorOpen] = useState(false);
   const [hosts, setHosts] = useState<PaneHosts | null>(null);
   // The hosts are made once per frame: effects run again when a suspended part of Studio shows again,
-  // and a new host would remount every panel and lose its unapplied input.
+  // and a new host would remount every panel and lose what is typed in it.
   const madeHosts = useRef<PaneHosts | null>(null);
   useEffect(() => {
     const create = () => {
@@ -216,13 +216,13 @@ export function StudioFrame<Key extends string>({
     madeHosts.current ??= { panel: create(), inspector: create() };
     setHosts(madeHosts.current);
   }, []);
-  const choose = async (key: Key) => {
+  const choose = (key: Key) => {
     if (key === activeTab) {
       if (wide) setPanelOpen((open) => !open);
       else setNarrowPanelOpen((open) => !open);
       return;
     }
-    if (!await onTabChange(key)) return;
+    onTabChange(key);
     if (wide) setPanelOpen(true);
     else setNarrowPanelOpen(true);
   };
@@ -239,7 +239,7 @@ export function StudioFrame<Key extends string>({
       {topBar}
       <div className="flex min-h-0 flex-1">
         <StudioRail tabs={tabs} active={activeTab} open={wide ? panelOpen : narrowPanelOpen}
-          onChoose={(key) => { void choose(key); }} label="Studio areas" />
+          onChoose={choose} label="Studio areas" />
         {showPanel && <>
           <section id="studio-rail-panel" role="tabpanel" aria-labelledby={`studio-rail-${activeTab}`}
             className="flex min-h-0 shrink-0 flex-col bg-background" style={{ width: `${width}rem` }}>

@@ -33,6 +33,7 @@ const shippedApplicationKeys = [
   "vortex.app.tasks",
   "vortex.app.service_desk",
   "vortex.app.landing_zone",
+  "vortex.app.app_store",
 ] as const;
 
 export const developmentSetupManifestSchema = z
@@ -131,6 +132,7 @@ export const developmentSetupManifestFor = (
       "vortex.app.tasks",
       "vortex.app.operations",
       "vortex.app.landing_zone",
+      "vortex.app.app_store",
     ],
     installerRole: {
       roleKey: "application_installer",

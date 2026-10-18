@@ -43,7 +43,7 @@ A named action cannot wait, call an external system, send email, send notificati
 
 ## Rules
 
-A **rule** is a flow with a `BeforeSave` trigger and the `transaction` execution kind. It declares the same fields as every [flow](appendices/frontend-rule-designer.md#flow-shape). Examples: a required value, an allowed status change, "a resolved case needs a resolution time". Rules on the same record type run in a stable published order.
+A **rule** is a flow with a `BeforeSave` trigger and the `transaction` execution kind. It declares the same fields as every [flow](appendices/frontend-rule-designer.md#flow-shape). Examples: a required value, an allowed status change, "a resolved case needs a resolution time". Rules on the same record type run in a stable published order. A rule belongs to the module that owns its record type. In Studio it is added on the record type in the Data tab (Rules before saving), which lists each rule with when it runs and what it refuses, warns or requires, and it is edited on the Flows tab with the same step editors as every flow. Rules run inside every save of the record through the one record write path, whichever way it is saved: a form, a board move, a named action or a Save record step. A pipeline's allowed moves are enforced at the same single point.
 
 A rule's ordered task list may contain only transaction-safe tasks:
 
