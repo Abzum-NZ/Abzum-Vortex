@@ -60,18 +60,31 @@ begin
   end if;
   field_column := source_meta -> 'columns' -> pg_catalog.lower(field_value ->> 'fieldId');
 
-  select mapping.* into mapping_row
-  from vortex_record.relationship_storage_mappings as mapping
-  where mapping.relationship_id = p_relationship_id
-    and mapping.source_storage_contract_id =
-      (source_meta ->> 'storageContractId')::uuid
-    and mapping.source_field_id = (field_value ->> 'fieldId')::uuid
-    and mapping.release_revision <= (source_meta ->> 'moduleReleaseRevision')::bigint;
-  if not found
-    or mapping_row.cardinality is distinct from (relationship_value ->> 'cardinality')
-    or mapping_row.on_parent_delete is distinct from (relationship_value ->> 'onParentDelete') then
-    raise exception using errcode = '55000',
-      message = 'Relationship storage disagrees with the active definition';
+  if source_meta ? 'previewInstallationId' then
+    -- The exact owner-validated preview definition is its mapping. A live mapping's single
+    -- relationship identity must never be repointed at a preview's isolated storage.
+    mapping_row.source_storage_contract_id := (source_meta ->> 'storageContractId')::uuid;
+    mapping_row.cardinality := relationship_value ->> 'cardinality';
+    mapping_row.on_parent_delete := relationship_value ->> 'onParentDelete';
+    select pg_catalog.array_agg((target.value ->> 'recordTypeId')::uuid)
+    into mapping_row.target_record_type_ids
+    from pg_catalog.jsonb_array_elements(case when relationship_value ? 'toRecordType'
+      then pg_catalog.jsonb_build_array(relationship_value -> 'toRecordType')
+      else relationship_value -> 'toRecordTypes' end) as target(value);
+  else
+    select mapping.* into mapping_row
+    from vortex_record.relationship_storage_mappings as mapping
+    where mapping.relationship_id = p_relationship_id
+      and mapping.source_storage_contract_id =
+        (source_meta ->> 'storageContractId')::uuid
+      and mapping.source_field_id = (field_value ->> 'fieldId')::uuid
+      and mapping.release_revision <= (source_meta ->> 'moduleReleaseRevision')::bigint;
+    if not found
+      or mapping_row.cardinality is distinct from (relationship_value ->> 'cardinality')
+      or mapping_row.on_parent_delete is distinct from (relationship_value ->> 'onParentDelete') then
+      raise exception using errcode = '55000',
+        message = 'Relationship storage disagrees with the active definition';
+    end if;
   end if;
 
   if pg_catalog.jsonb_typeof(p_target_value) = 'null' then
@@ -165,9 +178,20 @@ begin
     or pg_catalog.jsonb_typeof(target_loaded -> 'declaration') <> 'object' then
     raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
   end if;
-  target_decision := vortex_access.evaluate_organization_record_access_internal(
-    target_loaded -> 'declaration', target_record_id, target_loaded -> 'facts'
-  );
+  if source_meta ? 'previewInstallationId'
+    and target_loaded ->> 'previewInstallationId' = source_meta ->> 'previewInstallationId'
+    and exists (
+      select 1 from vortex_definition.roots as root
+      where root.root_id = (target_loaded #>> '{recordTypeMeta,moduleRootId}')::uuid
+        and root.owner_application_root_id = (source_context ->> 'applicationRootId')::uuid
+    ) then
+    target_decision := pg_catalog.jsonb_build_object('outcome', 'allowed');
+  else
+    target_decision := vortex_access.evaluate_organization_record_access_internal(
+      pg_catalog.jsonb_set(target_loaded -> 'declaration', '{authority}',
+        '{"kind":"permission"}'::jsonb), target_record_id, target_loaded -> 'facts'
+    );
+  end if;
   if target_decision ->> 'outcome' <> 'allowed' then
     raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
   end if;
@@ -216,6 +240,8 @@ begin
         and edge.to_organisation_id = (source_context ->> 'organizationId')::uuid
         and edge.to_storage_contract_id = (target_meta ->> 'storageContractId')::uuid
         and edge.to_record_id = target_record_id
+        and (not (source_meta ? 'previewInstallationId')
+          or edge.from_storage_contract_id = (source_meta ->> 'storageContractId')::uuid)
         and edge.from_record_id <> p_source_record_id
     ) into existing_other;
     if existing_other then

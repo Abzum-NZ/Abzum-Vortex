@@ -26,6 +26,7 @@ declare
   action_kind_value text := p_action ->> 'actionKind';
   named_action_value text := p_action ->> 'namedAction';
   preview_registration record;
+  preview_projection boolean := false;
 begin
   -- A preview request decides the permissions of the previewed Application and its own Modules
   -- from the preview's registration alone: the builder who opened the preview holds the draft's
@@ -45,6 +46,9 @@ begin
     if preview_registration.registration_kind is distinct from 'preview' then
       return;
     end if;
+    preview_projection := coalesce(
+      p_record_type_id = any(preview_registration.system_projection_record_type_ids), false
+    );
     if permission_owner_value = any(preview_registration.owned_owner_ids)
       and not coalesce(
         p_record_type_id = any(preview_registration.system_projection_record_type_ids), false
@@ -66,6 +70,17 @@ begin
         and (preview_entry.entry).named_action is not distinct from named_action_value;
       return;
     end if;
+  end if;
+
+  -- A projection has no preview copy or draft grant. Resolve a used projection's permission
+  -- in the Module owner's live registration, where the builder's accepted roles actually live.
+  -- This only changes the permission address: the common live role-path decision below still
+  -- proves a current grant, and ordinary borrowed record types retain their existing refusal.
+  if preview_projection and permission_owner_kind_value = 'module' then
+    select root.owner_application_root_id into permission_application_value
+    from vortex_definition.roots as root
+    where root.root_id = permission_owner_value;
+    if permission_application_value is null then return; end if;
   end if;
 
   return query
