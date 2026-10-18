@@ -901,6 +901,7 @@ export function ClickableRow(
           };
   return (
     <TableRow
+      id={`record-${recordId}`}
       data-vortex-record-id={recordId}
       data-state={selected ? "selected" : undefined}
       aria-busy={pending ? true : undefined}
