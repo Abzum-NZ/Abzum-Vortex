@@ -28,6 +28,8 @@ import { Input } from "../components/input";
 import { Label } from "../components/label";
 import { Pagination, PaginationContent, PaginationItem } from "../components/pagination";
 import { Skeleton } from "../components/skeleton";
+import { Spinner } from "../components/spinner";
+import { usePendingGesture } from "../controls/pending-gesture";
 import { TableRow } from "../components/table";
 import { cn } from "../lib/utils";
 import type {
@@ -219,6 +221,8 @@ export function RowActionControl({
   label?: string;
   events: DisplayEventHandlers | undefined;
 }>): ReactElement | null {
+  // The command's flow keeps the button busy until it settles, like every flow button.
+  const gesture = usePendingGesture();
   const onRowAction = events?.row_action;
   if (onRowAction === undefined) return null;
   const text = label ?? "Open";
@@ -228,15 +232,21 @@ export function RowActionControl({
       variant="outline"
       size="sm"
       aria-label={`${text} ${name}`}
+      disabled={gesture.pending}
+      aria-busy={gesture.pending}
       onClick={(clickEvent) => {
         clickEvent.stopPropagation();
-        onRowAction(
-          eventId === undefined
-            ? { event: "row_action", ...identity }
-            : { event: "row_action", eventId, ...identity },
+        if (gesture.running()) return;
+        gesture.track(
+          onRowAction(
+            eventId === undefined
+              ? { event: "row_action", ...identity }
+              : { event: "row_action", eventId, ...identity },
+          ),
         );
       }}
     >
+      {gesture.pending ? <Spinner data-icon="inline-start" aria-hidden="true" /> : null}
       {text}
     </Button>
   );
@@ -263,6 +273,8 @@ export function RowActionsMenu({
   actions: readonly RecordsTableActionContract[] | undefined;
   events: DisplayEventHandlers | undefined;
 }>): ReactElement | null {
+  // The chosen command's flow keeps the menu's button busy until it settles.
+  const gesture = usePendingGesture();
   const onRowAction = events?.row_action;
   if (onRowAction === undefined) return null;
   const commands: readonly {
@@ -288,12 +300,14 @@ export function RowActionsMenu({
             variant="outline"
             size="icon-sm"
             aria-label={`Actions for ${name}`}
+            disabled={gesture.pending}
+            aria-busy={gesture.pending}
             // Opening the commands of a row is not a request to open the row itself.
             onClick={(event) => event.stopPropagation()}
           />
         }
       >
-        <Icon name="more-horizontal" />
+        {gesture.pending ? <Spinner aria-hidden="true" /> : <Icon name="more-horizontal" />}
       </DropdownMenuTrigger>
       {/* The menu is portalled, but React still bubbles its clicks through the row; choosing a
           command is not a request to open the row itself. */}
@@ -301,13 +315,16 @@ export function RowActionsMenu({
         {commands.map((command) => (
           <DropdownMenuItem
             key={command.key}
-            onClick={() =>
-              onRowAction(
-                command.eventId === undefined
-                  ? { event: "row_action", ...identity }
-                  : { event: "row_action", eventId: command.eventId, ...identity },
-              )
-            }
+            onClick={() => {
+              if (gesture.running()) return;
+              gesture.track(
+                onRowAction(
+                  command.eventId === undefined
+                    ? { event: "row_action", ...identity }
+                    : { event: "row_action", eventId: command.eventId, ...identity },
+                ),
+              );
+            }}
           >
             {command.label}
           </DropdownMenuItem>
@@ -336,15 +353,24 @@ export function BulkActionsMenu({
   canRun: (action: RecordsTableActionContract) => boolean;
   events: DisplayEventHandlers | undefined;
 }>): ReactElement | null {
+  // The chosen command's flow keeps the menu's button busy until it settles.
+  const gesture = usePendingGesture();
   const onBulkAction = events?.bulk_action;
   if (onBulkAction === undefined) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button variant="outline" size="sm" aria-label={`Bulk actions for ${accessibleName}`} />
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={`Bulk actions for ${accessibleName}`}
+            disabled={gesture.pending}
+            aria-busy={gesture.pending}
+          />
         }
       >
+        {gesture.pending ? <Spinner data-icon="inline-start" aria-hidden="true" /> : null}
         Bulk actions
       </DropdownMenuTrigger>
       <DropdownMenuContent>
@@ -352,13 +378,16 @@ export function BulkActionsMenu({
           <DropdownMenuItem
             key={action.eventId}
             disabled={recordIds.length === 0 || !canRun(action)}
-            onClick={() =>
-              onBulkAction({
-                event: "bulk_action",
-                eventId: action.eventId,
-                recordIds: [...recordIds],
-              })
-            }
+            onClick={() => {
+              if (gesture.running()) return;
+              gesture.track(
+                onBulkAction({
+                  event: "bulk_action",
+                  eventId: action.eventId,
+                  recordIds: [...recordIds],
+                }),
+              );
+            }}
           >
             {action.label}
           </DropdownMenuItem>

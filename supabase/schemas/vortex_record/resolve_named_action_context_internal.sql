@@ -22,7 +22,6 @@ declare
   application_content jsonb;
   action_content jsonb;
   action_owner_content jsonb;
-  permission_value jsonb;
   permission_candidates jsonb := '[]'::jsonb;
   permission_keys jsonb;
   permission_key text;
@@ -94,7 +93,8 @@ begin
     raise exception using errcode = '55000', message = 'Named action permission is unavailable';
   end if;
 
-  -- Collect the exact permission declarations of the active pin set. Access
+  -- Collect the exact permission declarations of the active pin set that carry
+  -- one of the action's permission keys; only those can match below. Access
   -- remains authoritative for current registrations, assignments and scopes.
   for binding_value in
     select item.value
@@ -104,19 +104,23 @@ begin
     from vortex_definition.releases as release
     where release.root_id = (binding_value ->> 'moduleRootId')::uuid
       and release.release_revision = (binding_value ->> 'moduleReleaseRevision')::bigint;
-    for permission_value in
-      select item.value from pg_catalog.jsonb_array_elements(
-        coalesce(release_content -> 'permissions', '[]'::jsonb)
-      ) as item(value)
-      where pg_catalog.jsonb_typeof(item.value -> 'recordScope') = 'object'
-    loop
-      permission_candidates := permission_candidates || pg_catalog.jsonb_build_array(
-        permission_value || pg_catalog.jsonb_build_object(
+    permission_candidates := permission_candidates || coalesce((
+      select pg_catalog.jsonb_agg(
+        item.value || pg_catalog.jsonb_build_object(
           'ownerKind', 'module',
           'ownerId', (binding_value ->> 'moduleRootId')::uuid
         )
-      );
-    end loop;
+        order by item.ordinality
+      )
+      from pg_catalog.jsonb_array_elements(
+        coalesce(release_content -> 'permissions', '[]'::jsonb)
+      ) with ordinality as item(value, ordinality)
+      where pg_catalog.jsonb_typeof(item.value -> 'recordScope') = 'object'
+        and item.value ->> 'key' in (
+          select declared.value #>> '{}'
+          from pg_catalog.jsonb_array_elements(permission_keys) as declared(value)
+        )
+    ), '[]'::jsonb);
     -- #578: the owning Module release's rules are evaluated by Record
     -- (`beforeSaveRules`); a rule for the subject in any other release is not.
     if (binding_value ->> 'moduleRootId')::uuid <>
@@ -136,19 +140,23 @@ begin
   from vortex_definition.releases as release
   where release.root_id = (context_value ->> 'applicationRootId')::uuid
     and release.release_revision = (installation ->> 'applicationReleaseRevision')::bigint;
-  for permission_value in
-    select item.value from pg_catalog.jsonb_array_elements(
-      coalesce(application_content -> 'permissions', '[]'::jsonb)
-    ) as item(value)
-    where pg_catalog.jsonb_typeof(item.value -> 'recordScope') = 'object'
-  loop
-    permission_candidates := permission_candidates || pg_catalog.jsonb_build_array(
-      permission_value || pg_catalog.jsonb_build_object(
+  permission_candidates := permission_candidates || coalesce((
+    select pg_catalog.jsonb_agg(
+      item.value || pg_catalog.jsonb_build_object(
         'ownerKind', 'application',
         'ownerId', (context_value ->> 'applicationRootId')::uuid
       )
-    );
-  end loop;
+      order by item.ordinality
+    )
+    from pg_catalog.jsonb_array_elements(
+      coalesce(application_content -> 'permissions', '[]'::jsonb)
+    ) with ordinality as item(value, ordinality)
+    where pg_catalog.jsonb_typeof(item.value -> 'recordScope') = 'object'
+      and item.value ->> 'key' in (
+        select declared.value #>> '{}'
+        from pg_catalog.jsonb_array_elements(permission_keys) as declared(value)
+      )
+  ), '[]'::jsonb);
   if exists (
     select 1 from pg_catalog.jsonb_array_elements(
       coalesce(application_content -> 'rules', '[]'::jsonb)
