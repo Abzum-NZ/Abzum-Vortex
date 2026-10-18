@@ -577,6 +577,8 @@ export const compareApplicationContents = (
   const reasons = compareApplicationSharedContent(previousContent, candidateContent);
   const previous = asRecord(previousContent);
   const candidate = asRecord(candidateContent);
+  // Bringing a released block into use is additive. Its settings affect versioning only when
+  // an existing placement changes; dependency removals still compare as breaking changes.
   compareKeyed(
     reasons,
     previous.platformBlockDependencies as RecordValue[],

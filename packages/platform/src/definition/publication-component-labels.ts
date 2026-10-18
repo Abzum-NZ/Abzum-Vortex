@@ -2,6 +2,12 @@ import type { BlockId, PlatformBlockRelease, SemanticVersion } from "../schema";
 
 const textKeys = ["label", "name", "singularLabel"] as const;
 const identityKeyPattern = /^(?:[a-z]+(?:[A-Z][a-z]*)*)Id$/;
+const identityKeys: Readonly<Record<string, string>> = {
+  moduleBindings: "moduleRootId",
+  dependencies: "moduleRootId",
+  sharingConditions: "conditionId",
+  publicAddresses: "addressId",
+};
 
 const singular = (word: string): string =>
   word.endsWith("ies")
@@ -12,19 +18,13 @@ const singular = (word: string): string =>
         ? word.slice(0, -1)
         : word;
 
-/** The identity an object owns: `<singular of its array property>Id`, or a key that names the same kind (e.g. `bindingId` in `connectionBindings`). */
+/** An object's own contained id or kind-specific identity, never an identity it references. */
 const ownedIdentity = (
   record: Record<string, unknown>,
   container: string | undefined,
 ): string | undefined => {
   if (container === undefined) return undefined;
   if (typeof record.id === "string") return record.id;
-  const identityKeys: Record<string, string> = {
-    moduleBindings: "moduleRootId",
-    dependencies: "moduleRootId",
-    sharingConditions: "conditionId",
-    publicAddresses: "addressId",
-  };
   const identityKey = identityKeys[container];
   if (identityKey !== undefined && typeof record[identityKey] === "string")
     return record[identityKey];
@@ -192,7 +192,7 @@ export const componentLabelsOf = async (
       !labels.has(record.bindingId.toLowerCase())
     ) {
       const control = labels.get(record.controlId.toLowerCase());
-      const event = labels.get(record.eventId.toLowerCase());
+      const event = labels.get(record.eventId.toLowerCase()) ?? readableKey(record.event);
       if (control !== undefined && event !== undefined)
         labels.set(record.bindingId.toLowerCase(), `${control}: ${event}`);
     }
