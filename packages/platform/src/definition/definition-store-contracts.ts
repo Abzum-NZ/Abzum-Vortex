@@ -105,7 +105,7 @@ const validateStoredDraftEvidence = (draft: StoredDraftEvidence, context: z.Refi
 };
 
 export const storedDefinitionDraftSchema = z
-  .union([
+  .discriminatedUnion("kind", [
     z
       .object({
         kind: z.literal("module"),
