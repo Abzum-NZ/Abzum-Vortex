@@ -14,7 +14,6 @@ import {
   moneyValueSchema,
   organizationAccountIdSchema,
   parseExactDecimal,
-  personLinkValueSchema,
   recordLinkValueSchema,
   type ExactDecimal,
   type FlowFormula,
@@ -83,9 +82,7 @@ const recordReferenceIdentity = (value: JsonValue): string | undefined => {
 
 const organizationAccountIdentity = (value: JsonValue): string | undefined => {
   const direct = organizationAccountIdSchema.safeParse(value);
-  if (direct.success) return direct.data.toLowerCase();
-  const linked = personLinkValueSchema.safeParse(value);
-  return linked.success ? linked.data.organizationAccountId.toLowerCase() : undefined;
+  return direct.success ? direct.data.toLowerCase() : undefined;
 };
 
 const moneyParts = (

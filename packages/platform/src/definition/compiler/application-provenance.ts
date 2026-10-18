@@ -322,11 +322,18 @@ export function applicationProvenance(
       const directoryUse = source.body.uses.findIndex(
         (use) => use.module === peopleDirectory.module,
       );
-      if (directoryUse < 0) fail("vortex.definition.invalid_compilation_output", "invalid_value");
+      const directoryModule = source.body.modules.findIndex(
+        (module) => module.key === peopleDirectory.module,
+      );
+      if (directoryUse < 0 && directoryModule < 0)
+        fail("vortex.definition.invalid_compilation_output", "invalid_value");
       entries.push({
         canonicalPath,
         origin: "resolved",
-        sourcePath: ["body", "uses", directoryUse, "module"],
+        sourcePath:
+          directoryUse >= 0
+            ? ["body", "uses", directoryUse, "module"]
+            : ["body", "modules", directoryModule, "key"],
         ruleCode: RESOLUTION_RULE,
       });
       continue;
