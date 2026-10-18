@@ -674,6 +674,7 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
   }),
   prepare_role_change_evidence: operation({
     schema: prepareOrganizationAdministrationRoleChangeCommandSchema,
+    inputAliases: { privilegeClassification: "privilege_classification" },
     command: (inputs) => ({
       operation: inputs.operation,
       roleKey: inputs.role_key,
@@ -689,15 +690,20 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
       ...(inputs.source_role_id === undefined ? {} : { sourceRoleId: inputs.source_role_id }),
       acceptBroadenedAuthority: inputs.accept_broadened_authority,
     }),
-    run: async (services, caller, command) =>
-      mapAvailable(
-        await services.accessAdministration.prepareRoleChange(
-          caller.session,
-          caller.selection,
-          command,
-        ),
-        (evidence) => ({ evidence: evidence as unknown as JsonValue }),
-      ),
+    run: async (services, caller, command) => {
+      const result = await services.accessAdministration.prepareRoleChange(
+        caller.session,
+        caller.selection,
+        command,
+      );
+      if (result.kind === "invalid_privilege_classification")
+        return {
+          kind: "confirmed_failure",
+          outcome: "validation",
+          diagnostic: invalidCommandFeedback("privilege_classification"),
+        };
+      return mapAvailable(result, (evidence) => ({ evidence: evidence as unknown as JsonValue }));
+    },
   }),
   prepare_application_role_revision_acceptance: operation({
     schema: prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema,
@@ -1172,6 +1178,8 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
   review_application_installation: applicationStoreOperation("review"),
   install_application: applicationStoreOperation("install"),
   upgrade_application: applicationStoreOperation("upgrade"),
+  review_application_removal: applicationStoreOperation("reviewRemoval"),
+  remove_application: applicationStoreOperation("remove"),
 } satisfies Record<PlatformServiceOperationKey, Operation>);
 
 /** A value of a declared type the executor does not carry yet is refused, never coerced. */

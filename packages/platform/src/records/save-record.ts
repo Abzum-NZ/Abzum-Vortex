@@ -155,6 +155,11 @@ const parsePreparation = (candidate: unknown): PreparationOutcome => {
     return { outcome: "conflict", ...(correlationId ? { correlationId } : {}) };
   if (value.outcome === "refused")
     return { outcome: "unavailable", ...(correlationId ? { correlationId } : {}) };
+  if (value.outcome === "unsupported") {
+    // An Application-owned rule names this record type; only a Module's own rules run on a save.
+    console.error("[record] save refused RECORD_SAVE_UNSUPPORTED: an Application rule names the record type");
+    return { outcome: "unavailable", ...(correlationId ? { correlationId } : {}) };
+  }
   if (value.outcome !== "prepared")
     throw contractError("RECORD_SAVE_PREPARATION_INVALID", value.outcome);
   const recordType = recordTypeDefinitionSchema.safeParse(value.recordType);
