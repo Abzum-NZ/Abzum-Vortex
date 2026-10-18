@@ -40,6 +40,8 @@ export const VORTEX_ICON_NAMES = [
   "tablet",
   "smartphone",
   "eye",
+  "sun",
+  "moon",
 ] as const;
 
 export const vortexIconNameSchema = z.enum(VORTEX_ICON_NAMES);

@@ -108,7 +108,13 @@ export const guardRules = {
     owner: "lead",
     reviewBy: "2027-01-15",
     description:
+<<<<<<< HEAD
       "Literal rounded-*, arbitrary px or arbitrary font-family classes in packages/ui renderers (outside shadcn components and the Studio D11 canvas radius scale)",
+||||||| cc0a9252
+      "Literal rounded-*, arbitrary px or arbitrary font-family classes in packages/ui renderers (outside the shadcn components)",
+=======
+      "Literal rounded-*, arbitrary px or arbitrary font-family classes in packages/ui renderers (outside shadcn components; Studio chrome permits its specified md/lg/xl/full radius scale)",
+>>>>>>> fix/t9-3003
   },
   "file-size": {
     tier: "warning",

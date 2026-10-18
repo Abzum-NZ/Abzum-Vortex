@@ -234,9 +234,25 @@ for (const file of codeFiles) {
   const checkLiteralStyle = (text: string, offset: number): void => {
     for (const match of text.matchAll(/\S+/g)) {
       const token = match[0];
+<<<<<<< HEAD
       const utility = token.slice(token.lastIndexOf(":") + 1).replace(/^!|!$/g, "");
+||||||| cc0a9252
+      const utility = token.slice(token.lastIndexOf(":") + 1).replace(/^!/, "");
+=======
+      const utility = token.slice(token.lastIndexOf(":") + 1).replace(/^!/, "");
+      // Studio chrome has a fixed theme and uses the radius scale specified by its design.
+      // Runtime block renderers still take their radius from the shadcn component variants.
+      const studioRadius = file.startsWith("packages/ui/src/studio/") &&
+        /^rounded-(?:md|lg|xl|full)$/.test(utility);
+>>>>>>> fix/t9-3003
       if (
+<<<<<<< HEAD
         (/^-?rounded(?:-[a-z0-9]+)*$/.test(utility) && !studioCanvasRadii.has(utility)) ||
+||||||| cc0a9252
+        /^-?rounded(?:-[a-z0-9]+)*$/.test(utility) ||
+=======
+        (/^-?rounded(?:-[a-z0-9]+)*$/.test(utility) && !studioRadius) ||
+>>>>>>> fix/t9-3003
         /^-?[a-z][a-z0-9-]*-\[[^\]]*\d(?:\.\d+)?px[^\]]*\]$/.test(utility) ||
         /^font-\[[^\]]+\]$/.test(utility)
       )
