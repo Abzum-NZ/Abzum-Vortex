@@ -2,6 +2,18 @@ import type { BlockId, PlatformBlockRelease, SemanticVersion } from "../schema";
 
 const textKeys = ["label", "name", "singularLabel"] as const;
 const identityKeyPattern = /^(?:[a-z]+(?:[A-Z][a-z]*)*)Id$/;
+const identityKeys: Readonly<Record<string, string>> = {
+  moduleBindings: "moduleRootId",
+  dependencies: "moduleRootId",
+  sharingConditions: "conditionId",
+  publicAddresses: "addressId",
+  flows: "id",
+  nodes: "id",
+  edges: "id",
+  navigation: "id",
+  children: "id",
+  steps: "id",
+};
 
 const singular = (word: string): string =>
   word.endsWith("ies")
@@ -12,12 +24,15 @@ const singular = (word: string): string =>
         ? word.slice(0, -1)
         : word;
 
-/** The identity an object owns: `<singular of its array property>Id`, or a key that names the same kind (e.g. `bindingId` in `connectionBindings`). */
+/** An object's own contained id or kind-specific identity, never an identity it references. */
 const ownedIdentity = (
   record: Record<string, unknown>,
   container: string | undefined,
 ): string | undefined => {
   if (container === undefined) return undefined;
+  const identityKey = identityKeys[container];
+  if (identityKey !== undefined && typeof record[identityKey] === "string")
+    return record[identityKey];
   const expected = `${singular(container)}Id`.toLowerCase();
   const matches = Object.keys(record).filter((key) => {
     if (
@@ -40,9 +55,9 @@ const asRecord = (value: unknown): Record<string, unknown> | undefined =>
 const text = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 
-const readableKey = (value: unknown): string => {
+const readableKey = (value: unknown): string | undefined => {
   const words = text(value)?.replace(/[-_]+/g, " ").replace(/\s+/g, " ");
-  return words === undefined ? "Flow" : words[0]!.toUpperCase() + words.slice(1);
+  return words === undefined ? undefined : words[0]!.toUpperCase() + words.slice(1);
 };
 
 const blockReference = (
@@ -107,6 +122,11 @@ export const componentLabelsOf = async (
     if (record === undefined) return;
     const block = blockReference(record);
     if (block !== undefined) blocks.set(`${block.blockId}@${block.releaseVersion}`, block);
+    if (typeof record.blockId === "string" && typeof record.releaseVersion === "string")
+      blocks.set(`${record.blockId}@${record.releaseVersion}`, {
+        blockId: record.blockId as BlockId,
+        releaseVersion: record.releaseVersion as SemanticVersion,
+      });
     for (const entry of Object.values(record)) scan(entry);
   };
   for (const document of documents) scan(document);
@@ -121,34 +141,71 @@ export const componentLabelsOf = async (
   );
 
   const labels = new Map<string, string>();
-  const visit = (value: unknown, container: string | undefined): void => {
+  const visit = (
+    value: unknown,
+    container: string | undefined,
+    entryOfCollection = false,
+  ): void => {
     if (Array.isArray(value)) {
-      for (const entry of value) visit(entry, container);
+      for (const entry of value) visit(entry, container, true);
       return;
     }
     const record = asRecord(value);
     if (record === undefined) return;
+    if (
+      typeof record.blockId === "string" &&
+      typeof record.releaseVersion === "string" &&
+      !labels.has(record.blockId.toLowerCase())
+    )
+      labels.set(
+        record.blockId.toLowerCase(),
+        releases.get(`${record.blockId}@${record.releaseVersion}`)!.name,
+      );
+    const content = asRecord(record.content);
+    const envelope = asRecord(record.envelope);
+    if (
+      typeof envelope?.rootId === "string" &&
+      content !== undefined &&
+      text(content.name) !== undefined &&
+      !labels.has(envelope.rootId.toLowerCase())
+    )
+      labels.set(envelope.rootId.toLowerCase(), text(content.name)!);
     const block = blockReference(record);
     if (block !== undefined && !labels.has(block.id.toLowerCase())) {
       const release = releases.get(`${block.blockId}@${block.releaseVersion}`)!;
       labels.set(block.id.toLowerCase(), blockLabel(release, block.props));
     }
-    if (
-      container === "flows" &&
-      typeof record.id === "string" &&
-      !labels.has(record.id.toLowerCase())
-    ) {
-      labels.set(
-        record.id.toLowerCase(),
-        text(asRecord(record.labels)?.name) ?? readableKey(record.key),
-      );
-    }
     const textKey = textKeys.find((key) => text(record[key]) !== undefined);
-    const identity = textKey === undefined ? undefined : ownedIdentity(record, container);
-    if (textKey !== undefined && identity !== undefined && !labels.has(identity.toLowerCase()))
-      labels.set(identity.toLowerCase(), text(record[textKey])!);
+    const identity = entryOfCollection ? ownedIdentity(record, container) : undefined;
+    const label =
+      (textKey === undefined ? undefined : text(record[textKey])) ??
+      text(asRecord(record.labels)?.name) ??
+      readableKey(record.key);
+    if (label !== undefined && identity !== undefined && !labels.has(identity.toLowerCase()))
+      labels.set(identity.toLowerCase(), label);
     for (const [key, entry] of Object.entries(record)) visit(entry, key);
   };
   for (const document of documents) visit(document, undefined);
+  const labelBindings = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const entry of value) labelBindings(entry);
+      return;
+    }
+    const record = asRecord(value);
+    if (record === undefined) return;
+    if (
+      typeof record.bindingId === "string" &&
+      typeof record.controlId === "string" &&
+      typeof record.eventId === "string" &&
+      !labels.has(record.bindingId.toLowerCase())
+    ) {
+      const control = labels.get(record.controlId.toLowerCase());
+      const event = labels.get(record.eventId.toLowerCase()) ?? readableKey(record.event);
+      if (control !== undefined && event !== undefined)
+        labels.set(record.bindingId.toLowerCase(), `${control}: ${event}`);
+    }
+    for (const entry of Object.values(record)) labelBindings(entry);
+  };
+  for (const document of documents) labelBindings(document);
   return [...labels].map(([componentId, label]) => ({ componentId, label }));
 };
