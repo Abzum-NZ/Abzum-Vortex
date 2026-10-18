@@ -11,7 +11,7 @@ import {
   type StudioCompositionCommand, type StudioCompositionContext, type StudioCompositionDestination,
   type StudioCompositionOutcome, type StudioRecordReader, type StudioSemanticOutline, type StudioSemanticSelection,
 } from "@vortex/ui/studio";
-import { createAppearanceRootProps, Icon, type FieldInputControlReleaseMap, type PlatformThemeTokens } from "@vortex/ui";
+import { Icon, type FieldInputControlReleaseMap, type PlatformThemeTokens } from "@vortex/ui";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@vortex/ui/components/empty";
 import { Spinner } from "@vortex/ui/components/spinner";
 import { Button } from "@vortex/ui/components/button";
@@ -367,7 +367,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
       {draft.updatingCanvas ? ", as the saved draft grants it. Your latest change shows once the canvas is updated." : "."}</p>}
     {shown && canvasPage !== undefined &&
       // The canvas previews the application in light or dark: the appearance is set on the canvas only, never on Studio's frame.
-      <div {...createAppearanceRootProps(appearance)}>
+      <div>
         {/* A newly chosen icon library loads before the canvas draws with it; only the canvas waits. */}
         <Suspense fallback={<Empty role="status" className="min-h-64"><EmptyHeader><Spinner /><EmptyTitle>Drawing the canvas</EmptyTitle><EmptyDescription>Loading the application theme.</EmptyDescription></EmptyHeader></Empty>}>
           <ApplicationPagePuckEditor key={`canvas:${canvasPage.id}`} source={source} compiledSource={view.source}
@@ -379,7 +379,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
             onSelectPlacement={(alias) => Promise.resolve(alias !== null
               ? draft.select({ kind: "placement", placementAlias: alias })
               : canvasPageRef.current !== undefined && draft.select({ kind: "page", pageAlias: canvasPageRef.current }))}
-            breakpoint={breakpoint} zoom={canvasZoom} disabled={draft.locked} compileFailure={view.failure}
+            breakpoint={breakpoint} zoom={canvasZoom} appearance={appearance} disabled={draft.locked} compileFailure={view.failure}
             onChange={applyPuckPageEdit} readRecords={readCanvasRecords} updating={draft.updatingCanvas}
             palette={addTargets === null ? undefined : { host: paletteHost, targets: addTargets, message: paletteMessage, onAdd: addBlock }} />
         </Suspense>

@@ -103,7 +103,7 @@ export function StudioCanvasToolbar({
                   value={device.value}
                   aria-label={device.label}
                   title={device.label}
-                  className="size-8 p-0"
+                  className="size-8"
                 >
                   <Icon name={device.icon} />
                 </ToggleGroupItem>
@@ -122,7 +122,7 @@ export function StudioCanvasToolbar({
                 value="light"
                 aria-label="Light appearance"
                 title="Light appearance"
-                className="size-8 p-0"
+                className="size-8"
               >
                 <Icon name="sun" />
               </ToggleGroupItem>
@@ -130,7 +130,7 @@ export function StudioCanvasToolbar({
                 value="dark"
                 aria-label="Dark appearance"
                 title="Dark appearance"
-                className="size-8 p-0"
+                className="size-8"
               >
                 <Icon name="moon" />
               </ToggleGroupItem>

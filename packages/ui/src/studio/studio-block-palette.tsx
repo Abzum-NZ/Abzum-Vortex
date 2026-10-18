@@ -3,7 +3,8 @@
 import { Icon, resolveVortexIconName } from "../icons";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "../components/empty";
 import { Drawer } from "@puckeditor/core";
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useState, type CSSProperties } from "react";
+import { Button } from "../components/button";
 import { Input } from "../components/input";
 import { Label } from "../components/label";
 import { NativeSelect, NativeSelectOption } from "../components/native-select";
@@ -75,7 +76,11 @@ export function StudioBlockPalette({
     });
 
   return (
-    <div className="space-y-3" data-vortex-studio-palette="">
+    <div
+      className="space-y-3"
+      data-vortex-studio-palette=""
+      style={{ "--puck-font-family": "var(--font-sans)" } as CSSProperties}
+    >
       <div className="flex flex-col gap-2">
         <Label htmlFor={targetSelectId}>Add to</Label>
         <NativeSelect
@@ -131,29 +136,41 @@ export function StudioBlockPalette({
                   {group.choices.map((choice) => {
                     const available = choice.unavailable === undefined;
                     return (
-                      <Drawer.Item
+                      <div
                         key={choice.id}
-                        name={choice.rendererKey}
-                        label={choice.name}
-                        isDragDisabled={!editable || !available}
+                        className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 text-card-foreground"
                       >
-                        {() => (
-                          <button
-                            type="button"
-                            disabled={!editable || !available}
-                            className="flex h-full w-full flex-col items-start justify-start gap-2 whitespace-normal rounded-lg border border-border bg-card p-3 text-left text-card-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                            aria-label={`Add ${choice.name} to ${target.label}`}
-                            title={choice.unavailable ?? choice.description}
-                            onClick={() => add(choice)}
-                          >
-                            <Icon name={resolveVortexIconName(choice.icon) ?? "blocks"} className="size-5" />
-                            <span className="text-sm font-medium">{choice.name}</span>
-                            <span className="line-clamp-2 text-xs font-normal text-muted-foreground">
-                              {choice.unavailable ?? choice.description}
-                            </span>
-                          </button>
-                        )}
-                      </Drawer.Item>
+                        <Drawer.Item
+                          name={choice.rendererKey}
+                          label={choice.name}
+                          isDragDisabled={!editable || !available}
+                        >
+                          {() => (
+                            <div className="flex flex-col items-start gap-2">
+                              <Icon
+                                name={resolveVortexIconName(choice.icon) ?? "blocks"}
+                                className="size-5"
+                              />
+                              <span className="text-sm font-medium">{choice.name}</span>
+                              <span className="line-clamp-2 text-xs text-muted-foreground">
+                                {choice.unavailable ?? choice.description}
+                              </span>
+                            </div>
+                          )}
+                        </Drawer.Item>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="mt-auto w-full"
+                          disabled={!editable || !available}
+                          aria-label={`Add ${choice.name} to ${target.label}`}
+                          title={choice.unavailable ?? choice.description}
+                          onClick={() => add(choice)}
+                        >
+                          Add
+                        </Button>
+                      </div>
                     );
                   })}
                 </div>
