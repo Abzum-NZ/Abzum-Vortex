@@ -39,8 +39,7 @@ const requestSchema = z.object({
 
 /**
  * The records the data blocks of one content area of a saved draft page show, by block name, for
- * exactly that draft revision. A block whose records come from elsewhere (the page's own record,
- * a form) is not read here.
+ * exactly that draft revision, including a detail page's sample subject.
  */
 export type StudioCanvasRecordsResult =
   | Readonly<{ kind: "available"; draftRevision: number; sourceFingerprint: string; pageAlias: string;
@@ -100,11 +99,11 @@ const readSample = async (
   if (read.kind === "temporarily_unavailable") return "temporarily_unavailable";
   if (read.kind !== "available") {
     console.error(`[studio] canvas sample record unread: STUDIO_CANVAS_SAMPLE_REFUSED cause=${read.kind}`);
-    return { recordTypeName: record.singularLabel };
+    return "temporarily_unavailable";
   }
   if (read.value.outcome !== "completed") {
     console.error(`[studio] canvas sample record unread: STUDIO_CANVAS_SAMPLE_REFUSED cause=${read.value.reasonCode}`);
-    return { recordTypeName: record.singularLabel };
+    return "temporarily_unavailable";
   }
   const first = read.value.choices[0];
   return first === undefined ? { recordTypeName: record.singularLabel }
