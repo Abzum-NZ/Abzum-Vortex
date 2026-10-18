@@ -27,6 +27,7 @@ declare
   named_action_value text := p_action ->> 'namedAction';
   preview_registration record;
   preview_projection boolean := false;
+  projection_live_registration boolean := false;
 begin
   -- A preview request decides the permissions of the previewed Application and its own Modules
   -- from the preview's registration alone: the builder who opened the preview holds the draft's
@@ -72,15 +73,14 @@ begin
     end if;
   end if;
 
-  -- A projection has no preview copy or draft grant. Resolve a used projection's permission
-  -- in the Module owner's live registration, where the builder's accepted roles actually live.
-  -- This only changes the permission address: the common live role-path decision below still
-  -- proves a current grant, and ordinary borrowed record types retain their existing refusal.
+  -- A projection has no preview copy or draft grant. A Module's permission is registered by every
+  -- installed Application that links that Module, each under its own Application root, and none of
+  -- those is the address of the previewed Application: a projection of a used Module selects its
+  -- permission from the caller's live registrations rather than from the address it was asked
+  -- about. The common live role-path decision below still proves a current grant, and ordinary
+  -- borrowed record types keep their existing refusal.
   if preview_projection and permission_owner_kind_value = 'module' then
-    select root.owner_application_root_id into permission_application_value
-    from vortex_definition.roots as root
-    where root.root_id = permission_owner_value;
-    if permission_application_value is null then return; end if;
+    projection_live_registration := true;
   end if;
 
   return query
@@ -113,8 +113,11 @@ begin
       and continuity.meaning_fingerprint = catalogue.meaning_fingerprint
     where registration.organization_id = context_organization_value
       and registration.state = 'active'
-      and catalogue.application_root_id is not distinct from
-        permission_application_value
+      and (
+        projection_live_registration
+        or catalogue.application_root_id is not distinct from
+          permission_application_value
+      )
       and catalogue.owner_kind = permission_owner_kind_value
       and catalogue.owner_id = permission_owner_value
       and catalogue.permission_id = permission_value
@@ -369,7 +372,7 @@ comment on function
   vortex_access.evaluate_permission_role_path_internal(
     jsonb, timestamptz, jsonb, jsonb, uuid
   ) is
-  'Private current-permission and role-path evidence; null record type selects only non-record permissions. It returns one row per accepted meaning the caller holds through a live role path (never a later registered meaning), the registered meaning for a super administrator, or the registered permission without a deadline when no path is live. A preview request decides the previewed Application''s own permissions from its preview registration. No row authority.';
+  'Private current-permission and role-path evidence; null record type selects only non-record permissions. It returns one row per accepted meaning the caller holds through a live role path (never a later registered meaning), the registered meaning for a super administrator, or the registered permission without a deadline when no path is live. A preview request decides the previewed Application''s own permissions from its preview registration, and a permission on a system projection of a used Module from the caller''s live registrations, under whichever Application links that Module. No row authority.';
 
 alter function vortex_access.evaluate_permission_role_path_internal(p_context jsonb, p_checked_at timestamp with time zone, p_permission jsonb, p_action jsonb, p_record_type_id uuid) owner to vortex_owner;
 
