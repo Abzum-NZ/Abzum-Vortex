@@ -56,11 +56,21 @@ export function StudioFlowsPanel({
           selection: { kind: "flow", flowAlias: flow.id, moduleKey } as const,
           label: studioFlowLabel(flow),
           trigger:
-            flow.execution === "transaction"
-              ? "Before save"
-              : flow.triggers.length === 0
+            flow.triggers.length === 0
+              ? flow.execution === "interactive"
                 ? "On button"
-                : flow.triggers.map((trigger) => trigger.type.replaceAll("_", " ")).join(", "),
+                : "Called by a flow"
+              : flow.triggers
+                  .map(
+                    (trigger) =>
+                      ({
+                        BeforeSave: "Before save",
+                        Event: "On event",
+                        Schedule: "On schedule",
+                        IncomingMessage: "On message",
+                      })[trigger.type],
+                  )
+                  .join(", "),
         }))
         .filter((entry) => needle.length === 0 || entry.label.toLocaleLowerCase().includes(needle))
         .sort((left, right) => left.label.localeCompare(right.label));
@@ -110,7 +120,7 @@ export function StudioFlowsPanel({
               {query.length > 0 ? "No flow matches." : "No flows yet."}
             </p>
           ) : (
-            <ul className="list-none space-y-0.5">
+            <ul className="m-0 list-none space-y-1 p-0">
               {group.flows.map((entry) => {
                 const key = studioSemanticSelectionKey(entry.selection);
                 return (
@@ -132,7 +142,7 @@ export function StudioFlowsPanel({
       ))}
       {source.body.uses.length > 0 && (
         <StudioSection title="Used modules (read-only)">
-          <ul className="list-none space-y-2">
+          <ul className="m-0 list-none space-y-2 p-0">
             {source.body.uses.map((use) => {
               const owner = applications.find((application) => application.key === use.application);
               return (

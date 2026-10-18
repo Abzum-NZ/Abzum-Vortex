@@ -2,6 +2,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import type { StudioSemanticOutline, StudioSemanticOutlineNode } from "@vortex/ui/studio";
 import { StudioPanelShell, StudioSearchBox, StudioSection } from "./studio-frame";
+import { StudioNavEmpty } from "./studio-nav-tree";
 import { StudioOutline } from "./studio-outline";
 
 /**
@@ -62,7 +63,8 @@ function OutlineList({
   disabled: boolean;
   empty: string;
 }>) {
-  if (nodes.length === 0) return <p className="text-sm text-muted-foreground">{empty}</p>;
+  if (nodes.length === 0)
+    return <StudioNavEmpty title="No blocks" description={empty} icon="blocks" />;
   return (
     <StudioOutline nodes={nodes} selectedKey={selectedKey} choose={choose} disabled={disabled} />
   );
@@ -180,9 +182,11 @@ export function StudioBlockOutlinePanel({
       }
     >
       {owner === undefined ? (
-        <p className="text-sm text-muted-foreground">
-          Choose a page or layout in Structure to see its blocks here.
-        </p>
+        <StudioNavEmpty
+          title="No page open"
+          description="Choose a page or layout in Structure to see its blocks."
+          icon="list-tree"
+        />
       ) : (
         <>
           <StudioSection title={owner.label} count={blocks.length}>

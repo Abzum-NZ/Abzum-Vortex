@@ -210,7 +210,7 @@ export function StudioMenuPanel({
         )}
         <form
           onSubmit={addEntry}
-          className="flex items-end gap-2 border-b border-border pb-3"
+          className="flex items-end gap-2"
           aria-label="New menu entry"
         >
           <StudioField
@@ -368,7 +368,7 @@ function StudioMenuEntryEditor({
   return (
     <section
       aria-label={`Menu entry ${item.label}`}
-      className="space-y-3 rounded-md border border-border p-3"
+      className="space-y-4"
     >
       <p className="text-sm font-medium">
         {kindWords(item)} “{item.label}”

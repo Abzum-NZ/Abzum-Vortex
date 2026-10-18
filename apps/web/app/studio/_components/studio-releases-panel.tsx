@@ -19,7 +19,7 @@ export function StudioReleasesPanel({
   return (
     <StudioPanelShell title="Releases" hidden={hidden}>
       <StudioSection title="Release tools">
-        <ul className="list-none space-y-1" aria-label="Release tools">
+        <ul className="m-0 list-none space-y-1 p-0" aria-label="Release tools">
           {studioReleasesSections.map((entry) => (
             <li key={entry.value}>
               <StudioNavItem

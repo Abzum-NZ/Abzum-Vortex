@@ -149,9 +149,9 @@ export function StudioSearchOverview({ source, modules, disabled, edit, onSelect
           <Switch id="studio-search-enabled" checked={search.enabled} disabled={disabled} onCheckedChange={toggle} />
           <Label htmlFor="studio-search-enabled" className="font-normal">Search is on</Label>
         </div>
-        <ul className="list-none space-y-1" aria-label="Found in search">{found.map(({ reference, module, record }) =>
+        <ul className="m-0 list-none space-y-1 p-0" aria-label="Found in search">{found.map(({ reference, module, record }) =>
           <li key={reference}>{module === undefined || record === undefined ? <span className="text-sm">{reference}</span>
-            : <Button type="button" variant="link" size="sm" className="h-auto p-0"
+            : <Button type="button" variant="link" size="sm"
               onClick={() => onSelect({ kind: "record_type", moduleKey: module.key, recordKey: record.key })}>{record.pluralName}</Button>}
           </li>)}</ul>
       </>}

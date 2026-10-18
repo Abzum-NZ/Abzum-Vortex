@@ -173,7 +173,7 @@ export function useStudioAccessTab({
       }
     >
       <StudioSection title="Roles" count={roles.length}>
-        <ul className="space-y-1">
+        <ul className="m-0 list-none space-y-1 p-0">
           {roles.map((entry) => (
             <li key={entry.key}>
               <StudioNavItem

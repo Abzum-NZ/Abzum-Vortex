@@ -186,6 +186,7 @@ export function StudioHome({
                         <h3 className="text-base font-semibold">
                           <Link
                             href={href}
+                            prefetch={false}
                             className="outline-none after:absolute after:inset-0 after:rounded-xl"
                           >
                             {root.name}

@@ -160,7 +160,7 @@ export function StudioStructureEditor({
       )}
       {(form === "page" || form === "shell") && (
         <form
-          className="space-y-3 rounded-md border border-border p-3"
+          className="space-y-4"
           onSubmit={submitNew}
           aria-label={form === "page" ? "New page" : "New layout"}
         >
@@ -223,7 +223,7 @@ export function StudioStructureEditor({
       {target !== undefined && (
         <section
           key={target.id}
-          className="space-y-3 rounded-md border border-border p-3"
+          className="space-y-4"
           aria-label={`Selected ${what}`}
         >
           <p className="text-sm font-medium">

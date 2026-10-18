@@ -4,7 +4,12 @@ import { Icon } from "@vortex/ui";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import { StudioPanelShell, StudioSearchBox, StudioSection } from "./studio-frame";
-import { StudioNavItem, StudioNavTree, type StudioNavNode } from "./studio-nav-tree";
+import {
+  StudioNavEmpty,
+  StudioNavItem,
+  StudioNavTree,
+  type StudioNavNode,
+} from "./studio-nav-tree";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import type { StudioDataSelection } from "@vortex/ui/studio";
 import type { StudioDataModule } from "../_lib/studio-data-model";
@@ -82,6 +87,12 @@ export function StudioDataPanel({
       label,
       icon:
         selection.kind === "module" || selection.kind === "record_type" ? "database" : "panel-left",
+      defaultExpanded:
+        selection.kind !== "record_type" ||
+        (selected !== null &&
+          (selected.kind === "record_type" || selected.kind === "field") &&
+          selected.moduleKey === selection.moduleKey &&
+          selected.recordKey === selection.recordKey),
       selected: sameSelection(selected, selection),
       onSelect: () => onSelect(selection),
       children,
@@ -160,16 +171,13 @@ export function StudioDataPanel({
         />
       }
     >
-      {owned.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          This application owns no record types yet. Add its first record type: its module is
-          created with it.
-        </p>
-      ) : owned.every((module) => module.recordTypes.length === 0) ? (
-        <p className="text-sm text-muted-foreground">
-          This application has no record types yet. Add its first one, for example Asset.
-        </p>
-      ) : null}
+      {owned.every((module) => module.recordTypes.length === 0) && (
+        <StudioNavEmpty
+          title="No record types yet"
+          description="Add a record type to start defining your data."
+          icon="database"
+        />
+      )}
       {ownedShown.length > 0 && (
         <StudioSection title="This application" count={ownedShown.length} storageKey="data:owned">
           <StudioNavTree
