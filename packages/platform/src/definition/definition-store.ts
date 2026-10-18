@@ -205,6 +205,13 @@ const safeStoreOperation = async <Result>(
           cause,
         );
       case "invalid":
+        if (
+          operationKind === "save_draft" &&
+          error instanceof Error &&
+          error.message === "Definition draft write source is invalid"
+        )
+          throw new DefinitionError("INVALID_DEFINITION_SOURCE", cause);
+        throw new DefinitionError("DEFINITION_STORAGE_VALIDATION_FAILED", cause);
       case "constraint_failed":
         throw new DefinitionError("DEFINITION_STORAGE_VALIDATION_FAILED", cause);
       default:

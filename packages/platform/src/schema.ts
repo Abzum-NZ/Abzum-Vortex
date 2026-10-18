@@ -19,6 +19,8 @@ export * from "./definition/module-field-shape";
 export * from "./definition/application-uses";
 export * from "./definition/module-record-type-shape";
 export * from "./definition/module-action-shape";
+export { actionValueCompatible } from "./definition/validation/action-values";
+export * from "./definition/module-event-shape";
 export * from "./definition/module-pipeline-shape";
 export * from "./definition/module-field-settings";
 export * from "./definition/module-field-formulas";

@@ -266,7 +266,7 @@ function PipelineDialog({ source, module, record, pipeline, publication, edit, o
           issue={where.issue} references={where.references} onBeforeOpen={onClose} />}
         <DialogFooter><Button type="button" variant="outline" onClick={onClose}>Close</Button></DialogFooter>
       </div>
-      {creatingFor === undefined ? null : <ActionDialog key={creatingFor} module={module} record={record} action={undefined} open
+      {creatingFor === undefined ? null : <ActionDialog key={creatingFor} source={source} module={module} record={record} action={undefined} open
         initialEffect={{ field: stageField, option: creatingFor }} edit={edit}
         onOpenChange={(open) => { if (!open) setCreatingFor(undefined); }}
         onSaved={(actionKey) => change({ gates: { ...gates, [creatingFor]: actionKey } })} />}
