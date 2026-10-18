@@ -187,14 +187,15 @@ export function useApplyDispatch({
               server.descriptor.commit === "partial")
           )
             setCompletedGuidedNavigationKey(navigationKey);
-          // A refusal because the record changed under the person leaves their view stale, so the
-          // bound placements are re-read to show the record as it now is.
+          // A committed run already re-read the bound placements before its closing messages (the
+          // flow runtime's committed hook). A refusal because the record changed under the person
+          // leaves their view stale, so the bound placements are re-read to show it as it now is.
           const changedUnderPerson =
             server.descriptor.outcome === "conflict" || diagnostic?.code === "stale_revision";
           if (
-            (server.descriptor.commit === "confirmed" ||
-              server.descriptor.commit === "partial" ||
-              changedUnderPerson) &&
+            changedUnderPerson &&
+            server.descriptor.commit !== "confirmed" &&
+            server.descriptor.commit !== "partial" &&
             sourceBindingId !== undefined
           )
             void refreshPlacements(refreshTargetsForBinding(sourceBindingId), undefined, {

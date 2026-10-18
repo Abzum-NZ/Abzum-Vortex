@@ -879,115 +879,6 @@
       }
     }
   },
-  "accept_application_role_template": {
-    "key": "accept_application_role_template",
-    "name": "Accept application role template",
-    "release": {
-      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
-      "operationId": "1ec2bafd-aae8-4ebe-bf89-f6969a77ff37",
-      "releaseVersion": "1.0.0"
-    },
-    "descriptor": {
-      "contractVersion": "1.0.0",
-      "operation": {
-        "owner": {
-          "kind": "platform_service",
-          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
-        },
-        "operationId": "1ec2bafd-aae8-4ebe-bf89-f6969a77ff37"
-      },
-      "inputs": {
-        "evidence": {
-          "type": "json",
-          "required": true
-        }
-      },
-      "outputs": {
-        "role_id": {
-          "type": "text",
-          "required": true
-        },
-        "revision": {
-          "type": "whole_number",
-          "required": true
-        },
-        "access_version": {
-          "type": "whole_number",
-          "required": true
-        }
-      },
-      "effect": "change",
-      "expectedRevision": "not_required",
-      "confirmation": "required",
-      "duplicateProtection": "not_required",
-      "safeResults": [
-        "committed",
-        "refused",
-        "validation",
-        "failed"
-      ],
-      "requiredAuthority": {
-        "kind": "permission",
-        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
-        "key": "platform.organization.roles.manage"
-      }
-    }
-  },
-  "accept_application_role_revision": {
-    "key": "accept_application_role_revision",
-    "name": "Accept application role revision",
-    "release": {
-      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
-      "operationId": "1545959f-7005-4751-85e9-3e877c3a3fd6",
-      "releaseVersion": "1.0.0"
-    },
-    "descriptor": {
-      "contractVersion": "1.0.0",
-      "operation": {
-        "owner": {
-          "kind": "platform_service",
-          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
-        },
-        "operationId": "1545959f-7005-4751-85e9-3e877c3a3fd6"
-      },
-      "inputs": {
-        "evidence": {
-          "type": "json",
-          "required": true
-        }
-      },
-      "outputs": {
-        "role_id": {
-          "type": "text",
-          "required": true
-        },
-        "revision": {
-          "type": "whole_number",
-          "required": true
-        },
-        "access_version": {
-          "type": "whole_number",
-          "required": true
-        }
-      },
-      "effect": "change",
-      "expectedRevision": "required",
-      "confirmation": "required",
-      "duplicateProtection": "not_required",
-      "safeResults": [
-        "committed",
-        "refused",
-        "conflict",
-        "validation",
-        "failed"
-      ],
-      "requiredAuthority": {
-        "kind": "permission",
-        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
-        "key": "platform.organization.roles.manage"
-      }
-    }
-  },
   "rename_tenant_organization": {
     "key": "rename_tenant_organization",
     "name": "Rename tenant organisation",
@@ -1719,84 +1610,6 @@
       }
     }
   },
-  "prepare_application_role_revision_acceptance": {
-    "key": "prepare_application_role_revision_acceptance",
-    "name": "Prepare application role revision acceptance",
-    "release": {
-      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
-      "operationId": "dc68439e-fe07-4781-83c2-c0afae1fba3f",
-      "releaseVersion": "1.0.0"
-    },
-    "descriptor": {
-      "contractVersion": "1.0.0",
-      "operation": {
-        "owner": {
-          "kind": "platform_service",
-          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
-        },
-        "operationId": "dc68439e-fe07-4781-83c2-c0afae1fba3f"
-      },
-      "inputs": {
-        "role_id": {
-          "type": "text",
-          "required": true
-        },
-        "expected_role_revision": {
-          "type": "whole_number",
-          "required": true
-        },
-        "accept_broadened_authority": {
-          "type": "choice",
-          "required": true
-        }
-      },
-      "outputs": {
-        "evidence": {
-          "type": "json",
-          "required": true
-        },
-        "role_id": {
-          "type": "text",
-          "required": true
-        },
-        "expected_role_revision": {
-          "type": "whole_number",
-          "required": true
-        },
-        "role_label": {
-          "type": "text",
-          "required": true
-        },
-        "source_role_id": {
-          "type": "text",
-          "required": true
-        },
-        "permission_count": {
-          "type": "whole_number",
-          "required": true
-        },
-        "affected_assignment_count": {
-          "type": "whole_number",
-          "required": true
-        }
-      },
-      "effect": "read",
-      "expectedRevision": "not_required",
-      "confirmation": "not_required",
-      "duplicateProtection": "not_required",
-      "safeResults": [
-        "completed",
-        "refused",
-        "validation",
-        "failed"
-      ],
-      "requiredAuthority": {
-        "kind": "permission",
-        "permissionId": "87c96495-c806-4692-9bc2-250ddb10613c",
-        "key": "platform.organization.roles.manage"
-      }
-    }
-  },
   "appoint_organization_steward": {
     "key": "appoint_organization_steward",
     "name": "Appoint organisation steward",
@@ -1896,12 +1709,16 @@
           "type": "text",
           "required": true
         },
+        "roles": {
+          "type": "json",
+          "required": true
+        },
         "member_role_name": {
           "type": "text",
           "required": true
         },
-        "member_role_permissions": {
-          "type": "json",
+        "member_role_assignable": {
+          "type": "yes_no",
           "required": true
         },
         "role_changes": {
@@ -1912,7 +1729,7 @@
           "type": "whole_number",
           "required": true
         },
-        "role_ids": {
+        "role_template_ids": {
           "type": "json",
           "required": true
         },
@@ -2027,12 +1844,8 @@
           "type": "json",
           "required": true
         },
-        "role_ids": {
+        "role_template_ids": {
           "type": "json",
-          "required": true
-        },
-        "accept_role_changes": {
-          "type": "yes_no",
           "required": true
         }
       },

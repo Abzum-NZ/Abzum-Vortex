@@ -554,7 +554,7 @@
                                     {
                                       "op": "literal",
                                       "type": "text",
-                                      "value": "\n\nThe application becomes available in this organisation. Its default member role, "
+                                      "value": "\n\nInstalling adds these roles to this organisation, each with what it lets people do. Nobody has a role until it is given to them in IAM. "
                                     },
                                     {
                                       "op": "reference",
@@ -568,7 +568,7 @@
                                     {
                                       "op": "literal",
                                       "type": "text",
-                                      "value": ", lets people:"
+                                      "value": " is the role for everyone who uses the application."
                                     }
                                   ]
                                 }
@@ -579,34 +579,51 @@
                                   "source": "task_output",
                                   "task": "review",
                                   "key": "result",
-                                  "path": ["member_role_permissions"]
+                                  "path": ["roles"]
                                 }
                               },
                               "choice": {
                                 "kind": "formula",
                                 "formula": {
-                                  "op": "join",
-                                  "parts": [
-                                    {
-                                      "op": "literal",
-                                      "type": "text",
-                                      "value": "Give me the role "
-                                    },
-                                    {
-                                      "op": "reference",
-                                      "reference": {
-                                        "source": "task_output",
-                                        "task": "review",
-                                        "key": "result",
-                                        "path": ["member_role_name"]
-                                      }
-                                    },
-                                    {
-                                      "op": "literal",
-                                      "type": "text",
-                                      "value": " now. Otherwise roles are assigned in IAM."
+                                  "op": "if",
+                                  "condition": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "task_output",
+                                      "task": "review",
+                                      "key": "result",
+                                      "path": ["member_role_assignable"]
                                     }
-                                  ]
+                                  },
+                                  "then": {
+                                    "op": "join",
+                                    "parts": [
+                                      {
+                                        "op": "literal",
+                                        "type": "text",
+                                        "value": "Give me the role "
+                                      },
+                                      {
+                                        "op": "reference",
+                                        "reference": {
+                                          "source": "task_output",
+                                          "task": "review",
+                                          "key": "result",
+                                          "path": ["member_role_name"]
+                                        }
+                                      },
+                                      {
+                                        "op": "literal",
+                                        "type": "text",
+                                        "value": " now"
+                                      }
+                                    ]
+                                  },
+                                  "else": {
+                                    "op": "literal",
+                                    "type": "text",
+                                    "value": ""
+                                  }
                                 }
                               },
                               "confirm_label": {
@@ -739,7 +756,7 @@
                                             {
                                               "op": "literal",
                                               "type": "text",
-                                              "value": " is installed. People with one of its roles find it in the launcher."
+                                              "value": " is installed with its roles. Give people their roles in IAM; people with a role find the application in the launcher."
                                             }
                                           ]
                                         }
@@ -787,7 +804,7 @@
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
-                                          "value": "You cannot install or upgrade this application. That needs permission to manage applications, delegated management of the organisation's catalogue, and for some versions a recent sign-in."
+                                          "value": "You cannot do this. Installing or upgrading an application, and accepting its roles, needs permission to manage applications, delegated management of the organisation's catalogue and a sign-in within the last 15 minutes. Taking a role yourself also needs permission to manage access assignments."
                                         }
                                       }
                                     }
@@ -822,350 +839,330 @@
                         },
                         "tasks": [
                           {
-                            "id": "role_changes",
-                            "type": "if",
-                            "condition": {
-                              "op": "is_not_empty",
-                              "arg": {
-                                "op": "reference",
+                            "id": "confirm_upgrade",
+                            "type": "interface.confirm",
+                            "version": "1.0.0",
+                            "properties": {
+                              "title": {
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "join",
+                                  "parts": [
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": "Upgrade "
+                                    },
+                                    {
+                                      "op": "reference",
+                                      "reference": {
+                                        "source": "task_output",
+                                        "task": "review",
+                                        "key": "result",
+                                        "path": ["application_name"]
+                                      }
+                                    },
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": " to version "
+                                    },
+                                    {
+                                      "op": "reference",
+                                      "reference": {
+                                        "source": "task_output",
+                                        "task": "review",
+                                        "key": "result",
+                                        "path": ["release_version"]
+                                      }
+                                    },
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": "?"
+                                    }
+                                  ]
+                                }
+                              },
+                              "message": {
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "join",
+                                  "parts": [
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": "Version in use now: "
+                                    },
+                                    {
+                                      "op": "reference",
+                                      "reference": {
+                                        "source": "task_output",
+                                        "task": "review",
+                                        "key": "result",
+                                        "path": ["installed_version"]
+                                      }
+                                    },
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": ".\n\nWhat's new: "
+                                    },
+                                    {
+                                      "op": "reference",
+                                      "reference": {
+                                        "source": "task_output",
+                                        "task": "review",
+                                        "key": "result",
+                                        "path": ["release_note"]
+                                      }
+                                    },
+                                    {
+                                      "op": "if",
+                                      "condition": {
+                                        "op": "is_not_empty",
+                                        "arg": {
+                                          "op": "reference",
+                                          "reference": {
+                                            "source": "task_output",
+                                            "task": "review",
+                                            "key": "result",
+                                            "path": ["role_template_ids"]
+                                          }
+                                        }
+                                      },
+                                      "then": {
+                                        "op": "literal",
+                                        "type": "text",
+                                        "value": "\n\nUpgrading also accepts these role changes. The people and Groups who hold a changed role get its new access at once; a new role is held by nobody until it is given to people in IAM."
+                                      },
+                                      "else": {
+                                        "op": "literal",
+                                        "type": "text",
+                                        "value": ""
+                                      }
+                                    }
+                                  ]
+                                }
+                              },
+                              "details": {
+                                "kind": "reference",
                                 "reference": {
                                   "source": "task_output",
                                   "task": "review",
                                   "key": "result",
-                                  "path": ["role_ids"]
+                                  "path": ["role_changes"]
+                                }
+                              },
+                              "confirm_label": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Upgrade"
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "id": "upgrade_declined",
+                            "type": "if",
+                            "condition": {
+                              "op": "not",
+                              "arg": {
+                                "op": "reference",
+                                "reference": {
+                                  "source": "task_output",
+                                  "task": "confirm_upgrade",
+                                  "key": "confirmed"
                                 }
                               }
                             },
                             "then": [
                               {
-                                "id": "confirm_upgrade_roles",
-                                "type": "interface.confirm",
-                                "version": "1.0.0",
-                                "properties": {
-                                  "title": {
-                                    "kind": "formula",
-                                    "formula": {
-                                      "op": "join",
-                                      "parts": [
-                                        {
-                                          "op": "literal",
-                                          "type": "text",
-                                          "value": "Upgrade "
-                                        },
-                                        {
-                                          "op": "reference",
-                                          "reference": {
-                                            "source": "task_output",
-                                            "task": "review",
-                                            "key": "result",
-                                            "path": ["application_name"]
-                                          }
-                                        },
-                                        {
-                                          "op": "literal",
-                                          "type": "text",
-                                          "value": " to version "
-                                        },
-                                        {
-                                          "op": "reference",
-                                          "reference": {
-                                            "source": "task_output",
-                                            "task": "review",
-                                            "key": "result",
-                                            "path": ["release_version"]
-                                          }
-                                        },
-                                        {
-                                          "op": "literal",
-                                          "type": "text",
-                                          "value": "?"
-                                        }
-                                      ]
+                                "id": "stop_upgrade_declined",
+                                "type": "stop",
+                                "outcome": "declined"
+                              }
+                            ]
+                          },
+                          {
+                            "id": "upgrade",
+                            "type": "operation.call",
+                            "version": "1.0.0",
+                            "allowRefusal": true,
+                            "properties": {
+                              "operation": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "platform.upgrade_application"
+                                }
+                              },
+                              "inputs": {
+                                "kind": "map",
+                                "entries": {
+                                  "application_root_id": {
+                                    "kind": "reference",
+                                    "reference": {
+                                      "source": "input",
+                                      "name": "application_root_id"
                                     }
                                   },
-                                  "message": {
-                                    "kind": "formula",
-                                    "formula": {
-                                      "op": "join",
-                                      "parts": [
-                                        {
-                                          "op": "literal",
-                                          "type": "text",
-                                          "value": "Version in use now: "
-                                        },
-                                        {
-                                          "op": "reference",
-                                          "reference": {
-                                            "source": "task_output",
-                                            "task": "review",
-                                            "key": "result",
-                                            "path": ["installed_version"]
-                                          }
-                                        },
-                                        {
-                                          "op": "literal",
-                                          "type": "text",
-                                          "value": ".\n\nWhat's new: "
-                                        },
-                                        {
-                                          "op": "reference",
-                                          "reference": {
-                                            "source": "task_output",
-                                            "task": "review",
-                                            "key": "result",
-                                            "path": ["release_note"]
-                                          }
-                                        },
-                                        {
-                                          "op": "literal",
-                                          "type": "text",
-                                          "value": "\n\nThese roles change against what was accepted for them. Until a change is accepted, people in the role keep exactly the access they have now."
-                                        }
-                                      ]
-                                    }
-                                  },
-                                  "details": {
+                                  "expected": {
                                     "kind": "reference",
                                     "reference": {
                                       "source": "task_output",
                                       "task": "review",
                                       "key": "result",
-                                      "path": ["role_changes"]
+                                      "path": ["expected"]
                                     }
                                   },
-                                  "choice": {
-                                    "kind": "literal",
-                                    "literal": {
-                                      "type": "text",
-                                      "value": "Accept these role changes now. Left unticked, they wait in IAM and the roles keep their accepted access."
-                                    }
-                                  },
-                                  "confirm_label": {
-                                    "kind": "literal",
-                                    "literal": {
-                                      "type": "text",
-                                      "value": "Upgrade"
-                                    }
-                                  }
-                                }
-                              },
-                              {
-                                "id": "upgrade_with_roles_declined",
-                                "type": "if",
-                                "condition": {
-                                  "op": "not",
-                                  "arg": {
-                                    "op": "reference",
+                                  "role_template_ids": {
+                                    "kind": "reference",
                                     "reference": {
                                       "source": "task_output",
-                                      "task": "confirm_upgrade_roles",
-                                      "key": "confirmed"
-                                    }
-                                  }
-                                },
-                                "then": [
-                                  {
-                                    "id": "stop_upgrade_with_roles_declined",
-                                    "type": "stop",
-                                    "outcome": "declined"
-                                  }
-                                ]
-                              },
-                              {
-                                "id": "upgrade_with_roles",
-                                "type": "operation.call",
-                                "version": "1.0.0",
-                                "allowRefusal": true,
-                                "properties": {
-                                  "operation": {
-                                    "kind": "literal",
-                                    "literal": {
-                                      "type": "text",
-                                      "value": "platform.upgrade_application"
-                                    }
-                                  },
-                                  "inputs": {
-                                    "kind": "map",
-                                    "entries": {
-                                      "application_root_id": {
-                                        "kind": "reference",
-                                        "reference": {
-                                          "source": "input",
-                                          "name": "application_root_id"
-                                        }
-                                      },
-                                      "expected": {
-                                        "kind": "reference",
-                                        "reference": {
-                                          "source": "task_output",
-                                          "task": "review",
-                                          "key": "result",
-                                          "path": ["expected"]
-                                        }
-                                      },
-                                      "role_ids": {
-                                        "kind": "reference",
-                                        "reference": {
-                                          "source": "task_output",
-                                          "task": "review",
-                                          "key": "result",
-                                          "path": ["role_ids"]
-                                        }
-                                      },
-                                      "accept_role_changes": {
-                                        "kind": "reference",
-                                        "reference": {
-                                          "source": "task_output",
-                                          "task": "confirm_upgrade_roles",
-                                          "key": "choice"
-                                        }
-                                      }
+                                      "task": "review",
+                                      "key": "result",
+                                      "path": ["role_template_ids"]
                                     }
                                   }
                                 }
-                              },
+                              }
+                            }
+                          },
+                          {
+                            "id": "upgrade_result",
+                            "type": "switch",
+                            "value": {
+                              "kind": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "upgrade",
+                                "key": "outcome"
+                              }
+                            },
+                            "cases": [
                               {
-                                "id": "upgrade_with_roles_result",
-                                "type": "switch",
-                                "value": {
-                                  "kind": "reference",
-                                  "reference": {
-                                    "source": "task_output",
-                                    "task": "upgrade_with_roles",
-                                    "key": "outcome"
-                                  }
+                                "key": "committed",
+                                "when": {
+                                  "type": "choice",
+                                  "value": "committed"
                                 },
-                                "cases": [
+                                "tasks": [
                                   {
-                                    "key": "committed",
-                                    "when": {
-                                      "type": "choice",
-                                      "value": "committed"
-                                    },
-                                    "tasks": [
-                                      {
-                                        "id": "upgrade_with_roles_done",
-                                        "type": "interface.show_message",
-                                        "version": "1.0.0",
-                                        "properties": {
-                                          "message": {
-                                            "kind": "formula",
-                                            "formula": {
-                                              "op": "join",
-                                              "parts": [
-                                                {
+                                    "id": "upgrade_done",
+                                    "type": "interface.show_message",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "message": {
+                                        "kind": "formula",
+                                        "formula": {
+                                          "op": "join",
+                                          "parts": [
+                                            {
+                                              "op": "reference",
+                                              "reference": {
+                                                "source": "task_output",
+                                                "task": "upgrade",
+                                                "key": "result",
+                                                "path": ["application_name"]
+                                              }
+                                            },
+                                            {
+                                              "op": "literal",
+                                              "type": "text",
+                                              "value": " is upgraded to version "
+                                            },
+                                            {
+                                              "op": "reference",
+                                              "reference": {
+                                                "source": "task_output",
+                                                "task": "upgrade",
+                                                "key": "result",
+                                                "path": ["release_version"]
+                                              }
+                                            },
+                                            {
+                                              "op": "literal",
+                                              "type": "text",
+                                              "value": "."
+                                            },
+                                            {
+                                              "op": "if",
+                                              "condition": {
+                                                "op": "gt",
+                                                "left": {
                                                   "op": "reference",
                                                   "reference": {
                                                     "source": "task_output",
-                                                    "task": "upgrade_with_roles",
-                                                    "key": "result",
-                                                    "path": ["application_name"]
-                                                  }
-                                                },
-                                                {
-                                                  "op": "literal",
-                                                  "type": "text",
-                                                  "value": " is upgraded to version "
-                                                },
-                                                {
-                                                  "op": "reference",
-                                                  "reference": {
-                                                    "source": "task_output",
-                                                    "task": "upgrade_with_roles",
-                                                    "key": "result",
-                                                    "path": ["release_version"]
-                                                  }
-                                                },
-                                                {
-                                                  "op": "literal",
-                                                  "type": "text",
-                                                  "value": ". Role changes accepted now: "
-                                                },
-                                                {
-                                                  "op": "reference",
-                                                  "reference": {
-                                                    "source": "task_output",
-                                                    "task": "upgrade_with_roles",
+                                                    "task": "upgrade",
                                                     "key": "result",
                                                     "path": ["accepted_role_count"]
                                                   }
                                                 },
-                                                {
+                                                "right": {
                                                   "op": "literal",
-                                                  "type": "text",
-                                                  "value": ". Role changes waiting in IAM: "
-                                                },
-                                                {
+                                                  "type": "whole_number",
+                                                  "value": 0
+                                                }
+                                              },
+                                              "then": {
+                                                "op": "literal",
+                                                "type": "text",
+                                                "value": " The people and Groups who hold its changed roles have their new access now."
+                                              },
+                                              "else": {
+                                                "op": "literal",
+                                                "type": "text",
+                                                "value": ""
+                                              }
+                                            },
+                                            {
+                                              "op": "if",
+                                              "condition": {
+                                                "op": "gt",
+                                                "left": {
                                                   "op": "reference",
                                                   "reference": {
                                                     "source": "task_output",
-                                                    "task": "upgrade_with_roles",
+                                                    "task": "upgrade",
                                                     "key": "result",
                                                     "path": ["waiting_role_count"]
                                                   }
                                                 },
-                                                {
+                                                "right": {
                                                   "op": "literal",
-                                                  "type": "text",
-                                                  "value": "."
+                                                  "type": "whole_number",
+                                                  "value": 0
                                                 }
-                                              ]
+                                              },
+                                              "then": {
+                                                "op": "literal",
+                                                "type": "text",
+                                                "value": " Some role changes could not be accepted; choose Install or upgrade again to accept them."
+                                              },
+                                              "else": {
+                                                "op": "literal",
+                                                "type": "text",
+                                                "value": ""
+                                              }
                                             }
-                                          }
+                                          ]
                                         }
                                       }
-                                    ]
-                                  },
-                                  {
-                                    "key": "conflict",
-                                    "when": {
-                                      "type": "choice",
-                                      "value": "conflict"
-                                    },
-                                    "tasks": [
-                                      {
-                                        "id": "upgrade_with_roles_conflict",
-                                        "type": "interface.show_message",
-                                        "version": "1.0.0",
-                                        "properties": {
-                                          "message": {
-                                            "kind": "literal",
-                                            "literal": {
-                                              "type": "text",
-                                              "value": "This application changed while you were reviewing it. Choose Install or upgrade again to see its current state."
-                                            }
-                                          }
-                                        }
-                                      }
-                                    ]
-                                  },
-                                  {
-                                    "key": "refused",
-                                    "when": {
-                                      "type": "choice",
-                                      "value": "refused"
-                                    },
-                                    "tasks": [
-                                      {
-                                        "id": "upgrade_with_roles_refused",
-                                        "type": "interface.show_message",
-                                        "version": "1.0.0",
-                                        "properties": {
-                                          "message": {
-                                            "kind": "literal",
-                                            "literal": {
-                                              "type": "text",
-                                              "value": "You cannot install or upgrade this application. That needs permission to manage applications, delegated management of the organisation's catalogue, and for some versions a recent sign-in."
-                                            }
-                                          }
-                                        }
-                                      }
-                                    ]
+                                    }
                                   }
-                                ],
-                                "default": [
+                                ]
+                              },
+                              {
+                                "key": "conflict",
+                                "when": {
+                                  "type": "choice",
+                                  "value": "conflict"
+                                },
+                                "tasks": [
                                   {
-                                    "id": "upgrade_with_roles_unknown",
+                                    "id": "upgrade_conflict",
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
@@ -1173,7 +1170,30 @@
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
-                                          "value": "The result could not be confirmed. Refresh the App Store before trying again."
+                                          "value": "This application changed while you were reviewing it. Choose Install or upgrade again to see its current state."
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "key": "refused",
+                                "when": {
+                                  "type": "choice",
+                                  "value": "refused"
+                                },
+                                "tasks": [
+                                  {
+                                    "id": "upgrade_refused",
+                                    "type": "interface.show_message",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "message": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "You cannot do this. Installing or upgrading an application, and accepting its roles, needs permission to manage applications, delegated management of the organisation's catalogue and a sign-in within the last 15 minutes. Taking a role yourself also needs permission to manage access assignments."
                                         }
                                       }
                                     }
@@ -1181,295 +1201,270 @@
                                 ]
                               }
                             ],
-                            "else": [
+                            "default": [
                               {
-                                "id": "confirm_upgrade",
-                                "type": "interface.confirm",
+                                "id": "upgrade_unknown",
+                                "type": "interface.show_message",
                                 "version": "1.0.0",
                                 "properties": {
-                                  "title": {
-                                    "kind": "formula",
-                                    "formula": {
-                                      "op": "join",
-                                      "parts": [
-                                        {
-                                          "op": "literal",
-                                          "type": "text",
-                                          "value": "Upgrade "
-                                        },
-                                        {
-                                          "op": "reference",
-                                          "reference": {
-                                            "source": "task_output",
-                                            "task": "review",
-                                            "key": "result",
-                                            "path": ["application_name"]
-                                          }
-                                        },
-                                        {
-                                          "op": "literal",
-                                          "type": "text",
-                                          "value": " to version "
-                                        },
-                                        {
-                                          "op": "reference",
-                                          "reference": {
-                                            "source": "task_output",
-                                            "task": "review",
-                                            "key": "result",
-                                            "path": ["release_version"]
-                                          }
-                                        },
-                                        {
-                                          "op": "literal",
-                                          "type": "text",
-                                          "value": "?"
-                                        }
-                                      ]
-                                    }
-                                  },
                                   "message": {
-                                    "kind": "formula",
-                                    "formula": {
-                                      "op": "join",
-                                      "parts": [
-                                        {
-                                          "op": "literal",
-                                          "type": "text",
-                                          "value": "Version in use now: "
-                                        },
-                                        {
-                                          "op": "reference",
-                                          "reference": {
-                                            "source": "task_output",
-                                            "task": "review",
-                                            "key": "result",
-                                            "path": ["installed_version"]
-                                          }
-                                        },
-                                        {
-                                          "op": "literal",
-                                          "type": "text",
-                                          "value": ".\n\nWhat's new: "
-                                        },
-                                        {
-                                          "op": "reference",
-                                          "reference": {
-                                            "source": "task_output",
-                                            "task": "review",
-                                            "key": "result",
-                                            "path": ["release_note"]
-                                          }
-                                        }
-                                      ]
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "The result could not be confirmed. Refresh the App Store before trying again."
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "key": "roles",
+                        "when": {
+                          "type": "choice",
+                          "value": "roles"
+                        },
+                        "tasks": [
+                          {
+                            "id": "confirm_roles",
+                            "type": "interface.confirm",
+                            "version": "1.0.0",
+                            "properties": {
+                              "title": {
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "join",
+                                  "parts": [
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": "Accept the role changes of "
+                                    },
+                                    {
+                                      "op": "reference",
+                                      "reference": {
+                                        "source": "task_output",
+                                        "task": "review",
+                                        "key": "result",
+                                        "path": ["application_name"]
+                                      }
+                                    },
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": "?"
+                                    }
+                                  ]
+                                }
+                              },
+                              "message": {
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "join",
+                                  "parts": [
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": "Version "
+                                    },
+                                    {
+                                      "op": "reference",
+                                      "reference": {
+                                        "source": "task_output",
+                                        "task": "review",
+                                        "key": "result",
+                                        "path": ["installed_version"]
+                                      }
+                                    },
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": " is in use, but these role changes from it are not accepted yet. Until they are, people keep the access they have now. Accepting gives the people and Groups who hold a changed role its new access at once; a new role is held by nobody until it is given to people in IAM."
+                                    }
+                                  ]
+                                }
+                              },
+                              "details": {
+                                "kind": "reference",
+                                "reference": {
+                                  "source": "task_output",
+                                  "task": "review",
+                                  "key": "result",
+                                  "path": ["role_changes"]
+                                }
+                              },
+                              "confirm_label": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Accept"
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "id": "roles_declined",
+                            "type": "if",
+                            "condition": {
+                              "op": "not",
+                              "arg": {
+                                "op": "reference",
+                                "reference": {
+                                  "source": "task_output",
+                                  "task": "confirm_roles",
+                                  "key": "confirmed"
+                                }
+                              }
+                            },
+                            "then": [
+                              {
+                                "id": "stop_roles_declined",
+                                "type": "stop",
+                                "outcome": "declined"
+                              }
+                            ]
+                          },
+                          {
+                            "id": "accept_roles",
+                            "type": "operation.call",
+                            "version": "1.0.0",
+                            "allowRefusal": true,
+                            "properties": {
+                              "operation": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "platform.upgrade_application"
+                                }
+                              },
+                              "inputs": {
+                                "kind": "map",
+                                "entries": {
+                                  "application_root_id": {
+                                    "kind": "reference",
+                                    "reference": {
+                                      "source": "input",
+                                      "name": "application_root_id"
                                     }
                                   },
-                                  "details": {
+                                  "expected": {
                                     "kind": "reference",
                                     "reference": {
                                       "source": "task_output",
                                       "task": "review",
                                       "key": "result",
-                                      "path": ["role_changes"]
+                                      "path": ["expected"]
                                     }
                                   },
-                                  "confirm_label": {
-                                    "kind": "literal",
-                                    "literal": {
-                                      "type": "text",
-                                      "value": "Upgrade"
+                                  "role_template_ids": {
+                                    "kind": "reference",
+                                    "reference": {
+                                      "source": "task_output",
+                                      "task": "review",
+                                      "key": "result",
+                                      "path": ["role_template_ids"]
                                     }
                                   }
                                 }
-                              },
+                              }
+                            }
+                          },
+                          {
+                            "id": "accept_roles_result",
+                            "type": "switch",
+                            "value": {
+                              "kind": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "accept_roles",
+                                "key": "outcome"
+                              }
+                            },
+                            "cases": [
                               {
-                                "id": "upgrade_declined",
-                                "type": "if",
-                                "condition": {
-                                  "op": "not",
-                                  "arg": {
-                                    "op": "reference",
-                                    "reference": {
-                                      "source": "task_output",
-                                      "task": "confirm_upgrade",
-                                      "key": "confirmed"
-                                    }
-                                  }
+                                "key": "committed",
+                                "when": {
+                                  "type": "choice",
+                                  "value": "committed"
                                 },
-                                "then": [
+                                "tasks": [
                                   {
-                                    "id": "stop_upgrade_declined",
-                                    "type": "stop",
-                                    "outcome": "declined"
+                                    "id": "accept_roles_done",
+                                    "type": "interface.show_message",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "message": {
+                                        "kind": "formula",
+                                        "formula": {
+                                          "op": "join",
+                                          "parts": [
+                                            {
+                                              "op": "literal",
+                                              "type": "text",
+                                              "value": "The role changes of "
+                                            },
+                                            {
+                                              "op": "reference",
+                                              "reference": {
+                                                "source": "task_output",
+                                                "task": "accept_roles",
+                                                "key": "result",
+                                                "path": ["application_name"]
+                                              }
+                                            },
+                                            {
+                                              "op": "literal",
+                                              "type": "text",
+                                              "value": " are accepted."
+                                            },
+                                            {
+                                              "op": "if",
+                                              "condition": {
+                                                "op": "gt",
+                                                "left": {
+                                                  "op": "reference",
+                                                  "reference": {
+                                                    "source": "task_output",
+                                                    "task": "accept_roles",
+                                                    "key": "result",
+                                                    "path": ["waiting_role_count"]
+                                                  }
+                                                },
+                                                "right": {
+                                                  "op": "literal",
+                                                  "type": "whole_number",
+                                                  "value": 0
+                                                }
+                                              },
+                                              "then": {
+                                                "op": "literal",
+                                                "type": "text",
+                                                "value": " Some role changes could not be accepted; choose Install or upgrade again to accept them."
+                                              },
+                                              "else": {
+                                                "op": "literal",
+                                                "type": "text",
+                                                "value": ""
+                                              }
+                                            }
+                                          ]
+                                        }
+                                      }
+                                    }
                                   }
                                 ]
                               },
                               {
-                                "id": "upgrade",
-                                "type": "operation.call",
-                                "version": "1.0.0",
-                                "allowRefusal": true,
-                                "properties": {
-                                  "operation": {
-                                    "kind": "literal",
-                                    "literal": {
-                                      "type": "text",
-                                      "value": "platform.upgrade_application"
-                                    }
-                                  },
-                                  "inputs": {
-                                    "kind": "map",
-                                    "entries": {
-                                      "application_root_id": {
-                                        "kind": "reference",
-                                        "reference": {
-                                          "source": "input",
-                                          "name": "application_root_id"
-                                        }
-                                      },
-                                      "expected": {
-                                        "kind": "reference",
-                                        "reference": {
-                                          "source": "task_output",
-                                          "task": "review",
-                                          "key": "result",
-                                          "path": ["expected"]
-                                        }
-                                      },
-                                      "role_ids": {
-                                        "kind": "reference",
-                                        "reference": {
-                                          "source": "task_output",
-                                          "task": "review",
-                                          "key": "result",
-                                          "path": ["role_ids"]
-                                        }
-                                      },
-                                      "accept_role_changes": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "yes_no",
-                                          "value": false
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              },
-                              {
-                                "id": "upgrade_result",
-                                "type": "switch",
-                                "value": {
-                                  "kind": "reference",
-                                  "reference": {
-                                    "source": "task_output",
-                                    "task": "upgrade",
-                                    "key": "outcome"
-                                  }
+                                "key": "conflict",
+                                "when": {
+                                  "type": "choice",
+                                  "value": "conflict"
                                 },
-                                "cases": [
+                                "tasks": [
                                   {
-                                    "key": "committed",
-                                    "when": {
-                                      "type": "choice",
-                                      "value": "committed"
-                                    },
-                                    "tasks": [
-                                      {
-                                        "id": "upgrade_done",
-                                        "type": "interface.show_message",
-                                        "version": "1.0.0",
-                                        "properties": {
-                                          "message": {
-                                            "kind": "formula",
-                                            "formula": {
-                                              "op": "join",
-                                              "parts": [
-                                                {
-                                                  "op": "reference",
-                                                  "reference": {
-                                                    "source": "task_output",
-                                                    "task": "upgrade",
-                                                    "key": "result",
-                                                    "path": ["application_name"]
-                                                  }
-                                                },
-                                                {
-                                                  "op": "literal",
-                                                  "type": "text",
-                                                  "value": " is upgraded to version "
-                                                },
-                                                {
-                                                  "op": "reference",
-                                                  "reference": {
-                                                    "source": "task_output",
-                                                    "task": "upgrade",
-                                                    "key": "result",
-                                                    "path": ["release_version"]
-                                                  }
-                                                },
-                                                {
-                                                  "op": "literal",
-                                                  "type": "text",
-                                                  "value": "."
-                                                }
-                                              ]
-                                            }
-                                          }
-                                        }
-                                      }
-                                    ]
-                                  },
-                                  {
-                                    "key": "conflict",
-                                    "when": {
-                                      "type": "choice",
-                                      "value": "conflict"
-                                    },
-                                    "tasks": [
-                                      {
-                                        "id": "upgrade_conflict",
-                                        "type": "interface.show_message",
-                                        "version": "1.0.0",
-                                        "properties": {
-                                          "message": {
-                                            "kind": "literal",
-                                            "literal": {
-                                              "type": "text",
-                                              "value": "This application changed while you were reviewing it. Choose Install or upgrade again to see its current state."
-                                            }
-                                          }
-                                        }
-                                      }
-                                    ]
-                                  },
-                                  {
-                                    "key": "refused",
-                                    "when": {
-                                      "type": "choice",
-                                      "value": "refused"
-                                    },
-                                    "tasks": [
-                                      {
-                                        "id": "upgrade_refused",
-                                        "type": "interface.show_message",
-                                        "version": "1.0.0",
-                                        "properties": {
-                                          "message": {
-                                            "kind": "literal",
-                                            "literal": {
-                                              "type": "text",
-                                              "value": "You cannot install or upgrade this application. That needs permission to manage applications, delegated management of the organisation's catalogue, and for some versions a recent sign-in."
-                                            }
-                                          }
-                                        }
-                                      }
-                                    ]
-                                  }
-                                ],
-                                "default": [
-                                  {
-                                    "id": "upgrade_unknown",
+                                    "id": "accept_roles_conflict",
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
@@ -1477,12 +1472,51 @@
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
-                                          "value": "The result could not be confirmed. Refresh the App Store before trying again."
+                                          "value": "This application changed while you were reviewing it. Choose Install or upgrade again to see its current state."
                                         }
                                       }
                                     }
                                   }
                                 ]
+                              },
+                              {
+                                "key": "refused",
+                                "when": {
+                                  "type": "choice",
+                                  "value": "refused"
+                                },
+                                "tasks": [
+                                  {
+                                    "id": "accept_roles_refused",
+                                    "type": "interface.show_message",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "message": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "You cannot do this. Installing or upgrading an application, and accepting its roles, needs permission to manage applications, delegated management of the organisation's catalogue and a sign-in within the last 15 minutes. Taking a role yourself also needs permission to manage access assignments."
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            ],
+                            "default": [
+                              {
+                                "id": "accept_roles_unknown",
+                                "type": "interface.show_message",
+                                "version": "1.0.0",
+                                "properties": {
+                                  "message": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "The result could not be confirmed. Refresh the App Store before trying again."
+                                    }
+                                  }
+                                }
                               }
                             ]
                           }

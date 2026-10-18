@@ -190,6 +190,9 @@ begin
       message = 'Private Organization role-authority scope is unavailable';
   end if;
 
+  -- Accepting an application's role template or role revision is part of installing or upgrading
+  -- that application, so it needs the installation permission (Manage applications) instead of
+  -- role management; the delegated scope over every permission and the recent sign-in stay.
   operation_key := 'platform.organization.roles.' || operation_name;
   select evaluated.* into strict decision
   from vortex_access.evaluate_organization_permission_eligibility(
@@ -201,8 +204,13 @@ begin
         'ownerKind', 'platform',
         -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-        'permissionId', '87c96495-c806-4692-9bc2-250ddb10613c'
+        'permissionId', case
+          when operation_name in ('accept_new_application_role', 'accept_application_role_revision')
+            -- guard-allow: function-uuid fixed installation permission identity without declaration-table read access
+            then '7ecd3304-f16c-47d4-94db-0964980091ba'
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
+          else '87c96495-c806-4692-9bc2-250ddb10613c'
+        end
       ),
       'recentAuthentication', case
         when operation_name in (

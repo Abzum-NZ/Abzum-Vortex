@@ -22,7 +22,8 @@ import {
   type FirstInstallFlowEnvironment,
 } from "./installation-first-install-app";
 import { createFirstInstallCoordinator } from "./installation-first-install-coordinator";
-import { activateFirstInstall } from "./installation-first-install-member-role";
+import { activateFirstInstall, readMemberRoleAssignable } from "./installation-first-install-roles";
+import { releaseMemberRole, type ApplicationRoleChange } from "./installation-role-templates";
 import {
   readUpgradeAuthorizedState,
   sameUpgradeSnapshotState,
@@ -30,22 +31,23 @@ import {
   type UpgradeSnapshot,
 } from "./installation-upgrade";
 import {
-  readUpgradeRoleRevisions,
-  upgradeWithRoleRevisions,
+  readUpgradeRoleChanges,
+  upgradeWithRoleChanges,
   type UpgradeRoleEnvironment,
-} from "./installation-upgrade-role-revisions";
+} from "./installation-upgrade-roles";
 
 /**
  * The installation journeys of the organisation's application catalogue, as three registered
  * platform operations a flow calls: a review that says whether the selected application's latest
- * published version would be a first install, an upgrade or nothing, and the install and the upgrade
- * themselves. They are the one human path to install and upgrade; each runs the shared installation
- * functions under the person's own authority: the installation authority alone (managing
- * applications, with the delegated scope and recent sign-in a role acceptance needs), never a right on
+ * published version would be a first install, an upgrade, role changes still to accept or
+ * nothing, and the install and the upgrade themselves. They are the one human path to install,
+ * upgrade and accept an application's roles; each runs the shared installation functions under the
+ * person's own authority: the installation authority alone (managing applications, with the
+ * delegated scope and recent sign-in a role acceptance needs), never role management or a right on
  * the application's draft. They re-prove that authority, the latest published version, the release
- * and the bindings in their own transactions. The review hands the caller the exact
- * state it showed (`expected`); the install and the upgrade refuse as a conflict when that state
- * moved, so a person only ever confirms what is still true.
+ * and the bindings in their own transactions. The review hands the caller the exact state it
+ * showed (`expected`); the install and the upgrade refuse as a conflict when that state moved, so
+ * a person only ever confirms what is still true.
  */
 export type ApplicationStoreEnvironment = FirstInstallFlowEnvironment & UpgradeRoleEnvironment;
 
@@ -64,6 +66,7 @@ type UnavailableReason =
   | "unsupported";
 
 const maximumRoleChangeLines = 100;
+const maximumRoleTemplates = 500;
 
 const applicationRootInput = (candidate: unknown) => applicationRootIdSchema.safeParse(candidate);
 
@@ -79,11 +82,12 @@ const reviewOutputs = (
     release_version: "",
     installed_version: "",
     release_note: "",
+    roles: [],
     member_role_name: "",
-    member_role_permissions: [],
+    member_role_assignable: false,
     role_changes: [],
     role_change_count: 0,
-    role_ids: [],
+    role_template_ids: [],
     expected: {},
     ...values,
   }) as Outputs;
@@ -144,29 +148,54 @@ const commandFailureOf = (error: unknown): ApplicationStoreResult => {
   return commandFailure(classifyInstallationFailure(error));
 };
 
-const installReview = (candidate: FirstInstallCandidate): Outputs => {
-  const role = candidate.snapshot.memberRole;
+const expectedOf = (snapshot: unknown): JsonValue =>
+  JSON.parse(canonicalJson(snapshot)) as JsonValue;
+
+/**
+ * One line per role change, in plain words: who holds the role and what accepting changes. A role
+ * the version adds is held by nobody until it is assigned.
+ */
+const roleChangeLine = (change: ApplicationRoleChange): string =>
+  change.roleId === undefined
+    ? `${change.name}, a new role nobody holds yet, lets people: ${change.changes.join(", ")}`
+    : `${change.name}, held by ${change.holders} ${change.holders === 1 ? "person or Group" : "people or Groups"}: ${change.changes.join("; ")}`;
+
+/**
+ * A first install: every role the version offers (installing makes each an organisation role that
+ * nobody holds until it is assigned), and whether the installer may take the default member role.
+ */
+const installReview = async (
+  environment: ApplicationStoreEnvironment,
+  session: IdentitySession,
+  candidate: FirstInstallCandidate,
+): Promise<Outputs> => {
+  const roles = candidate.snapshot.roles;
   return reviewOutputs({
-    change: candidate.snapshot.registrationState === "active_exact" ? "current" : "install",
+    change: "install",
     application_name: candidate.releaseSet.application.content.name,
     release_version: candidate.snapshot.selected.releaseVersion,
-    installed_version:
-      candidate.snapshot.registrationState === "active_exact"
-        ? candidate.snapshot.selected.releaseVersion
-        : "",
     release_note: candidate.snapshot.latest.releaseNote,
-    member_role_name: role.name,
-    member_role_permissions: role.permissions
+    roles: roles
       .slice(0, maximumRoleChangeLines)
-      .map((permission) => permission.label),
-    expected: JSON.parse(canonicalJson(candidate.snapshot)) as JsonValue,
+      .map(
+        (role) =>
+          `${role.name}: ${role.permissions.map((permission) => permission.label).join(", ")}`,
+      ),
+    member_role_name: releaseMemberRole(roles).name,
+    member_role_assignable: await readMemberRoleAssignable(
+      environment,
+      session,
+      candidate.selector,
+    ),
+    expected: expectedOf(candidate.snapshot),
   });
 };
 
 /**
  * What installing or upgrading the application to its latest published version would do, for the
- * person asking: the version, its release note, and for a first install the default member role the
- * installer is offered, or for an upgrade every role whose accepted access the new version changes.
+ * person asking: the version and its release note; for a first install every role it offers; for
+ * an upgrade every role it adds or changes. When the latest version is installed but some of its
+ * role changes were not accepted, the review offers exactly those.
  */
 const review = async (
   environment: ApplicationStoreEnvironment,
@@ -191,7 +220,8 @@ const review = async (
     };
     try {
       const candidate = await readCurrentFirstInstallCandidate(environment, session, selector);
-      return { kind: "available", value: installReview(candidate) };
+      if (candidate.snapshot.registrationState !== "active_exact")
+        return { kind: "available", value: await installReview(environment, session, candidate) };
     } catch (error) {
       // Installed at an earlier version: the latest one is an upgrade.
       if (!(error instanceof FirstInstallUnavailable) || error.reason !== "already_installed")
@@ -199,57 +229,21 @@ const review = async (
     }
     const authorized = await readUpgradeAuthorizedState(environment, selector, session, true);
     const application = authorized.state.selectedReleaseSet.application;
-    if (authorized.snapshot.selected.releaseRevision === authorized.snapshot.active.releaseRevision)
-      return {
-        kind: "available",
-        value: reviewOutputs({
-          change: "current",
-          application_name: application.content.name,
-          release_version: authorized.snapshot.selected.releaseVersion,
-          installed_version: authorized.snapshot.active.releaseVersion,
-          release_note: latest.releaseNote,
-        }),
-      };
-    // Reading the changed roles needs the role-reading permission; without it the upgrade still
-    // goes ahead and every change waits in IAM, which the review says instead of listing them.
-    const revisions = await readUpgradeRoleRevisions(
-      environment,
-      session,
-      selector,
-      authorized.state,
-    ).catch((error: unknown) => {
-      console.error(`[installation] upgrade role changes unreadable: ${describeFailure(error)}`);
-      return undefined;
-    });
-    if (revisions === undefined)
-      return {
-        kind: "available",
-        value: reviewOutputs({
-          change: "upgrade",
-          application_name: application.content.name,
-          release_version: authorized.snapshot.selected.releaseVersion,
-          installed_version: authorized.snapshot.active.releaseVersion,
-          release_note: latest.releaseNote,
-          role_changes: [
-            "The roles this version changes could not be read with your access. People keep the access they have; the changes wait in IAM.",
-          ],
-          expected: JSON.parse(canonicalJson(authorized.snapshot)) as JsonValue,
-        }),
-      };
+    const changes = await readUpgradeRoleChanges(environment, session, selector, authorized.state);
+    const installed =
+      authorized.snapshot.selected.releaseRevision === authorized.snapshot.active.releaseRevision;
     return {
       kind: "available",
       value: reviewOutputs({
-        change: "upgrade",
+        change: !installed ? "upgrade" : changes.length > 0 ? "roles" : "current",
         application_name: application.content.name,
         release_version: authorized.snapshot.selected.releaseVersion,
         installed_version: authorized.snapshot.active.releaseVersion,
         release_note: latest.releaseNote,
-        role_changes: revisions
-          .slice(0, maximumRoleChangeLines)
-          .map((revision) => `${revision.label}: ${revision.changes.join("; ")}`),
-        role_change_count: revisions.length,
-        role_ids: revisions.map((revision) => revision.roleId),
-        expected: JSON.parse(canonicalJson(authorized.snapshot)) as JsonValue,
+        role_changes: changes.slice(0, maximumRoleChangeLines).map(roleChangeLine),
+        role_change_count: changes.length,
+        role_template_ids: changes.map((change) => change.sourceRoleId),
+        expected: expectedOf(authorized.snapshot),
       }),
     };
   } catch (error) {
@@ -265,8 +259,9 @@ const firstInstallExpectedSchema = z
 
 /**
  * Installs the reviewed version for the first time: registers its access if that is not done yet,
- * then applies the installer's choice for the default member role and activates the release. Each
- * step runs only while the state is exactly the one the person reviewed.
+ * makes every role it offers an organisation role, applies the installer's choice for the default
+ * member role and activates the release. Each step runs only while the state is exactly the one the
+ * person reviewed.
  */
 const install = async (
   environment: ApplicationStoreEnvironment,
@@ -307,7 +302,7 @@ const install = async (
       candidate = await readCurrentFirstInstallCandidate(environment, session, selector);
       if (
         canonicalJson(candidate.snapshot.selected) !== canonicalJson(reviewed.selected) ||
-        canonicalJson(candidate.snapshot.memberRole) !== canonicalJson(reviewed.memberRole)
+        canonicalJson(candidate.snapshot.roles) !== canonicalJson(reviewed.roles)
       )
         return "conflict";
     }
@@ -317,7 +312,7 @@ const install = async (
       environment,
       candidate,
       acceptRole
-        ? { kind: "accept", sourceRoleId: candidate.snapshot.memberRole.sourceRoleId }
+        ? { kind: "accept", sourceRoleId: releaseMemberRole(candidate.snapshot.roles).sourceRoleId }
         : { kind: "decline" },
     );
     return {
@@ -336,14 +331,15 @@ const install = async (
 const upgradeExpectedSchema = z
   .object({
     selected: z.object({ releaseRevision: z.number().int().positive() }).passthrough(),
+    active: z.object({ releaseRevision: z.number().int().positive() }).passthrough(),
     validUntil: z.string().min(1),
   })
   .passthrough();
 
 /**
- * Upgrades the application to the reviewed version. With the person's explicit choice it also
- * accepts the reviewed role changes; otherwise every role keeps exactly the access it accepted and
- * its change waits in role administration.
+ * Upgrades the application to the reviewed version and accepts the role changes the person reviewed,
+ * or, when the reviewed version is already installed, accepts only those. A change that could not
+ * be accepted is counted as waiting, and the next review offers it again.
  */
 const upgrade = async (
   environment: ApplicationStoreEnvironment,
@@ -353,8 +349,12 @@ const upgrade = async (
 ): Promise<ApplicationStoreResult> => {
   const rootId = applicationRootInput(inputs.application_root_id);
   const expected = upgradeExpectedSchema.safeParse(inputs.expected);
-  const roleIds = z.array(roleIdSchema).max(maximumRoleChangeLines).safeParse(inputs.role_ids);
-  if (!rootId.success || !expected.success || !roleIds.success) return { kind: "unavailable" };
+  const roleTemplateIds = z
+    .array(roleIdSchema)
+    .max(maximumRoleTemplates)
+    .safeParse(inputs.role_template_ids);
+  if (!rootId.success || !expected.success || !roleTemplateIds.success)
+    return { kind: "unavailable" };
   const selector: UpgradeSelector = {
     organizationId: organizationOf(selection),
     rootId: rootId.data,
@@ -362,7 +362,9 @@ const upgrade = async (
   };
   try {
     const reviewed = expected.data as unknown as UpgradeSnapshot;
-    const current = await readUpgradeAuthorizedState(environment, selector, session, false);
+    // Reviewing an installed version offers only its role changes still to accept.
+    const rolesOnly = reviewed.selected.releaseRevision === reviewed.active.releaseRevision;
+    const current = await readUpgradeAuthorizedState(environment, selector, session, rolesOnly);
     const now = Date.parse(current.checkedAt);
     if (
       !Number.isFinite(now) ||
@@ -371,21 +373,20 @@ const upgrade = async (
       !sameUpgradeSnapshotState(reviewed, current.snapshot)
     )
       return "conflict";
-    const acceptRoleIds = yes(inputs.accept_role_changes) ? roleIds.data : [];
-    const { acceptedRoleIds } = await upgradeWithRoleRevisions(
+    const { accepted, notAccepted } = await upgradeWithRoleChanges(
       environment,
       selector,
       current.state,
       session,
-      acceptRoleIds,
+      roleTemplateIds.data,
     );
     return {
       kind: "available",
       value: {
         application_name: current.state.selectedReleaseSet.application.content.name,
         release_version: current.snapshot.selected.releaseVersion,
-        accepted_role_count: acceptedRoleIds.length,
-        waiting_role_count: roleIds.data.length - acceptedRoleIds.length,
+        accepted_role_count: accepted.length,
+        waiting_role_count: notAccepted.length,
       },
     };
   } catch (error) {

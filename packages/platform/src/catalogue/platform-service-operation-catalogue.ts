@@ -71,13 +71,8 @@ export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   revise_role_metadata: entry(sources.revise_role_metadata),
   retire_role: entry(sources.retire_role),
   prepare_role_change_evidence: entry(sources.prepare_role_change_evidence),
-  prepare_application_role_revision_acceptance: entry(
-    sources.prepare_application_role_revision_acceptance,
-  ),
   create_custom_role: entry(sources.create_custom_role),
   create_custom_role_from_template: entry(sources.create_custom_role_from_template),
-  accept_application_role_template: entry(sources.accept_application_role_template),
-  accept_application_role_revision: entry(sources.accept_application_role_revision),
   assign_role_assignment: entry(sources.assign_role_assignment),
   revoke_role_assignment: entry(sources.revoke_role_assignment),
   deactivate_role_activation: entry(sources.deactivate_role_activation),
