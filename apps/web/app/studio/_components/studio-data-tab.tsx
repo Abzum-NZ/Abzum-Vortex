@@ -324,7 +324,8 @@ export function useStudioDataTab({ organizationId, rootId, source, saved, used, 
       targets.push({ key: directory.recordType, label: "Person (people directory)", titleLabel: peopleDirectory.titleLabel });
     return targets;
   }, [used, peopleDirectory]);
-  const fieldContext: ModuleFieldEditorContext = { publication, composition: compositionContext, usedRecordTypes, peopleDirectory, readRecords };
+  const fieldContext: ModuleFieldEditorContext = { publication, composition: compositionContext, usedRecordTypes, peopleDirectory, readRecords,
+    compiledFields };
   const targetLabel = (key: string): string => {
     const [owner, local] = key.split(":");
     const record = source.body.modules.find((module) => module.key === owner)?.record_types.find((item) => item.key === local);
@@ -333,24 +334,24 @@ export function useStudioDataTab({ organizationId, rootId, source, saved, used, 
   const savedOwned = useMemo(() => ownedDataModules(saved), [saved]);
   const modules = useMemo(() => [...owned, ...(used ?? [])], [owned, used]);
   const [creating, setCreating] = useState(false);
-  // Each applied edit renews the inspector's forms from the draft.
+  // Every change of the draft (an applied edit, undo, redo or revert) renews the inspector's forms from it.
   const [epoch, setEpoch] = useState(0);
+  const [formsSource, setFormsSource] = useState(source);
+  if (formsSource !== source) {
+    setFormsSource(source);
+    setEpoch((value) => value + 1);
+  }
   const current = selection !== null && selectionExists(modules, selection) ? selection : null;
 
   const applyAndSelect = (next: ApplicationSourceDocument, message: string, then?: StudioDataSelection | null): boolean => {
     if (!apply(source, next, message)) return false;
     if (then !== undefined) selectAfterEdit(then);
-    setEpoch((value) => value + 1);
     return true;
   };
   const applyField = (expected: ApplicationSourceDocument, next: ApplicationSourceDocument) =>
     apply(expected, next, "Field changed. Save to keep it.");
   /** A query or search edit: one draft edit, after which the inspector's forms are read again. */
-  const applyChange: ApplyDataChange = (expected, next, message) => {
-    if (!apply(expected, next, message)) return false;
-    setEpoch((value) => value + 1);
-    return true;
-  };
+  const applyChange: ApplyDataChange = (expected, next, message) => apply(expected, next, message);
   const recordTypes = useMemo(() => [...owned.flatMap((item) => item.recordTypes.map((record) =>
     ({ key: `${item.key}:${record.key}`, label: record.name }))), ...usedRecordTypes], [owned, usedRecordTypes]);
   const isOwned = current !== null && owned.some((module) => module.key === current.moduleKey);
@@ -386,8 +387,8 @@ export function useStudioDataTab({ organizationId, rootId, source, saved, used, 
           : <ModuleFieldsEditor key={`${epoch}:${current.moduleKey}:${current.recordKey}:${current.fieldKey}`}
             source={source} moduleKey={current.moduleKey} recordKey={current.recordKey} fieldKey={current.fieldKey}
             disabled={disabled} context={fieldContext} onPendingChange={onFieldPending} onApply={applyField}
-            onApplied={() => setEpoch((value) => value + 1)} onShow={onShow}
-            onRemoved={() => { selectAfterEdit({ kind: "record_type", moduleKey: current.moduleKey, recordKey: current.recordKey }); setEpoch((value) => value + 1); }} />;
+            onShow={onShow}
+            onRemoved={() => selectAfterEdit({ kind: "record_type", moduleKey: current.moduleKey, recordKey: current.recordKey })} />;
   const inspector = <StudioPanelShell title="Inspector"
     description={current === null ? "Select an item to change it." : describeSelection(modules, current)}>
     {inspectorBody}
@@ -397,7 +398,6 @@ export function useStudioDataTab({ organizationId, rootId, source, saved, used, 
     onCreate={(expected, next, moduleKey, recordKey) => {
       if (!apply(expected, next, "Record type added. Save to keep it.")) return false;
       selectAfterEdit({ kind: "record_type", moduleKey, recordKey });
-      setEpoch((value) => value + 1);
       return true;
     }} />;
   return { panel, centre, inspector, dialog, title: describeSelection(modules, current) };

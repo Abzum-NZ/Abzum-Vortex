@@ -10,6 +10,7 @@ import {
 } from "./before-save-rules";
 import { evaluateRecordCalculations } from "./calculations";
 import { isDateDeadlineDueField } from "./deadline-transitions";
+import { emptyRecordTotals } from "./totals";
 import {
   finalizeRecordFieldCandidate,
   prepareInitialRecordFieldCandidate,
@@ -125,6 +126,11 @@ export const calculateAndFinalize = ({
     requirements = applied.requirements;
   }
 
+  // A new record has no related records yet, so its totals start as totals over none; a
+  // record's own save never changes its totals, so an update keeps the stored ones.
+  const authoritativeValues: Readonly<Record<string, JsonValue>> =
+    operation === "create" ? { ...ruleCandidateValues, ...emptyRecordTotals(recordType) } : ruleCandidateValues;
+
   const calculationFieldIds = recordType.fields
     .filter((field) => field.type === "calculation")
     .map((field) => field.fieldId);
@@ -133,7 +139,7 @@ export const calculateAndFinalize = ({
       {
         recordType,
         initialCandidate: initial.candidate,
-        candidateValues: ruleCandidateValues,
+        candidateValues: authoritativeValues,
         requirements,
         requiredGeneratedFieldIds: [],
         ...(organizationCurrency === undefined ? {} : { organizationCurrency }),
@@ -167,7 +173,7 @@ export const calculateAndFinalize = ({
   const calculations = evaluateRecordCalculations(
     {
       recordType,
-      authoritativeFieldValues: ruleCandidateValues,
+      authoritativeFieldValues: authoritativeValues,
       clock: { instant: issuedAt, organizationLocalDate },
     },
     fieldsById,
@@ -175,7 +181,7 @@ export const calculateAndFinalize = ({
   if (!calculations.success) return calculations;
 
   const candidateValues: Record<string, unknown> = {
-    ...ruleCandidateValues,
+    ...authoritativeValues,
     ...calculations.setValues,
   };
   for (const fieldId of calculations.clearFieldIds) delete candidateValues[fieldId];
