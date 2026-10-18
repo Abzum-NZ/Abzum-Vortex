@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { StudioStoredApplicationDraft } from "@vortex/ui/studio";
 import type { StudioApplicationPreviewResult, StudioPreviewStatus } from "../../_lib/studio-application-preview";
 
-export type StudioPreviewReadiness = Readonly<{ identity: string; status: StudioPreviewStatus }>;
+type Readiness = Readonly<{ identity: string; status: StudioPreviewStatus }>;
+export type StudioPreviewReadiness = Readiness & Readonly<{ refresh: () => void }>;
 
 /** One in-flight preparation per workspace, followed immediately by its newest saved revision. */
 export function useStudioPreview(organizationId: string, saved: StudioStoredApplicationDraft): StudioPreviewReadiness {
@@ -11,8 +12,17 @@ export function useStudioPreview(organizationId: string, saved: StudioStoredAppl
   const latest = useRef({ identity, rootId: saved.rootId, draftRevision: saved.draftRevision, sourceFingerprint: saved.sourceFingerprint });
   latest.current = { identity, rootId: saved.rootId, draftRevision: saved.draftRevision, sourceFingerprint: saved.sourceFingerprint };
   const running = useRef<Promise<void> | null>(null);
-  const completed = useRef<StudioPreviewReadiness | null>(null);
-  const [readiness, setReadiness] = useState<StudioPreviewReadiness>({ identity: "", status: { kind: "preparing" } });
+  const completed = useRef<Readiness | null>(null);
+  const [readiness, setReadiness] = useState<Readiness>({ identity: "", status: { kind: "preparing" } });
+  const [attempt, setAttempt] = useState(0);
+  // A read can discover that an otherwise ready preview needs reconciliation or renewal. This
+  // starts an explicit preparation, once; a failed/invalid revision is never retried by reads.
+  const refresh = useCallback(() => {
+    if (completed.current?.identity !== latest.current.identity || completed.current.status.kind !== "ready") return;
+    completed.current = null;
+    setReadiness({ identity: "", status: { kind: "preparing" } });
+    setAttempt((value) => value + 1);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -56,8 +66,13 @@ export function useStudioPreview(organizationId: string, saved: StudioStoredAppl
     };
     void run();
     return () => { active = false; };
-  }, [identity, organizationId]);
+  }, [identity, organizationId, attempt]);
 
-  return useMemo(() => readiness.identity === identity ? readiness
-    : { identity, status: { kind: "preparing" as const } }, [identity, readiness]);
+  useEffect(() => {
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [refresh]);
+
+  return useMemo(() => ({ ...(readiness.identity === identity ? readiness
+    : { identity, status: { kind: "preparing" as const } }), refresh }), [identity, readiness, refresh]);
 }

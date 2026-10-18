@@ -1,4 +1,5 @@
 import "server-only";
+import { runtimePreviewOf } from "@vortex/platform/server";
 
 import type {
   HumanOrganizationRequestDependencies,
@@ -76,6 +77,9 @@ export const openStudioPreviewRead = async (
     console.error(`[studio] preview context unavailable: STUDIO_PREVIEW_CONTEXT_UNAVAILABLE kind=${installed.kind}`);
     return installed.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };
   }
+  const running = runtimePreviewOf(installed.value);
+  if (running === undefined) throw new Error("STUDIO_PREVIEW_RUNTIME_MISSING");
+  if (running.draftRevision !== draftRevision) return { kind: "conflict" };
   const entry = launcher.kind === "available"
     ? launcher.entries.find((candidate) => sameId(candidate.organizationId, organizationId)) : undefined;
   if (entry === undefined) return launcher.kind === "available" ? { kind: "refused" } : { kind: "temporarily_unavailable" };

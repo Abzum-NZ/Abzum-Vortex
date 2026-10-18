@@ -110,10 +110,11 @@ function SummaryResults({ result, onPage }: Readonly<{
  * draft revision with their preview access. Paging is keyset paging: next and previous pages,
  * never a page count.
  */
-function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, queryKey, draftRevision }: Readonly<{
+function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, queryKey, draftRevision, onFollowing }: Readonly<{
   organizationId: string; rootId: string; moduleKey: string; recordKey: string; plural: string; queryKey: string | undefined;
   /** The latest saved draft revision whose preview the records are read from. */
   draftRevision: number;
+  onFollowing: () => void;
 }>) {
   const [pageSize, setPageSize] = useState<number>(40);
   // A page token belongs to one record type or query, page size and saved revision: any other
@@ -142,6 +143,7 @@ function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, 
     })();
   }, [organizationId, rootId, draftRevision, moduleKey, recordKey, queryKey, pageSize, page.token, page.direction, request]);
   const current = read?.request === request ? read.result : null;
+  useEffect(() => { if (current?.kind === "following") onFollowing(); }, [current, onFollowing]);
   const problem = current === null ? undefined : notReadable(current, plural, queryKey !== undefined);
   return <section aria-labelledby="studio-data-results" className="space-y-2">
     <div className="flex flex-wrap items-end justify-between gap-2">
@@ -183,7 +185,7 @@ function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, 
 }
 
 /** The Data tab's centre: the selected record type's schema grid and its records in the builder's preview. */
-export function StudioDataCentre({ organizationId, rootId, modules, selection, unsaved, draftRevision, preview }: Readonly<{
+export function StudioDataCentre({ organizationId, rootId, modules, selection, unsaved, draftRevision, preview, onFollowing }: Readonly<{
   organizationId: string; rootId: string;
   preview: StudioPreviewStatus;
   /** Owned and used modules, as the tree shows them. */
@@ -193,6 +195,7 @@ export function StudioDataCentre({ organizationId, rootId, modules, selection, u
   unsaved: boolean;
   /** The latest saved draft revision whose preview the records are read from. */
   draftRevision: number;
+  onFollowing: () => void;
 }>) {
   const module = selection === null ? undefined : modules.find((item) => item.key === selection.moduleKey);
   if (selection === null || module === undefined)
@@ -226,6 +229,6 @@ export function StudioDataCentre({ organizationId, rootId, modules, selection, u
         : preview.kind === "temporarily_unavailable" ? "The preview could not be prepared just now. Your draft remains editable."
         : "Your preview is catching up with the saved draft."}</p>
       : <PreviewResults organizationId={organizationId} rootId={rootId} moduleKey={module.key} recordKey={record.key} plural={record.pluralName}
-        queryKey={query?.key} draftRevision={draftRevision} />}
+        queryKey={query?.key} draftRevision={draftRevision} onFollowing={onFollowing} />}
   </div>;
 }
