@@ -330,10 +330,7 @@ export function StudioModuleActions({
       ? undefined
       : actions.find((action) => action.key === editing);
   return (
-    <section
-      className="space-y-2 border-t border-border pt-3"
-      aria-label={`Actions of ${record.plural_name}`}
-    >
+    <section className="space-y-4" aria-label={`Actions of ${record.plural_name}`}>
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">Actions</h3>
         <Button
