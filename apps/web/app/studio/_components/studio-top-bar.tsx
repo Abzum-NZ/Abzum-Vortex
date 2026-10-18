@@ -22,7 +22,7 @@ export type StudioLocation = Readonly<{
  * caught up), Undo and Redo, and the commands that act on the whole draft. Edits save themselves.
  */
 export function StudioTopBar({ location, chip, chipAlert, status, problem, canUndo, canRedo, undoDisabled, onUndo, onRedo,
-  backToAppHref, onPreview, previewDisabled, previewPending, onPublish, publishDisabled }: Readonly<{
+  backToAppHref, onPreview, previewDisabled, previewPending, onPublish, publishDisabled, statusLink }: Readonly<{
   location: StudioLocation;
   /** "Saved", "Saving…" or "Not saved", with "Updating canvas…" while the canvas catches up. */
   chip: string;
@@ -37,6 +37,8 @@ export function StudioTopBar({ location, chip, chipAlert, status, problem, canUn
   backToAppHref: string | undefined;
   onPreview: () => void; previewDisabled: boolean; previewPending: boolean;
   onPublish: () => void; publishDisabled: boolean;
+  /** A place the status points at, such as the App Store after a version is published. */
+  statusLink?: Readonly<{ label: string; href: string }> | undefined;
 }>) {
   return <header className="shrink-0 border-b border-border bg-background">
     <div className="flex flex-wrap items-center gap-2 px-3 py-2">
@@ -77,5 +79,8 @@ export function StudioTopBar({ location, chip, chipAlert, status, problem, canUn
     </div>
     {problem}
     <p role="status" aria-live="polite" className="px-3 pb-2 text-sm text-muted-foreground empty:hidden">{status.trim()}</p>
+    {statusLink === undefined ? null : <div className="px-3 pb-2">
+      <Button variant="link" size="sm" className="h-auto p-0" nativeButton={false} render={<Link href={statusLink.href} />}>
+        {statusLink.label}</Button></div>}
   </header>;
 }

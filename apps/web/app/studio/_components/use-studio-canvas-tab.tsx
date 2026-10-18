@@ -15,9 +15,10 @@ import { createAppearanceRootProps, Icon, type FieldInputControlReleaseMap, type
 import { Button } from "@vortex/ui/components/button";
 import type { StudioCanvasAddRequest, StudioCanvasBreakpoint, StudioCanvasFrame } from "@vortex/ui/studio/page-puck-editor";
 import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-empty-state";
-import { readStudioCanvasRecords, readStudioDataRecords, validateStudioPlacementThemeOverrides } from "../actions";
+import { readStudioCanvasRecords, readStudioDataRecords } from "../actions";
 import { applyStudioItemLabels } from "@vortex/ui/studio";
 import { studioDraftNavigation } from "../_lib/studio-draft-navigation";
+import { studioUseTargetOf } from "../_lib/studio-places";
 import type { StudioApplicationCanvasFrames } from "../../_lib/studio-application-draft";
 import { studioMenuPosition } from "@vortex/ui/studio";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
@@ -26,6 +27,7 @@ import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-b
 import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-toolbar";
 import { StudioPanelShell } from "./studio-frame";
 import { StudioInspector } from "./studio-inspector";
+import { StudioUsedIn } from "./studio-used-in";
 import { StudioBlockOutlinePanel } from "./studio-outline-panels";
 import type { StudioRailKey } from "./studio-rail-tabs";
 import type { StudioDraft } from "./use-studio-draft";
@@ -86,7 +88,6 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
   const [appearance, setAppearance] = useState<"light" | "dark">("light");
   // "Who can see this": the role the canvas and its menu are previewed as; null is the builder's view.
   const [viewAs, setViewAs] = useState<string | null>(null);
-  const [themeOverrideProblems, setThemeOverrideProblems] = useState(false);
   const [paletteHost, setPaletteHost] = useState<HTMLElement | null>(null);
   const [paletteMessage, setPaletteMessage] = useState("");
   const [blockSetup, setBlockSetup] = useState<StudioBlockSetupRequest | null>(null);
@@ -297,6 +298,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
     : ownerShellKey === undefined ? undefined : labels.get(ownerShellKey);
   const outlineOwnerKey = canvasPage !== undefined ? studioSemanticSelectionKey({ kind: "page", pageAlias: canvasPage.id }) : ownerShellKey;
   const selectedName = selected === null ? undefined : labels.get(selectionKey);
+  const usedIn = studioUseTargetOf(selected);
   const title = canvasPage !== undefined ? pageLabel(canvasPage.id, canvasPage.name)
     : inspector.status === "resolved" ? selectedName ?? inspector.descriptor.label : "Select an item";
   const outlinePanelProps = { outline, selectedKey: selectionKey, disabled: draft.isHeld("publication"),
@@ -334,6 +336,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
       <ApplicationVisibilityConditionEditor key={`${draft.lifetime}:${selectionKey}`} context={compositionContext}
         selection={selected} saved={draft.saved} disabled={draft.locked} onCommand={commandVisibility} />}
     {inspector.status === "resolved" && placementWorkflows}
+    {usedIn !== null && <StudioUsedIn source={source} target={usedIn} name={selectedName ?? "it"} />}
   </StudioInspector>;
 
   const shown = canvasPage !== undefined && (inspector.status === "resolved" || selected === null);
@@ -367,9 +370,6 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
               ? draft.select({ kind: "placement", placementAlias: alias })
               : canvasPageRef.current !== undefined && draft.select({ kind: "page", pageAlias: canvasPageRef.current }))}
             breakpoint={breakpoint} disabled={draft.locked} compileFailure={view.failure}
-            validateThemeOverrides={(candidate, placements) => validateStudioPlacementThemeOverrides(organizationId, {
-              rootId, expectedDraftRevision: draft.history.getState().draftRevision, theme: candidate, placements })}
-            onThemeOverrideProblems={setThemeOverrideProblems}
             onChange={applyPuckPageEdit} readRecords={readCanvasRecords} updating={draft.updatingCanvas}
             palette={addTargets === null ? undefined : { host: paletteHost, targets: addTargets, message: paletteMessage, onAdd: addBlock }} />
         </Suspense>
@@ -389,8 +389,6 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
   return {
     panels, inspector: inspectorPanel, centre, toolbar, dialog, title, breadcrumbItem, compositionContext,
     commandComposition, readRecordChoices, previewAs,
-    /** A canvas block's theme override the platform refuses keeps the draft from being published. */
-    publishBlocked: themeOverrideProblems ? "A block's colours are refused by the readability checks. Change them on the canvas first." : undefined,
     readQueries: () => studioDraftChoices(draft.parsed(draft.history.getState().source), view.borrowedChoices, null).queries,
   };
 }

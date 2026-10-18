@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import type { ImmutablePlatformBlockCatalogue, PeopleDirectoryOwner } from "@vortex/platform/schema";
 import {
-  projectStudioSemanticOutline,
+  projectStudioSemanticOutline, studioSemanticSelectionKey,
   type StudioBorrowedChoices, type StudioCompileFailure, type StudioSemanticSelection, type StudioStoredApplicationDraft,
 } from "@vortex/ui/studio";
 import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
@@ -10,6 +10,7 @@ import type { StudioApplicationCanvasFrames, StudioApplicationCompiledPageSlots 
 import type { StudioCompiledFields, StudioDataModule, StudioPublishedData } from "../_lib/studio-data-model";
 import type { StudioThemeOptions } from "../_lib/studio-theme-options";
 import { createStudioPlacementDescriber, studioOutlineLabels } from "../_lib/studio-labels";
+import { studioPlaceSelection, studioTabOfSelection } from "../_lib/studio-places";
 import { ApplicationDraftAgentTools } from "./application-draft-agent-tools";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import { NewApplicationWorkspace } from "./new-application-workspace";
@@ -21,6 +22,7 @@ import {
 } from "./studio-rail-tabs";
 import { StudioSaveProblem } from "./studio-save-problem";
 import { StudioTopBar } from "./studio-top-bar";
+import { StudioPlaceOpenerProvider, type StudioPlaceOpener } from "./studio-used-in";
 import { useStudioCanvasTab } from "./use-studio-canvas-tab";
 import { useStudioDraft } from "./use-studio-draft";
 import { useStudioDraftTheme } from "./use-studio-draft-theme";
@@ -35,6 +37,8 @@ export type StudioWorkspacePlace = Readonly<{
   organizationName: string;
   /** The running application, for Back to app; absent when the organisation's address is unknown. */
   applicationHref: string | undefined;
+  /** The App Store, where a published version is installed or upgraded to; absent like the above. */
+  appStoreHref: string | undefined;
 }>;
 
 type WorkspaceProps = Readonly<{
@@ -95,6 +99,20 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   const outline = useMemo(() => projectStudioSemanticOutline({ rootId: state.rootId, source, catalogue }, describePlacement),
     [state.rootId, source, catalogue, describePlacement]);
   const labels = useMemo(() => studioOutlineLabels(outline), [outline]);
+  // Every "Used in" entry and "Show me where" link opens its place in its own tab, selected.
+  const placeOpener: StudioPlaceOpener = {
+    open: (where) => {
+      const next = studioPlaceSelection(where.open, state.rootId);
+      if (next === null) return;
+      // The Access tab may be showing another of its views while the role is already selected.
+      if (next.kind === "role") access.showRole();
+      openIn(studioTabOfSelection(next), next);
+    },
+    nameOf: (where) => {
+      const next = studioPlaceSelection(where.open, state.rootId);
+      return next === null ? undefined : labels.get(studioSemanticSelectionKey(next));
+    },
+  };
   const theme = useStudioDraftTheme({ organizationId, rootId: state.rootId, theme: source.body.theme,
     compiledTheme: draft.view.frames?.theme, compiledSourceTheme: draft.view.source.body.theme });
 
@@ -113,27 +131,24 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   };
   const access = useStudioAccessTab({ source, selected: draft.selected, select: draft.select,
     compiledRoles: draft.view.frames?.roles, hidden: tab !== "access", disabled: draft.locked,
-    onCommand: commandAccess, onPreview: canvas.previewAs,
-    goTo: (where) => where.kind === "page" ? openIn("structure", { kind: "page", pageAlias: where.pageAlias })
-      : where.kind === "navigation" ? openIn("menu", { kind: "navigation", navigationItemAlias: where.alias })
-        : where.kind === "placement" ? openIn("structure", { kind: "placement", placementAlias: where.placementAlias })
-          : openIn("data", { kind: "module", moduleKey: where.moduleKey }) });
+    onCommand: commandAccess, onPreview: canvas.previewAs });
   const openAccessPages = () => { access.showPages(); setTab("access"); };
   const structure = useStudioStructureTab({ draft, catalogue, describePlacement, outline, hidden: tab !== "structure", openAccessPages });
   const menuTheme = useStudioMenuThemeTabs({ draft, menuHidden: tab !== "menu", themeHidden: tab !== "theme",
     themeOptions: props.themeOptions, theme, openAccessPages });
   const data = useStudioDataTab({ draft, applications, initialModule: props.initialModule ?? null, hidden: tab !== "data",
-    compositionContext: canvas.compositionContext, readRecords: canvas.readRecordChoices, openInTab: openIn });
+    compositionContext: canvas.compositionContext, readRecords: canvas.readRecordChoices });
   const releases = useStudioReleasesTab({ draft, hidden: tab !== "releases",
     initialSection: isStudioReleasesSection(props.initialSection) ? props.initialSection : "history" as StudioReleasesSection,
-    blocked: canvas.publishBlocked });
+    appStoreHref: place.appStoreHref });
 
   const centreTitle = tab === "data" ? data.title : tab === "access" ? access.title : tab === "releases" ? releases.title : canvas.title;
   const canvasShown = railShowsCanvas(tab);
   const conflictLoading = draft.isHeld("reopening");
   const [loadFailed, setLoadFailed] = useState(false);
 
-  return <div aria-busy={draft.isHeld("publication") || draft.isHeld("reopening")}>
+  return <StudioPlaceOpenerProvider opener={placeOpener}>
+  <div aria-busy={draft.isHeld("publication") || draft.isHeld("reopening")}>
     <ApplicationDraftAgentTools draft={draft} catalogue={catalogue} command={canvas.commandComposition}
       readQueries={canvas.readQueries} {...releases.agent} />
     <StudioFrame tabs={studioRailTabs} activeTab={tab} onTabChange={setTab}
@@ -142,7 +157,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
           applicationName: source.body.name, item: canvas.breadcrumbItem,
           onApplication: () => { draft.select({ kind: "application", applicationRootId: state.rootId }); } }}
         chip={draft.chip} chipAlert={draft.status.kind === "conflict" || draft.status.kind === "refused"}
-        status={releases.notice}
+        status={releases.notice} statusLink={releases.noticeLink}
         problem={<StudioSaveProblem status={draft.status} loading={conflictLoading} loadFailed={loadFailed}
           onLoadLatest={() => { setLoadFailed(false); void draft.reload().then((loaded) => setLoadFailed(!loaded)); }} />}
         canUndo={state.canUndo} canRedo={state.canRedo} undoDisabled={draft.locked}
@@ -175,5 +190,6 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     {releases.dialog}
     {canvas.dialog}
     {data.dialog}
-  </div>;
+  </div>
+  </StudioPlaceOpenerProvider>;
 }

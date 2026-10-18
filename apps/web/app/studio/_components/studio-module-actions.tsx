@@ -1,9 +1,9 @@
 "use client";
 import { useMemo, useState, type FormEvent } from "react";
 import {
-  deleteInlineModuleAction, saveInlineModuleAction,
-  type ApplicationSourceDocument, type ConditionNode, type FlowValue, type InlineModuleActionPrecondition,
-  type InlineRecordTypeReference, type JsonValue,
+  applicationUses, deleteInlineModuleAction, saveInlineModuleAction,
+  type ApplicationSourceDocument, type ApplicationUsePlace, type ConditionNode, type FlowValue, type InlineModuleActionPrecondition,
+  type JsonValue,
 } from "@vortex/platform/schema";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
@@ -16,11 +16,12 @@ import { Label } from "@vortex/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import {
   StudioConditionControls, StudioOptionControl, projectStudioActionCondition, studioActionConditionContext,
-  studioActionConditionSource, studioFlowLabel, type StudioConditionValidation,
+  studioActionConditionSource, type StudioConditionValidation,
 } from "@vortex/ui/studio";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
 import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
+import { StudioReferencesAlert, StudioUsedIn } from "./studio-used-in";
 
 /**
  * The named actions of a record type, such as Mark won, Mark lost or Convert lead: what each is
@@ -68,31 +69,6 @@ const effectValue = (effect: Effect, field: Field | undefined): FlowValue => {
   return { kind: "literal", literal: { type: "json", value: raw } };
 };
 
-/** The flows that run an action: by calling it, or by saving the choice option it owns. */
-const runningFlows = (source: ApplicationSourceDocument, module: Module, action: Action) => {
-  const owned = action.sets_choice_field === undefined ? undefined : { field: action.sets_choice_field, option: action.sets_choice_option };
-  const qualified = `${module.key}:${action.record_type}`;
-  const literal = (value: FlowValue | undefined) => value?.kind === "literal" ? value.literal.value : undefined;
-  const runs = (task: unknown): boolean => {
-    if (task === null || typeof task !== "object") return false;
-    const entry = task as { type?: string; properties?: Record<string, FlowValue>; then?: unknown[]; else?: unknown[];
-      default?: unknown[]; tasks?: unknown[]; cases?: { tasks: unknown[] }[]; branches?: unknown[][] };
-    if (entry.type === "operation.call" && literal(entry.properties?.operation) === action.key) return true;
-    if (entry.type === "record.save" && owned !== undefined && literal(entry.properties?.record_type) === qualified) {
-      const values = entry.properties?.values;
-      if (values?.kind === "map" && literal(values.entries[owned.field]) === owned.option) return true;
-    }
-    return [entry.then, entry.else, entry.default, entry.tasks, ...(entry.cases ?? []).map((item) => item.tasks), ...(entry.branches ?? [])]
-      .some((list) => list?.some(runs) === true);
-  };
-  return [
-    ...source.body.flows.filter((flow) => [...flow.tasks, ...flow.errors, ...flow.finally].some(runs))
-      .map((flow) => ({ flow, moduleKey: null as string | null })),
-    ...source.body.modules.flatMap((owner) => owner.flows.filter((flow) => [...flow.tasks, ...flow.errors, ...flow.finally].some(runs))
-      .map((flow) => ({ flow, moduleKey: owner.key as string | null }))),
-  ];
-};
-
 /** A fixed value an action sets, applied as it is typed. */
 function EffectText({ label, value, apply }: Readonly<{ label: string; value: string; apply: (next: string) => string | true }>) {
   const text = useStudioDraftText(value, apply);
@@ -109,17 +85,16 @@ function EffectText({ label, value, apply }: Readonly<{ label: string; value: st
  * then names the action it made. An existing action takes each valid change as one edit of the
  * draft at once; a name or condition that is not valid yet stays in its control with why.
  */
-export function ActionDialog({ module, record, action, open, onOpenChange, edit, onShow, initialEffect, onSaved }: Readonly<{
+export function ActionDialog({ module, record, action, open, onOpenChange, edit, initialEffect, onSaved }: Readonly<{
   module: Module; record: RecordType; action: Action | undefined; open: boolean;
   onOpenChange: (open: boolean) => void;
   edit: StudioDataEdit;
-  onShow: (reference: InlineRecordTypeReference) => void;
   /** For a new action: the choice option it sets from the start. */
   initialEffect?: Readonly<{ field: string; option: string }>;
   onSaved?: (actionKey: string) => void;
 }>) {
   const adding = action === undefined;
-  const [where, setWhere] = useState<readonly InlineRecordTypeReference[]>([]);
+  const [where, setWhere] = useState<readonly ApplicationUsePlace[]>([]);
   const projected = useMemo(() => projectStudioActionCondition(action?.precondition), [action]);
   const context = useMemo(() => studioActionConditionContext(record), [record]);
   const [replacing, setReplacing] = useState(false);
@@ -255,12 +230,8 @@ export function ActionDialog({ module, record, action, open, onOpenChange, edit,
           <p className="text-xs text-muted-foreground">Only people whose access groups hold this permission can run the action.</p></div>
         {issues.length === 0 ? null : <ul role="alert" className="space-y-1 text-sm text-destructive">
           {issues.map((issue, index) => <li key={index} className="break-words">{issue}</li>)}</ul>}
-        {where.length === 0 ? null : <div className="space-y-1 text-sm">
-          <p className="font-medium">Show me where</p>
-          <ul className="list-disc space-y-1 pl-5" aria-label="Where the permission is used">{where.map((reference) => <li key={reference.label}>
-            {reference.open.kind === "none" ? reference.label : <Button type="button" variant="link" size="sm" className="h-auto whitespace-normal p-0 text-left"
-              onClick={() => { onOpenChange(false); onShow(reference); }}>{reference.label}</Button>}</li>)}</ul>
-        </div>}
+        <StudioReferencesAlert name="the action's own permission" title="The action's own permission cannot be left behind"
+          references={where} onBeforeOpen={() => onOpenChange(false)} />
         <DialogFooter>
           {action === undefined
             ? <><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -272,28 +243,28 @@ export function ActionDialog({ module, record, action, open, onOpenChange, edit,
   </Dialog>;
 }
 
-export function StudioModuleActions({ source, moduleKey, recordKey, disabled, edit, onShow }: Readonly<{
+export function StudioModuleActions({ source, moduleKey, recordKey, disabled, edit }: Readonly<{
   source: ApplicationSourceDocument; moduleKey: string; recordKey: string; disabled: boolean;
   edit: StudioDataEdit;
-  onShow: (reference: InlineRecordTypeReference) => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [issues, setIssues] = useState<readonly string[]>([]);
-  const [references, setReferences] = useState<readonly InlineRecordTypeReference[]>([]);
+  const [refused, setRefused] = useState<Readonly<{ label: string; references: readonly ApplicationUsePlace[] }>>();
+  const [refusals, setRefusals] = useState(0);
   const module = source.body.modules.find((item) => item.key === moduleKey);
   const record = module?.record_types.find((item) => item.key === recordKey);
   if (module === undefined || record === undefined) return null;
   const actions = module.actions.filter((action) => action.record_type === record.key);
   const remove = async (action: Action) => {
-    setIssues([]); setReferences([]);
+    setIssues([]); setRefused(undefined);
     const check = deleteInlineModuleAction(source, module.key, action.key);
-    if (check.kind === "referenced") { setReferences(check.references); return; }
+    if (check.kind === "referenced") { setRefused({ label: action.label, references: check.references }); setRefusals((value) => value + 1); return; }
     if (check.kind === "invalid") { setIssues(check.issues); return; }
     if (!await confirm({ title: `Delete ${action.label}?`, confirmLabel: "Delete action",
       description: "The action and its own permission leave the draft. Undo brings them back." })) return;
     const result = edit((current) => deleteInlineModuleAction(current, module.key, action.key));
-    if (result.kind === "referenced") setReferences(result.references);
+    if (result.kind === "referenced") { setRefused({ label: action.label, references: result.references }); setRefusals((value) => value + 1); }
     else { const problem = studioEditProblem(result); if (problem !== undefined) setIssues([problem]); }
   };
   const chosen = editing === null || editing === "new" ? undefined : actions.find((action) => action.key === editing);
@@ -304,7 +275,8 @@ export function StudioModuleActions({ source, moduleKey, recordKey, disabled, ed
     </div>
     {actions.length === 0 && <p className="text-sm text-muted-foreground">No named actions yet, such as Mark won.</p>}
     <ul className="space-y-2">{actions.map((action) => {
-      const flows = runningFlows(source, module, action);
+      const target = { kind: "action", moduleKey: module.key, actionKey: action.key } as const;
+      const unused = applicationUses(source, target).length === 0;
       const option = action.sets_choice_field === undefined ? undefined
         : choiceOptions(record.fields.find((field) => field.key === action.sets_choice_field)).find((entry) => entry.value === action.sets_choice_option);
       return <Item key={action.key} render={<li />} variant="outline" size="sm">
@@ -317,27 +289,20 @@ export function StudioModuleActions({ source, moduleKey, recordKey, disabled, ed
             <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => { void remove(action); }}>Delete</Button>
           </ItemActions>
         </ItemHeader>
-        <ItemContent className="basis-full">
-          <ItemDescription>{action.protected_operation !== undefined ? "Runs a registered operation of the platform; it is not changed here."
-            : flows.length === 0 ? "No flow runs it yet. Add a button, then Create workflow in its inspector with a Save record step that saves this option."
-              : "Run by:"}</ItemDescription>
-          {flows.length === 0 ? null : <ul className="space-y-1">{flows.map(({ flow, moduleKey: owner }) => <li key={`${owner ?? ""}:${flow.id}`}>
-            <Button type="button" variant="link" size="sm" className="h-auto p-0"
-              onClick={() => onShow({ label: studioFlowLabel(flow), open: { kind: "flow", flowAlias: flow.id, moduleKey: owner } })}>
-              {studioFlowLabel(flow)}</Button></li>)}</ul>}
+        <ItemContent className="basis-full space-y-1">
+          {action.protected_operation !== undefined
+            ? <ItemDescription>Runs a registered operation of the platform; it is not changed here.</ItemDescription>
+            : unused ? <ItemDescription>No flow runs it yet. Add a button, then Create workflow in its inspector with a Save record step that saves this option.</ItemDescription>
+              : null}
+          {unused ? null : <StudioUsedIn source={source} target={target} name={action.label} collapsed />}
         </ItemContent>
       </Item>;
     })}</ul>
-    {references.length === 0 ? null : <div role="alert" className="space-y-1 text-sm text-destructive">
-      <p>This action cannot be deleted: it is still used in {references.length === 1 ? "one place" : `${references.length} places`}.</p>
-      <ul className="list-disc space-y-1 pl-5">{references.map((reference) => <li key={reference.label}>
-        {reference.open.kind === "none" ? reference.label
-          : <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => onShow(reference)}>{reference.label}</Button>}</li>)}</ul>
-    </div>}
+    {refused === undefined ? null : <StudioReferencesAlert key={refusals} name={refused.label} action="deleted" references={refused.references} />}
     {issues.length === 0 ? null : <ul role="alert" className="space-y-1 text-sm text-destructive">
       {issues.map((issue, index) => <li key={index}>{issue}</li>)}</ul>}
     {editing !== null && (editing === "new" || chosen !== undefined) && <ActionDialog key={editing} module={module}
-      record={record} action={chosen} open onOpenChange={(open) => { if (!open) setEditing(null); }} edit={edit} onShow={onShow} />}
+      record={record} action={chosen} open onOpenChange={(open) => { if (!open) setEditing(null); }} edit={edit} />}
     {confirmDialog}
   </section>;
 }

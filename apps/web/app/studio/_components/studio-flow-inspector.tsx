@@ -147,7 +147,11 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
     const main = lists[0];
     return <div className="space-y-4">
       <StudioFlowStartEditor key={selection.flowAlias} projection={start}
-        recordTypes={choices.recordTypes} controlLabel={controlLabel} disabled={disabled}
+        recordTypes={selection.moduleKey === null ? choices.recordTypes
+          // A module's own flow names its own record types by their bare key, as its triggers do.
+          : choices.recordTypes.filter((entry) => entry.key.startsWith(`${selection.moduleKey}:`))
+            .map((entry) => ({ key: entry.key.slice(entry.key.indexOf(":") + 1), label: entry.label }))}
+        controlLabel={controlLabel} disabled={disabled}
         onApply={(draft, setting) => {
           const result = onStart(context, draft,
             setting === undefined ? undefined : `flow-start:${selection.moduleKey ?? ""}:${selection.flowAlias}:${setting}`);

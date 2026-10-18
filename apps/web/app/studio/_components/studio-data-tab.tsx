@@ -2,11 +2,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  isStudioDataSelection, type StudioCompositionContext, type StudioDataSelection, type StudioRecordReader, type StudioSemanticSelection,
+  isStudioDataSelection, type StudioCompositionContext, type StudioDataSelection, type StudioRecordReader,
 } from "@vortex/ui/studio";
 import {
   deleteInlineRecordType, peopleDirectory as directory, renameInlineModule, renameInlineRecordType,
-  type ApplicationSourceDocument, type InlineRecordTypeReference,
+  type ApplicationSourceDocument, type ApplicationUsePlace,
 } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
@@ -16,12 +16,14 @@ import { StudioField } from "./studio-field";
 import { StudioDataPanel } from "./studio-data-panel";
 import { StudioDataCentre } from "./studio-data-centre";
 import { StudioRecordTypeDialog } from "./studio-record-type-dialog";
-import { StudioReferencesAlert } from "./studio-references-alert";
+import { StudioReferencesAlert, StudioUsedIn } from "./studio-used-in";
+import { studioUseTargetOf } from "../_lib/studio-places";
 import { StudioNewQueryForm, StudioQueryEditor } from "./studio-query-editor";
 import { StudioRecordTypeSearch, StudioSearchOverview } from "./studio-search-settings";
 import { StudioRelationshipsSection } from "./studio-relationships-section";
 import { StudioModuleActions } from "./studio-module-actions";
 import { StudioRecordPipelines } from "./studio-record-pipelines";
+import { StudioRecordRules } from "./studio-record-rules";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import type { StudioDraft } from "./use-studio-draft";
 import {
@@ -59,7 +61,7 @@ function ModuleInspector({ source, moduleKey, disabled, edit }: Readonly<{
 }
 
 /** The owned record type's names, applied as they are typed, and Delete, refused with where it is used. */
-function RecordTypeInspector({ source, moduleKey, recordKey, disabled, fieldContext, dataModule, targetLabel, edit, onSelect, onShow }: Readonly<{
+function RecordTypeInspector({ source, moduleKey, recordKey, disabled, fieldContext, dataModule, targetLabel, edit, onSelect }: Readonly<{
   source: Source; moduleKey: string; recordKey: string; disabled: boolean;
   fieldContext: ModuleFieldEditorContext;
   /** The module as the Data tab shows it, for the record type's search settings. */
@@ -68,14 +70,13 @@ function RecordTypeInspector({ source, moduleKey, recordKey, disabled, fieldCont
   targetLabel: (key: string) => string;
   edit: StudioDataEdit;
   onSelect: (selection: StudioDataSelection | null) => void;
-  onShow: (reference: InlineRecordTypeReference) => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   // A new field, a new relationship (a new link field) or a new query is being added.
   const [adding, setAdding] = useState<"field" | "relationship" | "query" | null>(null);
   const record = recordIn(source, moduleKey, recordKey)!;
   const [issues, setIssues] = useState<readonly string[]>([]);
-  const [references, setReferences] = useState<readonly InlineRecordTypeReference[]>([]);
+  const [references, setReferences] = useState<readonly ApplicationUsePlace[]>([]);
   const [refusals, setRefusals] = useState(0);
   const rename = (names: Readonly<{ name?: string; pluralName?: string }>, merge: string) => studioEditProblem(edit((current) => {
     const now = recordIn(current, moduleKey, recordKey);
@@ -124,7 +125,7 @@ function RecordTypeInspector({ source, moduleKey, recordKey, disabled, fieldCont
       disabled={disabled} targetLabel={targetLabel} adding={adding === "relationship"}
       onAdd={() => setAdding(adding === "relationship" ? null : "relationship")}
       onEdit={(owner, linking, fieldKey) => onSelect({ kind: "field", moduleKey: owner, recordKey: linking, fieldKey })}
-      edit={edit} onShow={onShow} />
+      edit={edit} />
     {adding === "query" && <section className="space-y-2 border-t border-border pt-3" aria-label={`New query of ${record.name}`}>
       <h3 className="text-sm font-semibold">New query of {record.plural_name}</h3>
       <StudioNewQueryForm source={source} moduleKey={moduleKey} recordKey={recordKey} disabled={disabled} edit={edit}
@@ -137,14 +138,15 @@ function RecordTypeInspector({ source, moduleKey, recordKey, disabled, fieldCont
         {` ${record.name.toLowerCase()} `}holds a link to the record it relates to. Name it as {record.name} sees it, for example Company.</p>}
       <ModuleFieldsEditor source={source} moduleKey={moduleKey} recordKey={recordKey} fieldKey={undefined}
         initialType={adding === "relationship" ? "link" : "text"} disabled={disabled} context={fieldContext} edit={edit}
-        onAdded={(fieldKey) => onSelect({ kind: "field", moduleKey, recordKey, fieldKey })} onShow={onShow} />
+        onAdded={(fieldKey) => onSelect({ kind: "field", moduleKey, recordKey, fieldKey })} />
     </section>}
-    <StudioModuleActions source={source} moduleKey={moduleKey} recordKey={recordKey} disabled={disabled} onShow={onShow} edit={edit} />
+    <StudioModuleActions source={source} moduleKey={moduleKey} recordKey={recordKey} disabled={disabled} edit={edit} />
     <StudioRecordPipelines source={source} moduleKey={moduleKey} recordKey={recordKey} publication={fieldContext.publication}
-      disabled={disabled} onShow={onShow} edit={edit} />
+      disabled={disabled} edit={edit} />
+    <StudioRecordRules source={source} moduleKey={moduleKey} recordKey={recordKey} disabled={disabled} edit={edit} />
     <section className="space-y-2 border-t border-border pt-3" aria-label="Delete">
       <Button type="button" size="sm" variant="destructive" disabled={disabled} onClick={() => { void remove(); }}>Delete record type</Button>
-      <StudioReferencesAlert key={refusals} name={record.name} action="deleted" references={references} onShow={onShow} />
+      <StudioReferencesAlert key={refusals} name={record.name} action="deleted" references={references} />
       <Problems issues={issues} />
     </section>
     {dataRecord === undefined ? null
@@ -214,7 +216,7 @@ const describeSelection = (modules: readonly StudioDataModule[], selection: Stud
  * workspace's one selection; every change is one edit of the draft through `draft.run`, applied as
  * soon as it is valid and saved by the draft's autosave.
  */
-export function useStudioDataTab({ draft, applications, initialModule, hidden, compositionContext, readRecords, openInTab }: Readonly<{
+export function useStudioDataTab({ draft, applications, initialModule, hidden, compositionContext, readRecords }: Readonly<{
   draft: StudioDraft;
   applications: readonly StudioModuleOwnerApplication[];
   /** The module the Studio address opens first, if any. */
@@ -224,8 +226,6 @@ export function useStudioDataTab({ draft, applications, initialModule, hidden, c
   compositionContext: StudioCompositionContext;
   /** Reads records of the installed application, for a link field's default. */
   readRecords: StudioRecordReader | null;
-  /** Opens another tab with an item of it selected, for "Show me where". */
-  openInTab: (tab: "structure" | "flows" | "menu", selection: StudioSemanticSelection) => void;
 }>) {
   const { source, organizationId, view } = draft;
   const disabled = draft.locked;
@@ -245,15 +245,6 @@ export function useStudioDataTab({ draft, applications, initialModule, hidden, c
       return changed === undefined ? { kind: "keep", result } : { kind: "edit", source: changed, result };
     }, options);
     return outcome.kind === "blocked" ? outcome : outcome.result;
-  };
-  const onShow = ({ open }: InlineRecordTypeReference) => {
-    if (open.kind === "record_type") select(open.fieldKey === undefined
-      ? { kind: "record_type", moduleKey: open.moduleKey, recordKey: open.recordKey }
-      : { kind: "field", moduleKey: open.moduleKey, recordKey: open.recordKey, fieldKey: open.fieldKey });
-    else if (open.kind === "query") select({ kind: "query", moduleKey: open.moduleKey, queryKey: open.queryKey });
-    else if (open.kind === "page") openInTab("structure", { kind: "page", pageAlias: open.pageAlias });
-    else if (open.kind === "flow") openInTab("flows", { kind: "flow", flowAlias: open.flowAlias, moduleKey: open.moduleKey });
-    else if (open.kind === "menu") openInTab("menu", { kind: "navigation", navigationItemAlias: open.navigationAlias });
   };
   const saved = useMemo(() => draft.parsed(draft.saved.source), [draft, draft.saved.source]);
   const used = view.usedModules;
@@ -304,7 +295,7 @@ export function useStudioDataTab({ draft, applications, initialModule, hidden, c
       : current.kind === "query"
         ? <StudioQueryEditor key={`query:${current.moduleKey}:${current.queryKey}`} source={source} moduleKey={current.moduleKey}
           queryKey={current.queryKey} compiledFields={view.compiledFields} recordTypes={recordTypes} disabled={disabled}
-          edit={edit} onShow={onShow}
+          edit={edit}
           onDeleted={(recordKey) => select(recordKey === undefined ? { kind: "module", moduleKey: current.moduleKey }
             : { kind: "record_type", moduleKey: current.moduleKey, recordKey })} />
       : current.kind === "module"
@@ -312,14 +303,16 @@ export function useStudioDataTab({ draft, applications, initialModule, hidden, c
         : current.kind === "record_type"
           ? <RecordTypeInspector key={`record:${current.moduleKey}:${current.recordKey}`} source={source}
             moduleKey={current.moduleKey} recordKey={current.recordKey} disabled={disabled} fieldContext={fieldContext}
-            dataModule={module} targetLabel={targetLabel} edit={edit} onSelect={select} onShow={onShow} />
+            dataModule={module} targetLabel={targetLabel} edit={edit} onSelect={select} />
           : <ModuleFieldsEditor key={`field:${current.moduleKey}:${current.recordKey}:${current.fieldKey}`}
             source={source} moduleKey={current.moduleKey} recordKey={current.recordKey} fieldKey={current.fieldKey}
-            disabled={disabled} context={fieldContext} edit={edit} onShow={onShow}
+            disabled={disabled} context={fieldContext} edit={edit}
             onRemoved={() => select({ kind: "record_type", moduleKey: current.moduleKey, recordKey: current.recordKey })} />;
+  const usedIn = studioUseTargetOf(current);
   const inspector = <StudioPanelShell title="Inspector"
     description={current === null ? "Select an item to change it." : describeSelection(modules, current)}>
     {inspectorBody}
+    {usedIn === null ? null : <StudioUsedIn source={source} target={usedIn} name={describeSelection(modules, current)} />}
   </StudioPanelShell>;
   const dialog = <StudioRecordTypeDialog key={creating ? "open" : "closed"} open={creating} source={source} edit={edit}
     onClose={() => setCreating(false)}

@@ -1,7 +1,7 @@
 import {
   applicationSourceDocumentSchema,
+  applicationUses,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
-  readSourceItem,
   sourceItemTree,
   sourcePageItems,
   sourcePageShell,
@@ -17,7 +17,6 @@ import {
   type Navigation, type Page, type Shell, type Source, type StudioStructureContext, type StudioStructureResult,
 } from "./application-structure-common";
 import { addRecordPage, type StudioRecordPageCommand } from "./application-record-pages";
-import { tokenName } from "./studio-words";
 
 /**
  * The Structure tab's edits: add, rename and remove pages and layouts, add the pages of a record
@@ -64,29 +63,6 @@ const releaseOf = (catalogue: ImmutablePlatformBlockCatalogue, item: SourceItem)
   catalogue.releases.find((release) => String(release.blockId) === item.props.vortex.block.block_id &&
     String(release.releaseVersion) === item.props.vortex.block.release_version);
 
-/** Whether a typed setting value (at any depth of a group or list) links to the page. */
-const linksTo = (value: unknown, pageKey: string): boolean => {
-  if (Array.isArray(value)) return value.some((entry) => linksTo(entry, pageKey));
-  if (value === null || typeof value !== "object") return false;
-  const record = value as Record<string, unknown>;
-  if (record.kind === "page_reference") return record.page === pageKey;
-  return Object.values(record).some((entry) => linksTo(entry, pageKey));
-};
-
-/** Whether a flow task anywhere in the flow opens the page. */
-const navigatesTo = (value: unknown, pageKey: string): boolean => {
-  if (Array.isArray(value)) return value.some((entry) => navigatesTo(entry, pageKey));
-  if (value === null || typeof value !== "object") return false;
-  const record = value as Record<string, unknown>;
-  if (record.type === "interface.navigate") {
-    const page = (record.properties as Record<string, unknown> | undefined)?.page as Record<string, unknown> | undefined;
-    const literal = page?.literal as Record<string, unknown> | undefined;
-    const target = typeof literal?.value === "string" ? literal.value : undefined;
-    if (target === pageKey || target?.endsWith(`:${pageKey}`)) return true;
-  }
-  return Object.values(record).some((entry) => navigatesTo(entry, pageKey));
-};
-
 const flowReferenceWords: Readonly<Record<StudioCompositionRemovalReason, string>> = {
   flow_control: "is bound to a flow",
   flow_form: "is the form a flow waits for",
@@ -116,35 +92,6 @@ const removeBlocks = (context: StudioStructureContext, source: Source, leaving: 
 /** A block's own settings (not its name, slots or layout), for naming it to a person. */
 const settingsOf = (item: SourceItem): Record<string, unknown> =>
   Object.fromEntries(Object.entries(item.props).filter(([key, value]) => key !== "id" && key !== "vortex" && !Array.isArray(value)));
-
-/** Everything outside the page that still names it; the first one found refuses the removal. */
-const pageReferences = (context: StudioStructureContext, page: Page): string | undefined => {
-  const { body } = context.source;
-  const subject = `The page ${quoted(page.name)}`;
-  if (body.home_page === page.key)
-    return `${subject} is the application's home page. Make another page the home page first.`;
-  const role = body.roles.find((candidate) => candidate.home_page === page.key);
-  if (role !== undefined) return `${subject} is where the role ${quoted(role.name)} starts. Give that role another start page first.`;
-  if ((body.experiences ?? []).some((experience) => experience.page === page.key))
-    return `${subject} is shown when a page cannot be opened. Choose another page for that first.`;
-  if (body.public_addresses.some((address) => address.page === page.key))
-    return `${subject} has a public address. Remove that address first.`;
-  const search = body.search?.record_types.find((entry) => entry.target_page === page.key);
-  if (search !== undefined)
-    return `${subject} opens search results for ${tokenName(search.record_type.slice(search.record_type.lastIndexOf(":") + 1))}. Change the search settings in Data first.`;
-  const replacing = body.pages.find((candidate) => candidate.replaces_page === page.id);
-  if (replacing !== undefined) return `${subject} is replaced by the page ${quoted(replacing.name)}. Remove that page first.`;
-  for (const { item, where, page: owner } of placementsOf(context.source)) {
-    if (owner === page.id) continue;
-    const release = releaseOf(context.catalogue, item);
-    if (release === undefined || !linksTo(readSourceItem(item, release).settings, page.key)) continue;
-    const block = context.describePlacement({ block: item.props.vortex.block, settings: settingsOf(item) }) ?? release.name;
-    return `${subject} is linked from the block ${quoted(String(block))} on ${where}. Change that link first.`;
-  }
-  const flow = body.flows.find((candidate) => navigatesTo(candidate, page.key));
-  if (flow !== undefined) return `${subject} is opened by the flow ${quoted(tokenName(flow.key))}. Change that flow first.`;
-  return undefined;
-};
 
 /** The layouts a page can use: the application's layouts, then the platform's default frame. */
 export const studioStructureShellChoices = (source: Source): readonly StudioStructureShellChoice[] => [
@@ -286,8 +233,10 @@ const addShell = (context: StudioStructureContext, candidate: Source,
 const removePage = (context: StudioStructureContext, candidate: Source, pageAlias: string): StudioStructureResult => {
   const page = context.source.body.pages.find((entry) => entry.id === pageAlias);
   if (page === undefined) return refuse("That page is no longer in the draft.");
-  const blocked = pageReferences(context, page);
-  if (blocked !== undefined) refuse(blocked);
+  // Everything outside the page that still names it refuses the removal; its menu entries go with it.
+  const where = applicationUses(context.source, { kind: "page", pageAlias }, (path) => path[1] === "navigation");
+  if (where.length > 0)
+    refuse(`The page ${quoted(page.name)} is still used in ${where.length === 1 ? "one place" : `${where.length} places`}, so it was not removed. Change those first.`, where);
   candidate.body.pages = candidate.body.pages.filter((entry) => entry.id !== pageAlias);
   candidate.body.navigation = withoutPageEntries(candidate.body.navigation, page.key);
   removeBlocks(context, candidate, sourcePageItems(page.composition), `The page ${quoted(page.name)}`);
@@ -337,7 +286,7 @@ export const applyStudioStructureCommand = (context: StudioStructureContext, com
       }
     }
   } catch (error) {
-    if (error instanceof StructureRefusal) return { kind: "refused", message: error.message };
+    if (error instanceof StructureRefusal) return { kind: "refused", message: error.message, where: error.where };
     throw error;
   }
 };

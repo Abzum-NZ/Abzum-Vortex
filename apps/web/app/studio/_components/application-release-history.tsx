@@ -10,7 +10,7 @@ import type { StudioApplicationHistoryFailure, StudioApplicationHistoryPage,
 import type { StudioApplicationRestoreCommandResult } from "../../_lib/studio-application-restore-contracts";
 import { listApplicationReleaseHistory, restoreApplicationRelease,
 } from "../[organizationId]/[applicationRootId]/history/actions";
-import { formatStudioTimestamp } from "./studio-time";
+import { FormattedTime } from "@vortex/ui";
 
 const snapshotIdentity = (snapshot: StudioApplicationHistorySnapshot) => JSON.stringify([
   snapshot.organizationId, snapshot.rootId, snapshot.definitionKey, snapshot.draftRevision,
@@ -176,7 +176,7 @@ export function ApplicationReleaseHistory({ initialPage, restoreBlocked, hold, o
       : <ol className="space-y-3" aria-busy={pending !== null}>
         {page.entries.map((entry) => <li key={entry.releaseRevision} className="space-y-2 rounded-xl border bg-card p-4 text-card-foreground">
           <p className="font-semibold">Version {entry.releaseVersion}{entry.isCurrent && <span className="font-normal text-muted-foreground"> · current version</span>}</p>
-          <p className="text-sm">Published <time dateTime={entry.publishedAt}>{formatStudioTimestamp(entry.publishedAt)}</time> by {author(entry)}</p>
+          <p className="text-sm">Published <FormattedTime iso={entry.publishedAt} /> by {author(entry)}</p>
           <div>
             <p className="text-sm font-medium">What changed</p>
             <p className="whitespace-pre-wrap break-words text-sm">{entry.releaseNote}</p>

@@ -9,12 +9,7 @@ import {
   includeFieldInStandardPermissions,
   standardPermissionKeys,
 } from "./module-field-shape";
-import {
-  describeSourcePlace,
-  walkSourceStrings,
-  type InlineRecordTypeReference,
-  type SourcePath,
-} from "./module-record-type-shape";
+import { applicationUses, describeSourcePlace, type ApplicationUsePlace } from "./application-uses";
 import { moduleFieldTypeLabels, type ModuleFieldType } from "./module-field-settings";
 import {
   enablePeopleDirectoryLinks,
@@ -27,7 +22,7 @@ import {
   type LinkCardinality,
   type PeopleDirectoryOwner,
 } from "./module-links";
-import { inlineChoiceOptionReferences, syncInlinePipelineStages } from "./module-pipeline-shape";
+import { syncInlinePipelineStages } from "./module-pipeline-shape";
 
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
@@ -239,7 +234,8 @@ export const changeInlineModuleField = (
       const before = (field.settings as { options: { value: string; label: string }[] }).options;
       const after = change.type === "choice" ? ((change.settings as { options?: { value: string }[] }).options ?? []) : [];
       for (const option of before.filter((entry) => !after.some((kept) => kept.value === entry.value))) {
-        const references = inlineChoiceOptionReferences(current, module.key, record.key, field.key, option.value);
+        const references = applicationUses(current,
+          { kind: "choice_option", moduleKey: module.key, recordKey: record.key, fieldKey: field.key, option: option.value });
         if (references.length > 0)
           return { kind: "invalid", issues: [`${label}: the option ${option.label} is used by ${references.map((reference) => reference.label).join(", ")}. ` +
             "Remove those uses before removing it."] };
@@ -256,109 +252,13 @@ export const changeInlineModuleField = (
   syncLinkRelationship(module, record, field, change.cardinality);
   syncInlinePipelineStages(record, field.key);
   if (isPersonLink(field)) {
-    const refused = enablePeopleDirectoryLinks(source, module, record, context.peopleDirectory);
+    const refused = enablePeopleDirectoryLinks(source, context.peopleDirectory);
     if (refused !== undefined) return { kind: "invalid", issues: [refused] };
   } else if (wasPersonLink) retirePeopleDirectoryLinks(source);
   const parsed = applicationSourceDocumentSchema.safeParse(source);
   if (!parsed.success)
     return { kind: "invalid", issues: locatedIssues(source, parsed.error.issues, moduleIndex, recordIndex, fieldIndex, label) };
   return { kind: "changed", source: parsed.data, fieldAlias: field.id, fieldKey: field.key };
-};
-
-/** Properties whose string values name fields of the record type in scope by their local key. */
-const fieldProperty = (key: string | undefined): boolean =>
-  key !== undefined && (/^(?:.*_)?fields?$/u.test(key) || key === "select" || key === "group_by" ||
-    key === "ownership_relationship" || key === "from_field");
-/** Properties that put a component in a record type's scope. */
-const scopeProperties: ReadonlySet<string> = new Set(["record_type", "recordTypeId", "record_types", "to_record_type", "to_record_types"]);
-
-const componentScoped = (value: unknown, local: string | undefined, qualified: string): boolean => {
-  let scoped = false;
-  walkSourceStrings(value, [], (text, _path, key) => {
-    if (key !== undefined && scopeProperties.has(key) && (text === qualified || (local !== undefined && text === local))) scoped = true;
-  });
-  return scoped;
-};
-
-/** Every object key under a value equal to `name`, inside a `values` or `field_values` map. */
-const mapKeyPaths = (value: unknown, name: string, path: SourcePath = [], parent?: string): SourcePath[] => {
-  if (Array.isArray(value)) return value.flatMap((item, index) => mapKeyPaths(item, name, [...path, index], parent));
-  if (value === null || typeof value !== "object") return [];
-  return Object.entries(value).flatMap(([key, child]) => [
-    ...((parent === "values" || parent === "field_values") && key === name ? [[...path, key]] : []),
-    ...mapKeyPaths(child, name, [...path, key], key),
-  ]);
-};
-
-/**
- * Every place in the Application source that uses one field of an owned inline Module: its
- * qualified reference or alias anywhere (pages, menus, search, flows and other modules), and its
- * local key in the components that work on its record type (other fields' settings, queries,
- * actions, rules and flows, non-standard permissions). Being the title field counts. The field
- * itself and the standard permissions' field lists (which follow it) do not.
- */
-export const inlineFieldReferences = (
-  source: ApplicationSourceDocument, moduleKey: string, recordKey: string, fieldKey: string,
-): readonly InlineRecordTypeReference[] => {
-  const moduleIndex = source.body.modules.findIndex((module) => module.key === moduleKey);
-  const module = source.body.modules[moduleIndex];
-  const recordIndex = module?.record_types.findIndex((record) => record.key === recordKey) ?? -1;
-  const record = module?.record_types[recordIndex];
-  const fieldIndex = record?.fields.findIndex((field) => field.key === fieldKey) ?? -1;
-  const field = record?.fields[fieldIndex];
-  if (module === undefined || record === undefined || field === undefined) return [];
-  const qualifiedRecord = `${moduleKey}:${recordKey}`;
-  const qualifiedNames = new Set([`${qualifiedRecord}.${fieldKey}`, field.id,
-    ...record.relationships.filter((relationship) => relationship.from_field === fieldKey)
-      .map((relationship) => `${qualifiedRecord}.${relationship.key}`)]);
-  const ownRelationshipIndexes = new Set(record.relationships.flatMap((relationship, index) =>
-    relationship.from_field === fieldKey ? [index] : []));
-  const standard = standardPermissionKeys(moduleKey, recordKey);
-  const found = new Map<string, InlineRecordTypeReference>();
-  const add = (path: SourcePath, label?: string) => {
-    const place = describeSourcePlace(source, path);
-    const named = label === undefined ? place : { ...place, label };
-    found.set(named.label, named);
-  };
-  const isSelf = (path: SourcePath): boolean =>
-    path[1] === "modules" && path[2] === moduleIndex && path[3] === "record_types" && path[4] === recordIndex &&
-    ((path[5] === "fields" && path[6] === fieldIndex) ||
-      (path[5] === "relationships" && typeof path[6] === "number" && ownRelationshipIndexes.has(path[6])));
-  const isStandardPolicy = (path: SourcePath): boolean => {
-    if (path[1] !== "modules" || path[2] !== moduleIndex || path[3] !== "permissions" || typeof path[4] !== "number") return false;
-    return standard.has(module.permissions[path[4]]!.key) && path[5] === "field_policy";
-  };
-  walkSourceStrings(source, [], (text, path) => {
-    if (qualifiedNames.has(text) && !isSelf(path)) add(path);
-  });
-  // The local key, in the components that work on this record type.
-  const scopes: Readonly<{ value: unknown; path: SourcePath }>[] = [
-    { value: record, path: ["body", "modules", moduleIndex, "record_types", recordIndex] },
-    ...(["permissions", "actions", "events", "flows", "extension_points", "sharing_conditions", "queries"] as const)
-      .flatMap((section) => (module[section] as unknown[]).flatMap((item, index) =>
-        componentScoped(item, recordKey, qualifiedRecord) ? [{ value: item, path: ["body", "modules", moduleIndex, section, index] }] : [])),
-    ...(["pages", "flows"] as const).flatMap((section) => (source.body[section] as unknown[]).flatMap((item, index) =>
-      componentScoped(item, undefined, qualifiedRecord) ? [{ value: item, path: ["body", section, index] }] : [])),
-    ...(source.body.search?.record_types ?? []).flatMap((item, index) =>
-      componentScoped(item, undefined, qualifiedRecord) ? [{ value: item, path: ["body", "search", "record_types", index] }] : []),
-  ];
-  for (const scope of scopes) {
-    walkSourceStrings(scope.value, scope.path, (text, path, key) => {
-      if (text !== fieldKey || !fieldProperty(key) || isSelf(path) || isStandardPolicy(path)) return;
-      if (path[5] === "title_field" && path.length === 6) add(path, `${record.name} names each record by it (its title field)`);
-      else add(path);
-    });
-    for (const path of mapKeyPaths(scope.value, fieldKey, scope.path)) add(path);
-  }
-  // A total of another record type adds up this field of its related records.
-  source.body.modules.forEach((other, otherIndex) => other.record_types.forEach((otherRecord, otherRecordIndex) =>
-    otherRecord.fields.forEach((candidate, candidateIndex) => {
-      const settings = candidate.settings as { relationship?: string; field?: string };
-      if (candidate.type === "total" && settings.field === fieldKey &&
-          (otherIndex !== moduleIndex || otherRecordIndex !== recordIndex))
-        add(["body", "modules", otherIndex, "record_types", otherRecordIndex, "fields", candidateIndex]);
-    })));
-  return [...found.values()];
 };
 
 /**
@@ -369,14 +269,14 @@ export const inlineFieldReferences = (
 export const deleteInlineModuleField = (
   current: ApplicationSourceDocument, moduleKey: string, recordKey: string, fieldKey: string,
   publication: ModuleFieldPublication,
-): InlineModuleFieldChangeResult | Readonly<{ kind: "referenced"; references: readonly InlineRecordTypeReference[] }> => {
+): InlineModuleFieldChangeResult | Readonly<{ kind: "referenced"; references: readonly ApplicationUsePlace[] }> => {
   const source = structuredClone(current);
   const module = source.body.modules.find((item) => item.key === moduleKey);
   const record = module?.record_types.find((item) => item.key === recordKey);
   const field = record?.fields.find((item) => item.key === fieldKey);
   if (module === undefined || record === undefined || field === undefined)
     return { kind: "invalid", issues: ["The field is not in this record type any more."] };
-  const references = inlineFieldReferences(current, moduleKey, recordKey, fieldKey);
+  const references = applicationUses(current, { kind: "field", moduleKey, recordKey, fieldKey });
   if (references.length > 0) return { kind: "referenced", references };
   if (publication.fields.has(`${moduleKey}:${recordKey}.${fieldKey}`))
     return { kind: "invalid", issues: [`${field.label} is in a published version, so it can't be removed: ` +

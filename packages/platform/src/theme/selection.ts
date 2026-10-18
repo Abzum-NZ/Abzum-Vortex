@@ -35,8 +35,7 @@ import type {
  * those keys are copied, so a later dimension overrides an earlier one where their keys overlap:
  * the base colour lays the complete neutral palette (including chart pairs), the theme colour then
  * sets the brand and chart pairs, the chart colour then sets the five chart pairs, and the radius
- * sets the base corner. Authored token overrides are applied last, then contrast and focus are
- * checked on the result.
+ * sets the base corner. Contrast and focus are checked on the result.
  */
 const TOKEN_DIMENSION_ORDER = ["baseColor", "theme", "chartColor", "radius"] as const;
 
@@ -56,8 +55,6 @@ export type ThemeSelectionResolutionInput = Readonly<{
   baseTokens: Readonly<Record<string, ThemeTokenValue>>;
   /** The authored catalogue selection, including its icon library. */
   selection: ApplicationThemeSelection;
-  /** Already-canonical token overrides applied after the selection. */
-  overrides?: Readonly<Record<string, ThemeTokenValue>> | undefined;
   options?: ThemeResolutionOptions | undefined;
 }>;
 
@@ -181,9 +178,8 @@ export function validateThemeSelectionOptions(
 /**
  * Resolves a catalogue selection into the complete token set and the style id. It refuses a
  * selection over any release other than the catalogue's base release, an unknown option id, a
- * refused option, a missing or extra dimension, and a token override whose key, kind or colour
- * role the selected theme does not allow. The resolved tokens then pass the same contrast and
- * focus checks publication runs, so an override cannot hide focus or lower required contrast.
+ * refused option, or a missing or extra dimension. The resolved tokens pass the same contrast and
+ * focus checks publication runs.
  *
  * The selected body and heading fonts become the families of the `body` and `heading` typography
  * tokens. The selection is required: an absent one is refused by the caller, never defaulted here.
@@ -195,17 +191,6 @@ export function resolveThemeSelection(
   const ruleFailures: DefinitionRuleFailure[] = [];
   const documentKey = input.options?.documentKey;
   const addSelectionFailure = selectionFailureSink(failures, ruleFailures, documentKey);
-  const addTokenFailure = (params: {
-    code: string;
-    family: "invalid_value" | "broken_reference";
-    message: string;
-    tokenKey: string;
-  }): void => {
-    const located = createLocatedFailure({ ...params, documentKey });
-    failures.push(located.failure);
-    ruleFailures.push(located.ruleFailure);
-  };
-
   const tokens: Record<string, ThemeTokenValue> = { ...input.baseTokens };
   const parsedSelection = applicationThemeSelectionSchema.safeParse(input.selection);
   if (!parsedSelection.success) {
@@ -252,7 +237,7 @@ export function resolveThemeSelection(
 
   // The selected fonts become the families of the `body` and `heading` typography tokens, so the
   // theme bridge and the renderer's font loading read one decision. Size, line height and weight
-  // stay the release's, and an authored override of either token still applies below.
+  // stay the release's.
   const fonts = resolveShadcnFontSelection(selection);
   for (const [key, font] of [
     ["body", fonts.body],
@@ -260,45 +245,6 @@ export function resolveThemeSelection(
   ] as const) {
     const token = tokens[key];
     if (token?.kind === "typography") tokens[key] = { ...token, family: shadcnFontFamilyKey(font) };
-  }
-
-  for (const key of Object.keys(input.overrides ?? {}).sort()) {
-    const override = input.overrides?.[key];
-    if (override === undefined) continue;
-    const inherited = tokens[key];
-    if (inherited === undefined) {
-      addTokenFailure({
-        code: "UNKNOWN_TOKEN_OVERRIDE",
-        family: "broken_reference",
-        message: `Theme token override references unknown token "${key}"`,
-        tokenKey: key,
-      });
-      continue;
-    }
-    if (inherited.kind !== override.kind) {
-      addTokenFailure({
-        code: "TOKEN_KIND_MISMATCH",
-        family: "broken_reference",
-        message: `Theme token override for "${key}" has kind "${override.kind}" but the selected theme token has kind "${inherited.kind}"`,
-        tokenKey: key,
-      });
-      continue;
-    }
-    if (override.kind === "color_pair" && inherited.kind === "color_pair") {
-      if (override.role !== undefined && override.role !== inherited.role) {
-        addTokenFailure({
-          code: "COLOR_ROLE_OVERRIDE",
-          family: "invalid_value",
-          message: `Theme token override for "${key}" cannot change the colour role declared by the catalogue`,
-          tokenKey: key,
-        });
-        continue;
-      }
-      tokens[key] =
-        inherited.role === undefined ? override : { ...override, role: inherited.role };
-      continue;
-    }
-    tokens[key] = override;
   }
 
   if (failures.length === 0) {

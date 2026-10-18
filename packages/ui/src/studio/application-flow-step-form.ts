@@ -191,6 +191,8 @@ export type StudioFlowPropertyField = Readonly<{
   entries?: readonly StudioFlowNamedEntry[];
   /** For field values: the fields of the step's record type. */
   fields?: readonly StudioFlowRecordField[];
+  /** For a field: the fields it can name, each stored as `<record type>.<field>`. */
+  options?: readonly Readonly<{ value: string; label: string }>[];
   help?: string;
 }>;
 
@@ -235,6 +237,7 @@ const propertyLabels: Readonly<Record<string, string>> = {
   action_inputs: "Inputs of the action it runs", page: "Page", parameters: "Page parameters", operation: "Operation",
   inputs: "Inputs", form: "Form", message: "Message", tone: "Tone", title: "Title", component: "Component",
   query: "Query", flow: "Flow", formula: "Calculation", variable: "Variable", value: "Value", field: "Field",
+  details: "What it covers (list of lines)", choice: "Opt-in that goes with a yes", confirm_label: "Confirm button",
 };
 
 const controlFor = (type: FlowTaskPropertyType): StudioFlowPropertyControl | undefined => {
@@ -278,6 +281,15 @@ const recordFields = (source: Readonly<ApplicationSourceDocument>, reference: st
 const stepRecordType = (flow: SourceFlow, properties: Readonly<Record<string, FlowValue>>): string | undefined =>
   literalText(properties.record_type) ?? (flow.execution === "transaction"
     ? (flow.triggers ?? []).flatMap((trigger) => "recordTypeId" in trigger ? [trigger.recordTypeId] : [])[0] : undefined);
+
+/** The fields a field setting can name: of the step's record type, or of the record the flow runs for. */
+const fieldOptions = (source: Readonly<ApplicationSourceDocument>, flow: SourceFlow, moduleKey: string | null,
+  properties: Readonly<Record<string, FlowValue>>): readonly Readonly<{ value: string; label: string }>[] | undefined => {
+  const recordType = stepRecordType(flow, properties) ?? (flow.triggers ?? []).flatMap((trigger) =>
+    "recordTypeId" in trigger ? [trigger.recordTypeId] : [])[0] ??
+    (flow.recordInput === undefined ? undefined : flow.inputs?.[flow.recordInput]?.recordTypeIds?.[0]);
+  return recordFields(source, recordType, moduleKey)?.map((field) => ({ value: `${recordType}.${field.key}`, label: field.label }));
+};
 
 /** The named action whose choice option a Save record step saves, when it saves exactly one owned option. */
 const ownedOptionAction = (choices: StudioFlowDraftChoices, source: Readonly<ApplicationSourceDocument>,
@@ -398,13 +410,14 @@ export const projectStudioFlowStepForm = (
     const control = controlFor(declaration.type)!;
     const entries = control === "input_map" ? expectedEntries(task, key, choices, source) : undefined;
     const recordFieldList = control === "field_values" ? recordFields(source, recordType, moduleKey) : undefined;
+    const options = control === "field" ? fieldOptions(source, flow, moduleKey, task.properties) : undefined;
     const valueType = control === "value" && declaration.type !== "any_value" && declaration.type !== "record_change_list"
       ? declaration.type : control === "message" ? "text" : undefined;
     const hint = help[`${task.type} ${key}`];
     return { key, label: propertyLabels[key] ?? studioWords(key), required: declaration.required, control, valueType,
       ...(declaration.type === "builder_key" || declaration.type === "namespaced_key" ? { keyType: declaration.type } : {}),
       ...(entries === undefined ? {} : { entries }), ...(recordFieldList === undefined ? {} : { fields: recordFieldList }),
-      ...(hint === undefined ? {} : { help: hint }) };
+      ...(options === undefined ? {} : { options }), ...(hint === undefined ? {} : { help: hint }) };
   });
   const properties = Object.fromEntries(Object.entries(definition.properties).map(([key, declaration]) => [key,
     Object.hasOwn(task.properties, key) ? propertyDraft(declaration.type, task.properties[key]!) : null]));

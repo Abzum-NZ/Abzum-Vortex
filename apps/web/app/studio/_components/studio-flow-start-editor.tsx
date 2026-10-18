@@ -15,9 +15,10 @@ import {
 import { useStudioDraftText } from "./use-studio-draft-text";
 
 /**
- * The Start node's inspector: how the flow starts. Its name, the inputs it declares, where each
- * input comes from when a control starts it, and its record triggers. Each change is one flow edit,
- * taken by the draft as it is made; text that is not valid yet stays in its control with the problem.
+ * The Start node's inspector: how the flow starts. Its name, the inputs it declares, the record it
+ * runs for, where each input comes from when a control starts it, and its record triggers. Each
+ * change is one flow edit, taken by the draft as it is made; text that is not valid yet stays in its
+ * control with the problem.
  */
 
 const typeLabels: Readonly<Record<string, string>> = {
@@ -126,6 +127,7 @@ export function StudioFlowStartEditor({ projection, recordTypes, controlLabel, d
     return result;
   };
   const setInputs = (inputs: readonly StudioFlowInputDraft[], setting?: string) => change({ ...shown, inputs,
+    recordInput: inputs.some((input) => input.id === shown.recordInput) ? shown.recordInput : null,
     bindings: shown.bindings.map((binding) => ({ ...binding, inputs: Object.fromEntries(inputs.map((input) =>
       [input.id, binding.inputs[input.id] ?? { kind: "none" as const }])) })) }, setting);
   return <section className="space-y-4" aria-label="How it starts">
@@ -188,6 +190,18 @@ export function StudioFlowStartEditor({ projection, recordTypes, controlLabel, d
         }}>
         Add an input</Button>
     </fieldset>
+    {projection.execution === "interactive" && <div className="space-y-1.5">
+      <Label htmlFor="flow-start-record">Runs for</Label>
+      <NativeSelect id="flow-start-record" className="w-full" disabled={disabled} value={shown.recordInput ?? ""}
+        onChange={(event) => change({ ...shown, recordInput: event.target.value === "" ? null : event.target.value })}>
+        <NativeSelectOption value="">No record</NativeSelectOption>
+        {shown.inputs.filter((input) => input.type === "record_reference").map((input) =>
+          <NativeSelectOption key={input.id} value={input.id}>{`The record in ${studioWords(input.name)}${input.recordType === null ? ""
+            : ` (${recordTypes.find((entry) => entry.key === input.recordType)?.label ?? input.recordType})`}`}</NativeSelectOption>)}
+      </NativeSelect>
+      <p className="text-xs text-muted-foreground">Its steps read the fields of this record, such as its stage, as the person may see them
+        when the flow runs.</p>
+    </div>}
     {problem === "" ? null : <p role="alert" className="text-sm text-destructive">{problem}</p>}
   </section>;
 }

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   applicationSourceDocumentSchema, canonicalJson, describeFailure, prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
-  type DefinitionPublicationConfirmation, type PublishDefinitionResult,
+  type DefinitionPublicationConfirmation,
 } from "@vortex/platform/schema";
 import { prepareStudioApplicationPublication, publishStudioApplication } from "../actions";
 import { previewStudioApplication } from "../preview-actions";
@@ -54,12 +54,12 @@ const publicationProblemText = (kind: string, reason: string | undefined, blockA
  * of them first lets the latest edits finish saving, because only the saved draft is published,
  * previewed or restored over.
  */
-export function useStudioReleasesTab({ draft, hidden, initialSection, blocked }: Readonly<{
+export function useStudioReleasesTab({ draft, hidden, initialSection, appStoreHref }: Readonly<{
   draft: StudioDraft;
   hidden: boolean;
+  /** The App Store, where a published version is installed or upgraded to; absent when its address is unknown. */
+  appStoreHref: string | undefined;
   initialSection: StudioReleasesSection;
-  /** Why the saved draft cannot be published now (a canvas setting the platform refuses), or undefined. */
-  blocked: string | undefined;
 }>) {
   const { organizationId, history } = draft;
   const latest = useRef(draft);
@@ -69,7 +69,9 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, blocked }:
   const [note, setNote] = useState("");
   const [problem, setProblem] = useState("");
   const [preparing, setPreparing] = useState(false);
-  const [published, setPublished] = useState<PublishDefinitionResult | null>(null);
+  // A new version closes Publish, is named in the top bar with the App Store link, and reloads the history.
+  const [offerAppStore, setOfferAppStore] = useState(false);
+  const [historyGeneration, setHistoryGeneration] = useState(0);
   const [prepared, setPreparedState] = useState<PreparedPublication | null>(null);
   const [previewPending, setPreviewPending] = useState(false);
   const [notice, setNotice] = useState("");
@@ -145,7 +147,10 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, blocked }:
         parsed.data.contentFingerprint === confirmation.contentFingerprint &&
         parsed.data.resolutionFingerprint === confirmation.resolutionFingerprint &&
         canonicalJson(parsed.data.dependencyManifest) === canonicalJson(confirmation.dependencyManifest)) {
-        setPublished(parsed.data);
+        setNotice(`Version ${parsed.data.releaseVersion} published.`);
+        setOfferAppStore(true);
+        setHistoryGeneration((generation) => generation + 1);
+        closePublish(false);
         return { kind: "published", publication: parsed.data };
       }
       if (result.kind === "available") {
@@ -175,7 +180,7 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, blocked }:
 
   const openPublish = () => {
     setProblem("");
-    setPublished(null);
+    setOfferAppStore(false);
     setNote("");
     setPublishOpen(true);
     void latest.current.flush();
@@ -256,7 +261,7 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, blocked }:
   const panel = <StudioReleasesPanel hidden={hidden} section={section} onSection={setSection} savedStateLabel={draft.chip} />;
   const centre: ReactNode = <>
     {!hidden && section === "history" &&
-      <StudioHistoryTab organizationId={organizationId} rootId={draft.state.rootId} savedRevision={draft.saved.draftRevision}
+      <StudioHistoryTab key={historyGeneration} organizationId={organizationId} rootId={draft.state.rootId} savedRevision={draft.saved.draftRevision}
         restoreBlocked={restoreBlocked} hold={(on) => draft.hold("restoring", on)}
         onRestored={(restored) => { void draft.reload().then((loaded) => setNotice(loaded ? restored
           : "The version was restored, but the restored draft could not be loaded here. Reload Studio to see it.")); }} />}
@@ -274,15 +279,17 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, blocked }:
   const notSaved = draft.status.kind === "conflict" || draft.status.kind === "refused" ? draft.status.message : "";
   const dialog = <StudioPublishDialog open={publishOpen} onOpenChange={closePublish}
     saving={draft.status.kind === "saving" || draft.status.kind === "failed"} notSaved={notSaved}
-    canPrepare={readSnapshot() !== null && blocked === undefined} preparing={preparing}
+    canPrepare={readSnapshot() !== null} preparing={preparing}
     publishing={draft.isHeld("publication") && !preparing}
     prepared={prepared} note={note} onNoteChange={setNote}
-    problem={blocked ?? problem} published={published}
+    problem={problem}
     onPrepare={() => { void requestPublication("prepare"); }}
     onPublish={() => { void requestPublication("publish"); }} />;
 
   return {
     panel, centre, title, dialog, notice,
+    noticeLink: offerAppStore && appStoreHref !== undefined
+      ? { label: "Open in App Store to install or upgrade", href: appStoreHref } : undefined,
     openPublish, openPreview: () => { void openPreview(); }, previewPending,
     agent: {
       readPreparedConfirmation: () => preparedRef.current?.confirmation,

@@ -1,8 +1,8 @@
 "use client";
+import { FormattedTime } from "@vortex/ui";
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
 import type { StudioSaveStatus } from "./use-studio-draft";
-import { formatStudioTimestamp } from "./studio-time";
 
 /** How many changed areas the conflict names before it says how many more there are. */
 const shownChanges = 6;
@@ -31,7 +31,7 @@ export function StudioSaveProblem({ status, loading, loadFailed, onLoadLatest }:
   return <Alert variant="destructive" role="alert" className="mx-3 mb-2 w-auto">
     <AlertTitle>Not saved: this draft was changed elsewhere</AlertTitle>
     <AlertDescription className="space-y-2">
-      <p>{status.message}{status.changedAt === null ? "" : <> They saved it <time dateTime={status.changedAt}>{formatStudioTimestamp(status.changedAt)}</time>.</>}</p>
+      <p>{status.message}{status.changedAt === null ? "" : <> They saved it <FormattedTime iso={status.changedAt} />.</>}</p>
       {status.changes.length > 0 && <>
         <p>What they changed:</p>
         <ul className="list-disc pl-5">

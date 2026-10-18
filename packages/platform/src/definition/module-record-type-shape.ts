@@ -7,6 +7,7 @@ import {
   changeableByPeople, deriveFieldKey, standardPermissionKey,
   standardPermissionKeys, standardRecordActions as standardActions,
 } from "./module-field-shape";
+import { applicationUses, type ApplicationUsePlace } from "./application-uses";
 
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
@@ -181,7 +182,7 @@ export const createInlineRecordType = (
   const record = {
     id: uniqueAlias(`rt_${key}`, taken), key, name, plural_name: pluralName, title_field: titleKey,
     storage_contract_id: uniqueAlias(`srt_${aliasPart(module.key)}_${key}`, taken),
-    storage_scope: "organisation_shared", ownership_mode: "group",
+    storage_scope: "organization_shared", ownership_mode: "group",
     standard_actions: standardActions.map((entry) => entry.action), custom_actions: [], fields, pipelines: [], relationships: [],
   } as unknown as RecordType;
   module.record_types.push(record);
@@ -250,140 +251,6 @@ export const renameInlineModule = (
   return parsedResult(source, module.key, "");
 };
 
-/** Where a record type is used, named for a person, with what Studio can open to show it. */
-export type InlineRecordTypeReference = Readonly<{
-  label: string;
-  open:
-    | Readonly<{ kind: "record_type"; moduleKey: string; recordKey: string; fieldKey?: string }>
-    | Readonly<{ kind: "query"; moduleKey: string; queryKey: string }>
-    | Readonly<{ kind: "page"; pageAlias: string }>
-    | Readonly<{ kind: "flow"; flowAlias: string; moduleKey: string | null }>
-    | Readonly<{ kind: "menu"; navigationAlias: string }>
-    | Readonly<{ kind: "none" }>;
-}>;
-
-export type SourcePath = readonly (string | number)[];
-type Path = SourcePath;
-type Visit = (text: string, path: Path, key: string | undefined) => void;
-
-/** Visits every string under a value with its path and the property it sits in. */
-export const walkSourceStrings = (value: unknown, path: Path, visit: Visit, key?: string): void => {
-  if (typeof value === "string") visit(value, path, key);
-  else if (Array.isArray(value)) value.forEach((item, index) => walkSourceStrings(item, [...path, index], visit, key));
-  else if (value !== null && typeof value === "object")
-    for (const [childKey, child] of Object.entries(value)) walkSourceStrings(child, [...path, childKey], visit, childKey);
-};
-
-const at = (value: unknown, path: Path): unknown =>
-  path.reduce<unknown>((node, segment) => (node as Record<string | number, unknown> | undefined)?.[segment], value);
-
-const navigationAt = (source: ApplicationSourceDocument, path: Path): { id?: string; label?: string } | undefined => {
-  let node: unknown = source.body.navigation;
-  let found: { id?: string; label?: string } | undefined;
-  for (let index = 2; index < path.length; index += 1) {
-    const segment = path[index]!;
-    node = (node as Record<string | number, unknown> | undefined)?.[segment];
-    if (typeof segment === "number" && node !== null && typeof node === "object") found = node as { id?: string; label?: string };
-  }
-  return found;
-};
-
-/** Names the place in the source a reference sits at, with what Studio can open to show it. */
-export const describeSourcePlace = (source: ApplicationSourceDocument, path: Path): InlineRecordTypeReference => {
-  const [, section, index] = path;
-  const body = source.body;
-  if (section === "modules" && typeof index === "number") {
-    const module = body.modules[index]!;
-    const [, , , part, partIndex, child, childIndex] = path;
-    if (part === "record_types" && typeof partIndex === "number") {
-      const record = module.record_types[partIndex]!;
-      if (child === "pipelines" && typeof childIndex === "number")
-        return { label: `Pipeline ${record.pipelines[childIndex]!.name} of ${record.name}`,
-          open: { kind: "record_type", moduleKey: module.key, recordKey: record.key } };
-      const field = child === "fields" && typeof childIndex === "number" ? record.fields[childIndex]
-        : child === "relationships" && typeof childIndex === "number"
-          ? record.fields.find((item) => item.key === record.relationships[childIndex]?.from_field) : undefined;
-      return field === undefined
-        ? { label: `Record type ${record.name}`, open: { kind: "record_type", moduleKey: module.key, recordKey: record.key } }
-        : { label: `Field ${field.label} of ${record.name}`, open: { kind: "record_type", moduleKey: module.key, recordKey: record.key, fieldKey: field.key } };
-    }
-    const item = typeof partIndex === "number" ? at(module, [part!, partIndex]) as Record<string, unknown> | undefined : undefined;
-    const itemName = typeof item?.label === "string" ? item.label : typeof item?.name === "string" ? item.name
-      : typeof item?.key === "string" ? String(item.key).replace(`${module.key}.`, "").replace(/[._]+/g, " ") : "";
-    switch (part) {
-      case "queries":
-        return { label: `Query ${itemName}`, open: { kind: "query", moduleKey: module.key, queryKey: String(item?.key ?? "") } };
-      case "permissions": return { label: `Permission ${itemName} in ${module.name}`, open: { kind: "none" } };
-      case "actions": return { label: `Action ${itemName} in ${module.name}`,
-        open: typeof item?.record_type === "string" ? { kind: "record_type", moduleKey: module.key, recordKey: item.record_type } : { kind: "none" } };
-      case "events": return { label: `Event ${itemName} in ${module.name}`, open: { kind: "none" } };
-      case "flows": return { label: `Rule or flow ${itemName} in ${module.name}`,
-        open: typeof item?.id === "string" ? { kind: "flow", flowAlias: item.id, moduleKey: module.key } : { kind: "none" } };
-      case "extension_points": return { label: `Extension point ${itemName} in ${module.name}`, open: { kind: "none" } };
-      case "sharing_conditions": return { label: `Sharing condition ${itemName} in ${module.name}`, open: { kind: "none" } };
-      default: return { label: `Module ${module.name}`, open: { kind: "none" } };
-    }
-  }
-  if (section === "pages" && typeof index === "number") {
-    const page = body.pages[index]!;
-    return { label: `Page ${page.name}`, open: { kind: "page", pageAlias: page.id } };
-  }
-  if (section === "flows" && typeof index === "number") {
-    const flow = body.flows[index]!;
-    return { label: `Flow ${Object.values(flow.labels)[0] ?? flow.key.replaceAll("_", " ")}`, open: { kind: "flow", flowAlias: flow.id, moduleKey: null } };
-  }
-  if (section === "navigation") {
-    const entry = navigationAt(source, path);
-    return { label: `Menu entry ${entry?.label ?? ""}`.trim(),
-      open: entry?.id === undefined ? { kind: "none" } : { kind: "menu", navigationAlias: entry.id } };
-  }
-  if (section === "shells" && typeof index === "number") return { label: `Layout ${body.shells[index]!.name}`, open: { kind: "none" } };
-  if (section === "search") return { label: "Search settings", open: { kind: "none" } };
-  if (section === "permissions" && typeof index === "number") return { label: `Permission ${body.permissions[index]!.label}`, open: { kind: "none" } };
-  if (section === "events") return { label: "A form event of the application", open: { kind: "none" } };
-  if (section === "roles" && typeof index === "number") return { label: `Access group ${body.roles[index]!.name}`, open: { kind: "none" } };
-  return { label: "An application setting", open: { kind: "none" } };
-};
-
-const localRecordProperties: ReadonlySet<string> = new Set(["record_type", "to_record_type", "to_record_types", "record_types"]);
-
-/**
- * Every place in the Application source that uses one record type of an owned Module, except the
- * record type itself and its own standard permissions (which are removed with it). A query of the
- * record type counts, and so does each page, flow or menu entry that uses such a query.
- */
-export const inlineRecordTypeReferences = (
-  source: ApplicationSourceDocument, moduleKey: string, recordKey: string,
-): readonly InlineRecordTypeReference[] => {
-  const moduleIndex = source.body.modules.findIndex((module) => module.key === moduleKey);
-  const module = source.body.modules[moduleIndex];
-  const recordIndex = module?.record_types.findIndex((record) => record.key === recordKey) ?? -1;
-  if (module === undefined || recordIndex < 0) return [];
-  const qualified = `${moduleKey}:${recordKey}`;
-  const ownPermissions = standardPermissionKeys(moduleKey, recordKey);
-  const ownPermissionIndexes = new Set(module.permissions.flatMap((permission, index) =>
-    ownPermissions.has(permission.key) ? [index] : []));
-  const queryReferences = new Set(module.queries.filter((query) => query.record_type === recordKey || query.record_type === qualified)
-    .map((query) => `${moduleKey}:${query.key}`));
-  const found = new Map<string, InlineRecordTypeReference>();
-  const isOwn = (path: Path): boolean =>
-    path[1] === "modules" && path[2] === moduleIndex &&
-    ((path[3] === "record_types" && path[4] === recordIndex) ||
-      (path[3] === "permissions" && typeof path[4] === "number" && ownPermissionIndexes.has(path[4])));
-  walkSourceStrings(source, [], (text, path, key) => {
-    if (isOwn(path)) return;
-    // Access groups list the standard permissions, which are removed with the record type.
-    if (path[1] === "roles" && ownPermissions.has(text)) return;
-    const inOwningModule = path[1] === "modules" && path[2] === moduleIndex;
-    const uses = text === qualified || text.startsWith(`${qualified}.`) || ownPermissions.has(text) ||
-      queryReferences.has(text) || (inOwningModule && key !== undefined && localRecordProperties.has(key) && text === recordKey);
-    if (!uses) return;
-    const place = describeSourcePlace(source, path);
-    found.set(place.label, place);
-  });
-  return [...found.values()];
-};
-
 /**
  * The Application source without one record type of an owned Module. It is refused while anything
  * else uses the record type. Its standard permissions go with it; its Module stays, empty when
@@ -391,8 +258,8 @@ export const inlineRecordTypeReferences = (
  */
 export const deleteInlineRecordType = (
   current: ApplicationSourceDocument, moduleKey: string, recordKey: string,
-): InlineRecordTypeResult | Readonly<{ kind: "referenced"; references: readonly InlineRecordTypeReference[] }> => {
-  const references = inlineRecordTypeReferences(current, moduleKey, recordKey);
+): InlineRecordTypeResult | Readonly<{ kind: "referenced"; references: readonly ApplicationUsePlace[] }> => {
+  const references = applicationUses(current, { kind: "record_type", moduleKey, recordKey });
   if (references.length > 0) return { kind: "referenced", references };
   const source = structuredClone(current);
   const module = source.body.modules.find((item) => item.key === moduleKey);

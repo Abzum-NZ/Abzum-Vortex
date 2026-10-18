@@ -106,70 +106,6 @@ export const themeTokenValueSchema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
-export const sourceThemeTokenValueSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: sourceProvenanceUnchanged(z.literal("color_pair")),
-      light: sourceProvenanceUnchanged(themeColorSchema),
-      dark: sourceProvenanceUnchanged(themeColorSchema),
-    })
-    .strict(),
-  z
-    .object({
-      kind: sourceProvenanceUnchanged(z.literal("typography")),
-      family: sourceProvenanceUnchanged(builderKeySchema),
-      size_rem: sourceProvenanceUnchanged(positiveFiniteSchema),
-      line_height: sourceProvenanceUnchanged(positiveFiniteSchema),
-      weight: sourceProvenanceUnchanged(z.number().int().min(100).max(900)),
-    })
-    .strict(),
-  z
-    .object({
-      kind: sourceProvenanceUnchanged(z.literal("spacing")),
-      rem: sourceProvenanceUnchanged(nonNegativeFiniteSchema),
-    })
-    .strict(),
-  z
-    .object({
-      kind: sourceProvenanceUnchanged(z.literal("corners")),
-      rem: sourceProvenanceUnchanged(nonNegativeFiniteSchema),
-    })
-    .strict(),
-  z
-    .object({
-      kind: sourceProvenanceUnchanged(z.literal("border")),
-      width_rem: sourceProvenanceUnchanged(nonNegativeFiniteSchema),
-      style: sourceProvenanceUnchanged(z.enum(["solid", "dashed"])),
-      color_token: sourceProvenanceUnchanged(builderKeySchema),
-    })
-    .strict(),
-  z
-    .object({
-      kind: sourceProvenanceUnchanged(z.literal("elevation")),
-      level: sourceProvenanceUnchanged(z.number().int().nonnegative()),
-    })
-    .strict(),
-  z
-    .object({
-      kind: sourceProvenanceUnchanged(z.literal("focus")),
-      color_token: sourceProvenanceUnchanged(builderKeySchema),
-      width_rem: sourceProvenanceUnchanged(positiveFiniteSchema),
-    })
-    .strict(),
-  z
-    .object({
-      kind: sourceProvenanceUnchanged(z.literal("asset")),
-      asset_id: sourceProvenanceUnchanged(platformIdSchema),
-    })
-    .strict(),
-  z
-    .object({
-      kind: sourceProvenanceUnchanged(z.literal("density")),
-      value: sourceProvenanceUnchanged(z.enum(["compact", "comfortable"])),
-    })
-    .strict(),
-]);
-
 export const exactPlatformThemeDependencySchema = z
   .object({
     kind: sourceProvenanceUnchanged(z.literal("platform_theme")),
@@ -317,11 +253,7 @@ const applicationThemeLoaderMarkSchema = z
   })
   .strict();
 
-const loaderMarkCoordinateSchema = z
-  .number()
-  .finite()
-  .min(0)
-  .max(LOADER_MARK_BOX_SIZE);
+const loaderMarkCoordinateSchema = z.number().finite().min(0).max(LOADER_MARK_BOX_SIZE);
 
 /**
  * The authored loader mark. A publication with more than 12 segments, a coordinate outside the
@@ -373,9 +305,6 @@ export const sourceApplicationThemeSchema = z
   .object({
     base: sourceProvenanceUnchanged(sourceExactPlatformThemeDependencySchema),
     selection: sourceProvenanceUnchanged(sourceApplicationThemeSelectionSchema),
-    token_overrides: sourceProvenanceUnchanged(
-      z.record(builderKeySchema, sourceThemeTokenValueSchema),
-    ),
     loader_mark: sourceProvenanceUnchanged(sourceApplicationThemeLoaderMarkSchema.optional(), true),
   })
   .strict();

@@ -1,12 +1,11 @@
 "use client";
 import { useState, type FormEvent } from "react";
 import {
-  deleteInlinePipeline, inlineActionSetsOption, inlineChoiceOptionReferences, inlineOptionOwner, pipelineStageTones,
-  saveInlinePipeline, type ApplicationSourceDocument, type InlinePipelineChange, type InlineRecordTypeReference,
+  applicationUses, deleteInlinePipeline, inlineActionSetsOption, inlineOptionOwner, pipelineStageTones,
+  saveInlinePipeline, type ApplicationSourceDocument, type ApplicationUsePlace, type InlinePipelineChange,
   type ModuleFieldPublication, type PipelineStageTone,
 } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
-import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
@@ -20,6 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ActionDialog } from "./studio-module-actions";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
+import { StudioReferencesAlert, StudioUsedIn } from "./studio-used-in";
 
 /**
  * The pipelines of a record type, on the Data tab: each follows one choice field, whose options are
@@ -33,7 +33,7 @@ type Module = Source["body"]["modules"][number];
 type RecordType = Module["record_types"][number];
 type Pipeline = RecordType["pipelines"][number];
 type Option = Readonly<{ value: string; label: string }>;
-type Refusal = Readonly<{ issue: string; references: readonly InlineRecordTypeReference[] }>;
+type Refusal = Readonly<{ name?: string; issue: string; references: readonly ApplicationUsePlace[] }>;
 
 const toneLabels: Readonly<Record<PipelineStageTone, string>> = {
   neutral: "Neutral", primary: "Primary", destructive: "Alert", chart_1: "Chart colour 1", chart_2: "Chart colour 2",
@@ -61,28 +61,6 @@ const gatesOf = (module: Module, record: RecordType, fieldKey: string): Record<s
     const owner = inlineOptionOwner(module, record, fieldKey, value)?.key;
     return owner === undefined ? [] : [[value, owner]];
   }));
-
-function Where({ references, onShow, label }: Readonly<{
-  references: readonly InlineRecordTypeReference[]; onShow: (reference: InlineRecordTypeReference) => void; label: string;
-}>) {
-  const [showing, setShowing] = useState(false);
-  return <div className="space-y-2">
-    <Button type="button" size="xs" variant="outline" aria-expanded={showing} onClick={() => setShowing(!showing)}>
-      {showing ? "Hide where" : "Show me where"}</Button>
-    {showing && <ul className="list-disc space-y-1 pl-5" aria-label={label}>{references.map((reference) =>
-      <li key={reference.label} className="break-words">{reference.open.kind === "none" ? reference.label
-        : <Button type="button" variant="link" size="sm" className="h-auto whitespace-normal p-0 text-left"
-          onClick={() => onShow(reference)}>{reference.label}</Button>}</li>)}</ul>}
-  </div>;
-}
-
-function Refused({ refusal, label, onShow }: Readonly<{ refusal: Refusal; label: string; onShow: (reference: InlineRecordTypeReference) => void }>) {
-  return <Alert variant="destructive" role="alert">
-    <AlertTitle>Refused</AlertTitle>
-    <AlertDescription className="space-y-2"><p>{refusal.issue}</p>
-      <Where references={refusal.references} label={label} onShow={onShow} /></AlertDescription>
-  </Alert>;
-}
 
 function Problems({ issues }: Readonly<{ issues: readonly string[] }>) {
   return issues.length === 0 ? null : <ul role="alert" className="space-y-1 text-sm text-destructive">
@@ -144,9 +122,9 @@ function NewPipelineDialog({ module, record, publication, edit, onClose, onCreat
 }
 
 /** One pipeline: each change of its name, stages, moves and gates is one edit of the draft at once. */
-function PipelineDialog({ source, module, record, pipeline, publication, edit, onClose, onShow }: Readonly<{
+function PipelineDialog({ source, module, record, pipeline, publication, edit, onClose }: Readonly<{
   source: Source; module: Module; record: RecordType; pipeline: Pipeline; publication: ModuleFieldPublication;
-  edit: StudioDataEdit; onClose: () => void; onShow: (reference: InlineRecordTypeReference) => void;
+  edit: StudioDataEdit; onClose: () => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const [issues, setIssues] = useState<readonly string[]>([]);
@@ -195,7 +173,7 @@ function PipelineDialog({ source, module, record, pipeline, publication, edit, o
   };
   const removeStage = async (option: string) => {
     setIssues([]); setWhere(undefined);
-    const references = inlineChoiceOptionReferences(source, module.key, record.key, stageField, option);
+    const references = applicationUses(source, { kind: "choice_option", moduleKey: module.key, recordKey: record.key, fieldKey: stageField, option });
     if (references.length > 0) {
       setWhere({ issue: `${label(option)} can't be removed: it is used in ${references.length === 1 ? "one place" : `${references.length} places`}. Remove those uses first.`, references });
       return;
@@ -257,6 +235,10 @@ function PipelineDialog({ source, module, record, pipeline, publication, edit, o
                   {gatesFor(stage.option).map((action) => <NativeSelectOption key={action.key} value={action.key}>Runs {action.label}</NativeSelectOption>)}
                   <NativeSelectOption value={createAction}>Runs a new action…</NativeSelectOption>
                 </NativeSelect></div>
+              <div className="sm:col-span-2">
+                <StudioUsedIn source={source} target={{ kind: "choice_option", moduleKey: module.key, recordKey: record.key,
+                  fieldKey: stageField, option: stage.option }} name={label(stage.option)} collapsed onBeforeOpen={onClose} />
+              </div>
             </ItemContent>
           </Item>)}</ul>
           <p className="text-xs text-muted-foreground">A gated stage runs its action wherever the option is saved: a board, a form or a flow
@@ -280,11 +262,12 @@ function PipelineDialog({ source, module, record, pipeline, publication, edit, o
         </fieldset>
 
         <Problems issues={issues} />
-        {where === undefined ? null : <Refused refusal={where} label="Where it is used" onShow={(reference) => { onClose(); onShow(reference); }} />}
+        {where === undefined ? null : <StudioReferencesAlert name="it" title={`${name.text.trim() || "The pipeline"} was not changed`}
+          issue={where.issue} references={where.references} onBeforeOpen={onClose} />}
         <DialogFooter><Button type="button" variant="outline" onClick={onClose}>Close</Button></DialogFooter>
       </div>
       {creatingFor === undefined ? null : <ActionDialog key={creatingFor} module={module} record={record} action={undefined} open
-        initialEffect={{ field: stageField, option: creatingFor }} edit={edit} onShow={onShow}
+        initialEffect={{ field: stageField, option: creatingFor }} edit={edit}
         onOpenChange={(open) => { if (!open) setCreatingFor(undefined); }}
         onSaved={(actionKey) => change({ gates: { ...gates, [creatingFor]: actionKey } })} />}
       {confirmDialog}
@@ -292,10 +275,9 @@ function PipelineDialog({ source, module, record, pipeline, publication, edit, o
   </Dialog>;
 }
 
-export function StudioRecordPipelines({ source, moduleKey, recordKey, publication, disabled, edit, onShow }: Readonly<{
+export function StudioRecordPipelines({ source, moduleKey, recordKey, publication, disabled, edit }: Readonly<{
   source: Source; moduleKey: string; recordKey: string; publication: ModuleFieldPublication; disabled: boolean;
   edit: StudioDataEdit;
-  onShow: (reference: InlineRecordTypeReference) => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const [editing, setEditing] = useState<string | "new" | null>(null);
@@ -308,12 +290,12 @@ export function StudioRecordPipelines({ source, moduleKey, recordKey, publicatio
   const remove = async (pipeline: Pipeline) => {
     setIssues([]); setRefusal(undefined);
     const check = deleteInlinePipeline(source, module.key, record.key, pipeline.key);
-    if (check.kind === "referenced") { setRefusal({ issue: `${pipeline.name} can't be deleted. ${check.issue}`, references: check.references }); return; }
+    if (check.kind === "referenced") { setRefusal({ name: pipeline.name, issue: check.issue, references: check.references }); return; }
     if (check.kind === "invalid") { setIssues(check.issues); return; }
     if (!await confirm({ title: `Delete ${pipeline.name}?`, confirmLabel: "Delete pipeline",
       description: "Its stage order, colours and moves leave the draft, and every move becomes allowed. Actions that own its stages keep them." })) return;
     const result = edit((current) => deleteInlinePipeline(current, module.key, record.key, pipeline.key));
-    if (result.kind === "referenced") setRefusal({ issue: `${pipeline.name} can't be deleted. ${result.issue}`, references: result.references });
+    if (result.kind === "referenced") setRefusal({ name: pipeline.name, issue: result.issue, references: result.references });
     else { const problem = studioEditProblem(result); if (problem !== undefined) setIssues([problem]); }
   };
   const chosen = editing === null || editing === "new" ? undefined : record.pipelines.find((pipeline) => pipeline.key === editing);
@@ -349,12 +331,13 @@ export function StudioRecordPipelines({ source, moduleKey, recordKey, publicatio
         </ItemContent>
       </Item>;
     })}</ul>
-    {refusal === undefined ? null : <Refused refusal={refusal} label="Where the pipeline is used" onShow={onShow} />}
+    {refusal === undefined ? null : <StudioReferencesAlert name={refusal.name ?? "The pipeline"} action="deleted" issue={refusal.issue}
+      references={refusal.references} />}
     <Problems issues={issues} />
     {editing === "new" && <NewPipelineDialog module={module} record={record} publication={publication} edit={edit}
       onClose={() => setEditing(null)} onCreated={setEditing} />}
     {chosen !== undefined && <PipelineDialog key={chosen.key} source={source} module={module} record={record} pipeline={chosen}
-      publication={publication} edit={edit} onClose={() => setEditing(null)} onShow={onShow} />}
+      publication={publication} edit={edit} onClose={() => setEditing(null)} />}
     {confirmDialog}
   </section>;
 }

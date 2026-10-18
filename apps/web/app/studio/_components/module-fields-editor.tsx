@@ -16,11 +16,11 @@ import {
   changeInlineModuleField, deleteInlineModuleField, deriveFieldKey, fieldTypeKeys, moduleFieldDefaultDeclaration,
   moduleFieldKeptSettings, moduleFieldSettingDeclarations, moduleFieldTypeLabels, moveInlineModuleField,
   peopleDirectory, readModuleFieldDefault, readModuleFieldSettings, starterModuleFieldSettings, writeModuleFieldDefault,
-  writeModuleFieldSettings, type ApplicationSourceDocument, type InlineRecordTypeReference, type LinkCardinality,
+  writeModuleFieldSettings, type ApplicationSourceDocument, type ApplicationUsePlace, type LinkCardinality,
   type ModuleFieldPublication, type ModuleFieldType, type PeopleDirectoryOwner,
 } from "@vortex/platform/schema";
 import { StudioField } from "./studio-field";
-import { StudioReferencesAlert } from "./studio-references-alert";
+import { StudioReferencesAlert } from "./studio-used-in";
 import { StudioLinkSection } from "./studio-link-section";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
@@ -72,7 +72,7 @@ const replacedFieldTypes: ReadonlySet<string> = new Set(["link_to_person"]);
  * version keeps its stored shape.
  */
 export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, initialType = "text", disabled, context,
-  edit, onAdded, onRemoved, onShow }: Readonly<{
+  edit, onAdded, onRemoved }: Readonly<{
   source: Source;
   moduleKey: string;
   recordKey: string;
@@ -87,8 +87,6 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
   onAdded?: (fieldKey: string) => void;
   /** Called after the field is removed from the draft. */
   onRemoved?: () => void;
-  /** Opens a place that uses the field, for "Show me where". */
-  onShow?: (reference: InlineRecordTypeReference) => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const module = source.body.modules.find((item) => item.key === moduleKey);
@@ -158,7 +156,7 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
   const readFailures = existing === undefined ? [] : read(existing.type as ModuleFieldType, existing.settings as Plain, storedDefault).reading.failures;
   const [placements, setPlacements] = useState<ReadonlySet<string>>(new Set());
   const [issues, setIssues] = useState<readonly string[]>([]);
-  const [references, setReferences] = useState<readonly InlineRecordTypeReference[]>([]);
+  const [references, setReferences] = useState<readonly ApplicationUsePlace[]>([]);
 
   /** One edit of the field: the patch over the field as the draft holds it. */
   const commit = (patch: Partial<FormState>, merge?: string): string | undefined => {
@@ -379,7 +377,7 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
         <Button type="button" size="sm" variant="destructive" disabled={disabled}
           onClick={() => { void remove(); }}>Remove field</Button>
       </div>
-      <StudioReferencesAlert name={existing.label} action="removed" references={references} onShow={onShow} />
+      <StudioReferencesAlert name={existing.label} action="removed" references={references} />
     </section>}
     {confirmDialog}
   </form>;

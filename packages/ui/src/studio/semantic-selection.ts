@@ -443,7 +443,7 @@ const normalizeSelection = (
     case "query":
       return Object.freeze({ kind: "query", moduleKey: selection.moduleKey, queryKey: selection.queryKey });
     case "role":
-      return Object.freeze({ kind: "role", roleKey: selection.roleKey });
+      return typeof selection.roleKey === "string" ? Object.freeze({ kind: "role", roleKey: selection.roleKey }) : undefined;
     default:
       return undefined;
   }

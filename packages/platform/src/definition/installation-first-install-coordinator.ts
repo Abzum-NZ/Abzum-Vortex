@@ -34,7 +34,6 @@ import {
   readInstallationDatabaseTime,
   readInstallationHumanContext,
   readInstallationOrdinaryRoot,
-  readInstallationPermissionDeadline,
   requireInstallationAuthority,
   type InstallationHumanContext,
   type InstallationProblemShape,
@@ -46,10 +45,10 @@ import {
 } from "./installation-binding-reader";
 import type { FirstInstallEnvironment } from "./installation-first-install-app";
 import {
-  firstInstallHistoryMatchesDraft,
+  firstInstallLatestReleaseMatches,
   readFirstInstallReleaseSet,
   sameFirstInstallRelease,
-  type FirstInstallHistory,
+  type ApplicationLatestRelease,
   type FirstInstallRegistrationState,
   type FirstInstallSelector,
 } from "./installation-first-install";
@@ -63,7 +62,7 @@ export type FirstInstallCoordinatorEnvironment = FirstInstallEnvironment &
 
 /** The state the caller proved and showed the person before running a first-install command. */
 type FirstInstallExpectation = Readonly<{
-  history: FirstInstallHistory;
+  latest: ApplicationLatestRelease;
   selected: Readonly<{ definitionKey: string }>;
   registrationState: FirstInstallRegistrationState;
   registeredReleaseRevision: number | null;
@@ -79,7 +78,7 @@ const same = (left: unknown, right: unknown): boolean => canonicalJson(left) ===
 const firstInstallDefinitionAccess = (
   environment: FirstInstallCoordinatorEnvironment,
   selector: FirstInstallSelector,
-  history: FirstInstallHistory,
+  latest: ApplicationLatestRelease,
   expectedReleaseSet: SystemApplicationBoundReleaseSetResult,
   onPreparedRegistration: (prepared: PreparedFirstInstallRegistration) => void,
 ): HumanInstallationDefinitionAccess => ({
@@ -99,30 +98,21 @@ const firstInstallDefinitionAccess = (
             organizationId: selector.organizationId,
           });
           await readInstallationOrdinaryRoot(transaction, selector.rootId);
-          await requireInstallationAuthority(transaction, scope, environment.permissions, { kind: "draft_change", rootId: selector.rootId });
-          await firstInstallHistoryMatchesDraft(
-            transaction, scope, selector, history, expectedReleaseSet.application.definitionKey,
-          );
+          await firstInstallLatestReleaseMatches(transaction, selector, latest);
           const releaseSet = await readFirstInstallReleaseSet(transaction, environment.catalogue, selector, context);
           if (!sameFirstInstallRelease(releaseSet, expectedReleaseSet)) problem("conflict");
-          await firstInstallHistoryMatchesDraft(
-            transaction, scope, selector, history, expectedReleaseSet.application.definitionKey,
-          );
+          await firstInstallLatestReleaseMatches(transaction, selector, latest);
           const finalContext = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
             organizationId: selector.organizationId,
           });
           if (!same(context, finalContext)) problem("refused");
-          await requireInstallationAuthority(transaction, scope, environment.permissions, { kind: "draft_change", rootId: selector.rootId });
           await requireInstallationAuthority(transaction, scope, environment.permissions, installationOperation(selector.rootId, environment.containsCustomComponents(releaseSet)));
-          const draftDeadline = await readInstallationPermissionDeadline(
-            transaction, scope, finalContext, environment.permissions, "platform.organization.definition_drafts.manage",
-          );
           const installDeadlines = await readInstallationAuthorityDeadlines(
             transaction, scope, finalContext, environment.permissions, selector.rootId, environment.containsCustomComponents(releaseSet),
           );
           const completedAt = await readInstallationDatabaseTime(transaction);
           if (Date.parse(completedAt) >= Math.min(
-            Date.parse(finalContext.expiresAt), Date.parse(draftDeadline),
+            Date.parse(finalContext.expiresAt),
             ...installDeadlines.map((deadline) => Date.parse(deadline)),
           )) problem("refused");
           return releaseSet;
@@ -210,7 +200,7 @@ const assertFirstInstallCoordinatorBoundary = (
 
 /**
  * The installation coordinator for one first install: each of its two transactions re-proves the
- * history, release, bindings, context and authority around the coordinator's own write.
+ * latest published version, release, bindings, context and authority around the coordinator's own write.
  */
 export const createFirstInstallCoordinator = (
   environment: FirstInstallCoordinatorEnvironment,
@@ -243,10 +233,7 @@ export const createFirstInstallCoordinator = (
             organizationId: selector.organizationId,
           });
           await readInstallationOrdinaryRoot(transaction, selector.rootId);
-          await requireInstallationAuthority(transaction, scope, environment.permissions, { kind: "draft_change", rootId: selector.rootId });
-          await firstInstallHistoryMatchesDraft(
-            transaction, scope, selector, expected.history, expected.selected.definitionKey,
-          );
+          await firstInstallLatestReleaseMatches(transaction, selector, expected.latest);
           const releaseSet = await readFirstInstallReleaseSet(transaction, environment.catalogue, selector, context);
           if (!sameFirstInstallRelease(releaseSet, expectedReleaseSet)) problem("conflict");
           await requireInstallationAuthority(transaction, scope, environment.permissions, installationOperation(selector.rootId, environment.containsCustomComponents(releaseSet)));
@@ -264,9 +251,6 @@ export const createFirstInstallCoordinator = (
             const prepared = preparedRegistration;
             if (prepared === undefined) problem("temporarily_unavailable");
             registrationContext = context;
-            const draftDeadline = await readInstallationPermissionDeadline(
-              transaction, scope, context, environment.permissions, "platform.organization.definition_drafts.manage",
-            );
             const acceptedInstall = {
               ...installationOperation(selector.rootId, environment.containsCustomComponents(releaseSet)),
               acceptedPermissions: firstInstallConferredPermissions(prepared),
@@ -274,7 +258,7 @@ export const createFirstInstallCoordinator = (
             const installDeadlines = await readBuilderOperationDeadlines(
               transaction, scope, context, environment.permissions, acceptedInstall,
             );
-            registrationDeadline = [context.expiresAt, draftDeadline, ...installDeadlines]
+            registrationDeadline = [context.expiresAt, ...installDeadlines]
               .reduce((earliest, deadline) =>
                 Date.parse(deadline) < Date.parse(earliest) ? deadline : earliest);
             const prewriteAt = await readInstallationDatabaseTime(transaction);
@@ -307,9 +291,7 @@ export const createFirstInstallCoordinator = (
               mode, "after_final", selector, expected, releaseSet, after,
             );
           }
-          await firstInstallHistoryMatchesDraft(
-            transaction, scope, selector, expected.history, expected.selected.definitionKey,
-          );
+          await firstInstallLatestReleaseMatches(transaction, selector, expected.latest);
           const finalContext = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
             organizationId: selector.organizationId,
           });
@@ -319,17 +301,13 @@ export const createFirstInstallCoordinator = (
             if (Date.parse(finalContext.expiresAt) <= Date.parse(completedAt)) problem("refused");
             return value;
           }
-          await requireInstallationAuthority(transaction, scope, environment.permissions, { kind: "draft_change", rootId: selector.rootId });
           await requireInstallationAuthority(transaction, scope, environment.permissions, installationOperation(selector.rootId, environment.containsCustomComponents(releaseSet)));
-          const draftDeadline = await readInstallationPermissionDeadline(
-            transaction, scope, finalContext, environment.permissions, "platform.organization.definition_drafts.manage",
-          );
           const installDeadlines = await readInstallationAuthorityDeadlines(
             transaction, scope, finalContext, environment.permissions, selector.rootId, environment.containsCustomComponents(releaseSet),
           );
           const completedAt = await readInstallationDatabaseTime(transaction);
           if (Date.parse(completedAt) >= Math.min(
-            Date.parse(finalContext.expiresAt), Date.parse(draftDeadline),
+            Date.parse(finalContext.expiresAt),
             ...installDeadlines.map((deadline) => Date.parse(deadline)),
           )) problem("refused");
           return value;
@@ -350,7 +328,7 @@ export const createFirstInstallCoordinator = (
     humanDefinitionAccess: firstInstallDefinitionAccess(
       environment,
       selector,
-      expected.history,
+      expected.latest,
       expectedReleaseSet,
       (prepared) => { preparedRegistration = prepared; },
     ),

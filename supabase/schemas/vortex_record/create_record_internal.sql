@@ -244,7 +244,7 @@ begin
     end loop;
 
     loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'create', record_id_value, null
+      p_record_type_id, 'create', record_id_value, null, null::jsonb
     );
     if loaded ->> 'outcome' <> 'loaded' then
       refusal_reason := 'record_unavailable';

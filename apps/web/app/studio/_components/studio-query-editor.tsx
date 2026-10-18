@@ -4,9 +4,9 @@ import {
   changeInlineQuery, createInlineQuery, defaultQueryPageSize, deleteInlineQuery, deriveQueryKey, deriveQueryTotalAlias,
   inlineQueryRecordType, maximumQueryPageSize, queryGroupFieldTypes, queryTotalAccepts, queryTotalOperationLabels,
   type ApplicationSourceDocument, type ConditionNode, type InlineQuery, type InlineQueryAggregate, type InlineQueryInput,
-  type InlineQueryChange, type InlineQuerySort, type InlineRecordTypeReference,
+  type InlineQueryChange, type InlineQuerySort, type ApplicationUsePlace,
 } from "@vortex/platform/schema";
-import { StudioConditionControls, StudioOptionControl } from "@vortex/ui/studio";
+import { StudioConditionControls, StudioOptionControl, validateStudioCondition } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
@@ -15,7 +15,7 @@ import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { Icon } from "@vortex/ui";
 import { StudioField } from "./studio-field";
-import { StudioReferencesAlert } from "./studio-references-alert";
+import { StudioReferencesAlert } from "./studio-used-in";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
 import { readStudioQueryFilter, studioQueryFilterContext, writeStudioQueryFilter } from "../_lib/studio-query-filter";
@@ -30,11 +30,28 @@ type QueryPatch = Partial<InlineQueryChange>;
 /** The input types a query offers, with the words the editor uses for them. */
 const inputTypes: readonly Readonly<{ value: InputType; label: string }>[] = [
   { value: "text", label: "Text" }, { value: "number", label: "Number" }, { value: "decimal_number", label: "Decimal number" },
+  { value: "money", label: "Amount of money" },
   { value: "boolean", label: "Yes or no" }, { value: "date", label: "Date" }, { value: "date_time", label: "Date and time" },
-  { value: "record_reference", label: "A record" }, { value: "organisation_account_reference", label: "A person's account" },
+  { value: "record_reference", label: "A record" }, { value: "organization_account_reference", label: "A person's account" },
 ];
 const directions = [{ value: "ascending", label: "A to Z, low to high, old to new" }, { value: "descending", label: "Z to A, high to low, new to old" }];
 const unfinishedFilter = "Filter: finish the comparisons marked above. Until then the query keeps its last filter.";
+
+/** The input keys a filter compares a field with. */
+const filterParameters = (filter: unknown): Set<string> => {
+  const found = new Set<string>();
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) { value.forEach(visit); return; }
+    if (value === null || typeof value !== "object") return;
+    for (const [key, child] of Object.entries(value)) {
+      if (key === "value") continue;
+      if (key === "parameter" && typeof child === "string") found.add(child);
+      else visit(child);
+    }
+  };
+  visit(filter);
+  return found;
+};
 
 const moved = <T,>(items: readonly T[], index: number, by: -1 | 1): T[] => {
   const next = [...items];
@@ -58,6 +75,10 @@ function Entry({ label, index, count, disabled, onMove, onRemove, children }: Re
       <Icon name="close" /></Button>
   </li>;
 }
+
+/** A label read by screen readers only, for a control whose visible text already says what it does. */
+const ScreenReaderLabel = ({ id, children }: Readonly<{ id: string; children: string }>) =>
+  <Label htmlFor={id} className="sr-only">{children}</Label>;
 
 function Section({ title, hint, children }: Readonly<{ title: string; hint?: string; children: ReactNode }>) {
   return <fieldset className="space-y-2 border-t border-border pt-3">
@@ -88,7 +109,7 @@ function InputName({ input, disabled, commit }: Readonly<{
  * name, page size or filter that is not valid yet stays in its control with why. Delete is refused
  * while anything uses the query.
  */
-export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields, recordTypes, disabled, edit, onDeleted, onShow }: Readonly<{
+export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields, recordTypes, disabled, edit, onDeleted }: Readonly<{
   source: Source; moduleKey: string; queryKey: string;
   /** The compiled fields of the saved draft, which the filter's typed controls need. */
   compiledFields: StudioCompiledFields | null;
@@ -97,7 +118,6 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
   disabled: boolean;
   edit: StudioDataEdit;
   onDeleted: (recordKey: string | undefined) => void;
-  onShow: (reference: InlineRecordTypeReference) => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const module = source.body.modules.find((item) => item.key === moduleKey);
@@ -105,7 +125,7 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
   const record = module === undefined || query === undefined ? undefined : inlineQueryRecordType(module, query);
   const [newInput, setNewInput] = useState<Readonly<{ label: string; type: InputType }>>({ label: "", type: "text" });
   const [issues, setIssues] = useState<readonly string[]>([]);
-  const [references, setReferences] = useState<readonly InlineRecordTypeReference[]>([]);
+  const [references, setReferences] = useState<readonly ApplicationUsePlace[]>([]);
   const [refusals, setRefusals] = useState(0);
 
   const recordReference = query === undefined ? "" : query.record_type.includes(":") ? query.record_type : `${moduleKey}:${query.record_type}`;
@@ -170,6 +190,24 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
     const read = after === undefined ? undefined : readFilter(after.filter);
     filter.applied(read?.kind === "read" ? read.condition : undefined);
   };
+  // The filter is kept as it is when an input changes type, so it is checked again against the inputs
+  // as they would be: an input whose type changed can leave a comparison with it that no longer fits.
+  const retainedFilterProblems = (inputs: readonly InlineQueryInput[]): string[] => {
+    if (query.filter === null) return [];
+    if (reading?.kind === "read" && reading.condition !== undefined && compiled !== undefined) {
+      const validation = validateStudioCondition(reading.condition, studioQueryFilterContext(compiled, filterable, inputs));
+      return validation.isValid ? []
+        : validation.issues.map((issue) => `Filter${issue.pointer === "" ? "" : ` (${issue.pointer})`}: ${issue.message}.`);
+    }
+    // Without the saved fields the filter can't be read here, so a changed input it uses is refused.
+    const before = new Map(query.inputs.map((input) => [input.key, input.type] as const));
+    return [...filterParameters(query.filter)].flatMap((key) => {
+      const now = inputs.find((input) => input.key === key);
+      return now !== undefined && before.get(key) !== undefined && before.get(key) !== now.type
+        ? [`Filter: it compares a field with the input ${now.label}, whose type changed. Change the filter first, or keep the type.`]
+        : [];
+    });
+  };
   const remove = async () => {
     setIssues([]);
     const result = deleteInlineQuery(source, moduleKey, queryKey);
@@ -221,8 +259,9 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
           <span className="text-sm">{labelOf(key)}</span>
         </Entry>)}</ol>
       {unselected.length === 0 ? <p className="text-xs text-muted-foreground">Every field is a column.</p>
-        : <StudioOptionControl id={`query-${queryKey}-add-column`} value="" unset="Add a column…" disabled={disabled}
-          options={fieldOptions(unselected)} onChange={(key) => { if (key !== "") change({ select: [...query.select, key] }); }} />}
+        : <><ScreenReaderLabel id={`query-${queryKey}-add-column`}>Add a column</ScreenReaderLabel>
+          <StudioOptionControl id={`query-${queryKey}-add-column`} value="" unset="Add a column…" disabled={disabled}
+          options={fieldOptions(unselected)} onChange={(key) => { if (key !== "") change({ select: [...query.select, key] }); }} /></>}
     </Section>
 
     <Section title="Filter" hint="Which records the query lists. Compare a field with a fixed value or with one of the query's inputs.">
@@ -248,9 +287,10 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
             onChange={(direction) => change({ sort: query.sort.map((item, at) => at === index ? { ...item, direction: direction as InlineQuerySort["direction"] } : item) })} />
         </Entry>)}</ol>
       {sortable.filter((key) => !query.sort.some((sort) => sort.field === key)).length === 0 ? null
-        : <StudioOptionControl id={`query-${queryKey}-add-sort`} value="" unset="Add a sort…" disabled={disabled}
+        : <><ScreenReaderLabel id={`query-${queryKey}-add-sort`}>Add a sort</ScreenReaderLabel>
+          <StudioOptionControl id={`query-${queryKey}-add-sort`} value="" unset="Add a sort…" disabled={disabled}
           options={fieldOptions(sortable.filter((key) => !query.sort.some((sort) => sort.field === key)))}
-          onChange={(key) => { if (key !== "") change({ sort: [...query.sort, { field: key, direction: "ascending" }] }); }} />}
+          onChange={(key) => { if (key !== "") change({ sort: [...query.sort, { field: key, direction: "ascending" }] }); }} /></>}
     </Section>
 
     <Section title="Grouping and totals" hint="Groups and totals make the query a summary: it then feeds Summary values, Charts and Boards. A Records table lists a query without them.">
@@ -260,14 +300,15 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
           onRemove={() => change({ group_by: query.group_by.filter((item) => item !== key), sort: query.sort.filter((sort) => sort.field !== key) })}>
           <span className="text-sm">Group by {labelOf(key)}</span>
         </Entry>)}</ol>
-      {groupable.length === 0 ? null : <StudioOptionControl id={`query-${queryKey}-add-group`} value="" unset="Group by…" disabled={disabled}
+      {groupable.length === 0 ? null : <><ScreenReaderLabel id={`query-${queryKey}-add-group`}>Group by</ScreenReaderLabel>
+        <StudioOptionControl id={`query-${queryKey}-add-group`} value="" unset="Group by…" disabled={disabled}
         options={fieldOptions(groupable)} onChange={(key) => {
           if (key === "") return;
           const group_by = [...query.group_by, key];
           // A grouped query sorts by its groups only.
           const kept = query.sort.filter((sort) => group_by.includes(sort.field));
           change({ group_by, sort: kept.length > 0 ? kept : [{ field: key, direction: "ascending" }] });
-        }} />}
+        }} /></>}
       <ol className="list-none space-y-1" aria-label="Totals">{query.aggregates.map((total, index) =>
         <Entry key={total.alias} label={`total ${index + 1}`} index={index} count={query.aggregates.length} disabled={disabled}
           onMove={(by) => change({ aggregates: moved(query.aggregates, index, by) })}
@@ -283,13 +324,14 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
               const replaced = { operation, ...(field === undefined ? {} : { field }), alias: deriveQueryTotalAlias(operation, field, others) };
               change({ aggregates: query.aggregates.map((item, at) => at === index ? replaced as InlineQueryAggregate : item) });
             }} />
-          {total.operation === "count" ? null : <StudioOptionControl id={`query-${queryKey}-total-${index}-field`} value={total.field ?? ""}
+          {total.operation === "count" ? null : <><ScreenReaderLabel id={`query-${queryKey}-total-${index}-field`}>{`Field of total ${index + 1}`}</ScreenReaderLabel>
+            <StudioOptionControl id={`query-${queryKey}-total-${index}-field`} value={total.field ?? ""}
             unset="Choose a field…" disabled={disabled} options={fieldOptions(totalFields(total.operation))}
             onChange={(field) => {
               const others = new Set([...query.select, ...query.aggregates.filter((_, at) => at !== index).map((item) => item.alias)]);
               change({ aggregates: query.aggregates.map((item, at) => at === index
                 ? { ...item, ...(field === "" ? {} : { field }), alias: deriveQueryTotalAlias(item.operation, field === "" ? undefined : field, others) } : item) });
-            }} />}
+            }} /></>}
         </Entry>)}</ol>
       <Button type="button" size="sm" variant="outline" disabled={disabled || query.aggregates.length >= 20}
         onClick={() => change({ aggregates: [...query.aggregates, { operation: "count", alias: deriveQueryTotalAlias("count", undefined, takenColumns()) }] })}>
@@ -315,16 +357,21 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
               onClick={() => change({ inputs: query.inputs.filter((_, at) => at !== index) })}><Icon name="close" /></Button>
           </div>
           <p className="text-xs text-muted-foreground">Key: {input.key}</p>
+          <ScreenReaderLabel id={`query-${queryKey}-input-${index}-type`}>{`Type of input ${input.label}`}</ScreenReaderLabel>
           <StudioOptionControl id={`query-${queryKey}-input-${index}-type`} value={input.type} disabled={disabled} options={inputTypes}
             onChange={(type) => {
               // A new type starts without the old type's record types and validation.
               const base = Object.fromEntries(Object.entries(input).filter(([key]) => key !== "record_types" && key !== "validation"));
-              change({ inputs: query.inputs.map((item, at) => at !== index ? item : { ...base, type,
-                ...(type === "record_reference" ? { record_types: [recordTypes[0]?.key ?? ""] } : {}) } as InlineQueryInput) });
+              const inputs = query.inputs.map((item, at) => at !== index ? item : { ...base, type,
+                ...(type === "record_reference" ? { record_types: [recordTypes[0]?.key ?? ""] } : {}) } as InlineQueryInput);
+              const retained = retainedFilterProblems(inputs);
+              if (retained.length > 0) { setIssues(retained); return; }
+              change({ inputs });
             }} />
-          {input.type === "record_reference" && <StudioOptionControl id={`query-${queryKey}-input-${index}-record`}
+          {input.type === "record_reference" && <><ScreenReaderLabel id={`query-${queryKey}-input-${index}-record`}>{`Record type of input ${input.label}`}</ScreenReaderLabel>
+            <StudioOptionControl id={`query-${queryKey}-input-${index}-record`}
             value={(input as { record_types: string[] }).record_types[0] ?? ""} disabled={disabled} options={recordTypes.map((item) => ({ value: item.key, label: item.label }))}
-            onChange={(recordType) => change({ inputs: setInput(index, { record_types: [recordType] }) })} />}
+            onChange={(recordType) => change({ inputs: setInput(index, { record_types: [recordType] }) })} /></>}
           <div className="flex items-center gap-2">
             <Checkbox id={`query-${queryKey}-input-${index}-required`} checked={input.required} disabled={disabled}
               onCheckedChange={(checked) => change({ inputs: setInput(index, { required: checked === true }) })} />
@@ -334,6 +381,7 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
       <form className="flex flex-wrap items-end gap-2" onSubmit={addInput} aria-label="New input">
         <Input aria-label="Name of a new input" placeholder="New input, for example Company" value={newInput.label} maxLength={60}
           disabled={disabled} className="min-w-0 flex-1" onChange={(event) => setNewInput({ ...newInput, label: event.target.value })} />
+        <ScreenReaderLabel id={`query-${queryKey}-new-input-type`}>Type of the new input</ScreenReaderLabel>
         <StudioOptionControl id={`query-${queryKey}-new-input-type`} value={newInput.type} disabled={disabled} options={inputTypes}
           onChange={(type) => setNewInput({ ...newInput, type: type as InputType })} />
         <Button type="submit" size="sm" variant="outline" disabled={disabled || newInput.label.trim() === ""}>Add input</Button>
@@ -345,7 +393,7 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
     </ul>}
     <section className="space-y-2 border-t border-border pt-3" aria-label="Delete">
       <Button type="button" size="sm" variant="destructive" disabled={disabled} onClick={() => { void remove(); }}>Delete query</Button>
-      <StudioReferencesAlert key={refusals} name={query.label || query.key} action="deleted" references={references} onShow={onShow} />
+      <StudioReferencesAlert key={refusals} name={query.label || query.key} action="deleted" references={references} />
     </section>
     {confirmDialog}
   </section>;

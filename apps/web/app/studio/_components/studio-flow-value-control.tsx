@@ -19,7 +19,7 @@ import {
 
 type LiteralType = FlowLiteral["type"];
 
-const groups = ["Inputs", "Variables", "Earlier steps", "The record that started it", "The run"] as const;
+const groups = ["Inputs", "Variables", "Earlier steps", "The record", "The run"] as const;
 
 /** A fixed value's starting literal for a type. */
 const startLiteral = (type: LiteralType, options: readonly Readonly<{ value: string }>[]): FlowLiteral =>
