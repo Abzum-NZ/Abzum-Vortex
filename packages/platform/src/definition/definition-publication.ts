@@ -449,8 +449,7 @@ export const createDefinitionPublicationService = (
         await transaction.lockCandidate(parsedCommand.rootId),
         parsedCommand,
       );
-      const roots = await materializeInlineModules(transaction, candidate);
-      return rehearseApplicationPreview(context, transaction, catalogue, candidate, roots);
+      return rehearseApplicationPreview(context, transaction, catalogue, candidate);
     });
   },
 

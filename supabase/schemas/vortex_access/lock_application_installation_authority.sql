@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.lock_application_installation_authority() RETURNS TABLE(organization_id uuid, organization_account_id uuid, access_version bigint, correlation_id uuid)
+CREATE OR REPLACE FUNCTION vortex_access.lock_application_installation_authority() RETURNS TABLE(organization_id uuid, organization_account_id uuid, access_version bigint, correlation_id uuid)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -18,7 +18,7 @@ begin
   where version.organization_id = (context_value ->> 'organizationId')::uuid
     and organization.state = 'active'
     and tenant.state = 'active'
-  for update of version;
+  for share of version;
   if not found then
     raise exception using errcode = '42501',
       message = 'Application installation scope is unavailable';
@@ -36,7 +36,9 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
@@ -56,7 +58,9 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),

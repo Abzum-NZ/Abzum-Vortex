@@ -7,6 +7,7 @@ import {
   createPreviewInstallationCoordinator,
   createPreviewInstallationRepository,
   DefinitionError,
+  dropRetiredPreviewStorage,
   fingerprintCanonicalValue,
   previewApplicationKey,
   readApplicationDefinitionDraft,
@@ -237,7 +238,13 @@ const provision = (target: Target): Promise<StudioPreviewResult> =>
   once(`${keyOf(target)}|create`, () => coordinator()
     .create(target.session, { organizationId: target.organizationId, applicationRootId: target.rootId,
       expectedDraftRevision: target.draftRevision, shapeFingerprint: target.shapeFingerprint })
-    .then((preview) => available(preview, false), failure));
+    .then((preview) => {
+      // Retired storage is dropped in short background transactions after provisioning commits.
+      void dropRetiredPreviewStorage().catch((error: unknown) => {
+        console.error("[studio] retired preview storage drop failed", error);
+      });
+      return available(preview, false);
+    }, failure));
 
 /**
  * The builder's preview moved to the draft in place, keeping its records; a new one only when

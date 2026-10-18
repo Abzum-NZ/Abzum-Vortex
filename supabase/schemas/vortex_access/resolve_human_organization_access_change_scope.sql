@@ -1,4 +1,4 @@
-create or replace function vortex_access.resolve_human_organization_change_scope(
+create or replace function vortex_access.resolve_human_organization_access_change_scope(
   p_identity_id uuid,
   p_organization_id uuid
 )
@@ -27,7 +27,7 @@ begin
     or p_organization_id is null
     or not vortex_platform.is_non_nil_uuid(p_organization_id::text) then
     raise exception using errcode = '22023',
-      message = 'Organisation change selection is invalid';
+      message = 'Organisation access change selection is invalid';
   end if;
 
   select tenant.tenant_id, organization.organization_id,
@@ -81,7 +81,7 @@ begin
         message = 'This super-administrator organisation account is suspended';
     end if;
     raise exception using errcode = '42501',
-      message = 'Organisation change selection is unavailable';
+      message = 'Organisation access change selection is unavailable';
   end if;
 
   select scope.tenant_id, scope.organization_id,
@@ -96,7 +96,7 @@ begin
     or (eligible_account_id is not null
       and resolved_account_id is distinct from eligible_account_id) then
     raise exception using errcode = '42501',
-      message = 'Organisation change selection is unavailable';
+      message = 'Organisation access change selection is unavailable';
   end if;
 
   return query select resolved_tenant_id, resolved_organization_id,
@@ -104,15 +104,15 @@ begin
 end
 $function$;
 
-revoke execute on function vortex_access.resolve_human_organization_change_scope(uuid, uuid)
+revoke execute on function vortex_access.resolve_human_organization_access_change_scope(uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
-grant execute on function vortex_access.resolve_human_organization_change_scope(uuid, uuid)
+grant execute on function vortex_access.resolve_human_organization_access_change_scope(uuid, uuid)
   to vortex_runtime;
 
-comment on function vortex_access.resolve_human_organization_change_scope(uuid, uuid) is
-  'Resolves one active account-bound change scope under its Access lock, provisioning missing local accounts only for assigned Vortex super administrators.';
+comment on function vortex_access.resolve_human_organization_access_change_scope(uuid, uuid) is
+  'Resolves one active account-bound scope for a change that advances the organisation Access version, holding that version exclusively (FOR UPDATE) until commit, so access changes queue behind every request that relies on the current version and never deadlock with each other. Provisions missing local accounts only for assigned Vortex super administrators.';
 
-alter function vortex_access.resolve_human_organization_change_scope(p_identity_id uuid, p_organization_id uuid) owner to vortex_owner;
+alter function vortex_access.resolve_human_organization_access_change_scope(p_identity_id uuid, p_organization_id uuid) owner to vortex_owner;
 
-grant execute on function vortex_access.resolve_human_organization_change_scope(p_identity_id uuid, p_organization_id uuid) to postgres;
+grant execute on function vortex_access.resolve_human_organization_access_change_scope(p_identity_id uuid, p_organization_id uuid) to postgres;

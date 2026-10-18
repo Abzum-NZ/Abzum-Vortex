@@ -565,7 +565,7 @@ export async function invokeInstalledFlow(
     applicationStore: dependencies.applicationStore,
     tenantGovernance: {
       run: (session, selection, operation) =>
-        requests.runChange(session, selection, (transaction, scope) =>
+        requests.runAccessChange(session, selection, (transaction, scope) =>
           operation({
             tenantId: scope.tenantId,
             operations: createRequestBoundTenantGovernanceService(transaction, scope),

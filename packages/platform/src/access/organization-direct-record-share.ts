@@ -71,7 +71,7 @@ export const createOrganizationDirectRecordShareService = (
       } catch {
         return { kind: "temporarily_unavailable" };
       }
-      return requests.runChange(session, candidate, async (transaction, scope) =>
+      return requests.runAccessChange(session, candidate, async (transaction, scope) =>
         changeOrganizationDirectRecordShareResultSchema.parse(
           await dependencies.adapter.grant(transaction, scope, command.data, {
             directShareId,
@@ -93,7 +93,7 @@ export const createOrganizationDirectRecordShareService = (
       } catch {
         return { kind: "temporarily_unavailable" };
       }
-      return requests.runChange(session, candidate, async (transaction, scope) =>
+      return requests.runAccessChange(session, candidate, async (transaction, scope) =>
         changeOrganizationDirectRecordShareResultSchema.parse(
           await dependencies.adapter.revoke(transaction, scope, command.data, { activityId }),
         ),

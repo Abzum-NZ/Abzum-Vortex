@@ -609,8 +609,8 @@ const coordinatorFor = (
   baseline: UpgradeState,
 ) => {
   let step = 0;
-  const installerRequests: Pick<HumanOrganizationRequests, "runChange"> = {
-    runChange: async <Result>(
+  const installerRequests: Pick<HumanOrganizationRequests, "runAccessChange"> = {
+    runAccessChange: async <Result>(
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
       operation: (
@@ -626,7 +626,7 @@ const coordinatorFor = (
       if (thisStep > 2)
         installationProblem("coordinator_unexpected_transaction", "temporarily_unavailable");
       let callbackFailure: unknown;
-      const result = await environment.requests.runChange(
+      const result = await environment.requests.runAccessChange(
         session,
         candidate,
         async (transaction, scope, issuedAt) => {
