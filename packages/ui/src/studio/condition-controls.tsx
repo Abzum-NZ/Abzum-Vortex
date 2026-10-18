@@ -181,6 +181,7 @@ function TreeEditor({
 
   if (!isComparisonCondition(condition)) return null;
 
+  const usesChoiceOptions = condition.operator !== "contains" && condition.operator !== "not_contains";
   const leftInfo = infoForOperand(condition.left, context);
   const availableOperators = studioConditionOperatorsFor(condition.left, condition.right, context).filter(
     (option) =>
@@ -249,8 +250,8 @@ function TreeEditor({
       if (side === "left") onReplace({ ...condition, left: replacement }, pathToOperand);
       else onReplace({ ...condition, right: replacement }, pathToOperand);
     };
-    // A value compared with a choice is one of its options.
-    const choiceOptions = choiceOptionsFor(other, context);
+    // Substring comparisons edit text; other choice comparisons use their options.
+    const choiceOptions = usesChoiceOptions ? choiceOptionsFor(other, context) : undefined;
     if (choiceOptions !== undefined && choiceOptions.length > 0 && (operand.value === null || typeof operand.value === "string")) {
       const optionError = errorForPath(validation, pathToOperand);
       return (
@@ -307,7 +308,7 @@ function TreeEditor({
     if (!operand) return null;
     const pathToOperand = [...path, side];
     const literalOwnsError = operand.source === "value" && context.allowLiteralValues &&
-      (operand.value !== null || (choiceOptionsFor(other, context)?.length ?? 0) > 0);
+      (operand.value !== null || (usesChoiceOptions && (choiceOptionsFor(other, context)?.length ?? 0) > 0));
     const operandError = literalOwnsError ? undefined : errorForPath(validation, pathToOperand);
     const referenceOptions = context.allowedOperands.filter((option) =>
       compatibleOperand(side, option.operand),
