@@ -39,9 +39,9 @@ export function StudioPlacementWorkflows({ source, placementAlias, createChoices
       </div>;
     })}
     {canCreate && <>
-      <p className="text-sm text-muted-foreground">Nothing runs when this control is used yet.</p>
+      <p className="text-sm text-muted-foreground">Choose an unbound event to create a flow or bind an existing one.</p>
       <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => setCreating(true)}>Create workflow</Button>
-      <StudioNewFlowDialog key={placementAlias} open={creating} onOpenChange={setCreating} choices={createChoices}
+      <StudioNewFlowDialog key={placementAlias} open={creating} onOpenChange={setCreating} choices={createChoices} source={source}
         onCreate={onCreate} initialControl={placementAlias} />
     </>}
   </section>;

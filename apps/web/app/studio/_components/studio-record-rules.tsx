@@ -40,7 +40,7 @@ export function StudioRecordRules({ source, moduleKey, recordKey, disabled, edit
     const label = name.trim();
     const result = edit((current) => {
       const created = applyStudioFlowCreate(current, { kind: "before_save", moduleKey, recordTypeKey: recordKey, name,
-        operations: [...(onCreate ? ["create" as const] : []), ...(onUpdate ? ["update" as const] : [])] });
+        operations: [...(onCreate ? ["create" as const] : []), ...(onUpdate ? ["update" as const] : [])] }, null);
       return created.kind === "refused" ? { kind: "refused" as const, message: created.reason }
         : { kind: "changed" as const, source: created.source, flowAlias: created.selection.flowAlias };
     });

@@ -955,6 +955,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "tenant_organization_detail",
+                    "heading_source": "title",
                     "title": "Organisation details",
                     "detail_fields": [
                       {
@@ -1114,6 +1115,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "tenant_administrator_detail",
+                    "heading_source": "title",
                     "title": "Tenant administrator details",
                     "detail_fields": [
                       {
