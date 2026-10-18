@@ -1226,6 +1226,7 @@
         "opportunity_number",
         "name",
         "company",
+        "owner",
         "value",
         "net_value",
         "stage",

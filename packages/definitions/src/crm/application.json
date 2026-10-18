@@ -900,6 +900,10 @@
                         "label": "Company"
                       },
                       {
+                        "field": "vortex.crm.opportunities:opportunity.owner",
+                        "label": "Owner"
+                      },
+                      {
                         "field": "vortex.crm.opportunities:opportunity.value",
                         "label": "Value"
                       },
