@@ -463,7 +463,7 @@ const flowCreate = (
   command: StudioFlowCreateCommand,
   what: string,
 ): Readonly<{ id: string; eventId: string }> => {
-  const result = applyStudioFlowCreate(judged(plan.source), command);
+  const result = applyStudioFlowCreate(judged(plan.source), command, null);
   if (result.kind === "refused") return refuse(`${what} could not be made: ${result.reason}`);
   plan.source = result.source;
   return result.binding!;

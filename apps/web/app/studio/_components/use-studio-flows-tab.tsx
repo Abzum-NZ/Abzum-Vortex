@@ -72,8 +72,9 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
   const draftChoices = useMemo(() => projectStudioFlowDraftChoices({ rootId: state.rootId, source, catalogue }), [state.rootId, source, catalogue]);
   const start = useMemo(() => flowSelection === null ? null : projectStudioFlowStart(source, flowSelection,
     (control) => draftChoices.forms.find((form) => form.alias === control)?.fields ?? []), [source, flowSelection, draftChoices]);
-  const createChoices = useMemo(() => projectStudioFlowCreateChoices({ rootId: state.rootId, source, catalogue }, controlLabel),
-    [state.rootId, source, catalogue, controlLabel]);
+  const borrowed = draft.view.borrowedChoices;
+  const createChoices = useMemo(() => projectStudioFlowCreateChoices({ rootId: state.rootId, source, catalogue, borrowed }, controlLabel),
+    [state.rootId, source, catalogue, borrowed, controlLabel]);
 
   // The live snapshot inside a command: the history's current entry, never the rendered one.
   const live = (): StudioFlowContext => {
@@ -112,7 +113,7 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
 
   const create = (createCommand: StudioFlowCreateCommand): string | true => {
     const outcome = draft.run((current): StudioDraftStep<StudioFlowCreateResult> => {
-      const result = applyStudioFlowCreate(current, createCommand);
+      const result = applyStudioFlowCreate(current, createCommand, borrowed);
       return result.kind === "applied" ? { kind: "edit", source: result.source, result } : { kind: "keep", result };
     });
     if (outcome.kind === "blocked") return outcome.message;

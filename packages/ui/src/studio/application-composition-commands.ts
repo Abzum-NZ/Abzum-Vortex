@@ -704,7 +704,7 @@ const applyAdd = (current: StudioCompositionContext, command: unknown): StudioCo
     const stage = settings[pipelineSetup.fieldProperty];
     if (stage?.kind !== "field_reference") return { kind: "invalid" };
     const moved = applyStudioFlowCreate(source, { kind: "action", controlAlias: alias,
-      name: pipelineSetup.moveFlowName, recordType: stage.field.slice(0, stage.field.lastIndexOf(".")), event: "card_moved" });
+      name: pipelineSetup.moveFlowName, recordType: stage.field.slice(0, stage.field.lastIndexOf(".")), event: "card_moved" }, null);
     if (moved.kind !== "applied") return moved;
     return { kind: "applied", source: moved.source, placementAlias: alias };
   }
