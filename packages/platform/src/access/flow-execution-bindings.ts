@@ -2,27 +2,17 @@ import "server-only";
 
 import { z } from "zod";
 import {
-  databaseTimestamp,
-  activityIdSchema,
-  administrationDuplicateKeySchema,
   applicationRootIdSchema,
   containedComponentIdSchema,
-  correlationIdSchema,
   flowExecutionBindingActorSchema,
   flowExecutionBindingEffectiveStateSchema,
   flowExecutionBindingSchema,
-  flowExecutionPermittedInputsSchema,
-  flowExecutionPermittedInvokersSchema,
-  flowExecutionPermittedSurfacesSchema,
   identityIdSchema,
   organizationAccountIdSchema,
   organizationIdSchema,
   protectedOperationReferenceSchema,
-  refineFlowExecutionActorInvokers,
-  revisionSchema,
   ruleIdSchema,
   stableDefinitionReleaseVersionSchema,
-  timestampSchema,
   workflowNodeIdSchema,
 } from "../schema";
 import type { FlowExecutionBinding } from "../schema";
@@ -67,29 +57,6 @@ export const flowExecutionBindingAdministratorAuthoritySchema = z
   .strict();
 
 /**
- * Without an expected revision, registers a new revision 1 binding. With one, replaces the mutable
- * bounds of that exact active binding at its next revision. The identity-defining scope
- * (organisation, application, release, flow node, operation and actor) is immutable across
- * revisions, so a replace can never re-point authority; changing the actor or target requires a
- * fresh binding identity.
- */
-export const registerFlowExecutionBindingCommandSchema = z
-  .object({
-    executionBindingId: containedComponentIdSchema,
-    ...flowExecutionBindingScopeShape,
-    permittedInvokers: flowExecutionPermittedInvokersSchema,
-    permittedSurfaces: flowExecutionPermittedSurfacesSchema,
-    permittedInputs: flowExecutionPermittedInputsSchema,
-    expiresAt: timestampSchema.optional(),
-    expectedRevision: revisionSchema.optional(),
-    duplicateKey: administrationDuplicateKeySchema,
-    activityId: activityIdSchema,
-    authority: flowExecutionBindingAdministratorAuthoritySchema,
-  })
-  .strict()
-  .superRefine(refineFlowExecutionActorInvokers);
-
-/**
  * Reads one exact binding by its identity and complete expected scope. Any mismatch between the
  * named scope and the stored binding returns no binding rather than a partial or fallback match.
  */
@@ -98,27 +65,6 @@ export const readFlowExecutionBindingCommandSchema = z
     executionBindingId: containedComponentIdSchema,
     ...flowExecutionBindingScopeShape,
     authority: flowExecutionBindingAdministratorAuthoritySchema,
-  })
-  .strict();
-
-/** Revokes one exact active binding at its next revision. Expiry is not required to revoke. */
-export const revokeFlowExecutionBindingCommandSchema = z
-  .object({
-    executionBindingId: containedComponentIdSchema,
-    organizationId: organizationIdSchema,
-    expectedRevision: revisionSchema,
-    duplicateKey: administrationDuplicateKeySchema,
-    activityId: activityIdSchema,
-    authority: flowExecutionBindingAdministratorAuthoritySchema,
-  })
-  .strict();
-
-export const flowExecutionBindingMutationResultSchema = z
-  .object({
-    outcome: z.enum(["accepted", "replayed"]),
-    binding: flowExecutionBindingSchema,
-    correlationId: correlationIdSchema,
-    acceptedAt: timestampSchema,
   })
   .strict();
 
@@ -136,16 +82,7 @@ export const flowExecutionBindingReadResultSchema = z.discriminatedUnion("outcom
 export type FlowExecutionBindingAdministratorAuthority = z.infer<
   typeof flowExecutionBindingAdministratorAuthoritySchema
 >;
-export type RegisterFlowExecutionBindingCommand = z.infer<
-  typeof registerFlowExecutionBindingCommandSchema
->;
 export type ReadFlowExecutionBindingCommand = z.infer<typeof readFlowExecutionBindingCommandSchema>;
-export type RevokeFlowExecutionBindingCommand = z.infer<
-  typeof revokeFlowExecutionBindingCommandSchema
->;
-export type FlowExecutionBindingMutationResult = z.infer<
-  typeof flowExecutionBindingMutationResultSchema
->;
 export type FlowExecutionBindingReadResult = z.infer<typeof flowExecutionBindingReadResultSchema>;
 
 export const flowExecutionBindingErrorCodes = [
@@ -169,13 +106,6 @@ export class FlowExecutionBindingError extends Error {
     this.code = code;
   }
 }
-
-type MutationResultRow = DatabaseRow & {
-  outcome: unknown;
-  result: unknown;
-  correlation_id: unknown;
-  accepted_at: unknown;
-};
 
 type ReadResultRow = DatabaseRow & {
   outcome: unknown;
@@ -226,21 +156,6 @@ const parseBinding = (value: unknown): FlowExecutionBinding => {
   return parsed.data;
 };
 
-const parseMutation = (rows: readonly MutationResultRow[]): FlowExecutionBindingMutationResult => {
-  const row = requireOne(rows);
-  const parsed = flowExecutionBindingMutationResultSchema.safeParse({
-    outcome: row.outcome,
-    binding: row.result,
-    correlationId: row.correlation_id,
-    acceptedAt: databaseTimestamp(row.accepted_at),
-  });
-  if (!parsed.success)
-    throw new FlowExecutionBindingError("INVALID_FLOW_EXECUTION_BINDING_STORAGE_RESULT", {
-      cause: parsed.error,
-    });
-  return parsed.data;
-};
-
 const ownerIdentity = (
   owner: FlowExecutionBinding["operation"]["owner"],
 ): Readonly<{ kind: string; id: string }> =>
@@ -249,92 +164,6 @@ const ownerIdentity = (
     : owner.kind === "module"
       ? { kind: owner.kind, id: owner.moduleRootId }
       : { kind: owner.kind, id: owner.serviceId };
-
-/**
- * Registers or replaces one protected execution-authority binding. The owning storage operation
- * re-establishes the administrator's current assignment permission and organisation-wide
- * delegation authority, requires the effective person and named invokers to be active accounts of
- * the organisation, and fails closed on a stale expected revision, an already-authorised scope, or
- * an attempt to revive a revoked binding.
- */
-export const registerFlowExecutionBinding = async (
-  transaction: RequestDatabaseTransaction,
-  commandCandidate: RegisterFlowExecutionBindingCommand,
-): Promise<FlowExecutionBindingMutationResult> => {
-  const command = registerFlowExecutionBindingCommandSchema.safeParse(commandCandidate);
-  if (!command.success)
-    throw new FlowExecutionBindingError("INVALID_FLOW_EXECUTION_BINDING_COMMAND", {
-      cause: command.error,
-    });
-  const value = command.data;
-  const owner = ownerIdentity(value.operation.owner);
-  try {
-    const rows = await transaction.query<MutationResultRow>`
-      select outcome, result, correlation_id, accepted_at
-      from vortex_access.register_flow_execution_binding(
-        ${value.authority.identityId}::uuid,
-        ${value.authority.organizationAccountId}::uuid,
-        ${value.duplicateKey}::uuid,
-        ${value.executionBindingId}::uuid,
-        ${value.organizationId}::uuid,
-        ${value.applicationRootId}::uuid,
-        ${value.releaseVersion}::text,
-        ${value.flowId}::uuid,
-        ${value.nodeId}::uuid,
-        ${owner.kind}::text,
-        ${owner.id}::uuid,
-        ${value.operation.operationId}::uuid,
-        ${value.actor.kind}::text,
-        ${value.actor.kind === "specified_user" ? value.actor.organizationAccountId : null}::uuid,
-        ${value.actor.kind === "system" ? value.actor.systemActorId : null}::uuid,
-        ${JSON.stringify(value.permittedInvokers)}::text::jsonb,
-        ${JSON.stringify(value.permittedSurfaces)}::text::jsonb,
-        ${JSON.stringify(value.permittedInputs)}::text::jsonb,
-        ${value.expiresAt ?? null}::timestamptz,
-        ${value.expectedRevision ?? null}::bigint,
-        ${value.activityId}::uuid
-      )
-    `;
-    return parseMutation(rows);
-  } catch (error) {
-    if (error instanceof FlowExecutionBindingError) throw error;
-    throw mapStorageFailure(error);
-  }
-};
-
-/**
- * Revokes one exact active binding at its next revision. The revoked revision remains readable so
- * audit and later consumers can see the revocation, but no active authority remains.
- */
-export const revokeFlowExecutionBinding = async (
-  transaction: RequestDatabaseTransaction,
-  commandCandidate: RevokeFlowExecutionBindingCommand,
-): Promise<FlowExecutionBindingMutationResult> => {
-  const command = revokeFlowExecutionBindingCommandSchema.safeParse(commandCandidate);
-  if (!command.success)
-    throw new FlowExecutionBindingError("INVALID_FLOW_EXECUTION_BINDING_COMMAND", {
-      cause: command.error,
-    });
-  const value = command.data;
-  try {
-    const rows = await transaction.query<MutationResultRow>`
-      select outcome, result, correlation_id, accepted_at
-      from vortex_access.revoke_flow_execution_binding(
-        ${value.authority.identityId}::uuid,
-        ${value.authority.organizationAccountId}::uuid,
-        ${value.duplicateKey}::uuid,
-        ${value.executionBindingId}::uuid,
-        ${value.organizationId}::uuid,
-        ${value.expectedRevision}::bigint,
-        ${value.activityId}::uuid
-      )
-    `;
-    return parseMutation(rows);
-  } catch (error) {
-    if (error instanceof FlowExecutionBindingError) throw error;
-    throw mapStorageFailure(error);
-  }
-};
 
 /**
  * Reads one exact binding only when the complete named scope matches the stored binding. A revoked

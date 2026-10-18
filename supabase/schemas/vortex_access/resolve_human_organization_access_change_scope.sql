@@ -99,6 +99,10 @@ begin
       message = 'Organisation access change selection is unavailable';
   end if;
 
+  perform pg_catalog.set_config(
+    'vortex_access.exclusive_organization_id', p_organization_id::text, true
+  );
+
   return query select resolved_tenant_id, resolved_organization_id,
     resolved_account_id, locked_access_version;
 end
