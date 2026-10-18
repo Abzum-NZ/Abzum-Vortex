@@ -9,6 +9,7 @@ import {
 } from "@vortex/ui/studio";
 import {
   applyStudioStructureCommand,
+  studioPageLayoutPlan,
   type StudioStructureCommand,
   type StudioStructureResult,
 } from "@vortex/ui/studio";
@@ -109,6 +110,7 @@ export function useStudioStructureTab({
           selected={selected}
           onCommand={command}
           onPreview={preview}
+          onLayoutPlan={(pageAlias, shellAlias) => studioPageLayoutPlan({ source, catalogue, describePlacement, publishedFields }, pageAlias, shellAlias)}
           onOpenAccess={openAccessPages}
           disabled={draft.locked}
         />
