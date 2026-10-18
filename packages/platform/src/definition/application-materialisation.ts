@@ -334,23 +334,10 @@ type DerivedFieldInput = Readonly<{
   settings: Readonly<Record<string, unknown>>;
 }>;
 
-/** The text input type a text field's declared format selects; any other format stays plain text. */
-const TEXT_FORMAT_INPUT_TYPES: Readonly<Record<string, string>> = Object.freeze({
-  email_address: "email",
-  web_address: "url",
-});
-
 const deriveFieldInputContract = (field: FieldInputSourceField): DerivedFieldInput => {
   switch (field.type) {
-    case "text": {
-      const inputType =
-        field.textFormat === undefined ? undefined : TEXT_FORMAT_INPUT_TYPES[field.textFormat];
-      return {
-        control: "text",
-        settings:
-          inputType === undefined ? {} : { input_type: { kind: "choice", value: inputType } },
-      };
-    }
+    case "text":
+      return { control: "text", settings: {} };
     case "email_address":
       return {
         control: "text",
