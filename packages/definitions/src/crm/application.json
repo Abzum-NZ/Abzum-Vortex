@@ -582,30 +582,50 @@
                     "columns": [
                       {
                         "field": "vortex.crm.organisations:company.company_number",
-                        "label": "Company number"
+                        "label": "Company number",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.organisations:company.name",
-                        "label": "Company name"
+                        "label": "Company name",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.organisations:company.industry",
-                        "label": "Industry"
+                        "label": "Industry",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.organisations:company.phone",
-                        "label": "Main phone"
+                        "label": "Main phone",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.organisations:company.website",
-                        "label": "Website"
+                        "label": "Website",
+                        "visible": true
+                      }
+                    ],
+                    "sortable_fields": [
+                      "vortex.crm.organisations:company.company_number",
+                      "vortex.crm.organisations:company.name",
+                      "vortex.crm.organisations:company.industry"
+                    ],
+                    "default_sort": [
+                      {
+                        "field": "vortex.crm.organisations:company.industry",
+                        "direction": "ascending"
+                      },
+                      {
+                        "field": "vortex.crm.organisations:company.name",
+                        "direction": "ascending"
                       }
                     ],
                     "title": "Companies",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.crm.organisations:crm_companies",
                       "responsive": {
@@ -681,30 +701,35 @@
                     "columns": [
                       {
                         "field": "vortex.crm.people:contact.contact_number",
-                        "label": "Contact number"
+                        "label": "Contact number",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.people:contact.full_name",
-                        "label": "Full name"
+                        "label": "Full name",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.people:contact.email",
-                        "label": "Email"
+                        "label": "Email",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.people:contact.company",
-                        "label": "Company"
+                        "label": "Company",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.people:contact.relationship_owner",
-                        "label": "Relationship owner"
+                        "label": "Relationship owner",
+                        "visible": true
                       }
                     ],
                     "title": "Contacts",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.crm.people:crm_contacts",
                       "responsive": {
@@ -780,38 +805,53 @@
                     "columns": [
                       {
                         "field": "vortex.crm.people:lead.lead_number",
-                        "label": "Lead number"
+                        "label": "Lead number",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.people:lead.display_name",
-                        "label": "Name"
+                        "label": "Name",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.people:lead.company_name",
-                        "label": "Company name"
+                        "label": "Company name",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.people:lead.source",
-                        "label": "Source"
+                        "label": "Source",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.people:lead.score",
-                        "label": "Score"
+                        "label": "Score",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.people:lead.status",
-                        "label": "Status"
+                        "label": "Status",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.people:lead.received_at",
-                        "label": "Received at"
+                        "label": "Received at",
+                        "visible": true
                       }
+                    ],
+                    "sortable_fields": [
+                      "vortex.crm.people:lead.lead_number",
+                      "vortex.crm.people:lead.display_name",
+                      "vortex.crm.people:lead.company_name",
+                      "vortex.crm.people:lead.score",
+                      "vortex.crm.people:lead.status",
+                      "vortex.crm.people:lead.received_at"
                     ],
                     "title": "Leads",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.crm.people:crm_leads",
                       "responsive": {
@@ -887,38 +927,51 @@
                     "columns": [
                       {
                         "field": "vortex.crm.opportunities:opportunity.opportunity_number",
-                        "label": "Opportunity number"
+                        "label": "Opportunity number",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.opportunities:opportunity.name",
-                        "label": "Opportunity name"
+                        "label": "Opportunity name",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.opportunities:opportunity.company",
-                        "label": "Company"
+                        "label": "Company",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.opportunities:opportunity.value",
-                        "label": "Value"
+                        "label": "Value",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.opportunities:opportunity.net_value",
-                        "label": "Net value"
+                        "label": "Net value",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.opportunities:opportunity.stage",
-                        "label": "Stage"
+                        "label": "Stage",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.opportunities:opportunity.expected_close_date",
-                        "label": "Expected close date"
+                        "label": "Expected close date",
+                        "visible": true
                       }
+                    ],
+                    "sortable_fields": [
+                      "vortex.crm.opportunities:opportunity.opportunity_number",
+                      "vortex.crm.opportunities:opportunity.name",
+                      "vortex.crm.opportunities:opportunity.stage",
+                      "vortex.crm.opportunities:opportunity.expected_close_date"
                     ],
                     "title": "Opportunities",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.crm.opportunities:crm_pipeline",
                       "responsive": {
@@ -994,34 +1047,40 @@
                     "columns": [
                       {
                         "field": "vortex.crm.activities:activity.subject",
-                        "label": "Subject"
+                        "label": "Subject",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.activities:activity.activity_type",
-                        "label": "Type"
+                        "label": "Type",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.activities:activity.due_at",
-                        "label": "Due at"
+                        "label": "Due at",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.activities:activity.completed",
-                        "label": "Completed"
+                        "label": "Completed",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.activities:activity.regarding",
-                        "label": "Regarding"
+                        "label": "Regarding",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.activities:activity.owner",
-                        "label": "Owner"
+                        "label": "Owner",
+                        "visible": true
                       }
                     ],
                     "title": "Activities",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.crm.activities:crm_activities",
                       "responsive": {
@@ -2511,15 +2570,18 @@
                     "columns": [
                       {
                         "field": "vortex.crm.people:contact.contact_number",
-                        "label": "Contact number"
+                        "label": "Contact number",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.people:contact.full_name",
-                        "label": "Full name"
+                        "label": "Full name",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.people:contact.email",
-                        "label": "Email"
+                        "label": "Email",
+                        "visible": true
                       }
                     ],
                     "query_parameters": [
@@ -2532,7 +2594,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.crm.people:crm_company_contacts",
                       "responsive": {

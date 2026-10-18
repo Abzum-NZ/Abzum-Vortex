@@ -54,7 +54,15 @@ export function TableLoadingState({
   contract: RecordsTableContract | undefined;
 }>): ReactElement {
   const columns = Array.from(
-    { length: Math.max(1, Math.min(contract?.columns.length ?? 4, SKELETON_COLUMN_LIMIT)) },
+    {
+      length: Math.max(
+        1,
+        Math.min(
+          contract?.columns.filter((column) => column.visible).length ?? 4,
+          SKELETON_COLUMN_LIMIT,
+        ),
+      ),
+    },
     (_, index) => index,
   );
   const rowCount = Math.max(

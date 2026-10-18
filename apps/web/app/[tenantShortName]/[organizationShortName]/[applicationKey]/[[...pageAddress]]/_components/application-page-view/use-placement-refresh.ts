@@ -25,7 +25,6 @@ import {
   readMountedRecordPinMemberships,
 } from "../../../../../../_lib/mounted-record-pin-watch-client";
 import type { RefreshedPlacementData, TableContinuationTarget, EditFormBaseline } from "./types";
-import type { TablePageCache } from "./use-table-page-cache";
 
 const subscribeToNothing = (): (() => void) => () => undefined;
 const afterHydration = (): boolean => true;
@@ -44,7 +43,6 @@ export function usePlacementRefresh({
   setDialogChoicePages,
   setRefreshedPlacementData,
   refreshedPlacementData,
-  pageCache,
 }: Readonly<{
   currentPageKey: string | undefined;
   placementRequestsRef: RefObject<{
@@ -62,7 +60,6 @@ export function usePlacementRefresh({
   setDialogChoicePages: Dispatch<SetStateAction<Readonly<Record<string, ChoiceInputPayload>>>>;
   setRefreshedPlacementData: Dispatch<SetStateAction<RefreshedPlacementData | undefined>>;
   refreshedPlacementData: RefreshedPlacementData | undefined;
-  pageCache: TablePageCache;
 }>) {
   const refreshPlacements = useCallback(
     async (
@@ -137,9 +134,6 @@ export function usePlacementRefresh({
         });
         return;
       }
-      // A reread of a list's own records (a write, a realtime change, Refresh) ends its cached pages.
-      if (tableContinuation === undefined) pageCache.invalidate(placementIds);
-
       const loadedData = new Map<string, PageDataState>();
       const loadedBaselines = new Map<string, EditFormBaseline | null>();
       const loadedSubjects = new Map<string, ApplicationPageModel["subject"] | null>();
@@ -156,15 +150,8 @@ export function usePlacementRefresh({
 
         let result: Awaited<ReturnType<typeof rereadApplicationPlacements>>;
         try {
-          // A click on a page already read (prefetched, or seen before) is served without a request;
-          // a position read from the address is always read fresh.
-          const cached =
-            tableContinuation === undefined || tableContinuation.fromAddress === true
-              ? undefined
-              : await pageCache.take(tableContinuation.placementId, tableContinuation.request);
-          result =
-            cached?.result ??
-            (await rereadApplicationPlacements(
+          // Every read, a page move included, is one placement read under the current access.
+          result = await rereadApplicationPlacements(
               {
                 tenantShortName: application.tenantShortName,
                 organizationShortName: application.organizationShortName,
@@ -177,9 +164,7 @@ export function usePlacementRefresh({
               undefined,
               tableContinuation,
               options?.content,
-            ));
-          if (tableContinuation !== undefined && result.kind === "available")
-            pageCache.settle(tableContinuation, result, cached);
+            );
         } catch {
           result = { kind: "temporarily_unavailable" };
         }
@@ -328,7 +313,6 @@ export function usePlacementRefresh({
       model.data,
       model.editFormBaselines,
       navigationKey,
-      pageCache,
       router,
     ],
   );

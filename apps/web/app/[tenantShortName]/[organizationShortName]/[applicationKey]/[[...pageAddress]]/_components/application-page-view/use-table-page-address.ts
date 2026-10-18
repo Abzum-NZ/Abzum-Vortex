@@ -1,23 +1,43 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import {
-  encodeTablePagePosition,
-  isTablePageParameter,
-  parseTablePagePosition,
-  tablePageParameterName,
-  type TablePageRequest,
-} from "../../../../../../_lib/table-page-position";
+  applyRecordsTableQueryChange,
+  readRecordsTableQueryState,
+  recordsTableAddressKey,
+  recordsTableParameterPlacement,
+  type RecordsTablePageRequest,
+  type RecordsTableQueryChange,
+} from "@vortex/platform/schema";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { TableContinuationTarget } from "./types";
 
+type Entries = readonly (readonly [string, string])[];
+
+/** The address key of every table placement the entries hold state for, by lower-cased placement. */
+const addressKeys = (entries: Entries): Map<string, string> => {
+  const keys = new Map<string, string>();
+  for (const [name] of entries) {
+    const placement = recordsTableParameterPlacement(name);
+    if (placement !== undefined && !keys.has(placement))
+      keys.set(placement, recordsTableAddressKey(placement, entries));
+  }
+  return keys;
+};
+
+const searchEntries = (search: string): Entries => [...new URLSearchParams(search)];
+
 /**
- * Keeps each table's page position in the address without a server render: a page change adds a
- * history entry (shallow), and an address that moves to another position (Back, Forward) rereads
- * only that table. The frame stays mounted throughout.
+ * Keeps each table's query state (sort, filters, search, visible columns and page) in the address
+ * without a server render. A person's change adds a history entry (shallow), and an address whose
+ * state for a table differs from the state the shown data was read for (the change itself, Back,
+ * Forward) rereads only that table once, under the viewer's current access. A change that reshapes
+ * the query also starts the table at page one and clears its selection; the placement reread's own
+ * request generation discards any response that lands for an earlier state.
  */
 export function useTablePageAddress({
   model,
   currentSearch,
   refreshPlacements,
+  setSelection,
 }: Readonly<{
   model: ApplicationPageModel;
   currentSearch: string;
@@ -25,53 +45,93 @@ export function useTablePageAddress({
     placementIds: readonly string[],
     tableContinuation?: TableContinuationTarget,
   ) => Promise<void>;
+  setSelection: Dispatch<SetStateAction<Readonly<Record<string, readonly string[]>>>>;
 }>) {
-  // The positions the shown table data was read for; a new server model starts from its own.
-  const shownRef = useRef<{ owner: ApplicationPageModel; positions: Map<string, string> }>({
+  // The table state the shown data was read for; a new server model starts from its own.
+  const shownRef = useRef<{ owner: ApplicationPageModel; keys: Map<string, string> }>({
     owner: model,
-    positions: new Map(Object.entries(model.tablePositions)),
+    keys: addressKeys(Object.entries(model.tableAddress)),
   });
   if (shownRef.current.owner !== model)
-    shownRef.current = { owner: model, positions: new Map(Object.entries(model.tablePositions)) };
+    shownRef.current = { owner: model, keys: addressKeys(Object.entries(model.tableAddress)) };
 
-  /** Records a page the table is about to show and adds it to the address. */
-  const commitTablePage = useCallback((placementId: string, request: TablePageRequest) => {
-    const name = tablePageParameterName(placementId);
-    const position = encodeTablePagePosition(request);
-    const shown = shownRef.current.positions;
-    if (shown.get(name) === position || (position === undefined && !shown.has(name))) return;
-    if (position === undefined) shown.delete(name);
-    else shown.set(name, position);
-    const parameters = new URLSearchParams(window.location.search);
-    if (position === undefined) parameters.delete(name);
-    else parameters.set(name, position);
+  const push = (parameters: URLSearchParams): void => {
     const query = parameters.toString();
     window.history.pushState(null, "", query === "" ? window.location.pathname : `?${query}`);
-  }, []);
+  };
+
+  /** Only the shown page is held, so a table that shows another page or state selects nothing. */
+  const clearSelection = useCallback(
+    (placementId: string) =>
+      setSelection((current) => {
+        const held = Object.keys(current).find(
+          (candidate) => candidate.toLowerCase() === placementId.toLowerCase(),
+        );
+        if (held === undefined) return current;
+        const next = { ...current };
+        delete next[held];
+        return next;
+      }),
+    [setSelection],
+  );
+
+  /** Records a page the table is about to show and adds it to the address. */
+  const commitTablePage = useCallback(
+    (placementId: string, request: RecordsTablePageRequest) => {
+      const parameters = new URLSearchParams(window.location.search);
+      applyRecordsTableQueryChange(parameters, placementId, { kind: "page", request });
+      const key = recordsTableAddressKey(placementId, [...parameters]);
+      const shown = shownRef.current.keys;
+      const placement = placementId.toLowerCase();
+      if ((shown.get(placement) ?? "") === key) return;
+      // The caller reads this page itself, so the address change must not read it again.
+      if (key === "") shown.delete(placement);
+      else shown.set(placement, key);
+      clearSelection(placementId);
+      push(parameters);
+    },
+    [clearSelection],
+  );
+
+  /** Applies a person's sort, filter, search or column change; the address effect rereads the table. */
+  const changeTableQuery = useCallback(
+    (placementId: string, change: Exclude<RecordsTableQueryChange, { kind: "page" }>) => {
+      const parameters = new URLSearchParams(window.location.search);
+      const before = recordsTableAddressKey(placementId, [...parameters]);
+      applyRecordsTableQueryChange(parameters, placementId, change);
+      if (recordsTableAddressKey(placementId, [...parameters]) === before) return;
+      clearSelection(placementId);
+      push(parameters);
+    },
+    [clearSelection],
+  );
 
   useEffect(() => {
-    const shown = shownRef.current.positions;
-    const parameters = new URLSearchParams(currentSearch);
-    const names = new Set([
-      ...[...parameters.keys()].filter(isTablePageParameter),
-      ...shown.keys(),
-    ]);
-    for (const name of names) {
-      const position = parameters.get(name) ?? undefined;
-      if (shown.get(name) === position) continue;
-      if (position === undefined) shown.delete(name);
-      else shown.set(name, position);
+    const shown = shownRef.current.keys;
+    const entries = searchEntries(currentSearch);
+    const current = addressKeys(entries);
+    for (const placement of new Set([...current.keys(), ...shown.keys()])) {
+      const key = current.get(placement);
+      if ((shown.get(placement) ?? "") === (key ?? "")) continue;
+      if (key === undefined) shown.delete(placement);
+      else shown.set(placement, key);
       const placementId = Object.keys(model.data).find(
-        (candidate) => tablePageParameterName(candidate).toLowerCase() === name.toLowerCase(),
+        (candidate) => candidate.toLowerCase() === placement,
       );
       if (placementId === undefined) continue;
+      clearSelection(placementId);
+      const state = readRecordsTableQueryState(placementId, entries);
       void refreshPlacements([placementId], {
         placementId,
         fromAddress: true,
-        request: parseTablePagePosition(position) ?? { page: 1, pageDirection: "forward" },
+        request:
+          (state.kind === "valid" ? state.state.page : undefined) ?? {
+            page: 1,
+            pageDirection: "forward",
+          },
       });
     }
-  }, [currentSearch, model.data, refreshPlacements]);
+  }, [clearSelection, currentSearch, model.data, refreshPlacements]);
 
-  return { commitTablePage };
+  return { commitTablePage, changeTableQuery };
 }

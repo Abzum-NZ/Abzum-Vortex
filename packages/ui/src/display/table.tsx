@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import {
+  nextRecordsTableSort,
   readRecordsTableContract,
   type RecordsTableActionContract,
   type RecordsTableColumnContract,
@@ -96,12 +97,6 @@ const priorityClass = (column: RenderedColumn, first: boolean): string | undefin
   }
 };
 
-/** The row's own record link: the first column's projected record link, when it has an address. */
-const rowOpenAddress = (row: DisplayRow, columnKey: string | undefined): string | undefined => {
-  const cell = columnKey === undefined ? undefined : row.cells[columnKey];
-  return cell?.kind === "record_link" ? cell.href : undefined;
-};
-
 /** Field identities compare without regard to case, as the Query engine keys them. */
 const sameFieldKey = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
@@ -163,7 +158,9 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   const columns = values === undefined ? [] : renderedColumns(contract, values.columns);
   const rows = values?.rows ?? [];
   const sortable = (column: RenderedColumn): boolean =>
-    contract === undefined || contract.sortableFields.includes(column.key);
+    contract === undefined ||
+    contract.sortableFields.some((field) => sameFieldKey(field, column.key));
+  const sortKeys = values?.sort?.keys ?? [];
   const selectionMode = contract?.selectionMode ?? "none";
   const selectable = events?.selection_changed !== undefined && contract?.selectionMode !== "none";
 
@@ -330,39 +327,64 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                   </TableHead>
                 )}
                 {columns.map((column) => {
-                  const direction =
-                    values.sort?.columnKey === column.key ? values.sort.direction : undefined;
+                  // The page's order is an ordered list of keys: the primary key sets aria-sort,
+                  // and every key states its direction and priority in the header's own text.
+                  const priority = sortKeys.findIndex((key) =>
+                    sameFieldKey(key.fieldId, column.key),
+                  );
+                  const direction = priority < 0 ? undefined : sortKeys[priority]?.direction;
                   const onSort = sortable(column) ? events?.sort_changed : undefined;
+                  const sortText =
+                    direction === undefined
+                      ? undefined
+                      : sortKeys.length === 1
+                        ? `sorted ${direction}`
+                        : `sorted ${direction}, sort priority ${priority + 1} of ${sortKeys.length}`;
                   return (
                     <TableHead
                       key={column.key}
                       scope="col"
-                      aria-sort={direction ?? "none"}
+                      aria-sort={priority === 0 && direction !== undefined ? direction : "none"}
                       className={cn(priorityClass(column, column.key === columns[0]?.key))}
                       {...columnAttributes(column)}
                     >
                       {onSort === undefined ? (
-                        column.label
+                        <>
+                          {column.label}
+                          {sortText === undefined ? null : (
+                            <span className="sr-only">, {sortText}</span>
+                          )}
+                        </>
                       ) : (
+                        // A click replaces the order with this column; Shift with a click adds,
+                        // turns or removes this column's key and keeps the others' priority.
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
-                          onClick={() =>
+                          title="Sort; hold Shift to add to the sort"
+                          onClick={(event) =>
                             onSort({
                               event: "sort_changed",
-                              columnKey: column.key,
-                              direction: direction === "ascending" ? "descending" : "ascending",
+                              sort: nextRecordsTableSort(values.sort, column.key, event.shiftKey),
                             })
                           }
                         >
                           {column.label}
+                          {sortText === undefined ? null : (
+                            <span className="sr-only">, {sortText}</span>
+                          )}
                           {direction === undefined ? null : (
                             <Icon
                               name={direction === "ascending" ? "arrow-up" : "arrow-down"}
                               aria-hidden="true"
                               className="size-3.5"
                             />
+                          )}
+                          {direction === undefined || sortKeys.length < 2 ? null : (
+                            <span aria-hidden="true" className="text-xs text-muted-foreground">
+                              {priority + 1}
+                            </span>
                           )}
                         </Button>
                       )}
@@ -383,18 +405,12 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                 const shownActions = declaredRowActions.filter((action) =>
                   rowShowsAction(row, action),
                 );
-                const activate = activateRow;
-                // A row with no declared click command opens the record its first column links to,
-                // through that column's own address, so the whole row acts as the link.
-                const openAddress =
-                  activate === undefined ? rowOpenAddress(row, columns[0]?.key) : undefined;
                 return (
                   <ClickableRow
                     key={row.recordId}
                     recordId={row.recordId}
                     selected={selected}
-                    activate={activate}
-                    openAddress={openAddress}
+                    activate={activateRow}
                   >
                     {!selectable ? null : (
                       <TableCell className="w-px">

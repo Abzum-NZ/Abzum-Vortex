@@ -693,18 +693,6 @@ export function PaginationControl({
 }>): ReactElement | null {
   if (page === undefined) return null;
   const onPage = events?.page_changed;
-  /** Pointer or focus on First or Last lets the page be read ahead; it never changes the page. */
-  const intend = (direction: "first" | "last") => {
-    if (onPage === undefined) return {};
-    const announce = () =>
-      onPage({
-        event: "page_changed",
-        page: direction === "first" ? 1 : (pageCount ?? 2),
-        direction,
-        intent: true,
-      });
-    return { onPointerEnter: announce, onFocus: announce };
-  };
   const numbered = pageCount !== undefined;
   const previousDisabled = numbered ? page <= 1 : hasPreviousPage !== true;
   const nextDisabled = pageCount !== undefined ? page >= pageCount : hasNextPage !== true;
@@ -727,7 +715,6 @@ export function PaginationControl({
               variant="ghost"
               disabled={firstDisabled}
               aria-label="First page"
-              {...intend("first")}
               onClick={() => onPage({ event: "page_changed", page: 1, direction: "first" })}
             >
               First
@@ -793,7 +780,6 @@ export function PaginationControl({
               variant="ghost"
               disabled={nextDisabled}
               aria-label="Last page"
-              {...intend("last")}
               onClick={() => onPage({ event: "page_changed", page: lastTarget, direction: "last" })}
             >
               Last
@@ -815,19 +801,20 @@ const isInteractiveTarget = (target: EventTarget, row: HTMLElement): boolean => 
 };
 
 /**
- * One list row. A row click handler may return the promise of the flow it started; the row stays
- * busy until it settles, so a second click or Enter cannot start the same flow twice.
+ * One list row. It opens only through the placement's declared row click, keyed by the row's own
+ * record identity, never through whatever a displayed cell links to. A row click handler may
+ * return the promise of the flow it started; the row stays busy until it settles, so a second click
+ * or Enter cannot start the same flow twice.
  */
 export function ClickableRow(
   props: Readonly<{
     recordId: string;
     selected: boolean;
     activate: ((recordId: string) => unknown) | undefined;
-    openAddress: string | undefined;
     children: ReactNode;
   }>,
 ): ReactElement {
-  const { recordId, selected, activate, openAddress, children } = props;
+  const { recordId, selected, activate, children } = props;
   const [pending, setPending] = useState(false);
   const pendingNow = useRef(false);
   const mounted = useRef(true);
@@ -872,14 +859,7 @@ export function ClickableRow(
             }
           },
         }
-      : openAddress === undefined
-        ? {}
-        : {
-            onClick: (event: MouseEvent<HTMLTableRowElement>) => {
-              if (isInteractiveTarget(event.target, event.currentTarget)) return;
-              window.location.assign(openAddress);
-            },
-          };
+      : {};
   return (
     <TableRow
       id={`record-${recordId}`}
@@ -887,7 +867,7 @@ export function ClickableRow(
       data-state={selected ? "selected" : undefined}
       aria-busy={pending ? true : undefined}
       className={cn(
-        activate === undefined && openAddress === undefined ? undefined : "cursor-pointer",
+        activate === undefined ? undefined : "cursor-pointer",
         pending && "cursor-progress opacity-60",
       )}
       {...interaction}

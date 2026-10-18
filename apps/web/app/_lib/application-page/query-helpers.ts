@@ -24,8 +24,7 @@ import {
   isRecord,
   recordIdSchema,
 } from "@vortex/platform/schema";
-import type { ModuleRelease, ModuleField, SearchParameters } from "./types";
-import { first } from "./placement-helpers";
+import type { ModuleRelease, ModuleField } from "./types";
 
 type ModuleQueryInput = ModuleRelease["content"]["queries"][number]["inputs"][number];
 
@@ -303,37 +302,11 @@ export const logPlacementFailure = (
     | "edit_field_unprojected"
     | "create_field_default_unprojected"
     | BoardPlacementFailureCause
-    | "board_payload_invalid",
+    | "board_payload_invalid"
+    | "table_state_malformed",
   detail?: string,
 ): void => {
   console.error(
     `[page] data placement not loaded: application=${address.application.key} page=${address.pageKey} placement=${placementId} reason=${reason}${detail === undefined ? "" : ` cause=${detail}`}`,
   );
-};
-
-export const requestState = (
-  placementId: string,
-  parameters: SearchParameters,
-): Readonly<{
-  sort: { fieldId: string; direction: "ascending" | "descending" } | null;
-  filters: { fieldId: string; value: string }[];
-  search: string | null;
-}> => {
-  const sortText = first(parameters[`sort.${placementId}`]);
-  const separator = sortText?.lastIndexOf(":") ?? -1;
-  const direction = sortText?.slice(separator + 1);
-  const sort: { fieldId: string; direction: "ascending" | "descending" } | null =
-    sortText !== undefined && separator > 0 && direction === "ascending"
-      ? { fieldId: sortText.slice(0, separator), direction: "ascending" }
-      : sortText !== undefined && separator > 0 && direction === "descending"
-        ? { fieldId: sortText.slice(0, separator), direction: "descending" }
-        : null;
-  const filterPrefix = `filter.${placementId}.`;
-  const filters = Object.entries(parameters).flatMap(([name, value]) => {
-    const text = first(value);
-    return name.startsWith(filterPrefix) && text !== undefined
-      ? [{ fieldId: name.slice(filterPrefix.length), value: text }]
-      : [];
-  });
-  return { sort, filters, search: first(parameters[`search.${placementId}`]) ?? null };
 };

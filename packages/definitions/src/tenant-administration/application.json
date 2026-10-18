@@ -398,21 +398,24 @@
                     "columns": [
                       {
                         "field": "vortex.system_directory:organization.display_name",
-                        "label": "Organisation"
+                        "label": "Organisation",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:organization.short_name",
-                        "label": "Short name"
+                        "label": "Short name",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:organization.state",
-                        "label": "State"
+                        "label": "State",
+                        "visible": true
                       }
                     ],
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.4.0"
+                        "release_version": "2.0.0"
                       },
                       "view_permission": "vortex.tenant_administration.organization.read",
                       "query": "vortex.system_directory:organizations",
@@ -461,23 +464,28 @@
                     "columns": [
                       {
                         "field": "vortex.system_directory:organization.display_name",
-                        "label": "Display name"
+                        "label": "Display name",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:organization.short_name",
-                        "label": "Short name"
+                        "label": "Short name",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:organization.state",
-                        "label": "State"
+                        "label": "State",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:organization.state_changed_at",
-                        "label": "State changed"
+                        "label": "State changed",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:organization.created_at",
-                        "label": "Created"
+                        "label": "Created",
+                        "visible": true
                       }
                     ],
                     "row_actions": [
@@ -505,7 +513,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.4.0"
+                        "release_version": "2.0.0"
                       },
                       "view_permission": "vortex.tenant_administration.organization.read",
                       "query": "vortex.system_directory:organizations",
@@ -1054,25 +1062,29 @@
                     "columns": [
                       {
                         "field": "vortex.system_directory:tenant_administrator.identity_id",
-                        "label": "Identity"
+                        "label": "Identity",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:tenant_administrator.starts_at",
-                        "label": "Starts"
+                        "label": "Starts",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:tenant_administrator.expires_at",
-                        "label": "Expires"
+                        "label": "Expires",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:tenant_administrator.state",
-                        "label": "State"
+                        "label": "State",
+                        "visible": true
                       }
                     ],
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.4.0"
+                        "release_version": "2.0.0"
                       },
                       "view_permission": "vortex.tenant_administration.tenant_administrator.read",
                       "query": "vortex.system_directory:tenant_administrators",

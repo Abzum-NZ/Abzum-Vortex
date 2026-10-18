@@ -16,6 +16,7 @@ import {
   projectedRecordPinTilesSchema,
   projectedApplicationPageLinkTilesSchema,
   mountedRecordPinFrameSchema,
+  type RecordsTableQueryChange,
   type ReferenceChoiceSelectionEvidenceMap,
   type ComponentRequestGeneration,
 } from "@vortex/platform/schema";
@@ -27,7 +28,6 @@ import { rereadApplicationPlacements } from "../../placement-refresh-action";
 import type {
   placementEventNamesByPage,
   applicationLauncherPlacementIds} from "./placement-helpers";
-import { tablePageParameterName } from "../../../../../../_lib/table-page-position";
 import {
   boardPayloadFor,
   tablePayloadFor,
@@ -61,7 +61,7 @@ export function useRuntimeInputs({
   continueTablePage,
   refreshPlacements,
   setSelection,
-  setQuery,
+  changeTableQuery,
   requestChoicePageRef,
   changeChoiceField,
   subject,
@@ -109,7 +109,10 @@ export function useRuntimeInputs({
   continueTablePage: (placementId: string, event: DisplaySemanticEvent, table: ReturnType<typeof parseTablePayload>) => Promise<void>;
   refreshPlacements: (placementIds: readonly string[], tableContinuation?: TableContinuationTarget) => Promise<void>;
   setSelection: Dispatch<SetStateAction<Readonly<Record<string, readonly string[]>>>>;
-  setQuery: (change: (parameters: URLSearchParams) => void) => void;
+  changeTableQuery: (
+    placementId: string,
+    change: Exclude<RecordsTableQueryChange, { kind: "page" }>,
+  ) => void;
   requestChoicePageRef: RefObject<(placementId: string, event: Extract<ControlSemanticEvent, { event: "choices_requested" }>, formId?: string) => Promise<void>>;
   changeChoiceField: (placementId: string, event: ControlSemanticEvent, dialogFormId?: string) => void;
   subject: ApplicationPageModel["subject"];
@@ -275,32 +278,26 @@ export function useRuntimeInputs({
               return { ...current, [placementId]: [...held] };
             });
           };
+        // Sort, filter and search change the table's query state in the address; that table alone
+        // is read again from page one, on the server, and nothing is applied to the shown rows.
         if (supportsEvent("sort_changed"))
           events.sort_changed = (event: DisplaySemanticEvent) => {
             if (event.event !== "sort_changed") return;
-            setQuery((parameters) => {
-              parameters.set(`sort.${placementId}`, `${event.columnKey}:${event.direction}`);
-              parameters.delete(tablePageParameterName(placementId));
-            });
+            changeTableQuery(placementId, { kind: "sort", keys: event.sort });
           };
         if (supportsEvent("filter_changed"))
           events.filter_changed = (event: DisplaySemanticEvent) => {
             if (event.event !== "filter_changed") return;
-            setQuery((parameters) => {
-              const name = `filter.${placementId}.${event.field}`;
-              parameters.delete(tablePageParameterName(placementId));
-              if (event.value === "") parameters.delete(name);
-              else parameters.set(name, event.value);
+            changeTableQuery(placementId, {
+              kind: "filter",
+              fieldId: event.field,
+              value: event.value,
             });
           };
         if (supportsEvent("search_changed"))
           events.search_changed = (event: DisplaySemanticEvent) => {
             if (event.event !== "search_changed") return;
-            setQuery((parameters) => {
-              parameters.delete(tablePageParameterName(placementId));
-              if (event.query.trim() === "") parameters.delete(`search.${placementId}`);
-              else parameters.set(`search.${placementId}`, event.query);
-            });
+            changeTableQuery(placementId, { kind: "search", text: event.query });
           };
       }
       if (model.referenceChoiceInputs.some((field) => field.placementId === placementId))
@@ -598,7 +595,7 @@ export function useRuntimeInputs({
     runBinding,
     requestChoicePage,
     selection,
-    setQuery,
+    changeTableQuery,
     subject,
     onOpenApplication,
     unsavedWork,

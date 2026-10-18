@@ -92,17 +92,11 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     rendererKey: "platform.renderer.summary_values",
     releaseVersion: "1.1.0",
   },
-  TABLE_BLOCK_RELEASE_1_2_0: {
+  TABLE_BLOCK_RELEASE: {
     blockId: "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
     key: "platform.display.table",
     rendererKey: "platform.renderer.table",
-    releaseVersion: "1.2.0",
-  },
-  TABLE_BLOCK_RELEASE_1_3_0: {
-    blockId: "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-    key: "platform.display.table",
-    rendererKey: "platform.renderer.table",
-    releaseVersion: "1.3.0",
+    releaseVersion: "2.0.0",
   },
   RECORD_DETAIL_BLOCK_RELEASE_1_2_0: {
     blockId: "e2569df0-2f10-4b20-b41d-177b66cd136c",
@@ -289,12 +283,6 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     key: "platform.launcher.view_filter",
     rendererKey: "platform.renderer.view_filter",
     releaseVersion: "1.0.0",
-  },
-  TABLE_BLOCK_RELEASE_1_4_0: {
-    blockId: "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-    key: "platform.display.table",
-    rendererKey: "platform.renderer.table",
-    releaseVersion: "1.4.0",
   },
   CONTAINER_BLOCK_RELEASE_1_2_0: {
     blockId: "11d1a889-531f-4880-a1a4-5dda5289e5ff",
