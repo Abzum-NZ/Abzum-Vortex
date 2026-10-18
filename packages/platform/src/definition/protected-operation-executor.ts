@@ -26,6 +26,7 @@ import {
   retireOrganizationAdministrationGroupCommandSchema,
   retireOrganizationAdministrationRoleCommandSchema,
   revokeOrganizationAdministrationDelegationAuthorityCommandSchema,
+  grantOrganizationAdministrationDelegationAuthorityCommandSchema,
   revokeOrganizationAdministrationRoleAssignmentCommandSchema,
   revokeOrganizationInvitationForAdministrationCommandSchema,
   reviseOrganizationAdministrationRoleMetadataCommandSchema,
@@ -223,6 +224,7 @@ type ProtectedOperationServices = Readonly<{
     | "revokeRoleAssignment"
     | "deactivateRoleActivation"
     | "revokeDelegationAuthority"
+    | "grantDelegationAuthority"
     | "suspendOrganizationAccount"
     | "reactivateOrganizationAccount"
     | "closeOrganizationAccount"
@@ -860,6 +862,27 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         (value) => ({
           role_activation_id: value.activation.roleActivationId,
           revision: value.activation.revision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
+  grant_delegation_authority: operation({
+    schema: grantOrganizationAdministrationDelegationAuthorityCommandSchema,
+    command: (inputs) => ({
+      holderKind: inputs.holder_kind,
+      holderId: inputs.holder_id,
+      expectedHolderRevision: inputs.expected_holder_revision,
+    }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.grantDelegationAuthority(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          delegation_authority_id: value.delegation.delegationAuthorityId,
+          revision: value.delegation.revision,
           access_version: value.accessVersion,
         }),
       ),
