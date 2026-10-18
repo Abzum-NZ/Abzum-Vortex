@@ -275,8 +275,8 @@ export type DisplaySemanticEventName = Extract<
  *
  * A row click, row action, bulk action and inline-edit commit carry the stable `eventId` of the
  * exact configured control that fired, because one table placement may declare several named
- * commands that each bind to a different flow. A legacy `row_action` from an earlier release that
- * declares only one command may leave it absent.
+ * commands that each bind to a different flow. Other displays with a single placement-level
+ * action emit `row_action` without an event identity.
  *
  * A row action carries the row's server-projected current revision, exactly as an inline-edit commit
  * does, so a command that changes one existing row is bound at the revision the person actually saw

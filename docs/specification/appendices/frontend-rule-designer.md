@@ -159,6 +159,8 @@ Human input pauses the execution, not a database transaction. Schedules, waits, 
 
 Every user-facing application action has a flow binding: standard record commands, custom record actions, toolbar, menu and row commands, action buttons and form submission. Every flow belongs to the application or module release that contains it. Module-owned queries, flows and protected operations remain reusable dependencies. Pages store layout, data and form context and typed event-to-flow bindings, not executable business behaviour or label-selected handlers.
 
+Records table row commands are declared in `row_actions`, each with a label and the `event_id` of its flow binding. Every table `row_action` binding must have a matching declared command. An empty command list displays no actions column; the renderer never invents an Open command from a binding alone. Commands carry the displayed record revision, and any required capability controls their visibility while the server rechecks permission and revision when the flow runs.
+
 ```mermaid
 flowchart TD
     APP[App Builder] --> PAGE[Pages: drag and drop components]
