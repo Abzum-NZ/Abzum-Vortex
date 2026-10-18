@@ -95,8 +95,9 @@ export const createDraftModuleOverlay = (
   context: SessionContext,
   applicationDraft: StoredDefinitionDraft,
 ): DefinitionPublicationTransaction => {
-  // One draft compile reads the stored definitions in one read transaction, so a stored release
-  // page or release read once is the same for the rest of the compile and is read only once.
+  // One draft compile reads the stored definitions in one read transaction, so its owned roots, a
+  // stored release page or a release read once are the same for the rest of the compile and are
+  // read only once.
   const storedReads = new Map<string, Promise<unknown>>();
   const once = <Value>(parts: readonly unknown[], read: () => Promise<Value>): Promise<Value> => {
     const readKey = JSON.stringify(parts);
@@ -110,7 +111,9 @@ export const createDraftModuleOverlay = (
     readCandidate: (rootId) => storedReader.readCandidate(rootId),
     readDraftCandidate: (rootId) => storedReader.readDraftCandidate(rootId),
     readOwnedModuleRoots: (applicationRootId) =>
-      storedReader.readOwnedModuleRoots(applicationRootId),
+      once(["owned", String(applicationRootId).toLowerCase()], () =>
+        storedReader.readOwnedModuleRoots(applicationRootId),
+      ),
     readModuleReleasePage: (organizationId, moduleKey, cursor) =>
       once(["page", organizationId, moduleKey, cursor ?? null], () =>
         storedReader.readModuleReleasePage(organizationId, moduleKey, cursor),
