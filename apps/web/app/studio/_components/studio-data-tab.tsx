@@ -58,7 +58,7 @@ function ModuleInspector({ source, moduleKey, disabled, edit }: Readonly<{
   const name = useStudioDraftText(module.name, (next) =>
     studioEditProblem(edit((current) => renameInlineModule(current, { moduleKey, name: next }), { merge: `module-name:${moduleKey}` })) ?? true);
   return <div className="space-y-3">
-    <StudioField label="Module name" error={name.problem === "" ? undefined : name.problem}>
+    <StudioField label="Module name" error={name.problem === "" ? undefined : name.problem} onUndo={name.reset}>
       {(control) => <Input {...control} maxLength={120} value={name.text} disabled={disabled}
         onChange={(event) => name.change(event.target.value)} />}
     </StudioField>
@@ -109,11 +109,11 @@ function RecordTypeInspector({ source, moduleKey, recordKey, disabled, fieldCont
   };
   return <div className="space-y-4">
     <section className="space-y-3" aria-label={`Names of ${record.plural_name}`}>
-      <StudioField label="Name of one record" error={name.problem === "" ? undefined : name.problem}>
+      <StudioField label="Name of one record" error={name.problem === "" ? undefined : name.problem} onUndo={name.reset}>
         {(control) => <Input {...control} maxLength={60} value={name.text} disabled={disabled}
           onChange={(event) => name.change(event.target.value)} />}
       </StudioField>
-      <StudioField label="Name of several records" error={plural.problem === "" ? undefined : plural.problem}>
+      <StudioField label="Name of several records" error={plural.problem === "" ? undefined : plural.problem} onUndo={plural.reset}>
         {(control) => <Input {...control} maxLength={60} value={plural.text} disabled={disabled}
           onChange={(event) => plural.change(event.target.value)} />}
       </StudioField>

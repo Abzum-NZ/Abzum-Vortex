@@ -1,6 +1,5 @@
 "use client";
 import {
-  Fragment,
   createContext,
   useCallback,
   useContext,
@@ -17,37 +16,39 @@ import { Info } from "lucide-react";
 
 const FieldProblemsContext = createContext<Readonly<{
   problems: readonly string[];
-  report: (id: string, error: string | undefined) => void;
+  report: (id: string, error: string | undefined, onUndo?: () => void) => void;
+  canUndo: boolean;
   undo: () => void;
 }> | null>(null);
 
 /** Invalid text stays outside the draft, but still belongs in the workspace's save feedback. */
 export function StudioFieldProblemsProvider({ children }: Readonly<{ children: ReactNode }>) {
-  const [problems, setProblems] = useState<Readonly<Record<string, string>>>({});
-  const [generation, setGeneration] = useState(0);
-  const report = useCallback((id: string, error: string | undefined) => {
+  const [problems, setProblems] = useState<
+    Readonly<Record<string, Readonly<{ message: string; onUndo: (() => void) | undefined }>>>
+  >({});
+  const report = useCallback((id: string, error: string | undefined, onUndo?: () => void) => {
     setProblems((previous) => {
-      if (previous[id] === error) return previous;
+      if (previous[id]?.message === error && previous[id]?.onUndo === onUndo) return previous;
       const next = { ...previous };
       if (error === undefined) delete next[id];
-      else next[id] = error;
+      else next[id] = { message: error, onUndo };
       return next;
     });
   }, []);
   const undo = useCallback(() => {
-    setProblems({});
-    // Remount the form controls from the unchanged draft, preserving the owning draft history.
-    setGeneration((previous) => previous + 1);
-  }, []);
+    // Undo only the field shown in save feedback. Its owner clears the problem after resetting.
+    Object.values(problems)[0]?.onUndo?.();
+  }, [problems]);
   const value = useMemo(
-    () => ({ problems: Object.values(problems), report, undo }),
+    () => ({
+      problems: Object.values(problems).map((problem) => problem.message),
+      canUndo: Object.values(problems)[0]?.onUndo !== undefined,
+      report,
+      undo,
+    }),
     [problems, report, undo],
   );
-  return (
-    <FieldProblemsContext.Provider value={value}>
-      <Fragment key={generation}>{children}</Fragment>
-    </FieldProblemsContext.Provider>
-  );
+  return <FieldProblemsContext.Provider value={value}>{children}</FieldProblemsContext.Provider>;
 }
 
 export const useStudioFieldProblems = () => useContext(FieldProblemsContext);
@@ -89,12 +90,14 @@ export function StudioField({
   label,
   hint,
   error,
+  onUndo,
   optional = false,
   children,
 }: Readonly<{
   label: ReactNode;
   hint?: string | undefined;
   error?: string | undefined;
+  onUndo?: (() => void) | undefined;
   optional?: boolean;
   children: (
     control: Readonly<{ id: string; "aria-invalid"?: true; "aria-describedby"?: string }>,
@@ -103,9 +106,9 @@ export function StudioField({
   const id = useId();
   const report = useStudioFieldProblems()?.report;
   useEffect(() => {
-    report?.(id, error === "" ? undefined : error);
+    report?.(id, error === "" ? undefined : error, onUndo);
     return () => report?.(id, undefined);
-  }, [id, error, report]);
+  }, [id, error, onUndo, report]);
   const description = [
     hint === undefined ? undefined : id + "-hint",
     error === undefined ? undefined : id + "-error",

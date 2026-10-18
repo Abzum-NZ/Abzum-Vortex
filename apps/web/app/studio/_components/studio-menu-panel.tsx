@@ -199,7 +199,7 @@ function StudioMenuEntryEditor({ source, item, position, disabled, run, moveBy, 
   };
   return <section aria-label={`Menu entry ${item.label}`} className="space-y-3 rounded-md border border-border p-3">
     <p className="text-sm font-medium">{kindWords(item)} “{item.label}”</p>
-    <StudioField label="Label" error={label.problem === "" ? undefined : label.problem}>
+    <StudioField label="Label" error={label.problem === "" ? undefined : label.problem} onUndo={label.reset}>
       {(control) => <Input {...control} value={label.text} maxLength={60} disabled={disabled} onChange={(event) => label.change(event.target.value)} />}
     </StudioField>
     <fieldset className="space-y-1">
@@ -223,7 +223,7 @@ function StudioMenuEntryEditor({ source, item, position, disabled, run, moveBy, 
         {pages.map((page) => <NativeSelectOption key={page.key} value={page.key}>{page.label}</NativeSelectOption>)}
       </NativeSelect>}
     </StudioField>}
-    {item.type === "external" && <StudioField label="Address" error={address.problem === "" ? undefined : address.problem}>
+    {item.type === "external" && <StudioField label="Address" error={address.problem === "" ? undefined : address.problem} onUndo={address.reset}>
       {(control) => <Input {...control} value={address.text} disabled={disabled} onChange={(event) => address.change(event.target.value)} />}
     </StudioField>}
     {item.type !== "heading" && <div className="space-y-1">

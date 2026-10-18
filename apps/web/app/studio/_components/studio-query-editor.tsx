@@ -240,12 +240,12 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
 
   return <section className="space-y-4" aria-label={`Query ${query.label ?? query.key}`}>
     <StudioField label="Name" hint={`Key: ${query.key}. It does not change when the name does. Lists ${record.plural_name}.`}
-      error={name.problem === "" ? undefined : name.problem}>
+      error={name.problem === "" ? undefined : name.problem} onUndo={name.reset}>
       {(control) => <Input {...control} value={name.text} maxLength={60} disabled={disabled}
         onChange={(event) => name.change(event.target.value)} />}
     </StudioField>
     <StudioField label="Description" hint="What the query lists, for other builders. Optional."
-      error={description.problem === "" ? undefined : description.problem}>
+      error={description.problem === "" ? undefined : description.problem} onUndo={description.reset}>
       {(control) => <Textarea {...control} value={description.text} maxLength={1_000} disabled={disabled}
         onChange={(event) => description.change(event.target.value)} />}
     </StudioField>

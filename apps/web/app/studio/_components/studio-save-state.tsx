@@ -143,7 +143,9 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={(!hasFieldProblems && !draft.state.canUndo) || draft.locked}
+                  disabled={
+                    (hasFieldProblems ? !fields?.canUndo : !draft.state.canUndo) || draft.locked
+                  }
                   onClick={hasFieldProblems ? fields?.undo : draft.undo}
                 >
                   Undo my change

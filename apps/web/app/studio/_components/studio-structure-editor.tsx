@@ -126,7 +126,7 @@ export function StudioStructureEditor({ source, selected, disabled, onCommand, o
         {page !== undefined ? "Selected page" : "Selected layout"}
         {page !== undefined && page.key === source.body.home_page && <span className="text-muted-foreground"> · home page</span>}
       </p>
-      <StudioField label="Name" error={rename.problem === "" ? undefined : rename.problem}>
+      <StudioField label="Name" error={rename.problem === "" ? undefined : rename.problem} onUndo={rename.reset}>
         {(control) => <Input {...control} value={rename.text} maxLength={60} disabled={disabled}
           onChange={(event) => rename.change(event.target.value)} />}
       </StudioField>

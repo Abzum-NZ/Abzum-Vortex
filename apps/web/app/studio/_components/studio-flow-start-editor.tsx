@@ -85,7 +85,7 @@ function StartText({
 }>) {
   const text = useStudioDraftText(value, apply);
   return (
-    <StudioField label={label} error={text.problem || undefined}>
+    <StudioField label={label} error={text.problem || undefined} onUndo={text.reset}>
       {(control) => (
         <Input
           {...control}

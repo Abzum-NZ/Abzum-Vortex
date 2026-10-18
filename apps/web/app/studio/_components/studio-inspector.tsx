@@ -33,7 +33,7 @@ function LabelsForm({ labels }: Readonly<{ labels: StudioLabelsForm }>) {
   const description = useStudioDraftText(labels.description, labels.onDescription);
   return (
     <div className="space-y-4">
-      <StudioField label="Name" error={name.problem || undefined}>
+      <StudioField label="Name" error={name.problem || undefined} onUndo={name.reset}>
         {(control) => (
           <Input
             {...control}
@@ -47,7 +47,7 @@ function LabelsForm({ labels }: Readonly<{ labels: StudioLabelsForm }>) {
         )}
       </StudioField>
       {labels.isApplication && (
-        <StudioField label="Description" error={description.problem || undefined}>
+        <StudioField label="Description" error={description.problem || undefined} onUndo={description.reset}>
           {(control) => (
             <Textarea
               {...control}

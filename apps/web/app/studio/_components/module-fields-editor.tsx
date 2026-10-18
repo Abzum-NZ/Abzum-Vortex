@@ -337,14 +337,14 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
   const problemOf = (text: string) => text === "" ? undefined : text;
 
   return <form className="space-y-4" onSubmit={add} aria-label={adding ? `New field of ${record.name}` : `Field ${existing!.label}`}>
-    <StudioField label="Label" error={problemOf(label.problem)} hint={adding
+    <StudioField label="Label" error={problemOf(label.problem)} onUndo={label.reset} hint={adding
       ? nextKey === undefined ? "The label people see on forms and lists. A short key is made from it."
         : `Its key will be "${nextKey}". It does not change later.`
       : `Key: ${existing!.key}. It does not change when the label does.`}>
       {(control) => <Input {...control} className="w-full" value={label.text} disabled={disabled} maxLength={60}
         onChange={(event) => { label.change(event.target.value); if (adding) setIssues([]); }} />}
     </StudioField>
-    <StudioField label="Help text" hint="Shown under the field on forms. Optional." error={problemOf(helpText.problem)}>
+    <StudioField label="Help text" hint="Shown under the field on forms. Optional." error={problemOf(helpText.problem)} onUndo={helpText.reset}>
       {(control) => <Textarea {...control} value={helpText.text} disabled={disabled} maxLength={200}
         onChange={(event) => helpText.change(event.target.value)} />}
     </StudioField>
