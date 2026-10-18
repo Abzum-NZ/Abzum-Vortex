@@ -13,14 +13,7 @@
       "storage_contract_id": "srt_00000002",
       "storage_scope": "organization_shared",
       "ownership_mode": "group",
-      "standard_actions": [
-        "create",
-        "read",
-        "update",
-        "soft_delete",
-        "restore",
-        "export"
-      ],
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
       "custom_actions": [],
       "fields": [
         {
@@ -88,10 +81,7 @@
             "result_type": "text",
             "expression": {
               "operation": "join_text",
-              "fields": [
-                "first_name",
-                "last_name"
-              ],
+              "fields": ["first_name", "last_name"],
               "separator": " "
             }
           }
@@ -155,31 +145,13 @@
           "sortable": false,
           "personal_data": "none",
           "public_display": "refused",
-          "type": "link_to_person",
-          "settings": {
-            "audience": "organization_accounts",
-            "application_root_required": false,
-            "on_person_deactivation": "retain_reference"
-          }
-        },
-        {
-          "id": "fld_contact_owner_person",
-          "key": "relationship_owner_person",
-          "label": "Relationship owner",
-          "required": false,
-          "unique": false,
-          "filterable": false,
-          "sortable": false,
-          "personal_data": "none",
-          "public_display": "refused",
           "type": "link",
           "settings": {
             "target": "vortex.system_directory:person",
-            "reverse_key": "relationship_owner_person_references",
-            "reverse_name": "Relationship owner person references",
+            "reverse_key": "relationship_owner_references",
+            "reverse_name": "Relationship owner references",
             "on_parent_delete": "empty_optional",
-            "application_root_required": false,
-            "legacy_person_field": "relationship_owner"
+            "application_root_required": false
           }
         },
         {
@@ -224,9 +196,9 @@
           "on_parent_delete": "empty_optional"
         },
         {
-          "id": "fld_contact_owner_person_relationship",
-          "key": "relationship_owner_person",
-          "from_field": "relationship_owner_person",
+          "id": "fld_contact_owner_relationship",
+          "key": "relationship_owner",
+          "from_field": "relationship_owner",
           "to_record_type": "vortex.system_directory:person",
           "cardinality": "many_to_one",
           "on_parent_delete": "empty_optional"
@@ -242,17 +214,8 @@
       "storage_contract_id": "srt_00000003",
       "storage_scope": "application_contained",
       "ownership_mode": "organization_account",
-      "standard_actions": [
-        "create",
-        "read",
-        "update",
-        "soft_delete",
-        "restore",
-        "export"
-      ],
-      "custom_actions": [
-        "act_lead_convert"
-      ],
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
+      "custom_actions": ["act_lead_convert"],
       "fields": [
         {
           "id": "fld_lead_number",
@@ -844,13 +807,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "email",
-          "status"
-        ],
-        "changeable_fields": [
-          "status"
-        ]
+        "readable_fields": ["email", "status"],
+        "changeable_fields": ["status"]
       }
     },
     {
@@ -869,9 +827,7 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "notes"
-        ],
+        "readable_fields": ["notes"],
         "changeable_fields": []
       }
     }
@@ -902,9 +858,7 @@
           "label": "Company",
           "required": false,
           "type": "record_reference",
-          "record_types": [
-            "vortex.crm.organisations:company"
-          ]
+          "record_types": ["vortex.crm.organisations:company"]
         }
       ],
       "tasks": [
@@ -951,29 +905,21 @@
       "id": "evt_contact_created",
       "key": "vortex.crm.people.contact.created",
       "record_type": "contact",
-      "carries": [
-        "contact_number",
-        "company"
-      ],
+      "carries": ["contact_number", "company"],
       "personal_or_sensitive_values_allowed": false
     },
     {
       "id": "evt_lead_received",
       "key": "vortex.crm.people.lead.received",
       "record_type": "lead",
-      "carries": [
-        "lead_number",
-        "source"
-      ],
+      "carries": ["lead_number", "source"],
       "personal_or_sensitive_values_allowed": false
     },
     {
       "id": "evt_lead_converted",
       "key": "vortex.crm.people.lead.converted",
       "record_type": "lead",
-      "carries": [
-        "lead_number"
-      ],
+      "carries": ["lead_number"],
       "personal_or_sensitive_values_allowed": false
     }
   ],
@@ -1075,17 +1021,13 @@
       "id": "ext_contact_fields",
       "key": "contact_fields",
       "record_type": "contact",
-      "accepts": [
-        "field"
-      ]
+      "accepts": ["field"]
     },
     {
       "id": "ext_lead_actions",
       "key": "lead_actions",
       "record_type": "lead",
-      "accepts": [
-        "action"
-      ]
+      "accepts": ["action"]
     }
   ],
   "sharing_conditions": [],
@@ -1096,13 +1038,7 @@
       "label": "Contacts",
       "record_type": "contact",
       "inputs": [],
-      "select": [
-        "contact_number",
-        "full_name",
-        "email",
-        "company",
-        "relationship_owner"
-      ],
+      "select": ["contact_number", "full_name", "email", "company", "relationship_owner"],
       "filter": null,
       "group_by": [],
       "aggregates": [],
@@ -1126,17 +1062,10 @@
           "label": "Company",
           "required": true,
           "type": "record_reference",
-          "record_types": [
-            "vortex.crm.organisations:company"
-          ]
+          "record_types": ["vortex.crm.organisations:company"]
         }
       ],
-      "select": [
-        "contact_number",
-        "full_name",
-        "email",
-        "company"
-      ],
+      "select": ["contact_number", "full_name", "email", "company"],
       "filter": {
         "field": "company",
         "operator": "equals",

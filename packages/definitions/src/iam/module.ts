@@ -127,26 +127,17 @@ const requestItemCreateChangeable = [
   "application_key",
 ];
 const requestItemUpdateChangeable = ["item_type", "target_key", "change", "application_key"];
-const requestItemReadable = [
-  "request",
-  "item_type",
-  "target_key",
-  "change",
-  "application_key",
-];
+const requestItemReadable = ["request", "item_type", "target_key", "change", "application_key"];
 
 const permissions = [
   ...standardActions.flatMap((action) => {
-    const readable =
-      action === "soft_delete" || action === "restore" ? [] : requestReadable;
-    const changeable =
-      action === "create" || action === "update" ? requestChangeable : [];
+    const readable = action === "soft_delete" || action === "restore" ? [] : requestReadable;
+    const changeable = action === "create" || action === "update" ? requestChangeable : [];
     const scope = action === "update" ? draftRequests : allRecords;
     return [recordPermission("access_request", action, readable, changeable, scope)];
   }),
   ...standardActions.flatMap((action) => {
-    const readable =
-      action === "soft_delete" || action === "restore" ? [] : requestItemReadable;
+    const readable = action === "soft_delete" || action === "restore" ? [] : requestItemReadable;
     const changeable =
       action === "create"
         ? requestItemCreateChangeable
@@ -156,11 +147,21 @@ const permissions = [
     return [recordPermission("access_request_item", action, readable, changeable)];
   }),
   scopedRecordPermission(
-    "access_request", "create", "own", ownRecords, requestReadable, requestChangeable,
+    "access_request",
+    "create",
+    "own",
+    ownRecords,
+    requestReadable,
+    requestChangeable,
   ),
   scopedRecordPermission("access_request", "read", "own", ownRecords, requestReadable, []),
   scopedRecordPermission(
-    "access_request", "update", "own", ownDraftRequests, requestReadable, requestChangeable,
+    "access_request",
+    "update",
+    "own",
+    ownDraftRequests,
+    requestReadable,
+    requestChangeable,
   ),
   scopedRecordPermission("access_request", "soft_delete", "own", ownRecords, [], []),
   scopedRecordPermission(
@@ -258,19 +259,6 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
           label: "Beneficiary",
           filterable: true,
           personal_data: "personal",
-          type: "link_to_person",
-          settings: {
-            audience: "organization_accounts",
-            application_root_required: false,
-            on_person_deactivation: "retain_reference",
-          },
-        },
-        {
-          ...fieldBase,
-          id: "fld_iam_request_beneficiary_person",
-          key: "beneficiary_person",
-          label: "Beneficiary",
-          personal_data: "personal",
           type: "link",
           settings: {
             target: "vortex.system_directory:person",
@@ -278,7 +266,6 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
             reverse_name: "Beneficiary references",
             on_parent_delete: "empty_optional",
             application_root_required: false,
-            legacy_person_field: "beneficiary",
           },
         },
         {
@@ -376,9 +363,9 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
       pipelines: [],
       relationships: [
         {
-          id: "rel_iam_request_beneficiary_person",
-          key: "beneficiary_person",
-          from_field: "beneficiary_person",
+          id: "rel_iam_request_beneficiary",
+          key: "beneficiary",
+          from_field: "beneficiary",
           to_record_type: "vortex.system_directory:person",
           cardinality: "many_to_one",
           on_parent_delete: "empty_optional",
@@ -518,30 +505,23 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
   ],
   queries: [
     {
-      "id": "qry_iam_access_requests",
-      "key": "iam_access_requests",
-      "label": "Access requests",
-      "record_type": "access_request",
-      "inputs": [],
-      "select": [
-        "request_number",
-        "title",
-        "request_type",
-        "state",
-        "beneficiary",
-        "submitted_at"
-      ],
-      "filter": null,
-      "group_by": [],
-      "aggregates": [],
-      "sort": [
+      id: "qry_iam_access_requests",
+      key: "iam_access_requests",
+      label: "Access requests",
+      record_type: "access_request",
+      inputs: [],
+      select: ["request_number", "title", "request_type", "state", "beneficiary", "submitted_at"],
+      filter: null,
+      group_by: [],
+      aggregates: [],
+      sort: [
         {
-          "field": "request_number",
-          "direction": "descending"
-        }
+          field: "request_number",
+          direction: "descending",
+        },
       ],
-      "page_size": 50,
-      "relationship_hops": 0
-    }
+      page_size: 50,
+      relationship_hops: 0,
+    },
   ],
 });

@@ -153,7 +153,7 @@ export function sourceResolvesIdentity(
     /\/(?:custom_actions|carries|declared_fields|filterable_fields|sortable_fields|public_fields|select|group_by|component_order|relationships|record_types|allowed_child_blocks)\/#$/.test(
       path,
     ) ||
-    /\/(?:record_type|source_record_type|to_record_type|target|field|legacy_person_field|page|query|block|home_page|module|connection_type|workflow|node|relationship|amount_field|percentage_field|date_field|due_field|status_field|required_permission|sets_choice_field|dependency|extension_point|contributed_action)$/.test(
+    /\/(?:record_type|source_record_type|to_record_type|target|field|page|query|block|home_page|module|connection_type|workflow|node|relationship|amount_field|percentage_field|date_field|due_field|status_field|required_permission|sets_choice_field|dependency|extension_point|contributed_action)$/.test(
       path,
     ) ||
     /\/expression\/fields\/#$/.test(path) ||
@@ -331,7 +331,8 @@ export function provenanceFor(
       dependencies.forEach((dependency, index) => {
         const moduleKey = asObject(dependency).moduleKey;
         const sourcePath = references.get(String(moduleKey))?.[0];
-        if (sourcePath === undefined) fail("vortex.definition.invalid_compilation_output", "invalid_value");
+        if (sourcePath === undefined)
+          fail("vortex.definition.invalid_compilation_output", "invalid_value");
         for (const canonicalPath of leafPaths(dependency))
           entries.push({
             canonicalPath: ["content", "dependencies", index, ...canonicalPath],
