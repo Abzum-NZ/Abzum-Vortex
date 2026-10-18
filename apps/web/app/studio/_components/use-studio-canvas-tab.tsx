@@ -226,7 +226,10 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
           ...(result.next === undefined ? {} : { next: result.next }) };
       }
       case "not_saved": return { kind: "not_saved" };
-      case "following": case "conflict": return { kind: "temporarily_unavailable" };
+      // The preview is still moving to the saved revision; the picker reads again when opened again.
+      case "following": return { kind: "temporarily_unavailable" };
+      // The saved draft moved on; the next save's revision reads again.
+      case "conflict": return { kind: "temporarily_unavailable" };
       case "no_query": return { kind: "no_list" };
       // A record type is read through a plain query, never a summary.
       case "summary": return { kind: "no_list" };
@@ -249,8 +252,11 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
       result.sourceFingerprint === view.sourceFingerprint && result.pageAlias === pageAlias && result.area === area)
       return { state: "ready" as const, records: result.records, behind: result.behind };
     if (result.kind === "refused") return { state: "refused" as const, records: {} };
-    console.error(`[studio] the canvas records were not read: STUDIO_CANVAS_RECORDS_${result.kind.toUpperCase()}`);
-    return { state: "unavailable" as const, records: {} };
+    // A conflict means a newer save replaced this revision, whose own read follows; anything else is a failure.
+    if (result.kind !== "conflict")
+      console.error(`[studio] the canvas records were not read: STUDIO_CANVAS_RECORDS_${result.kind.toUpperCase()}`);
+    // A newer save or the preview moving under this read: the canvas reads again shortly.
+    return { state: "unavailable" as const, records: {}, behind: true };
   }, [organizationId, rootId, view.draftRevision, view.sourceFingerprint]);
 
   const commandVisibility: Parameters<typeof ApplicationVisibilityConditionEditor>[0]["onCommand"] =
