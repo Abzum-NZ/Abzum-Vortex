@@ -146,7 +146,7 @@ export function StudioEntryList({
                 )}
                 <button
                   type="button"
-                  className="flex min-w-0 flex-1 items-center gap-1.5 rounded-sm py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-expanded={item.content === undefined ? undefined : expanded}
                   aria-keyshortcuts={movable ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
                   onClick={() => {
