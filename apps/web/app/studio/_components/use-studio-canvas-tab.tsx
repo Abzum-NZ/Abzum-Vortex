@@ -85,7 +85,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
   const rootId = state.rootId;
   const key = draft.saved.key;
   const [fitZoom, setFitZoom] = useState(0);
-  const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>("fit");
+  const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>(100);
   const [breakpoint, setBreakpoint] = useState<StudioCanvasBreakpoint>("desktop");
   // The canvas previews the application in light or dark; the running application keeps its own toggle.
   const [appearance, setAppearance] = useState<"light" | "dark">("light");

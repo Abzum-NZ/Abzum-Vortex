@@ -372,7 +372,7 @@ function ApplicationPageSlotPuckEditor({
   const [actionsHost, setActionsHost] = useState<HTMLDivElement | null>(null);
   const [availableWidth, setAvailableWidth] = useState(0);
   const width = deviceWidths[breakpoint];
-  const scale = zoom === "fit" ? Math.min(1, availableWidth / width) : zoom / 100;
+  const scale = zoom === "fit" ? Math.max(0.75, Math.min(1, availableWidth / width)) : zoom / 100;
   const registry = useMemo(
     () => createPlatformComponentRegistryForReleases(platformBlockCatalogue.releases),
     [platformBlockCatalogue],
@@ -523,7 +523,7 @@ function ApplicationPageSlotPuckEditor({
       const available =
         element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
       setAvailableWidth(available);
-      onFitZoom(Math.min(1, available / width) * 100);
+      onFitZoom(Math.max(0.75, Math.min(1, available / width)) * 100);
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -645,7 +645,11 @@ function ApplicationPageSlotPuckEditor({
         </Alert>
       )}
       <div ref={setActionsHost} className="sticky top-0 z-10 min-h-9 bg-background px-4" />
-      <div ref={well} data-vortex-studio-canvas-well="" className="min-h-96 bg-muted/40 px-4 py-4">
+      <div
+        ref={well}
+        data-vortex-studio-canvas-well=""
+        className="min-h-96 overflow-x-auto bg-muted/40 px-4 py-4"
+      >
         <div
           {...createAppearanceRootProps(appearance)}
           data-vortex-studio-page-frame=""
