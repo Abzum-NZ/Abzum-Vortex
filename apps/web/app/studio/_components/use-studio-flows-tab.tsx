@@ -46,8 +46,8 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
 
   const context = useMemo((): StudioFlowContext => ({
     organizationId: draft.organizationId, rootId: state.rootId, key: draft.saved.key, draftRevision: state.draftRevision,
-    localLifetime: draft.lifetime, source: state.source as ApplicationSourceDocument,
-  }), [draft.organizationId, state.rootId, draft.saved.key, state.draftRevision, state.source, draft.lifetime]);
+    localLifetime: draft.lifetime, catalogue, source: state.source as ApplicationSourceDocument,
+  }), [draft.organizationId, state.rootId, draft.saved.key, state.draftRevision, state.source, draft.lifetime, catalogue]);
   const controlLabel = useCallback((alias: string) =>
     labels.get(studioSemanticSelectionKey({ kind: "placement", placementAlias: alias })) ?? "a control", [labels]);
   const outline = useMemo(() => {
@@ -72,6 +72,9 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
   const starts = useMemo(() => flowSelection === null ? [] : describeStudioFlowStarts(source, flowSelection, controlLabel),
     [source, flowSelection, controlLabel]);
   const draftChoices = useMemo(() => projectStudioFlowDraftChoices({ rootId: state.rootId, source, catalogue }), [state.rootId, source, catalogue]);
+  const flowChoices = useMemo(() => outline === null ? draftChoices : projectStudioFlowDraftChoices({
+    rootId: state.rootId, source, catalogue, flow: outline.flow,
+  }), [outline, draftChoices, state.rootId, source, catalogue]);
   const start = useMemo(() => flowSelection === null ? null : projectStudioFlowStart(source, flowSelection,
     (control) => draftChoices.forms.find((form) => form.alias === control)?.fields ?? []), [source, flowSelection, draftChoices]);
   const createChoices = useMemo(() => projectStudioFlowCreateChoices({ rootId: state.rootId, source, catalogue }, controlLabel),
@@ -81,7 +84,7 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
   const live = (): StudioFlowContext => {
     const current = draft.history.getState();
     return { organizationId: draft.organizationId, rootId: current.rootId, key: draft.saved.key, draftRevision: current.draftRevision,
-      localLifetime: draft.lifetime, source: current.source as ApplicationSourceDocument };
+      localLifetime: draft.lifetime, catalogue, source: current.source as ApplicationSourceDocument };
   };
 
   /**
@@ -145,10 +148,10 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
       ? <p role="alert" className="text-sm">This flow cannot be drawn because it could not be read from the draft.</p>
       : <div className="flex h-full min-h-96 flex-col">
         <StudioFlowCanvas lists={outline.lists} starts={starts} selectedPath={stepPath} onSelect={selectStep}
-          appearance={appearance} types={stepTypes} disabled={disabled}
+          appearance={appearance} types={stepTypes} forms={flowChoices.forms} disabled={disabled}
           title={labels.get(selectionKey) ?? "Flow"}
-          onAdd={(insertion, taskType) => {
-            const result = command(context, flowSelection, { kind: "insert_task", ...insertion, taskType });
+          onAdd={(insertion, taskType, formAlias) => {
+            const result = command(context, flowSelection, { kind: "insert_task", ...insertion, taskType, ...(formAlias === undefined ? {} : { formAlias }) });
             if (result.kind !== "applied") return result.reason;
             draft.select({ kind: "flow_step", flowAlias: flowSelection.flowAlias, moduleKey: flowSelection.moduleKey, taskId: result.taskId });
             return true;
@@ -159,7 +162,7 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
   // Keyed by flow and step only: an applied edit never remounts it, so typing keeps its focus.
   const inspector: ReactNode = flowSelection === null || outline === null || start === null ? null
     : <StudioFlowInspector key={`${selectionKey}:${stepId ?? ""}`} context={context} selection={flowSelection}
-      lists={outline.lists} stepPath={stepPath} choices={draftChoices} start={start} controlLabel={controlLabel} disabled={disabled}
+      lists={outline.lists} stepPath={stepPath} choices={flowChoices} start={start} controlLabel={controlLabel} disabled={disabled}
       onStart={startCommand}
       ownerNote={owner === undefined ? undefined : `This flow belongs to the module ${owner.name}, which this application owns.`}
       onCommand={command} onSelectStep={selectStep} />;

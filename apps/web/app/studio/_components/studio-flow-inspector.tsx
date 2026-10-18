@@ -75,8 +75,8 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
     : projectStudioFlowStepForm(context.source, outline.flow, outline.siblings, selection.moduleKey, task, step.path, choices),
   [context.source, outline, selection.moduleKey, task, step, choices]);
   const references = useMemo(() => outline === null || step === undefined ? []
-    : studioFlowReferenceChoices(context.source, outline.flow, outline.siblings, selection.moduleKey, step.path),
-  [context.source, outline, selection.moduleKey, step]);
+    : studioFlowReferenceChoices(context.source, outline.flow, outline.siblings, selection.moduleKey, step.path, choices.forms),
+  [context.source, outline, selection.moduleKey, step, choices.forms]);
   const condition = useMemo(() => studioFlowConditionContext(references), [references]);
   /**
    * The settings as typed, on the draft snapshot they stand on: what the draft took (which it may
@@ -136,8 +136,8 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
         }} />
       {ownerNote === undefined ? null : <p className="text-sm text-muted-foreground">{ownerNote}</p>}
       <p className="text-sm text-muted-foreground">Select a step on the canvas to change its settings, move it or add a step after it.</p>
-      {main !== undefined && <StudioFlowStepPicker id="flow-add-last" label="Add a step at the end" types={actions.stepTypes} disabled={disabled}
-        action="Add" onAdd={(taskType) => add({ kind: "insert_task", taskType, listPath: main.path, index: main.tasks.length }, "Step added at the end.")} />}
+      {main !== undefined && <StudioFlowStepPicker forms={choices.forms} id="flow-add-last" label="Add a step at the end" types={actions.stepTypes} disabled={disabled}
+        action="Add" onAdd={(taskType, formAlias) => add({ kind: "insert_task", taskType, ...(formAlias === undefined ? {} : { formAlias }), listPath: main.path, index: main.tasks.length }, "Step added at the end.")} />}
       {messages}
       {confirmDialog}
     </div>;
@@ -192,14 +192,14 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
       </>}
     </section>
     <section className="space-y-3" aria-label="Add steps">
-      <StudioFlowStepPicker id="flow-add-after" label="Add a step after this one" types={actions.stepTypes} disabled={disabled}
-        action="Add" onAdd={(taskType) => add({ kind: "insert_task", taskType, listPath, index: index + 1 }, "Step added.")} />
-      {step.children.map((child) => <StudioFlowStepPicker key={JSON.stringify(child.path)} id={`flow-add-in-${JSON.stringify(child.path)}`}
+      <StudioFlowStepPicker forms={choices.forms} id="flow-add-after" label="Add a step after this one" types={actions.stepTypes} disabled={disabled}
+        action="Add" onAdd={(taskType, formAlias) => add({ kind: "insert_task", taskType, ...(formAlias === undefined ? {} : { formAlias }), listPath, index: index + 1 }, "Step added.")} />
+      {step.children.map((child) => <StudioFlowStepPicker forms={choices.forms} key={JSON.stringify(child.path)} id={`flow-add-in-${JSON.stringify(child.path)}`}
         label={`Add a step to ${child.label}`} types={actions.stepTypes} disabled={disabled} action="Add"
-        onAdd={(taskType) => add({ kind: "insert_task", taskType, listPath: child.path, index: child.tasks.length }, `Step added to ${child.label}.`)} />)}
-      {actions.branch !== null && <StudioFlowStepPicker id="flow-add-branch" label={`Add the ${actions.branch} branch, starting with`}
+        onAdd={(taskType, formAlias) => add({ kind: "insert_task", taskType, ...(formAlias === undefined ? {} : { formAlias }), listPath: child.path, index: child.tasks.length }, `Step added to ${child.label}.`)} />)}
+      {actions.branch !== null && <StudioFlowStepPicker forms={choices.forms} id="flow-add-branch" label={`Add the ${actions.branch} branch, starting with`}
         types={actions.stepTypes} disabled={disabled} action="Add branch"
-        onAdd={(taskType) => add({ kind: "add_branch", taskId: step.id, taskPath: step.path, taskType }, `${actions.branch} branch added.`)} />}
+        onAdd={(taskType, formAlias) => add({ kind: "add_branch", taskId: step.id, taskPath: step.path, taskType, ...(formAlias === undefined ? {} : { formAlias }) }, `${actions.branch} branch added.`)} />}
     </section>
     {messages}
     {confirmDialog}

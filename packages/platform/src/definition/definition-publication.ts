@@ -1,5 +1,6 @@
 import "server-only";
 
+import { planApplicationPreview } from "./preview-release-plan";
 import { componentLabelsOf } from "./publication-component-labels";
 
 import {
@@ -44,20 +45,21 @@ import {
   type DefinitionPublicationCatalogue,
   type DefinitionPublicationRepository,
   type PreparedDefinitionPublication,
+  type DefinitionDraftCandidate,
+  type DefinitionPublicationTransaction,
 } from "./definition-publication-contracts";
 import type { ResolvedDependencies } from "./definition-dependency-resolution";
 import { validateDraftCandidate } from "./definition-publication-compilation";
 import {
   applicationCandidate,
   materializeInlineModules,
+  releasedUnchangedModules,
   compileApplicationWithInlineModules,
   planApplicationPublication,
-  rehearseApplicationPreview,
-  type RehearsedPreviewRelease,
 } from "./application-publication";
 
-/** The internal Module releases a rehearsed preparation writes are rolled back with this note. */
-const preparationReleaseNote = "Rehearsed by publication preparation";
+/** A preparation labels its in-memory Module plans with this note. */
+const preparationReleaseNote = "Planned by publication preparation";
 
 export type ApplicationDraftCompilation = Readonly<{
   compilation: ApplicationCompilationOutput;
@@ -74,16 +76,25 @@ export type ApplicationDraftCompilation = Readonly<{
 }>;
 
 /** The record types (`module:record`) and fields (`module:record.field`) the draft's own Modules have published. */
-export type ApplicationDraftPublication = Readonly<{ recordTypes: readonly string[]; fields: readonly string[] }>;
+export type ApplicationDraftPublication = Readonly<{
+  recordTypes: readonly string[];
+  fields: readonly string[];
+}>;
 
 /** The owner and person title of a release of the people directory Module. */
 const peopleDirectoryOwnerOf = (release: ResolvableModuleRelease): PeopleDirectoryOwner | null => {
   const content = release.compilationOutput.canonical.content;
-  const personKey = peopleDirectory.recordType.slice(peopleDirectory.recordType.lastIndexOf(":") + 1);
+  const personKey = peopleDirectory.recordType.slice(
+    peopleDirectory.recordType.lastIndexOf(":") + 1,
+  );
   const person = content.recordTypes.find((record) => record.key === personKey);
-  const title = person?.fields.find((field) => String(field.fieldId) === String(person.titleFieldId));
+  const title = person?.fields.find(
+    (field) => String(field.fieldId) === String(person.titleFieldId),
+  );
   if (title === undefined) {
-    console.error("[definition] the people directory release has no person title field: PEOPLE_DIRECTORY_UNREADABLE");
+    console.error(
+      "[definition] the people directory release has no person title field: PEOPLE_DIRECTORY_UNREADABLE",
+    );
     return null;
   }
   return { application: content.ownerApplication, titleLabel: title.label };
@@ -257,6 +268,94 @@ const authorize = async (
   await requireBuilderAuthority(authority, operation);
 };
 
+const compileDraftSnapshot = async (
+  context: SessionContext,
+  overlay: DefinitionPublicationTransaction,
+  catalogue: DefinitionPublicationCatalogue,
+  candidate: DefinitionDraftCandidate,
+): Promise<ApplicationDraftCompilation> => {
+  // The compile is a pure function of the draft and the stored definitions it reads: its own
+  // inline Modules' roots and the current release of every Module it uses. The same draft
+  // revision over the same of those is compiled once; authorisation and the candidate
+  // validation above run on every call.
+  const source = candidate.draft.source;
+  if (source.kind !== "application") return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+  const inlineKeys = new Set(applicationModuleSources(source).map((module) => module.key));
+  const ownedRoots = await overlay.readOwnedModuleRoots(String(candidate.draft.rootId));
+  const usedKeys = applicationModuleKeys(source).filter((key) => !inlineKeys.has(key));
+  const needsDirectory = !applicationModuleKeys(source).includes(peopleDirectory.module);
+  const pages = await Promise.all(
+    [...usedKeys, ...(needsDirectory ? [peopleDirectory.module] : [])].map((moduleKey) =>
+      overlay.readModuleReleasePage(candidate.draft.organizationId, moduleKey),
+    ),
+  );
+  const usedAnchors = usedKeys.map((moduleKey, index) => [
+    moduleKey,
+    pages[index]!.rootId,
+    pages[index]!.anchorReleaseRevision,
+  ]);
+  // An unused directory's release still supplies the Person-link choice.
+  const directoryPage = needsDirectory ? pages[usedKeys.length] : undefined;
+  const cacheKey = applicationDraftCompilationKey([
+    candidate.draft.organizationId.toLowerCase(),
+    candidate.draft.rootId.toLowerCase(),
+    candidate.draft.draftRevision,
+    candidate.draft.sourceFingerprint,
+    candidate.draft.publishedRevision ?? null,
+    candidate.currentReleaseVersion,
+    ownedRoots.map((root) => [
+      root.key,
+      root.rootId,
+      root.draftRevision,
+      root.currentReleaseRevision,
+      root.sourceFingerprint,
+    ]),
+    usedAnchors,
+    directoryPage === undefined
+      ? null
+      : [directoryPage.rootId, directoryPage.anchorReleaseRevision],
+  ]);
+  const cached = readCachedApplicationDraftCompilation(cacheKey);
+  if (cached !== undefined) return cached;
+  // The draft's own inline Modules are compiled from the draft, in memory, by the
+  // publication's own steps; nothing is written.
+  const compiled = await compileApplicationWithInlineModules(
+    context,
+    overlay,
+    catalogue,
+    candidate,
+  );
+  const compilation = compiled.output;
+  if (
+    compilation.kind !== "application" ||
+    compilation.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION
+  )
+    return refuse("DEFINITION_COMPILATION_REFUSED");
+  let directory = compiled.dependencies.modules.find(
+    (release) => release.key === peopleDirectory.module,
+  );
+  if (directory === undefined && directoryPage !== undefined && directoryPage.rootId !== null) {
+    try {
+      directory = await selectCurrentModuleRelease(overlay, candidate, peopleDirectory.module);
+    } catch (error) {
+      if (!(error instanceof DefinitionError)) throw error;
+      console.error(`[definition] the people directory release could not be read: ${error.code}`);
+    }
+  }
+  return retainApplicationDraftCompilation(cacheKey, {
+    compilation,
+    moduleReleases: compiled.dependencies.modules,
+    conditionContexts: projectDraftConditionContexts(
+      source,
+      candidate.draft.sourceFingerprint,
+      compiled.dependencies,
+      compiled.resolution,
+    ),
+    currentReleaseRevision: candidate.draft.publishedRevision ?? null,
+    peopleDirectory: directory === undefined ? null : peopleDirectoryOwnerOf(directory),
+  });
+};
+
 /**
  * Publication orchestration over private injected stores. Preparation exposes only safe JSON
  * evidence; every byte that matters is recomputed inside the publish transaction.
@@ -281,17 +380,16 @@ export const createDefinitionPublicationService = (
     if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
     await authorize(authority, context, { kind: "publication", rootId: parsedCommand.rootId });
-    // Preparation rehearses the whole publication and keeps only the inline Modules' internal
-    // roots and drafts, whose permanent identities the confirmation is computed from.
+    // Permanent inline identities are established before planning; release rows stay in memory.
     return repository.transaction(context, async (transaction) => {
       const candidate = applicationCandidate(
         context,
         await transaction.lockCandidate(parsedCommand.rootId),
         parsedCommand,
       );
-      const roots = await materializeInlineModules(transaction, candidate);
-      // Removed fields no longer occur in the compiled draft. Read their names from the exact
-      // Module releases the previous Application pinned, within the same authorised transaction.
+      const ownedRoots = await transaction.readOwnedModuleRoots(String(candidate.draft.rootId));
+      const roots = await materializeInlineModules(transaction, candidate, ownedRoots);
+      // Publication labels also need fields removed from the current candidate.
       const previousModules = await transaction.readModuleReleases(
         context.organizationId,
         (candidate.historyEvidence.latestRelease?.dependencyManifest ?? [])
@@ -303,15 +401,13 @@ export const createDefinitionPublicationService = (
       );
       if (previousModules.some((release) => release === undefined))
         refuse("DEFINITION_DEPENDENCY_MISSING");
-      const state = await transaction.rehearse(() =>
-        planApplicationPublication(
-          context,
-          transaction,
-          catalogue,
-          candidate,
-          roots,
-          preparationReleaseNote,
-        ),
+      const state = await planApplicationPublication(
+        context,
+        transaction,
+        catalogue,
+        candidate,
+        roots,
+        preparationReleaseNote,
       );
       const inlineRootIds = new Set(
         state.moduleOutputs.map((output) => String(output.canonical.envelope.rootId)),
@@ -369,143 +465,92 @@ export const createDefinitionPublicationService = (
       // Another definition kind at this root is refused exactly like a missing draft.
       if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
         refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-      // The compile is a pure function of the draft and the stored definitions it reads: its own
-      // inline Modules' roots and the current release of every Module it uses. The same draft
-      // revision over the same of those is compiled once; authorisation and the candidate
-      // validation above run on every call.
-      const source = candidate.draft.source;
-      const inlineKeys = new Set(applicationModuleSources(source).map((module) => module.key));
-      const overlay = createDraftModuleOverlay(reader, context, candidate.draft);
-      const ownedRoots = await overlay.readOwnedModuleRoots(String(candidate.draft.rootId));
-      const usedAnchors = [];
-      for (const moduleKey of applicationModuleKeys(source).filter((key) => !inlineKeys.has(key))) {
-        const page = await overlay.readModuleReleasePage(candidate.draft.organizationId, moduleKey);
-        usedAnchors.push([moduleKey, page.rootId, page.anchorReleaseRevision]);
-      }
-      // A draft that does not use the people directory yet still names its current release, so
-      // Studio can offer a Person link that adds the use.
-      const directoryPage = applicationModuleKeys(source).includes(peopleDirectory.module) ? undefined
-        : await overlay.readModuleReleasePage(candidate.draft.organizationId, peopleDirectory.module);
-      const cacheKey = applicationDraftCompilationKey([
-        candidate.draft.organizationId.toLowerCase(),
-        candidate.draft.rootId.toLowerCase(),
-        candidate.draft.draftRevision,
-        candidate.draft.sourceFingerprint,
-        candidate.draft.publishedRevision ?? null,
-        candidate.currentReleaseVersion,
-        ownedRoots.map((root) => [
-          root.key,
-          root.rootId,
-          root.draftRevision,
-          root.currentReleaseRevision,
-          root.sourceFingerprint,
-        ]),
-        usedAnchors,
-        directoryPage === undefined ? null : [directoryPage.rootId, directoryPage.anchorReleaseRevision],
-      ]);
-      const cached = readCachedApplicationDraftCompilation(cacheKey);
-      if (cached !== undefined) return cached;
-      // The draft's own inline Modules are compiled from the draft, in memory, by the
-      // publication's own steps; nothing is written.
-      const compiled = await compileApplicationWithInlineModules(
+      return compileDraftSnapshot(
         context,
-        overlay,
+        createDraftModuleOverlay(reader, context, candidate.draft),
         catalogue,
         candidate,
       );
-      const compilation = compiled.output;
-      if (
-        compilation.kind !== "application" ||
-        compilation.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION
-      )
-        return refuse("DEFINITION_COMPILATION_REFUSED");
-      let directory = compiled.dependencies.modules.find((release) => release.key === peopleDirectory.module);
-      if (directory === undefined && directoryPage !== undefined && directoryPage.rootId !== null) {
-        try {
-          directory = await selectCurrentModuleRelease(overlay, candidate, peopleDirectory.module);
-        } catch (error) {
-          if (!(error instanceof DefinitionError)) throw error;
-          console.error(`[definition] the people directory release could not be read: ${error.code}`);
-        }
-      }
-      return retainApplicationDraftCompilation(cacheKey, {
-        compilation,
-        moduleReleases: compiled.dependencies.modules,
-        conditionContexts: projectDraftConditionContexts(
-          candidate.draft.source,
-          candidate.draft.sourceFingerprint,
-          compiled.dependencies,
-          compiled.resolution,
-        ),
-        currentReleaseRevision: candidate.draft.publishedRevision ?? null,
-        peopleDirectory: directory === undefined ? null : peopleDirectoryOwnerOf(directory),
-      });
     });
   },
 
-  /**
-   * What the current published releases of the caller organisation's Application draft's own
-   * Modules hold, as qualified references: every record type (`module:record`) and field
-   * (`module:record.field`). Their stored shape is fixed, so Studio offers only the changes an
-   * upgrade accepts. It reads the stored releases only, never compiles the draft, so it answers
-   * for a draft that does not compile too: an Application never published has no published fields.
-   */
-  readApplicationDraftPublication: async (
-    context: SessionContext,
-    input: unknown,
-  ): Promise<ApplicationDraftPublication> => {
+  /** Published field facts and compilation share one request-scoped definition snapshot. */
+  readApplicationDraftSnapshot: async (context: SessionContext, input: unknown) => {
     const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
-    if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
-    const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
-    await authorize(authority, context, { kind: "draft_change", rootId: parsedCommand.rootId });
+    if (!command.success) return refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
+    await authorize(authority, context, { kind: "draft_change", rootId: command.data.rootId });
     return repository.read(context, async (reader) => {
       const candidate = validateDraftCandidate(
         context,
-        await reader.readDraftCandidate(parsedCommand.rootId),
-        parsedCommand,
+        await reader.readDraftCandidate(command.data.rootId),
+        command.data,
       );
       if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
-        refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+        return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
       const overlay = createDraftModuleOverlay(reader, context, candidate.draft);
-      const ownedRoots = await overlay.readOwnedModuleRoots(String(candidate.draft.rootId));
-      // The stored current release of each own Module, not the draft's newer revision.
-      const published = { recordTypes: [] as string[], fields: [] as string[] };
-      for (const root of ownedRoots) {
-        if (root.currentReleaseRevision === null) continue;
-        const release = await overlay.readModuleRelease(candidate.draft.organizationId, root.rootId, root.currentReleaseRevision);
+      const roots = await overlay.readOwnedModuleRoots(String(candidate.draft.rootId));
+      const released = roots.filter((root) => root.currentReleaseRevision !== null);
+      const releases = await overlay.readModuleReleases(
+        candidate.draft.organizationId,
+        released.map((root) => ({
+          rootId: root.rootId,
+          releaseRevision: root.currentReleaseRevision!,
+        })),
+      );
+      const recordTypes: string[] = [];
+      const fields: string[] = [];
+      for (const [index, root] of released.entries()) {
+        const release = releases[index];
         if (release === undefined) return refuse("DEFINITION_COMPILATION_REFUSED");
-        for (const record of release.compilationOutput.canonical.content.recordTypes as readonly {
-          key: string; fields: readonly { key: string }[];
-        }[]) {
-          published.recordTypes.push(`${root.key}:${record.key}`);
-          for (const field of record.fields) published.fields.push(`${root.key}:${record.key}.${field.key}`);
+        for (const record of release.compilationOutput.canonical.content.recordTypes) {
+          recordTypes.push(`${root.key}:${record.key}`);
+          for (const field of record.fields) fields.push(`${root.key}:${record.key}.${field.key}`);
         }
       }
-      return published;
+      const publication: ApplicationDraftPublication = { recordTypes, fields };
+      try {
+        return {
+          publication,
+          compilation: await compileDraftSnapshot(context, overlay, catalogue, candidate),
+          failure: undefined,
+        };
+      } catch (failure) {
+        return { publication, compilation: null, failure };
+      }
     });
   },
 
-  /**
-   * Rehearses the publication of the caller organisation's current Application draft at the
-   * expected revision, exactly as publication runs it, and returns the release rows it wrote for
-   * the Application and its inline Modules after undoing them. Only the inline Modules' internal
-   * roots and drafts are kept, as preparation keeps them. A preview runs the returned rows.
-   */
-  rehearseApplicationPreview: async (
-    context: SessionContext,
-    input: unknown,
-  ): Promise<readonly RehearsedPreviewRelease[]> => {
+  /** Establish permanent inline identities in a short authorised write phase. */
+  prepareApplicationPreview: async (context: SessionContext, input: unknown): Promise<void> => {
     const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
-    if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
-    const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
-    await authorize(authority, context, { kind: "publication", rootId: parsedCommand.rootId });
-    return repository.transaction(context, async (transaction) => {
+    if (!command.success) return refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
+    await authorize(authority, context, { kind: "publication", rootId: command.data.rootId });
+    await repository.transaction(context, async (transaction) => {
+      const candidate = validateDraftCandidate(
+        context,
+        await transaction.readDraftCandidate(command.data.rootId),
+        command.data,
+      );
+      if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
+        return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+      if (candidate.draft.publishedRevision === candidate.draft.draftRevision) return;
+      const ownedRoots = await transaction.readOwnedModuleRoots(String(candidate.draft.rootId));
+      const unchanged = await releasedUnchangedModules(transaction, candidate, ownedRoots);
+      await materializeInlineModules(transaction, candidate, ownedRoots, unchanged);
+    });
+  },
+
+  planApplicationPreview: async (context: SessionContext, input: unknown) => {
+    const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
+    if (!command.success) return refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
+    await authorize(authority, context, { kind: "publication", rootId: command.data.rootId });
+    return repository.read(context, async (reader) => {
       const candidate = applicationCandidate(
         context,
-        await transaction.lockCandidate(parsedCommand.rootId),
-        parsedCommand,
+        await reader.readCandidate(command.data.rootId),
+        command.data,
       );
-      return rehearseApplicationPreview(context, transaction, catalogue, candidate);
+      return planApplicationPreview(context, reader, catalogue, candidate);
     });
   },
 
@@ -524,7 +569,8 @@ export const createDefinitionPublicationService = (
         await transaction.lockCandidate(confirmation.rootId),
         { rootId: confirmation.rootId, expectedDraftRevision: confirmation.expectedDraftRevision },
       );
-      const roots = await materializeInlineModules(transaction, candidate);
+      const ownedRoots = await transaction.readOwnedModuleRoots(String(candidate.draft.rootId));
+      const roots = await materializeInlineModules(transaction, candidate, ownedRoots);
       // The inline Modules that changed are released here, before the Application, which is last.
       const recomputed = await planApplicationPublication(
         context,
@@ -546,6 +592,8 @@ export const createDefinitionPublicationService = (
           APPLICATION_PLATFORM_COMPATIBILITY_VERSION
       )
         refuse("DEFINITION_COMPILATION_REFUSED");
+      for (const release of recomputed.moduleReleases)
+        await transaction.appendModuleRelease(release);
       const result = await transaction.appendRelease({
         draft: recomputed.draft,
         compilationOutput: recomputed.compilationOutput,
