@@ -360,13 +360,15 @@ export function useRuntimeInputs({
           }
           if (submitBinding === undefined) return;
           const baseline = currentEditFormBaselines[placementId];
+          // Questions outside the record baseline are flow answers, so they always travel with
+          // the submission; only unchanged stored record fields are left out of its patch.
           const values =
             baseline === undefined
               ? event.values
               : Object.fromEntries(
                   Object.entries(event.values).filter(
                     ([name, value]) =>
-                      Object.hasOwn(baseline, name) && !equalFormValue(value, baseline[name]),
+                      !Object.hasOwn(baseline, name) || !equalFormValue(value, baseline[name]),
                   ),
                 );
           if (baseline !== undefined && Object.keys(values).length === 0) {
