@@ -300,6 +300,8 @@ export const RICH_TEXT_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(sourc
  * compiler derives its name, label, requirement, choices and control from that module field, so an
  * input can never publish against a missing field and a label follows a field rename.
  */
+export const TABLE_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(sources.TABLE_INPUT_BLOCK_RELEASE);
+
 export const FIELD_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(sources.FIELD_INPUT_BLOCK_RELEASE);
 
 /**
@@ -354,6 +356,7 @@ export const FIELD_INPUT_CONTROL_RELEASES: Readonly<Record<FieldInputControlKey,
       severalChoicesMaximumSelectionsProperty,
     ]),
     link: LINK_INPUT_BLOCK_RELEASE,
+    table: TABLE_INPUT_BLOCK_RELEASE,
   });
 
 /** Exact immutable metadata release for the application launcher block. */
@@ -403,6 +406,7 @@ export const CONTROL_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.fr
   LINK_INPUT_BLOCK_RELEASE,
   RICH_TEXT_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_BLOCK_RELEASE,
+  TABLE_INPUT_BLOCK_RELEASE,
   NUMBER_INPUT_BLOCK_RELEASE,
   BOOLEAN_INPUT_BLOCK_RELEASE,
   DATE_INPUT_BLOCK_RELEASE,
