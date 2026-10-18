@@ -604,15 +604,13 @@ export const createOrganizationLocalAdministrationService = (
       } catch {
         return { kind: "temporarily_unavailable" };
       }
-      return requests.runProfileChange(
+      return requests.runProfileChange<UpdateOwnProfileResult | "conflict">(
         session,
         selection,
         command.data.organizationAccountId,
         async (transaction, scope) => {
-          let row: ProfileChangeRow;
-          try {
-            row = requireOne(
-              await transaction.query<ProfileChangeRow>`
+          const row = requireOne(
+            await transaction.query<ProfileChangeRow>`
             select outcome, operation, organization_id, organization_account_id,
               account_summary, correlation_id, accepted_at, access_version
             from vortex_access.update_own_profile(
@@ -624,11 +622,7 @@ export const createOrganizationLocalAdministrationService = (
               ${activityId}::uuid
             )
             `,
-            );
-          } catch (error) {
-            if (isStaleOwnProfileRevision(error)) return "conflict" as const;
-            throw error;
-          }
+          );
           if (
             typeof row.organization_id !== "string" ||
             !sameId(row.organization_id, scope.organizationId) ||
@@ -659,6 +653,7 @@ export const createOrganizationLocalAdministrationService = (
             throw unavailableError(unavailableCode);
           return result;
         },
+        (_code, error) => (isStaleOwnProfileRevision(error) ? "conflict" : undefined),
       );
     },
 

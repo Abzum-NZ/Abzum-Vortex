@@ -384,6 +384,7 @@ export const createHumanOrganizationRequestService = (
         scope: SelectedOrganizationScope,
         issuedAt: string,
       ) => Promise<Result>,
+      mapDatabaseRefusal: (code: string, error: unknown) => Result | undefined,
     ): Promise<HumanOrganizationRequestResult<Result>> =>
       runWithMode(
         "shared",
@@ -392,7 +393,7 @@ export const createHumanOrganizationRequestService = (
         operation,
         undefined,
         undefined,
-        undefined,
+        mapDatabaseRefusal,
         organizationAccountId,
       ),
     /**
