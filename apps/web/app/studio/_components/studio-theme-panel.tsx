@@ -372,9 +372,8 @@ export function StudioThemePanel({
           className="grid grid-cols-2 gap-3"
         >
           {dimension("style").options.map((option) => (
-            <label
+            <div
               key={option.id}
-              htmlFor={`studio-theme-style-${option.id}`}
               className={cn(
                 "relative cursor-pointer space-y-2 rounded-lg border p-2 focus-within:ring-2 focus-within:ring-ring",
                 selection.style === option.id && "ring-2 ring-primary",
@@ -384,12 +383,23 @@ export function StudioThemePanel({
               <RadioGroupItem
                 id={`studio-theme-style-${option.id}`}
                 value={option.id}
-                aria-label={option.label}
+                aria-labelledby={`studio-theme-style-${option.id}-caption`}
                 className="sr-only"
               />
               <StylePreview style={option.id} />
-              <span className="block text-sm font-medium">{option.label}</span>
-            </label>
+              <span
+                id={`studio-theme-style-${option.id}-caption`}
+                className="block text-sm font-medium"
+              >
+                {option.label}
+              </span>
+              {/* The whole tile selects the radio; sample controls remain inert and outside its label. */}
+              <label
+                htmlFor={`studio-theme-style-${option.id}`}
+                aria-hidden="true"
+                className="absolute inset-0 cursor-inherit"
+              />
+            </div>
           ))}
         </RadioGroup>
       </ThemeSection>
