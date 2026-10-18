@@ -120,9 +120,9 @@ export function PublicationSummary({
     <div className="min-w-0 space-y-4 text-sm wrap-anywhere">
       <p>{intro}</p>
       {confirmation.reasons.length > 0 && (
-        <ul aria-label="Publication changes" className="min-w-0 divide-y rounded-lg border">
+        <ul aria-label="Publication changes" className="min-w-0 space-y-2">
           {Array.from(groups).map(([key, reasons]) => (
-            <li key={key} className="min-w-0 space-y-2 p-3">
+            <li key={key} className="min-w-0 space-y-2 rounded-md py-3 hover:bg-muted/40">
               <p className="font-medium">
                 {names.get(key.toLowerCase()) ??
                   kindLabels[reasons[0]!.location.componentKind] ??

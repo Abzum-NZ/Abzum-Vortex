@@ -71,7 +71,15 @@ begin
         from pg_catalog.jsonb_array_elements(p_value) as member(value)
         where pg_catalog.jsonb_typeof(member.value) is distinct from 'string'
       );
-  elsif p_semantic_type in ('record_reference', 'organization_account_reference') then
+  elsif p_semantic_type = 'record_reference' then
+    return pg_catalog.jsonb_typeof(p_value) = 'object'
+      and p_value ?& array['recordTypeId', 'recordId']
+      and p_value - array['recordTypeId', 'recordId']::text[] = '{}'::jsonb
+      and pg_catalog.jsonb_typeof(p_value -> 'recordTypeId') = 'string'
+      and pg_catalog.jsonb_typeof(p_value -> 'recordId') = 'string'
+      and vortex_platform.is_non_nil_uuid(p_value ->> 'recordTypeId')
+      and vortex_platform.is_non_nil_uuid(p_value ->> 'recordId');
+  elsif p_semantic_type = 'organization_account_reference' then
     return pg_catalog.jsonb_typeof(p_value) = 'string'
       and vortex_platform.is_non_nil_uuid(p_value #>> '{}');
   elsif p_semantic_type = 'opaque_json' then

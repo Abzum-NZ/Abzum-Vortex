@@ -93,6 +93,7 @@ export function ApplicationReleaseHistory({
   currentRestoreBlocked.current = restoreBlocked;
   const [page, setPage] = useState<StudioApplicationHistoryPage | null>(initialPage);
   const [pending, setPending] = useState<Pending | null>(null);
+  const [expandedRelease, setExpandedRelease] = useState<number | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [message, setMessage] = useState("Versions loaded.");
   const mounted = useRef(false);
@@ -305,9 +306,12 @@ export function ApplicationReleaseHistory({
             </EmptyHeader>
           </Empty>
         ) : (
-          <ol className="divide-y rounded-xl border" aria-busy={pending !== null}>
+          <ol className="space-y-2" aria-busy={pending !== null}>
             {page.entries.map((entry) => (
-              <li key={entry.releaseRevision} className="min-w-0 space-y-3 p-4">
+              <li
+                key={entry.releaseRevision}
+                className="min-w-0 space-y-2 rounded-md py-3 hover:bg-muted/40"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
@@ -325,6 +329,7 @@ export function ApplicationReleaseHistory({
                           variant="ghost"
                           size="icon-sm"
                           aria-label={`More for version ${entry.releaseVersion}`}
+                          title={`More for version ${entry.releaseVersion}`}
                         />
                       }
                     >
@@ -341,7 +346,10 @@ export function ApplicationReleaseHistory({
                   </DropdownMenu>
                 </div>
                 <p className="whitespace-pre-wrap break-words text-sm">{entry.releaseNote}</p>
-                <Collapsible>
+                <Collapsible
+                  open={expandedRelease === entry.releaseRevision}
+                  onOpenChange={(open) => setExpandedRelease(open ? entry.releaseRevision : null)}
+                >
                   <CollapsibleTrigger render={<Button variant="ghost" size="sm" />}>
                     <Icon name="chevron-down" />
                     Details

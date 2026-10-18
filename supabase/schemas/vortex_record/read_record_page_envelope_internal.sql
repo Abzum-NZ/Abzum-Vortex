@@ -32,8 +32,8 @@ begin
   envelope := p_first_loaded;
   narrowed := false;
   -- When nothing about this record type can reach another record or another
-  -- record type (no total field, and every route of every permission on it is
-  -- an all-record, owner or direct-share route), each record's facts carry
+  -- record type (no total field or saved condition, and every route of every
+  -- permission on it is an all-record, owner or direct-share route), each record's facts carry
   -- only its own type and its own permissions, and no relationship: every
   -- reader of these facts (projection, derived fields, capabilities) looks at
   -- nothing else.
@@ -48,7 +48,10 @@ begin
       select 1
       from pg_catalog.jsonb_each(p_first_loaded -> 'accessPermissions') as declared(key, value)
       where pg_catalog.lower(declared.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text)
-        and (pg_catalog.jsonb_typeof(declared.value #> '{recordScope,routes}') is distinct from 'array'
+        -- A saved condition can bind the current person as a typed reference,
+        -- which needs the directory type from these exact installation facts.
+        and (declared.value #> '{recordScope,savedCondition}' is not null
+          or pg_catalog.jsonb_typeof(declared.value #> '{recordScope,routes}') is distinct from 'array'
           or exists (
             select 1
             from pg_catalog.jsonb_array_elements(
