@@ -107,7 +107,35 @@ const locate = (
 const emptySlot = (props: JsonObject, slotKey: string): void => {
   props[slotKey] = [];
   const vortex = object(props.vortex);
-  vortex.slotOrders = { ...object(vortex.slotOrders), [slotKey]: { tablet: [], phone: [] } };
+  props.vortex = {
+    ...vortex,
+    slotOrders: { ...object(vortex.slotOrders), [slotKey]: { tablet: [], phone: [] } },
+  };
+};
+
+/** Replaces one item, copying only its ancestors; every unchanged placement keeps its identity. */
+const replaceItem = (
+  list: JsonObject[],
+  placementId: string,
+  replacement: JsonObject,
+): JsonObject[] => {
+  let changed = false;
+  const next = list.map((item) => {
+    const props = object(item.props);
+    if (String(props.id) === placementId) {
+      changed = true;
+      return replacement;
+    }
+    let nextProps = props;
+    for (const [slotKey, child] of itemPropSlots(props)) {
+      const nextChild = replaceItem(items(child), placementId, replacement);
+      if (nextChild !== child) nextProps = { ...nextProps, [slotKey]: nextChild };
+    }
+    if (nextProps === props) return item;
+    changed = true;
+    return { ...item, props: nextProps };
+  });
+  return changed ? next : list;
 };
 
 const splitRoot = (
@@ -115,13 +143,18 @@ const splitRoot = (
   outlet: ShellOutletLocation,
 ): Readonly<{ frame: CompiledLayout; content: CompiledLayout }> => {
   if (outlet.kind === "root") return { frame: emptyLayout(), content: root as CompiledLayout };
-  const frame = structuredClone(object(root));
-  const found = locate(frame.content, outlet.placementId);
+  const original = object(root);
+  const found = locate(original.content, outlet.placementId);
   if (found === undefined)
     // The viewer may not see the placement that holds the content, so no content is shown, exactly
     // as when the content is composed into that placement.
-    return { frame: frame as unknown as CompiledLayout, content: emptyLayout() };
-  const props = object(found.item.props);
+    return { frame: root as CompiledLayout, content: emptyLayout() };
+  const props = { ...object(found.item.props) };
+  const frame = (): CompiledLayout =>
+    ({
+      ...original,
+      content: replaceItem(items(original.content), outlet.placementId, { ...found.item, props }),
+    }) as unknown as CompiledLayout;
   if (outlet.kind === "slot") {
     const content = items(props[outlet.slotKey] ?? []);
     const order = object(object(props.vortex).slotOrders)[outlet.slotKey] ?? {
@@ -129,16 +162,15 @@ const splitRoot = (
       phone: [],
     };
     emptySlot(props, outlet.slotKey);
-    return { frame: frame as unknown as CompiledLayout, content: layoutOf(content, order) };
+    return { frame: frame(), content: layoutOf(content, order) };
   }
-  const original = locate(object(root).content, outlet.placementId);
-  const content = layoutOf([structuredClone(original!.item)], {
+  const content = layoutOf([found.item], {
     tablet: [outlet.placementId],
     phone: [outlet.placementId],
   });
   // The frame keeps the holding placement's position, emptied, so the outlet takes its place.
   for (const [slotKey] of itemPropSlots(props)) emptySlot(props, slotKey);
-  return { frame: frame as unknown as CompiledLayout, content };
+  return { frame: frame(), content };
 };
 
 /**
