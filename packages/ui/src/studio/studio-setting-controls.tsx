@@ -925,7 +925,7 @@ export function StudioQueryPicker({
         id={id}
         value={value}
         disabled={disabled}
-        unset="Choose the data?"
+        unset="Choose data"
         onChange={onChange}
         options={queries.map((query) => ({
           value: query.reference,

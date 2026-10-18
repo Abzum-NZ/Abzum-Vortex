@@ -105,10 +105,12 @@ export function StudioReferencePicker({
               <Primitive.Collection>
                 {(entry: StudioReferencePickerOption) => (
                   <ComboboxItem key={entry.value} value={entry} disabled={entry.disabled}>
-                    <span className="flex flex-col text-sm">
-                      <span>{entry.label}</span>
+                    <span className="flex min-w-0 flex-col text-sm">
+                      <span className="truncate">{entry.label}</span>
                       {entry.description !== undefined && (
-                        <span className="text-muted-foreground">{entry.description}</span>
+                        <span className="line-clamp-1 text-muted-foreground">
+                          {entry.description}
+                        </span>
                       )}
                     </span>
                   </ComboboxItem>

@@ -149,7 +149,7 @@ export function StudioRecordReferenceControl({
         unset={
           recordTypes.length === 0
             ? "This application has no record types yet"
-            : "Choose the kind of record?"
+            : "Choose a record type"
         }
         options={recordTypes.map((type) => ({ value: type.key, label: type.label }))}
         onChange={(next) => {
@@ -170,7 +170,7 @@ export function StudioRecordReferenceControl({
               value={recordId ?? ""}
               disabled={disabled || loaded.state === "loading"}
               aria-invalid={!known && loaded.state === "read" && next === undefined}
-              unset={loaded.state === "loading" ? "Reading the records?" : "Choose a record?"}
+              unset={loaded.state === "loading" ? "Reading records" : "Choose a record"}
               options={[
                 ...(!known && recordId !== undefined
                   ? [

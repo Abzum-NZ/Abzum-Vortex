@@ -6,6 +6,7 @@ import { Label } from "@vortex/ui/components/label";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { describeFailure, type SourceFlow } from "@vortex/platform/schema";
 import {
+  StudioField,
   StudioReferencePicker,
   StudioHelp,
   StudioInspectorGroup,
@@ -77,6 +78,22 @@ export const findStudioFlowStepById = (
   return undefined;
 };
 
+/** Canvas and keyboard selection use the same step identities and selection callback. */
+const stepChoices = (
+  lists: readonly StudioFlowTaskListOutline[],
+): readonly Readonly<{
+  value: string;
+  label: string;
+  group: string;
+  description: string;
+}>[] =>
+  lists.flatMap((list) =>
+    list.tasks.flatMap((task) => [
+      { value: task.id, label: task.title, group: list.label, description: task.caption },
+      ...stepChoices(task.children),
+    ]),
+  );
+
 function StepTypePicker({
   id,
   label,
@@ -107,7 +124,7 @@ function StepTypePicker({
           id={id}
           disabled={disabled}
           value={type}
-          unset="Choose a kind of step?"
+          unset="Choose a step type"
           options={types.map((entry) => ({
             value: entry.type,
             label: entry.title,
@@ -291,6 +308,27 @@ export function StudioFlowInspector({
     if (result.kind === "applied") setFocusId(result.taskId);
   };
 
+  const stepPicker = (
+    <StudioField label="Step">
+      {(control) => (
+        <StudioReferencePicker
+          {...control}
+          value={step?.id ?? ""}
+          unset="Start"
+          options={stepChoices(lists)}
+          disabled={disabled}
+          onChange={(id) => {
+            if (id === "") onSelectStep(null);
+            else {
+              const chosen = findStudioFlowStepById(lists, id);
+              if (chosen !== undefined) onSelectStep(chosen.path);
+            }
+          }}
+        />
+      )}
+    </StudioField>
+  );
+
   const messages = (
     <>
       {problem === "" ? null : (
@@ -308,6 +346,7 @@ export function StudioFlowInspector({
     const main = lists[0];
     return (
       <div className="space-y-4">
+        {stepPicker}
         <StudioFlowStartEditor
           key={selection.flowAlias}
           projection={start}
@@ -463,6 +502,7 @@ export function StudioFlowInspector({
           ]}
         />
       </div>
+      {stepPicker}
       <StudioInspectorGroup title="Settings">
         {form === null && (
           <p role="alert" className="text-sm">
