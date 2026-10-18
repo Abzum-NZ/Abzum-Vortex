@@ -5,13 +5,11 @@ import {
   type ImmutablePlatformBlockCatalogue,
   type SourceItem,
 } from "@vortex/platform/schema";
-import {
-  syncStoredBlockDependencies,
-  type StudioPlacementDescriber,
-  type StudioSemanticSelection,
-} from "@vortex/ui/studio";
-import { applyStudioMenuCommand } from "./application-menu";
-import { tokenName } from "./studio-labels";
+import { syncStoredBlockDependencies } from "./stored-composition";
+import type { StudioPlacementDescriber } from "./semantic-outline";
+import type { StudioSemanticSelection } from "./semantic-selection";
+import { applyStudioMenuCommand } from "./application-menu-commands";
+import { tokenName } from "./studio-words";
 
 /**
  * What every Structure edit shares: the draft it is applied to, how a refusal is raised and

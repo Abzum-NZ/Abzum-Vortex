@@ -52,8 +52,8 @@ export type StudioApplicationSourceReviewResult = z.infer<typeof studioApplicati
 export type StudioApplicationSourceImportSnapshot = Readonly<{
   organizationId: string; rootId: string; key: string; rootAlias: string;
   draftRevision: number; savedSourceFingerprint: string;
-  source: ApplicationSourceDocument; selectionKey: string;
-  localLifetime: number; generation: number;
+  source: ApplicationSourceDocument;
+  localLifetime: number;
 }>;
 
 export const sameStudioApplicationSourceImportSnapshot = (
@@ -62,8 +62,7 @@ export const sameStudioApplicationSourceImportSnapshot = (
 ): boolean => current !== null && expected.organizationId === current.organizationId &&
   expected.rootId === current.rootId && expected.key === current.key && expected.rootAlias === current.rootAlias &&
   expected.draftRevision === current.draftRevision && expected.savedSourceFingerprint === current.savedSourceFingerprint &&
-  expected.selectionKey === current.selectionKey && expected.localLifetime === current.localLifetime &&
-  expected.generation === current.generation && canonicalJson(expected.source) === canonicalJson(current.source);
+  expected.localLifetime === current.localLifetime && canonicalJson(expected.source) === canonicalJson(current.source);
 
 /** Inspect raw member names before JSON.parse can silently discard a duplicate. */
 function hasUnambiguousMembers(text: string): boolean {
