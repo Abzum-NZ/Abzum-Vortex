@@ -1306,6 +1306,30 @@
                               }
                             },
                             {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_company_create_logo",
+                                "field": "vortex.crm.organisations:company.logo",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
                               "type": "platform.renderer.button",
                               "props": {
                                 "id": "submit_crm_company_create",
@@ -1435,6 +1459,30 @@
                               "props": {
                                 "id": "input_crm_company_edit_company_kind",
                                 "field": "vortex.crm.organisations:company.company_kind",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_company_edit_logo",
+                                "field": "vortex.crm.organisations:company.logo",
                                 "vortex": {
                                   "block": {
                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
@@ -3330,6 +3378,30 @@
                               }
                             },
                             {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_opportunity_edit_documents",
+                                "field": "vortex.crm.opportunities:opportunity.documents",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
                               "type": "platform.renderer.button",
                               "props": {
                                 "id": "submit_crm_opportunity_edit",
@@ -3579,6 +3651,30 @@
                               "props": {
                                 "id": "input_crm_opportunity_create_expected_close_date",
                                 "field": "vortex.crm.opportunities:opportunity.expected_close_date",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_opportunity_create_documents",
+                                "field": "vortex.crm.opportunities:opportunity.documents",
                                 "vortex": {
                                   "block": {
                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",

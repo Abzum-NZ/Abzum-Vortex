@@ -30,6 +30,8 @@ import {
   parseTabsPayload,
   parseTextInputPayload,
   parseTableInputPayload,
+  parseAttachmentInputPayload,
+  type AttachmentInputPayload,
   type TableInputPayload,
   parseTypedFieldValue,
   parseValidationPayload,
@@ -360,6 +362,10 @@ export const CONTROL_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
       parsePayload: controlPayloadParser<ChoiceInputPayload>(parseDependentChoiceInputPayload),
+    }),
+    Object.freeze({
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.ATTACHMENT_INPUT_BLOCK_RELEASE,
+      parsePayload: controlPayloadParser<AttachmentInputPayload>(parseAttachmentInputPayload),
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_INPUT_BLOCK_RELEASE,

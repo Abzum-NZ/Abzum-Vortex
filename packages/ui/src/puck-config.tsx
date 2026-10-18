@@ -100,6 +100,7 @@ import { LinkInput } from "./controls/link-input";
 import { NumberInput } from "./controls/number-input";
 import { RichTextInput } from "./controls/rich-text-input";
 import { Tabs } from "./controls/tabs";
+import { AttachmentInput } from "./controls/attachment-input";
 import { TableInput } from "./controls/table-input";
 import { TextInput } from "./controls/text-input";
 import { ValidationMessage } from "./controls/validation-message";
@@ -266,6 +267,7 @@ const IMPLEMENTATIONS: ReadonlyMap<string, PlatformComponentRenderer> = new Map<
   ["platform.renderer.field_input", FieldInput],
   ["platform.renderer.text_input", TextInput],
   ["platform.renderer.table_input", TableInput],
+  ["platform.renderer.attachment_input", AttachmentInput],
   ["platform.renderer.link_input", LinkInput],
   ["platform.renderer.rich_text_input", RichTextInput],
   ["platform.renderer.number_input", NumberInput],

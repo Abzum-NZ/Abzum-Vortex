@@ -48,7 +48,7 @@ const FILE_IMPORT_DECISION_WINDOW_SECONDS = 30;
 
 type SigningConfiguration = Pick<
   StorageCredentialBridgeConfig,
-  "destinationProject" | "issuer" | "activeKeyId" | "keys"
+  "destination" | "activeKeyId" | "keys"
 >;
 
 export type FileRecordImportSourceDependencies = Readonly<
@@ -503,8 +503,7 @@ export const createFileRecordImportSourceService = (
 
           const validUntil = new Date(deadlineMilliseconds).toISOString();
           const bridge = createStorageCredentialBridge({
-            destinationProject: dependencies.destinationProject,
-            issuer: dependencies.issuer,
+            destination: dependencies.destination,
             activeKeyId: dependencies.activeKeyId,
             keys: dependencies.keys,
             resolveCurrentAuthority: composeStorageAuthorityResolvers({
