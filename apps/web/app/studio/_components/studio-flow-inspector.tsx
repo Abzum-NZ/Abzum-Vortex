@@ -1,12 +1,10 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@vortex/ui/components/button";
-import { Label } from "@vortex/ui/components/label";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { describeFailure, type SourceFlow } from "@vortex/platform/schema";
 import {
-  projectStudioFlowStepActions, projectStudioFlowStepForm, refreshStudioFlowStepFields, samePath,
+  StudioFlowStepPicker, projectStudioFlowStepActions, projectStudioFlowStepForm, refreshStudioFlowStepFields, samePath,
   studioFlowConditionContext, studioFlowOutline, studioFlowReferenceChoices,
   type StudioFlowCommand, type StudioFlowContext, type StudioFlowDraftChoices, type StudioFlowEditResult, type StudioFlowPath,
   type StudioFlowSelection, type StudioFlowStartDraft, type StudioFlowStartProjection, type StudioFlowStepDraft,
@@ -47,27 +45,6 @@ export const findStudioFlowStepById = (lists: readonly StudioFlowTaskListOutline
   }
   return undefined;
 };
-
-function StepTypePicker({ id, label, types, disabled, onAdd, action }: Readonly<{
-  id: string; label: string; types: readonly Readonly<{ type: string; title: string; summary: string }>[];
-  disabled: boolean; onAdd: (type: string) => void; action: string;
-}>) {
-  const [type, setType] = useState("");
-  const chosen = types.find((entry) => entry.type === type);
-  if (types.length === 0) return <p className="text-sm text-muted-foreground">No kind of step can be added to this flow here.</p>;
-  return <div className="space-y-1.5">
-    <Label htmlFor={id}>{label}</Label>
-    <div className="flex gap-2">
-      <NativeSelect id={id} className="w-full" disabled={disabled} value={type} onChange={(event) => setType(event.target.value)}>
-        <NativeSelectOption value="">Choose a kind of step…</NativeSelectOption>
-        {types.map((entry) => <NativeSelectOption key={entry.type} value={entry.type}>{entry.title}</NativeSelectOption>)}
-      </NativeSelect>
-      <Button type="button" size="sm" disabled={disabled || chosen === undefined}
-        onClick={() => { if (chosen !== undefined) { onAdd(chosen.type); setType(""); } }}>{action}</Button>
-    </div>
-    {chosen === undefined ? null : <p className="text-xs text-muted-foreground">{chosen.summary}</p>}
-  </div>;
-}
 
 export function StudioFlowInspector({ context, selection, lists, stepPath, ownerNote, choices, start, controlLabel, disabled,
   onCommand, onStart, onSelectStep }: Readonly<{
@@ -159,7 +136,7 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
         }} />
       {ownerNote === undefined ? null : <p className="text-sm text-muted-foreground">{ownerNote}</p>}
       <p className="text-sm text-muted-foreground">Select a step on the canvas to change its settings, move it or add a step after it.</p>
-      {main !== undefined && <StepTypePicker id="flow-add-last" label="Add a step at the end" types={actions.stepTypes} disabled={disabled}
+      {main !== undefined && <StudioFlowStepPicker id="flow-add-last" label="Add a step at the end" types={actions.stepTypes} disabled={disabled}
         action="Add" onAdd={(taskType) => add({ kind: "insert_task", taskType, listPath: main.path, index: main.tasks.length }, "Step added at the end.")} />}
       {messages}
       {confirmDialog}
@@ -215,12 +192,12 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
       </>}
     </section>
     <section className="space-y-3" aria-label="Add steps">
-      <StepTypePicker id="flow-add-after" label="Add a step after this one" types={actions.stepTypes} disabled={disabled}
+      <StudioFlowStepPicker id="flow-add-after" label="Add a step after this one" types={actions.stepTypes} disabled={disabled}
         action="Add" onAdd={(taskType) => add({ kind: "insert_task", taskType, listPath, index: index + 1 }, "Step added.")} />
-      {step.children.map((child) => <StepTypePicker key={JSON.stringify(child.path)} id={`flow-add-in-${JSON.stringify(child.path)}`}
+      {step.children.map((child) => <StudioFlowStepPicker key={JSON.stringify(child.path)} id={`flow-add-in-${JSON.stringify(child.path)}`}
         label={`Add a step to ${child.label}`} types={actions.stepTypes} disabled={disabled} action="Add"
         onAdd={(taskType) => add({ kind: "insert_task", taskType, listPath: child.path, index: child.tasks.length }, `Step added to ${child.label}.`)} />)}
-      {actions.branch !== null && <StepTypePicker id="flow-add-branch" label={`Add the ${actions.branch} branch, starting with`}
+      {actions.branch !== null && <StudioFlowStepPicker id="flow-add-branch" label={`Add the ${actions.branch} branch, starting with`}
         types={actions.stepTypes} disabled={disabled} action="Add branch"
         onAdd={(taskType) => add({ kind: "add_branch", taskId: step.id, taskPath: step.path, taskType }, `${actions.branch} branch added.`)} />}
     </section>
