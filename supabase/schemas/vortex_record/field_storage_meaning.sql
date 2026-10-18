@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.field_storage_meaning(p_field jsonb) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.field_storage_meaning(p_field jsonb) RETURNS jsonb
     LANGUAGE sql IMMUTABLE
     SET search_path TO ''
     AS $$
