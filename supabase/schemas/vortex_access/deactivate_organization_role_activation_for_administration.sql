@@ -43,7 +43,9 @@ begin
     from (select permission.application_root_id, permission.owner_kind, permission.owner_id,
       permission.permission_id, pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
         'applicationRootId', permission.application_root_id, 'ownerKind', permission.owner_kind,
-        'ownerId', permission.owner_id, 'permissionId', permission.permission_id)) as permission
+        'ownerId', permission.owner_id, 'permissionId', permission.permission_id,
+        'acceptedRegistrationRevision', permission.accepted_registration_revision,
+        'meaningFingerprint', permission.meaning_fingerprint)) as permission
       from vortex_access.organization_role_permission_entries as permission
       where permission.organization_id = context_organization_id
         and permission.role_id = activation_fact.role_id

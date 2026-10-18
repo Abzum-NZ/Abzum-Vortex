@@ -9,3 +9,4 @@ export * from "./action-flow-effects";
 export * from "./action-record-port";
 export * from "./record-lifecycle-policy-record";
 export * from "./delete-record";
+export * from "./derived-field-backfill";

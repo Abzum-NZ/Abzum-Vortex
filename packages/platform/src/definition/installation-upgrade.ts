@@ -53,6 +53,7 @@ import {
   type InstallationBindings,
 } from "./installation-binding-reader";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
+import { backfillActivatedApplication } from "../records/derived-field-backfill";
 
 type HumanOrganizationRequests = ReturnType<typeof createHumanOrganizationRequestService>;
 
@@ -736,5 +737,9 @@ export const activateUpgradeRelease = async (
     expectedActiveReleaseRevision: priorRevision,
   });
   const verified = verifyCoordinatorActivation(result, selector, priorRevision, state.selectedReleaseSet);
+  await backfillActivatedApplication(environment.requests, session, {
+    organizationId: state.active.organizationId,
+    applicationRootId: selector.rootId,
+  });
   return { ...verified, activeAtCommitRevision: result.installation.applicationReleaseRevision };
 };

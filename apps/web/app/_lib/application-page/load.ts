@@ -8,6 +8,7 @@ import {
   decideOrganizationAccessBatch,
   createStoredNavigationProjectionService,
   type PageSubjectReadResult,
+  type ProtectedQueryRow,
   type RecordLinkResolver,
   readCurrentRecordOwnerGroupsAfterAuthorization,
 } from "@vortex/platform/server";
@@ -24,8 +25,6 @@ import {
   organizationRuntimeSettingsSchema,
   type OrganizationAccessDeclaration,
   recordIdSchema,
-  type FlowTask,
-  flowTaskChildLists,
   type JsonValue,
   sameId,
   isRecord,
@@ -88,6 +87,12 @@ import { projectPlacementRecordTypes, projectFlowBindingTargets } from "./flow-b
 import { isStreamablePlacement, projectPlacementBindings, readPlacement } from "./placement-reader";
 import { projectPageWebMcpTools } from "./webmcp-projection";
 import { platformPermissionSource } from "../platform-permission-source";
+import {
+  applyFormFieldAccess,
+  decideFormFieldAccess,
+  flowCreatedRecordTypeIds,
+  readCreatableFieldIds,
+} from "./form-field-access";
 
 export const requestDependencies = (): HumanOrganizationRequestDependencies =>
   humanOrganizationRequestDependencies();
@@ -108,7 +113,9 @@ export const loadInstalledContext = (
         scope: {
           organizationId: scope.organizationId,
           applicationRootId: scope.applicationRootId,
-          ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
+          ...(scope.previewInstallationId === undefined
+            ? {}
+            : { previewInstallationId: scope.previewInstallationId }),
         },
       }).load();
     },
@@ -198,7 +205,9 @@ const loadApplicationPageJoined = async (
   const selection: OrganizationSelectionCandidate = {
     organizationId: address.read.organizationId,
     applicationRootId: address.application.applicationRootId,
-    ...(address.application.previewInstallationId === undefined ? {} : { previewInstallationId: address.application.previewInstallationId }),
+    ...(address.application.previewInstallationId === undefined
+      ? {}
+      : { previewInstallationId: address.application.previewInstallationId }),
   };
 
   // The installed context is read once, under the person's own verified request scope. The address
@@ -276,7 +285,7 @@ const loadApplicationPageJoined = async (
     context.releaseSet.modules.every((module) => module.content.recordTypes.length === 0)
       ? `/studio/${encodeURIComponent(context.organizationId)}/${encodeURIComponent(context.applicationRootId)}?tab=data`
       : undefined;
-  const allPlacements = collectPlacements(page);
+  let allPlacements = collectPlacements(page);
   if (boardContinuation !== undefined) {
     const targets = allPlacements.filter(({ placementId }) =>
       sameId(placementId, boardContinuation.placementId),
@@ -435,9 +444,16 @@ const loadApplicationPageJoined = async (
     tenantShortName: address.tenantShortName,
     organizationShortName: address.organizationShortName,
   });
-  const { queries, referenceChoices, tables, queryNotices, linkTiles, readCalendarSettings, subjects,
-    readConcurrently } =
-    services;
+  const {
+    queries,
+    referenceChoices,
+    tables,
+    queryNotices,
+    linkTiles,
+    readCalendarSettings,
+    subjects,
+    readConcurrently,
+  } = services;
 
   // The page subject: the one record the page's own address names, of the page's declared record
   // type, read once through the record read path under the viewer's own authority. Nothing here
@@ -495,7 +511,59 @@ const loadApplicationPageJoined = async (
       return isFormContainer && submitsPageRecord ? [placementId] : [];
     }),
   );
-  // A form baseline is valid only when every declared field was projected. A selected field also
+  // The forms of a form page show each field as the viewer's field policy allows: decided once,
+  // before any placement is read, so a field left out is never read or sent.
+  const formRecordType =
+    pageDefinition.type === "form" && subjectType !== undefined
+      ? context.releaseSet.modules
+          .flatMap((module) => module.content.recordTypes)
+          .find((recordType) =>
+            sameId(String(recordType.recordTypeId), String(subjectType.recordTypeId)),
+          )
+      : undefined;
+  let refusedForms: ReadonlyMap<string, string> = new Map();
+  if (formRecordType !== undefined) {
+    const recordTypeId = String(formRecordType.recordTypeId);
+    const editForms = new Map<string, ProtectedQueryRow>();
+    if (editFormPlacementIds.size > 0 && subjectId.success) {
+      const read = await readSubject(recordTypeId, subjectId.data);
+      if (read.kind === "read")
+        for (const formId of editFormPlacementIds) editForms.set(formId, read.row);
+    }
+    const createFormIds = allPlacements.flatMap(({ placementId, vortex }) => {
+      const block = vortex.block;
+      return isRecord(block) &&
+        typeof block.blockId === "string" &&
+        sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId) &&
+        !editFormPlacementIds.has(placementId) &&
+        application.content.flowBindings.some(
+          (binding) =>
+            sameId(binding.controlId, placementId) &&
+            binding.event === "form_submit" &&
+            flowCreatedRecordTypeIds(application.content.flows, String(binding.flow.flowId)).has(
+              recordTypeId.toLowerCase(),
+            ),
+        )
+        ? [placementId]
+        : [];
+    });
+    const createForms = new Map<string, ReadonlySet<string> | undefined>();
+    if (createFormIds.length > 0) {
+      const creatable = await readCreatableFieldIds(session, selection, context, recordTypeId);
+      if (creatable.kind !== "available") return creatable;
+      for (const formId of createFormIds) createForms.set(formId, creatable.fieldIds);
+    }
+    const access = decideFormFieldAccess({
+      placements: allPlacements,
+      recordType: formRecordType,
+      editForms,
+      createForms,
+    });
+    applyFormFieldAccess(page, access);
+    allPlacements = collectPlacements(page);
+    refusedForms = access.refused;
+  }
+  // A form baseline is valid only when every shown field was projected. A selected field also
   // needs its owning form's subject read, even though only the requested field is returned.
   const selectedForProjection =
     selectedPlacementIds === undefined ? undefined : new Set(selectedPlacementIds);
@@ -553,17 +621,16 @@ const loadApplicationPageJoined = async (
       editFormPlacementIds,
     });
 
-  const { refreshPlacementsByBinding, flowsById, selectedReadTypesByFlow } =
-    projectFlowBindingTargets({
-      application,
-      context,
-      allPlacements,
-      recordTypeByPlacement,
-      pageSubjectRecordTypeId,
-      editFormPlacementIds,
-      dataPlacementsByRecordType,
-      editFormDataPlacementIds,
-    });
+  const { refreshPlacementsByBinding, selectedReadTypesByFlow } = projectFlowBindingTargets({
+    application,
+    context,
+    allPlacements,
+    recordTypeByPlacement,
+    pageSubjectRecordTypeId,
+    editFormPlacementIds,
+    dataPlacementsByRecordType,
+    editFormDataPlacementIds,
+  });
 
   const data: Record<string, PageDataState> = {};
   // Set when the record a detail or public page addresses cannot be shown to this viewer: it is
@@ -645,40 +712,10 @@ const loadApplicationPageJoined = async (
       ),
     ),
   );
-  const createsGroupRecord = (flowId: string): boolean => {
-    const visited = new Set<string>();
-    const visitFlow = (id: string): boolean => {
-      if (visited.has(id.toLowerCase())) return false;
-      visited.add(id.toLowerCase());
-      const flow = flowsById.get(id.toLowerCase());
-      if (flow === undefined) return false;
-      const visitTasks = (tasks: readonly FlowTask[]): boolean =>
-        tasks.some((task) => {
-          const properties = "properties" in task ? task.properties : undefined;
-          const recordType = properties?.record_type;
-          if (
-            task.type === "record.save" &&
-            properties !== undefined &&
-            !Object.hasOwn(properties, "record") &&
-            isRecord(recordType) &&
-            recordType.kind === "literal" &&
-            isRecord(recordType.literal) &&
-            recordType.literal.type === "text" &&
-            typeof recordType.literal.value === "string" &&
-            ownershipByRecordType.get(recordType.literal.value.toLowerCase()) === "group"
-          )
-            return true;
-          if (
-            task.type === "run_flow" &&
-            visitFlow(String((task as Extract<FlowTask, { type: "run_flow" }>).flowId))
-          )
-            return true;
-          return flowTaskChildLists(task).some((child) => visitTasks(child.tasks));
-        });
-      return visitTasks(flow.tasks) || visitTasks(flow.errors) || visitTasks(flow.finally);
-    };
-    return visitFlow(flowId);
-  };
+  const createsGroupRecord = (flowId: string): boolean =>
+    [...flowCreatedRecordTypeIds(application.content.flows, flowId)].some(
+      (recordTypeId) => ownershipByRecordType.get(recordTypeId) === "group",
+    );
   const groupCreateBindings = placements.flatMap(({ placementId, vortex }) => {
     const block = vortex.block;
     if (
@@ -786,7 +823,8 @@ const loadApplicationPageJoined = async (
       ...guidedFormInputData(page, recordType, values, dateTimeZones),
     } as Record<string, PageDataState>;
     // A linked record shows by its title, read under the viewer's access.
-    if (!(await titleLinkInputs(stepData, resolveRecordLinks))) return { kind: "unavailable" };
+    if ((await titleLinkInputs(stepData, resolveRecordLinks)).size > 0)
+      return { kind: "unavailable" };
     Object.assign(data, stepData);
     guidedForm = {
       draftId: String(openedDraft.draft.draftId),
@@ -809,6 +847,7 @@ const loadApplicationPageJoined = async (
         subjectType !== undefined &&
         sameId(String(recordType.recordTypeId), String(subjectType.recordTypeId)),
     );
+  const unshown = new Set<string>();
   if (pageDefinition.type !== "guided_form") {
     for (const { placementId, vortex } of placements) {
       if (!editFormPlacementIds.has(placementId)) continue;
@@ -834,7 +873,7 @@ const loadApplicationPageJoined = async (
       });
       const baseline: Record<string, JsonValue> = {};
       const projected: Record<string, PageDataState> = {};
-      let complete = true;
+      const baselineKeys = new Map<string, string>();
       for (const entry of fields) {
         const projectedField = projectEditField(
           entry,
@@ -842,21 +881,25 @@ const loadApplicationPageJoined = async (
           subjectRow.row.values,
           dateTimeZones,
         );
+        // A field whose stored value this form cannot show is left out of it, with the cause
+        // logged; the save then leaves that value as it is.
         if (projectedField === undefined || Object.hasOwn(baseline, projectedField.key)) {
-          complete = false;
-          break;
+          logPlacementFailure(address, entry.placementId, "edit_field_unprojected");
+          unshown.add(entry.placementId.toLowerCase());
+          continue;
         }
         baseline[projectedField.key] = projectedField.value;
+        baselineKeys.set(entry.placementId, projectedField.key);
         projected[entry.placementId] = projectedField.data;
       }
-      // A linked record shows by its title, read under the viewer's access in one batched read.
-      if (complete && !(await titleLinkInputs(projected, resolveRecordLinks))) {
-        logPlacementFailure(address, placementId, "link_titles_unavailable");
-        complete = false;
-      }
-      if (!complete) {
-        data[placementId] = { status: "disabled", reason: "Record unavailable" };
-        continue;
+      // A linked record shows by its title, read under the viewer's access in one batched read; a
+      // link whose record the viewer may not read is left out of the form, with the cause logged.
+      for (const untitled of await titleLinkInputs(projected, resolveRecordLinks)) {
+        logPlacementFailure(address, untitled, "link_titles_unavailable");
+        unshown.add(untitled.toLowerCase());
+        delete projected[untitled];
+        const key = baselineKeys.get(untitled);
+        if (key !== undefined) delete baseline[key];
       }
       Object.assign(data, projected);
       data[placementId] = { status: "ready", values: { kind: "form" } };
@@ -875,6 +918,19 @@ const loadApplicationPageJoined = async (
       resolveRecordLinks,
       log: (placementId, reason) => logPlacementFailure(address, placementId, reason),
     });
+  if (unshown.size > 0) {
+    applyFormFieldAccess(page, { omitted: unshown, readOnly: new Set(), refused: new Map() });
+    for (const placementId of Object.keys(data))
+      if (unshown.has(placementId.toLowerCase())) delete data[placementId];
+    for (let index = referenceChoiceInputs.length - 1; index >= 0; index -= 1)
+      if (unshown.has(referenceChoiceInputs[index]!.placementId.toLowerCase()))
+        referenceChoiceInputs.splice(index, 1);
+  }
+  // A form whose required field the viewer cannot fill in is refused, naming that field.
+  for (const { placementId } of placements) {
+    const reason = refusedForms.get(placementId.toLowerCase());
+    if (reason !== undefined) data[placementId] = { status: "disabled", reason };
+  }
 
   if (subjectUnreadable) return { kind: "unavailable" };
   if (typeof page.accessVersion !== "number" || !Number.isSafeInteger(page.accessVersion))

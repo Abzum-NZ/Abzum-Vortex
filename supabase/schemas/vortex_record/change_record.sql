@@ -89,7 +89,7 @@ begin
         'outcome', 'refused', 'reasonCode', 'record_unavailable'
       );
     end if;
-    bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+    bounds := vortex_record.decide_record_field_bounds_internal(decision);
   end if;
   select coalesce(pg_catalog.array_agg(item.value #>> '{}'), array[]::text[])
   into changeable
@@ -182,7 +182,7 @@ begin
         'outcome', 'refused', 'reasonCode', 'proposed_record_refused'
       );
     end if;
-    bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+    bounds := vortex_record.decide_record_field_bounds_internal(decision);
   end if;
 
   update_sql := pg_catalog.format(

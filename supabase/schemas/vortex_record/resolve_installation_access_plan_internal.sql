@@ -453,7 +453,7 @@ alter function vortex_record.resolve_installation_access_plan_internal(jsonb) ow
 revoke all on function vortex_record.resolve_installation_access_plan_internal(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.resolve_installation_access_plan_internal(jsonb)
-  to vortex_record_adapter;
+  to vortex_record_adapter, vortex_owner;
 
 comment on function vortex_record.resolve_installation_access_plan_internal(jsonb) is
   'Private installation access plan builder and cache: resolves definitions, column maps, permission alternatives and saved conditions once per all-active installation binding revision; a detached pin set is resolved afresh.';
