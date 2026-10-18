@@ -263,6 +263,7 @@ function TreeEditor({
             {typeof operand.value === "string" && operand.value !== "" && !choiceOptions.some((option) => option.value === operand.value) &&
               <option value={operand.value} disabled>{operand.value} (not an option)</option>}
           </NativeSelect>
+          {optionError && <span role="alert">{optionError}</span>}
         </label>
       );
     }
@@ -305,7 +306,9 @@ function TreeEditor({
     const other = side === "left" ? condition.right : condition.left;
     if (!operand) return null;
     const pathToOperand = [...path, side];
-    const operandError = errorForPath(validation, pathToOperand);
+    const literalOwnsError = operand.source === "value" && context.allowLiteralValues &&
+      (operand.value !== null || (choiceOptionsFor(other, context)?.length ?? 0) > 0);
+    const operandError = literalOwnsError ? undefined : errorForPath(validation, pathToOperand);
     const referenceOptions = context.allowedOperands.filter((option) =>
       compatibleOperand(side, option.operand),
     );
