@@ -49,6 +49,9 @@ export const studioCanvasFramesFor = (
     throw new Error("Studio compiled page list does not match its authored draft");
   const shells = content.shells as unknown as readonly ApplicationShell[];
   const pages: Record<string, StudioApplicationCanvasFrames["pages"][string]> = {};
+  // Pages sharing a shell share the same empty frame. Keeping that identity also lets the RSC
+  // serializer send the frame once rather than cloning its layout into every page's props.
+  const frames = new Map<string | undefined, ProjectedApplicationFrame>();
   sourcePages.forEach((sourcePage, index) => {
     const compiled = content.pages[index];
     if (compiled === undefined || compiled.key !== sourcePage.key || compiled.type !== sourcePage.type)
@@ -58,13 +61,17 @@ export const studioCanvasFramesFor = (
       : shells.find((candidate) => sameId(String(candidate.shellId), String(shellId)));
     if (shellId !== undefined && shell === undefined)
       throw new Error(`Studio compiled page '${compiled.key}' references a missing shell`);
+    let frame = frames.get(shellId);
+    if (frame === undefined) {
+      frame = splitProjectedPage({ pageId: compiled.pageId, composition: shell?.layout ?? emptyLayout }, shell).frame;
+      frames.set(shellId, frame);
+    }
     pages[sourcePage.id] = {
       pageId: String(compiled.pageId),
       pageName: compiled.name,
       // The frame is the shell alone: its content slots are reserved and empty in the compiled
       // shell, and the canvas draws the page being edited in the outlet they declare.
-      frame: splitProjectedPage({ pageId: compiled.pageId, composition: shell?.layout ?? emptyLayout },
-        shell).frame,
+      frame,
     };
   });
   return {

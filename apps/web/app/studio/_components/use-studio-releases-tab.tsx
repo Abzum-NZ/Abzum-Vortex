@@ -1,4 +1,5 @@
 "use client";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   applicationSourceDocumentSchema, canonicalJson, describeFailure, prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
@@ -8,9 +9,7 @@ import { prepareStudioApplicationPublication, publishStudioApplication } from ".
 import { previewStudioApplication } from "../preview-actions";
 import { sameStudioApplicationSourceImportSnapshot, type StudioApplicationSourceImportSnapshot } from "../_lib/application-source-import";
 import type { SavedDraftContext, StudioPublicationOutcome } from "./application-draft-agent-tools";
-import { ApplicationSourceImport } from "./application-source-import";
-import { StandardPageAdoption } from "./standard-page-adoption";
-import { StudioHistoryTab } from "./studio-history-tab";
+import type { ApplicationSourceImport as ApplicationSourceImportComponent } from "./application-source-import";
 import { StudioPublishDialog } from "./studio-publish-dialog";
 import { previewProblem, unavailableMessage } from "./studio-refusal-messages";
 import { describeStudioCompileFailure } from "../_lib/studio-compile-failure";
@@ -19,6 +18,14 @@ import { studioReleasesSections, type StudioReleasesSection } from "./studio-rai
 import type { StudioDraft } from "./use-studio-draft";
 import { studioNotice } from "./studio-save-state";
 import { toast } from "@vortex/ui/components/sonner";
+import { useStudioTabVisited } from "./studio-frame";
+
+const ApplicationSourceImport = dynamic(() => import("./application-source-import").then((module) => module.ApplicationSourceImport),
+  { loading: () => <p role="status">Loading source import…</p> });
+const StandardPageAdoption = dynamic(() => import("./standard-page-adoption").then((module) => module.StandardPageAdoption),
+  { loading: () => <p role="status">Loading page adoption…</p> });
+const StudioHistoryTab = dynamic(() => import("./studio-history-tab").then((module) => module.StudioHistoryTab),
+  { loading: () => <p role="status">Loading the published versions…</p> });
 
 /** The saved revision a publication was prepared for; any edit or reload makes it out of date. */
 type PublicationSnapshot = Readonly<{
@@ -69,6 +76,7 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, appStoreHr
   const latest = useRef(draft);
   latest.current = draft;
   const [section, setSection] = useState<StudioReleasesSection>(initialSection);
+  const importVisited = useStudioTabVisited(!hidden && section === "import");
   const [publishOpen, setPublishOpen] = useState(false);
   const [note, setNote] = useState("");
   const [problem, setProblem] = useState("");
@@ -252,7 +260,7 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, appStoreHr
       draftRevision: state.draftRevision, savedSourceFingerprint: current.readSaved().sourceFingerprint,
       source: state.source, localLifetime: current.lifetime };
   };
-  const applyImport: Parameters<typeof ApplicationSourceImport>[0]["onApply"] = (expected, candidate) => {
+  const applyImport: Parameters<typeof ApplicationSourceImportComponent>[0]["onApply"] = (expected, candidate) => {
     if (!sameStudioApplicationSourceImportSnapshot(expected, readImportSnapshot())) return "stale";
     const parsed = applicationSourceDocumentSchema.safeParse(candidate);
     if (!parsed.success || parsed.data.key !== expected.key || parsed.data.root_alias !== expected.rootAlias) return "stale";
@@ -280,10 +288,10 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, appStoreHr
         disabledReason={restoreBlocked} hold={(on) => draft.hold("restoring", on)}
         onSaved={() => { void draft.reload().then((loaded) => { if (!loaded) studioNotice("Your choice was saved, but the draft could not be loaded here. Reload Studio to see it.", "error"); }); }} />}
     {/* The import keeps what was pasted while another section or tab is open. */}
-    <section hidden={section !== "import"} aria-label="Import from source" className="space-y-3">
+    {importVisited && <section hidden={hidden || section !== "import"} aria-label="Import from source" className="space-y-3">
       <p className="text-sm text-muted-foreground">Replace the draft with a source document. This is for advanced use; the change is checked before it reaches your draft.</p>
       <ApplicationSourceImport key={draft.lifetime} disabled={draft.locked} readSnapshot={readImportSnapshot} onApply={applyImport} />
-    </section>
+    </section>}
   </>;
   const title = studioReleasesSections.find((entry) => entry.value === section)!.label;
   const notSaved = draft.status.kind === "conflict" || draft.status.kind === "refused" ? draft.status.message : "";

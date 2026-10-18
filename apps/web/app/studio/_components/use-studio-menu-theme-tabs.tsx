@@ -1,11 +1,16 @@
 "use client";
+import dynamic from "next/dynamic";
 import { applicationSourceDocumentSchema, canonicalJson, type ApplicationSourceDocument } from "@vortex/platform/schema";
 import { applyStudioMenuCommand, type StudioMenuCommand, type StudioMenuResult } from "@vortex/ui/studio";
 import type { StudioThemeOptions } from "../_lib/studio-theme-options";
 import { StudioMenuPanel } from "./studio-menu-panel";
-import { StudioThemePanel, type StudioThemeChangeOutcome } from "./studio-theme-panel";
+import type { StudioThemeChangeOutcome } from "./studio-theme-panel";
+import { useStudioTabVisited } from "./studio-frame";
 import type { StudioDraft } from "./use-studio-draft";
 import type { useStudioDraftTheme } from "./use-studio-draft-theme";
+
+const StudioThemePanel = dynamic(() => import("./studio-theme-panel").then((module) => module.StudioThemePanel),
+  { loading: () => <p role="status">Loading the theme editor…</p> });
 
 /**
  * The Menu and Theme tabs: the application's navigation tree, and its shadcn create theme. Both edit the whole application, through the draft's envelope; the
@@ -22,6 +27,7 @@ export function useStudioMenuThemeTabs({ draft, menuHidden, themeHidden, themeOp
   openAccessPages: () => void;
 }>) {
   const { source, selected } = draft;
+  const themeVisited = useStudioTabVisited(!themeHidden);
   const commandMenu = (command: StudioMenuCommand, merge?: string): StudioMenuResult => {
     const after: { select?: string | null | undefined } = {};
     const outcome = draft.run<StudioMenuResult>((current) => {
@@ -66,7 +72,7 @@ export function useStudioMenuThemeTabs({ draft, menuHidden, themeHidden, themeOp
     selectedAlias={selected?.kind === "navigation" ? selected.navigationItemAlias : null}
     onSelect={(alias) => { draft.select(alias === null ? null : { kind: "navigation", navigationItemAlias: alias }); }}
     onCommand={commandMenu} onOpenAccess={openAccessPages} disabled={draft.locked} />;
-  const themePanel = <StudioThemePanel hidden={themeHidden} selection={source.body.theme.selection} options={themeOptions}
-    disabled={draft.locked} onChange={changeThemeSelection} />;
+  const themePanel = themeVisited ? <StudioThemePanel hidden={themeHidden} selection={source.body.theme.selection} options={themeOptions}
+    disabled={draft.locked} onChange={changeThemeSelection} /> : null;
   return { menuPanel, themePanel };
 }

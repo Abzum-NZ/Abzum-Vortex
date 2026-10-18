@@ -90,14 +90,14 @@ export function StudioTopBar({
         size="icon-sm"
         nativeButton={false}
         aria-label="All applications"
-        render={<Link href="/studio" />}
+        render={<Link href="/studio" prefetch={false} />}
       >
         <Icon name="grid" />
       </Button>
       <Breadcrumb className="min-w-0">
         <BreadcrumbList className="flex-nowrap">
           <BreadcrumbItem className="min-w-0">
-            <BreadcrumbLink className="truncate" render={<Link href={location.organizationHref} />}>
+            <BreadcrumbLink className="truncate" render={<Link href={location.organizationHref} prefetch={false} />}>
               {location.organizationName}
             </BreadcrumbLink>
           </BreadcrumbItem>
@@ -117,7 +117,7 @@ export function StudioTopBar({
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {location.applications.map((app) => (
-                  <DropdownMenuItem key={app.href} render={<Link href={app.href} />}>
+                  <DropdownMenuItem key={app.href} render={<Link href={app.href} prefetch={false} />}>
                     {app.name}
                   </DropdownMenuItem>
                 ))}
@@ -178,7 +178,7 @@ export function StudioTopBar({
             variant="ghost"
             size="sm"
             nativeButton={false}
-            render={<Link href={backToAppHref} />}
+            render={<Link href={backToAppHref} prefetch={false} />}
           >
             <Icon name="chevron-left" />
             Back to app
