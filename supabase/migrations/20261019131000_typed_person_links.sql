@@ -8888,6 +8888,8 @@ alter function vortex_access.evaluate_record_permission_row_scope_internal(p_con
 
 grant execute on function vortex_access.evaluate_record_permission_row_scope_internal(p_context jsonb, p_checked_at timestamp with time zone, p_auth_deadline timestamp with time zone, p_application_root_id uuid, p_action jsonb, p_candidate jsonb, p_record_id uuid, p_facts jsonb, p_path uuid[]) to postgres;
 
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.read_record_page_envelope_internal(
   p_record_type_id uuid,
   p_first_loaded jsonb
