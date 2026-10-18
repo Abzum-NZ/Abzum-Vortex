@@ -2253,8 +2253,8 @@ alter function vortex_access.update_own_profile(p_organization_account_id uuid, 
 
 grant execute on function vortex_access.update_own_profile(p_organization_account_id uuid, p_expected_revision bigint, p_display_name text, p_language text, p_time_zone text, p_activity_id uuid) to postgres;
 
--- vortex_identity/lock_organization_accounts_for_profile_change.sql
-create or replace function vortex_identity.lock_organization_accounts_for_profile_change(
+-- vortex_access/lock_organization_accounts_for_profile_change.sql
+create or replace function vortex_access.lock_organization_accounts_for_profile_change(
   p_identity_id uuid,
   p_organization_id uuid,
   p_organization_account_id uuid
@@ -2274,10 +2274,19 @@ begin
   end if;
 
   -- The request's scope holds its own account with a shared lock until commit, and the profile
-  -- writer then needs the changed account exclusively. Taking the write lock first, before the
-  -- scope, makes two saves of the same account queue here instead of each holding a shared lock
-  -- the other's write waits for (a deadlock). The actor's account and the changed one are locked
-  -- in account identity order, and the changed one only when the actor has an active account here.
+  -- writer then needs the changed account exclusively. Taking the write lock before the scope's
+  -- account lock makes two saves of one account queue here instead of each holding a shared lock
+  -- the other's write waits for (a deadlock). The Access version is held shared first, in the
+  -- same order as every scope (the version, then accounts), so an access change, which holds the
+  -- version exclusively before it locks an account, never waits for a lock taken here while
+  -- holding one this transaction needs.
+  perform 1
+  from vortex_access.organization_access_versions as version
+  where version.organization_id = p_organization_id
+  for share of version;
+
+  -- The actor's account and the changed one are locked in account identity order, the changed
+  -- one only when the actor has an active account in the organisation.
   perform 1
   from vortex_identity.organization_accounts as account
   where account.organization_id = p_organization_id
@@ -2295,18 +2304,18 @@ begin
 end
 $function$;
 
-revoke all on function vortex_identity.lock_organization_accounts_for_profile_change(uuid, uuid, uuid)
+revoke all on function vortex_access.lock_organization_accounts_for_profile_change(uuid, uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
-grant execute on function vortex_identity.lock_organization_accounts_for_profile_change(uuid, uuid, uuid)
+grant execute on function vortex_access.lock_organization_accounts_for_profile_change(uuid, uuid, uuid)
   to vortex_runtime;
 
-comment on function vortex_identity.lock_organization_accounts_for_profile_change(uuid, uuid, uuid) is
-  'Locks the acting account and the account whose profile changes, in account identity order, before the request scope takes its shared account lock, so concurrent profile saves of one account queue instead of deadlocking. Decides nothing: the scope and the profile writer still check the actor, the account state and the revision.';
+comment on function vortex_access.lock_organization_accounts_for_profile_change(uuid, uuid, uuid) is
+  'Holds the organisation Access version shared, then locks the acting account and the account whose profile changes, in account identity order, before the request scope takes its shared account lock, so concurrent profile saves of one account queue instead of deadlocking. Decides nothing: the scope and the profile writer still check the actor, the account state and the revision.';
 
-alter function vortex_identity.lock_organization_accounts_for_profile_change(p_identity_id uuid, p_organization_id uuid, p_organization_account_id uuid) owner to vortex_owner;
+alter function vortex_access.lock_organization_accounts_for_profile_change(p_identity_id uuid, p_organization_id uuid, p_organization_account_id uuid) owner to vortex_owner;
 
-grant execute on function vortex_identity.lock_organization_accounts_for_profile_change(p_identity_id uuid, p_organization_id uuid, p_organization_account_id uuid) to postgres;
+grant execute on function vortex_access.lock_organization_accounts_for_profile_change(p_identity_id uuid, p_organization_id uuid, p_organization_account_id uuid) to postgres;
 
 -- vortex_access/propose_record_share_grant_for_administration.sql
 create or replace function vortex_access.propose_record_share_grant_for_administration(

@@ -190,7 +190,7 @@ export const createHumanOrganizationRequestService = (
           // account shared, so two saves of one account queue instead of deadlocking.
           if (changedAccountId !== undefined)
             await transaction.query`
-              select vortex_identity.lock_organization_accounts_for_profile_change(
+              select vortex_access.lock_organization_accounts_for_profile_change(
                 ${verifiedSession.data.identityId}::uuid,
                 ${verifiedCandidate.data.organizationId}::uuid,
                 ${changedAccountId}::uuid
