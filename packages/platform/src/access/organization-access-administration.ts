@@ -785,6 +785,15 @@ export const readOrganizationAdministrationDelegationAuthorityResultSchema = z.d
   ],
 );
 
+/** Catalogue delegation is separate from role permissions and stewardship. */
+export const grantOrganizationAdministrationDelegationAuthorityCommandSchema = z
+  .object({
+    holderKind: z.enum(["organization_account", "group"]),
+    holderId: z.union([organizationAccountIdSchema, groupIdSchema]),
+    expectedHolderRevision: revisionSchema,
+  })
+  .strict();
+
 export const revokeOrganizationAdministrationDelegationAuthorityCommandSchema = z
   .object({
     delegationAuthorityId: delegationAuthorityIdSchema,
@@ -1115,4 +1124,8 @@ export type AddOrganizationAdministrationMembershipCommand = z.infer<
 >;
 export type AssignOrganizationAdministrationRoleAssignmentCommand = z.infer<
   typeof assignOrganizationAdministrationRoleAssignmentCommandSchema
+>;
+
+export type GrantOrganizationAdministrationDelegationAuthorityCommand = z.infer<
+  typeof grantOrganizationAdministrationDelegationAuthorityCommandSchema
 >;
