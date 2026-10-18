@@ -5,7 +5,8 @@ import { createReadStream } from "node:fs";
 import { mkdtemp, open, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileTypeFromFile } from "file-type";
+import { Readable } from "node:stream";
+import { fileTypeFromStream } from "file-type";
 import { trustedFileInspectionSchema } from "../schema";
 import type { StorageCredentialBridge } from "./storage-credentials";
 import { resolveFileStorageDestination, type FileStorageDestination } from "./storage-destination";
@@ -114,7 +115,16 @@ export const createStoredUploadInspection = (
       configuration.maximumBytes,
       fetchImplementation,
       async (filename, size, checksum) => {
-        let detected: { ext: string; mime: string } | undefined = await fileTypeFromFile(filename);
+        const content = createReadStream(filename);
+        let detected: { ext: string; mime: string } | undefined;
+        try {
+          // Web-stream detection keeps file-type's Node-only dynamic imports out of bundled routes.
+          detected = await fileTypeFromStream(
+            Readable.toWeb(content) as ReadableStream<Uint8Array>,
+          );
+        } finally {
+          content.destroy();
+        }
         if (detected === undefined) {
           const decoder = new TextDecoder("utf-8", { fatal: true });
           let text = true;
