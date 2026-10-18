@@ -604,11 +604,15 @@ export const createOrganizationLocalAdministrationService = (
       } catch {
         return { kind: "temporarily_unavailable" };
       }
-      return requests.runChange(session, selection, async (transaction, scope) => {
-        let row: ProfileChangeRow;
-        try {
-          row = requireOne(
-            await transaction.query<ProfileChangeRow>`
+      return requests.runProfileChange(
+        session,
+        selection,
+        command.data.organizationAccountId,
+        async (transaction, scope) => {
+          let row: ProfileChangeRow;
+          try {
+            row = requireOne(
+              await transaction.query<ProfileChangeRow>`
             select outcome, operation, organization_id, organization_account_id,
               account_summary, correlation_id, accepted_at, access_version
             from vortex_access.update_own_profile(
@@ -620,41 +624,42 @@ export const createOrganizationLocalAdministrationService = (
               ${activityId}::uuid
             )
             `,
-          );
-        } catch (error) {
-          if (isStaleOwnProfileRevision(error)) return "conflict" as const;
-          throw error;
-        }
-        if (
-          typeof row.organization_id !== "string" ||
-          !sameId(row.organization_id, scope.organizationId) ||
-          typeof row.organization_account_id !== "string" ||
-          !sameId(row.organization_account_id, command.data.organizationAccountId) ||
-          databaseRevision(row.access_version) !== scope.accessVersion
-        )
-          throw unavailableError(unavailableCode);
-        const result = updateOwnProfileResultSchema.parse({
-          outcome: row.outcome,
-          operation: row.operation,
-          organizationId: row.organization_id,
-          organizationAccountId: row.organization_account_id,
-          correlationId: row.correlation_id,
-          acceptedAt: databaseTimestamp(row.accepted_at),
-          accessVersion: databaseRevision(row.access_version),
-          ...(row.outcome === "accepted" &&
-          row.account_summary !== null &&
-          row.account_summary !== undefined
-            ? { account: normalizeRevision(row.account_summary) }
-            : {}),
-        });
-        if (
-          result.outcome === "accepted" &&
-          (!sameId(result.account.organizationAccountId, command.data.organizationAccountId) ||
-            result.account.revision !== command.data.expectedRevision + 1)
-        )
-          throw unavailableError(unavailableCode);
-        return result;
-      });
+            );
+          } catch (error) {
+            if (isStaleOwnProfileRevision(error)) return "conflict" as const;
+            throw error;
+          }
+          if (
+            typeof row.organization_id !== "string" ||
+            !sameId(row.organization_id, scope.organizationId) ||
+            typeof row.organization_account_id !== "string" ||
+            !sameId(row.organization_account_id, command.data.organizationAccountId) ||
+            databaseRevision(row.access_version) !== scope.accessVersion
+          )
+            throw unavailableError(unavailableCode);
+          const result = updateOwnProfileResultSchema.parse({
+            outcome: row.outcome,
+            operation: row.operation,
+            organizationId: row.organization_id,
+            organizationAccountId: row.organization_account_id,
+            correlationId: row.correlation_id,
+            acceptedAt: databaseTimestamp(row.accepted_at),
+            accessVersion: databaseRevision(row.access_version),
+            ...(row.outcome === "accepted" &&
+            row.account_summary !== null &&
+            row.account_summary !== undefined
+              ? { account: normalizeRevision(row.account_summary) }
+              : {}),
+          });
+          if (
+            result.outcome === "accepted" &&
+            (!sameId(result.account.organizationAccountId, command.data.organizationAccountId) ||
+              result.account.revision !== command.data.expectedRevision + 1)
+          )
+            throw unavailableError(unavailableCode);
+          return result;
+        },
+      );
     },
 
     async createOrganizationInvitation(

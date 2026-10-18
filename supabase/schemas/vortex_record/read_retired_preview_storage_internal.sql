@@ -7,7 +7,9 @@ stable
 security definer
 set search_path = ''
 as $function$
-  -- Storage whose preview row is gone: no request reaches it, and the background drops it.
+  -- A storage binding outlives its preview: deleting a preview leaves the binding as the storage's
+  -- retirement identity. Storage whose preview row is gone is reached by no request, and the
+  -- background drops it.
   select binding.storage_contract_id
   from vortex_record.preview_storage_bindings as binding
   where not exists (

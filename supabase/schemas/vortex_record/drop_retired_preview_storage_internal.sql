@@ -17,7 +17,8 @@ begin
   -- of the retired table, so a held lock fails fast (55P03) and the next run retries.
   perform pg_catalog.set_config('lock_timeout', '200ms', true);
 
-  -- Retired: its preview row is gone, so no request reaches this storage any more. Another run
+  -- Retired: its binding outlived its deleted preview, so no request reaches this storage any
+  -- more, and the binding is deleted only here, with the storage it names. Another run
   -- dropping the same storage holds these rows; this one leaves it to that run.
   select binding.storage_contract_id, catalogue.physical_table_token into storage_row
   from vortex_record.preview_storage_bindings as binding

@@ -6,20 +6,29 @@
 -- that advances the version holds it exclusively, from its first statement, through the access
 -- change scopes, which replace the old change scopes. The functions that pinned authority with an
 -- exclusive lock without advancing the version now pin it with a shared one: an access change
--- still waits for them, so a decision checked at a version stays valid until commit.
+-- still waits for them, so a decision checked at a version stays valid until commit. A profile
+-- save, whose scope holds the actor's account shared, locks the accounts it writes before its
+-- scope, so two saves of one account queue instead of deadlocking.
 --
 -- Preview storage never locks a platform table: a preview's record tables reference no platform
 -- row (a foreign key to organisations, accounts or Groups made creating and dropping them take
 -- locks on those tables, ACCESS EXCLUSIVE on drop, which stopped every request of every
 -- organisation). A replaced or expired preview's storage is retired with its preview row and
 -- dropped in the background, one storage identity per short transaction with a short lock timeout,
--- never inside a builder's request.
+-- never inside a builder's request. The storage binding outlives its preview (its foreign key to
+-- the preview no longer cascades the binding away): a binding whose preview is gone is the
+-- retirement identity the background drop reads, and it is deleted only with its storage.
 set local role vortex_owner;
 
 drop function vortex_access.resolve_human_application_change_scope(uuid, uuid, uuid);
 drop function vortex_access.resolve_human_organization_change_scope(uuid, uuid);
 drop function vortex_record.drop_preview_installation_storage(uuid);
 drop function vortex_record.create_record_storage_table_internal(uuid, uuid, uuid, text, text);
+
+alter table vortex_record.preview_storage_bindings
+  drop constraint preview_storage_bindings_preview_installation_id_fkey;
+comment on table vortex_record.preview_storage_bindings is
+  'Binds each preview record type to its isolated storage. A binding outlives its preview: once the preview is deleted it names retired storage, and only the background drop deletes it together with that storage.';
 
 -- vortex_access/resolve_human_organization_scope.sql
 create or replace function vortex_access.resolve_human_organization_scope(
@@ -2244,6 +2253,61 @@ alter function vortex_access.update_own_profile(p_organization_account_id uuid, 
 
 grant execute on function vortex_access.update_own_profile(p_organization_account_id uuid, p_expected_revision bigint, p_display_name text, p_language text, p_time_zone text, p_activity_id uuid) to postgres;
 
+-- vortex_identity/lock_organization_accounts_for_profile_change.sql
+create or replace function vortex_identity.lock_organization_accounts_for_profile_change(
+  p_identity_id uuid,
+  p_organization_id uuid,
+  p_organization_account_id uuid
+)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+begin
+  if not vortex_platform.is_non_nil_uuid(p_identity_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_organization_account_id::text) then
+    raise exception using errcode = '22023',
+      message = 'Organization account profile command is invalid';
+  end if;
+
+  -- The request's scope holds its own account with a shared lock until commit, and the profile
+  -- writer then needs the changed account exclusively. Taking the write lock first, before the
+  -- scope, makes two saves of the same account queue here instead of each holding a shared lock
+  -- the other's write waits for (a deadlock). The actor's account and the changed one are locked
+  -- in account identity order, and the changed one only when the actor has an active account here.
+  perform 1
+  from vortex_identity.organization_accounts as account
+  where account.organization_id = p_organization_id
+    and (account.identity_id = p_identity_id
+      or (account.organization_account_id = p_organization_account_id
+        and exists (
+          select 1
+          from vortex_identity.organization_accounts as actor
+          where actor.organization_id = p_organization_id
+            and actor.identity_id = p_identity_id
+            and actor.state = 'active'
+        )))
+  order by account.organization_account_id
+  for no key update of account;
+end
+$function$;
+
+revoke all on function vortex_identity.lock_organization_accounts_for_profile_change(uuid, uuid, uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+grant execute on function vortex_identity.lock_organization_accounts_for_profile_change(uuid, uuid, uuid)
+  to vortex_runtime;
+
+comment on function vortex_identity.lock_organization_accounts_for_profile_change(uuid, uuid, uuid) is
+  'Locks the acting account and the account whose profile changes, in account identity order, before the request scope takes its shared account lock, so concurrent profile saves of one account queue instead of deadlocking. Decides nothing: the scope and the profile writer still check the actor, the account state and the revision.';
+
+alter function vortex_identity.lock_organization_accounts_for_profile_change(p_identity_id uuid, p_organization_id uuid, p_organization_account_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_identity.lock_organization_accounts_for_profile_change(p_identity_id uuid, p_organization_id uuid, p_organization_account_id uuid) to postgres;
+
 -- vortex_access/propose_record_share_grant_for_administration.sql
 create or replace function vortex_access.propose_record_share_grant_for_administration(
   p_grant_id uuid,
@@ -2806,7 +2870,9 @@ begin
       'applicationRootId', permission.application_root_id,
       'ownerKind', permission.owner_kind,
       'ownerId', permission.owner_id,
-      'permissionId', permission.permission_id
+      'permissionId', permission.permission_id,
+      'acceptedRegistrationRevision', permission.accepted_registration_revision,
+      'meaningFingerprint', permission.meaning_fingerprint
     )) order by permission.application_root_id nulls first,
       permission.owner_kind collate "C", permission.owner_id,
       permission.permission_id
@@ -4520,7 +4586,9 @@ stable
 security definer
 set search_path = ''
 as $function$
-  -- Storage whose preview row is gone: no request reaches it, and the background drops it.
+  -- A storage binding outlives its preview: deleting a preview leaves the binding as the storage's
+  -- retirement identity. Storage whose preview row is gone is reached by no request, and the
+  -- background drops it.
   select binding.storage_contract_id
   from vortex_record.preview_storage_bindings as binding
   where not exists (
@@ -4560,7 +4628,8 @@ begin
   -- of the retired table, so a held lock fails fast (55P03) and the next run retries.
   perform pg_catalog.set_config('lock_timeout', '200ms', true);
 
-  -- Retired: its preview row is gone, so no request reaches this storage any more. Another run
+  -- Retired: its binding outlived its deleted preview, so no request reaches this storage any
+  -- more, and the binding is deleted only here, with the storage it names. Another run
   -- dropping the same storage holds these rows; this one leaves it to that run.
   select binding.storage_contract_id, catalogue.physical_table_token into storage_row
   from vortex_record.preview_storage_bindings as binding

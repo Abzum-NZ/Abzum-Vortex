@@ -138,6 +138,7 @@ export const createHumanOrganizationRequestService = (
     prepare?: ChangePreparation,
     suspendedAccountResult?: () => Special,
     mapDatabaseRefusal?: (code: string, error: unknown) => Result | undefined,
+    changedAccountId?: string,
   ): Promise<HumanOrganizationRequestResult<Result> | Special> => {
     const verifiedSession = identitySessionSchema.safeParse(session);
     const verifiedCandidate = organizationSelectionCandidateSchema.safeParse(candidate);
@@ -185,6 +186,16 @@ export const createHumanOrganizationRequestService = (
                 ${verifiedCandidate.data.previewInstallationId}, true
               )
             `;
+          // A profile change locks the accounts it writes before the scope holds the actor's
+          // account shared, so two saves of one account queue instead of deadlocking.
+          if (changedAccountId !== undefined)
+            await transaction.query`
+              select vortex_identity.lock_organization_accounts_for_profile_change(
+                ${verifiedSession.data.identityId}::uuid,
+                ${verifiedCandidate.data.organizationId}::uuid,
+                ${changedAccountId}::uuid
+              )
+            `;
           const rows =
             verifiedCandidate.data.applicationRootId === undefined
               ? mode === "access_change"
@@ -223,7 +234,10 @@ export const createHumanOrganizationRequestService = (
           const scope: SelectedOrganizationScope =
             verifiedCandidate.data.previewInstallationId === undefined
               ? parsedScope
-              : { ...parsedScope, previewInstallationId: verifiedCandidate.data.previewInstallationId };
+              : {
+                  ...parsedScope,
+                  previewInstallationId: verifiedCandidate.data.previewInstallationId,
+                };
           if (
             (verifiedCandidate.data.applicationRootId === undefined) !==
               (scope.applicationRootId === undefined) ||
@@ -352,6 +366,30 @@ export const createHumanOrganizationRequestService = (
       ) => Promise<Result>,
     ): Promise<HumanOrganizationRequestResult<Result>> =>
       runWithMode("shared", session, candidate, operation, prepare),
+    /**
+     * An ordinary change that writes one organisation account's profile. It holds the Access
+     * version shared like any ordinary change, but locks the account it writes first.
+     */
+    runProfileChange: <Result>(
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      organizationAccountId: string,
+      operation: (
+        transaction: RequestDatabaseTransaction,
+        scope: SelectedOrganizationScope,
+        issuedAt: string,
+      ) => Promise<Result>,
+    ): Promise<HumanOrganizationRequestResult<Result>> =>
+      runWithMode(
+        "shared",
+        session,
+        candidate,
+        operation,
+        undefined,
+        undefined,
+        undefined,
+        organizationAccountId,
+      ),
     /**
      * A change that advances the organisation's Access version (role, group, assignment,
      * delegation, account, stewardship, installation access or direct-share changes). It holds
