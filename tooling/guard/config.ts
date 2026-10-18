@@ -108,7 +108,7 @@ export const guardRules = {
     owner: "lead",
     reviewBy: "2027-01-15",
     description:
-      "Literal rounded-*, arbitrary px or arbitrary font-family classes in packages/ui renderers (outside the shadcn components)",
+      "Literal rounded-*, arbitrary px or arbitrary font-family classes in packages/ui renderers (outside shadcn components; Studio chrome permits its specified md/lg/xl/full radius scale)",
   },
   "file-size": {
     tier: "warning",
