@@ -26,6 +26,7 @@ begin
   if not vortex_platform.is_non_nil_uuid(p_application_root_id::text)
     or p_expected_draft_revision is null
     or p_expected_draft_revision not between 1 and 9007199254740991
+    or p_releases #>> '{application,draftRevision}' is distinct from p_expected_draft_revision::text
     or p_shape_fingerprint is null
     or p_shape_fingerprint !~ '^sha256:[a-f0-9]{64}$' then
     raise exception using errcode = '22023', message = 'Preview installation command is invalid';
@@ -47,7 +48,7 @@ begin
   where root.root_id = p_application_root_id
     and root.organization_id = organization_id_value
     and root.kind = 'application'
-  for share of draft;
+;
   if not found or draft_revision_value <> p_expected_draft_revision then
     raise exception using errcode = '40001', message = 'Application draft revision changed';
   end if;
@@ -91,7 +92,7 @@ begin
   select preview_installation_id_value, (item.value #>> '{release,root_id}')::uuid,
     (item.value #>> '{release,release_revision}')::bigint,
     item.value -> 'release', item.value -> 'dependencies'
-  from pg_catalog.jsonb_array_elements(p_releases) as item(value);
+  from pg_catalog.jsonb_array_elements(p_releases -> 'releases') as item(value);
   perform vortex_definition.write_preview_shape_internal(preview_installation_id_value, false);
 
   return pg_catalog.jsonb_build_object(
@@ -122,4 +123,4 @@ revoke all on function vortex_definition.create_preview_installation(uuid, bigin
 grant execute on function vortex_definition.create_preview_installation(uuid, bigint, jsonb, text)
   to vortex_request;
 comment on function vortex_definition.create_preview_installation(uuid, bigint, jsonb, text) is
-  'Replaces the builder''s 24-hour preview of one Application with a preview of its current draft: the releases its publication rehearsed, the exact Module pins they and the used Module releases name, the preview''s own permission registration whose draft roles only its builder holds, empty isolated storage for every bound record type, and the fingerprint of the draft''s data shape.';
+  'Replaces the builder''s 24-hour preview of one Application with a preview of its current draft: the server-compiled release plan, the exact Module pins they and the used Module releases name, the preview''s own permission registration whose draft roles only its builder holds, empty isolated storage for every bound record type, and the fingerprint of the draft''s data shape.';
