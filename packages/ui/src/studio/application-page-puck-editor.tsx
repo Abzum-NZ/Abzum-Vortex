@@ -360,9 +360,12 @@ function ApplicationPageSlotPuckEditor({
   const shown = useMemo(() => data === undefined ? undefined
     : puckDataForBreakpoint(data, breakpoint, slot?.order), [data, breakpoint, slot]);
 
-  // The records of this area's data blocks, read for the saved revision the compiled version is.
-  const [recordsRead, setRecordsRead] = useState<StudioCanvasRecordsRead & { source?: ApplicationSourceDocument }>(
-    { state: "loading", records: {} });
+  // The records of this area's data blocks, read for the saved revision the compiled version is,
+  // with each data block's release, settings and query in that revision.
+  const savedKeys = useMemo(() => recordKeys(catalogue, originalSlot?.items ?? []), [catalogue, originalSlot]);
+  const [recordsRead, setRecordsRead] = useState<StudioCanvasRecordsRead & {
+    source?: ApplicationSourceDocument; keys?: ReadonlyMap<string, string>;
+  }>({ state: "loading", records: {} });
   // A preview still moving to this revision is read again shortly; the records shown meanwhile stay.
   const [followed, setFollowed] = useState<Readonly<{ source?: ApplicationSourceDocument; area?: string; count: number }>>({ count: 0 });
   const followUp = followed.source === compiledSource && followed.area === at.key ? followed.count : 0;
@@ -370,27 +373,32 @@ function ApplicationPageSlotPuckEditor({
     if (readRecords === undefined) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    if (followUp === 0) setRecordsRead({ state: "loading", records: {}, source: compiledSource });
     readRecords(at.key).then(
       (read) => {
         if (cancelled) return;
-        setRecordsRead({ ...read, source: compiledSource });
-        if (read.behind === true && followUp < 30)
+        const again = read.behind === true && followUp < 30;
+        // A read that failed for a moment is tried again, and what is shown meanwhile stays.
+        if (read.state !== "unavailable" || !again) setRecordsRead({ ...read, source: compiledSource, keys: savedKeys });
+        if (again)
           timer = setTimeout(() => setFollowed({ source: compiledSource, area: at.key, count: followUp + 1 }), 1500);
       },
       (error: unknown) => {
         console.error("[studio] the canvas records could not be read", error);
-        if (!cancelled) setRecordsRead({ state: "unavailable", records: {}, source: compiledSource });
+        if (!cancelled) setRecordsRead({ state: "unavailable", records: {}, source: compiledSource, keys: savedKeys });
       });
     return () => { cancelled = true; if (timer !== undefined) clearTimeout(timer); };
   }, [readRecords, compiledSource, at.key, followUp]);
+  // Records read for another saved revision are never shown as this one's, except while this
+  // revision's own read runs after a presentation edit: every data block is still exactly as it
+  // was read (same release, settings and query), so its records are the same.
+  const carried = recordsRead.source !== compiledSource && recordsRead.state === "ready" && recordsRead.keys !== undefined &&
+    [...savedKeys].every(([id, key]) => recordsRead.keys?.get(id) === key);
   const canvasRecords = useMemo((): StudioCanvasRecords => ({
-    // Records read for another saved revision are never shown as this one's.
-    ...(recordsRead.source === compiledSource ? recordsRead : { state: "loading", records: {} }),
-    saved: recordKeys(catalogue, originalSlot?.items ?? []),
+    ...(recordsRead.source === compiledSource || carried ? recordsRead : { state: "loading", records: {} }),
+    saved: savedKeys,
     current: recordKeys(catalogue, slot?.items ?? []),
     updating: updating === true,
-  }), [recordsRead, compiledSource, catalogue, originalSlot, slot, updating]);
+  }), [recordsRead, compiledSource, carried, catalogue, savedKeys, slot, updating]);
   const editable = !disabled && readOnlyCause === undefined && breakpoint === "desktop";
 
   // Every canvas change goes back through the definition: Puck's data is converted to the

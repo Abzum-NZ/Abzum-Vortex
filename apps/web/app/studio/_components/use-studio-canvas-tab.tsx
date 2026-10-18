@@ -253,7 +253,8 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
       return { state: "ready" as const, records: result.records, behind: result.behind };
     if (result.kind === "refused") return { state: "refused" as const, records: {} };
     console.error(`[studio] the canvas records were not read: STUDIO_CANVAS_RECORDS_${result.kind.toUpperCase()}`);
-    return { state: "unavailable" as const, records: {} };
+    // A newer save or the preview moving under this read: the canvas reads again shortly.
+    return { state: "unavailable" as const, records: {}, behind: true };
   }, [organizationId, rootId, view.draftRevision, view.sourceFingerprint]);
 
   const commandVisibility: Parameters<typeof ApplicationVisibilityConditionEditor>[0]["onCommand"] =
