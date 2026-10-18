@@ -7,6 +7,7 @@ import {
   sourceModuleFieldValueSchemas,
 } from "@vortex/platform/schema";
 import { Button } from "../components/button";
+import { Card } from "../components/card";
 import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { NativeSelect, NativeSelectOption } from "../components/native-select";
@@ -205,9 +206,9 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
         className="space-y-3"
       >
         {rows.map((row, index) => (
-          <div
+          <Card
             key={index}
-            className="space-y-3 rounded-md border p-3"
+            className="space-y-3 p-3"
             role="group"
             aria-label={`Row ${index + 1}`}
           >
@@ -344,7 +345,7 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
             >
               Remove row {index + 1}
             </Button>
-          </div>
+          </Card>
         ))}
         <Button
           type="button"
