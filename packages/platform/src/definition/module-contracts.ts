@@ -262,6 +262,7 @@ const linkSettingsSchema = z
   .object({
     target: recordTypeReferenceSchema,
     reverseKey: builderKeySchema,
+    reverseName: labelSchema,
     onParentDelete: z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
     applicationRootIdRequired: z.boolean().optional(),
     legacyPersonFieldId: fieldIdSchema.optional(),
