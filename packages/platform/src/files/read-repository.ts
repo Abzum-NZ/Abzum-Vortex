@@ -152,7 +152,7 @@ export const createSqlFileReadRepository = (
               ${grant.recordTypeId}::uuid,
               ${grant.recordId}::uuid,
               ${grant.fieldId}::uuid,
-              ${JSON.stringify(grant.actor)}::jsonb,
+              ${JSON.stringify(grant.actor)}::text::jsonb,
               ${purpose},
               ${correlationId}::uuid,
               ${grant.expiresAt}::timestamptz

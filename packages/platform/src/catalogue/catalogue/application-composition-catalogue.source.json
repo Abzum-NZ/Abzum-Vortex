@@ -4319,6 +4319,10 @@
           {
             "key": "table",
             "label": "Table"
+          },
+          {
+            "key": "attachment",
+            "label": "Attachment"
           }
         ]
       },
@@ -4578,6 +4582,38 @@
             }
           ]
         }
+      },
+      {
+        "kind": "boolean",
+        "key": "multiple",
+        "label": "Multiple files",
+        "required": true
+      },
+      {
+        "kind": "number",
+        "key": "maximum_files",
+        "label": "Maximum files",
+        "required": true,
+        "integer": true,
+        "minimum": 1,
+        "maximum": 1000
+      },
+      {
+        "kind": "number",
+        "key": "maximum_size_mb",
+        "label": "Maximum size (MiB)",
+        "required": true,
+        "minimum": 1e-6,
+        "maximum": 5000,
+        "integer": false
+      },
+      {
+        "kind": "text",
+        "key": "accepted_extensions",
+        "label": "Accepted extensions",
+        "required": true,
+        "minLength": 0,
+        "maxLength": 2000
       }
     ],
     "slots": [],
@@ -7444,6 +7480,122 @@
       "gridWidth": true,
       "height": "content",
       "publicSurface": "allowed",
+      "accessibleName": "required",
+      "accessibleNamePropertyPath": ["label"]
+    },
+    "supportedEvents": ["field_changed"],
+    "supportedStateOperations": []
+  },
+  "ATTACHMENT_INPUT_BLOCK_RELEASE": {
+    "blockId": "9cd96c38-95a1-4bd4-bfaa-0e20c4acb1b9",
+    "key": "platform.form.attachment_input",
+    "releaseVersion": "1.0.0",
+    "name": "Attachment input",
+    "description": "Uploads files to an attachment field and includes their references in the record save.",
+    "icon": "paperclip",
+    "paletteGroup": "input",
+    "rendererKey": "platform.renderer.attachment_input",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "name",
+        "label": "Field name",
+        "help": "Key of this field in form values and events: lowercase words separated by underscores",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 40
+      },
+      {
+        "kind": "text",
+        "key": "label",
+        "presentation": true,
+        "label": "Label",
+        "help": "Accessible name and visual field label",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "text",
+        "key": "placeholder",
+        "presentation": true,
+        "label": "Placeholder",
+        "help": "Placeholder hint text",
+        "required": false,
+        "minLength": 0,
+        "maxLength": 200
+      },
+      {
+        "kind": "text",
+        "key": "help_text",
+        "presentation": true,
+        "label": "Help text",
+        "help": "Descriptive help text below the input",
+        "required": false,
+        "minLength": 0,
+        "maxLength": 500
+      },
+      {
+        "kind": "boolean",
+        "key": "required",
+        "label": "Required",
+        "help": "Whether the field is required",
+        "required": false
+      },
+      {
+        "kind": "boolean",
+        "key": "disabled",
+        "label": "Disabled",
+        "help": "Whether the field is disabled",
+        "required": false
+      },
+      {
+        "kind": "boolean",
+        "key": "read_only",
+        "label": "Read-only",
+        "help": "Whether the field is read-only",
+        "required": false
+      },
+      {
+        "kind": "boolean",
+        "key": "multiple",
+        "label": "Multiple files",
+        "required": true
+      },
+      {
+        "kind": "number",
+        "key": "maximum_files",
+        "label": "Maximum files",
+        "required": true,
+        "integer": true,
+        "minimum": 1,
+        "maximum": 1000
+      },
+      {
+        "kind": "number",
+        "key": "maximum_size_mb",
+        "label": "Maximum size (MiB)",
+        "required": true,
+        "minimum": 1e-6,
+        "maximum": 5000,
+        "integer": false
+      },
+      {
+        "kind": "text",
+        "key": "accepted_extensions",
+        "label": "Accepted extensions",
+        "required": true,
+        "minLength": 0,
+        "maxLength": 2000
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content",
+      "publicSurface": "refused",
       "accessibleName": "required",
       "accessibleNamePropertyPath": ["label"]
     },
