@@ -11,11 +11,12 @@ const fields = [
   {
     key: "actor",
     label: "Actor",
-    type: "link_to_person",
+    type: "link",
     settings: {
-      audience: "organization_accounts",
+      target: "vortex.system_directory:person",
+      reverse_key: "activity_entries",
+      on_parent_delete: "empty_optional",
       application_root_required: false,
-      on_person_deactivation: "retain_reference",
     },
   },
   { key: "action", label: "Action", type: "text", settings: { max_length: 40 } },
@@ -55,7 +56,16 @@ export const activityRecordType = {
     settings: field.settings,
   })),
   pipelines: [],
-  relationships: [],
+  relationships: [
+    {
+      id: "rel_activity_actor",
+      key: "actor",
+      from_field: "actor",
+      to_record_type: "vortex.system_directory:person",
+      cardinality: "many_to_one",
+      on_parent_delete: "empty_optional",
+    },
+  ],
 };
 
 export const activityReadPermission = {
@@ -80,14 +90,7 @@ export const activityQuery = {
   label: "Activity",
   record_type: "activity_entry",
   inputs: [],
-  select: [
-    "occurred_at",
-    "actor_kind",
-    "actor",
-    "action",
-    "subject_count",
-    "changed_field_count",
-  ],
+  select: ["occurred_at", "actor_kind", "actor", "action", "subject_count", "changed_field_count"],
   filter: null,
   group_by: [],
   aggregates: [],

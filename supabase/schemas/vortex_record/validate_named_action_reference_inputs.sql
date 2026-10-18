@@ -1,9 +1,8 @@
-CREATE FUNCTION vortex_record.validate_named_action_reference_inputs(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_inputs jsonb) RETURNS boolean
+CREATE OR REPLACE FUNCTION vortex_record.validate_named_action_reference_inputs(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_inputs jsonb) RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
 declare
-  context_value jsonb;
   action_context jsonb;
   input_definition jsonb;
   input_candidate jsonb;
@@ -15,7 +14,6 @@ begin
   if pg_catalog.jsonb_typeof(p_inputs) is distinct from 'object' then
     return false;
   end if;
-  context_value := vortex_access.validated_human_request_context();
   action_context := vortex_record.resolve_named_action_context_internal(
     p_action_owner_kind, p_action_owner_id, p_action_release_revision,
     p_action_id, p_record_type_id
@@ -23,27 +21,12 @@ begin
   for input_definition in
     select item.value
     from pg_catalog.jsonb_array_elements(action_context -> 'action' -> 'inputs') item(value)
-    where item.value ->> 'type' in (
-      'organization_account_reference', 'record_reference'
-    )
+    where item.value ->> 'type' = 'record_reference'
   loop
     if not p_inputs ? (input_definition ->> 'key') then
       continue;
     end if;
     input_candidate := p_inputs -> (input_definition ->> 'key');
-    if input_definition ->> 'type' = 'organization_account_reference' then
-      if pg_catalog.jsonb_typeof(input_candidate) is distinct from 'string'
-        or not pg_catalog.pg_input_is_valid(input_candidate #>> '{}', 'uuid')
-        or not vortex_identity.is_active_organization_account_reference_internal(
-          (context_value ->> 'tenantId')::uuid,
-          (context_value ->> 'organizationId')::uuid,
-          (input_candidate #>> '{}')::uuid
-        ) then
-        return false;
-      end if;
-      continue;
-    end if;
-
     reference_record_type_id := null;
     reference_record_id := null;
     if pg_catalog.jsonb_typeof(input_candidate) = 'object'

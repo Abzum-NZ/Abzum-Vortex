@@ -59,7 +59,7 @@ begin
       return false;
     end;
   elsif p_type in (
-    'choice', 'record_reference', 'organization_account_reference',
+    'choice', 'record_reference',
     'workflow_run_reference', 'relationship_reference', 'file_reference'
   ) then
     return pg_catalog.jsonb_typeof(p_value) = 'string'

@@ -169,7 +169,7 @@ export function ActionDialog({ source, module, record, action, open, onOpenChang
                 <NativeSelect aria-label={`${field?.label ?? effect.field}: set to`} className="w-full" value={effect.from}
                   onChange={(event) => set({ ...effect, from: event.target.value as Effect["from"] })}>
                   <NativeSelectOption value="fixed">A fixed value</NativeSelectOption>
-                  {field?.type === "link_to_person" || field?.type === "link" ? <NativeSelectOption value="person">The person running it</NativeSelectOption> : null}
+                  {field?.type === "link" ? <NativeSelectOption value="person">The person running it</NativeSelectOption> : null}
                   {field?.type === "date_time" || field?.type === "date" ? <NativeSelectOption value="now">The time it runs</NativeSelectOption> : null}
                 </NativeSelect>
                 {effect.from === "fixed" && (options.length > 0

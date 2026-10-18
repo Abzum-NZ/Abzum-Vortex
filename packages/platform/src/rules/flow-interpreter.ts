@@ -283,7 +283,6 @@ const valueMatchesType = (type: string, candidate: unknown): candidate is JsonVa
       return recordRichTextDocumentSchema.safeParse(candidate).success;
     case "choice":
     case "record_reference":
-    case "organization_account_reference":
     case "workflow_run_reference":
     case "relationship_reference":
     case "file_reference":
@@ -459,7 +458,7 @@ const scopeOf = (state: FlowRunState, activation: Activation, flow: FlowDefiniti
       case "execution_actor":
         return state.actor === undefined
           ? undefined
-          : typed("organization_account_reference", state.actor);
+          : typed("text", state.actor);
       case "execution_now":
         return typed("date_time", state.now);
       // A run started by a person or a system has no trigger record, unless the host supplied the

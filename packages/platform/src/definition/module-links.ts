@@ -127,7 +127,7 @@ export const enablePeopleDirectoryLinks = (
  */
 export const retirePeopleDirectoryLinks = (source: ApplicationSourceDocument): void => {
   const fields = source.body.modules.flatMap((module) => module.record_types.flatMap((record) => record.fields));
-  if (fields.some((field) => field.type === "link_to_person" || isPersonLink(field))) return;
+  if (fields.some((field) => isPersonLink(field))) return;
   const { uses, roles, ...rest } = source.body;
   const otherGrants = roles.map((role) => ({ ...role,
     permissions: (role.permissions as string[]).filter((permission) => permission !== peopleDirectory.readPermission) }));

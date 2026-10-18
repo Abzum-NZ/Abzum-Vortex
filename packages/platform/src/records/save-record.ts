@@ -463,8 +463,7 @@ const persist = async (
   preview: boolean,
 ): Promise<StoredResult> => {
   if (recordType.systemProjection !== undefined) {
-    if (preview)
-      return { outcome: "refused", reasonCode: "field_refused" };
+    if (preview) return { outcome: "refused", reasonCode: "field_refused" };
     const registration = writableSystemProjection(recordType);
     if (
       command.operation !== "update" ||
@@ -693,10 +692,9 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
           selection,
           async (transaction, _scope, issuedAt) => {
             // A preview request's own selection addresses its isolated storage.
-            const totalPreparation =
-              !preview
-                ? await prepareRelationshipTotals(transaction, command.data, activityId)
-                : { outcome: "not_required" as const };
+            const totalPreparation = !preview
+              ? await prepareRelationshipTotals(transaction, command.data, activityId)
+              : { outcome: "not_required" as const };
             if (totalPreparation.outcome === "restart") return restartRelationshipTotalSave;
             if (totalPreparation.outcome === "refused_recorded") return recordedRefusal;
             if (totalPreparation.outcome === "conflict")
@@ -881,11 +879,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
             const unsupportedChecks = values.pendingChecks.filter(
               (check) =>
                 check.kind !== "record_reference" &&
-                check.kind !== "person_reference" &&
-                !(
-                  preview &&
-                  check.kind === "choice_permission"
-                ),
+                !(preview && check.kind === "choice_permission"),
             );
             if (unsupportedChecks.length > 0) {
               if (unsupportedChecks.some((check) => !prepared.readableFieldIds.has(check.fieldId)))
@@ -966,21 +960,6 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                 "[record] protected save persistence refused",
                 contractError(stored.reasonCode ?? "RECORD_SAVE_REFUSED", stored.reasonCode),
               );
-            if (
-              stored.outcome === "refused" &&
-              stored.reasonCode === "person_reference_unavailable"
-            ) {
-              const fieldId = fieldIdSchema.safeParse(stored.fieldId);
-              if (!fieldId.success) throw contractError("RECORD_SAVE_FIELD_ID_INVALID", stored);
-              if (!prepared.readableFieldIds.has(fieldId.data))
-                return safeRefusal(prepared.correlationId, "operation_refused");
-              return saveRecordResultSchema.parse({
-                contractVersion: "2.0.0",
-                outcome: "correction_required",
-                correlationId: prepared.correlationId,
-                corrections: [{ code: "invalid_value", fieldId: fieldId.data }],
-              });
-            }
             if (stored.outcome === "refused")
               return safeRefusal(
                 prepared.correlationId,

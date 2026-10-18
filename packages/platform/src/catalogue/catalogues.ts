@@ -19,7 +19,6 @@ export const fieldTypeKeys = [
   "table",
   "link",
   "link_to_one_of_several",
-  "link_to_person",
   "calculation",
   "total",
   "attachment",
@@ -33,7 +32,6 @@ export const fieldTypeKeys = [
 export const flowOnlyValueTypeKeys = [
   "record_reference",
   "record_reference_list",
-  "organization_account_reference",
   "workflow_run_reference",
   "relationship_reference",
   "relationship_reference_list",
@@ -70,7 +68,6 @@ export const workflowValueTypeKeys = [
   "several_choices",
   "record_reference",
   "record_reference_list",
-  "organization_account_reference",
   "workflow_run_reference",
   "relationship_reference",
   "relationship_reference_list",
@@ -89,7 +86,6 @@ export const actionInputValueTypes = {
   date: "date",
   date_time: "date_time",
   record_reference: "record_reference",
-  organization_account_reference: "organization_account_reference",
 } as const satisfies Record<string, ValueType>;
 
 /** Sharing-parameter value types accepted by the current condition contract. */
@@ -99,7 +95,6 @@ export const sharingParameterValueTypeKeys = [
   "boolean",
   "date",
   "date_time",
-  "organization_account_reference",
   "decimal_number",
   "money",
 ] as const satisfies readonly ValueType[];
@@ -200,16 +195,11 @@ export function valueTypesCompatible(
     case "cross_format":
       return actual === expected && crossFormatValueTypes.has(actual);
     case "flow":
-      return (
-        actual === expected ||
-        (expected === "record_reference" && actual === "organization_account_reference") ||
-        expected === "json"
-      );
+      return actual === expected || expected === "json";
     case "value":
       return (
         actual === expected ||
         (expected === "text" && (actual === "date" || actual === "date_time")) ||
-        (expected === "record_reference" && actual === "organization_account_reference") ||
         expected === "json"
       );
   }

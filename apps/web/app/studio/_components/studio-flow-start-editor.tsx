@@ -21,7 +21,7 @@ import {
 const typeLabels: Readonly<Record<string, string>> = {
   text: "Text", formatted_text: "Formatted text", whole_number: "Whole number", decimal_number: "Decimal number", money: "Money",
   yes_no: "Yes or no", date: "Date", date_time: "Date and time", choice: "Choice", several_choices: "Several choices",
-  record_reference: "A record", record_reference_list: "Several records", organization_account_reference: "A person",
+  record_reference: "A record", record_reference_list: "Several records",
   workflow_run_reference: "A flow run", relationship_reference: "A link between records",
   relationship_reference_list: "Links between records", file_reference: "A file", json: "A set of values (such as a form's answers)",
 };

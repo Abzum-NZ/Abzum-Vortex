@@ -9,8 +9,6 @@ import {
   jsonValueSchema,
   moduleFieldSchema,
   moneyValueSchema,
-  organizationAccountIdSchema,
-  personLinkValueSchema,
   recordLinkValueSchema,
   type ConditionNode,
   type JsonValue,
@@ -18,7 +16,6 @@ import {
   isRecord,
 } from "@vortex/platform/schema";
 import { formatIsoDate } from "../display/date-format";
-
 
 type ComparisonCondition = Extract<ConditionNode, { kind: "comparison" }>;
 export type ConditionOperand = ComparisonCondition["left"];
@@ -45,8 +42,7 @@ export type StudioConditionSemanticType =
   | "date_time"
   | "text_collection"
   | "opaque_json"
-  | "record_reference"
-  | "organization_account_reference";
+  | "record_reference";
 
 /**
  * Parameter types accepted by Rule and query conditions. Host-only values use the same parameter
@@ -60,8 +56,7 @@ export type StudioConditionParameterType =
   | "boolean"
   | "date"
   | "date_time"
-  | "record_reference"
-  | "organization_account_reference";
+  | "record_reference";
 
 export type StudioConditionOperandRole =
   | "current_field"
@@ -156,10 +151,7 @@ const numericTypes = new Set<StudioConditionSemanticType>([
   "whole_number",
   "decimal_number",
 ]);
-const exactNumericTypes = new Set<StudioConditionSemanticType>([
-  "whole_number",
-  "decimal_number",
-]);
+const exactNumericTypes = new Set<StudioConditionSemanticType>(["whole_number", "decimal_number"]);
 export const maximumGroupChildren = 50;
 
 export type StudioConditionValidationIssue = Readonly<{
@@ -264,8 +256,6 @@ const semanticTypeForField = (field: ModuleField): StudioConditionSemanticType =
     case "link":
     case "link_to_one_of_several":
       return "record_reference";
-    case "link_to_person":
-      return "organization_account_reference";
     case "calculation":
     case "total": {
       const resultType = field.settings.resultType;
@@ -301,14 +291,31 @@ const contextIssues = (
 
   if (context.allowedOperators !== undefined) {
     if (!Array.isArray(context.allowedOperators))
-      issues.push(makeIssue("invalid_context", ["allowedOperators"], "Allowed operators must be a list"));
+      issues.push(
+        makeIssue("invalid_context", ["allowedOperators"], "Allowed operators must be a list"),
+      );
     else {
       const seenOperators = new Set<string>();
       for (const [index, operator] of context.allowedOperators.entries()) {
-        if (typeof operator !== "string" || !Object.prototype.hasOwnProperty.call(operatorLabels, operator))
-          issues.push(makeIssue("invalid_context", ["allowedOperators", index], "An allowed operator is invalid"));
+        if (
+          typeof operator !== "string" ||
+          !Object.prototype.hasOwnProperty.call(operatorLabels, operator)
+        )
+          issues.push(
+            makeIssue(
+              "invalid_context",
+              ["allowedOperators", index],
+              "An allowed operator is invalid",
+            ),
+          );
         if (seenOperators.has(operator))
-          issues.push(makeIssue("invalid_context", ["allowedOperators", index], "An operator is listed more than once"));
+          issues.push(
+            makeIssue(
+              "invalid_context",
+              ["allowedOperators", index],
+              "An operator is listed more than once",
+            ),
+          );
         seenOperators.add(operator);
       }
     }
@@ -323,7 +330,6 @@ const contextIssues = (
     "date",
     "date_time",
     "record_reference",
-    "organization_account_reference",
   ]);
   const parameterDeclarations = new Map<string, StudioConditionParameterType>();
   for (const [index, declaration] of context.parameterDeclarations.entries()) {
@@ -333,11 +339,23 @@ const contextIssues = (
       !builderKeySchema.safeParse(declaration.key).success ||
       !validTypes.has(declaration.type)
     ) {
-      issues.push(makeIssue("invalid_context", ["parameterDeclarations", index], "A parameter declaration is invalid"));
+      issues.push(
+        makeIssue(
+          "invalid_context",
+          ["parameterDeclarations", index],
+          "A parameter declaration is invalid",
+        ),
+      );
       continue;
     }
     if (parameterDeclarations.has(declaration.key))
-      issues.push(makeIssue("invalid_context", ["parameterDeclarations", index], "A parameter key is declared more than once"));
+      issues.push(
+        makeIssue(
+          "invalid_context",
+          ["parameterDeclarations", index],
+          "A parameter key is declared more than once",
+        ),
+      );
     parameterDeclarations.set(declaration.key, declaration.type);
   }
 
@@ -345,11 +363,23 @@ const contextIssues = (
   for (const [index, fieldId] of context.declaredFieldIds.entries()) {
     const parsedFieldId = fieldIdSchema.safeParse(fieldId);
     if (!parsedFieldId.success) {
-      issues.push(makeIssue("invalid_context", ["declaredFieldIds", index], "A declared field identity is invalid"));
+      issues.push(
+        makeIssue(
+          "invalid_context",
+          ["declaredFieldIds", index],
+          "A declared field identity is invalid",
+        ),
+      );
       continue;
     }
     if (declaredFieldIds.has(parsedFieldId.data))
-      issues.push(makeIssue("invalid_context", ["declaredFieldIds", index], "A field identity is declared more than once"));
+      issues.push(
+        makeIssue(
+          "invalid_context",
+          ["declaredFieldIds", index],
+          "A field identity is declared more than once",
+        ),
+      );
     declaredFieldIds.add(parsedFieldId.data);
   }
 
@@ -366,12 +396,20 @@ const contextIssues = (
       typeof permission.role !== "string" ||
       !Object.prototype.hasOwnProperty.call(roleLabels, permission.role)
     ) {
-      issues.push(makeIssue("invalid_context", ["allowedOperands", index], "An allowed operand is invalid"));
+      issues.push(
+        makeIssue("invalid_context", ["allowedOperands", index], "An allowed operand is invalid"),
+      );
       continue;
     }
     const key = permissionKey(permission);
     if (seen.has(key))
-      issues.push(makeIssue("invalid_context", ["allowedOperands", index], "An operand is listed more than once"));
+      issues.push(
+        makeIssue(
+          "invalid_context",
+          ["allowedOperands", index],
+          "An operand is listed more than once",
+        ),
+      );
     seen.add(key);
 
     if (isFieldOperandPermission(permission)) {
@@ -382,17 +420,36 @@ const contextIssues = (
         !declaredFieldIds.has(permission.operand.fieldId) ||
         permission.role !== "current_field"
       )
-        issues.push(makeIssue("invalid_context", ["allowedOperands", index], "A current field must match its Module metadata"));
+        issues.push(
+          makeIssue(
+            "invalid_context",
+            ["allowedOperands", index],
+            "A current field must match its Module metadata",
+          ),
+        );
     } else {
       const parsedKey = builderKeySchema.safeParse(permission.operand.key);
       const declaredType = parameterDeclarations.get(permission.operand.key);
-      if (!parsedKey.success || declaredType === undefined || String(permission.role) === "current_field")
-        issues.push(makeIssue("invalid_context", ["allowedOperands", index], "A parameter must match a Rule  declaration"));
       if (
-        permission.role === "trusted_account_context" &&
-        declaredType !== "organization_account_reference"
+        !parsedKey.success ||
+        declaredType === undefined ||
+        String(permission.role) === "current_field"
       )
-        issues.push(makeIssue("invalid_context", ["allowedOperands", index], "Trusted account context must use its declared account type"));
+        issues.push(
+          makeIssue(
+            "invalid_context",
+            ["allowedOperands", index],
+            "A parameter must match a Rule  declaration",
+          ),
+        );
+      if (permission.role === "trusted_account_context" && declaredType !== "text")
+        issues.push(
+          makeIssue(
+            "invalid_context",
+            ["allowedOperands", index],
+            "Trusted account context must use a text parameter",
+          ),
+        );
     }
   }
   return issues;
@@ -403,7 +460,11 @@ export const infoForOperand = (
   context: StudioConditionControlsContext,
 ): OperandInfo | undefined => {
   if (operand.source === "value")
-    return { source: "value", literal: operand.value, semanticType: semanticTypeForLiteral(operand.value) };
+    return {
+      source: "value",
+      literal: operand.value,
+      semanticType: semanticTypeForLiteral(operand.value),
+    };
   const permission = context.allowedOperands.find(
     (candidate) => permissionKey(candidate) === referenceKey(operand),
   );
@@ -463,7 +524,10 @@ const semanticTypeForLiteral = (value: JsonValue): StudioConditionSemanticType |
   return "opaque_json";
 };
 
-export const literalMatchesType = (value: JsonValue, type: StudioConditionSemanticType): boolean => {
+export const literalMatchesType = (
+  value: JsonValue,
+  type: StudioConditionSemanticType,
+): boolean => {
   if (value === null) return true;
   switch (type) {
     case "text":
@@ -491,19 +555,13 @@ export const literalMatchesType = (value: JsonValue, type: StudioConditionSemant
       return jsonValueSchema.safeParse(value).success;
     case "record_reference":
       return recordLinkValueSchema.safeParse(value).success;
-    case "organization_account_reference":
-      return (
-        organizationAccountIdSchema.safeParse(value).success ||
-        personLinkValueSchema.safeParse(value).success
-      );
   }
 };
 
 const sameComparableType = (
   left: StudioConditionSemanticType,
   right: StudioConditionSemanticType,
-): boolean =>
-  left === right || (exactNumericTypes.has(left) && exactNumericTypes.has(right));
+): boolean => left === right || (exactNumericTypes.has(left) && exactNumericTypes.has(right));
 
 const exactNumericLiteral = (value: JsonValue | undefined): boolean =>
   value === null ||
@@ -530,9 +588,11 @@ const sharedType = (
 
   if (left.source === "reference" && right.source === "reference") {
     if (left.semanticType === right.semanticType) return left.semanticType;
-    return left.semanticType && right.semanticType &&
+    return left.semanticType &&
+      right.semanticType &&
       sameComparableType(left.semanticType, right.semanticType) &&
-      exactNumericOperand(left) && exactNumericOperand(right)
+      exactNumericOperand(left) &&
+      exactNumericOperand(right)
       ? "decimal_number"
       : undefined;
   }
@@ -542,7 +602,8 @@ const sharedType = (
   const referenceType = reference.semanticType;
   if (!referenceType || literal.literal === undefined) return undefined;
   if (literalMatchesType(literal.literal, referenceType)) return referenceType;
-  return numericTypes.has(referenceType) && exactNumericOperand(reference) &&
+  return numericTypes.has(referenceType) &&
+    exactNumericOperand(reference) &&
     exactNumericOperand(literal)
     ? "decimal_number"
     : undefined;
@@ -587,7 +648,8 @@ export const operatorAcceptsOperands = (
   if (unaryOperators.has(operator)) return right === undefined;
   if (!right) return false;
 
-  if (operator === "equals" || operator === "not_equals") return sharedType(left, right) !== undefined;
+  if (operator === "equals" || operator === "not_equals")
+    return sharedType(left, right) !== undefined;
   if (operator === "contains" || operator === "not_contains") {
     const textOperands = canBeType(left, "text") && canBeType(right, "text");
     const elementType = collectionElementType(left, knownReferenceType(right));
@@ -598,17 +660,28 @@ export const operatorAcceptsOperands = (
     return elementType !== undefined && canBeType(left, elementType);
   }
   const type = sharedType(left, right);
-  if (type === "money" && left.source === "value" && right.source === "value" &&
-    left.literal !== null && right.literal !== null) {
+  if (
+    type === "money" &&
+    left.source === "value" &&
+    right.source === "value" &&
+    left.literal !== null &&
+    right.literal !== null
+  ) {
     const leftMoney = moneyValueSchema.safeParse(left.literal);
     const rightMoney = moneyValueSchema.safeParse(right.literal);
-    if (leftMoney.success && rightMoney.success &&
-      leftMoney.data.currency !== rightMoney.data.currency) return false;
+    if (
+      leftMoney.success &&
+      rightMoney.success &&
+      leftMoney.data.currency !== rightMoney.data.currency
+    )
+      return false;
   }
   return type !== undefined && orderableTypes.has(type);
 };
 
-export const defaultLiteralForType = (type: StudioConditionSemanticType | undefined): JsonValue | undefined => {
+export const defaultLiteralForType = (
+  type: StudioConditionSemanticType | undefined,
+): JsonValue | undefined => {
   switch (type) {
     case "number":
     case "whole_number":
@@ -626,7 +699,6 @@ export const defaultLiteralForType = (type: StudioConditionSemanticType | undefi
     case "text_collection":
       return [];
     case "record_reference":
-    case "organization_account_reference":
     case "opaque_json":
       return null;
     case "text":
@@ -635,7 +707,9 @@ export const defaultLiteralForType = (type: StudioConditionSemanticType | undefi
   }
 };
 
-export const literalOperand = (type: StudioConditionSemanticType | undefined): ConditionOperand => ({
+export const literalOperand = (
+  type: StudioConditionSemanticType | undefined,
+): ConditionOperand => ({
   source: "value",
   value: defaultLiteralForType(type) ?? null,
 });
@@ -652,11 +726,7 @@ const candidateRightOperands = (
     if (type === "text") candidates.push({ source: "value", value: [] });
     if (type === "text_collection") candidates.push({ source: "value", value: "" });
     candidates.push({ source: "value", value: [] });
-    if (
-      left.source === "value" &&
-      left.value !== null &&
-      !Array.isArray(left.value)
-    )
+    if (left.source === "value" && left.value !== null && !Array.isArray(left.value))
       candidates.push({ source: "value", value: [left.value] });
     const elementType = leftInfo && collectionElementType(leftInfo);
     if (elementType) candidates.push(literalOperand(elementType));
@@ -677,14 +747,21 @@ export function studioConditionOperatorsFor(
   const leftInfo = infoForOperand(left, context);
   if (!leftInfo) return [];
   return operatorOptions.filter((option) => {
-    if (context.allowedOperators !== undefined && !context.allowedOperators.includes(option.operator)) return false;
+    if (
+      context.allowedOperators !== undefined &&
+      !context.allowedOperators.includes(option.operator)
+    )
+      return false;
     if (option.arity === "unary") return true;
-    const rightCandidates = right === undefined
-      ? candidateRightOperands(left, context)
-      : [right, ...candidateRightOperands(left, context)];
+    const rightCandidates =
+      right === undefined
+        ? candidateRightOperands(left, context)
+        : [right, ...candidateRightOperands(left, context)];
     return rightCandidates.some((candidate) => {
       const rightInfo = infoForOperand(candidate, context);
-      return rightInfo !== undefined && operatorAcceptsOperands(option.operator, leftInfo, rightInfo);
+      return (
+        rightInfo !== undefined && operatorAcceptsOperands(option.operator, leftInfo, rightInfo)
+      );
     });
   });
 }
@@ -739,7 +816,13 @@ const addContractLimitIssues = (
 ): void => {
   if (!isRecord(value) || typeof value.kind !== "string") return;
   if (depth > conditionMaximumNestingDepth) {
-    issues.push(makeIssue("invalid_condition", path, `Condition nesting cannot exceed ${conditionMaximumNestingDepth} levels`));
+    issues.push(
+      makeIssue(
+        "invalid_condition",
+        path,
+        `Condition nesting cannot exceed ${conditionMaximumNestingDepth} levels`,
+      ),
+    );
     return;
   }
   if (value.kind === "comparison") {
@@ -747,17 +830,35 @@ const addContractLimitIssues = (
       if (key === "right" && value.right === undefined) continue;
       operandCount.value += 1;
       if (operandCount.value > conditionMaximumOperandCount)
-        issues.push(makeIssue("invalid_condition", [...path, key], `Condition operands cannot exceed ${conditionMaximumOperandCount}`));
+        issues.push(
+          makeIssue(
+            "invalid_condition",
+            [...path, key],
+            `Condition operands cannot exceed ${conditionMaximumOperandCount}`,
+          ),
+        );
     }
     return;
   }
   if (value.kind === "not") {
-    addContractLimitIssues(value.condition, [...path, "condition"], depth + 1, operandCount, issues);
+    addContractLimitIssues(
+      value.condition,
+      [...path, "condition"],
+      depth + 1,
+      operandCount,
+      issues,
+    );
     return;
   }
   if ((value.kind === "all" || value.kind === "any") && Array.isArray(value.conditions))
     value.conditions.forEach((child, index) =>
-      addContractLimitIssues(child, [...path, "conditions", index], depth + 1, operandCount, issues),
+      addContractLimitIssues(
+        child,
+        [...path, "conditions", index],
+        depth + 1,
+        operandCount,
+        issues,
+      ),
     );
 };
 
@@ -767,8 +868,7 @@ export function validateStudioCondition(
   context: StudioConditionControlsContext,
 ): StudioConditionValidation {
   const issues = contextIssues(context);
-  if (value === undefined)
-    return { condition: undefined, issues, isValid: issues.length === 0 };
+  if (value === undefined) return { condition: undefined, issues, isValid: issues.length === 0 };
   const parsed = conditionNodeSchema.safeParse(value);
   if (!parsed.success) {
     for (const issue of parsed.error.issues) {
@@ -791,7 +891,9 @@ export function validateStudioCondition(
   if (issues.some((issue) => issue.code === "invalid_context"))
     return { condition: parsed.data, issues, isValid: false };
 
-  const permissions = new Map(context.allowedOperands.map((entry) => [permissionKey(entry), entry]));
+  const permissions = new Map(
+    context.allowedOperands.map((entry) => [permissionKey(entry), entry]),
+  );
   const visit = (condition: ConditionNode, path: ConditionPath): void => {
     if (condition.kind === "not") {
       visit(condition.condition, [...path, "condition"]);
@@ -803,28 +905,59 @@ export function validateStudioCondition(
     }
     if (!isComparisonCondition(condition)) return;
 
-    const checkOperand = (operand: ConditionOperand, key: "left" | "right"): OperandInfo | undefined => {
+    const checkOperand = (
+      operand: ConditionOperand,
+      key: "left" | "right",
+    ): OperandInfo | undefined => {
       const operandPath = [...path, key];
       if (operand.source === "value") {
         if (!context.allowLiteralValues)
-          issues.push(makeIssue("literal_not_permitted", operandPath, "This host does not allow literal values"));
+          issues.push(
+            makeIssue(
+              "literal_not_permitted",
+              operandPath,
+              "This host does not allow literal values",
+            ),
+          );
       } else if (!permissions.has(referenceKey(operand))) {
-        issues.push(makeIssue("operand_not_permitted", operandPath, "This operand is not permitted by the host"));
+        issues.push(
+          makeIssue(
+            "operand_not_permitted",
+            operandPath,
+            "This operand is not permitted by the host",
+          ),
+        );
       }
       return infoForOperand(operand, context);
     };
 
     const left = checkOperand(condition.left, "left");
-    const right = condition.right === undefined ? undefined : checkOperand(condition.right, "right");
-    if (context.allowedOperators !== undefined && !context.allowedOperators.includes(condition.operator))
-      issues.push(makeIssue("operator_incompatible", [...path, "operator"], "This operator is not permitted by the host"));
+    const right =
+      condition.right === undefined ? undefined : checkOperand(condition.right, "right");
+    if (
+      context.allowedOperators !== undefined &&
+      !context.allowedOperators.includes(condition.operator)
+    )
+      issues.push(
+        makeIssue(
+          "operator_incompatible",
+          [...path, "operator"],
+          "This operator is not permitted by the host",
+        ),
+      );
     if (
       !unaryOperators.has(condition.operator) &&
       left !== undefined &&
       right !== undefined &&
       !operatorAcceptsOperands(condition.operator, left, right)
     )
-      issues.push(makeIssue("operator_incompatible", [...path, "operator"], "This operator is not valid for the selected operand types"));
+      issues.push(
+        makeIssue(
+          "operator_incompatible",
+          [...path, "operator"],
+          "This operator is not valid for the selected operand types",
+        ),
+      );
   };
   visit(parsed.data, []);
   return { condition: parsed.data, issues, isValid: issues.length === 0 };
@@ -836,7 +969,10 @@ export const pathEquals = (left: ConditionPath, right: ConditionPath): boolean =
 export const pathStartsWith = (path: ConditionPath, prefix: ConditionPath): boolean =>
   prefix.length <= path.length && prefix.every((part, index) => part === path[index]);
 
-export const hasLiteralAtPath = (condition: ConditionNode | undefined, path: ConditionPath): boolean => {
+export const hasLiteralAtPath = (
+  condition: ConditionNode | undefined,
+  path: ConditionPath,
+): boolean => {
   const value = path.reduce<unknown>((current, part) => {
     if (Array.isArray(current) && typeof part === "number") return current[part];
     if (isRecord(current) && typeof part === "string") return current[part];
@@ -854,7 +990,8 @@ export const withDraftIssues = (
   isValid: validation.isValid && draftIssues.length === 0,
 });
 
-export const contextOperandToken = (permission: StudioConditionOperandPermission): string => permissionKey(permission);
+export const contextOperandToken = (permission: StudioConditionOperandPermission): string =>
+  permissionKey(permission);
 
 export const operandToken = (operand: ConditionOperand): string =>
   operand.source === "value" ? "value" : referenceKey(operand);
@@ -881,8 +1018,7 @@ export const describeCondition = (
       ? `${left} ${operator}`
       : `${left} ${operator} ${describeOperand(condition.right, context)}`;
   }
-  if (condition.kind === "not")
-    return `not (${describeCondition(condition.condition, context)})`;
+  if (condition.kind === "not") return `not (${describeCondition(condition.condition, context)})`;
   const joiningWord = condition.kind === "all" ? " and " : " or ";
   return `(${condition.conditions.map((child) => describeCondition(child, context)).join(joiningWord)})`;
 };
@@ -892,8 +1028,7 @@ export const displayRole = (role: StudioConditionOperandRole): string => roleLab
 export const errorForPath = (
   validation: StudioConditionValidation,
   path: ConditionPath,
-): string | undefined =>
-  validation.issues.find((issue) => pathEquals(issue.path, path))?.message;
+): string | undefined => validation.issues.find((issue) => pathEquals(issue.path, path))?.message;
 
 export const infoForExpectedLiteral = (
   operand: ConditionOperand,
@@ -904,24 +1039,25 @@ export const infoForExpectedLiteral = (
 ): StudioConditionSemanticType | undefined => {
   const operandInfo = infoForOperand(operand, context);
   const otherInfo = other ? infoForOperand(other, context) : undefined;
-  const otherType = otherInfo?.semanticType ??
+  const otherType =
+    otherInfo?.semanticType ??
     (other?.source === "value" ? semanticTypeForLiteral(other.value) : undefined);
   if (operator === "in" || operator === "not_in") {
     if (side === "right") return "text_collection";
     return otherInfo
-      ? collectionElementType(
+      ? (collectionElementType(
           otherInfo,
           operandInfo ? knownReferenceType(operandInfo) : undefined,
-        ) ?? otherType
+        ) ?? otherType)
       : otherType;
   }
   if (operator === "contains" || operator === "not_contains") {
     if (side === "left") return operandInfo?.semanticType ?? "text_collection";
     return otherInfo
-      ? collectionElementType(
+      ? (collectionElementType(
           otherInfo,
           operandInfo ? knownReferenceType(operandInfo) : undefined,
-        ) ?? "text"
+        ) ?? "text")
       : "text";
   }
   return otherType ?? infoForOperand(operand, context)?.semanticType;

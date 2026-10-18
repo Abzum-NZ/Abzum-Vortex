@@ -285,7 +285,7 @@ function ControlForm({ id, control, entries, references, condition, choices, flo
           <StudioOptionControl id={id} disabled={disabled} value={control.form}
             options={choices.forms.map((form) => ({ value: form.alias, label: form.label }))}
             onChange={(form) => onChange({ ...control, form }, null)} /></div>
-        <StudioFlowValueControl id={`${id}-assignee`} label="Who answers" valueType="organization_account_reference" references={references}
+        <StudioFlowValueControl id={`${id}-assignee`} label="Who answers" valueType="text" references={references}
           value={control.assignee} disabled={disabled} onChange={(source) => keep(source, (assignee) => ({ ...control, assignee }))} />
         <EntryRows id={`${id}-inputs`} label="Starting answers" entries={control.inputs} expected={entries} references={references}
           disabled={disabled} onChange={(inputs) => onChange({ ...control, inputs }, null)} />

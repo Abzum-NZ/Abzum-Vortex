@@ -21,7 +21,6 @@ const parameterType = (fieldType: string): StudioConditionParameterType => {
     case "yes_no": return "boolean";
     case "date": return "date";
     case "date_time": return "date_time";
-    case "organization_account_reference": return "organization_account_reference";
     default: return "text";
   }
 };

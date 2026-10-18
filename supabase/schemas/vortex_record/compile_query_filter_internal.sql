@@ -239,10 +239,6 @@ begin
         field_sql := pg_catalog.format('stored.%I', field_token);
         if operand_type = 'record_reference' then
           field_sql := pg_catalog.format('pg_catalog.lower(%s ->> ''recordId'')', field_sql);
-        elsif operand_type = 'organization_account_reference' then
-          field_sql := pg_catalog.format(
-            'pg_catalog.lower(%s ->> ''organizationAccountId'')', field_sql
-          );
         elsif operand_type = 'text' and field_database_type = 'json' then
           field_sql := pg_catalog.format('%s #>> ''{}''', field_sql);
         end if;
@@ -504,7 +500,7 @@ begin
   if operator_value in ('equals', 'not_equals') then
     if shared_type not in (
       'text', 'number', 'decimal_number', 'money', 'boolean', 'date', 'date_time',
-      'text_collection', 'opaque_json', 'record_reference', 'organization_account_reference', 'uuid'
+      'text_collection', 'opaque_json', 'record_reference', 'uuid'
     ) then
       return pg_catalog.jsonb_build_object('predicate', null, 'parameters', parameter_values);
     end if;
@@ -537,9 +533,6 @@ begin
           '(%s::uuid is not distinct from %s::uuid)', left_sql, right_sql
         )
         when 'record_reference' then pg_catalog.format(
-          '(pg_catalog.lower(%s) is not distinct from pg_catalog.lower(%s))', left_sql, right_sql
-        )
-        when 'organization_account_reference' then pg_catalog.format(
           '(pg_catalog.lower(%s) is not distinct from pg_catalog.lower(%s))', left_sql, right_sql
         )
         else pg_catalog.format('(%s is not distinct from %s)', left_sql, right_sql)
@@ -587,9 +580,6 @@ begin
           '(%s::uuid is not distinct from (item.value #>> ''{}'')::uuid)', left_sql
         )
         when 'record_reference' then pg_catalog.format(
-          '(pg_catalog.lower(%s) is not distinct from pg_catalog.lower(item.value #>> ''{}''))', left_sql
-        )
-        when 'organization_account_reference' then pg_catalog.format(
           '(pg_catalog.lower(%s) is not distinct from pg_catalog.lower(item.value #>> ''{}''))', left_sql
         )
         else pg_catalog.format(

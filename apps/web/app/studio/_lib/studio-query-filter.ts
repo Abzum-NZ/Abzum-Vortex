@@ -17,7 +17,6 @@ const unary = (operator: unknown): boolean => operator === "is_empty" || operato
 const parameterTypes: Readonly<Record<string, StudioConditionParameterType>> = {
   text: "text", number: "number", decimal_number: "decimal_number", money: "money", boolean: "boolean",
   date: "date", date_time: "date_time", record_reference: "record_reference",
-  organization_account_reference: "organization_account_reference",
 };
 
 /** A query's filter as the typed condition controls read it, or why they can't. */

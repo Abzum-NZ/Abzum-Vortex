@@ -107,7 +107,6 @@ begin
       when field_kind = 'several_choices' then 'text_collection'
       when field_kind in ('table', 'attachment') then 'opaque_json'
       when field_kind in ('link', 'link_to_one_of_several') then 'record_reference'
-      when field_kind = 'link_to_person' then 'organization_account_reference'
       when field_kind in ('calculation', 'total') then null
       when field_kind in (
         'text', 'long_text', 'formatted_text', 'choice', 'reference_number',
@@ -174,7 +173,7 @@ begin
       or parameter_type is null
       or not (
         parameter_type in (
-          'text', 'number', 'boolean', 'date', 'date_time', 'organization_account_reference'
+          'text', 'number', 'boolean', 'date', 'date_time'
         )
         or parameter_type in ('decimal_number', 'money')
       )
@@ -196,7 +195,7 @@ begin
       raise exception using errcode = '22023', message = 'Typed record condition is invalid';
     end if;
     if binding ->> 'source' = 'current_organization_account_id' then
-      if key_count <> 2 or parameter_type not in ('text', 'organization_account_reference') then
+      if key_count <> 2 or parameter_type <> 'text' then
         raise exception using errcode = '22023', message = 'Typed record condition is invalid';
       end if;
       parameter_values := parameter_values || pg_catalog.jsonb_build_object(

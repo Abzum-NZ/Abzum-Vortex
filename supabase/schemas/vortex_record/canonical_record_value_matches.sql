@@ -40,13 +40,6 @@ begin
       and (p_value ->> 'amount') ~ canonical_decimal
       and pg_catalog.jsonb_typeof(p_value -> 'currency') = 'string'
       and (p_value ->> 'currency') ~ '^[A-Z]{3}$';
-  elsif p_field_type = 'link_to_person' then
-    return pg_catalog.jsonb_typeof(p_value) = 'object'
-      and p_value - array['organizationAccountId']::text[] = '{}'::jsonb
-      and p_value ? 'organizationAccountId'
-      and pg_catalog.jsonb_typeof(p_value -> 'organizationAccountId') = 'string'
-      and (p_value ->> 'organizationAccountId') ~ uuid_pattern
-      and pg_catalog.lower(p_value ->> 'organizationAccountId') <> nil_uuid_text;
   elsif p_field_type = 'several_choices' then
     return pg_catalog.jsonb_typeof(p_value) = 'array'
       and not exists (

@@ -145,12 +145,6 @@ export const applicationActionInputDefinitionSchema = z
         recordTypes: z.array(recordTypeReferenceSchema).min(1).max(20),
       })
       .strict(),
-    z
-      .object({
-        ...actionInputBase,
-        type: z.literal(actionInputValueTypes.organization_account_reference),
-      })
-      .strict(),
   ])
   .superRefine((value, context) => {
     if (

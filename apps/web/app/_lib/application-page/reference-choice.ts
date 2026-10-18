@@ -51,7 +51,9 @@ export const projectReferenceChoicePage = async (
   const selection: OrganizationSelectionCandidate = {
     organizationId: address.read.organizationId,
     applicationRootId: address.application.applicationRootId,
-    ...(address.application.previewInstallationId === undefined ? {} : { previewInstallationId: address.application.previewInstallationId }),
+    ...(address.application.previewInstallationId === undefined
+      ? {}
+      : { previewInstallationId: address.application.previewInstallationId }),
   };
   const loaded = await loadInstalledContext(session, dependencies, selection);
   if (loaded.kind !== "available")

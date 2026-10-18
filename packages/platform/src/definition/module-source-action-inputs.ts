@@ -173,12 +173,6 @@ export const moduleSourceActionInputSchema = z
         ),
       })
       .strict(),
-    z
-      .object({
-        ...moduleSourceActionInputBase,
-        type: sourceProvenanceTarget(z.literal("organization_account_reference"), ["type"]),
-      })
-      .strict(),
   ])
   .superRefine((value, context) => {
     if (

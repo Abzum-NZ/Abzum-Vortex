@@ -187,6 +187,15 @@
         "administrative": false
       },
       {
+        "id": "app_permission_sd_case_assign",
+        "key": "application.service_desk.case.assign",
+        "label": "See the assign case form",
+        "description": "Allows seeing the assign form on a case page.",
+        "action_kind": "named",
+        "named_action": "case_assign",
+        "administrative": false
+      },
+      {
         "id": "app_permission_12",
         "key": "application.service_desk.case.resolve",
         "label": "See the resolve case form",
@@ -255,6 +264,7 @@
           "vortex.service_desk.cases.case.restore",
           "vortex.service_desk.cases.case.export",
           "vortex.service_desk.cases.case.assign",
+          "application.service_desk.case.assign",
           "vortex.service_desk.cases.case.resolve",
           "application.service_desk.case.resolve",
           "vortex.service_desk.cases.case.add_public_comment",
@@ -301,6 +311,7 @@
           "vortex.service_desk.cases.case_comment.restore",
           "vortex.service_desk.cases.case_comment.export",
           "vortex.service_desk.cases.case.assign",
+          "application.service_desk.case.assign",
           "vortex.service_desk.cases.case.resolve",
           "application.service_desk.case.resolve",
           "vortex.service_desk.cases.case.add_public_comment",
@@ -845,6 +856,118 @@
                         "release_version": "1.3.0"
                       },
                       "query": "vortex.service_desk.cases:service_desk_case_comments",
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.container",
+                  "props": {
+                    "id": "form_sd_case_assign_frame",
+                    "direction": "column",
+                    "gap": "medium",
+                    "padding": "medium",
+                    "content_width": "readable",
+                    "content": [
+                      {
+                        "type": "platform.renderer.form_container",
+                        "props": {
+                          "id": "form_sd_case_assign",
+                          "title": "Assign case",
+                          "content": [
+                            {
+                              "type": "platform.renderer.choice_input",
+                              "props": {
+                                "id": "input_sd_case_assign_owner",
+                                "name": "owner",
+                                "label": "Owner",
+                                "required": true,
+                                "choice_source": {
+                                  "query": "vortex.system_directory:people",
+                                  "label_field": "vortex.system_directory:person.display_name"
+                                },
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                                    "release_version": "1.1.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.button",
+                              "props": {
+                                "id": "submit_sd_case_assign",
+                                "label": "Assign case",
+                                "action_kind": "submit",
+                                "variant": "primary",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          ],
+                          "vortex": {
+                            "block": {
+                              "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                              "release_version": "1.0.0"
+                            },
+                            "view_permission": "application.service_desk.case.assign",
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                        "release_version": "1.3.0"
+                      },
                       "responsive": {
                         "desktop": {
                           "visible": true,
@@ -1775,6 +1898,36 @@
                                   "block": {
                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                                     "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.choice_input",
+                              "props": {
+                                "id": "input_service_desk_case_edit_requester",
+                                "name": "requester",
+                                "label": "Requester",
+                                "required": true,
+                                "choice_source": {
+                                  "query": "vortex.service_desk.cases:service_desk_requesters",
+                                  "label_field": "vortex.crm.people:contact.full_name"
+                                },
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                                    "release_version": "1.1.0"
                                   },
                                   "responsive": {
                                     "desktop": {
@@ -3065,6 +3218,13 @@
         "personal_or_sensitive_values_allowed": false
       },
       {
+        "id": "form_submit_sd_case_assign",
+        "key": "vortex.app.events.vortex_app_service_desk_assign_case",
+        "record_type": "vortex.service_desk.cases:case",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
         "id": "form_submit_sd_case_resolve",
         "key": "vortex.app.events.vortex_app_service_desk_resolve_case",
         "record_type": "vortex.service_desk.cases:case",
@@ -3921,7 +4081,8 @@
         },
         "inputs": {
           "owner": {
-            "type": "organization_account_reference",
+            "type": "record_reference",
+            "recordTypeIds": ["vortex.system_directory:person"],
             "required": true
           }
         },
@@ -4866,6 +5027,19 @@
           "record": {
             "kind": "caller",
             "name": "record"
+          }
+        }
+      },
+      {
+        "id": "form_binding_sd_case_assign",
+        "control": "form_sd_case_assign",
+        "event_id": "form_submit_sd_case_assign",
+        "event": "form_submit",
+        "flow": "sd_named_action_case_assign",
+        "inputs": {
+          "owner": {
+            "kind": "caller",
+            "name": "owner"
           }
         }
       },

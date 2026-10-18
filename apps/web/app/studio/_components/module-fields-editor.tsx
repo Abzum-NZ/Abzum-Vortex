@@ -56,7 +56,6 @@ type FormState = Readonly<{
 
 const linkTypes: ReadonlySet<string> = new Set(["link", "link_to_one_of_several"]);
 /** A person is linked with a Link to a record whose target is the people directory's Person, not this older type. */
-const replacedFieldTypes: ReadonlySet<string> = new Set(["link_to_person"]);
 
 
 /**
@@ -274,7 +273,7 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
       : existing !== undefined && existing.type !== form.type
         ? "Changing the type starts this field's settings and default afresh. No stored value is converted." : undefined}>
       {(control) => <StudioOptionControl id={control.id} value={form.type} disabled={disabled || shapeLocked}
-        options={fieldTypeKeys.filter((item) => !replacedFieldTypes.has(item)).map((item) => ({ value: item, label: moduleFieldTypeLabels[item] }))}
+        options={fieldTypeKeys.map((item) => ({ value: item, label: moduleFieldTypeLabels[item] }))}
         onChange={(next) => changeType(next as ModuleFieldType)} />}
     </StudioField>
     <fieldset className="space-y-2">

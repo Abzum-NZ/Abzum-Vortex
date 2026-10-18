@@ -333,7 +333,7 @@ export function validateFlow(
         // A record field's type belongs to the record type, which the flow does not carry.
         return undefined;
       case "execution_actor":
-        return "organization_account_reference";
+        return "text";
       case "execution_now":
         return "date_time";
       case "task_output": {
@@ -966,7 +966,7 @@ export function validateFlow(
       }
       case "wait_for_person": {
         const node = task as Extract<FlowTask, { type: "wait_for_person" }>;
-        checkValue(node.assignee, ["organization_account_reference"], where, [...path, "assignee"]);
+        checkValue(node.assignee, ["text"], where, [...path, "assignee"]);
         for (const [name, value] of Object.entries(node.inputs))
           valueType(value, where, [...path, "inputs", name]);
         return;

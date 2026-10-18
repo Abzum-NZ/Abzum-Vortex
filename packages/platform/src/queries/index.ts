@@ -137,18 +137,14 @@ export {
 } from "./usage-projection";
 
 export {
-  organizationAccountReferenceChoiceCommandSchema,
   recordReferenceChoiceCommandSchema,
-  referenceChoiceCommandSchema,
   referenceChoiceOptionSchema,
   referenceChoicePageSchema,
   referenceChoiceRefusalReasonCodes,
   referenceChoiceRefusalSchema,
   referenceChoiceResultSchema,
   referenceChoiceValueSchema,
-  type OrganizationAccountReferenceChoiceCommand,
   type RecordReferenceChoiceCommand,
-  type ReferenceChoiceCommand,
   type ReferenceChoiceOption,
   type ReferenceChoicePage,
   type ReferenceChoiceRefusal,

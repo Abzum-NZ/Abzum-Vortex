@@ -362,7 +362,10 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
   const personType = recordType(hrSet, "vortex.system_directory", "person");
   const ownerSession = nominatedOwnerSession(facts.stewardIdentityId);
   const saveRecord = createRecordSaveService({ identityAuthorityId: facts.identityAuthorityId });
-  const personOwner = { organizationAccountId: facts.stewardOrganizationAccountId };
+  const personOwner = {
+    recordTypeId: personType.recordTypeId,
+    recordId: facts.stewardOrganizationAccountId,
+  };
   const readOwnerGroup = async (applicationRootId: string): Promise<string> => {
     const result = await createHumanOrganizationRequestService({
       identityAuthorityId: facts.identityAuthorityId,
@@ -489,6 +492,10 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
         name: opportunity.name,
         company: { recordTypeId: companyType.recordTypeId, recordId: companyIds[index]! },
         primary_contact: { recordTypeId: contactType.recordTypeId, recordId: contactIds[index]! },
+        owner: {
+          recordTypeId: personType.recordTypeId,
+          recordId: facts.stewardOrganizationAccountId,
+        },
         value: { amount: opportunity.value, currency: "NZD" },
         discount_percent: opportunity.discount,
         probability: opportunity.probability,

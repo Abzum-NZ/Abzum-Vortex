@@ -140,7 +140,7 @@ begin
       or field_type not in (
         'text', 'whole_number', 'decimal_number', 'yes_no', 'date', 'date_time',
         'choice', 'reference_number', 'email_address', 'phone_number', 'web_address',
-        'link', 'link_to_one_of_several', 'link_to_person'
+        'link', 'link_to_one_of_several'
       ) then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
@@ -354,7 +354,6 @@ begin
         when 'money' then mapping_row.database_value_type = 'json'
         when 'link' then mapping_row.database_value_type = 'json'
         when 'link_to_one_of_several' then mapping_row.database_value_type = 'json'
-        when 'link_to_person' then mapping_row.database_value_type = 'json'
         when 'text' then mapping_row.database_value_type = 'text'
         when 'long_text' then mapping_row.database_value_type = 'text'
         when 'formatted_text' then mapping_row.database_value_type = 'json'
@@ -676,8 +675,6 @@ begin
              case $13 ->> referenced.id
                when ''record_reference'' then pg_catalog.to_jsonb(
                  pg_catalog.lower(readable.result -> ''values'' -> referenced.id ->> ''recordId''))
-               when ''organization_account_reference'' then pg_catalog.to_jsonb(
-                 pg_catalog.lower(readable.result -> ''values'' -> referenced.id ->> ''organizationAccountId''))
                else readable.result -> ''values'' -> referenced.id
              end), ''{}''::jsonb)
             from pg_catalog.unnest($16::text[]) as referenced(id)),

@@ -32,7 +32,6 @@ const parameterType = (type: string | undefined): StudioConditionParameterType =
     case "yes_no": return "boolean";
     case "date": return "date";
     case "date_time": return "date_time";
-    case "organization_account_reference": return "organization_account_reference";
     default: return "text";
   }
 };
@@ -122,7 +121,7 @@ const literalTypeFor = (declared: string | undefined, value: JsonValue): FlowLit
   if (typeof value === "number") return Number.isInteger(value) ? "whole_number" : "decimal_number";
   if (Array.isArray(value)) return "several_choices";
   if (typeof value === "string" && declared !== undefined &&
-    ["choice", "date", "date_time", "decimal_number", "organization_account_reference", "record_reference"].includes(declared))
+    ["choice", "date", "date_time", "decimal_number", "record_reference"].includes(declared))
     return declared as FlowLiteral["type"];
   return typeof value === "string" ? "text" : "json";
 };

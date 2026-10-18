@@ -292,7 +292,6 @@ begin
                 when field_kind = 'several_choices' then 'text_collection'
                 when field_kind in ('table', 'attachment') then 'opaque_json'
                 when field_kind in ('link', 'link_to_one_of_several') then 'record_reference'
-                when field_kind = 'link_to_person' then 'organization_account_reference'
                 when field_kind in (
                   'text', 'long_text', 'formatted_text', 'choice', 'reference_number',
                   'email_address', 'phone_number', 'web_address'

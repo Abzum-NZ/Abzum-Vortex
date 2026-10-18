@@ -21,6 +21,7 @@ declare
   visible_organization_id uuid;
   actor_identity_id uuid;
   actor_account_id uuid;
+  person_record_type_id uuid;
   decision_outcome text;
   decision_organization_id uuid;
   decision_account_id uuid;
@@ -90,6 +91,18 @@ begin
     false
   );
 
+  select (item.value ->> 'recordTypeId')::uuid into strict person_record_type_id
+  from pg_catalog.jsonb_array_elements(
+    vortex_definition.read_current_active_installation() -> 'moduleBindings'
+  ) as binding(value)
+  join vortex_definition.runtime_releases as release
+    on release.root_id = (binding.value ->> 'moduleRootId')::uuid
+    and release.release_revision = (binding.value ->> 'moduleReleaseRevision')::bigint
+  cross join lateral pg_catalog.jsonb_array_elements(
+    release.compilation_output #> '{canonical,content,recordTypes}'
+  ) as item(value)
+  where item.value #>> '{systemProjection,protectedView}' = 'organization_accounts';
+
   order_sql := pg_catalog.format(
     ' order by entry.occurred_at %s, entry.activity_id %s limit $8',
     case when p_direction = 'descending' then 'desc' else 'asc' end,
@@ -131,7 +144,10 @@ begin
         when 'public_session' then 'Public visitor'
         else 'Other' end,
       'actor', case when entry.actor_kind = 'organization_account'
-        then pg_catalog.jsonb_build_object('organizationAccountId', entry.actor_id::text)
+        then pg_catalog.jsonb_build_object(
+          'recordTypeId', person_record_type_id::text,
+          'recordId', entry.actor_id::text
+        )
         else null end,
       'action', entry.action,
       'subject_count', pg_catalog.cardinality(entry.subject_ids),

@@ -77,7 +77,6 @@ export const studioFieldValueType = (fieldType: string): LiteralType | undefined
     case "whole_number": case "decimal_number": case "money": case "yes_no": case "date": case "date_time":
     case "choice": case "several_choices": case "formatted_text": return fieldType;
     case "link": case "link_to_one_of_several": return "record_reference";
-    case "link_to_person": return "organization_account_reference";
     default: return undefined;
   }
 };
@@ -208,7 +207,7 @@ export const studioFlowReferenceChoices = (
           "The record that started it", studioFieldValueType(field.type));
     }
   }
-  add({ source: "execution_actor" }, "The person running it", "The run", "organization_account_reference");
+  add({ source: "execution_actor" }, "The person running it", "The run", "text");
   if (flow.execution === "interactive" || flow.execution === "background")
     add({ source: "execution_now" }, "Now", "The run", "date_time");
   return choices;

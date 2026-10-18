@@ -29,7 +29,7 @@ export const maximumQueryPageSize = 200;
 /** Field types a query can group by: the database groups exactly these. */
 export const queryGroupFieldTypes: ReadonlySet<string> = new Set([
   "text", "whole_number", "decimal_number", "yes_no", "date", "date_time", "choice", "reference_number",
-  "email_address", "phone_number", "web_address", "link", "link_to_one_of_several", "link_to_person",
+  "email_address", "phone_number", "web_address", "link", "link_to_one_of_several",
 ]);
 /** Field types a sum or an average adds up. */
 export const queryNumericTotalFieldTypes: ReadonlySet<string> = new Set(["whole_number", "decimal_number", "money"]);

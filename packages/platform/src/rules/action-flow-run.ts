@@ -166,14 +166,6 @@ export const flowRuntimeValueOf = (type: string, value: unknown): FlowRuntimeVal
           ? candidate.recordId
           : undefined,
       );
-    case "link_to_person":
-      return mapped("organization_account_reference", (candidate) =>
-        isPlainObject(candidate) && typeof candidate.organizationAccountId === "string"
-          ? candidate.organizationAccountId
-          : undefined,
-      );
-    case "organization_account_reference":
-      return mapped("organization_account_reference", text);
     // A calculated or total value carries whichever type its formula or source field has, so it is
     // typed by the shape it was stored with.
     case "calculation":
@@ -231,11 +223,13 @@ const typeOfOperand = (formula: FlowFormula, seed: ActionFlowSeed): string | und
   return undefined;
 };
 
-const retypedLiteral = (
-  candidate: FlowFormula,
-  type: string | undefined,
-): FlowFormula => {
-  if (type === undefined || type === "json" || candidate.op !== "literal" || candidate.type !== "json")
+const retypedLiteral = (candidate: FlowFormula, type: string | undefined): FlowFormula => {
+  if (
+    type === undefined ||
+    type === "json" ||
+    candidate.op !== "literal" ||
+    candidate.type !== "json"
+  )
     return candidate;
   const value = literalAs(type, candidate.value);
   return value === undefined
@@ -257,7 +251,10 @@ const retypeFormula = (formula: FlowFormula, seed: ActionFlowSeed): FlowFormula 
       return {
         ...formula,
         left: retypedLiteral(retypeFormula(formula.left, seed), typeOfOperand(formula.right, seed)),
-        right: retypedLiteral(retypeFormula(formula.right, seed), typeOfOperand(formula.left, seed)),
+        right: retypedLiteral(
+          retypeFormula(formula.right, seed),
+          typeOfOperand(formula.left, seed),
+        ),
       };
     case "in": {
       const type = typeOfOperand(formula.value, seed);
@@ -347,7 +344,9 @@ export const collectActionFlowTasks = (
     if (step.kind !== "protected_task")
       return invalid(`flow ${flowId} asked for a person (${step.kind}) inside a transaction`);
     if (!actionFlowTaskTypes.has(step.call.taskType))
-      return invalid(`flow ${flowId} holds task ${step.call.taskId} of type ${step.call.taskType}, which a named action cannot run`);
+      return invalid(
+        `flow ${flowId} holds task ${step.call.taskId} of type ${step.call.taskType}, which a named action cannot run`,
+      );
     calls.push(step.call);
     step = resumeFlowRun(step.state, { kind: "task_result", outcome: "committed" }, runnable);
   }

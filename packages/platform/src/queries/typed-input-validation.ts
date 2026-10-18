@@ -159,11 +159,5 @@ const validateOne = (input: ActionInputDefinition, value: JsonValue): JsonValue 
       );
       return allowed ? { recordTypeId, recordId } : refuse();
     }
-    case "organization_account_reference": {
-      if (!isPlainRecord(value) || !hasExactKeys(value, ["organizationAccountId"])) return refuse();
-      const { organizationAccountId } = value;
-      if (!isUuidText(organizationAccountId)) return refuse();
-      return { organizationAccountId };
-    }
   }
 };
