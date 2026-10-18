@@ -45,8 +45,8 @@ export function LiteralEditor({
   const inputTimeZone = timeZone ?? "UTC";
   const error = errorForPath(validation, path);
   const label = collectionElementType && collectionElementType !== "text"
-    ? `Literal value (${collectionElementType.replaceAll("_", " ")} list, JSON array)`
-    : `Literal value${semanticType ? ` (${semanticType.replaceAll("_", " ")})` : ""}`;
+    ? `Value (${collectionElementType.replaceAll("_", " ")} list, JSON array)`
+    : `Value${semanticType ? ` (${semanticType.replaceAll("_", " ")})` : ""}`;
 
   if (collectionElementType && collectionElementType !== "text")
     return (

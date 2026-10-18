@@ -346,25 +346,56 @@ function GroupControl({ id, property, value, onChange, choices, disabled }: Cont
   if (property.kind !== "group") throw new TypeError("A group control needs a group setting.");
   const group = value?.kind === "group" ? value : undefined;
   const optional = !property.required && property.defaultValue === undefined;
+  const named = property.namedEntry;
+  const fields = (properties: readonly BlockPropertySchemaContract[], locked = disabled) =>
+    <SettingFields idPrefix={id} properties={properties} values={group?.properties ?? {}}
+      choices={choices} disabled={locked}
+      onChange={(properties) => onChange({ kind: "group", properties: { ...properties } })} />;
   return <div className="space-y-2">
     {optional && <label className="flex items-center gap-2 text-sm">
       <Checkbox checked={group !== undefined} disabled={disabled}
         onCheckedChange={(checked) => onChange(checked === true ? { kind: "group", properties: {} } : undefined)} />
       Use {property.label.toLowerCase()}</label>}
     {(group !== undefined || !optional) && <div className="space-y-3 border-l-2 border-border pl-3">
-      <SettingFields idPrefix={id} properties={property.properties} values={group?.properties ?? {}}
-        choices={choices} disabled={disabled}
-        onChange={(properties) => onChange({ kind: "group", properties: { ...properties } })} />
+      {named === undefined ? fields(property.properties) : <>
+        {fields(property.properties.filter((child) => child.key === named.label))}
+        <details className="space-y-2">
+          <summary className="cursor-pointer text-sm text-muted-foreground">Technical details</summary>
+          {fields(property.properties.filter((child) => child.key === named.value), true)}
+          {fields(property.properties.filter((child) => child.key !== named.label && child.key !== named.value))}
+        </details>
+      </>}
     </div>}
   </div>;
 }
 
 function ListControl({ id, property, value, onChange, choices, disabled }: ControlProps): ReactElement {
+  const [newLabel, setNewLabel] = useState("");
   if (property.kind !== "list") throw new TypeError("A list control needs a list setting.");
   const items = value?.kind === "list" ? value.items : [];
+  const named = property.item.kind === "group" ? property.item.namedEntry : undefined;
+  const labelProperty = property.item.kind === "group" && named !== undefined
+    ? property.item.properties.find((child) => child.key === named.label) : undefined;
+  const valueProperty = property.item.kind === "group" && named !== undefined
+    ? property.item.properties.find((child) => child.key === named.value) : undefined;
+  const maximum = valueProperty?.kind === "text" ? valueProperty.maxLength : 120;
+  const taken = new Set(items.flatMap((item) => {
+    const stored = item.kind === "group" && named !== undefined ? item.properties[named.value] : undefined;
+    return stored?.kind === "text" ? [stored.value] : [];
+  }));
+  const base = newLabel.trim().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, maximum) || "option";
+  let generated = base;
+  for (let suffix = 2; taken.has(generated); suffix += 1) {
+    const ending = `_${suffix}`;
+    generated = `${base.slice(0, maximum - ending.length)}${ending}`;
+  }
   const write = (next: SourceBlockPropertyValueContract[]) =>
     onChange(next.length === 0 && !property.required ? undefined : { kind: "list", items: next });
-  const fresh = initialValue(property.item, choices);
+  const fresh = named === undefined ? initialValue(property.item, choices) : { kind: "group" as const, properties: {
+    [named.label]: { kind: "text" as const, value: newLabel.trim() },
+    [named.value]: { kind: "text" as const, value: generated },
+  } };
   const move = (index: number, by: -1 | 1) => {
     const next = [...items];
     const [moved] = next.splice(index, 1);
@@ -398,8 +429,14 @@ function ListControl({ id, property, value, onChange, choices, disabled }: Contr
         </ItemContent>
       </Item>)}
     </ol>
-    <Button type="button" variant="outline" size="sm" disabled={disabled || fresh === undefined || items.length >= property.maximumItems}
-      onClick={() => { if (fresh !== undefined) write([...items, fresh]); }}>Add {property.item.label.toLowerCase()}</Button>
+    {named !== undefined && <div className="space-y-1">
+      <Label htmlFor={`${id}-new-label`}>New {property.item.label.toLowerCase()} label</Label>
+      <Input id={`${id}-new-label`} value={newLabel} disabled={disabled || items.length >= property.maximumItems}
+        maxLength={labelProperty?.kind === "text" ? labelProperty.maxLength : undefined}
+        onChange={(event) => setNewLabel(event.target.value)} />
+    </div>}
+    <Button type="button" variant="outline" size="sm" disabled={disabled || fresh === undefined || items.length >= property.maximumItems || (named !== undefined && newLabel.trim() === "")}
+      onClick={() => { if (fresh !== undefined) { write([...items, fresh]); setNewLabel(""); } }}>Add {property.item.label.toLowerCase()}</Button>
   </div>;
 }
 

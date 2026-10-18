@@ -178,9 +178,6 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
   const groupable = fields.filter((field) => queryGroupFieldTypes.has(field.type) && !query.group_by.includes(field.key)).map((field) => field.key);
   const takenColumns = () => new Set([...query.select, ...query.aggregates.map((total) => total.alias)]);
   const totalFields = (operation: Operation) => fields.filter((field) => queryTotalAccepts(operation, field.type)).map((field) => field.key);
-  const choiceHints = fields.filter((field) => filterable.has(field.key) && (field.type === "choice" || field.type === "several_choices"))
-    .map((field) => `${field.label}: ${((field.settings as { options?: { value: string; label: string }[] }).options ?? [])
-      .map((option) => `${option.value} (${option.label})`).join(", ")}`);
 
   const changeFilter = (condition: ConditionNode | undefined, valid: boolean) => {
     if (!valid) { filter.hold(condition, unfinishedFilter); return; }
@@ -266,7 +263,7 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
           options={fieldOptions(unselected)} onChange={(key) => { if (key !== "") change({ select: [...query.select, key] }); }} /></>}
     </Section>
 
-    <Section title="Filter" hint="Which records the query lists. Compare a field with a fixed value or with one of the query's inputs.">
+    <Section title="Filter" hint="Which records the query lists. Compare a field with a fixed value or with one of the query's inputs. Only filterable fields are offered; turn on filtering in a field's settings to use it here.">
       {reading?.kind === "unreadable" || context === undefined
         ? <div className="space-y-2">
           <p role="note" className="text-sm">{!draftCompiles
@@ -279,10 +276,7 @@ export function StudioQueryEditor({ source, moduleKey, queryKey, compiledFields,
           {...(filter.value === undefined ? {} : { value: filter.value })}
           onChange={(condition, validation) => changeFilter(condition, validation.isValid)} />}
       {filter.problem === "" ? null : <p role="alert" className="text-sm text-destructive">{filter.problem}</p>}
-      {choiceHints.length === 0 ? null : <div className="text-xs text-muted-foreground">
-        <p>Choice fields compare by their stored value:</p>
-        <ul className="list-disc pl-5">{choiceHints.map((hint) => <li key={hint} className="break-words">{hint}</li>)}</ul>
-      </div>}
+
     </Section>
 
     <Section title="Sorting" hint={query.group_by.length > 0 ? "A grouped query sorts by its groups." : "The order records are listed in. Only sortable fields are offered."}>
