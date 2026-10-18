@@ -255,7 +255,9 @@ const correctionsFor = (
         : { nestedPath: nested as RecordSaveFieldCorrection["nestedPath"] }),
       // A rule's authored message, and a refused stage move's labels, are the only text that
       // leaves with a located correction.
-      ...((issue.code === beforeSaveRuleRefusedIssueCode || issue.code === "stage_move_refused") &&
+      ...((issue.code === beforeSaveRuleRefusedIssueCode ||
+        issue.code === "required_field_missing" ||
+        issue.code === "stage_move_refused") &&
       issue.requirement !== undefined
         ? { message: issue.requirement.message }
         : {}),

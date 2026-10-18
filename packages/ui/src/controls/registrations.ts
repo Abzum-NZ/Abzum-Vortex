@@ -274,7 +274,7 @@ const FORM_PAYLOAD_PARSER: PlatformComponentPayloadParser = createPayloadParser(
     if (feedback.kind === "refusal") {
       requireExactKeys(
         feedback,
-        ["kind", "code", "fieldLabel", "corrections", "ruleMessage", "recovery"],
+        ["kind", "code", "fieldLabel", "corrections", "ruleMessages", "recovery"],
         location,
       );
       if (
@@ -299,20 +299,24 @@ const FORM_PAYLOAD_PARSER: PlatformComponentPayloadParser = createPayloadParser(
         fail("Flow refusal feedback field corrections are invalid", location);
       if (corrections !== undefined && code.data !== "invalid_command")
         fail("Only invalid command feedback may carry field corrections", location);
-      const ruleMessage =
-        feedback.ruleMessage === undefined
+      const ruleMessages =
+        feedback.ruleMessages === undefined
           ? undefined
-          : flowRuleRefusalSchema.shape.message.safeParse(feedback.ruleMessage);
-      if (ruleMessage !== undefined && !ruleMessage.success)
-        fail("Flow refusal feedback rule message is invalid", location);
-      if (ruleMessage !== undefined && code.data !== "invalid_command")
-        fail("Only invalid command feedback may carry a rule message", location);
+          : flowRuleRefusalSchema.shape.message
+              .array()
+              .min(1)
+              .max(100)
+              .safeParse(feedback.ruleMessages);
+      if (ruleMessages !== undefined && !ruleMessages.success)
+        fail("Flow refusal feedback rule messages are invalid", location);
+      if (ruleMessages !== undefined && code.data !== "invalid_command")
+        fail("Only invalid command feedback may carry rule messages", location);
       return Object.freeze({
         kind: "refusal",
         code: code.data,
         ...(fieldLabel?.success ? { fieldLabel: fieldLabel.data } : {}),
         ...(corrections?.success ? { corrections: corrections.data } : {}),
-        ...(ruleMessage?.success ? { ruleMessage: ruleMessage.data } : {}),
+        ...(ruleMessages?.success ? { ruleMessages: ruleMessages.data } : {}),
         ...(feedback.recovery === undefined ? {} : { recovery: feedback.recovery }),
       });
     }
