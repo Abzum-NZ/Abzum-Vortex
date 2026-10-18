@@ -14,6 +14,7 @@ import type { StudioApplicationCanvasFrames, StudioApplicationCompiledPageSlots 
 import type { StudioCompiledFields, StudioDataModule, StudioPublishedData } from "../_lib/studio-data-model";
 import { summarizeSourceChange, type SourceChangeRow } from "../_lib/source-change-summary";
 import { conflictMessage, refusalMessage } from "./studio-refusal-messages";
+import { useStudioSession } from "./use-studio-session";
 
 /** How long Studio waits after the last edit of a batch before it saves the batch. */
 const autosaveDelayMs = 600;
@@ -80,6 +81,7 @@ export type StudioDraftHold = "publication" | "reopening" | "restoring";
  * Every tab edits the draft through `run`, the single command envelope.
  */
 export type StudioDraft = Readonly<{
+  session: ReturnType<typeof useStudioSession>;
   organizationId: string;
   history: StudioApplicationDraftHistoryController;
   selection: StudioSemanticSelectionStore;
@@ -155,6 +157,7 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
   catalogue: ImmutablePlatformBlockCatalogue;
   initialView: Omit<StudioCompiledView, "source" | "draftRevision" | "sourceFingerprint" | "generation">;
 }>): StudioDraft {
+  const session = useStudioSession();
   const active = useRef(false);
   const savedRef = useRef(draft);
   // The draft a save returned, taken as saved only once the history accepts it.
@@ -179,7 +182,7 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
 
   const [history] = useState(() => createStudioApplicationDraftHistoryController(draft, {
     saveDraft: async (command) => {
-      const result = await saveStudioApplication(organizationId, command);
+      const result = await session.save(() => saveStudioApplication(organizationId, command));
       // A save sent as the workspace closes (leaving Studio within a batch) still completes on the server.
       if (result.kind === "available") { returned.current = result.draft; return result.draft; }
       if (!active.current) throw new StudioSaveError("STUDIO_WORKSPACE_CLOSED");
@@ -271,6 +274,11 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
           return;
         }
         case "conflict": {
+          if (outcome.reason === "alias_conflict") {
+            setStatus({ kind: "refused", message: conflictMessage(outcome.reason,
+              "Your edit is kept. Undo the import or correct the component names, and Studio saves again.") });
+            return;
+          }
           // Read through a function: TypeScript would otherwise narrow the ref to the null assigned before the awaited save.
           const latest = readElsewhere();
           if (outcome.reason !== "draft_changed" || latest === null) {
@@ -428,12 +436,12 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
   const locked = renderedHolds.size > 0 || status.kind === "conflict" || lifetime === 0;
 
   return useMemo<StudioDraft>(() => ({
-    organizationId, history, selection, state, source, selected, saved, readSaved: () => savedRef.current, view, updatingCanvas, status, chip, lifetime, locked,
+    session, organizationId, history, selection, state, source, selected, saved, readSaved: () => savedRef.current, view, updatingCanvas, status, chip, lifetime, locked,
     isHeld: (key) => renderedHolds.has(key), hold, blockedReason, parsed, run,
     select: (next) => selection.select(next),
     undo: () => { if (blockedReason() === undefined) history.undo(); },
     redo: () => { if (blockedReason() === undefined) history.redo(); },
     flush, retry, reload, isActive: () => active.current,
-  }), [organizationId, history, selection, state, source, selected, saved, view, updatingCanvas, status, chip, lifetime, locked,
+  }), [session, organizationId, history, selection, state, source, selected, saved, view, updatingCanvas, status, chip, lifetime, locked,
     renderedHolds, hold, blockedReason, parsed, run, flush, retry, reload]);
 }

@@ -215,6 +215,24 @@ const resolveRenderIdentity = cache(() => resolveRequestIdentity());
 export const resolveIdentitySession = async (): Promise<IdentitySessionResolution> =>
   (await resolveRenderIdentity()).resolution;
 
+/** Explicit recovery after a refused save; the route commits the pair before the browser retries. */
+export const refreshIdentitySession = async (): Promise<IdentitySessionResolution> => {
+  try {
+    const boundary = createIdentitySessionClient(await requestCookies());
+    if (boundary.stage.initialState.kind !== "valid") return revoked();
+    const refreshed = await boundary.client.auth.refreshSession();
+    if (refreshed.error || !refreshed.data.session) return providerFailure(refreshed.error);
+    const result = await sessionService().resolve(refreshed.data.session.access_token);
+    const staged = boundary.stage.snapshot();
+    if (staged.refused) return invalid();
+    if (result.kind === "active") await applyMutations(staged.mutations);
+    return result;
+  } catch (error) {
+    return mapWebError(error, { route: "auth/session", operation: "refresh-identity-session",
+      code: "SESSION_REFRESH_FAILED", fallback: unavailable() });
+  }
+};
+
 /** The ordinary resolution plus the signed-in person's email, for pages that show who is signed in. */
 export const resolveIdentitySessionWithEmail = async (): Promise<
   Readonly<{ resolution: IdentitySessionResolution; email?: string }>

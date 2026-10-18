@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { FormattedTime, Icon } from "@vortex/ui";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
@@ -54,15 +54,20 @@ export function studioNotice(
 export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
   const { status } = draft;
   const [loadFailed, setLoadFailed] = useState(false);
-  const waitingForSignIn = useRef(false);
   const sessionEnded =
-    status.kind === "refused" &&
-    (status.reason === "session_ended" ||
-      status.reason === "context_changed" ||
-      status.reason === "recent_authentication_required");
+    draft.session.needsSignIn ||
+    (status.kind === "refused" &&
+      ["session_ended", "context_changed", "recent_authentication_required"].includes(
+        status.reason ?? "",
+      ));
   const notSaved =
-    status.kind === "refused" || status.kind === "conflict" || status.kind === "failed";
-  const busy = status.kind === "saving" || (status.kind === "saved" && draft.updatingCanvas);
+    sessionEnded ||
+    status.kind === "refused" ||
+    status.kind === "conflict" ||
+    status.kind === "failed";
+  const busy =
+    !sessionEnded &&
+    (status.kind === "saving" || (status.kind === "saved" && draft.updatingCanvas));
   const label =
     status.kind === "failed"
       ? "Retrying…"
@@ -74,20 +79,6 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
             ? "Updating canvas…"
             : "Saved";
   const loading = draft.isHeld("reopening");
-
-  useEffect(() => {
-    if (!sessionEnded) {
-      waitingForSignIn.current = false;
-      return;
-    }
-    const retry = () => {
-      if (!waitingForSignIn.current || document.visibilityState !== "visible") return;
-      waitingForSignIn.current = false;
-      void draft.retry();
-    };
-    window.addEventListener("focus", retry);
-    return () => window.removeEventListener("focus", retry);
-  }, [sessionEnded, draft.retry]);
 
   const badge = (
     <Badge
@@ -131,7 +122,13 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
             </PopoverTrigger>
             <PopoverContent className="space-y-3">
               <PopoverTitle>Your latest change is not saved</PopoverTitle>
-              <PopoverDescription>{status.message}</PopoverDescription>
+              <PopoverDescription>
+                {sessionEnded
+                  ? "Your session ended, so your last change was not saved."
+                  : "message" in status
+                    ? status.message
+                    : ""}
+              </PopoverDescription>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -245,18 +242,26 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
               Your session ended, so your last change wasn’t saved.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {draft.session.message && (
+            <p role="alert" className="text-sm text-destructive">
+              {draft.session.message}
+            </p>
+          )}
           <AlertDialogFooter>
             <Button
               variant="outline"
               disabled={!draft.state.canUndo || draft.locked}
-              onClick={draft.undo}
+              onClick={() => {
+                draft.session.cancel();
+                void draft.flush().then(() => draft.undo());
+              }}
             >
               Undo my change
             </Button>
             <Button
               onClick={() => {
-                waitingForSignIn.current = true;
-                window.open("/auth/sign-in", "_blank", "noopener");
+                if (!draft.session.needsSignIn) void draft.retry();
+                draft.session.openSignIn();
               }}
             >
               Sign in again

@@ -207,7 +207,7 @@ function StudioRail<Key extends string>({
               onFocus={() => setFocusKey(tab.key)}
               onClick={() => onChoose(tab.key)}
               className={cn(
-                "relative flex h-13 w-full flex-col items-center justify-center gap-1 rounded-lg border-0 px-1 text-xs font-medium outline-none transition-colors",
+                "relative flex h-13 w-full flex-col items-center justify-center gap-1 rounded-lg border-0 px-0 py-0 text-xs font-medium outline-none transition-colors",
                 "hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
                 selected
                   ? "bg-sidebar-accent text-sidebar-accent-foreground before:absolute before:inset-y-3 before:left-0 before:w-0.75 before:rounded-full before:bg-primary"
