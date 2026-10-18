@@ -41,6 +41,7 @@ export * from "./studio-record-reference-control";
 export * from "./theme-preset";
 export { removeFlowBindingsOf, StoredCompositionRefusal, syncStoredBlockDependencies, validateStoredShell, validateStoredZone } from "./stored-composition";
 export * from "./application-structure-commands";
+export { studioPageLayoutPlan, type StudioPageLayoutPlan } from "./application-page-layout";
 export * from "./application-menu-commands";
 export * from "./application-access-commands";
 export { studioRecordPageChoices, studioRecordPageKinds, type StudioRecordPageCommand, type StudioRecordPageKind } from "./application-record-pages";
