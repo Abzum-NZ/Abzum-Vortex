@@ -825,7 +825,7 @@ export function useStudioDataTab({
     current !== null &&
     JSON.stringify(compileProblem.selection) === JSON.stringify(current);
   const inspector = (
-    <StudioPanelShell title={current === null ? "Inspector" : describeSelection(modules, current)}>
+    <StudioPanelShell title="Inspector">
       {compileProblem === null ? null : (
         <div role="alert" className="space-y-2 rounded-md border border-destructive/50 p-3 text-sm">
           <p className="font-semibold text-destructive">

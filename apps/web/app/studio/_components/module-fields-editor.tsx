@@ -592,7 +592,7 @@ export function ModuleFieldsEditor({
 
   const shapeLocked = published;
   const shapeHint = shapeLocked
-    ? "Published fields keep their stored shape. Labels, help, defaults and link-back names can change."
+    ? "Published shape is fixed. Labels, help, defaults and link-back names can change."
     : undefined;
   const flag = (
     key: "required" | "unique" | "filterable" | "sortable",
@@ -695,7 +695,7 @@ export function ModuleFieldsEditor({
             shapeLocked
               ? "Published: the type is fixed. To hold another kind of value, add a new field."
               : existing !== undefined
-                ? "Changing the type starts this field's settings and default afresh. No stored value is converted."
+                ? "Changing the type resets its settings and default."
                 : undefined
           }
         >

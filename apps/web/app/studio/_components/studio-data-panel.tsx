@@ -28,10 +28,10 @@ function TreeButton({
       variant={selected ? "secondary" : "ghost"}
       size="sm"
       aria-pressed={selected}
-      className="h-auto min-w-0 flex-1 justify-start whitespace-normal py-1 text-left"
+      className="h-8 min-w-0 flex-1 justify-start whitespace-nowrap text-left"
       onClick={onClick}
     >
-      <span className="min-w-0 break-words">{label}</span>
+      <span className="min-w-0 truncate">{label}</span>
       {detail === undefined ? null : (
         <span className="ml-auto shrink-0 text-xs text-muted-foreground">{detail}</span>
       )}
@@ -298,10 +298,8 @@ export function StudioDataPanel({
         </p>
       ) : null}
       {ownedShown.length === 0 ? null : (
-        <section aria-label="Owned by this application" className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase text-muted-foreground">
-            Owned by this application
-          </h3>
+        <section aria-label="This application" className="space-y-2">
+          <h3 className="text-sm font-medium text-foreground">This application</h3>
           <ul className="list-none space-y-3">
             {ownedShown.map((module) => (
               <ModuleNode
@@ -323,10 +321,8 @@ export function StudioDataPanel({
         </p>
       ) : null}
       {usedShown.length === 0 ? null : (
-        <section aria-label="Used from other applications" className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase text-muted-foreground">
-            Used from other applications
-          </h3>
+        <section aria-label="From other applications" className="space-y-2">
+          <h3 className="text-sm font-medium text-foreground">From other applications</h3>
           <ul className="list-none space-y-3">
             {usedShown.map((module) => (
               <ModuleNode

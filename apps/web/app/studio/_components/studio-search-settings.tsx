@@ -325,7 +325,7 @@ export function StudioSearchOverview({
                     type="button"
                     variant="link"
                     size="sm"
-                    className="h-auto p-0"
+                    className="dark:text-foreground dark:underline"
                     onClick={() =>
                       onSelect({
                         kind: "record_type",
