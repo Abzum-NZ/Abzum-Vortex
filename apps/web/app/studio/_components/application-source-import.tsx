@@ -86,16 +86,16 @@ function SourceChangeTable({
       <Table>
         <TableHeader className="bg-muted/50 text-xs">
           <TableRow>
-            <TableHead>Area</TableHead>
-            <TableHead>Item</TableHead>
-            <TableHead>Change</TableHead>
+            <TableHead className="text-foreground normal-case">Area</TableHead>
+            <TableHead className="text-foreground normal-case">Item</TableHead>
+            <TableHead className="text-foreground normal-case">Change</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.map((row, index) => (
             <TableRow key={`${row.area}:${row.item}:${index}`}>
               <TableCell>{row.area}</TableCell>
-              <TableCell className="whitespace-normal break-words">{row.item}</TableCell>
+              <TableCell className="whitespace-normal wrap-anywhere">{row.item}</TableCell>
               <TableCell>{row.change}</TableCell>
             </TableRow>
           ))}
