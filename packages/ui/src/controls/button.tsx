@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactElement } from "react";
+import { useId, type ReactElement } from "react";
 import { Button as SharedButton } from "../components/button";
+import { Spinner } from "../components/spinner";
 import { DefinitionRenderError } from "../definition-error";
 import type { ButtonPayload } from "./projected-data";
 import {
@@ -10,6 +11,7 @@ import {
   type ControlRenderProps,
 } from "./control-context";
 import { useFormScope } from "./form-context";
+import { usePendingGesture } from "./pending-gesture";
 
 export type ButtonProps = ControlRenderProps<ButtonPayload>;
 
@@ -48,16 +50,7 @@ export function Button(props: ButtonProps): ReactElement {
   const noteId = useId();
   // An action handler may return the promise of the flow it started; the button stays busy until it
   // settles, so one gesture cannot start the same flow twice.
-  const [running, setRunning] = useState(false);
-  // Guards the gap before the busy state renders, so a second click in the same frame is ignored.
-  const runningNow = useRef(false);
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
+  const gesture = usePendingGesture();
   if (mode !== "action" && form === undefined)
     throw new DefinitionRenderError(
       "INVALID_COMPOSITION",
@@ -66,7 +59,8 @@ export function Button(props: ButtonProps): ReactElement {
     );
 
   const label = context.accessibleName ?? props.metadata.name;
-  const pending = context.pending || running || (mode === "submit" && form?.pending === true);
+  const pending =
+    context.pending || gesture.pending || (mode === "submit" && form?.pending === true);
   const disabled =
     context.inactive ||
     pending ||
@@ -87,27 +81,17 @@ export function Button(props: ButtonProps): ReactElement {
         aria-busy={pending}
         {...(note === undefined ? {} : { "aria-describedby": noteId })}
         onClick={() => {
-          if (mode !== "action" || disabled || runningNow.current) return;
-          const outcome: unknown = context.events?.action?.({
-            event: "action",
-            intent: "activate",
-            ...(form === undefined ? {} : { values: form.values() }),
-          });
-          if (
-            typeof outcome === "object" &&
-            outcome !== null &&
-            typeof (outcome as PromiseLike<unknown>).then === "function"
-          ) {
-            runningNow.current = true;
-            setRunning(true);
-            const settle = (): void => {
-              runningNow.current = false;
-              if (mounted.current) setRunning(false);
-            };
-            (outcome as PromiseLike<unknown>).then(settle, settle);
-          }
+          if (mode !== "action" || disabled || gesture.running()) return;
+          gesture.track(
+            context.events?.action?.({
+              event: "action",
+              intent: "activate",
+              ...(form === undefined ? {} : { values: form.values() }),
+            }),
+          );
         }}
       >
+        {pending ? <Spinner data-icon="inline-start" aria-hidden="true" /> : null}
         {label}
       </SharedButton>
       {note === undefined ? null : (
