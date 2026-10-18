@@ -317,10 +317,6 @@ const compileSettings = (
     const value = authored[declaration.key];
     if (value !== undefined)
       result[declaration.key] = compilePropertyValue(value, declaration, resolution);
-    else if (declaration.defaultValue !== undefined) {
-      validateCanonicalPropertyValue(declaration.defaultValue, declaration);
-      result[declaration.key] = declaration.defaultValue;
-    }
   }
   return result;
 };
