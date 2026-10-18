@@ -470,7 +470,9 @@ export const createReadStorageAuthorityResolver = (
  * resolver is refused.
  */
 export const composeStorageAuthorityResolvers = (
-  resolvers: Readonly<Partial<Record<StorageCredentialRequest["operation"], ResolveCurrentStorageAuthority>>>,
+  resolvers: Readonly<
+    Partial<Record<StorageCredentialRequest["operation"], ResolveCurrentStorageAuthority>>
+  >,
 ): ResolveCurrentStorageAuthority => {
   const routes = Object.freeze({ ...resolvers });
   return async (request) => {
@@ -507,7 +509,7 @@ export const createDefaultUpstreamStorageReader = (
 ): UpstreamStorageReader => {
   return async ({ credential, range }) => {
     const objectPath = credential.objectPath.split("/").map(encodeURIComponent).join("/");
-    const url = `https://${credential.destinationProject}.supabase.co/storage/v1/object/authenticated/${encodeURIComponent(credential.bucketId)}/${objectPath}`;
+    const url = `${credential.storageOrigin}/storage/v1/object/authenticated/${encodeURIComponent(credential.bucketId)}/${objectPath}`;
     const headers: Record<string, string> = {
       Authorization: `Bearer ${credential.token}`,
       "Accept-Encoding": "identity",
@@ -647,8 +649,11 @@ const positiveLimit = (value: number | undefined, fallback: number): number =>
 
 type AuthorityRejection = Readonly<{ rejected: string; cause?: unknown }>;
 
-const parseAuthority = (candidate: CurrentReadAuthority): CurrentReadAuthority | AuthorityRejection => {
-  if (candidate === null || typeof candidate !== "object") return { rejected: "authority_not_an_object" };
+const parseAuthority = (
+  candidate: CurrentReadAuthority,
+): CurrentReadAuthority | AuthorityRejection => {
+  if (candidate === null || typeof candidate !== "object")
+    return { rejected: "authority_not_an_object" };
   const viewer = candidate.viewer;
   const organizationId = organizationIdSchema.safeParse(viewer?.organizationId);
   const actor = verifiedFileActorSchema.safeParse(viewer?.actor);
@@ -682,11 +687,19 @@ const parseAuthority = (candidate: CurrentReadAuthority): CurrentReadAuthority |
       recordId,
       fieldId,
       validUntil,
-    }).flatMap(([name, parsed]) => (parsed !== undefined && !parsed.success ? [{ name, error: parsed.error }] : []));
+    }).flatMap(([name, parsed]) =>
+      parsed !== undefined && !parsed.success ? [{ name, error: parsed.error }] : [],
+    );
     const invalidField = readableFieldIds?.find((value) => !value.success);
     if (readableFieldIds === undefined || invalidField !== undefined)
-      failed.push({ name: "readableFieldIds", error: invalidField?.success === false ? invalidField.error : undefined });
-    return { rejected: `authority_fields_invalid:${failed.map((entry) => entry.name).join(",")}`, cause: failed[0]?.error };
+      failed.push({
+        name: "readableFieldIds",
+        error: invalidField?.success === false ? invalidField.error : undefined,
+      });
+    return {
+      rejected: `authority_fields_invalid:${failed.map((entry) => entry.name).join(",")}`,
+      cause: failed[0]?.error,
+    };
   }
 
   let sharedRecordGrant: SharedRecordFileGrant | undefined;
@@ -750,7 +763,9 @@ const parseAuthority = (candidate: CurrentReadAuthority): CurrentReadAuthority |
       ...(recipientApplication !== undefined && recipientApplication.success
         ? { recipientApplicationRootId: recipientApplication.data }
         : {}),
-      readableFieldIds: Object.freeze(grantFields.flatMap((value) => (value.success ? [value.data] : []))),
+      readableFieldIds: Object.freeze(
+        grantFields.flatMap((value) => (value.success ? [value.data] : [])),
+      ),
       expiresAt: expiresAt.data,
       revoked: grant.revoked,
     });
@@ -798,7 +813,8 @@ const organisationMayRead = (
     grant.sourceRecordId === fileRecord.ownerRecordId &&
     grant.readableFieldIds.includes(authority.fieldId) &&
     (grant.recipientOrganizationAccountId === undefined ||
-      (actor.kind === "human" && actor.organizationAccountId === grant.recipientOrganizationAccountId)) &&
+      (actor.kind === "human" &&
+        actor.organizationAccountId === grant.recipientOrganizationAccountId)) &&
     (grant.recipientApplicationRootId === undefined ||
       authority.viewer.applicationRootId === grant.recipientApplicationRootId)
   );
@@ -821,7 +837,9 @@ const chooseRepresentation = (
     return {
       kind: "original",
       disposition: "attachment",
-      mediaType: active ? "application/octet-stream" : normalizeMediaType(fileRecord.detectedMediaType),
+      mediaType: active
+        ? "application/octet-stream"
+        : normalizeMediaType(fileRecord.detectedMediaType),
     };
   }
   if (canPreviewOriginalInline(fileRecord)) {

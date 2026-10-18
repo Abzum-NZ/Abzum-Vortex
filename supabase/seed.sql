@@ -6,6 +6,10 @@
 -- Supabase CLI database on exact loopback.
 alter role vortex_runtime password 'vortex-runtime-local-only';
 
+-- The exact-object Storage policies compare signed tokens with this destination identity.
+-- This seed runs only on disposable Local Supabase; hosted projects provision their own ref.
+alter database postgres set vortex.destination_project = 'local';
+
 -- Local development delivers committed events in process (there is no public webhook endpoint). The
 -- dispatcher resolves its system actor from exactly one active platform-wide grant; hosted
 -- environments provision that grant as an operations step, never from this file.

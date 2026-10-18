@@ -20,6 +20,7 @@ import {
   type VerifiedFileActor,
 } from "../schema";
 import { createSignedStorageOperationClaims, validateStorageKey } from "./storage-policy";
+import { resolveFileStorageDestination, type FileStorageDestination } from "./storage-destination";
 import {
   evaluateResolvedFileRemovalAuthority,
   type FileRemovalAuthoritySnapshot,
@@ -75,9 +76,7 @@ export type CurrentStorageAuthority =
         removalAuthority: FileRemovalAuthoritySnapshot;
       }>);
 
-export type StorageAuthorityResolution =
-  | CurrentStorageAuthority
-  | Readonly<{ authorized: false }>;
+export type StorageAuthorityResolution = CurrentStorageAuthority | Readonly<{ authorized: false }>;
 
 export type ResolveCurrentStorageAuthority = (
   request: StorageCredentialRequest,
@@ -107,8 +106,7 @@ export type StorageKeyRotationMetadata = Readonly<{
  * are installed once by trusted service wiring, never selected by a request.
  */
 export type StorageCredentialBridgeConfig = Readonly<{
-  destinationProject: string;
-  issuer: string;
+  destination: FileStorageDestination;
   activeKeyId: string;
   keys: readonly StorageKeyDefinition[];
   resolveCurrentAuthority: ResolveCurrentStorageAuthority;
@@ -125,6 +123,7 @@ export type StorageOperationCredential = Readonly<{
   tokenKind: "vortex_file_storage_operation";
   role: "authenticated";
   destinationProject: string;
+  storageOrigin: string;
   organizationId: OrganizationId;
   bucketId: typeof PRIVATE_FILE_BUCKET;
   objectPath: string;
@@ -165,9 +164,7 @@ const timestampSeconds = (value: string): number | undefined => {
   return Number.isFinite(milliseconds) ? Math.floor(milliseconds / 1_000) : undefined;
 };
 
-const validateCredentialRequest = (
-  request: StorageCredentialRequest,
-): StorageCredentialRequest => {
+const validateCredentialRequest = (request: StorageCredentialRequest): StorageCredentialRequest => {
   if (request === null || typeof request !== "object") {
     throw new Error("Storage credential request is invalid");
   }
@@ -265,14 +262,7 @@ const validateSignature = (candidate: string): string => {
 };
 
 const validateBridgeConfig = (config: StorageCredentialBridgeConfig): void => {
-  if (!/^[a-z0-9](?:[a-z0-9-]{0,118}[a-z0-9])?$/.test(config.destinationProject)) {
-    throw new Error("Storage destination project must be a canonical lowercase project ref");
-  }
-
-  const expectedIssuer = `https://${config.destinationProject}.supabase.co/auth/v1`;
-  if (config.issuer !== expectedIssuer) {
-    throw new Error("Storage issuer must be the destination Supabase project's Auth issuer");
-  }
+  resolveFileStorageDestination(config.destination);
 
   if (typeof config.resolveCurrentAuthority !== "function") {
     throw new Error("Storage credential bridge requires a current-authority resolver");
@@ -426,10 +416,7 @@ const validateCurrentAuthority = (
       if (!("removalAuthority" in resolution)) {
         throw new Error("Storage credential minting refused: removal authority is unavailable");
       }
-      const decision = evaluateResolvedFileRemovalAuthority(
-        resolution.removalAuthority,
-        now,
-      );
+      const decision = evaluateResolvedFileRemovalAuthority(resolution.removalAuthority, now);
       if (!decision.eligible) {
         throw new Error("Storage credential minting refused: file is not eligible for removal");
       }
@@ -464,11 +451,7 @@ const validateCurrentAuthority = (
       ) {
         throw new Error("Storage credential minting refused: removal authority is unavailable");
       }
-      grantExpiry = Math.min(
-        removalAuthorityExpiry,
-        holdAuthorityExpiry,
-        recoveryPolicyExpiry,
-      );
+      grantExpiry = Math.min(removalAuthorityExpiry, holdAuthorityExpiry, recoveryPolicyExpiry);
       break;
     }
     default: {
@@ -499,9 +482,7 @@ const requestedTtl = (ttlSeconds: number | undefined): number => {
   return ttlSeconds;
 };
 
-const makeServerCredential = (
-  value: StorageOperationCredential,
-): StorageOperationCredential => {
+const makeServerCredential = (value: StorageOperationCredential): StorageOperationCredential => {
   Object.defineProperty(value, "toJSON", {
     enumerable: false,
     configurable: false,
@@ -532,8 +513,11 @@ export const createStorageCredentialBridge = (
 ): StorageCredentialBridge => {
   validateBridgeConfig(config);
 
-  const destinationProject = config.destinationProject;
-  const issuer = config.issuer;
+  const {
+    destinationProject,
+    issuer,
+    origin: storageOrigin,
+  } = resolveFileStorageDestination(config.destination);
   const activeKeyId = config.activeKeyId;
   const resolveCurrentAuthority = config.resolveCurrentAuthority;
   const clock = config.clock ?? (() => new Date());
@@ -541,9 +525,7 @@ export const createStorageCredentialBridge = (
   for (const key of config.keys) {
     signers.set(
       key.keyId,
-      typeof key.signer === "function"
-        ? key.signer
-        : createStorageSignerFromPrivateKey(key.signer),
+      typeof key.signer === "function" ? key.signer : createStorageSignerFromPrivateKey(key.signer),
     );
   }
   const activeSigner = signers.get(activeKeyId);
@@ -571,14 +553,10 @@ export const createStorageCredentialBridge = (
     let resolution: StorageAuthorityResolution;
     try {
       resolution = await resolveCurrentAuthority(request);
-    } catch {
-      throw new Error("Storage credential current authority is unavailable");
+    } catch (cause) {
+      throw new Error("Storage credential current authority is unavailable", { cause });
     }
-    const authority = validateCurrentAuthority(
-      request,
-      resolution,
-      now,
-    );
+    const authority = validateCurrentAuthority(request, resolution, now);
     const ttlSeconds = Math.min(
       requestedTtl(input.ttlSeconds),
       authority.expiresAtSeconds - nowSeconds,
@@ -612,6 +590,7 @@ export const createStorageCredentialBridge = (
       tokenKind: "vortex_file_storage_operation",
       role: "authenticated",
       destinationProject,
+      storageOrigin,
       organizationId: authority.fileRecord.organizationId,
       bucketId: PRIVATE_FILE_BUCKET,
       objectPath: authority.fileRecord.storageKey,
