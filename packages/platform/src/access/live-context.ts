@@ -132,7 +132,25 @@ export const readLiveHumanContext = async (
     Date.parse(context.expiresAt) <= now ||
     Date.parse(context.issuedAt) >= Date.parse(context.expiresAt)
   )
-    throw refuse("session_context_mismatch");
+    throw refuse("session_context_mismatch", new Error(JSON.stringify({
+      mismatchedFields: Object.entries({
+        tenantId: !sameId(context.tenantId, scope.tenantId),
+        organizationId: !sameId(context.organizationId, scope.organizationId),
+        organizationAccountId: !sameId(context.organizationAccountId, scope.organizationAccountId),
+        accessVersion: context.accessVersion !== scope.accessVersion,
+        identityId: !sameId(context.identityId, session.identityId),
+        sessionId: !sameId(context.sessionId, session.sessionId),
+        authenticationStrength: context.authenticationStrength !== session.authenticationStrength,
+        issuedAt: context.issuedAt !== issuedAt,
+        expiresAt: context.expiresAt !== session.accessTokenExpiresAt,
+        accessTokenIssuedAt: context.accessTokenIssuedAt !== (hasAuthenticationEvidence ? session.accessTokenIssuedAt : undefined),
+        primaryAuthenticatedAt: context.primaryAuthenticatedAt !== session.primaryAuthenticatedAt,
+        multiFactorAuthenticatedAt: context.multiFactorAuthenticatedAt !== session.multiFactorAuthenticatedAt,
+      }).filter(([, mismatch]) => mismatch).map(([field]) => field),
+      issuedInFutureMs: Math.max(0, Date.parse(context.issuedAt) - now),
+      expired: Date.parse(context.expiresAt) <= now,
+      invalidWindow: Date.parse(context.issuedAt) >= Date.parse(context.expiresAt),
+    })));
   return context;
 };
 
