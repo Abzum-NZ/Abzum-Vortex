@@ -237,10 +237,20 @@
     // Studio D11 sizes its flow cards and circular edge buttons with these theme-scale utilities.
     // Keep checking arbitrary values, fonts, inline overrides and every other component variant.
     const flowUtilities = new Set([
-      "rounded-md", "rounded-lg", "rounded-xl", "rounded-full", "px-3", "py-2", "py-2.5",
+      "rounded-md",
+      "rounded-lg",
+      "rounded-xl",
+      "rounded-full",
+      "px-3",
+      "py-2",
+      "py-2.5",
     ]);
-    const flowPattern = !inlineOverride && element.closest("[data-vortex-studio-frame] .react-flow") !== null &&
-      overrides.every((name) => flowUtilities.has(name.slice(name.lastIndexOf(":") + 1).replace(/^!|!$/g, "")));
+    const flowPattern =
+      !inlineOverride &&
+      element.closest(".react-flow:has(.react-flow__node-studio)") !== null &&
+      overrides.every((name) =>
+        flowUtilities.has(name.slice(name.lastIndexOf(":") + 1).replace(/^!|!$/g, "")),
+      );
     const probe = document.createElement(element.tagName);
     for (const attribute of element.attributes)
       if (
@@ -269,8 +279,11 @@
           : Math.abs(px(actual) - px(wanted)) <= TOLERANCE;
       const root = themedRootOf(element);
       const tokens = root === null ? null : tokensOf(root);
-      const canvasScale = flowPattern && tokens !== null &&
-        (CORNERS.includes(property) ? radiusOk(actual, radiiFor(element, tokens))
+      const canvasScale =
+        flowPattern &&
+        tokens !== null &&
+        (CORNERS.includes(property)
+          ? radiusOk(actual, radiiFor(element, tokens))
           : SIDES.includes(property) && paddingOk(actual, tokens));
       if (!same && !canvasScale) differences.push(`${property} ${actual} (variant ${wanted})`);
     }
