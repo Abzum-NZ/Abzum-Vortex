@@ -268,8 +268,7 @@
           "vortex.service_desk.sla.service_level.read",
           "application.service_desk.service_level.read",
           "vortex.service_desk.knowledge.article.read",
-          "application.service_desk.article.read",
-          "vortex.system_directory.person.reference_read"
+          "application.service_desk.article.read"
         ]
       },
       {
@@ -335,8 +334,7 @@
           "vortex.service_desk.knowledge.article.publish",
           "application.service_desk.article.publish",
           "application.service_desk.business_calendar.create",
-          "application.service_desk.service_level.create",
-          "vortex.system_directory.person.reference_read"
+          "application.service_desk.service_level.create"
         ]
       },
       {
@@ -360,8 +358,7 @@
           "vortex.service_desk.knowledge.article_case.read",
           "vortex.service_desk.knowledge.article_case.soft_delete",
           "vortex.service_desk.knowledge.article_case.restore",
-          "vortex.service_desk.knowledge.article_case.export",
-          "vortex.system_directory.person.reference_read"
+          "vortex.service_desk.knowledge.article_case.export"
         ]
       }
     ],
