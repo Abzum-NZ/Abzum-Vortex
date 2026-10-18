@@ -155,6 +155,7 @@ export function StudioAccessRoleEditor({ source, role, compiledGrants, disabled,
                   </TableCell>)}
                   <TableCell>
                     <Button type="button" size="sm" variant={fieldsOf === id ? "secondary" : "ghost"} aria-expanded={fieldsOf === id}
+                      aria-label={`Fields of ${row.name}`}
                       onClick={() => setFieldsOf(fieldsOf === id ? null : id)}>Fields</Button>
                   </TableCell>
                 </TableRow>

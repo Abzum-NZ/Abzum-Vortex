@@ -149,6 +149,7 @@ function ConfirmSurface({
           {confirmation.choice === undefined ? null : (
             <label className="flex items-start gap-2 text-sm">
               <Checkbox
+                aria-label={confirmation.choice}
                 defaultChecked={false}
                 onCheckedChange={(checked) => {
                   choice = checked === true;
