@@ -498,7 +498,16 @@ export const fileRecordSchema = z
         message: "A private file object path is scoped to its own organisation and file identifier",
       });
 
-    const ownerParts = [value.ownerRecordTypeId, value.ownerRecordId, value.ownerFieldId];
+    const staged =
+      value.lifecycleState === "pending" ||
+      value.lifecycleState === "scanning" ||
+      value.lifecycleState === "quarantined" ||
+      value.lifecycleState === "uploaded" ||
+      value.lifecycleState === "abandoned" ||
+      (value.lifecycleState === "removed" && value.activatedAt === undefined);
+    const ownerParts = staged
+      ? [value.ownerRecordTypeId, value.ownerFieldId]
+      : [value.ownerRecordTypeId, value.ownerRecordId, value.ownerFieldId];
     if (
       ownerParts.some((part) => part !== undefined) &&
       ownerParts.some((part) => part === undefined)
@@ -598,6 +607,7 @@ export const uploadGrantSchema = z
   .object({
     ...transferGrantBase,
     kind: z.literal("upload"),
+    recordId: recordIdSchema.optional(),
     policyFingerprint: fingerprintSchema,
     maximumBytes: z.number().int().positive(),
     oneTimeId: platformIdSchema,
@@ -630,17 +640,6 @@ export const trustedFileInspectionSchema = z
 
 export type TrustedFileInspection = z.infer<typeof trustedFileInspectionSchema>;
 
-/** The outcome of the isolated safety scanner for one uploaded object. */
-export const fileUploadScanOutcomeSchema = z
-  .object({
-    scannerName: z.string().min(1).max(120),
-    scannerVersion: z.string().min(1).max(120),
-    scannerResult: z.enum(["clean", "quarantined", "refused"]),
-  })
-  .strict();
-
-export type FileUploadScanOutcome = z.infer<typeof fileUploadScanOutcomeSchema>;
-
 export const fileUploadAdmissionRefusalReasonSchema = z.enum([
   "caller_not_authorized",
   "field_not_writable",
@@ -648,7 +647,6 @@ export const fileUploadAdmissionRefusalReasonSchema = z.enum([
   "file_size_exceeded",
   "disallowed_extension",
   "executable_content_refused",
-  "capability_refused",
   "replacement_file_not_found",
   "malformed_request",
 ]);
@@ -711,3 +709,19 @@ export type FileRecord = z.infer<typeof fileRecordSchema>;
 export type UploadGrant = z.infer<typeof uploadGrantSchema>;
 
 export type DownloadGrant = z.infer<typeof downloadGrantSchema>;
+
+/** Private upload transport responses contain only the pending identity and exact-object grant. */
+export const attachmentUploadAdmissionSchema = z
+  .object({
+    outcome: z.literal("admitted"),
+    fileId: fileIdSchema,
+    url: z.string().url(),
+    token: z.string().min(1),
+  })
+  .strict();
+export const attachmentUploadCompletionSchema = z
+  .object({ outcome: z.literal("completed"), fileId: fileIdSchema, name: z.string().min(1) })
+  .strict();
+export const attachmentUploadRefusalSchema = z
+  .object({ outcome: z.literal("refused"), message: z.string() })
+  .passthrough();

@@ -1,17 +1,16 @@
 import "server-only";
 
+import { z } from "zod";
 import {
+  canonicalJson,
   createDefinitionRootCommandSchema,
   saveDefinitionDraftCommandSchema,
   storedDefinitionDraftSchema,
-  type CreateDefinitionRootCommand,
-  type SaveDefinitionDraftCommand,
   type StoredDefinitionDraft,
 } from "../schema";
-import type { z } from "zod";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { requireBuilderAuthority, type BuilderAuthority } from "./builder-authority";
-import { fingerprintCanonicalValue } from "./canonical-json-definition";
+import { fingerprintCanonicalJson } from "./canonical-json-definition";
 import { extractStoredSourceIdentityRequirements } from "./source-identities";
 import { validateDefinitionSource } from "./validation";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
@@ -129,26 +128,43 @@ const sourceFailureDetail = (validation: ReturnType<typeof validateDefinitionSou
   return `${path}: ${first.family} (${first.ruleCode})`;
 };
 
-const validateSource = (
-  source: CreateDefinitionRootCommand["source"],
-  permissions: PlatformPermissionSource,
-) => {
-  const validation = validateDefinitionSource(source, permissions);
-  if (!validation.valid)
+const prepareSource = (candidate: unknown, permissions: PlatformPermissionSource) => {
+  const validation = validateDefinitionSource(candidate, permissions);
+  const source = validation.source;
+  if (!validation.valid || source === undefined)
     throw new DefinitionError("INVALID_DEFINITION_SOURCE", {
       detail: sourceFailureDetail(validation),
     });
-  return source;
+  // Only an Application has a draft; Modules are edited inside their owning Application.
+  if (source.kind !== "application") throw new DefinitionError("INVALID_DEFINITION_COMMAND");
+  const canonicalSource = canonicalJson(source);
+  return {
+    source,
+    canonicalSource,
+    sourceFingerprint: fingerprintCanonicalJson(canonicalSource),
+    identityRequirements: extractStoredSourceIdentityRequirements(source),
+  };
 };
 
-const invalidSourceDetail = (
-  candidate: unknown,
-  permissions: PlatformPermissionSource,
-): string | undefined => {
-  if (candidate === null || typeof candidate !== "object" || !("source" in candidate))
-    return undefined;
-  const validation = validateDefinitionSource(candidate.source, permissions);
-  return validation.valid ? undefined : sourceFailureDetail(validation);
+// Parse command metadata without parsing its source a second time. These are private envelopes;
+// the public store methods always pass the unknown source through prepareSource.
+const createCommandEnvelope = createDefinitionRootCommandSchema.extend({ source: z.unknown() });
+const saveCommandEnvelope = saveDefinitionDraftCommandSchema.extend({ source: z.unknown() });
+
+const verifyStoredSource = (
+  row: StoredDraftRow,
+  prepared: ReturnType<typeof prepareSource>,
+): StoredDefinitionDraft => {
+  const draft = parseStoredDraft(row);
+  if (
+    draft.kind !== prepared.source.kind ||
+    draft.key !== prepared.source.key ||
+    draft.sourceContractVersion !== prepared.source.source_contract_version ||
+    draft.sourceFingerprint !== prepared.sourceFingerprint ||
+    canonicalJson(draft.source) !== prepared.canonicalSource
+  )
+    throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
+  return draft;
 };
 
 const commandIssueDetail = (error: z.ZodError): string => {
@@ -221,23 +237,19 @@ export const createDefinitionStore = (
   permissions: PlatformPermissionSource,
 ) => {
   const createRoot = async (
-    candidate: CreateDefinitionRootCommand,
+    candidate: unknown,
     mode: RootCreationMode,
   ): Promise<StoredDefinitionDraft> => {
     await requireBuilderAuthority(authority, { kind: "draft_change" });
     return safeStoreOperation("create_root", async () => {
-      const command = createDefinitionRootCommandSchema.safeParse(candidate);
+      const command = createCommandEnvelope.safeParse(candidate);
       if (!command.success) {
-        const sourceDetail = invalidSourceDetail(candidate, permissions);
-        if (sourceDetail)
-          throw new DefinitionError("INVALID_DEFINITION_SOURCE", { detail: sourceDetail });
         throw new DefinitionError("INVALID_DEFINITION_COMMAND", {
           detail: commandIssueDetail(command.error),
         });
       }
-      const source = validateSource(command.data.source, permissions);
-      // A Module root is internal: only its owning Application's publication creates one.
-      if (source.kind !== "application") throw new DefinitionError("INVALID_DEFINITION_COMMAND");
+      const prepared = prepareSource(command.data.source, permissions);
+      const { source, canonicalSource, sourceFingerprint, identityRequirements } = prepared;
       if (
         mode.kind === "trusted_application" &&
         (source.kind !== "application" ||
@@ -247,14 +259,12 @@ export const createDefinitionStore = (
         throw new DefinitionError("INVALID_DEFINITION_COMMAND");
       const applicationOriginKind =
         mode.kind === "trusted_application" ? mode.applicationOriginKind : "ordinary";
-      const sourceFingerprint = fingerprintCanonicalValue(source);
-      const identityRequirements = extractStoredSourceIdentityRequirements(source);
       const rows = await transaction.query<StoredDraftRow>`
         select *
         from vortex_definition.create_root(
           ${source.kind},
           ${source.key},
-          ${JSON.stringify(source)}::text::jsonb,
+          ${canonicalSource}::text::jsonb,
           ${sourceFingerprint},
           ${JSON.stringify(identityRequirements)}::text::jsonb,
           ${applicationOriginKind}::text,
@@ -262,22 +272,22 @@ export const createDefinitionStore = (
         )
       `;
       if (rows.length !== 1) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
-      return parseStoredDraft(rows[0]!);
+      return verifyStoredSource(rows[0]!, prepared);
     });
   };
 
   return {
-    createRoot: (candidate: CreateDefinitionRootCommand): Promise<StoredDefinitionDraft> =>
+    createRoot: (candidate: unknown): Promise<StoredDefinitionDraft> =>
       createRoot(candidate, { kind: "ordinary" }),
 
     /** Trusted server descriptors supply provenance separately from the strict public command. */
     createTrustedApplicationRoot: (
-      candidate: CreateDefinitionRootCommand,
+      candidate: unknown,
       applicationOriginKind: TrustedApplicationRootOriginKind,
     ): Promise<StoredDefinitionDraft> =>
       createRoot(candidate, { kind: "trusted_application", applicationOriginKind }),
 
-    async saveDraft(candidate: SaveDefinitionDraftCommand): Promise<StoredDefinitionDraft> {
+    async saveDraft(candidate: unknown): Promise<StoredDefinitionDraft> {
       const rootId = saveDefinitionDraftCommandSchema.pick({ rootId: true }).safeParse({
         rootId:
           typeof candidate === "object" && candidate !== null
@@ -290,33 +300,27 @@ export const createDefinitionStore = (
         rootId: rootId.data.rootId,
       });
       return safeStoreOperation("save_draft", async () => {
-        const command = saveDefinitionDraftCommandSchema.safeParse(candidate);
+        const command = saveCommandEnvelope.safeParse(candidate);
         if (!command.success) {
-          const sourceDetail = invalidSourceDetail(candidate, permissions);
-          if (sourceDetail)
-            throw new DefinitionError("INVALID_DEFINITION_SOURCE", { detail: sourceDetail });
           throw new DefinitionError("INVALID_DEFINITION_COMMAND", {
             detail: commandIssueDetail(command.error),
           });
         }
-        const source = validateSource(command.data.source, permissions);
-        // Only an Application has a draft: a Module is edited inside its owning Application.
-        if (source.kind !== "application") throw new DefinitionError("INVALID_DEFINITION_COMMAND");
-        const sourceFingerprint = fingerprintCanonicalValue(source);
-        const identityRequirements = extractStoredSourceIdentityRequirements(source);
+        const prepared = prepareSource(command.data.source, permissions);
+        const { canonicalSource, sourceFingerprint, identityRequirements } = prepared;
         const rows = await transaction.query<StoredDraftRow>`
           select *
           from vortex_definition.save_draft(
             ${command.data.rootId},
             ${command.data.expectedDraftRevision},
-            ${JSON.stringify(source)}::text::jsonb,
+            ${canonicalSource}::text::jsonb,
             ${sourceFingerprint},
             ${JSON.stringify(identityRequirements)}::text::jsonb
           )
         `;
         if (rows.length === 0) throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
         if (rows.length !== 1) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
-        return parseStoredDraft(rows[0]!);
+        return verifyStoredSource(rows[0]!, prepared);
       });
     },
   };

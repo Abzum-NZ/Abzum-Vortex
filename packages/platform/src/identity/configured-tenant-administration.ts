@@ -49,6 +49,7 @@ import {
   type DatabaseRow,
   type RequestDatabaseTransaction,
 } from "../db/index";
+import { resolveFileStorageDestination } from "../files/storage-destination";
 import { logRefusedOperations } from "./log-refused-operations";
 
 type RuntimeTransactionRunner = <Result>(
@@ -270,6 +271,17 @@ export const createConfiguredTenantAdministrationService = (
       try {
         return await run(async (transaction) => {
           const value = command.data;
+          const storageEnvironment = process.env.VORTEX_ENVIRONMENT;
+          if (
+            storageEnvironment !== "local" &&
+            storageEnvironment !== "testing" &&
+            storageEnvironment !== "production"
+          )
+            throw new Error("STORAGE_PROVISIONING_ENVIRONMENT_INVALID");
+          const storage = resolveFileStorageDestination({
+            environment: storageEnvironment,
+            supabaseUrl: process.env.VORTEX_SUPABASE_URL ?? "",
+          });
           const rows = await transaction.query<ProvisionRow>`
             select * from vortex_identity.provision_tenant(
               ${operator.clusterId}::uuid,
@@ -289,7 +301,8 @@ export const createConfiguredTenantAdministrationService = (
               ${value.runtimeSettings.timeZone}::text,
               ${value.runtimeSettings.currency}::text,
               ${value.runtimeSettings.dateFormat}::text,
-              ${value.runtimeSettings.numberFormat}::text
+              ${value.runtimeSettings.numberFormat}::text,
+              ${storage.destinationProject}::text
             )
           `;
           const row = one(rows);
