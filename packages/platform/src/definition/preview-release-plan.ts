@@ -164,14 +164,15 @@ export const planApplicationPreview = async (
   const source = candidate.draft.source;
   if (source.kind !== "application") return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
   const inlineKeys = new Set(applicationModuleSources(source).map((source) => source.key));
-  const usedRoots: { rootId: string; currentReleaseRevision: number }[] = [];
-  for (const key of applicationModuleKeys(source)) {
-    if (inlineKeys.has(key)) continue;
-    const page = await snapshot.readModuleReleasePage(candidate.draft.organizationId, key);
+  const usedKeys = applicationModuleKeys(source).filter((key) => !inlineKeys.has(key));
+  const usedPages = await Promise.all(
+    usedKeys.map((key) => snapshot.readModuleReleasePage(candidate.draft.organizationId, key)),
+  );
+  const usedRoots = usedPages.map((page) => {
     if (page.rootId === null || page.anchorReleaseRevision === null)
       return refuse("DEFINITION_DEPENDENCY_MISSING");
-    usedRoots.push({ rootId: page.rootId, currentReleaseRevision: page.anchorReleaseRevision });
-  }
+    return { rootId: page.rootId, currentReleaseRevision: page.anchorReleaseRevision };
+  });
   const compiled = await compileApplicationWithInlineModules(
     context,
     snapshot,

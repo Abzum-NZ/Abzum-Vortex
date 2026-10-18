@@ -282,16 +282,20 @@ const compileDraftSnapshot = async (
   if (source.kind !== "application") return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
   const inlineKeys = new Set(applicationModuleSources(source).map((module) => module.key));
   const ownedRoots = await overlay.readOwnedModuleRoots(String(candidate.draft.rootId));
-  const usedAnchors = [];
-  for (const moduleKey of applicationModuleKeys(source).filter((key) => !inlineKeys.has(key))) {
-    const page = await overlay.readModuleReleasePage(candidate.draft.organizationId, moduleKey);
-    usedAnchors.push([moduleKey, page.rootId, page.anchorReleaseRevision]);
-  }
-  // A draft that does not use the people directory yet still names its current release, so
-  // Studio can offer a Person link that adds the use.
-  const directoryPage = applicationModuleKeys(source).includes(peopleDirectory.module)
-    ? undefined
-    : await overlay.readModuleReleasePage(candidate.draft.organizationId, peopleDirectory.module);
+  const usedKeys = applicationModuleKeys(source).filter((key) => !inlineKeys.has(key));
+  const needsDirectory = !applicationModuleKeys(source).includes(peopleDirectory.module);
+  const pages = await Promise.all(
+    [...usedKeys, ...(needsDirectory ? [peopleDirectory.module] : [])].map((moduleKey) =>
+      overlay.readModuleReleasePage(candidate.draft.organizationId, moduleKey),
+    ),
+  );
+  const usedAnchors = usedKeys.map((moduleKey, index) => [
+    moduleKey,
+    pages[index]!.rootId,
+    pages[index]!.anchorReleaseRevision,
+  ]);
+  // An unused directory's release still supplies the Person-link choice.
+  const directoryPage = needsDirectory ? pages[usedKeys.length] : undefined;
   const cacheKey = applicationDraftCompilationKey([
     candidate.draft.organizationId.toLowerCase(),
     candidate.draft.rootId.toLowerCase(),
@@ -461,7 +465,6 @@ export const createDefinitionPublicationService = (
           releaseRevision: root.currentReleaseRevision!,
         })),
       );
-      const publication: ApplicationDraftPublication = { recordTypes: [], fields: [] };
       const recordTypes: string[] = [];
       const fields: string[] = [];
       for (const [index, root] of released.entries()) {
@@ -472,7 +475,7 @@ export const createDefinitionPublicationService = (
           for (const field of record.fields) fields.push(`${root.key}:${record.key}.${field.key}`);
         }
       }
-      Object.assign(publication, { recordTypes, fields });
+      const publication: ApplicationDraftPublication = { recordTypes, fields };
       try {
         return {
           publication,

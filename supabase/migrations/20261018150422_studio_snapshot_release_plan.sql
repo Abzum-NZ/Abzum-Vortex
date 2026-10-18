@@ -2,6 +2,233 @@ set role vortex_owner;
 
 drop function vortex_definition.read_rehearsed_preview_releases(uuid, jsonb);
 
+create or replace function vortex_definition.read_module_release_page(
+  p_key text,
+  p_anchor_release_revision bigint,
+  p_after_release_revision bigint,
+  p_page_size integer
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  checked_context jsonb;
+  root_row vortex_definition.roots%rowtype;
+  anchor_revision bigint;
+  history_latest_release_revision bigint;
+  entries jsonb;
+  next_after bigint;
+begin
+  checked_context := vortex_definition.validated_builder_evidence_read_context_internal();
+  if p_key is null
+    or pg_catalog.char_length(p_key) not between 3 and 120
+    or p_key !~ '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*(?:\.[a-z][a-z0-9]*(?:_[a-z0-9]+)*)+$'
+    or p_key ~ '(^|\.)[^.]{41,}(\.|$)'
+    or p_page_size is null or p_page_size not between 1 and 100
+    or (p_anchor_release_revision is null and p_after_release_revision is not null)
+    or (p_anchor_release_revision is not null and
+      (p_anchor_release_revision not between 1 and 9007199254740991
+        or p_after_release_revision is null
+        or p_after_release_revision not between 1 and p_anchor_release_revision - 1)) then
+    raise exception using errcode = '22023',
+      message = 'Definition module release page selector is invalid';
+  end if;
+
+  select root.* into root_row
+  from vortex_definition.roots as root
+  where root.organization_id = (checked_context ->> 'organizationId')::uuid
+    and root.kind = 'module'
+    and root.key = p_key;
+
+  if not found or root_row.current_release_revision is null then
+    return pg_catalog.jsonb_build_object(
+      'rootId', null, 'anchorReleaseRevision', null,
+      'entries', '[]'::jsonb, 'nextAfterReleaseRevision', null
+    );
+  end if;
+
+  if p_anchor_release_revision is null then
+    anchor_revision := root_row.current_release_revision;
+    select release.release_revision into history_latest_release_revision
+    from vortex_definition.releases as release
+    where release.root_id = root_row.root_id
+    order by release.release_revision desc
+    limit 1;
+    if history_latest_release_revision is distinct from anchor_revision then
+      raise exception using errcode = '23514',
+        message = 'Definition root current release pointer does not match immutable release history';
+    end if;
+  else
+    anchor_revision := p_anchor_release_revision;
+    if root_row.current_release_revision < anchor_revision
+      or not exists (
+        select 1 from vortex_definition.releases as release
+        where release.root_id = root_row.root_id
+          and release.release_revision = anchor_revision
+      ) then
+      raise exception using errcode = '40001',
+        message = 'Definition module release page anchor is unavailable';
+    end if;
+  end if;
+
+  with page as (
+    select release.*
+    from vortex_definition.releases as release
+    where release.root_id = root_row.root_id
+      and release.release_revision <= anchor_revision
+      and (p_after_release_revision is null or release.release_revision > p_after_release_revision)
+    order by release.release_revision asc
+    limit p_page_size
+  )
+  select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+    'previousReleaseRevision', (
+      select previous.release_revision
+      from vortex_definition.releases as previous
+      where previous.root_id = release.root_id
+        and previous.release_revision < release.release_revision
+      order by previous.release_revision desc
+      limit 1
+    ),
+    'releaseRevision', release.release_revision
+  ) order by release.release_revision asc), '[]'::jsonb), max(release.release_revision)
+  into entries, next_after
+  from page as release;
+
+  return pg_catalog.jsonb_build_object(
+    'rootId', root_row.root_id,
+    'anchorReleaseRevision', anchor_revision,
+    'entries', entries,
+    'nextAfterReleaseRevision', case when next_after = anchor_revision then null else next_after end
+  );
+end
+$function$;
+
+revoke all on function vortex_definition.read_module_release_page(text, bigint, bigint, integer) from public, anon, authenticated, service_role, vortex_runtime;
+
+grant execute on function vortex_definition.read_module_release_page(text, bigint, bigint, integer) to vortex_request;
+
+comment on function vortex_definition.read_module_release_page(text, bigint, bigint, integer) is
+  'Returns one anchored bounded oldest-first page of same-organisation immutable Module release locators; exact definitions are read once per snapshot in batches.';
+
+alter function vortex_definition.read_module_release_page(p_key text, p_anchor_release_revision bigint, p_after_release_revision bigint, p_page_size integer) owner to vortex_owner;
+
+grant execute on function vortex_definition.read_module_release_page(p_key text, p_anchor_release_revision bigint, p_after_release_revision bigint, p_page_size integer) to postgres;
+
+create or replace function vortex_definition.read_module_release(
+  p_root_id uuid,
+  p_release_revision bigint
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  checked_context jsonb;
+  context_organization_id uuid;
+  root_row vortex_definition.roots%rowtype;
+  release_row vortex_definition.releases%rowtype;
+begin
+  checked_context := vortex_definition.validated_builder_evidence_read_context_internal();
+  context_organization_id := (checked_context ->> 'organizationId')::uuid;
+
+  if p_root_id is null
+    or p_root_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_release_revision is null
+    or p_release_revision not between 1 and 9007199254740991 then
+    raise exception using
+      errcode = '22023',
+      message = 'Definition module release read requires a root and release revision';
+  end if;
+
+  select root.* into root_row
+  from vortex_definition.roots as root
+  where root.root_id = p_root_id;
+
+  if not found then
+    return null;
+  end if;
+
+  if root_row.organization_id <> context_organization_id then
+    raise exception using
+      errcode = '42501',
+      message = 'Definition root does not belong to the context organization';
+  end if;
+
+  if root_row.kind <> 'module' then
+    return null;
+  end if;
+
+  select release.* into release_row
+  from vortex_definition.releases as release
+  where release.root_id = p_root_id
+    and release.release_revision = p_release_revision;
+
+  if not found then
+    return null;
+  end if;
+
+  return pg_catalog.jsonb_build_object(
+    'organizationId', root_row.organization_id,
+    'key', root_row.key,
+    'rootId', release_row.root_id,
+    'releaseRevision', release_row.release_revision,
+    'releaseVersion', release_row.release_version,
+    'contentFingerprint', release_row.content_fingerprint,
+    'resolutionFingerprint', release_row.resolution_fingerprint,
+    'authoredSource', release_row.authored_source,
+    'authoredSourceFingerprint', release_row.authored_source_fingerprint,
+    'sourceContractVersion', release_row.source_contract_version,
+    'compilationOutput', release_row.compilation_output,
+    'resolutionSnapshot', release_row.resolution_snapshot,
+    'identities', coalesce(release_row.resolution_snapshot -> 'identities', '[]'::jsonb),
+    'published', pg_catalog.jsonb_build_object(
+      'publication', pg_catalog.jsonb_build_object(
+        'kind', 'module', 'rootId', release_row.root_id,
+        'revision', release_row.release_revision, 'releaseVersion', release_row.release_version,
+        'contentFingerprint', release_row.content_fingerprint,
+        'publishedAt', release_row.published_at, 'publishedBy', release_row.published_by,
+        'validationContractVersion', release_row.validation_contract_version
+      ),
+      'content', release_row.compilation_output -> 'canonical' -> 'content',
+      'dependencyManifest', coalesce((
+        select pg_catalog.jsonb_agg(
+          pg_catalog.jsonb_build_object(
+            'kind', 'module', 'rootId', target.root_id,
+            'revision', target.release_revision, 'releaseVersion', target.release_version,
+            'contentFingerprint', target.content_fingerprint,
+            'publishedAt', target.published_at, 'publishedBy', target.published_by,
+            'validationContractVersion', target.validation_contract_version
+          ) order by target.root_id, target.release_revision
+        ) from vortex_definition.release_dependencies as dependency
+        join vortex_definition.releases as target
+          on target.root_id = dependency.target_root_id
+          and target.release_revision = dependency.target_release_revision
+        where dependency.root_id = release_row.root_id
+          and dependency.release_revision = release_row.release_revision
+          and dependency.dependency_kind = 'module'
+      ), '[]'::jsonb),
+      'releaseNote', release_row.release_note
+    )
+  );
+end
+$function$;
+
+revoke execute on function vortex_definition.read_module_release(uuid, bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+grant execute on function vortex_definition.read_module_release(uuid, bigint) to vortex_request;
+
+comment on function vortex_definition.read_module_release(uuid, bigint) is
+  'Reads one exact same-organisation immutable Module release and its stored compilation and resolution evidence.';
+
+alter function vortex_definition.read_module_release(p_root_id uuid, p_release_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_definition.read_module_release(p_root_id uuid, p_release_revision bigint) to postgres;
+
 create or replace function vortex_definition.assert_preview_releases_internal(
   p_organization_id uuid,
   p_application_root_id uuid,
