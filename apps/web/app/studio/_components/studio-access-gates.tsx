@@ -124,87 +124,95 @@ export function StudioAccessPageGates({
         A page opens for people who hold its permission, and a menu entry shows for people who hold
         its own. Give the permission to roles in each role&apos;s page.
       </p>
-      <Table
-        containerClassName="rounded-xl overflow-hidden"
-        className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:normal-case [&_th]:tracking-normal [&_th]:text-foreground"
-        aria-label="Who opens each page"
-      >
-        <TableHeader>
-          <TableRow>
-            <TableHead>Page</TableHead>
-            <TableHead>Opens for people who hold</TableHead>
-            <TableHead>Its menu entries show for</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {source.body.pages.map((page) => {
-            const own = entries.filter((entry) => entry.type === "page" && entry.page === page.key);
-            return (
-              <TableRow key={page.id}>
-                <TableCell className="align-top font-medium">{page.name}</TableCell>
-                <TableCell className="align-top">
-                  <GateSelect
-                    source={source}
-                    value={page.permission}
-                    label={`Who can open ${page.name}`}
-                    disabled={disabled}
-                    onGate={(gate) => run({ kind: "set_page_gate", pageAlias: page.id, gate })}
-                  />
-                </TableCell>
-                <TableCell className="align-top">
-                  {own.length === 0 ? (
-                    <span className="text-sm text-muted-foreground">Not in the menu</span>
-                  ) : (
-                    <div className="space-y-2">
-                      {own.map((entry) => (
-                        <div key={entry.id} className="space-y-1">
-                          <p className="text-sm text-muted-foreground">{entry.label}</p>
-                          <GateSelect
-                            source={source}
-                            value={entry.permission}
-                            label={`Who sees the menu entry ${entry.label}`}
-                            disabled={disabled}
-                            onGate={(gate) => run({ kind: "set_menu_gate", alias: entry.id, gate })}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-      {external.length > 0 && (
+      <div className="overflow-hidden rounded-xl border">
         <Table
-          containerClassName="rounded-xl overflow-hidden"
+          containerClassName="border-0"
           className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:normal-case [&_th]:tracking-normal [&_th]:text-foreground"
-          aria-label="Who sees each link"
+          aria-label="Who opens each page"
         >
           <TableHeader>
             <TableRow>
-              <TableHead>Menu link</TableHead>
-              <TableHead>Shows for people who hold</TableHead>
+              <TableHead>Page</TableHead>
+              <TableHead>Opens for people who hold</TableHead>
+              <TableHead>Its menu entries show for</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {external.map((entry) => (
-              <TableRow key={entry.id}>
-                <TableCell className="font-medium">{entry.label}</TableCell>
-                <TableCell>
-                  <GateSelect
-                    source={source}
-                    value={entry.permission}
-                    label={`Who sees the link ${entry.label}`}
-                    disabled={disabled}
-                    onGate={(gate) => run({ kind: "set_menu_gate", alias: entry.id, gate })}
-                  />
-                </TableCell>
-              </TableRow>
-            ))}
+            {source.body.pages.map((page) => {
+              const own = entries.filter(
+                (entry) => entry.type === "page" && entry.page === page.key,
+              );
+              return (
+                <TableRow key={page.id}>
+                  <TableCell className="align-top font-medium">{page.name}</TableCell>
+                  <TableCell className="align-top">
+                    <GateSelect
+                      source={source}
+                      value={page.permission}
+                      label={`Who can open ${page.name}`}
+                      disabled={disabled}
+                      onGate={(gate) => run({ kind: "set_page_gate", pageAlias: page.id, gate })}
+                    />
+                  </TableCell>
+                  <TableCell className="align-top">
+                    {own.length === 0 ? (
+                      <span className="text-sm text-muted-foreground">Not in the menu</span>
+                    ) : (
+                      <div className="space-y-2">
+                        {own.map((entry) => (
+                          <div key={entry.id} className="space-y-1">
+                            <p className="text-sm text-muted-foreground">{entry.label}</p>
+                            <GateSelect
+                              source={source}
+                              value={entry.permission}
+                              label={`Who sees the menu entry ${entry.label}`}
+                              disabled={disabled}
+                              onGate={(gate) =>
+                                run({ kind: "set_menu_gate", alias: entry.id, gate })
+                              }
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
+      </div>
+      {external.length > 0 && (
+        <div className="overflow-hidden rounded-xl border">
+          <Table
+            containerClassName="border-0"
+            className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:normal-case [&_th]:tracking-normal [&_th]:text-foreground"
+            aria-label="Who sees each link"
+          >
+            <TableHeader>
+              <TableRow>
+                <TableHead>Menu link</TableHead>
+                <TableHead>Shows for people who hold</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {external.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell className="font-medium">{entry.label}</TableCell>
+                  <TableCell>
+                    <GateSelect
+                      source={source}
+                      value={entry.permission}
+                      label={`Who sees the link ${entry.label}`}
+                      disabled={disabled}
+                      onGate={(gate) => run({ kind: "set_menu_gate", alias: entry.id, gate })}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
     </section>
   );
@@ -257,73 +265,75 @@ export function StudioAccessPermissionList({
           Add permission
         </Button>
       </form>
-      <Table
-        containerClassName="rounded-xl overflow-hidden"
-        className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:normal-case [&_th]:tracking-normal [&_th]:text-foreground"
-        aria-label="Permissions of the application"
-      >
-        <TableHeader>
-          <TableRow>
-            <TableHead>Permission</TableHead>
-            <TableHead>Belongs to</TableHead>
-            <TableHead>Held by</TableHead>
-            <TableHead />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {permissions.map((permission) => {
-            const roles = source.body.roles
-              .filter((role) => role.permissions.includes(permission.key))
-              .map((role) => role.name);
-            return (
-              <TableRow key={permission.key}>
-                <TableCell>
-                  <span className="font-medium">{permission.label}</span>
-                  <span className="block text-sm text-muted-foreground">
-                    {permission.description}
-                  </span>
-                  <StudioUsedIn
-                    source={source}
-                    target={{ kind: "permission", permissionKey: permission.key }}
-                    name={permission.label}
-                    collapsed
-                  />
-                </TableCell>
-                <TableCell className="text-sm">
-                  {owner(permission.moduleKey, permission.recordKey)}
-                </TableCell>
-                <TableCell className="text-sm">
-                  {roles.length === 0 ? (
-                    <span className="text-muted-foreground">No role</span>
-                  ) : (
-                    roles.join(", ")
-                  )}
-                </TableCell>
-                <TableCell className="text-right">
-                  {permission.standard ? (
-                    <span className="text-sm text-muted-foreground">
-                      Comes with its record type
+      <div className="overflow-hidden rounded-xl border">
+        <Table
+          containerClassName="border-0"
+          className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:normal-case [&_th]:tracking-normal [&_th]:text-foreground"
+          aria-label="Permissions of the application"
+        >
+          <TableHeader>
+            <TableRow>
+              <TableHead>Permission</TableHead>
+              <TableHead>Belongs to</TableHead>
+              <TableHead>Held by</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {permissions.map((permission) => {
+              const roles = source.body.roles
+                .filter((role) => role.permissions.includes(permission.key))
+                .map((role) => role.name);
+              return (
+                <TableRow key={permission.key}>
+                  <TableCell>
+                    <span className="font-medium">{permission.label}</span>
+                    <span className="block text-sm text-muted-foreground">
+                      {permission.description}
                     </span>
-                  ) : (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      disabled={disabled}
-                      aria-label={`Remove ${permission.label}`}
-                      onClick={() =>
-                        run({ kind: "remove_permission", permissionKey: permission.key })
-                      }
-                    >
-                      Remove
-                    </Button>
-                  )}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+                    <StudioUsedIn
+                      source={source}
+                      target={{ kind: "permission", permissionKey: permission.key }}
+                      name={permission.label}
+                      collapsed
+                    />
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {owner(permission.moduleKey, permission.recordKey)}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {roles.length === 0 ? (
+                      <span className="text-muted-foreground">No role</span>
+                    ) : (
+                      roles.join(", ")
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {permission.standard ? (
+                      <span className="text-sm text-muted-foreground">
+                        Comes with its record type
+                      </span>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={disabled}
+                        aria-label={`Remove ${permission.label}`}
+                        onClick={() =>
+                          run({ kind: "remove_permission", permissionKey: permission.key })
+                        }
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
     </section>
   );
 }

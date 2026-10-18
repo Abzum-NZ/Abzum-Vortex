@@ -346,7 +346,7 @@ export function StudioThemePanel({
                 locked && "cursor-not-allowed opacity-50",
               )}
             >
-              <RadioGroupItem value={option.id} aria-label={option.label} className="sr-only" />
+              <RadioGroupItem value={option.id} className="sr-only" />
               <div
                 aria-hidden="true"
                 className="space-y-2 rounded-md bg-muted/50 p-2 text-foreground"

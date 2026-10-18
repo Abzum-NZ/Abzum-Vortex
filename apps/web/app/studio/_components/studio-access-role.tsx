@@ -263,15 +263,16 @@ export function StudioAccessRoleEditor({
           </div>
         ) : (
           <h2 className="text-xl font-semibold tracking-tight">
-            <button
+            <Button
               type="button"
-              className="rounded-md text-left focus-visible:outline-2 focus-visible:outline-ring"
+              variant="ghost"
+              className="text-xl font-semibold tracking-tight"
               disabled={disabled}
               aria-label={`Rename ${role.name}`}
               onClick={() => setEditingName(true)}
             >
               {role.name}
-            </button>
+            </Button>
           </h2>
         )}
         <div className="flex items-center gap-2">
@@ -410,9 +411,11 @@ export function StudioAccessRoleEditor({
                               {row.more.length === 0 ? (
                                 row.name
                               ) : (
-                                <button
+                                <Button
                                   type="button"
-                                  className="flex min-h-8 items-center gap-2 rounded-md text-left focus-visible:outline-2 focus-visible:outline-ring"
+                                  variant="ghost"
+                                  size="xs"
+                                  className="justify-start text-sm font-medium"
                                   aria-expanded={expanded.has(id)}
                                   aria-controls={`extra-${row.moduleKey}-${row.recordKey}`}
                                   aria-label={`Extra permissions for ${row.name}`}
@@ -430,7 +433,7 @@ export function StudioAccessRoleEditor({
                                     className="size-4"
                                   />
                                   {row.name}
-                                </button>
+                                </Button>
                               )}
                             </TableCell>
                             {studioAccessColumns.map((column) => (
@@ -456,7 +459,8 @@ export function StudioAccessRoleEditor({
                                       render={
                                         <Button
                                           type="button"
-                                          size="sm"
+                                          size="xs"
+                                          className="text-sm"
                                           variant="ghost"
                                           aria-label={`${role.name} can ${column.kind} ${row.name}: choose permissions`}
                                         />
@@ -513,7 +517,8 @@ export function StudioAccessRoleEditor({
                             <TableCell>
                               <Button
                                 type="button"
-                                size="sm"
+                                size="xs"
+                                className="text-sm"
                                 variant="link"
                                 aria-haspopup="dialog"
                                 aria-label={`Fields of ${row.name}`}
@@ -604,44 +609,46 @@ export function StudioAccessRoleEditor({
 
           {menuEntries.length > 0 && (
             <Section title="Menu" description="Which menu entries this role can see.">
-              <Table
-                aria-label="Menu access"
-                containerClassName="rounded-xl overflow-hidden"
-                className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:normal-case [&_th]:tracking-normal [&_th]:text-foreground"
-              >
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Menu entry</TableHead>
-                    <TableHead>Shows with</TableHead>
-                    <TableHead className="w-20 text-center">Can see</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {menuEntries.map((entry) => (
-                    <TableRow key={entry.id}>
-                      <TableCell className="font-medium">{entry.label}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {labelOf(entry.permission)}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Switch
-                          aria-label={`${role.name} can see the menu entry ${entry.label}`}
-                          checked={studioRoleHolds(role, entry.permission) === true}
-                          disabled={disabled}
-                          onCheckedChange={(granted) =>
-                            run({
-                              kind: "grant",
-                              roleKey: role.key,
-                              permissionKey: entry.permission,
-                              granted,
-                            })
-                          }
-                        />
-                      </TableCell>
+              <div className="overflow-hidden rounded-xl border">
+                <Table
+                  aria-label="Menu access"
+                  containerClassName="border-0"
+                  className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:normal-case [&_th]:tracking-normal [&_th]:text-foreground"
+                >
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Menu entry</TableHead>
+                      <TableHead>Shows with</TableHead>
+                      <TableHead className="w-20 text-center">Can see</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {menuEntries.map((entry) => (
+                      <TableRow key={entry.id}>
+                        <TableCell className="font-medium">{entry.label}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {labelOf(entry.permission)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Switch
+                            aria-label={`${role.name} can see the menu entry ${entry.label}`}
+                            checked={studioRoleHolds(role, entry.permission) === true}
+                            disabled={disabled}
+                            onCheckedChange={(granted) =>
+                              run({
+                                kind: "grant",
+                                roleKey: role.key,
+                                permissionKey: entry.permission,
+                                granted,
+                              })
+                            }
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </Section>
           )}
 
