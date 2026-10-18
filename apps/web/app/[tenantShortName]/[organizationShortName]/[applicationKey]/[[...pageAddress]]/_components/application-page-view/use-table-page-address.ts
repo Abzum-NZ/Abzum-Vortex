@@ -25,13 +25,18 @@ const addressKeys = (entries: Entries): Map<string, string> => {
 
 const searchEntries = (search: string): Entries => [...new URLSearchParams(search)];
 
+/** A query change the address effect has not yet turned into a read. */
+const CHANGED = Symbol("changed");
+
 /**
  * Keeps each table's query state (sort, filters, search, visible columns and page) in the address
  * without a server render. A person's change adds a history entry (shallow), and an address whose
  * state for a table differs from the state the shown data was read for (the change itself, Back,
  * Forward) rereads only that table once, under the viewer's current access. A change that reshapes
  * the query also starts the table at page one and clears its selection; the placement reread's own
- * request generation discards any response that lands for an earlier state.
+ * request generation discards any response that lands for an earlier state. From the change until
+ * its read lands the table is pending: the page it still shows was read for the earlier state, so
+ * its continuation tokens must not start a read.
  */
 export function useTablePageAddress({
   model,
@@ -54,6 +59,12 @@ export function useTablePageAddress({
   });
   if (shownRef.current.owner !== model)
     shownRef.current = { owner: model, keys: addressKeys(Object.entries(model.tableAddress)) };
+  // Tables whose shown page no longer matches the address, by lower-cased placement.
+  const pendingRef = useRef(new Map<string, symbol>());
+  const tableQueryPending = useCallback(
+    (placementId: string): boolean => pendingRef.current.has(placementId.toLowerCase()),
+    [],
+  );
 
   const push = (parameters: URLSearchParams): void => {
     const query = parameters.toString();
@@ -100,6 +111,7 @@ export function useTablePageAddress({
       const before = recordsTableAddressKey(placementId, [...parameters]);
       applyRecordsTableQueryChange(parameters, placementId, change);
       if (recordsTableAddressKey(placementId, [...parameters]) === before) return;
+      pendingRef.current.set(placementId.toLowerCase(), CHANGED);
       clearSelection(placementId);
       push(parameters);
     },
@@ -112,15 +124,24 @@ export function useTablePageAddress({
     const current = addressKeys(entries);
     for (const placement of new Set([...current.keys(), ...shown.keys()])) {
       const key = current.get(placement);
-      if ((shown.get(placement) ?? "") === (key ?? "")) continue;
+      const pending = pendingRef.current;
+      if ((shown.get(placement) ?? "") === (key ?? "")) {
+        if (pending.get(placement) === CHANGED) pending.delete(placement);
+        continue;
+      }
       if (key === undefined) shown.delete(placement);
       else shown.set(placement, key);
       const placementId = Object.keys(model.data).find(
         (candidate) => candidate.toLowerCase() === placement,
       );
-      if (placementId === undefined) continue;
+      if (placementId === undefined) {
+        pending.delete(placement);
+        continue;
+      }
       clearSelection(placementId);
       const state = readRecordsTableQueryState(placementId, entries);
+      const read = Symbol(placement);
+      pending.set(placement, read);
       void refreshPlacements([placementId], {
         placementId,
         fromAddress: true,
@@ -129,9 +150,11 @@ export function useTablePageAddress({
             page: 1,
             pageDirection: "forward",
           },
+      }).finally(() => {
+        if (pending.get(placement) === read) pending.delete(placement);
       });
     }
   }, [clearSelection, currentSearch, model.data, refreshPlacements]);
 
-  return { commitTablePage, changeTableQuery };
+  return { commitTablePage, changeTableQuery, tableQueryPending };
 }

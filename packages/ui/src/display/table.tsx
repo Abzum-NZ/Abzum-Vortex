@@ -34,26 +34,19 @@ import type { DisplayCellValue, DisplayColumn, DisplayRow, TablePayload } from "
 type RenderedColumn = Readonly<{
   key: string;
   label: string;
-  declared: RecordsTableColumnContract | undefined;
+  declared: RecordsTableColumnContract;
 }>;
 
 /**
- * The columns to render. A placement that declares a data contract shows its declared columns in
- * declared order, but only those the permission projection supplies: a column whose field the
- * viewer cannot read is withheld from the projection and never rendered, not even as a heading.
- * The projected column supplies the label a declared column left unset. A placement without a
- * contract renders the projected columns as before.
+ * The columns to render: the declared columns in declared order, but only those the permission
+ * projection supplies. A column whose field the viewer cannot read is withheld from the projection
+ * and never rendered, not even as a heading. The projected column supplies the label a declared
+ * column left unset.
  */
 const renderedColumns = (
-  contract: RecordsTableContract | undefined,
+  contract: RecordsTableContract,
   projected: readonly DisplayColumn[],
 ): readonly RenderedColumn[] => {
-  if (contract === undefined)
-    return projected.map((column) => ({
-      key: column.key,
-      label: column.label,
-      declared: undefined,
-    }));
   const labels = new Map(projected.map((column) => [column.key, column.label]));
   return contract.columns.flatMap((column): RenderedColumn[] => {
     const projectedLabel = labels.get(column.field);
@@ -71,13 +64,11 @@ const columnAttributes = (
   "data-vortex-column-priority"?: string;
   style?: { textAlign: "start" | "center" | "end" };
 } =>
-  column.declared === undefined
-    ? {}
-    : {
-        "data-vortex-column-width": column.declared.width,
-        "data-vortex-column-priority": column.declared.priority,
-        style: { textAlign: column.declared.alignment },
-      };
+  ({
+    "data-vortex-column-width": column.declared.width,
+    "data-vortex-column-priority": column.declared.priority,
+    style: { textAlign: column.declared.alignment },
+  });
 
 /**
  * Declared column priority as a responsive utility: a low priority column hides first on a narrow
@@ -87,7 +78,7 @@ const columnAttributes = (
  */
 const priorityClass = (column: RenderedColumn, first: boolean): string | undefined => {
   if (first) return undefined;
-  switch (column.declared?.priority) {
+  switch (column.declared.priority) {
     case "low":
       return "max-lg:hidden";
     case "medium":
@@ -102,8 +93,8 @@ const sameFieldKey = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
 /** The filter control kind for a declared filterable field, from the column it is declared with. */
-const filterInputKind = (declared: RecordsTableColumnContract | undefined): FilterInputKind => {
-  switch (declared?.format) {
+const filterInputKind = (declared: RecordsTableColumnContract): FilterInputKind => {
+  switch (declared.format) {
     case "number":
     case "currency":
     case "percent":
@@ -154,15 +145,18 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     (table) => table.rows.length === 0,
     "No records to show",
   );
+  // Publication refuses a Records table without its contract, so a missing one is a definition
+  // error: it renders the error state below, never a second way of choosing columns or controls.
   const contract = readRecordsTableContract(props.settings);
-  const columns = values === undefined ? [] : renderedColumns(contract, values.columns);
+  const columns =
+    values === undefined || contract === undefined ? [] : renderedColumns(contract, values.columns);
   const rows = values?.rows ?? [];
   const sortable = (column: RenderedColumn): boolean =>
-    contract === undefined ||
-    contract.sortableFields.some((field) => sameFieldKey(field, column.key));
+    contract?.sortableFields.some((field) => sameFieldKey(field, column.key)) === true;
   const sortKeys = values?.sort?.keys ?? [];
   const selectionMode = contract?.selectionMode ?? "none";
-  const selectable = events?.selection_changed !== undefined && contract?.selectionMode !== "none";
+  const selectable =
+    events?.selection_changed !== undefined && contract !== undefined && selectionMode !== "none";
 
   // Filter controls and the search box report their declared data events; sorting already does the
   // same. The host sends each to the Query engine and returns a new page, so the component never
@@ -235,6 +229,22 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   // and unavailable states of this placement.
   const revealed = useLoadingReveal(state.status === "loading");
   const rowsRef = useRowEntrance<HTMLDivElement>(pageRecordIds, "tbody > tr");
+  if (contract === undefined) {
+    console.error("[display] Records table settings do not declare a readable contract", {
+      placementId,
+    });
+    return (
+      <DisplayStateContainer
+        accessibleName={accessibleName}
+        availability={availability}
+        projectedData={{ status: "error" }}
+        emptyMessage={emptyMessage}
+        {...(errorMessage === undefined ? {} : { errorMessage })}
+      >
+        {null}
+      </DisplayStateContainer>
+    );
+  }
   if (state.status === "loading")
     return (
       <TableLoadingState

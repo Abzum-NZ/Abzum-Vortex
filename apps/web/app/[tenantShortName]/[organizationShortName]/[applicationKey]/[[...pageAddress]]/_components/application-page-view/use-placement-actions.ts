@@ -42,6 +42,7 @@ export function usePlacementActions({
   router,
   tableContinuationScopeRef,
   commitTablePage,
+  tableQueryPending,
 }: Readonly<{
   applyDispatch: (
     dispatch: Promise<FlowDispatchResult | undefined>,
@@ -71,6 +72,7 @@ export function usePlacementActions({
   router: ReturnType<typeof useRouter>;
   tableContinuationScopeRef: RefObject<{ scopeKey: string; inFlight: Set<string> }>;
   commitTablePage: (placementId: string, request: RecordsTablePageRequest) => void;
+  tableQueryPending: (placementId: string) => boolean;
 }>) {
   /**
    * Runs the flow bound to a display or action event through the same runtime as a form gesture.
@@ -288,7 +290,9 @@ export function usePlacementActions({
       )
         return;
       const parsedId = containedComponentIdSchema.safeParse(placementId);
-      if (!parsedId.success) return;
+      // The shown page was read for an earlier sort, filter, search or column state: its tokens
+      // belong to that state, so a page move waits for the new state's page.
+      if (!parsedId.success || tableQueryPending(parsedId.data)) return;
 
       const scopeKey = `${navigationKey}\u0000${searchWithoutRecordsTableState(currentSearch)}`;
       let scope = tableContinuationScopeRef.current;
@@ -329,15 +333,15 @@ export function usePlacementActions({
           pageDirection: direction === "previous" || direction === "last" ? "backward" : "forward",
           ...(continuationToken === undefined ? {} : { continuationToken }),
         };
-        // One deliberate read of the requested page under the viewer's current access: no page is
-        // read ahead, and none is replayed from an earlier read.
+        // One read of the requested page under the viewer's current access; only a Next whose page
+        // was read ahead for this same state uses that read, and no page is replayed.
         commitTablePage(parsedId.data, request);
         await refreshPlacements([parsedId.data], { placementId: parsedId.data, request });
       } finally {
         scope.inFlight.delete(requestKey);
       }
     },
-    [busy, commitTablePage, currentSearch, navigationKey, refreshPlacements],
+    [busy, commitTablePage, currentSearch, navigationKey, refreshPlacements, tableQueryPending],
   );
 
   return { runBinding, continueBoardColumn, continueTablePage };

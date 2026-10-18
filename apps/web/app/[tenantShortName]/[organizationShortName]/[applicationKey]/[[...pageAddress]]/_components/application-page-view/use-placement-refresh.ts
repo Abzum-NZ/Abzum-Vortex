@@ -25,6 +25,7 @@ import {
   readMountedRecordPinMemberships,
 } from "../../../../../../_lib/mounted-record-pin-watch-client";
 import type { RefreshedPlacementData, TableContinuationTarget, EditFormBaseline } from "./types";
+import type { TableNextPage } from "./use-table-next-page";
 
 const subscribeToNothing = (): (() => void) => () => undefined;
 const afterHydration = (): boolean => true;
@@ -43,6 +44,7 @@ export function usePlacementRefresh({
   setDialogChoicePages,
   setRefreshedPlacementData,
   refreshedPlacementData,
+  nextPage,
 }: Readonly<{
   currentPageKey: string | undefined;
   placementRequestsRef: RefObject<{
@@ -60,6 +62,7 @@ export function usePlacementRefresh({
   setDialogChoicePages: Dispatch<SetStateAction<Readonly<Record<string, ChoiceInputPayload>>>>;
   setRefreshedPlacementData: Dispatch<SetStateAction<RefreshedPlacementData | undefined>>;
   refreshedPlacementData: RefreshedPlacementData | undefined;
+  nextPage: TableNextPage;
 }>) {
   const refreshPlacements = useCallback(
     async (
@@ -77,6 +80,13 @@ export function usePlacementRefresh({
           placementIds[0]?.toLowerCase() !== tableContinuation.placementId.toLowerCase())
       )
         return;
+      // A Next click whose page was read ahead for the same full state uses that read; any other
+      // read of a table drops the page it held, so a held page is never shown after a change.
+      const heldNextPage =
+        tableContinuation === undefined || tableContinuation.fromAddress === true
+          ? undefined
+          : nextPage.take(tableContinuation.placementId, tableContinuation.request);
+      nextPage.drop(placementIds);
 
       const requests = new Map<string, ComponentRequestGeneration>();
       for (const placementId of new Set(placementIds)) {
@@ -150,8 +160,11 @@ export function usePlacementRefresh({
 
         let result: Awaited<ReturnType<typeof rereadApplicationPlacements>>;
         try {
-          // Every read, a page move included, is one placement read under the current access.
-          result = await rereadApplicationPlacements(
+          // Every read is one placement read under the current access; a matching held next page
+          // is the same read, made while the browser was idle.
+          result =
+            (heldNextPage === undefined ? undefined : await heldNextPage) ??
+            (await rereadApplicationPlacements(
               {
                 tenantShortName: application.tenantShortName,
                 organizationShortName: application.organizationShortName,
@@ -164,7 +177,7 @@ export function usePlacementRefresh({
               undefined,
               tableContinuation,
               options?.content,
-            );
+            ));
         } catch {
           result = { kind: "temporarily_unavailable" };
         }
@@ -313,6 +326,7 @@ export function usePlacementRefresh({
       model.data,
       model.editFormBaselines,
       navigationKey,
+      nextPage,
       router,
     ],
   );
