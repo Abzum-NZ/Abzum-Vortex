@@ -228,6 +228,8 @@ comment on function vortex_access.list_application_role_templates_projection(
   uuid[], text, text, jsonb, integer
 ) is 'Returns one keyset page of registered application role templates, defaulting to 40 rows and limited to 200 rows.';
 
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.run_module_query(
   p_module_root_id uuid,
   p_query_id uuid,
