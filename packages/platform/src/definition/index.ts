@@ -44,6 +44,11 @@ export {
 } from "./installation-first-install-member-role";
 export { classifyInstallationFailure } from "./installation-failure";
 export {
+  createApplicationStoreService,
+  type ApplicationStoreEnvironment,
+  type ApplicationStoreService,
+} from "./installation-application-store";
+export {
   activateUpgradeRelease,
   readUpgradeActiveObservation,
   readUpgradeAuthorizedState,

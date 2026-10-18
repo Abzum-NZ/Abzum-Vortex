@@ -644,12 +644,21 @@ const flowProvenance = (
 
 // ─── Entry point ───────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The record types a flow's record can be: those its record triggers name or, for an interactive
+ * flow, the one its record input names.
+ */
+const flowRecordTypes = (source: SourceFlow): string[] => [
+  ...source.triggers.flatMap((trigger) =>
+    trigger.type === "BeforeSave" || trigger.type === "Event" ? [trigger.recordTypeId] : [],
+  ),
+  ...(source.recordInput === undefined
+    ? []
+    : (source.inputs[source.recordInput]?.recordTypeIds ?? [])),
+];
+
 const triggerRecordType = (source: SourceFlow): string | undefined => {
-  const aliases = new Set(
-    source.triggers.flatMap((trigger) =>
-      trigger.type === "BeforeSave" || trigger.type === "Event" ? [trigger.recordTypeId] : [],
-    ),
-  );
+  const aliases = new Set(flowRecordTypes(source));
   return aliases.size === 1 ? [...aliases][0] : undefined;
 };
 
@@ -687,9 +696,7 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
     // Structure, run locations, typed references, outputs and error handling, in one pass. Run
     // flow is checked against its target's declared inputs and outputs, and a trigger record
     // field must exist on every record type the flow's record triggers name.
-    const recordTypes = source.triggers.flatMap((trigger) =>
-      trigger.type === "BeforeSave" || trigger.type === "Event" ? [trigger.recordTypeId] : [],
-    );
+    const recordTypes = flowRecordTypes(source);
     const invalid = validateFlow(source, {
       targetFlow,
       triggerRecordFieldExists: (field) =>

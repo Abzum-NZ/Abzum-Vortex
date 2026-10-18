@@ -17,7 +17,7 @@ const unary = (operator: unknown): boolean => operator === "is_empty" || operato
 const parameterTypes: Readonly<Record<string, StudioConditionParameterType>> = {
   text: "text", number: "number", decimal_number: "decimal_number", money: "money", boolean: "boolean",
   date: "date", date_time: "date_time", record_reference: "record_reference",
-  organisation_account_reference: "organization_account_reference",
+  organization_account_reference: "organization_account_reference",
 };
 
 /** A query's filter as the typed condition controls read it, or why they can't. */
@@ -67,7 +67,7 @@ export const readStudioQueryFilter = (filter: InlineQueryFilter | null, fieldIdO
   if (condition !== undefined) return { kind: "read", condition };
   return { kind: "unreadable", reason: missing === undefined
     ? "It is written in a form the filter controls do not edit."
-    : `It uses the field "${missing}", which is not in the saved draft. Save the draft to filter by a new field.` };
+    : `It uses the field "${missing}", which the compiled draft does not have yet. It can be edited in a moment, once Studio has saved and compiled the draft.` };
 };
 
 /**

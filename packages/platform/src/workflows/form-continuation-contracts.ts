@@ -116,8 +116,8 @@ export const formContinuationAnswerSchema = z.discriminatedUnion("kind", [
     .strict(),
   /** Cancel the form; the flow follows its declared not-submitted path. */
   z.object({ kind: z.literal("cancel") }).strict(),
-  /** Answer a confirmation. */
-  z.object({ kind: z.literal("confirm"), confirmed: z.boolean() }).strict(),
+  /** Answer a confirmation, with the person's opt-in when the confirmation offered one. */
+  z.object({ kind: z.literal("confirm"), confirmed: z.boolean(), choice: z.boolean().optional() }).strict(),
 ]);
 
 /** Asks the server to start a flow the person may run, which may pause at a form. */

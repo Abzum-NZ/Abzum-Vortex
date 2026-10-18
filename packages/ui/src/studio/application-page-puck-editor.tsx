@@ -30,18 +30,9 @@ import type { Breakpoint } from "../definition-error";
 
 export type { Breakpoint as StudioCanvasBreakpoint } from "../definition-error";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Button } from "../components/button";
 import { Label } from "../components/label";
 import { NativeSelect, NativeSelectOption } from "../components/native-select";
-import type { StudioApplicationTheme } from "./application-appearance";
-import {
-  clearPlacementThemeOverrides,
-  placementsWithThemeOverrides,
-  type StudioCompileFailure,
-  type StudioPlacementThemeFailure,
-  type StudioPlacementThemeOverrides,
-  type StudioPlacementThemeResult,
-} from "./placement-theme-overrides";
+import type { StudioCompileFailure } from "./compile-failure";
 import {
   StoredCompositionRefusal,
   storedItemRelease,
@@ -164,13 +155,6 @@ export type ApplicationPagePuckEditorProps = Readonly<{
   disabled: boolean;
   /** Why the saved draft would not compile; the page stays open so the cause can be corrected. */
   compileFailure?: StudioCompileFailure | null | undefined;
-  /** Judges placement theme overrides with the checks publication applies. */
-  validateThemeOverrides?: (
-    theme: StudioApplicationTheme,
-    placements: readonly StudioPlacementThemeOverrides[],
-  ) => Promise<StudioPlacementThemeResult>;
-  /** Reports whether any placement theme override is currently refused, so Save can wait. */
-  onThemeOverrideProblems?: (hasProblems: boolean) => void;
   onChange: (
     expectedSource: ApplicationSourceDocument,
     source: ApplicationSourceDocument,
@@ -308,8 +292,6 @@ function ApplicationPageSlotPuckEditor({
   at,
   disabled,
   compileFailure,
-  validateThemeOverrides,
-  onThemeOverrideProblems,
   onChange,
   selectedPlacementAlias,
   onSelectPlacement,
@@ -328,10 +310,10 @@ function ApplicationPageSlotPuckEditor({
   // The content renders inside the frame's outlet, exactly as a running page's content does.
   const config = useMemo(
     () => studioCanvasConfig(
-      contentConfigFor(getVortexPuckConfig(registry, fieldInputControlReleases, platformThemeTokens)),
+      contentConfigFor(getVortexPuckConfig(registry, fieldInputControlReleases)),
       registry,
     ),
-    [registry, fieldInputControlReleases, platformThemeTokens],
+    [registry, fieldInputControlReleases],
   );
   const compiledSlot = compiledSlots?.[at.key];
   const [message, setMessage] = useState("");
@@ -378,9 +360,12 @@ function ApplicationPageSlotPuckEditor({
   const shown = useMemo(() => data === undefined ? undefined
     : puckDataForBreakpoint(data, breakpoint, slot?.order), [data, breakpoint, slot]);
 
-  // The records of this area's data blocks, read for the saved revision the compiled version is.
-  const [recordsRead, setRecordsRead] = useState<StudioCanvasRecordsRead & { source?: ApplicationSourceDocument }>(
-    { state: "loading", records: {} });
+  // The records of this area's data blocks, read for the saved revision the compiled version is,
+  // with each data block's release, settings and query in that revision.
+  const savedKeys = useMemo(() => recordKeys(catalogue, originalSlot?.items ?? []), [catalogue, originalSlot]);
+  const [recordsRead, setRecordsRead] = useState<StudioCanvasRecordsRead & {
+    source?: ApplicationSourceDocument; keys?: ReadonlyMap<string, string>;
+  }>({ state: "loading", records: {} });
   // A preview still moving to this revision is read again shortly; the records shown meanwhile stay.
   const [followed, setFollowed] = useState<Readonly<{ source?: ApplicationSourceDocument; area?: string; count: number }>>({ count: 0 });
   const followUp = followed.source === compiledSource && followed.area === at.key ? followed.count : 0;
@@ -388,94 +373,33 @@ function ApplicationPageSlotPuckEditor({
     if (readRecords === undefined) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    if (followUp === 0) setRecordsRead({ state: "loading", records: {}, source: compiledSource });
     readRecords(at.key).then(
       (read) => {
         if (cancelled) return;
-        setRecordsRead({ ...read, source: compiledSource });
-        if (read.behind === true && followUp < 30)
+        const again = read.behind === true && followUp < 30;
+        // A read that failed for a moment is tried again, and what is shown meanwhile stays.
+        if (read.state !== "unavailable" || !again) setRecordsRead({ ...read, source: compiledSource, keys: savedKeys });
+        if (again)
           timer = setTimeout(() => setFollowed({ source: compiledSource, area: at.key, count: followUp + 1 }), 1500);
       },
       (error: unknown) => {
         console.error("[studio] the canvas records could not be read", error);
-        if (!cancelled) setRecordsRead({ state: "unavailable", records: {}, source: compiledSource });
+        if (!cancelled) setRecordsRead({ state: "unavailable", records: {}, source: compiledSource, keys: savedKeys });
       });
     return () => { cancelled = true; if (timer !== undefined) clearTimeout(timer); };
   }, [readRecords, compiledSource, at.key, followUp]);
+  // Records read for another saved revision are never shown as this one's, except while this
+  // revision's own read runs after a presentation edit: every data block is still exactly as it
+  // was read (same release, settings and query), so its records are the same.
+  const carried = recordsRead.source !== compiledSource && recordsRead.state === "ready" && recordsRead.keys !== undefined &&
+    [...savedKeys].every(([id, key]) => recordsRead.keys?.get(id) === key);
   const canvasRecords = useMemo((): StudioCanvasRecords => ({
-    // Records read for another saved revision are never shown as this one's.
-    ...(recordsRead.source === compiledSource ? recordsRead : { state: "loading", records: {} }),
-    saved: recordKeys(catalogue, originalSlot?.items ?? []),
+    ...(recordsRead.source === compiledSource || carried ? recordsRead : { state: "loading", records: {} }),
+    saved: savedKeys,
     current: recordKeys(catalogue, slot?.items ?? []),
     updating: updating === true,
-  }), [recordsRead, compiledSource, catalogue, originalSlot, slot, updating]);
+  }), [recordsRead, compiledSource, carried, catalogue, savedKeys, slot, updating]);
   const editable = !disabled && readOnlyCause === undefined && breakpoint === "desktop";
-
-  const [themeProblems, setThemeProblems] = useState<readonly StudioPlacementThemeFailure[]>([]);
-  const [themeCheckNote, setThemeCheckNote] = useState("");
-  const placementOverrides = useMemo(
-    () => (slot === undefined ? [] : placementsWithThemeOverrides(slot.items)),
-    [slot],
-  );
-  const themeCheckKey = JSON.stringify([source.body.theme, placementOverrides]);
-  useEffect(() => {
-    if (validateThemeOverrides === undefined) return;
-    if (placementOverrides.length === 0) {
-      setThemeProblems([]);
-      setThemeCheckNote("");
-      onThemeOverrideProblems?.(false);
-      return;
-    }
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      validateThemeOverrides(source.body.theme, placementOverrides).then(
-        (result) => {
-          if (cancelled) return;
-          const failures = result.kind === "available" ? result.failures : [];
-          setThemeProblems(failures);
-          setThemeCheckNote(
-            result.kind === "available"
-              ? ""
-              : "Theme overrides could not be checked now. They are checked again when the draft is opened.",
-          );
-          onThemeOverrideProblems?.(failures.length > 0);
-        },
-        (error: unknown) => {
-          console.error("Failed to check placement theme overrides", error);
-          if (cancelled) return;
-          setThemeProblems([]);
-          setThemeCheckNote("Theme overrides could not be checked now.");
-          onThemeOverrideProblems?.(false);
-        },
-      );
-    }, 400);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [themeCheckKey]);
-
-  useEffect(() => () => onThemeOverrideProblems?.(false), []);
-
-  const removeThemeOverrides = (alias: string) => {
-    try {
-      const current = sourceRef.current;
-      const next = structuredClone(current);
-      const nextPage = next.body.pages.find((item) => item.id === pageAlias);
-      const nextSlot = nextPage === undefined ? undefined : sourcePageSlotAt(nextPage, at);
-      if (nextSlot === undefined || !clearPlacementThemeOverrides(nextSlot.items, alias))
-        throw new TypeError("The block is not on this page content slot.");
-      const parsed = applicationSourceDocumentSchema.safeParse(next);
-      if (!parsed.success) throw parsed.error;
-      setMessage("");
-      onChange(current, parsed.data);
-    } catch (error: unknown) {
-      console.error("Failed to remove placement theme overrides", error);
-      setMessage(
-        "The theme overrides could not be removed. The saved draft and current edits are preserved.",
-      );
-    }
-  };
 
   // Every canvas change goes back through the definition: Puck's data is converted to the
   // authored content area, placed in the current draft and validated before the history takes it.
@@ -538,16 +462,13 @@ function ApplicationPageSlotPuckEditor({
   if (data === undefined || shown === undefined)
     return (
       <section className="space-y-3" aria-label="Page canvas">
-        {paletteNote("Blocks can be added once this page has a compiled version. Save the draft to compile it.")}
+        {paletteNote("Blocks can be added once this page has a compiled version, which follows shortly after your latest change is saved.")}
         <p role="status">
           This page needs a current compiled version before it can be arranged on the canvas.
         </p>
         {compileFailure === null || compileFailure === undefined ? null : (
           <CompileFailureNotice
             failure={compileFailure}
-            hasOverrides={placementOverrides.some((entry) => entry.alias === compileFailure.blockAlias)}
-            disabled={disabled}
-            onRemoveOverrides={removeThemeOverrides}
           />
         )}
         {message.length === 0 ? null : <p role="status">{message}</p>}
@@ -568,22 +489,6 @@ function ApplicationPageSlotPuckEditor({
         </p>
       </div>
       {message.length === 0 ? null : <p role="status">{message}</p>}
-      {themeCheckNote.length === 0 ? null : <p role="status">{themeCheckNote}</p>}
-      {themeProblems.length === 0 ? null : (
-        <div role="alert" className="space-y-1 text-sm text-destructive">
-          <p className="font-semibold">These theme overrides are refused and cannot be saved:</p>
-          <ul className="list-disc pl-5">
-            {themeProblems.map((problem, index) => (
-              <li key={index}>
-                Block {problem.alias}
-                {problem.tokenKey === undefined ? "" : `, ${tokenLabel(problem.tokenKey)}`}:{" "}
-                {problem.code.toLowerCase().replaceAll("_", " ")}. Change the colour or remove the
-                override.
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
       <div className="overflow-x-auto border border-border bg-muted/30 p-2">
         <div className="mx-auto overflow-hidden bg-background" style={{ width, maxWidth: "100%" }}>
           <StudioCanvasCompiledSettings settings={compiled.settings ?? {}}>
@@ -636,17 +541,7 @@ function ApplicationPageSlotPuckEditor({
 const tokenLabel = (key: string): string =>
   key.replace(/_/gu, " ").replace(/^./u, (first) => first.toUpperCase());
 
-function CompileFailureNotice({
-  failure,
-  hasOverrides,
-  disabled,
-  onRemoveOverrides,
-}: Readonly<{
-  failure: StudioCompileFailure;
-  hasOverrides: boolean;
-  disabled: boolean;
-  onRemoveOverrides: (alias: string) => void;
-}>) {
+function CompileFailureNotice({ failure }: Readonly<{ failure: StudioCompileFailure }>) {
   const alias = failure.blockAlias;
   return (
     <div role="alert" className="space-y-2 text-sm">
@@ -656,23 +551,6 @@ function CompileFailureNotice({
         {alias === undefined ? "" : `, block ${alias}`}
         {failure.tokenKey === undefined ? "" : `, ${tokenLabel(failure.tokenKey)}`}.
       </p>
-      {hasOverrides && alias !== undefined ? (
-        <>
-          <p>
-            Remove this block&apos;s theme overrides, save the draft and reload the page to open it
-            for visual editing again.
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={disabled}
-            onClick={() => onRemoveOverrides(alias)}
-          >
-            Remove theme overrides from {alias}
-          </Button>
-        </>
-      ) : null}
     </div>
   );
 }

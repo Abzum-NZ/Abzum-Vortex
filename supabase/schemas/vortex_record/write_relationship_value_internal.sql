@@ -159,7 +159,7 @@ begin
   );
 
   target_loaded := vortex_record.load_record_access_facts_internal(
-    target_type_id, 'read', target_record_id, null
+    target_type_id, 'read', target_record_id, null, null::jsonb
   );
   if target_loaded ->> 'outcome' <> 'loaded'
     or pg_catalog.jsonb_typeof(target_loaded -> 'declaration') <> 'object' then

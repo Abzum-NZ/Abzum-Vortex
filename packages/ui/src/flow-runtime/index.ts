@@ -24,6 +24,7 @@ export {
   readConfirmIntent,
   readFormIntent,
   readMessageIntent,
+  type FlowConfirmAnswer,
   type FlowConfirmIntent,
   type FlowFormAnswer,
   type FlowFormIntent,

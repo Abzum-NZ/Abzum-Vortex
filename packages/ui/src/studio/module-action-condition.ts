@@ -1,6 +1,6 @@
 import type { ApplicationSourceDocument, ConditionNode, InlineModuleActionPrecondition, JsonValue } from "@vortex/platform/schema";
 import type { StudioConditionControlsContext, StudioConditionParameterType } from "./condition-model";
-import { studioFieldValueType } from "./application-flow-values";
+import { studioFieldChoiceOptions, studioFieldValueType } from "./application-flow-values";
 
 /**
  * A named action's precondition in Studio's shared condition controls. The action stores its
@@ -28,8 +28,11 @@ const parameterType = (fieldType: string): StudioConditionParameterType => {
 
 /** The fields a precondition can compare, each as one operand named by the field's key. */
 export const studioActionConditionContext = (record: RecordType): StudioConditionControlsContext => ({
-  allowedOperands: record.fields.map((field) => ({ operand: { source: "parameter" as const, key: field.key },
-    label: field.label, role: "record_field" as const })),
+  allowedOperands: record.fields.map((field) => {
+    const options = studioFieldChoiceOptions(field);
+    return { operand: { source: "parameter" as const, key: field.key }, label: field.label, role: "record_field" as const,
+      ...(options === undefined ? {} : { options }) };
+  }),
   declaredFieldIds: [],
   parameterDeclarations: record.fields.map((field) => ({ key: field.key, type: parameterType(field.type) })),
   allowLiteralValues: true,

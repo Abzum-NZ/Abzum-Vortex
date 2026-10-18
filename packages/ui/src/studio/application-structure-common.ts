@@ -1,16 +1,15 @@
 import {
   applicationSourceDocumentSchema,
   type ApplicationSourceDocument,
+  type ApplicationUsePlace,
   type ImmutablePlatformBlockCatalogue,
   type SourceItem,
 } from "@vortex/platform/schema";
-import {
-  syncStoredBlockDependencies,
-  type StudioPlacementDescriber,
-  type StudioSemanticSelection,
-} from "@vortex/ui/studio";
-import { applyStudioMenuCommand } from "./application-menu";
-import { tokenName } from "./studio-labels";
+import { syncStoredBlockDependencies } from "./stored-composition";
+import type { StudioPlacementDescriber } from "./semantic-outline";
+import type { StudioSemanticSelection } from "./semantic-selection";
+import { applyStudioMenuCommand } from "./application-menu-commands";
+import { tokenName } from "./studio-words";
 
 /**
  * What every Structure edit shares: the draft it is applied to, how a refusal is raised and
@@ -27,7 +26,7 @@ export type StudioStructureResult =
   | Readonly<{ kind: "applied"; source: Source; message: string; select: StudioSemanticSelection | null;
       /** What the edit made, in plain words, one entry per thing; empty for a one-thing edit. */
       details: readonly string[] }>
-  | Readonly<{ kind: "refused"; message: string }>;
+  | Readonly<{ kind: "refused"; message: string; where?: readonly ApplicationUsePlace[] | undefined }>;
 
 export type StudioStructureContext = Readonly<{
   source: Source;
@@ -35,8 +34,12 @@ export type StudioStructureContext = Readonly<{
   describePlacement: StudioPlacementDescriber;
 }>;
 
-export class StructureRefusal extends Error {}
-export const refuse = (message: string): never => { throw new StructureRefusal(message); };
+export class StructureRefusal extends Error {
+  constructor(message: string, readonly where?: readonly ApplicationUsePlace[]) { super(message); }
+}
+export const refuse = (message: string, where?: readonly ApplicationUsePlace[]): never => {
+  throw new StructureRefusal(message, where);
+};
 
 export const quoted = (name: string) => `“${name}”`;
 const nameLimit = 60;
@@ -79,7 +82,6 @@ export const blockItem = (release: StructureRelease, id: string, settings: Recor
     vortex: {
       block: { block_id: String(release.blockId), release_version: String(release.releaseVersion) },
       ...vortex,
-      theme_overrides: {},
       responsive: { desktop: { visible: true, width: { kind: "fill" }, height: { kind: "content" } } },
     },
   },

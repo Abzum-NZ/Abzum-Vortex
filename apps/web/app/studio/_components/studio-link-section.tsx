@@ -73,7 +73,7 @@ export function StudioLinkSection({ settings, cardinality, label, recordName, re
     </dl>
     {linksPerson && <p role="note" className="text-sm text-muted-foreground">
       People come from the organisation&apos;s shared people directory.
-      {usesDirectory ? "" : " Applying also adds the directory to the modules this application uses."} Every role that can read
+      {usesDirectory ? "" : " The link also adds the directory to the modules this application uses."} Every role that can read
       {` ${recordPlural.toLowerCase()} `}can also read the names of the people they link to.</p>}
   </section>;
 }

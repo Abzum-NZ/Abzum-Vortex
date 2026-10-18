@@ -5,7 +5,6 @@ import { createContext, useContext, type ReactElement, type ReactNode } from "re
 import type { ComponentConfig, Config, Field } from "@puckeditor/core";
 import {
   canonicalResponsivePlacement,
-  canonicalThemeTokenValue,
   findFieldInputBinding,
   holdsPermission,
   placementViewShown,
@@ -101,7 +100,6 @@ type StoredBlock = Readonly<{ block_id?: unknown; release_version?: unknown }>;
 type StoredVortex = Readonly<{
   block?: StoredBlock;
   responsive?: Readonly<Record<string, unknown>>;
-  theme_overrides?: Readonly<Record<string, Record<string, unknown>>>;
 }>;
 
 /** The props one block's render function takes, read from a stored item's props. */
@@ -127,9 +125,6 @@ const renderProps = (
   }
   result.vortex = {
     block: { blockId: vortex.block?.block_id, releaseVersion: vortex.block?.release_version },
-    themeOverrides: Object.fromEntries(
-      Object.entries(vortex.theme_overrides ?? {}).map(([key, value]) => [key, canonicalThemeTokenValue(value)]),
-    ),
     responsive: vortex.responsive === undefined ? undefined : canonicalResponsivePlacement(vortex.responsive),
   };
   return result;

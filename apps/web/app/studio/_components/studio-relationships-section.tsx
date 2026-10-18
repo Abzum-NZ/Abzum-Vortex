@@ -6,9 +6,10 @@ import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "@vortex/ui/components/item";
 import {
   deleteInlineModuleField, inlineRecordTypeLinks, type ApplicationSourceDocument, type InlineRecordTypeLink,
-  type InlineRecordTypeReference, type ModuleFieldPublication,
+  type ApplicationUsePlace, type ModuleFieldPublication,
 } from "@vortex/platform/schema";
-import { StudioReferencesAlert } from "./studio-references-alert";
+import { StudioReferencesAlert } from "./studio-used-in";
+import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
 
 const deleteWords: Readonly<Record<InlineRecordTypeLink["onParentDelete"], string>> = {
   refuse: "deleting a linked record is refused",
@@ -26,7 +27,7 @@ const cardinalityWords = (link: InlineRecordTypeLink, plural: string): string =>
  * changed and deleted through its link field; deleting one that is in use is refused with where.
  */
 export function StudioRelationshipsSection({ source, moduleKey, recordKey, publication, disabled, targetLabel, adding,
-  onAdd, onEdit, onApply, onShow }: Readonly<{
+  onAdd, onEdit, edit }: Readonly<{
   source: ApplicationSourceDocument;
   moduleKey: string;
   recordKey: string;
@@ -39,12 +40,10 @@ export function StudioRelationshipsSection({ source, moduleKey, recordKey, publi
   onAdd: () => void;
   /** Opens the link field that declares a relationship. */
   onEdit: (moduleKey: string, recordKey: string, fieldKey: string) => void;
-  /** Applies the source without a relationship; false when the draft moved on meanwhile. */
-  onApply: (expected: ApplicationSourceDocument, next: ApplicationSourceDocument, message: string) => boolean;
-  onShow: (reference: InlineRecordTypeReference) => void;
+  edit: StudioDataEdit;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
-  const [refused, setRefused] = useState<Readonly<{ label: string; references: readonly InlineRecordTypeReference[] }> | null>(null);
+  const [refused, setRefused] = useState<Readonly<{ label: string; references: readonly ApplicationUsePlace[] }> | null>(null);
   const [refusals, setRefusals] = useState(0);
   const [issues, setIssues] = useState<readonly string[]>([]);
   const record = source.body.modules.find((module) => module.key === moduleKey)?.record_types.find((item) => item.key === recordKey);
@@ -62,8 +61,9 @@ export function StudioRelationshipsSection({ source, moduleKey, recordKey, publi
         "leaves the draft. It was never published, so no stored link is lost.",
       confirmLabel: "Delete relationship",
     })) return;
-    if (!onApply(source, result.source, `The relationship ${link.label} was deleted from the draft. Save to keep it.`))
-      setIssues(["The draft changed or is busy, so nothing was deleted. Try again in a moment."]);
+    const deleted = edit((current) => deleteInlineModuleField(current, moduleKey, recordKey, link.fieldKey, publication));
+    if (deleted.kind === "referenced") { setRefused({ label: link.label, references: deleted.references }); setRefusals((value) => value + 1); }
+    else { const problem = studioEditProblem(deleted); if (problem !== undefined) setIssues([problem]); }
   };
 
   return <section className="space-y-3 border-t border-border pt-3" aria-label="Relationships">
@@ -115,7 +115,7 @@ export function StudioRelationshipsSection({ source, moduleKey, recordKey, publi
       </Item>)}
     </ItemGroup>}
     {refused === null ? null : <StudioReferencesAlert key={refusals} name={`The relationship ${refused.label}`}
-      action="deleted" references={refused.references} onShow={onShow} />}
+      action="deleted" references={refused.references} />}
     {issues.length === 0 ? null : <ul role="alert" className="space-y-1 text-sm text-destructive">
       {issues.map((issue, index) => <li key={index} className="break-words">{issue}</li>)}</ul>}
     {confirmDialog}

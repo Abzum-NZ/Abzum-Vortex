@@ -91,7 +91,7 @@ export const applicationDefinitionConsumerReadResultSchema = z
     toolBundle: applicationToolBundleSchema,
     ...definitionConsumerReadResultCommon,
     validationContractVersion: z.literal("3.0.0"),
-    platformCompatibilityVersion: applicationPlatformCompatibilityVersionSchema.optional(),
+    platformCompatibilityVersion: applicationPlatformCompatibilityVersionSchema,
   })
   .strict()
   .superRefine((value, context) => {

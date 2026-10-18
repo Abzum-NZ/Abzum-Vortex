@@ -41,8 +41,8 @@ type Read = Readonly<{ request: string; result: StudioDataRecordsResult }>;
 const notReadable = (result: StudioDataRecordsResult, plural: string, query: boolean): string | undefined => {
   switch (result.kind) {
     case "available": case "summary": return undefined;
-    case "not_saved": return query ? "Save to see results. The saved draft does not have this query yet."
-      : "Save to see records. The saved draft does not have this yet.";
+    case "not_saved": return query ? "Results show once this query is saved, in a moment."
+      : "Records show once this is saved, in a moment.";
     case "conflict": return "The saved draft changed. Its records follow in a moment.";
     case "following": return "Your preview is catching up with the saved draft. Its records follow in a moment.";
     case "no_query": return `No list of ${plural.toLowerCase()} exists yet. Add a query that lists ${plural.toLowerCase()} to see their records here.`;
@@ -228,8 +228,8 @@ export function StudioDataCentre({ organizationId, rootId, modules, selection, u
     </section>
     {unsaved
       ? <p role="status" className="text-sm">{query === undefined
-        ? "Save to see records. This record type is not saved yet."
-        : "Save to see results. This query is not saved yet."}</p>
+        ? "Records show once this record type is saved, in a moment."
+        : "Results show once this query is saved, in a moment."}</p>
       : <PreviewResults organizationId={organizationId} rootId={rootId} moduleKey={module.key} recordKey={record.key} plural={record.pluralName}
         queryKey={query?.key} draftRevision={draftRevision} />}
   </div>;

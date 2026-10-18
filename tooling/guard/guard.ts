@@ -102,9 +102,26 @@ function violatesLayering(file: string, specifier: string): boolean {
         (target === "ui" && fileArea === "definitions")))
   );
 }
+// Platform system applications (IAM, the App Store and the other administration applications) are
+// part of the platform, which links to them; only business applications are kept out of engines.
+// Their source directories are the ones shipped-sources.ts registers as platform system applications.
+const shippedSources = read(`${paths.applicationSources}shipped-sources.ts`);
+const sourceDirectories = new Map(
+  [...shippedSources.matchAll(/import \{ (\w+) \} from "\.\/([\w-]+)";/g)].map(
+    ([, name, directory]) => [name, directory] as const,
+  ),
+);
+const systemApplicationFiles = new Set(
+  [...shippedSources.matchAll(/source: (\w+),\s*applicationOriginKind: "platform_system_application"/g)].map(
+    ([, name]) => `${paths.applicationSources}${sourceDirectories.get(name ?? "") ?? "?"}/application.json`,
+  ),
+);
 const names = new Set<string>();
 for (const file of files.filter(
-  (file) => file.startsWith(paths.applicationSources) && /\/application\.json$/.test(file),
+  (file) =>
+    file.startsWith(paths.applicationSources) &&
+    /\/application\.json$/.test(file) &&
+    !systemApplicationFiles.has(file),
 )) {
   const source = JSON.parse(read(file)) as { key?: string; body?: { name?: string } };
   if (source.key) names.add(source.key);
@@ -631,6 +648,9 @@ for (const file of migrationFiles) {
   }
 }
 const canonicalFunctions = new Set<string>();
+// One name has one signature: two forms of a name make Postgres resolve a call by argument types, so
+// no single call shape names the function, and a drop must be repeated for every form.
+const canonicalDeclarations = new Map<string, Array<{ file: string; line: number }>>();
 // Canonical files still identical to a baseline function inherit its comments, allowances included.
 const baselineCopies = new Set<string>();
 for (const file of files.filter(
@@ -639,6 +659,10 @@ for (const file of files.filter(
   const content = read(file);
   for (const [key, value] of functions(content)) {
     canonicalFunctions.add(value.identity);
+    const canonicalName = value.identity.slice(0, value.identity.indexOf("("));
+    const declarations = canonicalDeclarations.get(canonicalName);
+    if (declarations) declarations.push({ file, line: lineAt(content, value.offset) });
+    else canonicalDeclarations.set(canonicalName, [{ file, line: lineAt(content, value.offset) }]);
     const migration = latest.get(key);
     const matchesMigration =
       migration !== undefined &&
@@ -667,6 +691,15 @@ for (const file of files.filter(
       }
   }
 }
+for (const [name, declarations] of canonicalDeclarations)
+  if (declarations.length > 1)
+    for (const declaration of declarations)
+      add(
+        "sql-overload",
+        declaration.file,
+        declaration.line,
+        `${name} is declared ${declarations.length} times in the canonical sources; one name has one signature`,
+      );
 for (const [identity, migration] of latestLive)
   // The generated baseline predates canonical files; every function a forward migration creates needs one.
   if (!canonicalFunctions.has(identity) && !baselineMigrationFiles.has(migration.file))
@@ -708,6 +741,37 @@ for (const file of files.filter(
     const derived = derivedDefinitionId(vector.parts);
     if (derived !== vector.id)
       add("derived-id-parity", vectorsFile, index + 1, `${JSON.stringify(vector.parts)}: TypeScript ${derived}, SQL ${vector.id}`);
+  }
+}
+
+// Each definition kind accepts exactly one contract version. The SQL function is the single
+// source of truth; the TypeScript source and validation constants must equal what it returns, and
+// it must return one element per kind.
+{
+  const sqlFile = "supabase/schemas/vortex_definition/accepted_contract_version.sql";
+  const sql = read(sqlFile);
+  const accepted = new Map<string, string[]>();
+  for (const match of sql.matchAll(/when '(\w+)' then\s+return array\[([^\]]*)\];/g))
+    accepted.set(match[1]!, [...match[2]!.matchAll(/'([^']+)'/g)].map((version) => version[1]!));
+  for (const kind of ["application", "module", "record_type"]) {
+    const versions = accepted.get(kind);
+    if (versions?.length !== 1)
+      add("contract-version-parity", sqlFile, 1, `${kind} must accept exactly one version, found ${JSON.stringify(versions)}`);
+  }
+  const constant = (file: string, name: string): string | undefined =>
+    new RegExp(`export const ${name} = "([^"]+)"`).exec(read(file))?.[1];
+  const definitionDir = "packages/platform/src/definition";
+  const expectations: Array<[string, string, string]> = [
+    ["application", `${definitionDir}/application-contract-versions.ts`, "applicationSourceContractVersion"],
+    ["application", `${definitionDir}/application-contract-versions.ts`, "applicationValidationContractVersion"],
+    ["module", `${definitionDir}/module-source-contracts.ts`, "moduleSourceContractVersion"],
+    ["module", `${definitionDir}/module-contracts.ts`, "moduleValidationContractVersion"],
+    ["record_type", `${definitionDir}/module-contracts.ts`, "moduleValidationContractVersion"],
+  ];
+  for (const [kind, file, name] of expectations) {
+    const value = constant(file, name);
+    if (value === undefined || value !== accepted.get(kind)?.[0])
+      add("contract-version-parity", file, 1, `${name} is ${value}, SQL accepts ${accepted.get(kind)?.[0]} for ${kind}`);
   }
 }
 
