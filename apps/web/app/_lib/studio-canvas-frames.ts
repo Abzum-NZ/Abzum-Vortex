@@ -33,17 +33,23 @@ export type StudioApplicationCanvasFrames = Readonly<{
    */
   roles: Readonly<Record<string, readonly string[]>>;
   /** Keyed by authored page alias. */
-  pages: Readonly<Record<string, Readonly<{
-    pageId: string;
-    pageName: string;
-    frame: ProjectedApplicationFrame;
-  }>>>;
+  pages: Readonly<
+    Record<
+      string,
+      Readonly<{
+        pageId: string;
+        pageName: string;
+        frame: ProjectedApplicationFrame;
+      }>
+    >
+  >;
 }>;
 
 /** Builds the canvas frames from one compiled draft; the compiled page list must match the authored one. */
 export const studioCanvasFramesFor = (
   sourcePages: SourcePages,
   content: ApplicationContent,
+  pageAlias: string | undefined,
 ): StudioApplicationCanvasFrames => {
   if (content.pages.length !== sourcePages.length)
     throw new Error("Studio compiled page list does not match its authored draft");
@@ -53,17 +59,27 @@ export const studioCanvasFramesFor = (
   // serializer send the frame once rather than cloning its layout into every page's props.
   const frames = new Map<string | undefined, ProjectedApplicationFrame>();
   sourcePages.forEach((sourcePage, index) => {
+    if (sourcePage.id !== pageAlias) return;
     const compiled = content.pages[index];
-    if (compiled === undefined || compiled.key !== sourcePage.key || compiled.type !== sourcePage.type)
+    if (
+      compiled === undefined ||
+      compiled.key !== sourcePage.key ||
+      compiled.type !== sourcePage.type
+    )
       throw new Error("Studio compiled page does not match its authored draft");
     const shellId = compiledPageShellId(compiled.composition) ?? undefined;
-    const shell = shellId === undefined ? undefined
-      : shells.find((candidate) => sameId(String(candidate.shellId), String(shellId)));
+    const shell =
+      shellId === undefined
+        ? undefined
+        : shells.find((candidate) => sameId(String(candidate.shellId), String(shellId)));
     if (shellId !== undefined && shell === undefined)
       throw new Error(`Studio compiled page '${compiled.key}' references a missing shell`);
     let frame = frames.get(shellId);
     if (frame === undefined) {
-      frame = splitProjectedPage({ pageId: compiled.pageId, composition: shell?.layout ?? emptyLayout }, shell).frame;
+      frame = splitProjectedPage(
+        { pageId: compiled.pageId, composition: shell?.layout ?? emptyLayout },
+        shell,
+      ).frame;
       frames.set(shellId, frame);
     }
     pages[sourcePage.id] = {
@@ -76,9 +92,18 @@ export const studioCanvasFramesFor = (
   });
   return {
     applicationName: content.name,
-    shells,
+    shells:
+      pageAlias === undefined
+        ? []
+        : shells.filter((shell) =>
+            Object.values(pages).some((page) =>
+              sameId(String(page.frame.shellId), String(shell.shellId)),
+            ),
+          ),
     theme: content.theme,
-    roles: Object.fromEntries(content.roles.map((role) => [role.key, role.permissionKeys.map(String)])),
+    roles: Object.fromEntries(
+      content.roles.map((role) => [role.key, role.permissionKeys.map(String)]),
+    ),
     pages,
   };
 };
