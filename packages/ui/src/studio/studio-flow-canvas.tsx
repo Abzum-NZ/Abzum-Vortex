@@ -68,11 +68,11 @@ function StudioFlowNode({ data, selected }: NodeProps<Node<FlowNodeData>>) {
             ? GitBranch
             : Workflow;
   const handle =
-    "size-2! rounded-full! border-background! bg-border! opacity-0 group-hover/node:opacity-100 group-focus-within/node:opacity-100";
+    "size-2! rounded-full! border-background! bg-border! opacity-0 group-hover/node:opacity-100 group-focus-visible/flow-node:opacity-100";
   return (
     <Card
       className={cn(
-        "group/node h-24 w-64 gap-2 rounded-xl border bg-card px-3 py-2.5 text-card-foreground shadow-xs hover:border-foreground/20",
+        "group/node h-24 w-64 gap-2 rounded-xl border bg-card px-3 py-2.5 text-card-foreground shadow-xs hover:border-foreground/20 group-focus-visible/flow-node:ring-2 group-focus-visible/flow-node:ring-primary",
         selected && "ring-2 ring-primary shadow-lg",
       )}
     >
@@ -253,6 +253,7 @@ type Layout = Readonly<{
 const node = (id: string, x: number, y: number, data: FlowNodeData): Node<FlowNodeData> => ({
   id,
   type: "studio",
+  className: "group/flow-node",
   draggable: false,
   connectable: false,
   selectable: data.kind === "step" || data.kind === "start",
@@ -448,6 +449,13 @@ export function StudioFlowCanvas({
           nodes={graph.nodes.map((entry) => ({
             ...entry,
             selected: selectedKey === null ? entry.data.kind === "start" : entry.id === selectedKey,
+            domAttributes: {
+              "aria-pressed": entry.selectable
+                ? selectedKey === null
+                  ? entry.data.kind === "start"
+                  : entry.id === selectedKey
+                : undefined,
+            },
           }))}
           edges={graph.edges}
           nodeTypes={nodeTypes}
@@ -459,6 +467,7 @@ export function StudioFlowCanvas({
           nodesDraggable={false}
           nodesConnectable={false}
           edgesFocusable={false}
+          deleteKeyCode={null}
           elementsSelectable
           proOptions={{ hideAttribution: true }}
           onNodeClick={(_, clicked) => selectNode(clicked)}

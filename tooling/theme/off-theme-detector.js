@@ -234,6 +234,13 @@
     const inline = element.getAttribute("style") ?? "";
     const inlineOverride = /(?:^|;)\s*(?:padding|border-radius|font-family|font)\b/.test(inline);
     if (overrides.length === 0 && !inlineOverride) return [];
+    // Studio D11 sizes its flow cards and circular edge buttons with these theme-scale utilities.
+    // Keep checking arbitrary values, fonts, inline overrides and every other component variant.
+    const flowUtilities = new Set([
+      "rounded-md", "rounded-lg", "rounded-xl", "rounded-full", "px-3", "py-2", "py-2.5",
+    ]);
+    const flowPattern = !inlineOverride && element.closest("[data-vortex-studio-frame] .react-flow") !== null &&
+      overrides.every((name) => flowUtilities.has(name.slice(name.lastIndexOf(":") + 1).replace(/^!|!$/g, "")));
     const probe = document.createElement(element.tagName);
     for (const attribute of element.attributes)
       if (
@@ -260,7 +267,12 @@
         property === "font-family"
           ? normalizeFont(actual) === normalizeFont(wanted)
           : Math.abs(px(actual) - px(wanted)) <= TOLERANCE;
-      if (!same) differences.push(`${property} ${actual} (variant ${wanted})`);
+      const root = themedRootOf(element);
+      const tokens = root === null ? null : tokensOf(root);
+      const canvasScale = flowPattern && tokens !== null &&
+        (CORNERS.includes(property) ? radiusOk(actual, radiiFor(element, tokens))
+          : SIDES.includes(property) && paddingOk(actual, tokens));
+      if (!same && !canvasScale) differences.push(`${property} ${actual} (variant ${wanted})`);
     }
     probe.remove();
     return differences.length === 0
