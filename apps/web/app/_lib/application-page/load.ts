@@ -91,6 +91,7 @@ import {
   applyFormFieldAccess,
   decideFormFieldAccess,
   flowCreatedRecordTypeIds,
+  formFieldOf,
   readCreatableFieldIds,
 } from "./form-field-access";
 
@@ -522,6 +523,7 @@ const loadApplicationPageJoined = async (
           )
       : undefined;
   let refusedForms: ReadonlyMap<string, string> = new Map();
+  let createFormIds: readonly string[] = [];
   if (formRecordType !== undefined) {
     const recordTypeId = String(formRecordType.recordTypeId);
     const editForms = new Map<string, ProtectedQueryRow>();
@@ -530,7 +532,7 @@ const loadApplicationPageJoined = async (
       if (read.kind === "read")
         for (const formId of editFormPlacementIds) editForms.set(formId, read.row);
     }
-    const createFormIds = allPlacements.flatMap(({ placementId, vortex }) => {
+    createFormIds = allPlacements.flatMap(({ placementId, vortex }) => {
       const block = vortex.block;
       return isRecord(block) &&
         typeof block.blockId === "string" &&
@@ -906,6 +908,30 @@ const loadApplicationPageJoined = async (
       editFormBaselines[placementId] = baseline;
     }
   }
+  // A create form starts each field at its definition's default, the value the save stores when
+  // the field is left as it is, so the person sees what will be saved.
+  if (formRecordType !== undefined)
+    for (const entry of placements) {
+      if (
+        entry.formId === undefined ||
+        !createFormIds.some((formId) => sameId(formId, entry.formId!)) ||
+        !isEditFieldPlacement(entry)
+      )
+        continue;
+      const field = formFieldOf(entry, formRecordType);
+      if (field?.default === undefined) continue;
+      const projected = projectEditField(
+        entry,
+        formRecordType,
+        { [String(field.fieldId)]: field.default as JsonValue },
+        dateTimeZones,
+      );
+      if (projected === undefined) {
+        logPlacementFailure(address, entry.placementId, "create_field_default_unprojected");
+        continue;
+      }
+      data[entry.placementId] = projected.data;
+    }
   const linkInputs = placements.filter(isLinkInputPlacement);
   // A new record's link field may start with the record its page address names.
   if (pageDefinition.type !== "guided_form")

@@ -126,8 +126,10 @@ export function StudioCalculationEditor({ idPrefix, settings, fields, compiled, 
               <Button type="button" size="icon-xs" variant="ghost" aria-label={`Remove ${labelOf(key)}`} disabled={disabled}
                 onClick={() => setExpression({ ...joined, fields: joined.fields.filter((item) => item !== key) })}><Icon name="close" /></Button>
             </li>)}</ol>
-          {offered.length === 0 ? null : <StudioOptionControl id={id("join-add")} value="" unset="Add a field…" disabled={disabled || joined.fields.length >= 20}
-            options={offered} onChange={(key) => { if (key !== "") setExpression({ ...joined, fields: [...joined.fields, key] }); }} />}
+          {offered.length === 0 ? null : <StudioField label="Add a field to joined text">
+            {(control) => <StudioOptionControl id={control.id} value="" unset="Choose a field…" disabled={disabled || joined.fields.length >= 20}
+              options={offered} onChange={(key) => { if (key !== "") setExpression({ ...joined, fields: [...joined.fields, key] }); }} />}
+          </StudioField>}
           <StudioField label="Between the values" hint="For example a space, or a comma and a space.">
             {(control) => <Input {...control} maxLength={20} value={joined.separator} disabled={disabled}
               onChange={(event) => setExpression({ ...joined, separator: event.target.value })} />}
