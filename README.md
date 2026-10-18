@@ -146,8 +146,10 @@ The custom-component and file pages read additional variables and report a confi
 For private files, `VORTEX_ENVIRONMENT=local` accepts only a loopback HTTP Supabase origin
 with an explicit port. Set `VORTEX_SUPABASE_WORKDIR` to the Local Supabase workdir (a worker's
 lane directory); file routes use its existing ignored `supabase/.temp/signing-keys.json`.
-The local seed sets the Storage policy destination to `local`. Hosted file routes continue
-to require an HTTPS Supabase project and the server-only signing variables above.
+The Storage operator must configure `vortex.destination_project=local` on the local database;
+the ordinary runtime role and migration/seed role cannot provision that database parameter.
+Hosted file routes continue to require an HTTPS Supabase project and the server-only signing
+variables above, with their own destination project configured by operations.
 
 The upload coordinator's stored-object inspector reads bytes with an exact-object inspect
 credential, bounds the stream by the admitted byte limit, detects binary type with `file-type`,
