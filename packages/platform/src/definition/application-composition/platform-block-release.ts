@@ -14,6 +14,7 @@ import { deterministicDependencyList, iconKeySchema } from "./shared";
 import {
   type BlockPropertySchemaContract,
   type ComponentSettingValue,
+  blockPropertyVisibilityIssues,
   blockPropertySchema,
 } from "./block-property-schema";
 import { customComponentReleaseSchema } from "./custom-components";
@@ -40,6 +41,22 @@ export const blockSlotDeclarationSchema = z
     ),
   })
   .strict();
+
+/** One declared selector that derives a block's initial settings from application data. */
+export const blockStudioSetupSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: sourceProvenanceUnchanged(z.literal("pipeline")),
+    fieldProperty: sourceProvenanceUnchanged(builderKeySchema),
+    titleFieldProperty: sourceProvenanceUnchanged(builderKeySchema),
+    label: sourceProvenanceUnchanged(labelSchema),
+    moveFlowName: sourceProvenanceUnchanged(labelSchema),
+    help: sourceProvenanceUnchanged(z.string().trim().min(1).max(500)),
+    emptyLabel: sourceProvenanceUnchanged(z.string().trim().min(1).max(500)),
+    fieldHasNoPipeline: sourceProvenanceUnchanged(z.string().trim().min(1).max(500)),
+    stageFilterError: sourceProvenanceUnchanged(z.string().trim().min(1).max(500)),
+    queryUnavailable: sourceProvenanceUnchanged(z.string().trim().min(1).max(500)),
+  }).strict(),
+]);
 
 /**
  * The exact placement slot key one repeatable item owns: `${family}_${identity}`. The family is
@@ -151,6 +168,8 @@ export const platformBlockReleaseSchema = z
     paletteGroup: sourceProvenanceUnchanged(blockPaletteGroupSchema),
     rendererKey: sourceProvenanceUnchanged(namespacedKeySchema),
     properties: sourceProvenanceUnchanged(z.array(blockPropertySchema)),
+    /** Builder setup controls that create the initial values for a new placement. */
+    studioSetup: sourceProvenanceUnchanged(blockStudioSetupSchema.optional()),
     /**
      * Present only on a release whose binding property derives an automatic field input: every
      * setting the compiler derives for it beyond the release's own properties (the field's name,
@@ -213,6 +232,26 @@ export const platformBlockReleaseSchema = z
         path: ["properties"],
         message: "Property keys must be unique",
       });
+    if (value.studioSetup?.kind === "pipeline") {
+      for (const [propertyKey, path] of [
+        [value.studioSetup.fieldProperty, ["studioSetup", "fieldProperty"]],
+        [value.studioSetup.titleFieldProperty, ["studioSetup", "titleFieldProperty"]],
+      ] as const) {
+        const property = value.properties.find((candidate) => candidate.key === propertyKey);
+        if (property?.kind !== "field_reference")
+          context.addIssue({
+            code: "custom",
+            path: [...path],
+            message: "A pipeline setup must name declared field-reference properties",
+          });
+      }
+      if (value.studioSetup.fieldProperty === value.studioSetup.titleFieldProperty)
+        context.addIssue({
+          code: "custom",
+          path: ["studioSetup", "titleFieldProperty"],
+          message: "A pipeline's stage and card title must use different settings",
+        });
+    }
     const fieldInputBindings = value.properties.filter(
       (property) => property.derivesFieldInput === true,
     ).length;
@@ -236,6 +275,18 @@ export const platformBlockReleaseSchema = z
         path: ["derivedProperties"],
         message: "A derived property key cannot repeat another property key",
       });
+    for (const issue of blockPropertyVisibilityIssues(releaseSettingDeclarations(value))) {
+      const [index, ...propertyPath] = issue.path;
+      const declarationPath =
+        typeof index === "number" && index >= value.properties.length
+          ? ["derivedProperties", index - value.properties.length]
+          : ["properties", index];
+      context.addIssue({
+        code: "custom",
+        path: [...declarationPath, ...propertyPath],
+        message: issue.message,
+      });
+    }
     if (new Set(value.slots.map((slot) => slot.key)).size !== value.slots.length)
       context.addIssue({ code: "custom", path: ["slots"], message: "Slot keys must be unique" });
     // An authored item carries its settings directly on its props, beside its identity (`id`),

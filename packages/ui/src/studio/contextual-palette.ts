@@ -33,6 +33,8 @@ export type StudioPaletteChoice = Readonly<{
   needsQuery: boolean;
   /** Required settings without a catalogue default, asked for when the block is added. */
   setup: readonly BlockPropertySchemaContract[];
+  /** A declared selector that derives initial settings and, when needed, a source query. */
+  studioSetup?: PlatformBlockRelease["studioSetup"];
   /** Why the block cannot be added yet; absent when it can. */
   unavailable?: string;
 }>;
@@ -99,6 +101,7 @@ const choiceFor = (catalogue: ImmutablePlatformBlockCatalogue, release: Platform
     groupLabel: PALETTE_GROUP_TITLES[release.paletteGroup],
     needsQuery: studioReleaseReadsQuery(release),
     setup: Object.freeze(setup),
+    ...(release.studioSetup === undefined ? {} : { studioSetup: release.studioSetup }),
     ...(unavailable === undefined ? {} : { unavailable }),
   });
 };

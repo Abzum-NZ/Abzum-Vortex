@@ -178,7 +178,7 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
       const parsed = studioApplicationSourceReviewResultSchema.safeParse(response);
       if (!parsed.success) { setMessage("The review could not be verified. What you typed is kept."); return; }
       const result = parsed.data;
-      if (result.kind !== "available" && result.kind !== "validation_failed") {
+      if (result.kind !== "available" && result.kind !== "validation_failed" && result.kind !== "identity_conflict") {
         setMessage(result.kind === "conflict" ? "The saved draft changed. Reopen explicitly before reviewing again."
           : result.kind === "invalid" ? "The source failed draft validation. What you typed is kept."
             : result.kind === "refused" ? "The current draft read was refused. What you typed is kept."
@@ -195,6 +195,11 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
       if (!responseIsCurrent()) return;
       if (result.candidateSourceFingerprint !== submittedFingerprint) {
         setMessage("The review does not match the submitted source. What you typed is kept.");
+        return;
+      }
+      if (result.kind === "identity_conflict") {
+        const names = result.conflicts.map((conflict) => `${conflict.kind.replaceAll("_", " ")} “${conflict.name}”`).join(", ");
+        setMessage(`This file gives names already used in this application to different components: ${names}. Keep each existing component's original id when editing its name, or choose a name that has never been used. Your draft is unchanged.`);
         return;
       }
       if (result.kind === "validation_failed") {
@@ -259,6 +264,18 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
     <h3 className="font-semibold">Import an application file</h3>
     <p>Choose an exported application file, or paste its contents (up to 2 MiB). It must be for this same application.
       You see what would change before anything is replaced. Importing does not publish or install anything.</p>
+    <Button type="button" variant="outline" disabled={disabled || operation !== null} onClick={() => {
+      const snapshot = readSnapshot();
+      if (snapshot === null) return;
+      // Export the authored document verbatim: ids own identities, names are mutable aliases.
+      const url = URL.createObjectURL(new Blob([JSON.stringify(snapshot.source, null, 2)], { type: "application/json" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${snapshot.key}.json`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    }}>Export source</Button>
+    <p className="text-sm text-muted-foreground">When changing component names in the file, keep their original ids.</p>
     <StudioField label="Application file">
       {(control) => <Input {...control} ref={fileInput} type="file" accept=".json,application/json" disabled={disabled}
         onChange={(event) => { void readFile(event); }} />}

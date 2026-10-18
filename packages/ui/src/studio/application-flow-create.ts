@@ -28,8 +28,8 @@ import { traverseStudioSemanticSelectionDraft, type StudioSemanticSelection } fr
  * - for a record event: a transaction flow an owned Module runs before one of its record types is
  *   saved, with one Warn step (the trigger is the flow's own `triggers`): a before-save rule, added
  *   on its record type in the Data tab.
- * A binding of a control on a page of a record type declares its event for that record type, as
- * publication requires of every bound event.
+ * A binding declares its event for the board's record type or the record type of its page, as
+ * publication requires of every bound record event.
  */
 
 type SourceBinding = ApplicationSourceDocument["body"]["flow_bindings"][number];
@@ -140,9 +140,14 @@ const bindControl = (body: ApplicationSourceDocument["body"], controlAlias: stri
   const module = typeof queryRef === "string" ? body.modules.find((entry) => queryRef.startsWith(`${entry.key}:`)) : undefined;
   const query = module?.queries.find((entry) => `${module.key}:${entry.key}` === queryRef);
   const choiceField = item?.props.choice_field;
-  const recordType = query !== undefined ? `${module!.key}:${query.record_type}`
+  let recordType = query !== undefined ? `${module!.key}:${query.record_type}`
     : typeof choiceField === "string" && choiceField.includes(".") ? choiceField.slice(0, choiceField.lastIndexOf("."))
       : page !== undefined && "record_type" in page && typeof page.record_type === "string" ? page.record_type : undefined;
+  if (event === "card_moved") {
+    if (typeof choiceField !== "string") return refuse("Choose the board's choice field first.");
+    // The event belongs to the cards, including boards on a page of another record type.
+    recordType = choiceField.slice(0, choiceField.lastIndexOf("."));
+  }
   // A binding is unique by its control and event, so every control of one record type raising one
   // kind of event shares that record type's one declared event of that kind.
   const declared = new Set(body.events.filter((entry) => entry.record_type === recordType).map((entry) => entry.id));

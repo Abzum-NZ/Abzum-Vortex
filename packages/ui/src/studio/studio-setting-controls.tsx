@@ -177,7 +177,7 @@ function NumberControl({ id, property, value, onChange, disabled }: ControlProps
 
 /** A closed choice among labelled options, with the unset state named by what it means (none when a value is always chosen). */
 export function StudioOptionControl({ id, value, options, unset, disabled, onChange }: Readonly<{
-  id: string; value: string; options: readonly Readonly<{ value: string; label: string }>[];
+  id: string; value: string; options: readonly Readonly<{ value: string; label: string; disabled?: boolean }>[];
   unset?: string | undefined; disabled: boolean; onChange: (value: string) => void;
 }>): ReactElement {
   const known = value === "" || options.some((option) => option.value === value);
@@ -185,7 +185,8 @@ export function StudioOptionControl({ id, value, options, unset, disabled, onCha
     aria-invalid={!known} onChange={(event) => onChange(event.target.value)}>
     {unset === undefined ? null : <NativeSelectOption value="">{unset}</NativeSelectOption>}
     {known ? null : <NativeSelectOption value={value}>{`${value} (not offered here)`}</NativeSelectOption>}
-    {options.map((option) => <NativeSelectOption key={option.value} value={option.value}>{option.label}</NativeSelectOption>)}
+    {options.map((option) => <NativeSelectOption key={option.value} value={option.value}
+      disabled={option.disabled}>{option.label}</NativeSelectOption>)}
   </NativeSelect>;
 }
 
@@ -515,6 +516,11 @@ export function StudioSettingFields(props: SettingFieldsProps): ReactElement {
 }
 
 function SettingFields({ idPrefix, properties, values, onChange, choices, disabled }: SettingFieldsProps): ReactElement {
+  const visible = (property: BlockPropertySchemaContract, settings: StudioSettingValues) => {
+    if (property.showWhen === undefined) return true;
+    const selected = settings[property.showWhen.property];
+    return selected?.kind === "choice" && property.showWhen.values.includes(selected.value);
+  };
   // A field's optional label is an override. Matching text follows the field when it changes;
   // other text stays authored, with an explicit way to return to the field's label.
   const fieldProperty = properties.find((property) => property.key === "field" && property.kind === "field_reference");
@@ -537,12 +543,15 @@ function SettingFields({ idPrefix, properties, values, onChange, choices, disabl
   };
   return <div className="space-y-3">
     {properties.map((property) => {
+      if (!visible(property, values)) return null;
       const id = `${idPrefix}-${property.key}`;
       const value = Object.hasOwn(values, property.key) ? values[property.key] : undefined;
       const set = (next: SettingValue) => {
         const result: Record<string, SourceBlockPropertyValueContract> = { ...values };
         if (next === undefined) delete result[property.key];
         else result[property.key] = next;
+        for (const sibling of properties)
+          if (!visible(sibling, result)) delete result[sibling.key];
         onChange(result);
       };
       const inline = property.kind === "boolean";

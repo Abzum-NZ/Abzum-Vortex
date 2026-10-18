@@ -87,7 +87,7 @@ const optionSchema = z
   })
   .strict();
 const emptySettingsSchema = z.object({}).strict();
-const textFormatSchema = z.enum(["email_address", "web_address", "uuid"]);
+const textFormatSchema = z.enum(["uuid"]);
 const textSettingsSchema = z
   .object({
     maxLength: z.number().int().min(1).max(100_000),
@@ -551,8 +551,6 @@ const fieldMembers = [
 
 const textFormatValid = (format: z.infer<typeof textFormatSchema> | undefined, value: string) =>
   format === undefined ||
-  (format === "email_address" && z.email().safeParse(value).success) ||
-  (format === "web_address" && safeHttpsUrlSchema.safeParse(value).success) ||
   (format === "uuid" && z.uuid().safeParse(value).success);
 const wholeNumberValid = (value: number, settings: z.infer<typeof wholeNumberSettingsSchema>) =>
   (settings.minimum === undefined || value >= settings.minimum) &&

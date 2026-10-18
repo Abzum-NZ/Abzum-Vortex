@@ -220,6 +220,7 @@ export type BoardPayload = Readonly<{
   choiceFieldId: string;
   /** The key a card move names the choice field by when it asks for the record to be saved. */
   choiceFieldKey: string;
+  choiceFieldRequired: boolean;
   cardTitleFieldId: string;
   /** The only field identities a card may carry; readable values and labels may be omitted. */
   cardFieldIds: readonly string[];
