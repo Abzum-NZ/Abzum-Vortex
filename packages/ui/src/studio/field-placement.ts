@@ -40,8 +40,8 @@ type Release = StudioCompositionContext["catalogue"]["releases"][number];
 const formContainerKey = "platform.form.container";
 const fieldInputKey = "platform.form.field_input";
 /** The field types an automatic field input renders: the others are not offered on forms. */
-const formInputTypes: ReadonlySet<string> = new Set(["text", "email_address", "long_text", "formatted_text", "whole_number",
-  "decimal_number", "money", "yes_no", "date", "date_time", "choice", "several_choices", "link", "link_to_one_of_several"]);
+const formInputTypes: ReadonlySet<string> = new Set(["text", "email_address", "phone_number", "web_address", "long_text", "formatted_text", "whole_number",
+  "decimal_number", "money", "yes_no", "date", "date_time", "choice", "several_choices", "link", "link_to_one_of_several", "table"]);
 const pageTypeWords: Readonly<Record<string, string>> = { detail: "Detail page", list: "List page", form: "Form page" };
 
 const releaseOf = (context: StudioCompositionContext, item: SourceItem): Release | undefined => {

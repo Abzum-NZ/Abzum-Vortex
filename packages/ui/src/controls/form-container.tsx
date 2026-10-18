@@ -62,8 +62,8 @@ export type FormFlowFeedback =
       code: FlowRefusalFeedback["code"];
       fieldLabel?: string;
       corrections?: readonly FlowFieldCorrection[];
-      /** The authored message of the rule that refused the change. */
-      ruleMessage?: string;
+      /** The individually bounded authored messages of the rules that refused the change. */
+      ruleMessages?: readonly string[];
       recovery?: "partial" | "uncertain";
     }>;
 
@@ -74,7 +74,7 @@ const fieldCorrectionText: Readonly<Record<FlowFieldCorrection["code"], string>>
 };
 
 const refusalFeedbackText = (feedback: Extract<FormFlowFeedback, { kind: "refusal" }>): string => {
-  if (feedback.ruleMessage !== undefined) return feedback.ruleMessage;
+  if (feedback.ruleMessages !== undefined) return feedback.ruleMessages.join(" ");
   switch (feedback.code) {
     case "invalid_command":
       return feedback.fieldLabel === undefined
