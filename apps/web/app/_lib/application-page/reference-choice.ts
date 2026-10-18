@@ -262,6 +262,12 @@ export const projectEditField = (
       }
       kind = "link_input";
       break;
+    case "attachment":
+      if (stored !== null && !moduleFieldValueSchemas.attachment.safeParse(stored).success)
+        return undefined;
+      displayed = stored ?? [];
+      kind = "attachment_input";
+      break;
     case "table":
       if (stored !== null && !moduleFieldValueSchemas.table.safeParse(stored).success)
         return undefined;
@@ -288,7 +294,12 @@ export const projectEditField = (
         : displayed,
     data: {
       status: "ready",
-      values: { kind, value: displayed, ...(kind === "date_time_input" ? dateTimeZones : {}) },
+      values: {
+        kind,
+        value: displayed,
+        ...(kind === "date_time_input" ? dateTimeZones : {}),
+        ...(kind === "attachment_input" ? { files: [], uploadUrl: "/api/files/upload?" } : {}),
+      },
     },
   };
 };

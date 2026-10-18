@@ -75,6 +75,14 @@ route URL and credential as the protected Coolify inputs `VORTEX_RUNTIME_BUNDLE_
 and `VORTEX_RUNTIME_BUNDLE_CLEANUP_CREDENTIAL_BASE64`, and configure its lowercase SHA-256 digest
 in the Vercel server-side environment as `VORTEX_RUNTIME_BUNDLE_CLEANUP_CREDENTIAL_SHA256`.
 
+The same maintenance call reclaims at most 25 expired, never-activated attachment uploads per run,
+including clean inspections awaiting Save and rejected content. It locks and marks them abandoned
+before deleting each exact private object through the Storage API with a server-only, short-lived
+credential. Successful deletion removes upload state and marks file metadata removed. Failed calls
+keep their claims and become eligible for retry after five minutes; active attachments and held
+files are excluded. Provision the existing scheduled flow and route credential in every environment
+that accepts uploads; without scheduled maintenance abandoned objects are not reclaimed.
+
 The event-dispatch route credential also authenticates the normal database-webhook hint. The database
 server carries the raw credential as the `vortex.event_dispatch_wakeup_bearer` setting while Vercel carries
 only its SHA-256 digest in `VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256`. Database sessions can read
