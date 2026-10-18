@@ -7,6 +7,10 @@ alter table vortex_record.relationship_edges add constraint relationship_edges_p
   relationship_id, from_organisation_id, from_storage_contract_id, from_record_id,
   to_storage_contract_id, to_record_id
 );
+-- The edge-scope trigger proves the relationship against its source storage's declaration.
+-- A preview-only relationship has no installed relationship mapping to reference.
+alter table vortex_record.relationship_edges
+  drop constraint relationship_edges_relationship_id_fkey;
 
 set local role vortex_owner;
 
