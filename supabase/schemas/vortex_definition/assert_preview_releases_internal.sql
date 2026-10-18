@@ -5,11 +5,12 @@ create or replace function vortex_definition.assert_preview_releases_internal(
 )
 returns bigint
 language plpgsql
-stable
+volatile
 security definer
 set search_path = ''
 as $function$
 declare
+  rehearsed_type record;
   current_release_revision_value bigint;
   application_release_revision_value bigint;
 begin
@@ -64,6 +65,23 @@ begin
     raise exception using errcode = '23514',
       message = 'Rehearsed preview releases are not this Application draft';
   end if;
+  -- A rehearsal may describe a new type, but cannot nominate another live or preview
+  -- table for a type already installed in this Application. Check before replacing a preview.
+  for rehearsed_type in
+    select (item.value #>> '{release,root_id}')::uuid as module_root_id, record_type.value
+    from pg_catalog.jsonb_array_elements(p_releases) as item(value)
+    cross join lateral pg_catalog.jsonb_array_elements(
+      item.value #> '{release,compilation_output,canonical,content,recordTypes}'
+    ) as record_type(value)
+    where item.value #>> '{release,compilation_output,kind}' = 'module'
+      and not record_type.value ? 'systemProjection'
+  loop
+    perform vortex_record.resolve_preview_seed_source_internal(
+      p_organization_id, p_application_root_id, rehearsed_type.module_root_id,
+      (rehearsed_type.value ->> 'recordTypeId')::uuid,
+      (rehearsed_type.value ->> 'storageContractId')::uuid
+    );
+  end loop;
   application_release_revision_value := coalesce((
     select (item.value #>> '{release,release_revision}')::bigint
     from pg_catalog.jsonb_array_elements(p_releases) as item(value)

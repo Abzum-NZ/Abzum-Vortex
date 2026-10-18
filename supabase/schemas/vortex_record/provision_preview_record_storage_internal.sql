@@ -27,6 +27,8 @@ declare
   scope_index_columns text;
   index_token text;
   live_table_token text;
+  preview_scope record;
+  live_type jsonb;
 begin
   begin
     storage_id := (p_record_type ->> 'storageContractId')::uuid;
@@ -63,13 +65,14 @@ begin
   );
   shape_fingerprint := vortex_record.storage_meaning_fingerprint(preview_record_type);
 
-  -- The live storage of this record type, when it has any: the builder's readable records are
-  -- seeded from it after provisioning, under the builder's own live access.
-  select catalogue.physical_table_token into live_table_token
-  from vortex_record.storage_catalogue as catalogue
-  where catalogue.storage_contract_id = storage_id
-    and catalogue.physical_schema_token = 'record_data'
-    and catalogue.state = 'active';
+  select preview.organization_id, preview.application_root_id into strict preview_scope
+  from vortex_definition.preview_installations as preview
+  where preview.preview_installation_id = p_preview_installation_id;
+  live_type := vortex_record.resolve_preview_seed_source_internal(
+    preview_scope.organization_id, preview_scope.application_root_id,
+    p_module_root_id, record_type_id_value, storage_id
+  );
+  live_table_token := live_type ->> 'table';
   perform vortex_record.create_record_storage_table_internal(
     preview_storage_id, p_module_root_id, record_type_id_value,
     storage_scope_value, ownership_mode_value
