@@ -18,8 +18,6 @@ export const linkSettingTargets = (settings: StudioSettingValues): readonly stri
     : [];
 };
 
-const words = (key: string): string => key.replaceAll("_", " ");
-
 /**
  * What a link field makes of its record type, read as a relationship: how many records may link to
  * one linked record, how each linked record is shown, the link in both directions, and, for a
@@ -57,8 +55,8 @@ export function StudioLinkSection({
       ? "the linked record type"
       : chosen.map((target) => target.label).join(" or ");
   const reverse =
-    settings.reverse_key?.kind === "text" && settings.reverse_key.value.trim() !== ""
-      ? words(settings.reverse_key.value)
+    settings.reverse_name?.kind === "text" && settings.reverse_name.value.trim() !== ""
+      ? settings.reverse_name.value.trim()
       : undefined;
   const linksPerson = chosen.some((target) => target.key === peopleDirectory.recordType);
   const name = label.trim() === "" ? "this link" : `"${label.trim()}"`;
