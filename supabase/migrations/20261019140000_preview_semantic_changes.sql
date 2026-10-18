@@ -208,6 +208,25 @@ begin
         'releaseVersion', module_pin.release_version
       )
     );
+    -- An unchanged immutable Module pin already serves this exact validated release. Carry its
+    -- storage identities forward without visiting or locking unrelated record types/fields.
+    -- Draft-produced Module rows still go through the definition comparison below.
+    if p_evolve and preview_row.resolved_modules @> pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object('moduleRootId', module_pin.module_root_id,
+        'moduleReleaseRevision', module_pin.module_release_revision)
+    ) and not exists (
+      select 1 from vortex_definition.preview_releases as release
+      where release.preview_installation_id = p_preview_installation_id
+        and release.root_id = module_pin.module_root_id
+        and release.release_revision = module_pin.module_release_revision
+    ) then
+      storage_identities_value := storage_identities_value || (
+        select coalesce(pg_catalog.jsonb_agg(identity.value), '[]'::jsonb)
+        from pg_catalog.jsonb_array_elements(preview_row.storage_identities) as identity(value)
+        where (identity.value ->> 'moduleRootId')::uuid = module_pin.module_root_id
+          and (identity.value ->> 'moduleReleaseRevision')::bigint = module_pin.module_release_revision
+      );
+    else
     storage_identities_value := storage_identities_value || case when p_evolve
       then vortex_record.evolve_preview_module_storage(
         p_preview_installation_id, module_pin.module_root_id, module_pin.module_release_revision
@@ -216,6 +235,7 @@ begin
         p_preview_installation_id, module_pin.module_root_id, module_pin.module_release_revision
       )
     end;
+    end if;
   end loop;
   if pg_catalog.jsonb_array_length(resolved_modules_value) = 0 then
     raise exception using errcode = '23514', message = 'Previewed Application binds no Module';
@@ -356,7 +376,7 @@ begin
 
   -- A system projection, of an own Module or a used one, is the platform's live read model: every
   -- permission on it is decided by the builder's own live access, never by a preview role.
-  select coalesce(pg_catalog.array_agg(distinct (record_type.value ->> 'recordTypeId')::uuid), array[]::uuid[])
+  select coalesce(pg_catalog.array_agg(distinct (record_type.value ->> 'recordTypeId')::uuid order by (record_type.value ->> 'recordTypeId')::uuid), array[]::uuid[])
   into system_projection_ids_value
   from pg_catalog.jsonb_array_elements(resolved_modules_value) as pin(value)
   left join vortex_definition.preview_releases as preview
@@ -422,7 +442,9 @@ begin
   update vortex_definition.preview_installations as preview
   set resolved_modules = resolved_modules_value,
       storage_identities = storage_identities_value
-  where preview.preview_installation_id = p_preview_installation_id;
+  where preview.preview_installation_id = p_preview_installation_id
+    and (preview.resolved_modules is distinct from resolved_modules_value
+      or preview.storage_identities is distinct from storage_identities_value);
 exception
   when no_data_found then
     raise exception using errcode = 'P0002', message = 'Preview installation is unavailable';
