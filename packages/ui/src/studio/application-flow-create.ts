@@ -43,6 +43,10 @@ export const studioFlowEventLabels: Readonly<Record<StudioFlowAuthoringEvent, st
   row_clicked: "When a row is clicked", row_action: "Row action",
 };
 
+/** Tables expose row actions through declared menu entries; other row surfaces use their own activation. */
+const hasRowActionMenu = (item: ReturnType<typeof sourcePageItems>[number] | undefined): boolean =>
+  item?.type === "platform.renderer.table";
+
 /** Undefined means the control's record source cannot currently be resolved. */
 const controlEventRecordType = (
   event: StudioFlowControlEvent,
@@ -66,12 +70,12 @@ const controlEventRecordType = (
 export type StudioFlowCreateCommand =
   /** On a record page, the flow gets the record the page shows as its record_id input. */
   | Readonly<{ kind: "action"; controlAlias: string; name: string; recordType: string | null;
-      event: StudioFlowAuthoringEvent }>
+      event: StudioFlowAuthoringEvent; rowActionLabel?: string }>
   | Readonly<{ kind: "control"; controlAlias: string; event: StudioFlowControlEvent; name: string; description: string;
       inputs: SourceFlow["inputs"]; tasks: SourceFlow["tasks"]; outputs: SourceFlow["outputs"];
-      bindingInputs: SourceBinding["inputs"] }>
+      bindingInputs: SourceBinding["inputs"]; rowActionLabel?: string }>
   | Readonly<{ kind: "bind"; controlAlias: string; event: StudioFlowControlEvent; flowKey: string;
-      bindingInputs: SourceBinding["inputs"] }>
+      bindingInputs: SourceBinding["inputs"]; rowActionLabel?: string }>
   | Readonly<{ kind: "before_save"; moduleKey: string; recordTypeKey: string; name: string;
       operations: readonly ("create" | "update")[] }>;
 
@@ -87,7 +91,8 @@ export type StudioFlowCreateChoices = Readonly<{
    * its own flow) with no flow bound yet; on a record page, the record type the page shows.
    */
   actions: readonly Readonly<{ controlAlias: string; label: string; recordType: string | null;
-    event: StudioFlowAuthoringEvent; callerNames: readonly Readonly<{ name: string; label: string }>[] }>[];
+    event: StudioFlowAuthoringEvent; rowActionMenu: boolean;
+    callerNames: readonly Readonly<{ name: string; label: string }>[] }>[];
 }>;
 
 export const projectStudioFlowCreateChoices = (
@@ -115,6 +120,7 @@ export const projectStudioFlowCreateChoices = (
       const recordType = controlEventRecordType(event, placements.get(alias), pageRecord, queries);
       if (recordType === undefined) continue;
       actions.push({ controlAlias: alias, label: controlLabel(alias), recordType, event,
+        rowActionMenu: event === "row_action" && hasRowActionMenu(placements.get(alias)),
         callerNames: studioFlowCallerNames(event, forms.find((form) => form.alias === alias)?.fields) });
     }
   });
@@ -141,7 +147,8 @@ const refuse = (reason: string): never => { throw new FlowCreateRefusal(reason);
  * with the record subject when the control has one.
  */
 const bindControl = (source: ApplicationSourceDocument, controlAlias: string, event: StudioFlowControlEvent,
-  flowKey: string, inputs: SourceBinding["inputs"], borrowed: StudioBorrowedChoices | null): Readonly<{ id: string; eventId: string }> => {
+  flowKey: string, inputs: SourceBinding["inputs"], borrowed: StudioBorrowedChoices | null,
+  rowActionLabel?: string): Readonly<{ id: string; eventId: string }> => {
   const body = source.body;
   if (body.flow_bindings.some((binding) => binding.control === controlAlias && binding.event === event))
     refuse(event === "action" ? "This control already runs a flow when it is used. Open that flow and change it instead."
@@ -153,6 +160,17 @@ const bindControl = (source: ApplicationSourceDocument, controlAlias: string, ev
   if (id === undefined) return refuse("No free name could be made for the binding. Choose another name.");
   const page = body.pages.find((candidate) => sourcePageItems(candidate.composition).some((item) => item.props.id === controlAlias));
   const item = page === undefined ? undefined : sourcePageItems(page.composition).find((entry) => entry.props.id === controlAlias);
+  const label = rowActionLabel?.trim();
+  if (event === "row_action" && item === undefined) return refuse("The row action's control is no longer on the page.");
+  const rowActionMenu = event === "row_action" && hasRowActionMenu(item);
+  if (rowActionMenu && item !== undefined) {
+    if (label === undefined || label.length === 0 || label.length > 60)
+      return refuse("Name the row action menu item, in at most 60 characters.");
+    if (item.props.row_actions !== undefined && !Array.isArray(item.props.row_actions))
+      return refuse("The control's row actions are not a list. Correct them before binding a flow.");
+    if (Array.isArray(item.props.row_actions) && item.props.row_actions.length >= 20)
+      return refuse("A control can have at most 20 row actions.");
+  }
   const pageRecord = page !== undefined && "record_type" in page && typeof page.record_type === "string" ? page.record_type : null;
   const resolved = controlEventRecordType(event, item, pageRecord, studioQueryChoices(source, borrowed));
   if (resolved === undefined) return refuse(event === "card_moved" ? "Choose the board's choice field first."
@@ -175,6 +193,10 @@ const bindControl = (source: ApplicationSourceDocument, controlAlias: string, ev
   body.flow_bindings.push({ id, control: controlAlias, event_id: eventId, event, flow: flowKey, inputs });
   if (event === "row_clicked") {
     if (item !== undefined) item.props.row_click = { event_id: eventId };
+  }
+  if (rowActionMenu && item !== undefined) {
+    item.props.row_actions = [...(Array.isArray(item.props.row_actions) ? item.props.row_actions : []),
+      { event_id: eventId, label }];
   }
   return { id, eventId };
 };
@@ -212,7 +234,7 @@ export const applyStudioFlowCreate = (
     if (command.kind === "bind") {
       const flow = body.flows.find((entry) => entry.key === command.flowKey);
       if (flow === undefined) return { kind: "refused", reason: "That flow is no longer in the draft." };
-      return created(candidate, flow, null, bindControl(candidate, command.controlAlias, command.event, flow.key, command.bindingInputs, borrowed));
+      return created(candidate, flow, null, bindControl(candidate, command.controlAlias, command.event, flow.key, command.bindingInputs, borrowed, command.rowActionLabel));
     }
     const name = command.name.trim();
     if (name.length < 1 || name.length > 100) return { kind: "refused", reason: "Name the flow, in at most 100 characters." };
@@ -261,10 +283,10 @@ export const applyStudioFlowCreate = (
         command.event === "form_submit"
           ? { values: { kind: "caller", name: "values" }, ...(command.recordType === null ? {}
             : { record_id: { kind: "caller" as const, name: "record" } }) }
-          : command.recordType === null ? {} : { record_id: { kind: "caller", name: "record_id" } }, borrowed);
+          : command.recordType === null ? {} : { record_id: { kind: "caller", name: "record_id" } }, borrowed, command.rowActionLabel);
     } else {
       flow = interactiveFlow(key, name, { description: command.description, inputs: command.inputs, tasks: command.tasks, outputs: command.outputs });
-      binding = bindControl(candidate, command.controlAlias, command.event, key, command.bindingInputs, borrowed);
+      binding = bindControl(candidate, command.controlAlias, command.event, key, command.bindingInputs, borrowed, command.rowActionLabel);
     }
     body.flows.push(flow);
     return created(candidate, flow, null, binding);

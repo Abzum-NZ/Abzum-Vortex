@@ -26,6 +26,7 @@ export function StudioNewFlowDialog({ open, onOpenChange, choices, source, onCre
   const [flowKey, setFlowKey] = useState("");
   const [mapping, setMapping] = useState<Readonly<Record<string, string>>>({});
   const [eventKind, setEventKind] = useState("");
+  const [rowActionLabel, setRowActionLabel] = useState("");
   const [problem, setProblem] = useState("");
   const events = choices.actions.filter((entry) => entry.controlAlias === control);
   const chosen = events.find((entry) => entry.event === eventKind) ?? events[0];
@@ -43,13 +44,15 @@ export function StudioNewFlowDialog({ open, onOpenChange, choices, source, onCre
         setProblem("Choose where each required input comes from."); return;
       }
       command = { kind: "bind", controlAlias: control, event: chosen.event, flowKey: existingFlow.key,
+        ...(chosen.rowActionMenu ? { rowActionLabel } : {}),
         bindingInputs: Object.fromEntries(inputs.flatMap(([input]) => {
           const caller = suppliedFor(input);
           return caller === "" ? [] : [[input, { kind: "caller" as const, name: caller }]];
         })) };
-    } else command = { kind: "action", controlAlias: control, name, recordType: chosen.recordType, event: chosen.event };
+    } else command = { kind: "action", controlAlias: control, name, recordType: chosen.recordType, event: chosen.event,
+      ...(chosen.rowActionMenu ? { rowActionLabel } : {}) };
     const result = onCreate(command);
-    if (result === true) { setName(""); setProblem(""); setMapping({}); setFlowKey(""); setEventKind(""); onOpenChange(false); }
+    if (result === true) { setName(""); setProblem(""); setMapping({}); setFlowKey(""); setEventKind(""); setRowActionLabel(""); onOpenChange(false); }
     else setProblem(result);
   };
   return <Dialog open={open} onOpenChange={onOpenChange}>
@@ -87,6 +90,11 @@ export function StudioNewFlowDialog({ open, onOpenChange, choices, source, onCre
           <NativeSelect id="new-flow-event" className="w-full" value={chosen.event} onChange={(event) => { setEventKind(event.target.value); setMapping({}); }}>
             {events.map((entry) => <NativeSelectOption key={entry.event} value={entry.event}>{studioFlowEventLabels[entry.event]}</NativeSelectOption>)}
           </NativeSelect>
+        </div>}
+        {chosen?.rowActionMenu === true && <div className="space-y-1.5">
+          <Label htmlFor="new-flow-row-action-label">Row action label</Label>
+          <Input id="new-flow-row-action-label" value={rowActionLabel} maxLength={60} required
+            onChange={(event) => setRowActionLabel(event.target.value)} />
         </div>}
         {existingFlow !== undefined && Object.entries(existingFlow.inputs).map(([input, declaration]) => <div key={input} className="space-y-1.5">
           <Label htmlFor={`new-flow-input-${input}`}>{input.replaceAll("_", " ")}{declaration.required ? " (required)" : ""}</Label>
