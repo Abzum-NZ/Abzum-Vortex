@@ -41,6 +41,8 @@ import {
 import type { recordIdSchema } from "@vortex/platform/schema";
 import {
   type BlockPropertyValueContract,
+  type FlowTask,
+  flowTaskChildLists,
   readRecordsTableContract,
   readRecordDetailContract,
   type JsonValue,
@@ -150,7 +152,20 @@ export const projectPlacementBindings = (
             : [];
         },
       );
+      const savesValues = (tasks: readonly FlowTask[]): boolean => tasks.some((task) => {
+        if (task.type === "record.save") {
+          const value = task.properties.values;
+          if (isRecord(value) && value.kind === "reference" && isRecord(value.reference) &&
+              value.reference.source === "input" && typeof value.reference.name === "string") {
+            const input = binding.flow.inputs[value.reference.name];
+            if (isRecord(input) && input.kind === "caller" && input.name === "values") return true;
+          }
+        }
+        return flowTaskChildLists(task).some((child) => savesValues(child.tasks));
+      });
+      const flow = application.content.flows.find((entry) => sameId(entry.id, binding.flow.flowId));
       return {
+        savesFormValues: flow !== undefined && savesValues(flow.tasks),
         bindingId: binding.bindingId,
         eventId: binding.eventId,
         event: binding.event,

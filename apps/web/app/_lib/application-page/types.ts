@@ -24,6 +24,8 @@ export type PlacementFlowBinding = Readonly<{
   flowId: string;
   /** The names of the caller inputs the bound flow declares; the surface may fill only these. */
   callerInputs: readonly string[];
+  /** The whole values input feeds a record-save task in this bound flow. */
+  savesFormValues: boolean;
   /** The installed record type of this placement's selected row or enclosing form context. */
   recordTypeId?: string;
   /** Caller inputs consumed by a declared `record.read_fields` task in this exact flow. */

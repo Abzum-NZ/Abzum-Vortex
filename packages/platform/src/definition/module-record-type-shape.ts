@@ -263,13 +263,30 @@ export const setInlineRecordTitleField = (
     return { kind: "invalid", issues: ["Choose a text, number, choice or date field, or a stored calculation with one of those results."] };
   const previousTitle = record.title_field;
   (record as { title_field: string }).title_field = field.key;
-  // Search results that followed the old record title keep following its chosen title.
+  // Headings and search entries that followed the old title keep following its chosen title.
   const reference = `${change.moduleKey}:${record.key}`;
   for (const page of source.body.pages)
     for (const item of sourcePageItems(page.composition))
       if (item.type === "platform.renderer.record_detail" && item.props.heading_source === "field" &&
-          item.props.heading_field === `${reference}.${previousTitle}`)
+          item.props.heading_field === `${reference}.${previousTitle}`) {
+        const queryReference = item.props.vortex.query;
+        if (typeof queryReference === "string") {
+          const separator = queryReference.indexOf(":");
+          const owner = source.body.modules.find((module) => module.key === queryReference.slice(0, separator));
+          const query = owner?.queries.find((entry) => entry.key === queryReference.slice(separator + 1));
+          if (owner === undefined || query === undefined)
+            return { kind: "invalid", issues: [
+              `The heading on ${page.name} uses query ${queryReference}, which this application cannot edit. Change that query in its owning application before choosing this title.`,
+            ] };
+          const queryRecord = query.record_type.includes(":") ? query.record_type : `${owner.key}:${query.record_type}`;
+          if (queryRecord !== reference)
+            return { kind: "invalid", issues: [`The heading on ${page.name} uses a query for a different record type.`] };
+          // An empty selection means all fields; keep that meaning rather than narrowing it.
+          if (query.select.length > 0 && !(query.select as string[]).includes(field.key))
+            (query.select as string[]).push(field.key);
+        }
         item.props.heading_field = `${reference}.${field.key}`;
+      }
   for (const entry of source.body.search?.record_types ?? [])
     if (entry.record_type === reference && entry.title_field === `${reference}.${previousTitle}`)
       entry.title_field = `${reference}.${field.key}`;
