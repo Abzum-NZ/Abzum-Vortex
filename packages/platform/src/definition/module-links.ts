@@ -36,7 +36,7 @@ export type InlineRecordTypeLink = Readonly<{
   /** The relationship's own cardinality; a link field holds one record. */
   cardinality: Relationship["cardinality"];
   /** The name of the link back, from each linked record. */
-  reverseKey: string | undefined;
+  reverseName: string | undefined;
   onParentDelete: Relationship["on_parent_delete"];
 }>;
 
@@ -49,11 +49,11 @@ const linksOf = (record: RecordType): InlineRecordTypeLink[] => record.fields.fl
   if (field.type !== "link" && field.type !== "link_to_one_of_several") return [];
   const relationship = record.relationships.find((candidate) => candidate.from_field === field.key);
   if (relationship === undefined) return [];
-  const settings = field.settings as { target?: string; targets?: string[]; reverse_key?: string };
+  const settings = field.settings as { target?: string; targets?: string[]; reverse_name?: string };
   return [{
     fieldKey: field.key, label: field.label, type: field.type,
     targets: field.type === "link" ? [String(settings.target)] : [...(settings.targets ?? [])],
-    cardinality: relationship.cardinality, reverseKey: settings.reverse_key, onParentDelete: relationship.on_parent_delete,
+    cardinality: relationship.cardinality, reverseName: settings.reverse_name, onParentDelete: relationship.on_parent_delete,
   }];
 });
 

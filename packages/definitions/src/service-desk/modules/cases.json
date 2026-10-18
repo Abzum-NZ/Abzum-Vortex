@@ -97,6 +97,7 @@
           "settings": {
             "target": "vortex.crm.organisations:company",
             "reverse_key": "service_cases",
+            "reverse_name": "Service cases",
             "on_parent_delete": "refuse"
           }
         },
@@ -115,6 +116,7 @@
           "settings": {
             "target": "vortex.crm.people:contact",
             "reverse_key": "requested_cases",
+            "reverse_name": "Requested cases",
             "on_parent_delete": "refuse"
           }
         },
@@ -149,6 +151,7 @@
           "settings": {
             "target": "vortex.system_directory:person",
             "reverse_key": "owner_person_references",
+            "reverse_name": "Owner person references",
             "on_parent_delete": "empty_optional",
             "application_root_required": true,
             "legacy_person_field": "owner"
@@ -245,6 +248,7 @@
           "settings": {
             "target": "vortex.service_desk.sla:service_level",
             "reverse_key": "cases",
+            "reverse_name": "Cases",
             "on_parent_delete": "refuse"
           }
         },
@@ -486,6 +490,7 @@
           "settings": {
             "target": "vortex.service_desk.cases:case",
             "reverse_key": "comments",
+            "reverse_name": "Comments",
             "on_parent_delete": "soft_delete_dependent"
           }
         },
@@ -555,6 +560,7 @@
           "settings": {
             "target": "vortex.system_directory:person",
             "reverse_key": "created_by_person_references",
+            "reverse_name": "Created by person references",
             "on_parent_delete": "empty_optional",
             "application_root_required": false,
             "legacy_person_field": "created_by"

@@ -74,6 +74,7 @@
           "settings": {
             "target": "vortex.crm.organisations:company",
             "reverse_key": "opportunities",
+            "reverse_name": "Opportunities",
             "on_parent_delete": "refuse"
           }
         },
@@ -92,6 +93,7 @@
           "settings": {
             "target": "vortex.crm.people:contact",
             "reverse_key": "primary_opportunities",
+            "reverse_name": "Primary opportunities",
             "on_parent_delete": "empty_optional"
           }
         },
@@ -465,6 +467,7 @@
           "settings": {
             "target": "vortex.crm.opportunities:opportunity",
             "reverse_key": "stakeholders",
+            "reverse_name": "Stakeholders",
             "on_parent_delete": "soft_delete_dependent"
           }
         },
@@ -483,6 +486,7 @@
           "settings": {
             "target": "vortex.crm.people:contact",
             "reverse_key": "opportunity_roles",
+            "reverse_name": "Opportunity roles",
             "on_parent_delete": "soft_delete_dependent"
           }
         },

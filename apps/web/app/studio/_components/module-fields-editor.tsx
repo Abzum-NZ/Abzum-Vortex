@@ -128,8 +128,8 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
     // A new calculation is settled like every edit of its formula, so it is read-time when it must be.
     if (type === "calculation") return settledCalculation(start as CalculationSettings, formulaFieldsByKey);
     // A new link reads back from the linked record by this record type's plural name, for example assets.
-    const back = type === "link" && record !== undefined ? deriveFieldKey(record.plural_name, new Set()) : undefined;
-    return back === undefined ? start : { ...start, reverse_key: back };
+    const back = type === "link" ? record?.plural_name : undefined;
+    return back === undefined ? start : { ...start, reverse_name: back };
   };
   /** The stored settings a type keeps: the field's own while it keeps its type, else the new type's starting settings. */
   const plainOf = (type: ModuleFieldType): Plain =>
@@ -367,8 +367,9 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
             "not in a form Studio edits, so the settings are not changed here. Change them in the application source."}</AlertDescription></Alert>
         : declarations.length === 0
           ? <p className="text-sm text-muted-foreground">This type has no settings.</p>
-          : <StudioSettingFields idPrefix="module-field-setting" properties={declarations} values={form.settings}
-            choices={choices} disabled={disabled || shapeLocked} onChange={changeSettings} />}
+          : declarations.map((declaration) => <StudioSettingFields key={declaration.key} idPrefix="module-field-setting"
+            properties={[declaration]} values={form.settings} choices={choices}
+            disabled={disabled || (shapeLocked && declaration.key !== "reverse_name")} onChange={changeSettings} />)}
       {settingsValue.problem === "" ? null : <p role="alert" className="text-sm text-destructive">{settingsValue.problem}</p>}
       {computedValue.problem === "" ? null : <p role="alert" className="text-sm text-destructive">{computedValue.problem}</p>}
     </section>

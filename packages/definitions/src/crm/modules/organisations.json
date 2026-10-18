@@ -231,6 +231,7 @@
           "settings": {
             "target": "vortex.crm.organisations:company",
             "reverse_key": "subsidiaries",
+            "reverse_name": "Subsidiaries",
             "on_parent_delete": "empty_optional"
           }
         },

@@ -90,6 +90,7 @@
           "settings": {
             "target": "vortex.system_directory:person",
             "reverse_key": "employee",
+            "reverse_name": "Employee",
             "on_parent_delete": "refuse"
           }
         },
@@ -107,6 +108,7 @@
           "settings": {
             "target": "vortex.hr:position",
             "reverse_key": "employees",
+            "reverse_name": "Employees",
             "on_parent_delete": "refuse"
           }
         },
@@ -264,6 +266,7 @@
           "settings": {
             "target": "vortex.hr:department",
             "reverse_key": "positions",
+            "reverse_name": "Positions",
             "on_parent_delete": "refuse"
           }
         }
@@ -312,6 +315,7 @@
           "settings": {
             "target": "vortex.hr:employee",
             "reverse_key": "leave_entitlements",
+            "reverse_name": "Leave entitlements",
             "on_parent_delete": "refuse"
           }
         },
@@ -531,6 +535,7 @@
           "settings": {
             "target": "vortex.hr:employee",
             "reverse_key": "leave_requests",
+            "reverse_name": "Leave requests",
             "on_parent_delete": "refuse"
           }
         },
@@ -548,6 +553,7 @@
           "settings": {
             "target": "vortex.hr:leave_entitlement",
             "reverse_key": "leave_requests",
+            "reverse_name": "Leave requests",
             "on_parent_delete": "refuse"
           }
         }
