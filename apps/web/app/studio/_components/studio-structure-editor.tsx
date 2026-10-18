@@ -103,7 +103,7 @@ export function StudioStructureEditor({
       const hasReferences = result.where !== undefined && result.where.length > 0;
       toast.error("Nothing was changed", {
         id: "studio-structure-refusal",
-        description: result.message,
+        description: <span className="text-muted-foreground">{result.message}</span>,
         duration: Infinity,
         closeButton: true,
         action: {

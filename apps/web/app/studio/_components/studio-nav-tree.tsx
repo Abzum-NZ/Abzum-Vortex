@@ -258,7 +258,11 @@ export function StudioNavTree({
             }}
           />
           {open && (
-            <ul id={groupId} role="group" className="m-0 list-none space-y-1 pl-4">
+            <ul
+              id={groupId}
+              role="group"
+              className={cn("m-0 list-none space-y-1", depth === 0 ? "pl-4" : "pl-0")}
+            >
               {rows(node.children ?? [], depth + 1)}
             </ul>
           )}
