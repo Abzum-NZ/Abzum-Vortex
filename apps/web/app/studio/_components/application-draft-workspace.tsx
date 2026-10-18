@@ -21,6 +21,7 @@ import {
   isStudioRailKey, isStudioReleasesSection, railShowsCanvas, studioRailTabs, type StudioRailKey, type StudioReleasesSection,
 } from "./studio-rail-tabs";
 import { StudioSaveProblem } from "./studio-save-problem";
+import { StudioSessionDialog } from "./studio-session-dialog";
 import { StudioTopBar } from "./studio-top-bar";
 import { StudioPlaceOpenerProvider, type StudioPlaceOpener } from "./studio-used-in";
 import { useStudioCanvasTab } from "./use-studio-canvas-tab";
@@ -148,6 +149,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   const [loadFailed, setLoadFailed] = useState(false);
 
   return <StudioPlaceOpenerProvider opener={placeOpener}>
+  <StudioSessionDialog session={draft.session} />
   <div aria-busy={draft.isHeld("publication") || draft.isHeld("reopening")}>
     <ApplicationDraftAgentTools draft={draft} catalogue={catalogue} command={canvas.commandComposition}
       readQueries={canvas.readQueries} {...releases.agent} />

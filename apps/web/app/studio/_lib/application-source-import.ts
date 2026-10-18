@@ -40,6 +40,11 @@ export const studioApplicationSourceReviewResultSchema = z.discriminatedUnion("k
     ...sourceReviewBinding,
     validation: definitionValidationResultSchema,
   }).strict(),
+  z.object({
+    kind: z.literal("identity_conflict"),
+    ...sourceReviewBinding,
+    conflicts: z.array(z.object({ kind: z.string(), name: z.string() }).strict()).min(1),
+  }).strict(),
   z.object({ kind: z.literal("invalid") }).strict(),
   z.object({ kind: z.literal("conflict") }).strict(),
   z.object({ kind: z.literal("refused") }).strict(),
