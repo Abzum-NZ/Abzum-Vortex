@@ -735,8 +735,7 @@ export function useStudioCanvasTab({
       {shown &&
         canvasPage !== undefined &&
         platformThemeTokens !== null &&
-        fieldInputControlReleases !== null &&
-        view.slots?.[canvasPage.id] !== undefined && (
+        fieldInputControlReleases !== null && (
           // The canvas previews the application in light or dark: the appearance is set on the canvas only, never on Studio's frame.
           <div
             {...createAppearanceRootProps(appearance)}
