@@ -1,12 +1,13 @@
 import "server-only";
 
 import type { createOrganizationAccessAdministrationService } from "../access/index";
-import type { IdentitySession } from "../schema";
+import { canonicalJson, type IdentitySession } from "../schema";
 import { installationProblem } from "./installation-authority";
 import {
   acceptApplicationRoleChanges,
   applicationRoleChanges,
   readInstallationRoles,
+  readInstallationRolesIn,
   requireRoleAcceptanceAuthority,
   type ApplicationRoleChange,
 } from "./installation-role-templates";
@@ -57,9 +58,8 @@ export type UpgradeWithRoleChangesResult = Readonly<{
  * operations under the upgrader's installation authority: Manage applications, the delegated
  * scope over every permission the roles confer and a primary sign-in within the last 15 minutes.
  * That authority is proved before anything is written, so a stale sign-in refuses the whole
- * action and nothing changes. A reviewed list that no longer matches is a conflict. Each
- * acceptance then commits in its own transaction after the switch, for exactly the template of
- * the selected version.
+ * action. A reviewed list or role revision that no longer matches is a conflict. All role
+ * acceptances commit together after the switch, for exactly the selected version's templates.
  */
 export const upgradeWithRoleChanges = async (
   environment: UpgradeRoleEnvironment,
@@ -67,10 +67,18 @@ export const upgradeWithRoleChanges = async (
   state: UpgradeState,
   session: IdentitySession,
   reviewedSourceRoleIds: readonly string[],
+  reviewedChanges: readonly unknown[],
 ): Promise<UpgradeWithRoleChangesResult> => {
   const listed = await readUpgradeRoleChanges(environment, session, selector, state);
   const reviewed = new Set(reviewedSourceRoleIds.map((id) => id.toLowerCase()));
   if (
+    canonicalJson(
+      listed.map(({ sourceRoleId, roleId, liveRevision }) => ({
+        sourceRoleId,
+        roleId: roleId ?? null,
+        liveRevision: liveRevision ?? null,
+      })),
+    ) !== canonicalJson(reviewedChanges) ||
     reviewed.size !== reviewedSourceRoleIds.length ||
     listed.length !== reviewed.size ||
     listed.some((change) => !reviewed.has(change.sourceRoleId.toLowerCase()))
@@ -89,12 +97,34 @@ export const upgradeWithRoleChanges = async (
     state.selectedReleaseSet,
     listed.map((change) => change.sourceRoleId),
   );
-  if (switching) await activateUpgradeRelease(environment, selector, state, session);
+  if (switching)
+    await activateUpgradeRelease(
+      environment,
+      selector,
+      state,
+      session,
+      async (transaction, scope) => {
+        const locked = await readInstallationRolesIn(
+          transaction,
+          scope,
+          environment,
+          selector,
+          environment.containsCustomComponents(state.selectedReleaseSet),
+        );
+        const lockedChanges = applicationRoleChanges(locked.roles, state.selectedReleaseSet, [
+          state.activeReleaseSet,
+        ]);
+        if (canonicalJson(lockedChanges) !== canonicalJson(listed))
+          installationProblem("upgrade_role_revision_changed", "conflict");
+      },
+    );
   return acceptApplicationRoleChanges(
     environment,
     session,
     selector,
     state.selectedReleaseSet,
-    listed,
+    listed.map((change) =>
+      switching ? { ...change, liveRevision: change.registrationRevision } : change,
+    ),
   );
 };

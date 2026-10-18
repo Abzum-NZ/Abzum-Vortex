@@ -15,6 +15,7 @@ import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "../platform-compatib
 import {
   applicationRoleReviewBytes,
   maximumApplicationRoleReviewBytes,
+  maximumAcceptedRoleHistoryBytes,
 } from "../application-role-review-volume";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "../canonical-json-definition";
 import {
@@ -718,13 +719,15 @@ export function compileParsedApplicationRequest(
       ),
     );
     const ownDefinition = resolution.definition(source.key, "application");
+    const roleReview = applicationRoleReviewBytes(
+      canonical.content,
+      dependencyOutputs.flatMap((output) =>
+        output.kind === "module" ? [output.canonical.content] : [],
+      ),
+    );
     if (
-      applicationRoleReviewBytes(
-        canonical.content,
-        dependencyOutputs.flatMap((output) =>
-          output.kind === "module" ? [output.canonical.content] : [],
-        ),
-      ) > maximumApplicationRoleReviewBytes
+      roleReview.releaseBytes > maximumApplicationRoleReviewBytes ||
+      roleReview.acceptedHistoryBytes > maximumAcceptedRoleHistoryBytes
     )
       fail("vortex.definition.application_role_review_volume", "invalid_value");
     const artifact = {

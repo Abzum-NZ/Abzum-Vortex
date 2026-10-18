@@ -1696,29 +1696,6 @@
                                     }
                                   }
                                 ]
-                              },
-                              {
-                                "key": "review_too_large",
-                                "when": {
-                                  "type": "text",
-                                  "value": "review_too_large"
-                                },
-                                "tasks": [
-                                  {
-                                    "id": "unavailable_review_too_large",
-                                    "type": "interface.show_message",
-                                    "version": "1.0.0",
-                                    "properties": {
-                                      "message": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "This version has too much role and permission detail to review safely here. Ask its author to publish a version with fewer roles, permissions or field-level grants. No role changes have been accepted."
-                                        }
-                                      }
-                                    }
-                                  }
-                                ]
                               }
                             ],
                             "default": [

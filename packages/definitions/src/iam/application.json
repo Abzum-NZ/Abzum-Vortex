@@ -4868,7 +4868,7 @@
                             "kind": "literal",
                             "literal": {
                               "type": "text",
-                              "value": "Review application role changes in App Store"
+                              "value": "Review and accept role changes in App Store"
                             }
                           },
                           "destination": {
@@ -5116,7 +5116,7 @@
                             "kind": "literal",
                             "literal": {
                               "type": "text",
-                              "value": "Review application role changes in App Store"
+                              "value": "Review and accept role changes in App Store"
                             }
                           },
                           "destination": {

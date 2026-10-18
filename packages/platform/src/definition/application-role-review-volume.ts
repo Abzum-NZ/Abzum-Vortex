@@ -1,16 +1,14 @@
-import type { ApplicationContent } from "./application-contracts";
+import { maximumApplicationRoles, type ApplicationContent } from "./application-contracts";
 import type { ModuleContent } from "./module-contracts";
 import type { JsonValue } from "../catalogue/common";
 
-/**
- * A continuation holds 2 MiB. Reserve 256 KiB for the flow, release identities, bindings and
- * release note, leaving 896 KiB for each side of an upgrade. Installation also retains the role
- * snapshot, so the allowance charges both its permission objects and their displayed labels.
- */
+/** A complete review reserves one bounded release and independently retained historical roles. */
 export const maximumApplicationRoleReviewBytes = 896 * 1024;
-export const maximumInstallationReviewBytes = 2 * maximumApplicationRoleReviewBytes;
+// Every one of the 500 roles may retain a different previously published permission set.
+export const maximumAcceptedRoleHistoryBytes =
+  96 * 1024 * 1024 - 256 * 1024 - maximumApplicationRoleReviewBytes;
 export const applicationRoleReviewVolumeMessage =
-  "This application's roles contain too much permission detail for one installation review. Use fewer roles, permissions or field-level grants before publishing.";
+  "This application's roles contain too much permission detail for one installation review. Use fewer roles, or give each role fewer permissions or field-level grants before publishing.";
 
 const bytes = (value: string): number => new TextEncoder().encode(value).length;
 
@@ -37,19 +35,20 @@ export const reviewJsonbBytes = (value: JsonValue): number => {
  * its saved key/label plus its displayed label and change marker. Each field grant reserves
  * 384 bytes: two 60-character labels at up to 3 UTF-8 bytes per UTF-16 unit, change marker,
  * edit suffix and separators. This also covers UUID fallbacks and names changed in later
- * releases. Charging both versions covers removed permissions/fields as well as added ones.
+ * releases. The largest role is charged 500 times because independently accepted roles can
+ * retain permission sets from 500 different releases.
  */
 export const applicationRoleReviewBytes = (
   application: ApplicationContent,
   modules: readonly ModuleContent[],
-): number => {
+): Readonly<{ releaseBytes: number; acceptedHistoryBytes: number }> => {
   const permissions = new Map(
     [...application.permissions, ...modules.flatMap((module) => module.permissions)].map(
       (permission) => [permission.key, permission],
     ),
   );
-  return application.roles.reduce((total, role) => {
-    let size = total + 512 + bytes(role.name) + bytes(role.key);
+  const roleSizes = application.roles.map((role) => {
+    let size = 512 + bytes(role.name) + bytes(role.key);
     for (const key of role.permissionKeys) {
       const permission = permissions.get(key);
       if (permission === undefined) throw new Error(`Role permission is unresolved: ${key}`);
@@ -67,5 +66,9 @@ export const applicationRoleReviewBytes = (
           (permission.fieldPolicy?.changeableFieldIds.length ?? 0));
     }
     return size;
-  }, 0);
+  });
+  return {
+    releaseBytes: roleSizes.reduce((total, size) => total + size, 0),
+    acceptedHistoryBytes: maximumApplicationRoles * Math.max(0, ...roleSizes),
+  };
 };

@@ -6,7 +6,6 @@ import { fingerprintPermissionMeaning, type BuilderConferredPermission } from ".
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   canonicalJson,
-  changeOrganizationAdministrationRoleAuthorityCommandSchema,
   organizationAccountIdSchema,
   organizationAdministrationPermissionSchema,
   organizationIdSchema,
@@ -488,6 +487,9 @@ const permissionChanges = (
 export type ApplicationRoleChange = Readonly<{
   sourceRoleId: string;
   roleId: string | undefined;
+  liveRevision: number | undefined;
+  /** The revision registration will produce before role acceptance. */
+  registrationRevision: number | undefined;
   name: string;
   /** Every permission of a new role, or what accepting changes for an accepted one. */
   changes: readonly string[];
@@ -513,6 +515,8 @@ export const applicationRoleChanges = (
       changes.push({
         sourceRoleId: template.sourceRoleId,
         roleId: undefined,
+        liveRevision: undefined,
+        registrationRevision: undefined,
         name: template.name,
         changes: template.permissions.map((permission) => permission.label),
         holders: 0,
@@ -525,10 +529,27 @@ export const applicationRoleChanges = (
       templatePermissions(releaseSet, template.sourceRoleId),
       names,
     );
+    const targetReferences = new Set(
+      templatePermissions(releaseSet, template.sourceRoleId).map(({ reference }) =>
+        referenceKey(reference),
+      ),
+    );
+    const retained = role.acceptedPermissions.filter(({ reference }) =>
+      targetReferences.has(referenceKey(reference)),
+    );
+    const targetUnchanged =
+      permissionChanges(retained, templatePermissions(releaseSet, template.sourceRoleId), names)
+        .length === 0;
+    const targetLifecycle =
+      role.lifecycle === "active" && targetUnchanged ? "active" : "acceptance_required";
+    const registrationChangesRevision =
+      role.lifecycle !== targetLifecycle || retained.length !== role.acceptedPermissions.length;
     if (changed.length > 0 || role.lifecycle === "acceptance_required")
       changes.push({
         sourceRoleId: template.sourceRoleId,
         roleId: String(role.roleId),
+        liveRevision: role.liveRevision,
+        registrationRevision: role.liveRevision + (registrationChangesRevision ? 1 : 0),
         name: role.label,
         changes: changed.length > 0 ? changed : ["Accept this role again"],
         holders: role.liveAssignmentCount,
@@ -597,8 +618,9 @@ const preparesShownTemplate = (
 
 /**
  * Accepts each listed role change for exactly the template of `releaseSet` the installer was
- * shown, through the existing Access operations under the installer's own authority, each in its
- * own transaction (each advances the Access version a request is pinned to). A new role is
+ * shown, through the existing Access operations under the installer's own authority, in one
+ * transaction. Every role is prepared before the complete set is written; any refusal rolls back
+ * every acceptance in that set. A new role is
  * accepted from its template; a changed one has its pending revision accepted. A role that an
  * upgrade left active (it only narrowed) needs no acceptance. Returns the source role ids now
  * matching the template and those that were not accepted, with the cause logged.
@@ -611,6 +633,7 @@ export const acceptApplicationRoleChanges = async (
   changes: readonly ApplicationRoleChange[],
 ): Promise<Readonly<{ accepted: readonly string[]; notAccepted: readonly string[] }>> => {
   const accepted: string[] = [];
+  const commands: { evidence: PreparedOrganizationRoleChange }[] = [];
   const notAccepted: string[] = [];
   if (changes.length === 0) return { accepted, notAccepted };
   const administration = environment.accessAdministration;
@@ -625,7 +648,7 @@ export const acceptApplicationRoleChanges = async (
   for (const change of changes) {
     const refuse = (cause: string) => {
       console.error(`[installation] role ${change.sourceRoleId} not accepted: ${cause}`);
-      notAccepted.push(change.sourceRoleId);
+      installationProblem(`installation_role_not_accepted_${cause}`, "conflict");
     };
     const role = current.roles.find((candidate) =>
       sameId(candidate.sourceRoleId, change.sourceRoleId),
@@ -667,29 +690,15 @@ export const acceptApplicationRoleChanges = async (
         refuse("template_changed_since_review");
         continue;
       }
-      const result = await administration.acceptApplicationRoleTemplate(
-        session,
-        selection,
-        changeOrganizationAdministrationRoleAuthorityCommandSchema.parse({
-          evidence: prepared.value,
-        }),
-      );
-      if (result.kind !== "available") {
-        refuse(`acceptance_${result.kind}`);
-        continue;
-      }
-      const created = result.value.role;
-      if (
-        created.source.kind !== "application" ||
-        !sameId(created.source.applicationRootId, selector.rootId) ||
-        !sameId(created.source.sourceRoleId, template.sourceRoleId) ||
-        created.lifecycle !== "active"
-      )
-        installationProblem("installation_role_acceptance_mismatch", "failed");
+      commands.push({ evidence: prepared.value });
       accepted.push(change.sourceRoleId);
       continue;
     }
-    if (role === undefined || !sameId(role.roleId, change.roleId)) {
+    if (
+      role === undefined ||
+      !sameId(role.roleId, change.roleId) ||
+      role.liveRevision !== change.liveRevision
+    ) {
       refuse("role_changed_since_review");
       continue;
     }
@@ -722,18 +731,22 @@ export const acceptApplicationRoleChanges = async (
       refuse("template_changed_since_review");
       continue;
     }
-    const result = await administration.acceptApplicationRoleRevision(
-      session,
-      selection,
-      changeOrganizationAdministrationRoleAuthorityCommandSchema.parse({
-        evidence: prepared.value,
-      }),
-    );
-    if (result.kind !== "available") {
-      refuse(`acceptance_${result.kind}`);
-      continue;
-    }
+    commands.push({ evidence: prepared.value });
     accepted.push(change.sourceRoleId);
+  }
+  if (commands.length > 0) {
+    const result = await administration.acceptApplicationRoles(session, selection, commands);
+    if (result.kind !== "available") {
+      if (result.kind === "unavailable" && result.code === "recent_authentication_required")
+        installationProblem(
+          "installation_role_acceptance_authentication",
+          "authentication_required",
+        );
+      installationProblem(
+        "installation_role_set_not_accepted",
+        result.kind === "unavailable" ? "refused" : "temporarily_unavailable",
+      );
+    }
   }
   return { accepted, notAccepted };
 };

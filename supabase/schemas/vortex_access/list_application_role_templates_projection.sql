@@ -1,4 +1,4 @@
-﻿create or replace function vortex_access.list_application_role_templates_projection(
+create or replace function vortex_access.list_application_role_templates_projection(
   p_record_ids uuid[], p_sort_key text, p_direction text,
   p_after jsonb, p_limit integer
 )

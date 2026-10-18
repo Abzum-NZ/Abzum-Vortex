@@ -14,7 +14,6 @@ import {
 } from "../schema";
 import type { InstallationProblemShape } from "./installation-authority";
 import { maximumApplicationRoles } from "./application-contracts";
-import { maximumInstallationReviewBytes, reviewJsonbBytes } from "./application-role-review-volume";
 import { classifyInstallationFailure } from "./installation-failure";
 import { FirstInstallUnavailable } from "./installation-first-install";
 import {
@@ -65,7 +64,6 @@ type UnavailableReason =
   | "module_set_changed"
   | "installation_incomplete"
   | "registration_misaligned"
-  | "review_too_large"
   | "unsupported";
 
 const applicationRootInput = (candidate: unknown) => applicationRootIdSchema.safeParse(candidate);
@@ -97,14 +95,6 @@ const unavailable = (reason: UnavailableReason): ApplicationStoreResult => ({
   kind: "available",
   value: reviewOutputs({ change: "unavailable", reason }),
 });
-
-/** Refuse oversized stored releases before the flow attempts to persist its confirmation. */
-const reviewed = (value: Outputs): ApplicationStoreResult => {
-  if (reviewJsonbBytes(value) <= maximumInstallationReviewBytes)
-    return { kind: "available", value };
-  console.error("[installation] application review exceeds its continuation allowance");
-  return unavailable("review_too_large");
-};
 
 /** The review's answer to a failure: a named unavailability the flow explains, or the failure itself. */
 const reviewFailure = (error: unknown): ApplicationStoreResult => {
@@ -227,7 +217,7 @@ const review = async (
     try {
       const candidate = await readCurrentFirstInstallCandidate(environment, session, selector);
       if (candidate.snapshot.registrationState !== "active_exact")
-        return reviewed(await installReview(environment, session, candidate));
+        return { kind: "available", value: await installReview(environment, session, candidate) };
     } catch (error) {
       // Installed at an earlier version: the latest one is an upgrade.
       if (!(error instanceof FirstInstallUnavailable) || error.reason !== "already_installed")
@@ -238,8 +228,9 @@ const review = async (
     const changes = await readUpgradeRoleChanges(environment, session, selector, authorized.state);
     const installed =
       authorized.snapshot.selected.releaseRevision === authorized.snapshot.active.releaseRevision;
-    return reviewed(
-      reviewOutputs({
+    return {
+      kind: "available",
+      value: reviewOutputs({
         change: !installed ? "upgrade" : changes.length > 0 ? "roles" : "current",
         application_name: application.content.name,
         release_version: authorized.snapshot.selected.releaseVersion,
@@ -248,9 +239,16 @@ const review = async (
         role_changes: changes.map(roleChangeLine),
         role_change_count: changes.length,
         role_template_ids: changes.map((change) => change.sourceRoleId),
-        expected: expectedOf(authorized.snapshot),
+        expected: expectedOf({
+          ...authorized.snapshot,
+          roleRevisions: changes.map(({ sourceRoleId, roleId, liveRevision }) => ({
+            sourceRoleId,
+            roleId: roleId ?? null,
+            liveRevision: liveRevision ?? null,
+          })),
+        }),
       }),
-    );
+    };
   } catch (error) {
     return reviewFailure(error);
   }
@@ -338,13 +336,24 @@ const upgradeExpectedSchema = z
     selected: z.object({ releaseRevision: z.number().int().positive() }).passthrough(),
     active: z.object({ releaseRevision: z.number().int().positive() }).passthrough(),
     validUntil: z.string().min(1),
+    roleRevisions: z
+      .array(
+        z
+          .object({
+            sourceRoleId: roleIdSchema,
+            roleId: roleIdSchema.nullable(),
+            liveRevision: z.number().int().positive().nullable(),
+          })
+          .strict(),
+      )
+      .max(maximumApplicationRoles),
   })
   .passthrough();
 
 /**
  * Upgrades the application to the reviewed version and accepts the role changes the person reviewed,
- * or, when the reviewed version is already installed, accepts only those. A change that could not
- * be accepted is counted as waiting, and the next review offers it again.
+ * or, when the reviewed version is already installed, accepts only those. Any refusal rolls back
+ * the complete acceptance set; a later review offers the pending changes again.
  */
 const upgrade = async (
   environment: ApplicationStoreEnvironment,
@@ -384,6 +393,7 @@ const upgrade = async (
       current.state,
       session,
       roleTemplateIds.data,
+      expected.data.roleRevisions,
     );
     return {
       kind: "available",

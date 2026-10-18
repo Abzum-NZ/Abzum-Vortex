@@ -16,14 +16,32 @@ The allowance is a conservative storage budget, not the length of the visible te
   two 60-character labels (record type and field), each using up to 180 UTF-8 bytes, plus its change
   marker, edit suffix and separator. This bound also covers UUID fallbacks and renamed fields.
 
-An upgrade may display additions from the selected version and removals from the previously
-accepted version. Each side has its own 896 KiB allowance, giving at most 1,792 KiB. The database's
-2 MiB continuation bound therefore retains 256 KiB of headroom for flow state, release identities,
-bindings and release notes. The role count still has its separate 500-role ceiling, shared with the
-confirmation entry count; a version must satisfy both count and volume limits.
+An upgrade may combine roles accepted from different releases. Publication therefore checks two
+independent allowances on every version:
 
-Before returning any review, the runtime also checks an upper bound for its complete JSONB output
-against 1,792 KiB. This includes the actual snapshot, binding metadata and release note. A stored
-release or locally changed role configuration that exceeds that allowance receives the typed
-`review_too_large` explanation in the definition-authored journey. It never reaches confirmation
-storage and never accepts any of that role set. This is a safety check on the same review path.
+- The sum of this version's roles is at most 917,504 bytes (896 KiB).
+- 500 times this version's largest role is at most 99,483,648 bytes. This limits every published
+  role to at most 198,967 bytes, regardless of how many other roles that version contains.
+
+The old side can contain at most 500 roles, each retaining a subset of a permission set accepted
+from some published version. Its upper bound is therefore 99,483,648 bytes even when all 500
+roles retain meanings from different releases. Adding the selected version's 917,504 bytes and
+262,144 bytes for flow state, release identities, bindings, release notes and reviewed role revisions
+gives exactly 100,663,296 bytes (96 MiB), the database continuation capacity. The 500-role count
+ceiling is shared with confirmation entries. Both publication allowances must pass.
+
+For the review's counterexample, a large role with two 216-byte grants, four-byte name/key and
+1,000 field grants costs `512 + 4 + 4 + 2 * 216 + 384 * 1,000 = 384,952` bytes. A release with
+only two such roles can pass the per-version allowance, but `500 * 384,952 = 192,476,000` exceeds
+the historical allowance and publication now refuses it. Eighteen older large roles would otherwise
+produce at least 2,346,678 bytes of field-removal text, exceeding the former 2 MiB continuation.
+That sequence can no longer be published. Every accepted role's independently retained permission
+set is bounded before publication, including resolved Module permissions and wildcards.
+
+The publication refusal uses business language: use fewer roles, permissions or field-level grants.
+It leaves the draft editable and preserves every grant. There is no read-time review-size refusal;
+a published, supported history remains available for a complete review. Data reset required when
+applying this contract: run demo:setup to republish shipped definitions and discard earlier state.
+
+The shipped applications have a maximum measured historical allowance of 76,241,000 bytes (the
+largest role is 152,482 bytes), so they satisfy the publication rule without changing their grants.

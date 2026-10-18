@@ -93,7 +93,7 @@ const assignmentDeclined = async (
  * The roles of a FIRST install, before the activation switch. Every role the release offers
  * becomes an organisation role, accepted under the installer's installation authority alone, so
  * the application's roles can be given to people as soon as it is installed; nobody holds one
- * until it is assigned. Each acceptance commits in its own transaction through the existing Access
+ * until it is assigned. All role acceptances commit together through the existing Access
  * operation, which re-checks Manage applications, the delegated scope over every permission and a
  * recent primary sign-in. With the installer's explicit choice (offered only when they may manage
  * assignments) the default member role is then assigned to them.
