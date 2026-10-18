@@ -8,12 +8,8 @@ import {
   type SourceFlow,
   type SourceItem,
 } from "@vortex/platform/schema";
-import {
-  applyStudioFlowCreate,
-  StoredCompositionRefusal,
-  validateStoredZone,
-  type StudioFlowCreateCommand,
-} from "@vortex/ui/studio";
+import { applyStudioFlowCreate, type StudioFlowCreateCommand } from "./application-flow-create";
+import { StoredCompositionRefusal, validateStoredZone } from "./stored-composition";
 import {
   blockItem, emptyPageData, judged, newestRelease, placeNewPage, quoted, refuse, StructureRefusal, uniqueKey,
   type Page, type Source, type StructureRelease, type StudioStructureContext, type StudioStructureResult,
@@ -627,5 +623,5 @@ export const addRecordPage = (context: StudioStructureContext, candidate: Source
       : command.type === "guided" ? addGuided(context, plan, resolved, command)
         : addForm(context, plan, resolved, command, command.type === "form_create" ? "create" : "update");
   return { kind: "applied", source: judged(plan.source), select: { kind: "page", pageAlias: page.id }, details: plan.details,
-    message: `The ${kindWords[command.type]} ${quoted(page.name)} for ${resolved.record.plural_name.toLowerCase()} was added. Save to keep it.` };
+    message: `The ${kindWords[command.type]} ${quoted(page.name)} for ${resolved.record.plural_name.toLowerCase()} was added.` };
 };

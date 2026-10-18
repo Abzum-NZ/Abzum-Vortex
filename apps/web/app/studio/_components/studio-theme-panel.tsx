@@ -1,5 +1,5 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import type { SourceApplicationThemeSelection } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
@@ -76,11 +76,13 @@ export function StudioThemePanel({ selection, options, disabled, hidden, onChang
   const pick = (key: StudioThemeDimensionKey, id: string) => {
     void change({ ...selection, [key]: id }, `${dimension(key).label} set to ${studioThemeOptionLabel(options, key, id)}`);
   };
-  const paste = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const decoded = decodeStudioThemePreset(code);
-    if (decoded.kind === "refused") { setFeedback({ kind: "refused", message: decoded.message }); return; }
-    if (await change(decoded.selection, `Preset ${code.trim()} applied`)) setCode("");
+  // A pasted code applies as soon as it reads as a preset; a code that does not is explained on Enter or when leaving the field.
+  const paste = async (next: string, explain: boolean) => {
+    setCode(next);
+    if (next.trim().length === 0) return;
+    const decoded = decodeStudioThemePreset(next);
+    if (decoded.kind === "refused") { if (explain) setFeedback({ kind: "refused", message: decoded.message }); return; }
+    if (await change(decoded.selection, `Preset ${next.trim()} applied`)) setCode("");
   };
   const shuffle = async () => {
     if (locked) return;
@@ -98,17 +100,17 @@ export function StudioThemePanel({ selection, options, disabled, hidden, onChang
   };
 
   return <StudioPanelShell title="Theme" hidden={hidden}
-    description="shadcn create settings for the whole application. The canvas shows each change at once; save to keep it."
+    description="shadcn create settings for the whole application. The canvas shows each change at once, and it is saved automatically."
     action={<Button type="button" size="sm" variant="outline" disabled={locked} onClick={() => { void shuffle(); }}>
       Shuffle</Button>}>
     <section aria-label="Preset code" className="space-y-2">
       <p className="text-sm">Preset code <span className="font-mono tabular-nums">{current}</span></p>
-      <form className="flex items-end gap-2" onSubmit={(event) => { void paste(event); }}>
-        <StudioField label="Paste a shadcn preset code" hint="From ui.shadcn.com/create, for example b5eFaVxg0.">
+      <form className="flex items-end gap-2" onSubmit={(event) => { event.preventDefault(); void paste(code, true); }}>
+        <StudioField label="Paste a shadcn preset code" hint="From ui.shadcn.com/create, for example b5eFaVxg0. It applies as soon as it is read.">
           {(control) => <Input {...control} value={code} maxLength={12} disabled={locked} spellCheck={false}
-            onChange={(event) => setCode(event.target.value)} />}
+            onChange={(event) => { void paste(event.target.value, false); }}
+            onBlur={() => { void paste(code, true); }} />}
         </StudioField>
-        <Button type="submit" size="sm" disabled={locked || code.trim().length === 0}>Apply</Button>
       </form>
     </section>
     {feedback !== null && <div role={feedback.kind === "refused" ? "alert" : "status"}

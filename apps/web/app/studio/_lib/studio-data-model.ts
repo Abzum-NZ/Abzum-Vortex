@@ -1,4 +1,22 @@
 import { moduleFieldTypeLabels, type ApplicationSourceDocument, type ModuleField, type ModuleFieldType } from "@vortex/platform/schema";
+import type { StudioRunOptions } from "../_components/use-studio-draft";
+
+/**
+ * The Data tab's one edit path: `command` changes the current draft source; a result of kind
+ * "changed" with a source is one edit of the draft (one Undo step, or one merged step with
+ * `merge`), any other result changes nothing and is answered as it is. "blocked" says the draft
+ * cannot be edited now (loading, publishing, or changed elsewhere).
+ */
+export type StudioDataEdit = <Result extends Readonly<{ kind: string }>>(
+  command: (source: ApplicationSourceDocument) => Result, options?: StudioRunOptions,
+) => Result | Readonly<{ kind: "blocked"; message: string }>;
+
+/** Why an edit was kept out of the draft, in words; undefined when it was applied. */
+export const studioEditProblem = (result: Readonly<{ kind: string }>): string | undefined => {
+  if (result.kind === "changed") return undefined;
+  const { message, issues, issue } = result as Readonly<{ message?: string; issues?: readonly string[]; issue?: string }>;
+  return message ?? (issues === undefined ? issue : issues.join(" ")) ?? "Nothing was changed.";
+};
 
 /**
  * What the current published versions of the application's own modules hold, as qualified
