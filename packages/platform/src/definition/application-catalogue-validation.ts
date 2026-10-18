@@ -159,9 +159,15 @@ export function validateApplicationSourceCatalogue(
     placementAlias: string,
     settings: Readonly<Record<string, SourceValue>>,
     location: readonly Segment[],
+    blockKey: string,
   ): void => {
     const table = readRecordsTableContract(settings);
     const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
+    if (blockKey === "platform.display.record_detail" &&
+        settings.detail_fields !== undefined && detail === undefined) {
+      report("vortex.definition.application_block_settings", "required_value", [...location, ...keySegment("setting", "heading_field")]);
+      return;
+    }
     if (table === undefined && detail === undefined) return;
     const at = (key: string): Segment[] => [...location, ...keySegment("setting", key)];
     if (table !== undefined && placement.query === undefined)
@@ -283,8 +289,11 @@ export function validateApplicationSourceCatalogue(
           "invalid_value",
         );
       }
-    } else if (detail !== undefined)
+    } else if (detail !== undefined) {
       checkFields("detail_fields", detail.fields.map((entry) => entry.field), () => true, "invalid_value");
+      if (detail.headingField !== undefined)
+        checkFields("heading_field", [detail.headingField], () => true, "invalid_value");
+    }
   };
 
   const settingPathSegments = (path: readonly (string | number)[]): Segment[] =>
@@ -435,7 +444,7 @@ export function validateApplicationSourceCatalogue(
 
       const reading = readSourceItem(item, release);
       reportSettingFailures(reading.settingFailures, location);
-      validateDataContract(placement, alias, reading.settings, location);
+      validateDataContract(placement, alias, reading.settings, location, release.key);
       validateAccessibleName(reading.settings, release, location);
       validateResponsive(placement, release, location);
 

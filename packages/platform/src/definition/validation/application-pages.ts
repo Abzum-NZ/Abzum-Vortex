@@ -160,6 +160,8 @@ export function applicationPageRules(scope: ApplicationScope): void {
       const settings = object(placement.settings) as Parameters<typeof readRecordsTableContract>[0];
       const table = readRecordsTableContract(settings);
       const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
+      if (blockKey === "platform.display.record_detail" && settings.detail_fields !== undefined && detail === undefined)
+        failures.push(failure(output, "vortex.definition.application_block_settings", "required_value"));
       if (blockKey === "platform.display.board") {
         const board = readBoardPlacementContract(settings);
         const boardRecordType = records.get(String(object(bound.recordType).recordTypeId));
@@ -327,7 +329,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
                 leading.direction !== table.defaultSort.direction)))) ||
         (detail !== undefined &&
           !mapped(
-            detail.fields.map((entry) => entry.field),
+            [...detail.fields.map((entry) => entry.field), ...(detail.headingField === undefined ? [] : [detail.headingField])],
             selected,
           ))
       )

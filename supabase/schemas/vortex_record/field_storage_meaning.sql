@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.field_storage_meaning(p_field jsonb) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.field_storage_meaning(p_field jsonb) RETURNS jsonb
     LANGUAGE sql IMMUTABLE
     SET search_path TO ''
     AS $$
@@ -9,7 +9,9 @@ CREATE FUNCTION vortex_record.field_storage_meaning(p_field jsonb) RETURNS jsonb
     'unique', p_field -> 'unique',
     'filterable', p_field -> 'filterable',
     'sortable', p_field -> 'sortable',
-    'settings', p_field -> 'settings'
+    'settings', case when p_field ->> 'type' = 'link'
+      then (p_field -> 'settings') - 'reverseName'
+      else p_field -> 'settings' end
   )
 $$;
 alter function vortex_record.field_storage_meaning(jsonb) owner to vortex_owner;

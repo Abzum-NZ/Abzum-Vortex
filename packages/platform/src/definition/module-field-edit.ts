@@ -1,3 +1,4 @@
+import { canonicalJson } from "./canonical-json";
 import { fieldTypeKeys } from "../catalogue/catalogues";
 import {
   applicationSourceDocumentSchema,
@@ -145,6 +146,7 @@ const linkProblem = (source: ApplicationSourceDocument, module: InlineModule, ch
   // A link back is named on the linked record type, so no two links to one record type, from
   // whichever owned record type, may share that name.
   const reverse = (change.settings as { reverse_key?: unknown }).reverse_key;
+  const reverseName = (change.settings as { reverse_name?: unknown }).reverse_name;
   if (change.type === "link" && typeof settings.target === "string" && reverse !== undefined) {
     const target = qualifiedLinkTarget(module.key, settings.target);
     for (const other of source.body.modules) for (const linking of other.record_types) {
@@ -152,9 +154,10 @@ const linkProblem = (source: ApplicationSourceDocument, module: InlineModule, ch
         !(other.key === module.key && linking.id === change.recordAlias && field.id === change.fieldAlias) &&
         typeof (field.settings as { target?: unknown }).target === "string" &&
         qualifiedLinkTarget(other.key, (field.settings as { target: string }).target) === target &&
-        (field.settings as { reverse_key?: unknown }).reverse_key === reverse);
+        ((field.settings as { reverse_key?: unknown }).reverse_key === reverse ||
+          (typeof reverseName === "string" && (field.settings as { reverse_name: string }).reverse_name.toLowerCase() === reverseName.toLowerCase())));
       if (twin !== undefined)
-        return `${label}: ${linking.name}'s ${twin.label} already links to the same record type with the link back "${String(reverse)}". ` +
+        return `${label}: ${linking.name}'s ${twin.label} already links to the same record type with the link back "${String(reverseName)}". ` +
           "Give this link back another name.";
     }
   }
@@ -186,13 +189,26 @@ export const changeInlineModuleField = (
   const label = change.label.trim();
   if (label === "") return { kind: "invalid", issues: ["Enter the field's label."] };
   const helpText = change.helpText.trim();
-  const refusedLink = linkProblem(source, module, change, label);
-  if (refusedLink !== undefined) return { kind: "invalid", issues: [refusedLink] };
   const qualifiedRecord = `${module.key}:${record.key}`;
   let fieldIndex = change.fieldAlias === undefined ? -1 : record.fields.findIndex((item) => item.id === change.fieldAlias);
   if (change.fieldAlias !== undefined && fieldIndex < 0)
     return { kind: "invalid", issues: ["The field is not in this record type any more."] };
-  const shape = { type: change.type, settings: change.settings, required: change.required, unique: change.unique,
+  // Names can change; the link back's identity is assigned once through the same derivation as fields.
+  let settings = change.settings;
+  if (change.type === "link") {
+    const name = settings.reverse_name;
+    if (typeof name !== "string" || name.trim() === "")
+      return { kind: "invalid", issues: [`${label}: enter the name of the link back, for example Items.`] };
+    const previous = record.fields[fieldIndex];
+    const key = previous?.type === "link" ? (previous.settings as { reverse_key: string }).reverse_key
+      : deriveFieldKey(name.trim(), new Set());
+    if (key === undefined)
+      return { kind: "invalid", issues: [`${label}: choose another name for the link back.`] };
+    settings = { ...settings, reverse_name: name.trim(), reverse_key: key };
+  }
+  const refusedLink = linkProblem(source, module, { ...change, settings }, label);
+  if (refusedLink !== undefined) return { kind: "invalid", issues: [refusedLink] };
+  const shape = { type: change.type, settings, required: change.required, unique: change.unique,
     filterable: change.filterable, sortable: change.sortable };
   let field: Field;
   let wasPersonLink = false;
@@ -216,9 +232,12 @@ export const changeInlineModuleField = (
     field = record.fields[fieldIndex]!;
     wasPersonLink = isPersonLink(field);
     if (publication.fields.has(`${qualifiedRecord}.${field.key}`)) {
+      // The display name is editable even after publication; stored relationship settings are fixed.
+      const storedSettings = (value: Readonly<Record<string, unknown>>) =>
+        Object.fromEntries(Object.entries(value).filter(([key]) => change.type !== "link" || key !== "reverse_name"));
       const fixed = [
         ...(field.type === change.type ? [] : ["type"]),
-        ...(JSON.stringify(field.settings) === JSON.stringify(change.settings) || field.type !== change.type ? [] : ["settings"]),
+        ...(canonicalJson(storedSettings(field.settings as Readonly<Record<string, unknown>>)) === canonicalJson(storedSettings(settings)) || field.type !== change.type ? [] : ["settings"]),
         ...(["required", "unique", "filterable", "sortable"] as const).filter((key) => field[key] !== change[key]),
         ...(field.type === change.type && record.relationships.some((relationship) =>
           relationship.from_field === field.key && relationship.cardinality !== change.cardinality) ? ["number of links"] : []),
