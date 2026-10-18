@@ -1,5 +1,6 @@
 "use client";
-import { Fragment, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { useStudioDraftText } from "./use-studio-draft-text";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
@@ -12,11 +13,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   studioAccessColumns, studioAccessPermissions, studioAccessRecordRows, studioRoleFieldAccess, studioRoleHolds,
   type StudioAccessCommand, type StudioAccessPermission,
-} from "../_lib/application-access";
+} from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
 
 type Role = ApplicationSourceDocument["body"]["roles"][number];
-export type StudioAccessRun = (command: StudioAccessCommand) => boolean;
+/** One Access edit; `merge` joins a run of edits to one value (typing a name) into one Undo step. */
+export type StudioAccessRun = (command: StudioAccessCommand, merge?: string) => boolean;
 
 function Section({ title, description, children }: Readonly<{ title: string; description: string; children: ReactNode }>) {
   return <section aria-label={title} className="space-y-2">
@@ -76,9 +78,9 @@ export function StudioAccessRoleEditor({ source, role, compiledGrants, disabled,
   onPreview: () => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
-  const [name, setName] = useState(role.name);
+  const name = useStudioDraftText(role.name, (next) => next.trim().length === 0 ? "Enter a name for the role."
+    : run({ kind: "rename_role", roleKey: role.key, name: next }, `role-name:${role.key}`) || "");
   const [fieldsOf, setFieldsOf] = useState<string | null>(null);
-  useEffect(() => { setName(role.name); }, [role.name]);
   const rows = useMemo(() => studioAccessRecordRows(source), [source]);
   const permissions = useMemo(() => studioAccessPermissions(source), [source]);
   const gates = new Set(source.body.pages.map((page) => page.permission));
@@ -88,14 +90,10 @@ export function StudioAccessRoleEditor({ source, role, compiledGrants, disabled,
   const labelOf = (key: string) => permissions.find((permission) => permission.key === key)?.label ?? key;
   const wildcard = role.permissions.includes("*");
 
-  const rename = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    run({ kind: "rename_role", roleKey: role.key, name });
-  };
   const remove = async () => {
     if (!await confirm({
       title: `Remove the role “${role.name}”?`,
-      description: "The role leaves the draft. After the next upgrade, people who hold it lose what it gives them. Undo brings it back until you save.",
+      description: "The role leaves the draft. After the next upgrade, people who hold it lose what it gives them. Undo brings it back.",
       confirmLabel: "Remove role",
     })) return;
     run({ kind: "remove_role", roleKey: role.key });
@@ -103,12 +101,9 @@ export function StudioAccessRoleEditor({ source, role, compiledGrants, disabled,
 
   return <section aria-label={`Role ${role.name}`} className="space-y-6">
     <div className="flex flex-wrap items-end gap-3">
-      <form className="flex items-end gap-2" onSubmit={rename}>
-        <StudioField label="Role name">
-          {(control) => <Input {...control} value={name} maxLength={60} disabled={disabled} onChange={(event) => setName(event.target.value)} />}
-        </StudioField>
-        <Button type="submit" size="sm" disabled={disabled || name.trim().length === 0 || name.trim() === role.name}>Rename</Button>
-      </form>
+      <StudioField label="Role name" error={name.problem === "" ? undefined : name.problem}>
+        {(control) => <Input {...control} value={name.text} maxLength={60} disabled={disabled} onChange={(event) => name.change(event.target.value)} />}
+      </StudioField>
       <StudioField label="Starts on" hint="The page its people see first.">
         {(control) => <NativeSelect {...control} value={role.home_page} disabled={disabled}
           onChange={(event) => run({ kind: "set_role_home_page", roleKey: role.key, pageKey: event.target.value })}>
@@ -134,7 +129,7 @@ export function StudioAccessRoleEditor({ source, role, compiledGrants, disabled,
       <Button type="button" size="sm" disabled={disabled || compiledGrants === undefined}
         onClick={() => run({ kind: "list_role_permissions", roleKey: role.key, permissionKeys: compiledGrants ?? [] })}>
         List its permissions one by one</Button>
-      {compiledGrants === undefined && <p className="text-sm text-muted-foreground">Save the draft first, so they can be listed.</p>}
+      {compiledGrants === undefined && <p className="text-sm text-muted-foreground">They are listed once your latest change is saved.</p>}
     </div> : <>
       <Section title="Records" description="What people with this role can do with each record type. Choose Fields for which fields they can see and change.">
         {rows.length === 0 ? <p className="text-sm text-muted-foreground">This application has no record types yet. Add them in Data.</p>

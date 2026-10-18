@@ -36,7 +36,7 @@ export function StudioNewFlowDialog({ open, onOpenChange, choices, onCreate, ini
         <DialogHeader>
           <DialogTitle>New flow</DialogTitle>
           <DialogDescription>The flow starts when a person uses a button or control, with one step you then change on the
-            canvas. Save to keep it. Rules that check a record before it is saved are added on the record type in the Data tab.</DialogDescription>
+            canvas. Rules that check a record before it is saved are added on the record type in the Data tab.</DialogDescription>
         </DialogHeader>
         <div className="space-y-1.5">
           <Label htmlFor="new-flow-name">Name</Label>
