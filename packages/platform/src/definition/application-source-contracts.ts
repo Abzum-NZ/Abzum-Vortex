@@ -3,6 +3,7 @@ import { previewApplicationKeyNamespace } from "./preview-application-key";
 import { applicationExperienceStateSchema } from "../catalogue/catalogues";
 import { inspectApplicationPageReplacements } from "../pages/application-page-replacement";
 import { applicationSourceContractVersion } from "./application-contract-versions";
+import { maximumApplicationRoles } from "./application-contracts";
 import {
   builderKeySchema,
   namespacedKeySchema,
@@ -606,7 +607,7 @@ export const sourceApplicationBodySchema = z
             .strict(),
         )
         .min(1)
-        .max(100)
+        .max(maximumApplicationRoles)
         .refine((roles) => roles.filter((role) => role.default_member === true).length === 1, {
           message: "Exactly one role must be the application's default member role",
         }),

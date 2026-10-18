@@ -76,7 +76,7 @@ export const guardRules = {
     owner: "lead",
     reviewBy: "2027-01-15",
     description:
-      "A new migration whose version is not above the highest on origin/main (skipped when origin/main is absent)",
+      "A new migration on a branch behind origin/main or whose version is not above the highest on origin/main",
   },
   "function-uuid": {
     tier: "blocking",
