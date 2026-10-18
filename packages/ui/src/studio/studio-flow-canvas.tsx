@@ -1,5 +1,6 @@
 "use client";
 import "@xyflow/react/dist/style.css";
+import type { FlowTaskTypeKey } from "@vortex/platform/schema";
 import { createContext, useContext, useId, useMemo, useState } from "react";
 import {
   Background,
@@ -18,15 +19,55 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import {
+  ArchiveRestore,
+  Braces,
+  Cable,
+  Calculator,
+  CaseSensitive,
+  CheckCheck,
+  CircleCheck,
+  CircleHelp,
+  CircleX,
+  ClipboardList,
+  Clock,
+  FileOutput,
+  FilePlus2,
+  Filter,
   Flag,
+  FolderInput,
   GitBranch,
+  GitFork,
+  Layers,
+  Link,
+  Link2,
+  ListFilter,
+  ListOrdered,
+  MapPin,
   Maximize,
+  Megaphone,
+  MessageSquare,
+  Navigation,
   Octagon,
+  PanelLeft,
+  Paperclip,
   Play,
+  Plug,
   Plus,
+  RefreshCw,
+  Repeat2,
+  Save,
+  Search,
+  Split,
+  SquarePen,
+  Timer,
+  Trash2,
+  TriangleAlert,
+  UserRound,
+  Variable,
   Workflow,
   ZoomIn,
   ZoomOut,
+  type LucideIcon,
 } from "lucide-react";
 import { Badge } from "../components/badge";
 import { Button } from "../components/button";
@@ -58,17 +99,58 @@ const columnGap = 64;
 const rowGap = 80;
 const pathKey = (path: StudioFlowPath): string => JSON.stringify(path);
 
+const taskIcons: Readonly<Record<string, LucideIcon>> = {
+  if: GitBranch,
+  switch: Split,
+  for_each: Repeat2,
+  sequential: ListOrdered,
+  run_flow: Workflow,
+  stop: Octagon,
+  parallel: GitFork,
+  wait_until: Clock,
+  wait_for_person: UserRound,
+  "record.save": Save,
+  "record.create": FilePlus2,
+  "record.set_fields": SquarePen,
+  "record.link": Link2,
+  "record.delete": Trash2,
+  "record.restore": ArchiveRestore,
+  "record.changes": Layers,
+  "record.query": Search,
+  "record.read_fields": ListFilter,
+  "record.pin_identity": MapPin,
+  "operation.call": Plug,
+  "flow.run_background": Timer,
+  "event.announce": Megaphone,
+  "connection.call": Cable,
+  "message.acknowledge": CheckCheck,
+  "file.export": FileOutput,
+  "file.attach": Paperclip,
+  "file.move": FolderInput,
+  "data.calculate": Calculator,
+  "data.record_link": Link,
+  "data.set_values": Braces,
+  "data.set_variable": Variable,
+  "data.format": CaseSensitive,
+  "rule.require": CircleCheck,
+  "rule.warn": TriangleAlert,
+  "rule.refuse": CircleX,
+  "interface.show_message": MessageSquare,
+  "interface.show_form": ClipboardList,
+  "interface.confirm": CircleHelp,
+  "interface.navigate": Navigation,
+  "interface.refresh": RefreshCw,
+  "interface.set_panel": PanelLeft,
+  "interface.set_filter": Filter,
+} satisfies Record<FlowTaskTypeKey, LucideIcon>;
+
 function StudioFlowNode({ data, selected }: NodeProps<Node<FlowNodeData>>) {
   const Icon =
     data.kind === "start"
       ? Play
       : data.kind === "end"
         ? Flag
-        : data.taskType === "stop"
-          ? Octagon
-          : data.taskType === "if" || data.taskType === "switch"
-            ? GitBranch
-            : Workflow;
+        : (taskIcons[data.taskType ?? ""] ?? Workflow);
   const handle =
     "size-2! rounded-full! border-background! bg-border! opacity-0 group-hover/node:opacity-100 group-focus-visible/flow-node:opacity-100";
   return (
