@@ -67,7 +67,7 @@ export const readStudioQueryFilter = (filter: InlineQueryFilter | null, fieldIdO
   if (condition !== undefined) return { kind: "read", condition };
   return { kind: "unreadable", reason: missing === undefined
     ? "It is written in a form the filter controls do not edit."
-    : `It uses the field "${missing}", which is not in the saved draft. Save the draft to filter by a new field.` };
+    : `It uses the field "${missing}", which the compiled draft does not have yet. It can be edited in a moment, once Studio has saved and compiled the draft.` };
 };
 
 /**

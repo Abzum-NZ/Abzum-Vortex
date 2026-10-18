@@ -1,5 +1,5 @@
 import { applicationSourceDocumentSchema, type ApplicationSourceDocument } from "@vortex/platform/schema";
-import type { StudioSemanticSelection } from "@vortex/ui/studio";
+import type { StudioSemanticSelection } from "./semantic-selection";
 
 export type StudioItemLabelResult =
   | Readonly<{ kind: "applied"; source: ApplicationSourceDocument }>

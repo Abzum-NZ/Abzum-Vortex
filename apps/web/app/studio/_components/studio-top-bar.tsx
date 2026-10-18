@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { AppearanceToggle, Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import {
@@ -16,18 +17,23 @@ export type StudioLocation = Readonly<{
   item?: string | undefined;
 }>;
 
-/** Studio's top bar: where you are, whether the draft is saved, and the commands that act on the whole draft. */
-export function StudioTopBar({ location, savedStateLabel, status, canUndo, canRedo, undoDisabled, onUndo, onRedo,
-  onRevert, revertDisabled, onSave, saveDisabled, backToAppHref, onPreview, previewDisabled, previewPending,
-  onPublish, publishDisabled, statusLink }: Readonly<{
+/**
+ * Studio's top bar: where you are, the one status chip (whether the draft is saved and the canvas
+ * caught up), Undo and Redo, and the commands that act on the whole draft. Edits save themselves.
+ */
+export function StudioTopBar({ location, chip, chipAlert, status, problem, canUndo, canRedo, undoDisabled, onUndo, onRedo,
+  backToAppHref, onPreview, previewDisabled, previewPending, onPublish, publishDisabled, statusLink }: Readonly<{
   location: StudioLocation;
-  savedStateLabel: string;
-  /** What just happened, or what must be applied first. */
+  /** "Saved", "Saving…" or "Not saved", with "Updating canvas…" while the canvas catches up. */
+  chip: string;
+  /** The chip reports a save that did not go through. */
+  chipAlert: boolean;
+  /** What just happened (a preview starting, a restore). */
   status: string;
+  /** Why the latest change is not saved and what to do, when it is not. */
+  problem: ReactNode;
   canUndo: boolean; canRedo: boolean; undoDisabled: boolean;
   onUndo: () => void; onRedo: () => void;
-  onRevert: () => void; revertDisabled: boolean;
-  onSave: () => void; saveDisabled: boolean;
   backToAppHref: string | undefined;
   onPreview: () => void; previewDisabled: boolean; previewPending: boolean;
   onPublish: () => void; publishDisabled: boolean;
@@ -53,24 +59,25 @@ export function StudioTopBar({ location, savedStateLabel, status, canUndo, canRe
           </>}
         </BreadcrumbList>
       </Breadcrumb>
-      <span className="text-sm text-muted-foreground" aria-live="polite">{savedStateLabel}</span>
+      <span role="status" aria-live="polite" className={chipAlert
+        ? "rounded-full bg-destructive/10 px-2 py-0.5 text-sm text-destructive"
+        : "rounded-full bg-muted px-2 py-0.5 text-sm text-muted-foreground"}>{chip}</span>
       <div className="ml-auto flex flex-wrap items-center gap-1">
         <Button type="button" variant="ghost" size="icon-sm" aria-label="Undo" title="Undo"
           disabled={!canUndo || undoDisabled} onClick={onUndo}><Icon name="undo" /></Button>
         <Button type="button" variant="ghost" size="icon-sm" aria-label="Redo" title="Redo"
           disabled={!canRedo || undoDisabled} onClick={onRedo}><Icon name="redo" /></Button>
-        <Button type="button" variant="ghost" size="sm" disabled={revertDisabled} onClick={onRevert}>Revert to saved</Button>
-        <Button type="button" variant="outline" size="sm" disabled={saveDisabled} onClick={onSave}>Save</Button>
         {backToAppHref === undefined ? null
           : <Button variant="ghost" size="sm" nativeButton={false} render={<Link href={backToAppHref} />}>
             <Icon name="chevron-left" />Back to app</Button>}
         <Button type="button" variant="outline" size="sm" aria-busy={previewPending}
-          title="Save the draft and run it in a new tab" disabled={previewDisabled || previewPending}
+          title="Run the saved draft in a new tab" disabled={previewDisabled || previewPending}
           onClick={onPreview}><Icon name="eye" />Preview</Button>
         <Button type="button" size="sm" disabled={publishDisabled} onClick={onPublish}>Publish…</Button>
         <AppearanceToggle />
       </div>
     </div>
+    {problem}
     <p role="status" aria-live="polite" className="px-3 pb-2 text-sm text-muted-foreground empty:hidden">{status.trim()}</p>
     {statusLink === undefined ? null : <div className="px-3 pb-2">
       <Button variant="link" size="sm" className="h-auto p-0" nativeButton={false} render={<Link href={statusLink.href} />}>

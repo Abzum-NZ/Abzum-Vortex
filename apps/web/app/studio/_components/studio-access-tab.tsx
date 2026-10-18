@@ -4,14 +4,15 @@ import type { ApplicationSourceDocument, ApplicationUsePlace } from "@vortex/pla
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@vortex/ui/components/item";
-import type { StudioAccessCommand, StudioAccessResult } from "../_lib/application-access";
+import type { StudioAccessCommand, StudioAccessResult, StudioSemanticSelection } from "@vortex/ui/studio";
 import { StudioAccessPageGates, StudioAccessPermissionList } from "./studio-access-gates";
 import { StudioAccessRoleEditor } from "./studio-access-role";
 import { StudioField } from "./studio-field";
 import { StudioPanelShell } from "./studio-frame";
 import { StudioReferencesAlert } from "./studio-used-in";
 
-type Section = "role" | "pages" | "permissions";
+/** What the centre edits: the selected role, or one of the two application-wide views. */
+type View = "role" | "pages" | "permissions";
 type Feedback = Readonly<{ kind: "applied" | "refused"; message: string; where?: readonly ApplicationUsePlace[] | undefined }>;
 
 /** The outcome of the last edit and, for something still in use, the places that use it with a way to go there. */
@@ -30,39 +31,36 @@ function AccessFeedback({ feedback }: Readonly<{ feedback: Feedback | null }>) {
  * selection (a role), so "Used in" and "Show me where" open a role here. Every change is one Access
  * command on the draft, through the workspace's one edit path.
  */
-export function useStudioAccessTab({ source, compiledRoles, hidden, disabled, onCommand, onPreview, selectedRole, chooseRole }: Readonly<{
+export function useStudioAccessTab({ source, selected, select, compiledRoles, hidden, disabled, onCommand, onPreview }: Readonly<{
   source: ApplicationSourceDocument;
+  /** The workspace's one selection; a role selection opens that role. */
+  selected: StudioSemanticSelection | null;
+  select: (selection: StudioSemanticSelection) => boolean;
   /** The permissions the compiled saved draft grants each role, by role key. */
   compiledRoles: Readonly<Record<string, readonly string[]>> | undefined;
   hidden: boolean;
   disabled: boolean;
-  onCommand: (command: StudioAccessCommand) => StudioAccessResult;
+  onCommand: (command: StudioAccessCommand, merge?: string) => StudioAccessResult;
   /** Shows the canvas and its menu as a role sees them. */
   onPreview: (roleKey: string) => void;
-  /** The role the workspace's selection holds, if it is a role. */
-  selectedRole: string | null;
-  /** Selects a role in the workspace's one selection store. */
-  chooseRole: (roleKey: string) => void;
 }>): Readonly<{ panel: ReactNode; centre: ReactNode; title: string; showPages: () => void; showRole: () => void }> {
   const roles = source.body.roles;
-  const [section, setSection] = useState<Section>("role");
+  const [view, setView] = useState<View>("role");
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [newRole, setNewRole] = useState("");
   // A role selected anywhere (a "Used in" entry, a refusal's place) is shown at once.
-  useEffect(() => { if (selectedRole !== null) setSection("role"); }, [selectedRole]);
+  const selectedRoleKey = selected?.kind === "role" ? selected.roleKey : null;
+  useEffect(() => { if (selectedRoleKey !== null) setView("role"); }, [selectedRoleKey]);
   // Without a selected role, or after it was removed by an edit or an undo, the first role is shown.
-  const role = roles.find((entry) => entry.key === selectedRole) ?? roles[0];
-  const view = section;
+  const role = view === "role" ? roles.find((entry) => entry.key === selectedRoleKey) ?? roles[0] : undefined;
 
-  const show = (next: Section, roleKey?: string) => {
-    setSection(next); setFeedback(null);
-    if (roleKey !== undefined) chooseRole(roleKey);
-  };
-  const run = (command: StudioAccessCommand): boolean => {
-    const result = onCommand(command);
+  const showRole = (key: string) => { setView("role"); setFeedback(null); select({ kind: "role", roleKey: key }); };
+  const show = (next: Exclude<View, "role">) => { setView(next); setFeedback(null); };
+  const run = (command: StudioAccessCommand, merge?: string): boolean => {
+    const result = onCommand(command, merge);
     setFeedback(result.kind === "applied" ? { kind: "applied", message: result.message }
       : { kind: "refused", message: result.message, where: result.where });
-    if (result.kind === "applied" && result.roleKey !== undefined) { setSection("role"); chooseRole(result.roleKey); }
+    if (result.kind === "applied" && result.roleKey !== undefined) { setView("role"); select({ kind: "role", roleKey: result.roleKey }); }
     return result.kind === "applied";
   };
   const addRole = (event: FormEvent<HTMLFormElement>) => {
@@ -84,7 +82,7 @@ export function useStudioAccessTab({ source, compiledRoles, hidden, disabled, on
           (entry.permissions.includes("*") ? "Holds every permission"
             : `${entry.permissions.length} ${entry.permissions.length === 1 ? "permission" : "permissions"}`) +
             (entry.default_member === true ? " · default member role" : ""),
-          () => show("role", entry.key))}
+          () => showRole(entry.key))}
       </li>)}</ul>
     </section>
     <form className="flex items-end gap-2" onSubmit={addRole}>
@@ -112,5 +110,5 @@ export function useStudioAccessTab({ source, compiledRoles, hidden, disabled, on
     {view === "permissions" && <StudioAccessPermissionList source={source} disabled={disabled} run={run} />}
   </div>;
   const title = view === "pages" ? "Pages and menu" : view === "permissions" ? "Permissions" : `Role: ${role?.name ?? ""}`;
-  return { panel, centre, title, showPages: () => show("pages"), showRole: () => show("role") };
+  return { panel, centre, title, showPages: () => show("pages"), showRole: () => { setView("role"); setFeedback(null); } };
 }

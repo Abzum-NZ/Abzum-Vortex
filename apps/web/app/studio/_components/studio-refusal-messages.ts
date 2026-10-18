@@ -79,7 +79,7 @@ export const previewProblem = (
   result: Readonly<{ kind: "refused"; reason: string } | { kind: "conflict" } | { kind: "temporarily_unavailable" }>,
 ): string =>
   result.kind === "conflict"
-    ? "The saved draft changed while the preview was being prepared. Choose Revert to saved, then preview again."
+    ? "The saved draft changed while the preview was being prepared. Preview again."
     : result.kind === "temporarily_unavailable"
       ? "The preview is temporarily unavailable. Your changes are kept; try again."
       : result.reason === "permission_refused"

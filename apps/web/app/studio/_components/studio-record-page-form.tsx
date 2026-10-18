@@ -6,10 +6,10 @@ import { Checkbox } from "@vortex/ui/components/checkbox";
 import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import {
   studioRecordPageChoices, studioRecordPageKinds, type StudioRecordPageCommand, type StudioRecordPageKind,
-} from "../_lib/application-record-pages";
+} from "@vortex/ui/studio";
 import {
   studioStructureDefaultShell, studioStructureShellChoices, type StudioStructureResult,
-} from "../_lib/application-structure";
+} from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
 
 /**

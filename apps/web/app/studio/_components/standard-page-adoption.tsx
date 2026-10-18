@@ -44,11 +44,13 @@ const choiceForm = (
 type Loaded = StudioStandardPageAdoptionLoadResult | null;
 
 /** Page adoption (in the Releases tab): compares each local page with the standard page it replaces. */
-export function StandardPageAdoption({ organizationId, rootId, disabledReason, onSaved }: Readonly<{
+export function StandardPageAdoption({ organizationId, rootId, disabledReason, hold, onSaved }: Readonly<{
   organizationId: string;
   rootId: string;
-  /** Why choices cannot be made right now (unsaved edits); the comparison itself still shows. */
+  /** Why choices cannot be made right now (a save in flight); the comparison itself still shows. */
   disabledReason?: string | undefined;
+  /** Holds the workspace's draft while a choice writes the saved draft, so nothing else edits it. */
+  hold: (on: boolean) => void;
   /** The choice changed the saved draft, so the workspace must read it again. */
   onSaved: () => void;
 }>) {
@@ -69,8 +71,10 @@ export function StandardPageAdoption({ organizationId, rootId, disabledReason, o
   useEffect(() => { void load(); }, [load]);
   const submit = (formData: FormData) => startTransition(async () => {
     let code = "temporarily_unavailable";
+    hold(true);
     try { code = await submitStandardPageAdoption(formData); }
     catch (error) { console.error("[studio] page adoption choice failed", error); }
+    finally { hold(false); }
     if (!mounted.current) return;
     setMessage(code);
     await load();
