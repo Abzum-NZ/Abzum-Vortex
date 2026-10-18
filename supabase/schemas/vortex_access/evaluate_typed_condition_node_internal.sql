@@ -124,6 +124,10 @@ begin
               operand_values[operand_index] #>> '{}', 'date_time'
             ) is not null then candidate_type := 'date_time';
             else candidate_type := 'text'; end if;
+          when 'object' then
+            candidate_type := case when vortex_access.typed_condition_value_matches_internal(
+              operand_values[operand_index], 'record_reference', false
+            ) then 'record_reference' else 'opaque_json' end;
           when 'array' then
             if not exists (
               select 1 from pg_catalog.jsonb_array_elements(operand_values[operand_index]) as element(value)
@@ -209,7 +213,10 @@ begin
               when 'string' then case
                 when vortex_access.typed_condition_temporal_value_internal(member #>> '{}', 'date') is not null then 'date'
                 when vortex_access.typed_condition_temporal_value_internal(member #>> '{}', 'date_time') is not null then 'date_time'
-                else 'text' end else null end;
+                else 'text' end
+              when 'object' then case when vortex_access.typed_condition_value_matches_internal(
+                member, 'record_reference', false
+              ) then 'record_reference' else null end else null end;
             if candidate_type is null or candidate_type in ('text_collection', 'opaque_json')
               or (member_type is not null and member_type <> candidate_type) then collection_valid := false;
             else member_type := candidate_type; end if;
@@ -246,7 +253,10 @@ begin
               when 'string' then case
                 when vortex_access.typed_condition_temporal_value_internal(member #>> '{}', 'date') is not null then 'date'
                 when vortex_access.typed_condition_temporal_value_internal(member #>> '{}', 'date_time') is not null then 'date_time'
-                else 'text' end else null end;
+                else 'text' end
+              when 'object' then case when vortex_access.typed_condition_value_matches_internal(
+                member, 'record_reference', false
+              ) then 'record_reference' else null end else null end;
             if candidate_type is null or candidate_type in ('text_collection', 'opaque_json')
               or (member_type is not null and member_type <> candidate_type) then collection_valid := false;
             else member_type := candidate_type; end if;

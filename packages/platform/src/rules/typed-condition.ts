@@ -32,6 +32,7 @@ export type TypedConditionParameterDeclaration = Readonly<{
     | "yes_no"
     | "date"
     | "date_time"
+    | "record_reference"
     | "organization_account_reference";
 }>;
 
@@ -45,6 +46,7 @@ export type TypedConditionEvaluationInput = Readonly<{
 }>;
 
 const parameterTypes = new Set<TypedConditionParameterDeclaration["type"]>([
+  "record_reference",
   "text",
   "whole_number",
   "decimal_number",

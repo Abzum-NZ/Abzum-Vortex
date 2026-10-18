@@ -22,6 +22,7 @@ import {
 import {
   sourceExactDecimalTextSchema,
   sourceMoneyValueSchema,
+  sourceRecordLinkValueSchema,
 } from "../records/module-field-values";
 import { recordOwnershipModeSchema } from "../records/record-ownership-mode";
 import { sourceFlowCollectionSchema } from "../workflows/flow-source-contracts";
@@ -372,7 +373,6 @@ const moduleSourceSystemProjectionSchema = z
 const systemProjectionRefusedFieldTypes: ReadonlySet<string> = new Set([
   "reference_number",
   "table",
-  "link",
   "link_to_one_of_several",
   "total",
   "attachment",
@@ -391,9 +391,7 @@ const moduleSourceRecordTypeSchema = z
       ["storageScope"],
     ),
     system_projection: sourceProvenanceUnchanged(moduleSourceSystemProjectionSchema.optional()),
-    ownership_mode: sourceProvenanceTarget(recordOwnershipModeSchema, [
-      "ownershipMode",
-    ]),
+    ownership_mode: sourceProvenanceTarget(recordOwnershipModeSchema, ["ownershipMode"]),
     ownership_relationship: sourceProvenanceTarget(builderKeySchema.optional(), [
       "ownershipRelationshipId",
     ]),
@@ -685,6 +683,7 @@ const moduleSourceSharingParameterSchema = z
         "date",
         "date_time",
         "organization_account_reference",
+        "record_reference",
       ]),
     ),
   })
@@ -720,6 +719,7 @@ const sourceSharingParameterValueSchemas: Record<
   date: z.iso.date(),
   date_time: z.iso.datetime({ offset: true }),
   organization_account_reference: organizationAccountIdSchema,
+  record_reference: sourceRecordLinkValueSchema,
 };
 
 const moduleSourceSharingConditionSchema = z
