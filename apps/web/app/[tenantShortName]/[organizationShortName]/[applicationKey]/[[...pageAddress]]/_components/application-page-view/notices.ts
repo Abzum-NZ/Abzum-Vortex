@@ -52,6 +52,11 @@ export const refusalNotices: Readonly<
   invalid_command: { tone: "problem", text: "The supplied inputs are invalid." },
   duplicate_conflict: { tone: "problem", text: "A conflicting item already exists." },
   stale_revision: { tone: "problem", text: "This item changed. Refresh and try again." },
+  recent_authentication_required: {
+    tone: "problem",
+    text: "To protect your organisation, this change needs a sign-in within the last 15 minutes. Sign in again, then retry the change.",
+    link: { label: "Sign in again", href: "/auth/session-ended" },
+  },
   role_acceptance_required: {
     tone: "problem",
     text: "This role revision needs accepting before it can be assigned.",

@@ -1111,7 +1111,7 @@ begin
     end if;
     -- The filter is evaluated on stored values first only to avoid reading
     -- rows it rejects; a row it admits is still read through the protected
-    -- projection, and every filtered and sorted field must be readable there.
+    -- projection, and every filtered field must be readable there.
     -- A value the condition engine refuses decides nothing until the row is
     -- known to be readable, so an unreadable row can never cause a refusal.
     needs_refusal_check := false;
@@ -1200,8 +1200,12 @@ begin
       end if;
       if projection ->> 'outcome' = 'allowed' then
         readable_values := projection -> 'values';
+        -- Filters decide membership, so every referenced value must be readable.
+        -- Sorts only decide order: the scan already drops unguaranteed sort keys
+        -- and ends with record identity. A withheld published sort field must
+        -- neither remove a readable row nor expose its value through ordering.
         if not exists (
-          select 1 from pg_catalog.unnest(declared_sort_ids || filter_ids) as referenced(id)
+          select 1 from pg_catalog.unnest(filter_ids) as referenced(id)
           where not (readable_values ? referenced.id)
         ) then
           if needs_refusal_check then

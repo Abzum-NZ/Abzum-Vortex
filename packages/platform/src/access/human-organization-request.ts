@@ -42,7 +42,7 @@ type ChangePreparation = (
 
 export type HumanOrganizationRequestResult<Result> =
   | Readonly<{ kind: "available"; value: Result }>
-  | Readonly<{ kind: "unavailable" }>
+  | Readonly<{ kind: "unavailable"; code?: "recent_authentication_required"; cause?: string }>
   | Readonly<{ kind: "temporarily_unavailable"; cause?: string }>;
 
 type OrganizationScopeResolutionResult =
@@ -216,7 +216,10 @@ export const createHumanOrganizationRequestService = (
           const scope: SelectedOrganizationScope =
             verifiedCandidate.data.previewInstallationId === undefined
               ? parsedScope
-              : { ...parsedScope, previewInstallationId: verifiedCandidate.data.previewInstallationId };
+              : {
+                  ...parsedScope,
+                  previewInstallationId: verifiedCandidate.data.previewInstallationId,
+                };
           if (
             (verifiedCandidate.data.applicationRootId === undefined) !==
               (scope.applicationRootId === undefined) ||
@@ -278,7 +281,8 @@ export const createHumanOrganizationRequestService = (
         appendTelemetry(correlationId, "refused", startedAtMs);
         return suspendedAccountResult();
       }
-      const refused = databaseCode(error) === "42501";
+      const recentAuthenticationRequired = code === "V3150";
+      const refused = code === "42501" || recentAuthenticationRequired;
       const cause = describeFailure(error);
       // A request its caller abandoned (the browser left the page) is stopped on purpose; that is
       // not a failure of the platform. Every other cause is logged in full.
@@ -290,7 +294,11 @@ export const createHumanOrganizationRequestService = (
       else if (refused) console.error(`[access] human organisation request refused: ${cause}`);
       else console.error(`[access] human organisation request failed: ${cause}`);
       appendTelemetry(correlationId, refused ? "refused" : "temporarily_unavailable", startedAtMs);
-      return refused ? { kind: "unavailable" } : { kind: "temporarily_unavailable", cause };
+      return recentAuthenticationRequired
+        ? { kind: "unavailable", code: "recent_authentication_required", cause }
+        : refused
+          ? { kind: "unavailable" }
+          : { kind: "temporarily_unavailable", cause };
     }
   };
 
