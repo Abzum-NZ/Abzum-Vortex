@@ -731,7 +731,7 @@ const defaultMatchesProperty = (schema: BlockPropertySchemaContract): boolean =>
 };
 
 export type BlockPropertyVisibilityIssue = Readonly<{
-  path: (string | number)[];
+  path: [number, ...(string | number)[]];
   message: string;
 }>;
 
@@ -744,12 +744,17 @@ export const blockPropertyVisibilityIssues = (
   properties: readonly BlockPropertySchemaContract[],
 ): readonly BlockPropertyVisibilityIssue[] => {
   const issues: BlockPropertyVisibilityIssue[] = [];
+  const extendPath = (
+    path: BlockPropertyVisibilityIssue["path"],
+    ...parts: (string | number)[]
+  ): BlockPropertyVisibilityIssue["path"] => [path[0], ...path.slice(1), ...parts];
   function inspect(
     declarations: readonly BlockPropertySchemaContract[],
-    prefix: (string | number)[] = [],
+    prefix?: BlockPropertyVisibilityIssue["path"],
   ): void {
     for (const [index, property] of declarations.entries()) {
-      const path = [...prefix, index];
+      const path: BlockPropertyVisibilityIssue["path"] =
+        prefix === undefined ? [index] : extendPath(prefix, index);
       const condition = property.showWhen;
       if (condition !== undefined) {
         const controllingIndex = declarations.findIndex(
@@ -758,18 +763,18 @@ export const blockPropertyVisibilityIssues = (
         const controller = declarations[controllingIndex];
         if (controller === undefined) {
           issues.push({
-            path: [...path, "showWhen", "property"],
+            path: extendPath(path, "showWhen", "property"),
             message: "A visibility condition must name a sibling choice property",
           });
         } else if (controller.kind !== "choice") {
           issues.push({
-            path: [...path, "showWhen", "property"],
+            path: extendPath(path, "showWhen", "property"),
             message: "A visibility condition must name a sibling choice property",
           });
         } else {
           if (controllingIndex >= index)
             issues.push({
-              path: [...path, "showWhen", "property"],
+              path: extendPath(path, "showWhen", "property"),
               message: "A visibility condition must use an earlier sibling choice property",
             });
           const optionKeys = new Set(controller.options.map((option) => option.key));
@@ -778,27 +783,30 @@ export const blockPropertyVisibilityIssues = (
             condition.values.some((value) => !optionKeys.has(value))
           )
             issues.push({
-              path: [...path, "showWhen", "values"],
+              path: extendPath(path, "showWhen", "values"),
               message: "Visibility values must be unique options of the sibling choice property",
             });
         }
       }
 
       if (property.kind === "group") {
-        inspect(property.properties, [...path, "properties"]);
+        inspect(property.properties, extendPath(path, "properties"));
       } else if (property.kind === "list") {
-        inspectListItem(property.item, [...path, "item"]);
+        inspectListItem(property.item, extendPath(path, "item"));
       }
     }
   }
-  function inspectListItem(item: BlockPropertySchemaContract, path: (string | number)[]): void {
+  function inspectListItem(
+    item: BlockPropertySchemaContract,
+    path: BlockPropertyVisibilityIssue["path"],
+  ): void {
     if (item.showWhen !== undefined)
       issues.push({
-        path: [...path, "showWhen"],
+        path: extendPath(path, "showWhen"),
         message: "A list item cannot have a visibility condition",
       });
-    if (item.kind === "group") inspect(item.properties, [...path, "properties"]);
-    else if (item.kind === "list") inspectListItem(item.item, [...path, "item"]);
+    if (item.kind === "group") inspect(item.properties, extendPath(path, "properties"));
+    else if (item.kind === "list") inspectListItem(item.item, extendPath(path, "item"));
   }
   inspect(properties);
   return issues;
