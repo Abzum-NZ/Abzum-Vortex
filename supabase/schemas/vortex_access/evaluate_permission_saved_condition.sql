@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid, p_installation_record_types jsonb) RETURNS boolean
     LANGUAGE plpgsql STABLE
     SET search_path TO ''
     AS $_$
@@ -200,14 +200,11 @@ begin
         raise exception using errcode = '22023', message = 'Typed record condition is invalid';
       end if;
       if parameter_type = 'record_reference' then
-        -- The registered account projection is the current actor's record identity.
-        -- Resolve it from protected platform metadata, never from the condition.
+        -- Resolve against the same trusted installation facts as the condition.
         if account_record_type_id is null then
-          select distinct catalogue.record_type_id into strict account_record_type_id
-          from vortex_record.storage_catalogue as catalogue
-          where catalogue.physical_schema_token = 'system_projection'
-            and catalogue.protected_read_model_key = 'organization_accounts'
-            and catalogue.state = 'active';
+          account_record_type_id := vortex_access.resolve_installed_account_record_type_internal(
+            p_installation_record_types
+          );
         end if;
         parameter_values := parameter_values || pg_catalog.jsonb_build_object(
           parameter_key, pg_catalog.jsonb_build_object(
@@ -280,10 +277,10 @@ exception
 end
 $_$;
 
-alter function vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) owner to vortex_owner;
+alter function vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid, p_installation_record_types jsonb) owner to vortex_owner;
 
-COMMENT ON FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) IS 'Owner-only predicate for one sealed permission saved condition over trusted versioned record values and a protected current organization account.';
+COMMENT ON FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid, p_installation_record_types jsonb) IS 'Owner-only predicate for one sealed permission saved condition over trusted versioned record values and a protected current organization account.';
 
-REVOKE ALL ON FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid, p_installation_record_types jsonb) FROM PUBLIC;
 
-grant execute on function vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) to postgres;
+grant execute on function vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid, p_installation_record_types jsonb) to postgres;

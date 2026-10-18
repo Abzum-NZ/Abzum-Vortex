@@ -26,6 +26,8 @@ declare
   decision_account_id uuid;
   audit_projection boolean;
   person_record_type_id uuid;
+  installation_plan jsonb;
+  installation_record_types jsonb;
   after_occurred_at timestamptz;
   after_record_id uuid;
   keyset_sql text := '';
@@ -91,11 +93,15 @@ begin
     false
   );
 
-  select distinct catalogue.record_type_id into strict person_record_type_id
-  from vortex_record.storage_catalogue as catalogue
-  where catalogue.physical_schema_token = 'system_projection'
-    and catalogue.protected_read_model_key = 'organization_accounts'
-    and catalogue.state = 'active';
+  -- Use this request's validated live/preview installation, including its pins.
+  installation_plan := vortex_record.resolve_installation_access_plan_internal(
+    vortex_definition.read_current_active_installation()
+  );
+  select pg_catalog.jsonb_agg(installed.value) into installation_record_types
+  from pg_catalog.jsonb_each(installation_plan -> 'recordTypes') as installed(key, value);
+  person_record_type_id := vortex_access.resolve_installed_account_record_type_internal(
+    installation_record_types
+  );
 
   order_sql := pg_catalog.format(
     ' order by entry.occurred_at %s, entry.activity_id %s limit $8',
