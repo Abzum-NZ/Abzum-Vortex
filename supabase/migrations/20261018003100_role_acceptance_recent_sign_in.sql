@@ -1,4 +1,3 @@
-begin;
 set local role vortex_owner;
 
 create or replace function vortex_access.coordinate_private_organization_role_authority_change(
@@ -280,4 +279,3 @@ alter function vortex_access.coordinate_private_organization_role_authority_chan
 grant execute on function vortex_access.coordinate_private_organization_role_authority_change(p_prepared_evidence jsonb, p_activity_id uuid) to postgres;
 
 reset role;
-commit;
