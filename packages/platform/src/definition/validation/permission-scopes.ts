@@ -95,7 +95,7 @@ export function permissionRecordScopesValid(
         return (
           expected === undefined ||
           (binding.source === "current_organization_account_id"
-            ? !["text", "organization_account_reference"].includes(expected)
+            ? !["text", "organization_account_reference", "record_reference"].includes(expected)
             : !typedValueMatchesType(binding.value, expected))
         );
       })
