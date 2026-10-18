@@ -39,7 +39,7 @@ const parameterType = (type: string | undefined): StudioConditionParameterType =
 
 const roles: Readonly<Record<StudioFlowReferenceChoice["group"], Exclude<StudioConditionOperandRole, "current_field">>> = {
   Inputs: "declared_input", Variables: "variable", "Earlier steps": "step_output",
-  "The record that started it": "record_field", "The run": "run_value",
+  "The record": "record_field", "The run": "run_value",
 };
 
 /** The controls' context for a condition that may read these references, and literal values. */
@@ -51,7 +51,7 @@ export const studioFlowConditionContext = (choices: readonly StudioFlowReference
     keys, choices: byKey,
     controls: {
       allowedOperands: choices.map((choice) => ({ operand: { source: "parameter" as const, key: keys.get(choice.token)! },
-        label: choice.label, role: roles[choice.group] })),
+        label: choice.label, role: roles[choice.group], ...(choice.options === undefined ? {} : { options: choice.options }) })),
       declaredFieldIds: [],
       parameterDeclarations: choices.map((choice) => ({ key: keys.get(choice.token)!, type: parameterType(choice.type) })),
       allowLiteralValues: true,
