@@ -215,8 +215,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
   // time with their preview access through the same reader as the Data tab's results.
   const readRecordChoices = useCallback<StudioRecordReader>(async ({ recordType, after }) => {
     const separator = recordType.indexOf(":");
-    if (draft.preview.status.kind !== "ready") return { kind: "temporarily_unavailable" };
-    const result = await readStudioDataRecords(organizationId, { rootId, draftRevision: draft.saved.draftRevision,
+    const result = await readStudioDataRecords(organizationId, { rootId, draftRevision: view.draftRevision,
       moduleKey: recordType.slice(0, separator), recordKey: recordType.slice(separator + 1), pageSize: 40,
       ...(after === undefined ? {} : { continuationToken: after }) });
     switch (result.kind) {
@@ -228,7 +227,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
       }
       case "not_saved": return { kind: "not_saved" };
       // The preview is still moving to the saved revision; the picker reads again when opened again.
-      case "following": draft.preview.refresh(); return { kind: "temporarily_unavailable" };
+      case "following": return { kind: "temporarily_unavailable" };
       // The saved draft moved on; the next save's revision reads again.
       case "conflict": return { kind: "temporarily_unavailable" };
       case "no_query": return { kind: "no_list" };
@@ -240,15 +239,13 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
       case "refused": return { kind: "refused" };
       case "temporarily_unavailable": return { kind: "temporarily_unavailable" };
     }
-  }, [organizationId, rootId, draft.saved.draftRevision, draft.preview.status, draft.preview.refresh]);
+  }, [organizationId, rootId, view.draftRevision]);
   const draftChoices = useMemo(() => studioDraftChoices(source, view.borrowedChoices, readRecordChoices),
     [source, view.borrowedChoices, readRecordChoices]);
   // The records of the canvas's data blocks, read for the compiled saved revision only.
   const readCanvasRecords = useCallback(async (area: string) => {
     const pageAlias = canvasPageRef.current;
     if (pageAlias === undefined) return { state: "unavailable" as const, records: {} };
-    if (draft.preview.status.kind !== "ready" || draft.preview.status.draftRevision !== view.draftRevision)
-      return { state: "unavailable" as const, records: {}, behind: true };
     const result = await readStudioCanvasRecords(organizationId, { rootId,
       draftRevision: view.draftRevision, sourceFingerprint: view.sourceFingerprint, pageAlias, area });
     if (result.kind === "available" && result.draftRevision === view.draftRevision &&
@@ -256,13 +253,12 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
       return { state: "ready" as const, records: result.records, behind: result.behind,
         ...(result.sample === undefined ? {} : { sample: result.sample }) };
     if (result.kind === "refused") return { state: "refused" as const, records: {} };
-    if (result.kind === "following") draft.preview.refresh();
     // A conflict means a newer save replaced this revision, whose own read follows; anything else is a failure.
-    if (result.kind !== "conflict" && result.kind !== "following")
+    if (result.kind !== "conflict")
       console.error(`[studio] the canvas records were not read: STUDIO_CANVAS_RECORDS_${result.kind.toUpperCase()}`);
     // A newer save or the preview moving under this read: the canvas reads again shortly.
     return { state: "unavailable" as const, records: {}, behind: true };
-  }, [organizationId, rootId, view.draftRevision, view.sourceFingerprint, draft.preview.status, draft.preview.refresh]);
+  }, [organizationId, rootId, view.draftRevision, view.sourceFingerprint]);
 
   const commandVisibility: Parameters<typeof ApplicationVisibilityConditionEditor>[0]["onCommand"] =
     (expected, expectedSelection, metadata, condition) => {

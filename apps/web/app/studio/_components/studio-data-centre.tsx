@@ -7,7 +7,6 @@ import { Label } from "@vortex/ui/components/label";
 import { StudioOptionControl, type StudioDataSelection } from "@vortex/ui/studio";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@vortex/ui/components/table";
 import { readStudioDataRecords } from "../_lib/studio-read-client";
-import type { StudioPreviewStatus } from "../../_lib/studio-application-preview";
 import type { StudioDataRecordsResult, StudioDataTotal } from "../../_lib/studio-data-records";
 import {
   fieldTypeLabel, type StudioDataModule, type StudioDataRecordType,
@@ -56,13 +55,6 @@ const notReadable = (result: StudioDataRecordsResult, plural: string, query: boo
     case "temporarily_unavailable": return "The records could not be read just now. Try again in a moment.";
   }
 };
-
-const preparationMessage = (preview: StudioPreviewStatus): string =>
-  preview.kind === "preparation_failed"
-    ? `The saved draft could not be prepared for preview (${preview.code}). Correct the draft to try again.`
-    : preview.kind === "refused" ? "Your access does not allow this preview."
-    : preview.kind === "temporarily_unavailable" ? "The preview could not be prepared just now. Your draft remains editable."
-    : "Your preview is catching up with the saved draft.";
 
 /** A summary's totals, as a list of label and value. */
 function Totals({ totals }: Readonly<{ totals: readonly StudioDataTotal[] }>) {
@@ -117,12 +109,10 @@ function SummaryResults({ result, onPage }: Readonly<{
  * draft revision with their preview access. Paging is keyset paging: next and previous pages,
  * never a page count.
  */
-function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, queryKey, draftRevision, onFollowing, preview }: Readonly<{
-  preview: StudioPreviewStatus;
+function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, queryKey, draftRevision }: Readonly<{
   organizationId: string; rootId: string; moduleKey: string; recordKey: string; plural: string; queryKey: string | undefined;
-  /** The latest saved draft revision whose preview the records are read from. */
+  /** The saved, compiled draft revision whose preview the records are read from. */
   draftRevision: number;
-  onFollowing: () => void;
 }>) {
   const [pageSize, setPageSize] = useState<number>(40);
   // A page token belongs to one record type or query, page size and saved revision: any other
@@ -134,10 +124,19 @@ function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, 
   const [read, setRead] = useState<Read | null>(null);
   const latest = useRef("");
   const request = JSON.stringify({ scope, page });
-  const ready = preview.kind === "ready" && preview.draftRevision === draftRevision;
+  // A preview still moving to this revision is read again shortly; what it showed stays meanwhile.
+  const [followed, setFollowed] = useState<Readonly<{ request: string; count: number }>>({ request: "", count: 0 });
+  const followUp = followed.request === request ? followed.count : 0;
   useEffect(() => {
-    if (!ready) return;
-    let active = true;
+    if (read?.request !== request) return;
+    const result = read.result;
+    const behind = result.kind === "following" ||
+      ((result.kind === "available" || result.kind === "summary") && result.behind);
+    if (!behind || followUp >= 30) return;
+    const timer = setTimeout(() => setFollowed({ request, count: followUp + 1 }), 1500);
+    return () => clearTimeout(timer);
+  }, [read, request, followUp]);
+  useEffect(() => {
     latest.current = request;
     void (async () => {
       let result: StudioDataRecordsResult;
@@ -150,12 +149,10 @@ function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, 
         console.error("[studio] reading data records failed", describeFailure(error));
         result = { kind: "temporarily_unavailable" };
       }
-      if (active && latest.current === request) setRead({ request, result });
+      if (latest.current === request) setRead({ request, result });
     })();
-  return () => { active = false; };
-  }, [organizationId, rootId, draftRevision, moduleKey, recordKey, queryKey, pageSize, page.token, page.direction, request, ready]);
+  }, [organizationId, rootId, draftRevision, moduleKey, recordKey, queryKey, pageSize, page.token, page.direction, request, followUp]);
   const current = read?.request === request ? read.result : null;
-  useEffect(() => { if (current?.kind === "following") onFollowing(); }, [current, onFollowing]);
   const problem = current === null ? undefined : notReadable(current, plural, queryKey !== undefined);
   return <section aria-labelledby="studio-data-results" className="space-y-2">
     <div className="flex flex-wrap items-end justify-between gap-2">
@@ -172,8 +169,7 @@ function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, 
           onChange={(next) => { setPageSize(Number(next)); setPage({}); }} />
       </div>
     </div>
-    {!ready ? <p role="status" className="text-sm">{preparationMessage(preview)}</p>
-      : current === null ? <p role="status" className="text-sm text-muted-foreground">Reading records…</p>
+    {current === null ? <p role="status" className="text-sm text-muted-foreground">Reading records…</p>
       : problem !== undefined ? <p role="status" className="text-sm">{problem}</p>
         : current.kind === "summary" ? <SummaryResults result={current} onPage={setPage} />
         : current.kind === "available" && <>
@@ -198,17 +194,15 @@ function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, 
 }
 
 /** The Data tab's centre: the selected record type's schema grid and its records in the builder's preview. */
-export function StudioDataCentre({ organizationId, rootId, modules, selection, unsaved, draftRevision, preview, onFollowing }: Readonly<{
+export function StudioDataCentre({ organizationId, rootId, modules, selection, unsaved, draftRevision }: Readonly<{
   organizationId: string; rootId: string;
-  preview: StudioPreviewStatus;
   /** Owned and used modules, as the tree shows them. */
   modules: readonly StudioDataModule[];
   selection: StudioDataSelection | null;
   /** Whether the selected record type or query is not in the saved draft yet. */
   unsaved: boolean;
-  /** The latest saved draft revision whose preview the records are read from. */
+  /** The saved, compiled draft revision whose preview the records are read from. */
   draftRevision: number;
-  onFollowing: () => void;
 }>) {
   const module = selection === null ? undefined : modules.find((item) => item.key === selection.moduleKey);
   if (selection === null || module === undefined)
@@ -237,6 +231,6 @@ export function StudioDataCentre({ organizationId, rootId, modules, selection, u
         ? "Records show once this record type is saved, in a moment."
         : "Results show once this query is saved, in a moment."}</p>
       : <PreviewResults organizationId={organizationId} rootId={rootId} moduleKey={module.key} recordKey={record.key} plural={record.pluralName}
-        queryKey={query?.key} draftRevision={draftRevision} onFollowing={onFollowing} preview={preview} />}
+        queryKey={query?.key} draftRevision={draftRevision} />}
   </div>;
 }

@@ -20,7 +20,7 @@ import {
 import { z } from "zod";
 import { WebMcpAdapter, type WebMcpToolDescriptor } from "../../_components/webmcp-adapter";
 import { applyStudioItemLabels } from "@vortex/ui/studio";
-import { previewStudioApplication } from "../_lib/studio-read-client";
+import { previewStudioApplication } from "../preview-actions";
 import { previewProblem, unavailableMessage } from "./studio-refusal-messages";
 import type { StudioDraft } from "./use-studio-draft";
 

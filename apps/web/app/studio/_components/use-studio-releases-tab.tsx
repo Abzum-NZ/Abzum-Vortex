@@ -5,7 +5,7 @@ import {
   type DefinitionPublicationConfirmation,
 } from "@vortex/platform/schema";
 import { prepareStudioApplicationPublication, publishStudioApplication } from "../actions";
-import { previewStudioApplication } from "../_lib/studio-read-client";
+import { previewStudioApplication } from "../preview-actions";
 import { sameStudioApplicationSourceImportSnapshot, type StudioApplicationSourceImportSnapshot } from "../_lib/application-source-import";
 import type { SavedDraftContext, StudioPublicationOutcome } from "./application-draft-agent-tools";
 import { ApplicationSourceImport } from "./application-source-import";

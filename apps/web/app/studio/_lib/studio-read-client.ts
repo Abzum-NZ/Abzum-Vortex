@@ -1,32 +1,36 @@
 "use client";
-import type { StudioApplicationPreviewResult } from "../../_lib/studio-application-preview";
 import type * as Operations from "../../_lib/studio-read-operations";
 
 /** Fetch reads independently of Next's serialized Server Action mutation queue. */
-const read = async <Result>(operation: string, organizationId: string, candidate: unknown): Promise<Result> => {
+const read = async <Result>(
+  operation: string,
+  organizationId: string,
+  candidate: unknown,
+): Promise<Result> => {
   const query = new URLSearchParams({ organizationId, request: JSON.stringify(candidate) });
   const response = await fetch(`/studio/read/${operation}?${query}`, {
-    credentials: "same-origin", cache: "no-store",
+    credentials: "same-origin",
+    cache: "no-store",
   });
   if (!response.ok) throw new Error(`STUDIO_READ_HTTP_${response.status}`);
   return response.json() as Promise<Result>;
 };
 
-export const reopenStudioApplication: typeof Operations.reopenStudioApplication = (organizationId, rootId) =>
-  read("draft", organizationId, rootId);
-export const readStudioCanvasRecords: typeof Operations.readStudioCanvasRecords = (organizationId, candidate) =>
-  read("canvas-records", organizationId, candidate);
-export const readStudioDataRecords: typeof Operations.readStudioDataRecords = (organizationId, candidate) =>
-  read("data-records", organizationId, candidate);
-export const resolveStudioApplicationConditionContext: typeof Operations.resolveStudioApplicationConditionContext = (organizationId, candidate) =>
-  read("condition-context", organizationId, candidate);
-export const resolveStudioApplicationTheme: typeof Operations.resolveStudioApplicationTheme = (organizationId, candidate) =>
-  read("theme", organizationId, candidate);
-
-/** The Preview button and saved-head preparation use the same authenticated operation. */
-export const previewStudioApplication = async (organizationId: string, request: unknown): Promise<StudioApplicationPreviewResult> => {
-  const response = await fetch("/studio/preview", { method: "POST", credentials: "same-origin",
-    headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, request }) });
-  if (!response.ok) throw new Error(`STUDIO_PREVIEW_PREPARE_HTTP_${response.status}`);
-  return response.json();
-};
+export const reopenStudioApplication: typeof Operations.reopenStudioApplication = (
+  organizationId,
+  rootId,
+) => read("draft", organizationId, rootId);
+export const readStudioCanvasRecords: typeof Operations.readStudioCanvasRecords = (
+  organizationId,
+  candidate,
+) => read("canvas-records", organizationId, candidate);
+export const readStudioDataRecords: typeof Operations.readStudioDataRecords = (
+  organizationId,
+  candidate,
+) => read("data-records", organizationId, candidate);
+export const resolveStudioApplicationConditionContext: typeof Operations.resolveStudioApplicationConditionContext =
+  (organizationId, candidate) => read("condition-context", organizationId, candidate);
+export const resolveStudioApplicationTheme: typeof Operations.resolveStudioApplicationTheme = (
+  organizationId,
+  candidate,
+) => read("theme", organizationId, candidate);

@@ -10,7 +10,6 @@ import {
   type StudioCompileFailure, type StudioSemanticSelection, type StudioSemanticSelectionStore, type StudioStoredApplicationDraft,
 } from "@vortex/ui/studio";
 import { saveStudioApplication, type StudioDraftChangedElsewhere } from "../actions";
-import { useStudioPreview, type StudioPreviewReadiness } from "./use-studio-preview";
 import { reopenStudioApplication } from "../_lib/studio-read-client";
 import type { StudioApplicationCanvasFrames, StudioApplicationCompiledPageSlots } from "../../_lib/studio-application-draft";
 import type { StudioCompiledFields, StudioDataModule, StudioPublishedData } from "../_lib/studio-data-model";
@@ -93,7 +92,6 @@ export type StudioDraft = Readonly<{
   selected: StudioSemanticSelection | null;
   /** The saved draft the current history extends. */
   saved: StudioStoredApplicationDraft;
-  preview: StudioPreviewReadiness;
   /**
    * Live: the saved draft at this moment, for requests that run before the next render (a flush
    * followed by Publish, Preview or an agent call). It changes once per saved edit batch.
@@ -200,7 +198,6 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
   const [state, setState] = useState(() => history.getState());
   const [selected, setSelected] = useState(() => selection.getSelection());
   const [saved, setSaved] = useState(draft);
-  const preview = useStudioPreview(organizationId, saved);
   const [view, setView] = useState<StudioCompiledView>(() => ({ ...initialView, source: draft.source,
     draftRevision: draft.draftRevision, sourceFingerprint: draft.sourceFingerprint, generation: 0 }));
   const [lifetime, setLifetime] = useState(0);
@@ -440,12 +437,12 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
   const locked = renderedHolds.size > 0 || status.kind === "conflict" || lifetime === 0;
 
   return useMemo<StudioDraft>(() => ({
-    session, organizationId, history, selection, state, source, selected, saved, preview, readSaved: () => savedRef.current, view, updatingCanvas, status, chip, lifetime, locked,
+    session, organizationId, history, selection, state, source, selected, saved, readSaved: () => savedRef.current, view, updatingCanvas, status, chip, lifetime, locked,
     isHeld: (key) => renderedHolds.has(key), hold, blockedReason, parsed, run,
     select: (next) => selection.select(next),
     undo: () => { if (blockedReason() === undefined) history.undo(); },
     redo: () => { if (blockedReason() === undefined) history.redo(); },
     flush, retry, reload, isActive: () => active.current,
-  }), [session, organizationId, history, selection, state, source, selected, saved, preview, view, updatingCanvas, status, chip, lifetime, locked,
+  }), [session, organizationId, history, selection, state, source, selected, saved, view, updatingCanvas, status, chip, lifetime, locked,
     renderedHolds, hold, blockedReason, parsed, run, flush, retry, reload]);
 }

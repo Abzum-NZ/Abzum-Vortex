@@ -306,7 +306,7 @@ export function useStudioDataTab({ draft, applications, initialModule, hidden, c
     selected={current} onSelect={select} onCreate={() => setCreating(true)} disabled={disabled}
     search={<StudioSearchOverview source={source} modules={modules} disabled={disabled} edit={edit} onSelect={select} />} />;
   const centre = <StudioDataCentre organizationId={organizationId} rootId={draft.state.rootId} modules={modules}
-    selection={current} unsaved={unsaved} draftRevision={draft.saved.draftRevision} preview={draft.preview.status} onFollowing={draft.preview.refresh} />;
+    selection={current} unsaved={unsaved} draftRevision={view.draftRevision} />;
   // Each editor is keyed by the item it edits only, so an applied edit never draws it afresh.
   const inspectorBody = current === null || module === undefined
     ? <p className="text-sm text-muted-foreground">Select a module, record type, field or query in the Data panel.</p>
