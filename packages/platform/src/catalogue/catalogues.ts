@@ -44,15 +44,9 @@ export const flowOnlyValueTypeKeys = [
 /**
  * The one value-type catalogue. Every field, flow, action-input, sharing-parameter and rule-graph
  * type list is a view of this list, and `valueTypesCompatible` is the one type-compatibility
- * function. `number` and `boolean` are the action-input and sharing-parameter spellings of a
- * number and a yes/no value.
+ * function.
  */
-export const valueTypeKeys = [
-  ...fieldTypeKeys,
-  ...flowOnlyValueTypeKeys,
-  "number",
-  "boolean",
-] as const;
+export const valueTypeKeys = [...fieldTypeKeys, ...flowOnlyValueTypeKeys] as const;
 export const valueTypeSchema = z.enum(valueTypeKeys);
 export type ValueType = z.infer<typeof valueTypeSchema>;
 
@@ -78,14 +72,14 @@ export const workflowValueTypeKeys = [
   "json",
 ] as const satisfies readonly ValueType[];
 
-/** Action-input value types: the view of the catalogue shared by the V1 and  module contracts. */
+/** Action-input value types: the view of the catalogue shared by application and module contracts. */
 export const actionInputValueTypes = {
   text: "text",
   formatted_text: "formatted_text",
-  number: "number",
+  whole_number: "whole_number",
   decimal_number: "decimal_number",
   money: "money",
-  boolean: "boolean",
+  yes_no: "yes_no",
   date: "date",
   date_time: "date_time",
   record_reference: "record_reference",
@@ -95,8 +89,8 @@ export const actionInputValueTypes = {
 /** Sharing-parameter value types accepted by the current condition contract. */
 export const sharingParameterValueTypeKeys = [
   "text",
-  "number",
-  "boolean",
+  "whole_number",
+  "yes_no",
   "date",
   "date_time",
   "organization_account_reference",
@@ -134,31 +128,14 @@ export type BlockPaletteGroup = z.infer<typeof blockPaletteGroupSchema>;
 export type PersonalDataClass = z.infer<typeof personalDataClassSchema>;
 export type SearchPriority = z.infer<typeof searchPrioritySchema>;
 
-/** The semantic spelling of a flow value type, shared by every flow compatibility check. */
-export function canonicalWorkflowValueType(type: string): string {
-  return ["whole_number", "decimal_number", "money"].includes(type)
-    ? "number"
-    : type === "yes_no"
-      ? "boolean"
-      : ["choice", "formatted_text"].includes(type)
-        ? "text"
-        : type === "several_choices"
-          ? "json"
-          : type;
-}
-
 export type ValueTypeCompatibilityContext =
   "value" | "flow" | "exact" | "condition" | "mapping" | "cross_format";
 
-const numericValueTypes: ReadonlySet<string> = new Set([
-  "number",
-  "whole_number",
-  "decimal_number",
-]);
+const numericValueTypes: ReadonlySet<string> = new Set(["whole_number", "decimal_number"]);
 const crossFormatValueTypes: ReadonlySet<string> = new Set([
   "text",
-  "number",
-  "boolean",
+  "whole_number",
+  "yes_no",
   "date",
   "date_time",
 ]);
@@ -172,6 +149,8 @@ export function valueTypesCompatible(
   expected: string | undefined,
   context: ValueTypeCompatibilityContext = "value",
 ): boolean {
+  if (!valueTypeSchema.safeParse(actual).success || !valueTypeSchema.safeParse(expected).success)
+    return false;
   if (actual === undefined || expected === undefined) return false;
   switch (context) {
     case "condition":
@@ -186,11 +165,6 @@ export function valueTypesCompatible(
         expected === "money"
       )
         return actual === expected;
-      if (
-        (actual === "number" || actual === "whole_number") &&
-        (expected === "number" || expected === "whole_number")
-      )
-        return true;
       return valueTypesCompatible(actual, expected, "exact");
     case "exact":
       return (

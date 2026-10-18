@@ -127,7 +127,7 @@ export type StudioFlowDraftChoices = Readonly<{
 }>;
 
 const actionInputType = (type: string): string =>
-  type === "number" ? "decimal_number" : type === "boolean" ? "yes_no" : type;
+  type;
 
 /** Everything a step setting can point at in the draft: record types, pages, forms, module actions, queries and connections. */
 export const projectStudioFlowDraftChoices = (draft: Readonly<{

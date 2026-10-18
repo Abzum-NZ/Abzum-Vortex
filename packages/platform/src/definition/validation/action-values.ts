@@ -7,8 +7,6 @@ import {
   typedFieldValueType,
   type ModuleValueDialect,
   fieldValueMatches,
-  typedConditionTypesValid,
-  conditionTypesValid,
 } from "./field-types";
 
 /**
@@ -162,7 +160,7 @@ export function applicationActionValueCompatible(
   if (
     reference?.source === "input" &&
     (inputs.get(String(reference.name))?.type === "formatted_text" ||
-      (inputs.get(String(reference.name))?.type === "number" &&
+      (inputs.get(String(reference.name))?.type === "whole_number" &&
         ["decimal_number", "money"].includes(applicationFieldType(target) ?? "")))
   )
     return false;
@@ -177,55 +175,14 @@ export function applicationActionValueCompatible(
   return actionValueCompatible(value, target.field, subjectFields, inputs, subjectRecordTypeId);
 }
 
-function applicationConditionUsesLossyInput(
-  value: unknown,
-  fields: ReadonlyMap<string, JsonObject>,
-  inputTypes: ReadonlyMap<string, string>,
-): boolean {
-  if (value === null || value === undefined) return false;
-  const condition = object(value);
-  if (condition.kind === "all" || condition.kind === "any")
-    return array(condition.conditions).some((entry) =>
-      applicationConditionUsesLossyInput(entry, fields, inputTypes),
-    );
-  if (condition.kind === "not")
-    return applicationConditionUsesLossyInput(condition.condition, fields, inputTypes);
-  if (condition.kind !== "comparison") return false;
-  const exactFieldType = (operandValue: unknown) => {
-    const operand = object(operandValue);
-    if (operand.source !== "field") return undefined;
-    const type = typedFieldValueType(fields.get(String(operand.fieldId)));
-    return type === "decimal_number" || type === "money" ? type : undefined;
-  };
-  const isLegacyNumberInput = (operandValue: unknown) => {
-    const operand = object(operandValue);
-    return operand.source === "parameter" && inputTypes.get(String(operand.key)) === "number";
-  };
-  return (
-    (exactFieldType(condition.left) !== undefined && isLegacyNumberInput(condition.right)) ||
-    (exactFieldType(condition.right) !== undefined && isLegacyNumberInput(condition.left))
-  );
-}
-
-export const applicationConditionTypesValid = (
-  value: unknown,
-  fields: ReadonlyMap<string, JsonObject>,
-  moduleBound: boolean,
-  inputTypes: ReadonlyMap<string, string> = new Map(),
-): boolean =>
-  moduleBound
-    ? !applicationConditionUsesLossyInput(value, fields, inputTypes) &&
-      typedConditionTypesValid(value, fields, inputTypes)
-    : conditionTypesValid(value, fields, inputTypes);
-
 export const applicationInterfaceFieldType = (
   pair: ApplicationFieldValuePair | undefined,
 ): string | undefined => {
   const type = applicationFieldType(pair);
   if (!pair) return type;
-  if (type === "whole_number" || type === "number") return "number";
+  if (type === "whole_number") return "whole_number";
   if (type === "decimal_number" || type === "money") return type;
-  if (type === "boolean") return "boolean";
+  if (type === "yes_no") return "yes_no";
   if (["text", "date", "date_time", "record_reference"].includes(String(type))) return type;
   return undefined;
 };
