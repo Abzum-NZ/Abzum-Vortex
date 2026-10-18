@@ -1,4 +1,6 @@
 import {
+  SunIcon,
+  MoonIcon,
   TreeStructureIcon,
   TreeViewIcon,
   CubeIcon,
@@ -52,6 +54,8 @@ const phosphorIcon = (Glyph: PhosphorIcon): ComponentType<VortexIconProps> => {
 
 /** The semantic icon set drawn with Phosphor Icons, the names the shadcn registry uses for it. */
 export const icons: VortexIconAdapter = {
+  sun: phosphorIcon(SunIcon),
+  moon: phosphorIcon(MoonIcon),
   "arrow-down": phosphorIcon(ArrowDownIcon),
   "arrow-up": phosphorIcon(ArrowUpIcon),
   calendar: phosphorIcon(CalendarBlankIcon),

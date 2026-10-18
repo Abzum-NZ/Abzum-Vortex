@@ -1,4 +1,6 @@
 import {
+  Sun03Icon,
+  Moon02Icon,
   HierarchySquare01Icon,
   LeftToRightListBulletIcon,
   CubeIcon,
@@ -56,6 +58,8 @@ const hugeicon = (icon: IconSvgElement): ComponentType<VortexIconProps> => {
 
 /** The semantic icon set drawn with HugeIcons, the names the shadcn registry uses for it. */
 export const icons: VortexIconAdapter = {
+  sun: hugeicon(Sun03Icon),
+  moon: hugeicon(Moon02Icon),
   "arrow-down": hugeicon(ArrowDown02Icon),
   "arrow-up": hugeicon(ArrowUp02Icon),
   calendar: hugeicon(Calendar01Icon),
