@@ -17,6 +17,15 @@ import { Checkbox } from "@vortex/ui/components/checkbox";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { Input } from "@vortex/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@vortex/ui/components/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
+import { toast } from "@vortex/ui/components/sonner";
 import type { StudioSemanticSelection } from "@vortex/ui/studio";
 import {
   studioStructureDefaultShell,
@@ -27,11 +36,10 @@ import {
 import { studioAccessGateChoices } from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
 import { StudioRecordPageForm } from "./studio-record-page-form";
-import { StudioReferencesAlert } from "./studio-used-in";
+import { StudioPlaceList } from "./studio-used-in";
 import { useStudioDraftText } from "./use-studio-draft-text";
 
-type Feedback = Readonly<{
-  kind: "applied" | "refused";
+type Refusal = Readonly<{
   message: string;
   where?: readonly ApplicationUsePlace[] | undefined;
 }>;
@@ -39,8 +47,8 @@ export type StudioStructureForm = "none" | "page" | "record" | "shell";
 
 /**
  * The Structure tab's controls: add a page or a layout, and rename, remove or make home the page or
- * layout selected in the tree. Each control sends one command; a refusal is shown here, where it was
- * asked for, and nothing changes.
+ * layout selected in the tree. Each control sends one command; a refusal uses the shared toast
+ * region with a way to inspect references, and nothing changes.
  */
 export function StudioStructureEditor({
   source,
@@ -66,7 +74,8 @@ export function StudioStructureEditor({
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const setForm = onFormChange;
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [refusal, setRefusal] = useState<Refusal | null>(null);
+  const [showReferences, setShowReferences] = useState(false);
   const [newName, setNewName] = useState("");
   const [shellChoice, setShellChoice] = useState("");
   const [addToMenu, setAddToMenu] = useState(true);
@@ -90,16 +99,30 @@ export function StudioStructureEditor({
 
   const run = (command: StudioStructureCommand, merge?: string): boolean => {
     const result = onCommand(command, merge);
-    setFeedback(
-      result.kind === "refused"
-        ? { kind: "refused", message: result.message, where: result.where }
-        : { kind: "applied", message: result.message },
-    );
+    if (result.kind === "refused") {
+      const hasReferences = result.where !== undefined && result.where.length > 0;
+      toast.error("Nothing was changed", {
+        id: "studio-structure-refusal",
+        description: result.message,
+        duration: Infinity,
+        closeButton: true,
+        action: {
+          label: hasReferences ? "Show me where" : "Dismiss",
+          onClick: () => {
+            if (hasReferences) {
+              setRefusal(result);
+              setShowReferences(true);
+            }
+          },
+        },
+      });
+    }
     return result.kind === "applied";
   };
   useEffect(() => {
     setNewName("");
-    setFeedback(null);
+    setRefusal(null);
+    setShowReferences(false);
     setAddToMenu(true);
     setShellChoice(studioStructureDefaultShell(source) ?? "");
     // Opening a form starts a fresh command, independent of later draft changes.
@@ -221,11 +244,7 @@ export function StudioStructureEditor({
         </form>
       )}
       {target !== undefined && (
-        <section
-          key={target.id}
-          className="space-y-4"
-          aria-label={`Selected ${what}`}
-        >
+        <section key={target.id} className="space-y-4" aria-label={`Selected ${what}`}>
           <p className="text-sm font-medium">
             {page !== undefined ? "Selected page" : "Selected layout"}
             {page !== undefined && page.key === source.body.home_page && (
@@ -255,17 +274,25 @@ export function StudioStructureEditor({
                 Make home page
               </Button>
             )}
-            <Button
-              type="button"
-              size="sm"
-              variant="destructive"
-              disabled={disabled}
-              onClick={() => {
-                void remove();
-              }}
-            >
-              {page !== undefined ? "Remove page" : "Remove layout"}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    disabled={disabled}
+                    aria-label={`Remove ${what}`}
+                    onClick={() => {
+                      void remove();
+                    }}
+                  />
+                }
+              >
+                <Icon name="close" />
+              </TooltipTrigger>
+              <TooltipContent>Remove {what}</TooltipContent>
+            </Tooltip>
           </div>
           {page !== undefined && (
             <StudioField
@@ -313,27 +340,19 @@ export function StudioStructureEditor({
           )}
         </section>
       )}
-      {feedback?.where !== undefined && feedback.where.length > 0 ? (
-        <StudioReferencesAlert
-          name="it"
-          title="Nothing was changed"
-          issue={feedback.message}
-          references={feedback.where}
-        />
-      ) : (
-        feedback !== null && (
-          <p
-            role={feedback.kind === "refused" ? "alert" : "status"}
-            className={
-              feedback.kind === "refused"
-                ? "text-sm text-destructive"
-                : "text-sm text-muted-foreground"
-            }
-          >
-            {feedback.message}
-          </p>
-        )
-      )}
+      <Dialog open={showReferences} onOpenChange={setShowReferences}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Where it is used</DialogTitle>
+            <DialogDescription>{refusal?.message}</DialogDescription>
+          </DialogHeader>
+          <StudioPlaceList
+            places={refusal?.where ?? []}
+            label="Where it is used"
+            onBeforeOpen={() => setShowReferences(false)}
+          />
+        </DialogContent>
+      </Dialog>
       {confirmDialog}
     </div>
   );
