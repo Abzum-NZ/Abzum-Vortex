@@ -6,6 +6,7 @@ import { Drawer } from "@puckeditor/core";
 import { useId, useMemo, useState } from "react";
 import { studioPuckStyle } from "./studio-puck-style";
 import { Button } from "../components/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Input } from "../components/input";
 import { Label } from "../components/label";
 import { NativeSelect, NativeSelectOption } from "../components/native-select";
@@ -103,7 +104,7 @@ export function StudioBlockPalette({
           onChange={(event) => setSearch(event.target.value)}
         />
       </div>
-      <p className="text-sm text-muted-foreground">Drag onto the page or choose a tile to add.</p>
+      <p className="text-sm text-muted-foreground">Drag onto the page or use Add.</p>
       {message.length === 0 ? null : (
         <p role="status" aria-live="polite" className="text-sm">
           {message}
@@ -129,13 +130,13 @@ export function StudioBlockPalette({
             {groups.map((group) => (
               <section key={group.group} aria-label={group.label} className="space-y-2">
                 <h3 className="text-sm font-medium text-foreground">{group.label}</h3>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
                   {group.choices.map((choice) => {
                     const available = choice.unavailable === undefined;
                     return (
                       <div
                         key={choice.id}
-                        className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 text-card-foreground"
+                        className="group flex min-w-0 items-center gap-2 rounded-md py-2 hover:bg-accent focus-within:bg-accent"
                       >
                         <Drawer.Item
                           name={choice.rendererKey}
@@ -143,30 +144,40 @@ export function StudioBlockPalette({
                           isDragDisabled={!editable || !available}
                         >
                           {() => (
-                            <div className="flex flex-col items-start gap-2">
+                            <div className="flex min-w-0 items-start gap-2">
                               <Icon
                                 name={resolveVortexIconName(choice.icon) ?? "blocks"}
-                                className="size-5"
+                                className="mt-1 size-5 shrink-0"
                               />
-                              <span className="text-sm font-medium">{choice.name}</span>
-                              <span className="line-clamp-2 text-sm text-muted-foreground">
-                                {choice.unavailable ?? choice.description}
-                              </span>
+                              <div className="min-w-0">
+                                <span className="block text-sm font-medium">{choice.name}</span>
+                                <span className="line-clamp-1 text-sm text-muted-foreground group-hover:text-accent-foreground group-focus-within:text-accent-foreground">
+                                  {choice.unavailable ?? choice.description}
+                                </span>
+                              </div>
                             </div>
                           )}
                         </Drawer.Item>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="mt-auto w-full"
-                          disabled={!editable || !available}
-                          aria-label={`Add ${choice.name} to ${target.label}`}
-                          title={choice.unavailable ?? choice.description}
-                          onClick={() => add(choice)}
-                        >
-                          Add
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                className="ml-auto shrink-0"
+                                disabled={!editable || !available}
+                                aria-label={`Add ${choice.name} to ${target.label}`}
+                                onClick={() => add(choice)}
+                              />
+                            }
+                          >
+                            <Icon name="plus" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {choice.unavailable ?? `Add ${choice.name}`}
+                          </TooltipContent>
+                        </Tooltip>
                       </div>
                     );
                   })}
