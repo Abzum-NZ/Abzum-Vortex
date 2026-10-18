@@ -66,9 +66,6 @@ begin
     order by preview.preview_installation_id
     for update
   loop
-    perform vortex_record.drop_preview_installation_storage(
-      previous_preview.preview_installation_id
-    );
     delete from vortex_definition.preview_installations as preview
     where preview.preview_installation_id = previous_preview.preview_installation_id;
   end loop;
