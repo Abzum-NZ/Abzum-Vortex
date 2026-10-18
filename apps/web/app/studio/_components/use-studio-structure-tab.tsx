@@ -4,7 +4,7 @@ import type { ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
 import {
   studioSemanticSelectionKey, type StudioPlacementDescriber, type StudioSemanticOutline, type StudioSemanticSelection,
 } from "@vortex/ui/studio";
-import { applyStudioStructureCommand, type StudioStructureCommand, type StudioStructureResult } from "@vortex/ui/studio";
+import { applyStudioStructureCommand, studioPageLayoutPlan, type StudioStructureCommand, type StudioStructureResult } from "@vortex/ui/studio";
 import { studioFieldPublication } from "./module-fields-editor";
 import { StudioStructurePanel } from "./studio-outline-panels";
 import { StudioStructureEditor, type StudioStructureForm } from "./studio-structure-editor";
@@ -53,6 +53,7 @@ export function useStudioStructureTab({ draft, catalogue, describePlacement, out
     homePageKey={homePage === undefined ? undefined : studioSemanticSelectionKey({ kind: "page", pageAlias: homePage.id })}
     editor={<StudioStructureEditor source={source} selected={selected} onCommand={command} onPreview={preview}
       form={form} onFormChange={onFormChange}
+      onLayoutPlan={(pageAlias, shellAlias) => studioPageLayoutPlan({ source, catalogue, describePlacement, publishedFields }, pageAlias, shellAlias)}
       onOpenAccess={openAccessPages} disabled={draft.locked} />} />;
   return { panel };
 }

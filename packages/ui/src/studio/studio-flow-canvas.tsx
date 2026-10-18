@@ -1,59 +1,381 @@
 "use client";
 import "@xyflow/react/dist/style.css";
-import { useMemo, type CSSProperties } from "react";
-import { Background, Controls, Handle, Position, ReactFlow, type Edge, type Node, type NodeProps } from "@xyflow/react";
+import type { FlowTaskTypeKey } from "@vortex/platform/schema";
+import { createContext, useContext, useId, useMemo, useState } from "react";
+import {
+  Background,
+  BackgroundVariant,
+  BaseEdge,
+  EdgeLabelRenderer,
+  Handle,
+  Panel,
+  Position,
+  ReactFlow,
+  getSmoothStepPath,
+  useReactFlow,
+  type Edge,
+  type EdgeProps,
+  type Node,
+  type NodeProps,
+} from "@xyflow/react";
+import {
+  ArchiveRestore,
+  Braces,
+  Cable,
+  Calculator,
+  CaseSensitive,
+  CheckCheck,
+  CircleCheck,
+  CircleHelp,
+  CircleX,
+  ClipboardList,
+  Clock,
+  FileOutput,
+  FilePlus2,
+  Filter,
+  Flag,
+  FolderInput,
+  GitBranch,
+  GitFork,
+  Layers,
+  Link,
+  Link2,
+  ListFilter,
+  ListOrdered,
+  MapPin,
+  Maximize,
+  Megaphone,
+  MessageSquare,
+  Navigation,
+  Octagon,
+  PanelLeft,
+  Paperclip,
+  Play,
+  Plug,
+  Plus,
+  RefreshCw,
+  Repeat2,
+  Save,
+  Search,
+  Split,
+  SquarePen,
+  Timer,
+  Trash2,
+  TriangleAlert,
+  UserRound,
+  Variable,
+  Workflow,
+  ZoomIn,
+  ZoomOut,
+  type LucideIcon,
+} from "lucide-react";
 import { Badge } from "../components/badge";
-import { Card, CardDescription, CardHeader, CardTitle } from "../components/card";
+import { Button } from "../components/button";
+import { Card } from "../components/card";
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "../components/popover";
 import { cn } from "../lib/utils";
+import type { ThemeMode } from "../theme";
+import type { StudioFlowDraftChoices } from "./application-flow-step-form";
 import type { StudioFlowPath, StudioFlowTaskListOutline } from "./application-flow-model";
+import { StudioFlowStepPicker, type StudioFlowStepChoice } from "./studio-flow-step-picker";
 
-/**
- * The workflow canvas: the stored flow drawn as a graph. How it starts, its steps top to bottom,
- * each decision's branches side by side below it, and where it ends; the failure and final lists
- * sit beside the main steps. Positions are computed every time from the authored lists, so the
- * canvas stores nothing of its own. React Flow (`@xyflow/react`) draws it; the nodes are shadcn
- * cards on the platform theme's tokens.
- */
-
+/** The graph is a view of the authored lists; no canvas positions or graph state are stored. */
 type NodeKind = "start" | "step" | "group" | "end";
-type CanvasNodeData = Readonly<{ title: string; caption: string; kind: NodeKind; badge?: string }>;
+type FlowNodeData = Readonly<{ title: string; caption: string; kind: NodeKind; taskType?: string }>;
+type Insertion = Readonly<{ listPath: StudioFlowPath; index: number }>;
+type FlowEdge = Edge<Readonly<{ insertion: Insertion; label: string }>, "studio">;
+type AddStep = (insertion: Insertion, taskType: string, formAlias?: string) => true | string;
+type CanvasActions = Readonly<{
+  types: readonly StudioFlowStepChoice[];
+  forms: StudioFlowDraftChoices["forms"];
+  disabled: boolean;
+  onAdd: AddStep;
+}>;
+const ActionsContext = createContext<CanvasActions | null>(null);
 
-const nodeWidth = 240;
-const nodeHeight = 64;
-const columnGap = 40;
-const rowGap = 44;
-
+const nodeWidth = 256;
+const nodeHeight = 96;
+const columnGap = 64;
+const rowGap = 80;
 const pathKey = (path: StudioFlowPath): string => JSON.stringify(path);
 
-function CanvasNode({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
-  return <Card size="sm" style={{ width: nodeWidth, minHeight: nodeHeight }}
-    className={cn("gap-1 py-2", selected && "ring-2 ring-ring", data.kind === "step" || data.kind === "start" ? "cursor-pointer" : "bg-muted text-muted-foreground")}>
-    <Handle type="target" position={Position.Top} isConnectable={false} />
-    <CardHeader className="gap-1 px-3">
-      <CardTitle className="flex items-center gap-2 truncate text-sm">
-        {data.badge === undefined ? null : <Badge variant="outline">{data.badge}</Badge>}
-        <span className="truncate">{data.title}</span>
-      </CardTitle>
-      <CardDescription className="truncate text-xs">{data.caption}</CardDescription>
-    </CardHeader>
-    <Handle type="source" position={Position.Bottom} isConnectable={false} />
-  </Card>;
+const taskIcons: Readonly<Record<string, LucideIcon>> = {
+  if: GitBranch,
+  switch: Split,
+  for_each: Repeat2,
+  sequential: ListOrdered,
+  run_flow: Workflow,
+  stop: Octagon,
+  parallel: GitFork,
+  wait_until: Clock,
+  wait_for_person: UserRound,
+  "record.save": Save,
+  "record.create": FilePlus2,
+  "record.set_fields": SquarePen,
+  "record.link": Link2,
+  "record.delete": Trash2,
+  "record.restore": ArchiveRestore,
+  "record.changes": Layers,
+  "record.query": Search,
+  "record.read_fields": ListFilter,
+  "record.pin_identity": MapPin,
+  "operation.call": Plug,
+  "flow.run_background": Timer,
+  "event.announce": Megaphone,
+  "connection.call": Cable,
+  "message.acknowledge": CheckCheck,
+  "file.export": FileOutput,
+  "file.attach": Paperclip,
+  "file.move": FolderInput,
+  "data.calculate": Calculator,
+  "data.record_link": Link,
+  "data.set_values": Braces,
+  "data.set_variable": Variable,
+  "data.format": CaseSensitive,
+  "rule.require": CircleCheck,
+  "rule.warn": TriangleAlert,
+  "rule.refuse": CircleX,
+  "interface.show_message": MessageSquare,
+  "interface.show_form": ClipboardList,
+  "interface.confirm": CircleHelp,
+  "interface.navigate": Navigation,
+  "interface.refresh": RefreshCw,
+  "interface.set_panel": PanelLeft,
+  "interface.set_filter": Filter,
+} satisfies Record<FlowTaskTypeKey, LucideIcon>;
+
+function StudioFlowNode({ data, selected }: NodeProps<Node<FlowNodeData>>) {
+  const Icon =
+    data.kind === "start"
+      ? Play
+      : data.kind === "end"
+        ? Flag
+        : (taskIcons[data.taskType ?? ""] ?? Workflow);
+  const handle =
+    "size-2! rounded-full! border-background! bg-border! opacity-0 group-hover/node:opacity-100 group-focus-visible/flow-node:opacity-100";
+  return (
+    <Card
+      className={cn(
+        "group/node h-24 w-64 gap-2 rounded-xl border bg-card px-3 py-2.5 text-card-foreground shadow-xs hover:border-foreground/20 group-focus-visible/flow-node:ring-2 group-focus-visible/flow-node:ring-primary",
+        selected && "ring-2 ring-primary shadow-lg",
+      )}
+    >
+      {data.kind !== "start" && data.kind !== "group" && (
+        <Handle type="target" position={Position.Top} isConnectable={false} className={handle} />
+      )}
+      <div className="flex min-w-0 items-center gap-2">
+        <span
+          className={cn(
+            "flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-foreground",
+            data.kind === "start" && "bg-primary/10 text-primary",
+            data.taskType === "stop" && "bg-destructive/10 text-destructive",
+          )}
+        >
+          <Icon aria-hidden="true" className="size-4" />
+        </span>
+        <span className="truncate text-sm font-medium" title={data.title}>
+          {data.title}
+        </span>
+      </div>
+      <p className="line-clamp-2 text-xs text-muted-foreground" title={data.caption}>
+        {data.caption}
+      </p>
+      {data.kind !== "end" && (
+        <Handle type="source" position={Position.Bottom} isConnectable={false} className={handle} />
+      )}
+    </Card>
+  );
 }
-const nodeTypes = { canvas: CanvasNode };
+const nodeTypes = { studio: StudioFlowNode };
 
-type Layout = Readonly<{ width: number; height: number; firstIds: readonly string[]; lastIds: readonly string[] }>;
+function StudioFlowEdge(props: EdgeProps<FlowEdge>) {
+  const actions = useContext(ActionsContext);
+  const id = useId();
+  const [hovered, setHovered] = useState(false);
+  // Hold the command's snapshot while the picker is open; a changed draft must refuse a stale insertion.
+  const [request, setRequest] = useState<CanvasActions | null>(null);
+  const [problem, setProblem] = useState("");
+  const [path, x, y] = getSmoothStepPath(props);
+  if (actions === null || props.data === undefined)
+    throw new Error("Flow edges require canvas actions and an insertion position.");
+  const { insertion, label } = props.data;
+  return (
+    <>
+      <g onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)}>
+        <BaseEdge
+          id={props.id}
+          path={path}
+          interactionWidth={24}
+          style={{ stroke: "var(--muted-foreground)", strokeWidth: 1.5 }}
+        />
+      </g>
+      <EdgeLabelRenderer>
+        <div
+          className="nodrag nopan pointer-events-auto absolute flex items-center gap-2"
+          style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
+          onPointerEnter={() => setHovered(true)}
+          onPointerLeave={() => setHovered(false)}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          {props.label === undefined ? null : (
+            <Badge variant="secondary" className="rounded-full">
+              {props.label}
+            </Badge>
+          )}
+          <Popover
+            open={request !== null}
+            onOpenChange={(open) => {
+              setRequest(open ? actions : null);
+              setProblem("");
+            }}
+          >
+            <PopoverTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={label}
+                  title={actions.disabled ? "This draft is read-only" : label}
+                  disabled={actions.disabled}
+                  className={cn(
+                    "rounded-full bg-card opacity-0 focus:opacity-100",
+                    (hovered || request !== null) && "opacity-100",
+                  )}
+                />
+              }
+            >
+              <Plus aria-hidden="true" className="size-3" />
+            </PopoverTrigger>
+            <PopoverContent className="w-80" onKeyDown={(event) => event.stopPropagation()}>
+              <PopoverTitle>Add a step</PopoverTitle>
+              <StudioFlowStepPicker
+                forms={request?.forms ?? actions.forms}
+                id={id}
+                label="Kind of step"
+                types={request?.types ?? actions.types}
+                disabled={actions.disabled}
+                action="Add step"
+                onAdd={(taskType, formAlias) => {
+                  if (request === null) return;
+                  const result = request.onAdd(insertion, taskType, formAlias);
+                  if (result === true) {
+                    setRequest(null);
+                    setProblem("");
+                  } else setProblem(result);
+                }}
+              />
+              {problem === "" ? null : (
+                <p role="alert" className="mt-2 text-sm text-destructive">
+                  {problem}
+                </p>
+              )}
+            </PopoverContent>
+          </Popover>
+        </div>
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+const edgeTypes = { studio: StudioFlowEdge };
 
-const node = (id: string, x: number, y: number, data: CanvasNodeData): Node<CanvasNodeData> =>
-  ({ id, type: "canvas", draggable: false, connectable: false, selectable: data.kind === "step" || data.kind === "start", position: { x, y }, data });
+function StudioFlowControls() {
+  const { zoomIn, zoomOut, fitView } = useReactFlow();
+  return (
+    <Panel
+      position="bottom-left"
+      className="flex flex-col rounded-lg border bg-card p-1 text-card-foreground shadow-xs"
+      aria-label="Canvas zoom"
+      role="group"
+    >
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Zoom in"
+        title="Zoom in"
+        onClick={() => {
+          void zoomIn();
+        }}
+      >
+        <ZoomIn aria-hidden="true" className="size-4" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Zoom out"
+        title="Zoom out"
+        onClick={() => {
+          void zoomOut();
+        }}
+      >
+        <ZoomOut aria-hidden="true" className="size-4" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Fit flow to canvas"
+        title="Fit flow to canvas"
+        onClick={() => {
+          void fitView({ maxZoom: 1 });
+        }}
+      >
+        <Maximize aria-hidden="true" className="size-4" />
+      </Button>
+    </Panel>
+  );
+}
 
-/** Lists run top to bottom; a step's branches sit side by side below it and join again after it. */
-function layoutList(list: StudioFlowTaskListOutline, left: number, top: number,
-  nodes: Node<CanvasNodeData>[], edges: Edge[]): Layout {
+type Outlet = Readonly<{ id: string; insertion: Insertion }>;
+type Layout = Readonly<{
+  width: number;
+  height: number;
+  firstIds: readonly string[];
+  outlets: readonly Outlet[];
+}>;
+const node = (id: string, x: number, y: number, data: FlowNodeData): Node<FlowNodeData> => ({
+  id,
+  type: "studio",
+  className: "group/flow-node",
+  draggable: false,
+  connectable: false,
+  selectable: data.kind === "step" || data.kind === "start",
+  focusable: data.kind === "step" || data.kind === "start",
+  ariaRole: data.kind === "step" || data.kind === "start" ? "button" : "group",
+  position: { x, y },
+  data,
+  ariaLabel: `${data.title}. ${data.caption}`,
+});
+const edge = (
+  source: string,
+  target: string,
+  insertion: Insertion,
+  label: string,
+  branch?: string,
+): FlowEdge => ({
+  id: `${source}>${target}:${pathKey(insertion.listPath)}:${insertion.index}`,
+  source,
+  target,
+  type: "studio",
+  label: branch,
+  data: { insertion, label },
+});
+
+/** Lists run top to bottom. A branch's outgoing edge appends inside that branch, before it rejoins. */
+function layoutList(
+  list: StudioFlowTaskListOutline,
+  left: number,
+  top: number,
+  nodes: Node<FlowNodeData>[],
+  edges: FlowEdge[],
+): Layout {
   let y = top;
   let width = nodeWidth;
-  let previous: readonly string[] = [];
+  let previous: readonly Outlet[] = [];
   const firstIds: string[] = [];
-  for (const task of list.tasks) {
+  list.tasks.forEach((task, index) => {
     const id = pathKey(task.path);
     const nodeY = y;
     y += nodeHeight + rowGap;
@@ -66,22 +388,42 @@ function layoutList(list: StudioFlowTaskListOutline, left: number, top: number,
       return { child, branch };
     });
     const span = Math.max(nodeWidth, branchX - columnGap - left);
-    nodes.push(node(id, left + (span - nodeWidth) / 2, nodeY, { title: task.title, caption: task.caption, kind: "step" }));
+    nodes.push(
+      node(id, left + (span - nodeWidth) / 2, nodeY, {
+        title: task.title,
+        caption: task.caption,
+        kind: "step",
+        taskType: task.type,
+      }),
+    );
     for (const { child, branch } of branches)
-      for (const first of branch.firstIds) edges.push({ id: `${id}>${first}`, source: id, target: first, label: child.label });
-    if (previous.length > 0) for (const from of previous) edges.push({ id: `${from}>${id}`, source: from, target: id });
+      for (const first of branch.firstIds)
+        edges.push(
+          edge(
+            id,
+            first,
+            { listPath: child.path, index: 0 },
+            `Add a step to ${child.label}`,
+            child.label,
+          ),
+        );
+    if (previous.length > 0)
+      for (const from of previous)
+        edges.push(edge(from.id, id, from.insertion, `Add a step before ${task.title}`));
     else firstIds.push(id);
-    // The next step follows where each branch ends; the deciding step itself falls through only
-    // when a branch is empty or absent (no Else, no Otherwise).
-    const ends = branches.flatMap(({ branch }) => branch.lastIds);
-    const fallsThrough = branches.length === 0 || branches.some(({ branch }) => branch.lastIds.length === 0) ||
+    const ends = branches.flatMap(({ branch }) => branch.outlets);
+    const fallsThrough =
+      branches.length === 0 ||
+      branches.some(({ branch }) => branch.outlets.length === 0) ||
       (task.type === "if" && !task.children.some((child) => child.label === "Else")) ||
       (task.type === "switch" && !task.children.some((child) => child.label === "Otherwise"));
-    previous = fallsThrough ? [id, ...ends] : ends;
+    previous = fallsThrough
+      ? [{ id, insertion: { listPath: list.path, index: index + 1 } }, ...ends]
+      : ends;
     width = Math.max(width, span);
     y += branchHeight > 0 ? branchHeight + rowGap : 0;
-  }
-  return { width, height: y - top, firstIds, lastIds: previous };
+  });
+  return { width, height: y - top, firstIds, outlets: previous };
 }
 
 const groupCaptions: Readonly<Record<string, Readonly<{ caption: string; edge: string }>>> = {
@@ -90,75 +432,169 @@ const groupCaptions: Readonly<Record<string, Readonly<{ caption: string; edge: s
 };
 
 function buildGraph(lists: readonly StudioFlowTaskListOutline[], starts: readonly string[]) {
-  const nodes: Node<CanvasNodeData>[] = [];
-  const edges: Edge[] = [];
+  const nodes: Node<FlowNodeData>[] = [];
+  const edges: FlowEdge[] = [];
   let left = 0;
   lists.forEach((list, index) => {
     if (index > 0 && list.tasks.length === 0) return;
     const headers: string[] = [];
     if (index === 0) {
-      (starts.length === 0 ? ["Started by another flow or not started yet"] : starts).forEach((start, startIndex) => {
-        const id = `start:${startIndex}`;
-        headers.push(id);
-        nodes.push(node(id, left + startIndex * (nodeWidth + columnGap), 0, { title: start, caption: "How this flow starts", kind: "start", badge: "Start" }));
-      });
+      (starts.length === 0 ? ["Started by another flow or not started yet"] : starts).forEach(
+        (start, startIndex) => {
+          const id = `start:${startIndex}`;
+          headers.push(id);
+          nodes.push(
+            node(id, left + startIndex * (nodeWidth + columnGap), 0, {
+              title: "Start",
+              caption: start,
+              kind: "start",
+            }),
+          );
+        },
+      );
     } else {
       const id = `group:${index}`;
       headers.push(id);
-      nodes.push(node(id, left, 0, { title: list.label, caption: groupCaptions[list.label]?.caption ?? list.label, kind: "group" }));
+      nodes.push(
+        node(id, left, 0, {
+          title: list.label,
+          caption: groupCaptions[list.label]?.caption ?? list.label,
+          kind: "group",
+        }),
+      );
     }
     const layout = layoutList(list, left, nodeHeight + rowGap, nodes, edges);
-    for (const header of headers) for (const first of layout.firstIds)
-      edges.push({ id: `${header}>${first}`, source: header, target: first, ...(index === 0 ? {} : { label: groupCaptions[list.label]?.edge }) });
+    for (const header of headers)
+      for (const first of layout.firstIds)
+        edges.push(
+          edge(
+            header,
+            first,
+            { listPath: list.path, index: 0 },
+            "Add a step at the start",
+            index === 0 ? undefined : groupCaptions[list.label]?.edge,
+          ),
+        );
     if (index === 0) {
       const end = "end";
-      nodes.push(node(end, left + (layout.width - nodeWidth) / 2, nodeHeight + rowGap + layout.height,
-        { title: "End", caption: "The flow is done", kind: "end", badge: "End" }));
-      for (const last of layout.lastIds) edges.push({ id: `${last}>${end}`, source: last, target: end });
+      nodes.push(
+        node(end, left + (layout.width - nodeWidth) / 2, nodeHeight + rowGap + layout.height, {
+          title: "End",
+          caption: "The flow is done",
+          kind: "end",
+        }),
+      );
+      for (const last of layout.outlets)
+        edges.push(edge(last.id, end, last.insertion, "Add a step at the end"));
+      if (layout.firstIds.length === 0)
+        for (const header of headers)
+          edges.push(edge(header, end, { listPath: list.path, index: 0 }, "Add the first step"));
     }
-    left += Math.max(layout.width, headers.length * (nodeWidth + columnGap) - columnGap) + columnGap * 2;
+    left +=
+      Math.max(layout.width, headers.length * (nodeWidth + columnGap) - columnGap) + columnGap * 2;
   });
   return { nodes, edges };
 }
 
-const themed = {
-  "--xy-edge-stroke-default": "var(--muted-foreground)",
-  "--xy-edge-label-color-default": "var(--muted-foreground)",
-  "--xy-edge-label-background-color-default": "var(--background)",
-  "--xy-background-color-default": "var(--background)",
-  "--xy-background-pattern-color-default": "var(--border)",
-  "--xy-controls-button-background-color-default": "var(--card)",
-  "--xy-controls-button-color-default": "var(--card-foreground)",
-  "--xy-controls-button-border-color-default": "var(--border)",
-  "--xy-node-border-radius-default": "0",
-} as CSSProperties;
-
-export function StudioFlowCanvas({ lists, starts, selectedPath, onSelect, label }: Readonly<{
+export function StudioFlowCanvas({
+  lists,
+  starts,
+  selectedPath,
+  onSelect,
+  label,
+  title,
+  appearance,
+  types,
+  forms,
+  disabled,
+  onAdd,
+}: Readonly<{
   lists: readonly StudioFlowTaskListOutline[];
-  /** How the flow starts, in words: one entry per trigger or bound control event. */
   starts: readonly string[];
   selectedPath: StudioFlowPath | null;
-  /**
-   * A step was chosen on the canvas (its path), or how the flow starts (null): the Start node or the
-   * empty canvas, whose inspector is the flow's own, how it starts.
-   */
+  /** null selects the flow's start settings. */
   onSelect: (path: StudioFlowPath | null) => void;
   label: string;
+  title: string;
+  appearance: ThemeMode;
+  types: readonly StudioFlowStepChoice[];
+  forms: StudioFlowDraftChoices["forms"];
+  disabled: boolean;
+  onAdd: AddStep;
 }>) {
   const graph = useMemo(() => buildGraph(lists, starts), [lists, starts]);
+  const actions = useMemo(
+    () => ({ types, forms, disabled, onAdd }),
+    [types, forms, disabled, onAdd],
+  );
   const selectedKey = selectedPath === null ? null : pathKey(selectedPath);
-  return <div className="h-full min-h-96 w-full border border-border" style={themed} aria-label={label} role="group">
-    <ReactFlow nodes={graph.nodes.map((entry) => ({ ...entry,
-      selected: selectedKey === null ? entry.data.kind === "start" : entry.id === selectedKey }))} edges={graph.edges}
-      nodeTypes={nodeTypes} fitView fitViewOptions={{ maxZoom: 1 }} nodesDraggable={false} nodesConnectable={false}
-      edgesFocusable={false} elementsSelectable proOptions={{ hideAttribution: true }}
-      onNodeClick={(_, clicked) => {
-        if (clicked.data.kind === "start") onSelect(null);
-        else if (clicked.data.kind === "step") onSelect(JSON.parse(clicked.id) as StudioFlowPath);
-      }}
-      onPaneClick={() => onSelect(null)}>
-      <Background />
-      <Controls showInteractive={false} />
-    </ReactFlow>
-  </div>;
+  const selectNode = (clicked: Node<FlowNodeData>) => {
+    if (clicked.data.kind === "start") onSelect(null);
+    else if (clicked.data.kind === "step") onSelect(JSON.parse(clicked.id) as StudioFlowPath);
+  };
+  return (
+    <div
+      className="flex h-full min-h-96 w-full flex-col bg-background"
+      aria-label={label}
+      role="group"
+    >
+      <div className="shrink-0 space-y-1 px-3 py-3">
+        <p className="m-0 truncate text-sm font-medium">{title}</p>
+        <p className="m-0 line-clamp-2 text-sm text-muted-foreground">
+          {starts.join(" · ") || "Started by another flow or not started yet"}
+        </p>
+      </div>
+      <div className="min-h-0 flex-1">
+        <ActionsContext.Provider value={actions}>
+          <ReactFlow
+            nodes={graph.nodes.map((entry) => ({
+              ...entry,
+              selected:
+                selectedKey === null ? entry.data.kind === "start" : entry.id === selectedKey,
+              domAttributes: {
+                "aria-pressed": entry.selectable
+                  ? selectedKey === null
+                    ? entry.data.kind === "start"
+                    : entry.id === selectedKey
+                  : undefined,
+              },
+            }))}
+            edges={graph.edges}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            colorMode={appearance}
+            className="bg-background!"
+            fitView
+            fitViewOptions={{ maxZoom: 1 }}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            edgesFocusable={false}
+            deleteKeyCode={null}
+            elementsSelectable
+            proOptions={{ hideAttribution: true }}
+            onNodeClick={(_, clicked) => selectNode(clicked)}
+            onKeyDown={(event) => {
+              const target = event.target;
+              if (
+                !(target instanceof HTMLElement) ||
+                !target.classList.contains("react-flow__node")
+              )
+                return;
+              const clicked = graph.nodes.find(
+                (entry) => entry.id === target.getAttribute("data-id"),
+              );
+              if (clicked !== undefined && (event.key === "Enter" || event.key === " ")) {
+                event.preventDefault();
+                selectNode(clicked);
+              } else if (event.key === "Escape") onSelect(null);
+            }}
+            onPaneClick={() => onSelect(null)}
+          >
+            <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="var(--border)" />
+            <StudioFlowControls />
+          </ReactFlow>
+        </ActionsContext.Provider>
+      </div>
+    </div>
+  );
 }

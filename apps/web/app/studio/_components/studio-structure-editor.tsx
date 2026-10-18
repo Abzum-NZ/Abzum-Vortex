@@ -9,13 +9,14 @@ import { Input } from "@vortex/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import type { StudioSemanticSelection } from "@vortex/ui/studio";
 import {
-  studioStructureDefaultShell, studioStructureShellChoices, type StudioStructureCommand, type StudioStructureResult,
+  studioStructureDefaultShell, studioStructureShellChoices, type StudioPageLayoutPlan, type StudioStructureCommand, type StudioStructureResult,
 } from "@vortex/ui/studio";
 import { studioAccessGateChoices } from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
 import { StudioRecordPageForm } from "./studio-record-page-form";
 import { StudioReferencesAlert } from "./studio-used-in";
 import { useStudioDraftText } from "./use-studio-draft-text";
+import { StudioPageLayoutDialog } from "./studio-page-layout-dialog";
 
 type Feedback = Readonly<{ kind: "applied" | "refused"; message: string; where?: readonly ApplicationUsePlace[] | undefined }>;
 export type StudioStructureForm = "none" | "page" | "record" | "shell";
@@ -25,7 +26,7 @@ export type StudioStructureForm = "none" | "page" | "record" | "shell";
  * layout selected in the tree. Each control sends one command; a refusal is shown here, where it was
  * asked for, and nothing changes.
  */
-export function StudioStructureEditor({ source, selected, disabled, onCommand, onPreview, onOpenAccess, form, onFormChange: setForm }: Readonly<{
+export function StudioStructureEditor({ source, selected, disabled, onCommand, onPreview, onLayoutPlan, onOpenAccess, form, onFormChange: setForm }: Readonly<{
   source: ApplicationSourceDocument;
   selected: StudioSemanticSelection | null;
   disabled: boolean;
@@ -35,6 +36,7 @@ export function StudioStructureEditor({ source, selected, disabled, onCommand, o
   onCommand: (command: StudioStructureCommand, merge?: string) => StudioStructureResult;
   /** Runs a command on the current draft without keeping it, for a preview of what it adds. */
   onPreview: (command: StudioStructureCommand) => StudioStructureResult;
+  onLayoutPlan: (pageAlias: string, shellAlias: string | null) => StudioPageLayoutPlan;
   /** Opens the Access tab, where who can open a page is set. */
   onOpenAccess: () => void;
 }>) {
@@ -43,6 +45,7 @@ export function StudioStructureEditor({ source, selected, disabled, onCommand, o
   const [newName, setNewName] = useState("");
   const [shellChoice, setShellChoice] = useState("");
   const [addToMenu, setAddToMenu] = useState(true);
+  const [layoutChange, setLayoutChange] = useState<{ pageAlias: string; shellAlias: string | null } | null>(null);
   const choices = useMemo(() => studioStructureShellChoices(source), [source]);
 
   const page = selected?.kind === "page" ? source.body.pages.find((entry) => entry.id === selected.pageAlias) : undefined;
@@ -51,6 +54,7 @@ export function StudioStructureEditor({ source, selected, disabled, onCommand, o
   const what = page !== undefined ? "page" : "layout";
   const gate = page === undefined ? undefined : studioAccessGateChoices(source).find((choice) => choice.key === page.permission);
   const pageShell = page === undefined ? null : sourcePageShell(page.composition);
+  const movingPage = source.body.pages.find((entry) => entry.id === layoutChange?.pageAlias);
 
   const run = (command: StudioStructureCommand, merge?: string): boolean => {
     const result = onCommand(command, merge);
@@ -138,9 +142,14 @@ export function StudioStructureEditor({ source, selected, disabled, onCommand, o
         <Button type="button" size="sm" variant="destructive" disabled={disabled} onClick={() => { void remove(); }}>
           {page !== undefined ? "Remove page" : "Remove layout"}</Button>
       </div>
-      {page !== undefined && <StudioField label="Layout" hint="Blocks move to the area of the same name in the new layout.">
+      {page !== undefined && <StudioField label="Layout" hint="Choose where your blocks go when you change layout.">
         {(control) => <NativeSelect {...control} value={pageShell ?? ""} disabled={disabled}
-          onChange={(event) => run({ kind: "move_page", pageAlias: page.id, shellAlias: event.target.value === "" ? null : event.target.value })}>
+          onChange={(event) => {
+            const shellAlias = event.target.value === "" ? null : event.target.value;
+            if (shellAlias === pageShell) return;
+            setFeedback(null);
+            setLayoutChange({ pageAlias: page.id, shellAlias });
+          }}>
           {choices.map((choice) => <NativeSelectOption key={choice.shellAlias ?? ""} value={choice.shellAlias ?? ""}>
             {choice.label}</NativeSelectOption>)}
         </NativeSelect>}
@@ -159,5 +168,11 @@ export function StudioStructureEditor({ source, selected, disabled, onCommand, o
       className={feedback.kind === "refused" ? "text-sm text-destructive" : "text-sm text-muted-foreground"}>
       {feedback.message}</p>}
     {confirmDialog}
+    {layoutChange !== null && movingPage !== undefined && <StudioPageLayoutDialog
+      key={`${layoutChange.pageAlias}:${layoutChange.shellAlias ?? ""}`} pageAlias={layoutChange.pageAlias}
+      pageName={movingPage.name} shellAlias={layoutChange.shellAlias}
+      layoutName={choices.find((choice) => choice.shellAlias === layoutChange.shellAlias)!.label}
+      plan={onLayoutPlan(layoutChange.pageAlias, layoutChange.shellAlias)} disabled={disabled}
+      onPreview={onPreview} onCommand={onCommand} onClose={() => setLayoutChange(null)} />}
   </div>;
 }
