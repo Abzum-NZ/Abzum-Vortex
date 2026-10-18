@@ -11,7 +11,6 @@ set search_path = ''
 as $function$
 declare
   rehearsed_type record;
-  current_release_revision_value bigint;
   application_release_revision_value bigint;
   releases_value jsonb := p_releases -> 'releases';
   checked_context jsonb;
@@ -48,7 +47,7 @@ begin
     and (root.root_id = p_application_root_id or root.owner_application_root_id = p_application_root_id)
   order by draft.root_id for share of draft;
 
-  select root.current_release_revision into current_release_revision_value
+  perform 1
   from vortex_definition.roots as root
   join vortex_definition.drafts as draft on draft.root_id = root.root_id
   where root.root_id = p_application_root_id and root.organization_id = p_organization_id
@@ -153,13 +152,13 @@ begin
       (rehearsed_type.value ->> 'storageContractId')::uuid
     );
   end loop;
-  application_release_revision_value := coalesce((
+  application_release_revision_value := (
     select (item.value #>> '{release,release_revision}')::bigint
     from pg_catalog.jsonb_array_elements(releases_value) as item(value)
     where (item.value #>> '{release,root_id}')::uuid = p_application_root_id
-  ), current_release_revision_value);
+  );
   if application_release_revision_value is null then
-    raise exception using errcode = 'P0002', message = 'Application has no release to preview';
+    raise exception using errcode = 'P0002', message = 'Preview plan has no compiled Application release';
   end if;
   return application_release_revision_value;
 end

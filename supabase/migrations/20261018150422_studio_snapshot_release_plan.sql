@@ -242,7 +242,6 @@ set search_path = ''
 as $function$
 declare
   rehearsed_type record;
-  current_release_revision_value bigint;
   application_release_revision_value bigint;
   releases_value jsonb := p_releases -> 'releases';
   checked_context jsonb;
@@ -279,7 +278,7 @@ begin
     and (root.root_id = p_application_root_id or root.owner_application_root_id = p_application_root_id)
   order by draft.root_id for share of draft;
 
-  select root.current_release_revision into current_release_revision_value
+  perform 1
   from vortex_definition.roots as root
   join vortex_definition.drafts as draft on draft.root_id = root.root_id
   where root.root_id = p_application_root_id and root.organization_id = p_organization_id
@@ -384,13 +383,13 @@ begin
       (rehearsed_type.value ->> 'storageContractId')::uuid
     );
   end loop;
-  application_release_revision_value := coalesce((
+  application_release_revision_value := (
     select (item.value #>> '{release,release_revision}')::bigint
     from pg_catalog.jsonb_array_elements(releases_value) as item(value)
     where (item.value #>> '{release,root_id}')::uuid = p_application_root_id
-  ), current_release_revision_value);
+  );
   if application_release_revision_value is null then
-    raise exception using errcode = 'P0002', message = 'Application has no release to preview';
+    raise exception using errcode = 'P0002', message = 'Preview plan has no compiled Application release';
   end if;
   return application_release_revision_value;
 end
@@ -433,6 +432,7 @@ begin
   if not vortex_platform.is_non_nil_uuid(p_application_root_id::text)
     or p_expected_draft_revision is null
     or p_expected_draft_revision not between 1 and 9007199254740991
+    or p_releases #>> '{application,draftRevision}' is distinct from p_expected_draft_revision::text
     or p_shape_fingerprint is null
     or p_shape_fingerprint !~ '^sha256:[a-f0-9]{64}$' then
     raise exception using errcode = '22023', message = 'Preview installation command is invalid';
@@ -554,6 +554,7 @@ begin
   if not vortex_platform.is_non_nil_uuid(p_preview_installation_id::text)
     or p_expected_draft_revision is null
     or p_expected_draft_revision not between 1 and 9007199254740991
+    or p_releases #>> '{application,draftRevision}' is distinct from p_expected_draft_revision::text
     or p_shape_fingerprint is null
     or p_shape_fingerprint !~ '^sha256:[a-f0-9]{64}$' then
     raise exception using errcode = '22023', message = 'Preview installation command is invalid';

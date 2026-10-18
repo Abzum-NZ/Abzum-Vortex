@@ -21,6 +21,7 @@ begin
   if not vortex_platform.is_non_nil_uuid(p_preview_installation_id::text)
     or p_expected_draft_revision is null
     or p_expected_draft_revision not between 1 and 9007199254740991
+    or p_releases #>> '{application,draftRevision}' is distinct from p_expected_draft_revision::text
     or p_shape_fingerprint is null
     or p_shape_fingerprint !~ '^sha256:[a-f0-9]{64}$' then
     raise exception using errcode = '22023', message = 'Preview installation command is invalid';
