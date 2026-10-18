@@ -44,7 +44,7 @@ export type StudioSettingValues = Readonly<Record<string, SourceBlockPropertyVal
  * What reference settings can point at, all read from the draft being edited: the fields of the
  * block's data (or every field of its record types), its queries, pages, record types, module
  * actions and relationships. Records are not part of a draft: `records` reads them from
- * the installed application with the person's own access, or is null where none can be read.
+ * the builder's preview of the saved draft with their preview access, or is null where none can be read.
  */
 export type StudioSettingChoices = Readonly<{
   fields: readonly StudioQueryField[];

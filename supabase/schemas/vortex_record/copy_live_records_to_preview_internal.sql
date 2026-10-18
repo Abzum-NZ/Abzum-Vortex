@@ -22,6 +22,9 @@ declare
   scanned_count integer := 0;
   bounded boolean := false;
   live_table_token text;
+  source_module_root_id uuid;
+  checked_context jsonb;
+  live_type jsonb;
   preview_table_token text;
   record_columns text[];
   field_columns text[];
@@ -42,12 +45,22 @@ begin
     is not null then
     raise exception using errcode = '42501', message = 'Preview record copy must read live records';
   end if;
-  select catalogue.physical_table_token into strict live_table_token
+  select catalogue.physical_table_token, catalogue.module_root_id
+  into strict live_table_token, source_module_root_id
   from vortex_record.storage_catalogue as catalogue
   where catalogue.storage_contract_id = p_live_storage_contract_id
     and catalogue.record_type_id = p_record_type_id
     and catalogue.physical_schema_token = 'record_data'
     and catalogue.state = 'active';
+  checked_context := vortex_access.validated_human_request_context();
+  live_type := vortex_record.resolve_preview_seed_source_internal(
+    (checked_context ->> 'organizationId')::uuid,
+    (checked_context ->> 'applicationRootId')::uuid,
+    source_module_root_id, p_record_type_id, p_live_storage_contract_id
+  );
+  if live_type is null or live_type ->> 'table' is distinct from live_table_token then
+    raise exception using errcode = '42501', message = 'Preview seed source is not installed';
+  end if;
   -- The caller passes the preview's own storage identities; both tables hold this record type.
   select catalogue.physical_table_token into strict preview_table_token
   from vortex_record.storage_catalogue as catalogue
@@ -101,11 +114,17 @@ begin
   loop
     scanned_count := scanned_count + 1;
     exit when scanned_count > scan_limit;
-    select projected.projection, projected.read_bounds into row_read
+    select projected.projection, projected.read_bounds, projected.read_facts into row_read
     from vortex_record.read_record_projection_internal(
       p_record_type_id, live_record.record_id
     ) as projected;
     continue when row_read.projection ->> 'outcome' is distinct from 'allowed';
+    -- The row decision and the raw values must refer to the same authoritative storage,
+    -- including if the installed pin set changed since the source was resolved.
+    if (row_read.read_facts #>> '{facts,binding,storageContractId}')::uuid
+      is distinct from p_live_storage_contract_id then
+      raise exception using errcode = '42501', message = 'Preview seed authorization storage changed';
+    end if;
     if copied_count = copy_limit then
       bounded := true;
       exit;
