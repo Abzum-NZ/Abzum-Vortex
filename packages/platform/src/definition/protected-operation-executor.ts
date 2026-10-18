@@ -1392,6 +1392,7 @@ export const createProtectedOperationExecutor = (
 
         const actorResolution = await durableActorRequest.run(
           context.data,
+          registered.descriptor.effect === "read" ? "shared" : "access_change",
           async (transaction, scope) => {
             const policy = context.data.policy;
             if (policy.kind !== "initiating_person" ||

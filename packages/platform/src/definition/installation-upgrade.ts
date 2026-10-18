@@ -609,54 +609,57 @@ const coordinatorFor = (
   baseline: UpgradeState,
 ) => {
   let step = 0;
-  const installerRequests: Pick<HumanOrganizationRequests, "runAccessChange"> = {
-    runAccessChange: async <Result>(
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-      operation: (
-        transaction: RequestDatabaseTransaction,
-        scope: SelectedOrganizationScope,
-        issuedAt: string,
-      ) => Promise<Result>,
-    ): Promise<HumanOrganizationRequestResult<Result>> => {
-      const thisStep = step++;
-      // The existing coordinator can open a third, compensating Access transaction after a
-      // failed switch. The same baseline guard below permits only restoration of this request's
-      // exact prior registration; any further installer transaction is unexpected.
-      if (thisStep > 2)
-        installationProblem("coordinator_unexpected_transaction", "temporarily_unavailable");
-      let callbackFailure: unknown;
-      const result = await environment.requests.runAccessChange(
-        session,
-        candidate,
-        async (transaction, scope, issuedAt) => {
-          try {
-            if (
-              !sameId(scope.organizationId, selector.organizationId) ||
-              scope.applicationRootId !== undefined
-            )
-              installationProblem("coordinator_scope_mismatch", "refused");
-            const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
-              organizationId: selector.organizationId,
-            });
-            await readInstallationOrdinaryRoot(transaction, selector.rootId);
-            await currentInstallationStateForCoordinator(
-              transaction,
-              selector,
-              baseline,
-              thisStep,
-              context,
-            );
-            return await operation(transaction, scope, issuedAt);
-          } catch (error) {
-            callbackFailure = error;
-            throw error;
-          }
-        },
-      );
-      if (callbackFailure !== undefined) throw callbackFailure;
-      return result;
-    },
+  const runInstallerRequest = async <Result>(
+    requestMode: "runAccessChange" | "runChange",
+    session: IdentitySession,
+    candidate: OrganizationSelectionCandidate,
+    operation: (
+      transaction: RequestDatabaseTransaction,
+      scope: SelectedOrganizationScope,
+      issuedAt: string,
+    ) => Promise<Result>,
+  ): Promise<HumanOrganizationRequestResult<Result>> => {
+    const thisStep = step++;
+    // The existing coordinator can open a third, compensating Access transaction after a
+    // failed switch. The same baseline guard below permits only restoration of this request's
+    // exact prior registration; any further installer transaction is unexpected.
+    if (thisStep > 2)
+      installationProblem("coordinator_unexpected_transaction", "temporarily_unavailable");
+    let callbackFailure: unknown;
+    const result = await environment.requests[requestMode](
+      session,
+      candidate,
+      async (transaction, scope, issuedAt) => {
+        try {
+          if (
+            !sameId(scope.organizationId, selector.organizationId) ||
+            scope.applicationRootId !== undefined
+          )
+            installationProblem("coordinator_scope_mismatch", "refused");
+          const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
+            organizationId: selector.organizationId,
+          });
+          await readInstallationOrdinaryRoot(transaction, selector.rootId);
+          await currentInstallationStateForCoordinator(
+            transaction,
+            selector,
+            baseline,
+            thisStep,
+            context,
+          );
+          return await operation(transaction, scope, issuedAt);
+        } catch (error) {
+          callbackFailure = error;
+          throw error;
+        }
+      },
+    );
+    if (callbackFailure !== undefined) throw callbackFailure;
+    return result;
+  };
+  const installerRequests: Pick<HumanOrganizationRequests, "runAccessChange" | "runChange"> = {
+    runAccessChange: (...args) => runInstallerRequest("runAccessChange", ...args),
+    runChange: (...args) => runInstallerRequest("runChange", ...args),
   };
   return createApplicationInstallationCoordinator({
     installerRequests,
