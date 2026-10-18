@@ -34,6 +34,8 @@ type PlacementContext = {
   declarations: readonly BlockPropertySchemaContract[];
   parent: string;
   order: Record<"desktop" | "tablet" | "phone", number>;
+  publicPage: boolean;
+  guidedStep: boolean;
   pageId?: string;
 };
 
@@ -74,7 +76,7 @@ const collectPlacementSlot = (
   itemsValue: unknown,
   orderValue: unknown,
   parent: string,
-  flags: { pageId?: string },
+  flags: Pick<PlacementContext, "publicPage" | "guidedStep"> & { pageId?: string },
   result: Map<string, PlacementContext>,
 ): void => {
   const items = itemsValue as RecordValue[];
@@ -126,7 +128,7 @@ const compositionShellId = (composition: RecordValue): string | null => {
 const collectPageData = (
   dataValue: unknown,
   base: string,
-  flags: { pageId?: string },
+  flags: Pick<PlacementContext, "publicPage" | "guidedStep"> & { pageId?: string },
   result: Map<string, PlacementContext>,
 ): void => {
   const data = asRecord(dataValue);
@@ -151,20 +153,38 @@ const collectPlacements = (contentValue: ApplicationContent): Map<string, Placem
   const content = asRecord(contentValue);
   const result = new Map<string, PlacementContext>();
   const shells = content.shells as RecordValue[];
+  const shellConsumers = new Map<string, { publicPage: boolean; guidedStep: boolean }>();
+  for (const page of content.pages as RecordValue[]) {
+    const shellId = compositionShellId(asRecord(page.composition));
+    if (shellId === null) continue;
+    const current = shellConsumers.get(shellId) ?? { publicPage: false, guidedStep: false };
+    shellConsumers.set(shellId, {
+      publicPage: current.publicPage || page.type === "public",
+      guidedStep: current.guidedStep || page.type === "guided_form",
+    });
+  }
   for (const shell of shells) {
+    const consumers = shellConsumers.get(String(shell.shellId)) ?? {
+      publicPage: false,
+      guidedStep: false,
+    };
     const layout = asRecord(shell.layout);
     collectPlacementSlot(
       layout.content,
       asRecord(dataVortex(layout).slotOrders).content,
       `shell:${String(shell.shellId)}:root`,
-      {},
+      consumers,
       result,
     );
   }
   for (const page of content.pages as RecordValue[]) {
     const pageId = String(page.pageId);
     const composition = asRecord(page.composition);
-    const flags = { pageId };
+    const flags = {
+      publicPage: page.type === "public",
+      guidedStep: page.type === "guided_form",
+      pageId,
+    };
     if (composition.stepContent !== undefined)
       for (const [stepId, data] of Object.entries(asRecord(composition.stepContent)))
         collectPageData(data, `page:${pageId}/step:${stepId}`, flags, result);
@@ -206,9 +226,18 @@ const comparePlacements = (
   for (const [id, current] of candidate)
     if (!previous.has(id)) {
       if (current.pageId !== undefined && compatibleAddedPageIds.has(current.pageId)) continue;
-      // A new placement adds capability. Its query, settings and permissions describe the
-      // new block; they do not change the contract of any existing placement.
-      reasons.push(makeReason("minor", "component_added", "block_placement", "definition", id));
+      // Public forms and guided steps have an existing interaction contract. Ordinary
+      // page additions, including data-bound Boards, add a new capability.
+      const breaking = current.publicPage || current.guidedStep;
+      reasons.push(
+        makeReason(
+          breaking ? "major" : "minor",
+          breaking ? "required_component_added" : "component_added",
+          "block_placement",
+          "definition",
+          id,
+        ),
+      );
     }
   for (const [id] of previous)
     if (!candidate.has(id))
