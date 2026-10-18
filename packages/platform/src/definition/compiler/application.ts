@@ -653,6 +653,20 @@ const applicationCompositionResolution = (
         ...(type === "several_choices" && typeof settings.maximumSelections === "number"
           ? { maximumSelections: settings.maximumSelections }
           : {}),
+        ...(type === "attachment"
+          ? {
+              attachmentSettings: settings as unknown as NonNullable<
+                FieldInputSourceField["attachmentSettings"]
+              >,
+            }
+          : {}),
+        ...(type === "table"
+          ? {
+              tableSettings: settings as unknown as NonNullable<
+                FieldInputSourceField["tableSettings"]
+              >,
+            }
+          : {}),
         choices,
         recordTypes,
       };
