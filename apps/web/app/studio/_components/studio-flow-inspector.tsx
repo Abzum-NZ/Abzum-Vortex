@@ -149,6 +149,7 @@ function StepTypePicker({
             }
           }}
         >
+          <Icon name="plus" />
           {action}
         </Button>
       </div>

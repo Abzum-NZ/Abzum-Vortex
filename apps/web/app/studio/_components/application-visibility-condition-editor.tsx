@@ -174,16 +174,11 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
   return (
     <StudioInspectorGroup title="Visibility rule">
       <StudioHelp hint="Show this item only when a field on this page has a chosen value. This only hides or shows the item; who may open the page is set separately." />
-      {status && <p role="status">{status}</p>}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={props.disabled}
-        onClick={() => setReload((count) => count + 1)}
-      >
-        Reload fields
-      </Button>
+      {status && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {status}
+        </p>
+      )}
       {model?.kind === "unsupported" && (
         <p role="status">This rule cannot be edited here. It is kept as it is.</p>
       )}
@@ -198,17 +193,18 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
             label="Visibility rule"
             onChange={update}
           />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={value === undefined}
-            onClick={() => update(undefined, { condition: undefined, issues: [], isValid: true })}
-          >
-            Remove rule
-          </Button>
         </fieldset>
       )}
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="self-start"
+        disabled={props.disabled}
+        onClick={() => setReload((count) => count + 1)}
+      >
+        Reload fields
+      </Button>
       {held !== null && held.validation.issues.length > 0 && (
         <ul role="alert" className="text-sm text-destructive">
           {held.validation.issues.map((issue, index) => (

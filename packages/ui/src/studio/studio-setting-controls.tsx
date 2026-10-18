@@ -13,14 +13,30 @@ import { Button } from "../components/button";
 import { Checkbox } from "../components/checkbox";
 import { Switch } from "../components/switch";
 import { Input } from "../components/input";
-import { Item, ItemActions, ItemContent, ItemHeader, ItemTitle } from "../components/item";
-import { StudioReferencePicker } from "./studio-reference-picker";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "../components/input-group";
+import { Plus } from "lucide-react";
+import {
+  StudioReferencePicker,
+  studioBorrowedGroup,
+  type StudioReferencePickerOption,
+} from "./studio-reference-picker";
 import { StudioField, StudioHelp } from "./studio-field";
-import { StudioInspectorActions } from "./studio-inspector-actions";
+import { StudioEntryList } from "./studio-entry-list";
 import { useConfirm } from "../components/confirm-dialog";
 import { StudioInspectorGroup } from "./studio-inspector-group";
 import { Label } from "../components/label";
-import { NativeSelect, NativeSelectOption } from "../components/native-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/select";
 import { Textarea } from "../components/textarea";
 import {
   studioActionChoices,
@@ -75,15 +91,23 @@ export const studioDraftChoices = (
   source: ApplicationSourceDocument,
   borrowed: StudioBorrowedChoices | null,
   records: StudioRecordReader | null,
-): StudioSettingChoices => ({
-  queries: studioQueryChoices(source, borrowed),
-  fields: studioSourceFields(source),
-  pages: source.body.pages.map((page) => ({ key: page.key, label: page.name })),
-  recordTypes: studioSourceRecordTypes(source),
-  actions: studioActionChoices(source, borrowed),
-  relationships: studioRelationshipChoices(source, borrowed),
-  records,
-});
+  /** The business name of the application with this key, which borrowed choices are grouped by. */
+  applicationName: (key: string) => string,
+): StudioSettingChoices => {
+  const named = <T extends Readonly<{ borrowedFrom?: string }>>(choice: T): T =>
+    choice.borrowedFrom === undefined
+      ? choice
+      : { ...choice, borrowedFrom: applicationName(choice.borrowedFrom) };
+  return {
+    queries: studioQueryChoices(source, borrowed).map(named),
+    fields: studioSourceFields(source),
+    pages: source.body.pages.map((page) => ({ key: page.key, label: page.name })),
+    recordTypes: studioSourceRecordTypes(source),
+    actions: studioActionChoices(source, borrowed).map(named),
+    relationships: studioRelationshipChoices(source, borrowed).map(named),
+    records,
+  };
+};
 
 /**
  * The choices of one block: a block that reads a query picks only that query's fields, and only
@@ -255,7 +279,10 @@ function NumberControl({
   );
 }
 
-/** A closed choice among labelled options, with the unset state named by what it means (none when a value is always chosen). */
+/**
+ * A closed choice among labelled options, with the unset state named by what it means (none when
+ * a value is always chosen). Short lists open as a styled list; longer ones are searchable.
+ */
 export function StudioOptionControl({
   id,
   value,
@@ -264,11 +291,15 @@ export function StudioOptionControl({
   disabled,
   onChange,
   "aria-describedby": describedBy,
+  "aria-label": label,
+  "aria-invalid": invalid,
 }: Readonly<{
-  id: string;
+  id?: string | undefined;
   value: string;
-  options: readonly Readonly<{ value: string; label: string; disabled?: boolean }>[];
+  options: readonly Readonly<{ value: string; label: string; disabled?: boolean | undefined }>[];
   "aria-describedby"?: string | undefined;
+  "aria-label"?: string | undefined;
+  "aria-invalid"?: boolean | undefined;
   unset?: string | undefined;
   disabled: boolean;
   onChange: (value: string) => void;
@@ -284,28 +315,41 @@ export function StudioOptionControl({
         disabled={disabled}
         onChange={onChange}
         aria-describedby={describedBy}
+        aria-label={label}
+        aria-invalid={invalid}
       />
     );
+  const entries = [
+    ...(unset === undefined ? [] : [{ value: "", label: unset, disabled: false }]),
+    ...(known ? [] : [{ value, label: `${value} (not offered here)`, disabled: true }]),
+    ...options,
+  ];
   return (
-    <NativeSelect
-      id={id}
-      aria-describedby={describedBy}
-      className="w-full"
-      disabled={disabled}
+    <Select
+      items={entries.map((entry) => ({ value: entry.value, label: entry.label }))}
       value={value}
-      aria-invalid={!known}
-      onChange={(event) => onChange(event.target.value)}
+      disabled={disabled}
+      onValueChange={(next) => {
+        if (typeof next === "string") onChange(next);
+      }}
     >
-      {unset === undefined ? null : <NativeSelectOption value="">{unset}</NativeSelectOption>}
-      {known ? null : (
-        <NativeSelectOption value={value}>{`${value} (not offered here)`}</NativeSelectOption>
-      )}
-      {options.map((option) => (
-        <NativeSelectOption key={option.value} value={option.value} disabled={option.disabled}>
-          {option.label}
-        </NativeSelectOption>
-      ))}
-    </NativeSelect>
+      <SelectTrigger
+        id={id}
+        aria-label={label}
+        aria-describedby={describedBy}
+        aria-invalid={invalid === true || !known}
+        disabled={disabled}
+      >
+        <SelectValue placeholder={unset ?? "Choose…"} />
+      </SelectTrigger>
+      <SelectContent>
+        {entries.map((entry) => (
+          <SelectItem key={entry.value} value={entry.value} disabled={entry.disabled}>
+            {entry.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -431,10 +475,7 @@ function SettingControl(props: ControlProps): ReactElement {
           disabled={disabled}
           value={value?.kind === "query_reference" ? value.query : ""}
           unset={unsetLabel(property, undefined)}
-          options={choices.queries.map((query) => ({
-            value: query.reference,
-            label: queryChoiceLabel(query),
-          }))}
+          options={choices.queries.map(borrowableOption)}
           onChange={(next) =>
             onChange(next === "" ? undefined : { kind: "query_reference", query: next })
           }
@@ -648,7 +689,11 @@ function BorrowableReferenceControl({
 }: Readonly<{
   id: string;
   value: string;
-  choices: readonly Readonly<{ reference: string; label: string; borrowedFrom?: string }>[];
+  choices: readonly Readonly<{
+    reference: string;
+    label: string;
+    borrowedFrom?: string | undefined;
+  }>[];
   unset: string;
   disabled: boolean;
   onChange: (value: string) => void;
@@ -660,23 +705,23 @@ function BorrowableReferenceControl({
       disabled={disabled}
       unset={unset}
       onChange={onChange}
-      options={choices.map((choice) => ({
-        value: choice.reference,
-        label: choice.label,
-        group:
-          choice.borrowedFrom === undefined ? "This application" : "Used from other applications",
-        description:
-          choice.borrowedFrom === undefined ? undefined : `From ${choice.borrowedFrom}, read-only`,
-      }))}
+      options={choices.map(borrowableOption)}
     />
   );
 }
 
-/** The label a query choice shows: its own, and for a borrowed one where it comes from. */
-export const queryChoiceLabel = (query: StudioQueryChoice): string =>
-  query.borrowedFrom === undefined
-    ? query.label
-    : `${query.label} (from ${query.borrowedFrom}, read-only)`;
+/** A choice of this application or, grouped under its owner's name, of an application it uses. */
+const borrowableOption = (
+  choice: Readonly<{ reference: string; label: string; borrowedFrom?: string | undefined }>,
+): StudioReferencePickerOption => ({
+  value: choice.reference,
+  label: choice.label,
+  group:
+    choice.borrowedFrom === undefined
+      ? "This application"
+      : studioBorrowedGroup(choice.borrowedFrom),
+  readOnly: choice.borrowedFrom !== undefined,
+});
 
 function GroupControl({
   id,
@@ -740,6 +785,32 @@ function GroupControl({
   );
 }
 
+/** The name and one-line summary of a list entry: its label and the field it shows, when it has them. */
+const entryHeading = (
+  item: SourceBlockPropertyValueContract,
+  declaration: BlockPropertySchemaContract,
+  choices: StudioSettingChoices,
+): Readonly<{ title: string | undefined; summary: string | undefined }> => {
+  const fieldLabel = (reference: string) =>
+    choices.fields.find((field) => field.reference === reference)?.label ??
+    "Field not offered by this data";
+  if (item.kind === "text") return { title: item.value || undefined, summary: undefined };
+  if (item.kind === "field_reference") return { title: fieldLabel(item.field), summary: undefined };
+  if (item.kind !== "group" || declaration.kind !== "group")
+    return { title: undefined, summary: undefined };
+  const values = Object.values(item.properties);
+  const stored = item.properties[declaration.namedEntry?.label ?? "label"];
+  const label = stored?.kind === "text" && stored.value !== "" ? stored.value : undefined;
+  const field = values.find((entry) => entry.kind === "field_reference");
+  const fieldName = field?.kind === "field_reference" ? fieldLabel(field.field) : undefined;
+  const text = values.find((entry) => entry.kind === "text" && entry.value !== "");
+  return label !== undefined
+    ? { title: label, summary: fieldName }
+    : fieldName !== undefined
+      ? { title: fieldName, summary: undefined }
+      : { title: text?.kind === "text" ? text.value : undefined, summary: undefined };
+};
+
 function ListControl({
   id,
   property,
@@ -750,8 +821,13 @@ function ListControl({
 }: ControlProps): ReactElement {
   const [newLabel, setNewLabel] = useState("");
   const [confirm, confirmDialog] = useConfirm();
+  // Entries carry no identity of their own; these keys follow them through this editor's moves.
+  const keys = useRef<string[]>([]);
+  const nextKey = useRef(0);
   if (property.kind !== "list") throw new TypeError("A list control needs a list setting.");
   const items = value?.kind === "list" ? value.items : [];
+  const newKey = () => `entry-${(nextKey.current += 1)}`;
+  if (keys.current.length !== items.length) keys.current = items.map(newKey);
   const named = property.item.kind === "group" ? property.item.namedEntry : undefined;
   const labelProperty =
     property.item.kind === "group" && named !== undefined
@@ -773,7 +849,7 @@ function ListControl({
     newLabel
       .trim()
       .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[̀-ͯ]/g, "")
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "_")
       .replace(/^_+|_+$/g, "")
@@ -783,8 +859,10 @@ function ListControl({
     const ending = `_${suffix}`;
     generated = `${base.slice(0, maximum - ending.length)}${ending}`;
   }
-  const write = (next: SourceBlockPropertyValueContract[]) =>
+  const write = (next: SourceBlockPropertyValueContract[], nextKeys: string[]) => {
+    keys.current = nextKeys;
     onChange(next.length === 0 && !property.required ? undefined : { kind: "list", items: next });
+  };
   const fresh =
     named === undefined
       ? initialValue(property.item, choices)
@@ -795,59 +873,27 @@ function ListControl({
             [named.value]: { kind: "text" as const, value: generated },
           },
         };
-  const move = (index: number, by: -1 | 1) => {
-    const next = [...items];
-    const [moved] = next.splice(index, 1);
-    if (moved === undefined) return;
-    next.splice(index + by, 0, moved);
-    write(next);
+  const itemName = property.item.label.toLowerCase();
+  const full = items.length >= property.maximumItems;
+  const add = () => {
+    if (fresh === undefined) return;
+    write([...items, fresh], [...keys.current, newKey()]);
+    setNewLabel("");
   };
   return (
-    <div className="space-y-2">
-      {items.length === 0 && <p className="text-sm text-muted-foreground">No entries yet.</p>}
-      <ol className="space-y-2">
-        {items.map((item, index) => (
-          <Item key={index} render={<li />} variant="outline" size="sm">
-            <ItemHeader className="flex-wrap gap-2">
-              <ItemTitle>
-                {property.item.label} {index + 1}
-              </ItemTitle>
-              <ItemActions>
-                <StudioInspectorActions
-                  actions={[
-                    {
-                      label: "Move up",
-                      disabled: disabled || index === 0,
-                      onSelect: () => move(index, -1),
-                    },
-                    {
-                      label: "Move down",
-                      disabled: disabled || index === items.length - 1,
-                      onSelect: () => move(index, 1),
-                    },
-                    {
-                      label: "Remove",
-                      disabled,
-                      destructive: true,
-                      onSelect: () => {
-                        void (async () => {
-                          if (
-                            await confirm({
-                              title: `Remove ${property.item.label} ${index + 1}?`,
-                              description: "This entry will be removed. Undo restores it.",
-                              confirmLabel: "Remove",
-                              destructive: true,
-                            })
-                          )
-                            write(items.filter((_, position) => position !== index));
-                        })();
-                      },
-                    },
-                  ]}
-                />
-              </ItemActions>
-            </ItemHeader>
-            <ItemContent className="basis-full">
+    <>
+      <StudioEntryList
+        label={property.label}
+        itemName={itemName}
+        disabled={disabled}
+        empty="No entries yet."
+        items={items.map((item, index) => {
+          const heading = entryHeading(item, property.item, choices);
+          return {
+            key: keys.current[index]!,
+            title: heading.title ?? `${property.item.label} ${index + 1}`,
+            summary: heading.summary,
+            content: (
               <SettingControl
                 id={`${id}-${index}`}
                 property={property.item}
@@ -857,46 +903,88 @@ function ListControl({
                 onChange={(next) => {
                   const replacement = next ?? initialValue(property.item, choices);
                   if (replacement === undefined) return;
-                  write(items.map((entry, position) => (position === index ? replacement : entry)));
+                  write(
+                    items.map((entry, position) => (position === index ? replacement : entry)),
+                    keys.current,
+                  );
                 }}
               />
-            </ItemContent>
-          </Item>
-        ))}
-      </ol>
-      {named !== undefined && (
-        <div className="space-y-1">
-          <Label htmlFor={`${id}-new-label`}>New {property.item.label.toLowerCase()} label</Label>
-          <Input
-            id={`${id}-new-label`}
-            value={newLabel}
-            disabled={disabled || items.length >= property.maximumItems}
-            maxLength={labelProperty?.kind === "text" ? labelProperty.maxLength : undefined}
-            onChange={(event) => setNewLabel(event.target.value)}
-          />
-        </div>
-      )}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={
-          disabled ||
-          fresh === undefined ||
-          items.length >= property.maximumItems ||
-          (named !== undefined && newLabel.trim() === "")
-        }
-        onClick={() => {
-          if (fresh !== undefined) {
-            write([...items, fresh]);
-            setNewLabel("");
-          }
+            ),
+          };
+        })}
+        onMove={(from, to) => {
+          const next = [...items];
+          const nextKeys = [...keys.current];
+          const [moved] = next.splice(from, 1);
+          const [movedKey] = nextKeys.splice(from, 1);
+          if (moved === undefined || movedKey === undefined) return;
+          next.splice(to, 0, moved);
+          nextKeys.splice(to, 0, movedKey);
+          write(next, nextKeys);
+        }}
+        onRemove={(index) => {
+          void (async () => {
+            const name =
+              entryHeading(items[index]!, property.item, choices).title ??
+              `${itemName} ${index + 1}`;
+            if (
+              await confirm({
+                title: `Remove ${name}?`,
+                description: "This entry will be removed. Undo restores it.",
+                confirmLabel: "Remove",
+                destructive: true,
+              })
+            )
+              write(
+                items.filter((_, position) => position !== index),
+                keys.current.filter((_, position) => position !== index),
+              );
+          })();
         }}
       >
-        Add {property.item.label.toLowerCase()}
-      </Button>
+        {named !== undefined ? (
+          <InputGroup>
+            <InputGroupInput
+              id={`${id}-new-label`}
+              aria-label={`New ${itemName} label`}
+              placeholder={`New ${itemName}`}
+              value={newLabel}
+              disabled={disabled || full}
+              maxLength={labelProperty?.kind === "text" ? labelProperty.maxLength : undefined}
+              onChange={(event) => setNewLabel(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && newLabel.trim() !== "") {
+                  event.preventDefault();
+                  add();
+                }
+              }}
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                aria-label={`Add ${itemName}`}
+                size="icon-xs"
+                disabled={disabled || full || newLabel.trim() === ""}
+                onClick={add}
+              >
+                <Plus />
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={disabled || fresh === undefined || full}
+            onClick={add}
+          >
+            <Plus />
+            Add {itemName}
+          </Button>
+        )}
+      </StudioEntryList>
       {confirmDialog}
-    </div>
+    </>
   );
 }
 
@@ -927,14 +1015,7 @@ export function StudioQueryPicker({
         disabled={disabled}
         unset="Choose data"
         onChange={onChange}
-        options={queries.map((query) => ({
-          value: query.reference,
-          label: query.label,
-          group:
-            query.borrowedFrom === undefined ? "This application" : "Used from other applications",
-          description:
-            query.borrowedFrom === undefined ? undefined : `From ${query.borrowedFrom}, read-only`,
-        }))}
+        options={queries.map(borrowableOption)}
       />
       {queries.length === 0 && (
         <p role="status" className="text-sm">
@@ -1169,7 +1250,7 @@ function SettingFields({
               )}
             </StudioField>
             {property === labelProperty && fieldProperty !== undefined && (
-              <div className="space-y-1 text-sm">
+              <div className="space-y-1 text-sm text-muted-foreground">
                 {field === undefined ? (
                   <p role="alert">Choose a field offered by this data to resolve its label.</p>
                 ) : label?.kind === "text" ? (
@@ -1182,17 +1263,17 @@ function SettingFields({
                     )}
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="link"
                       size="sm"
                       disabled={disabled}
-                      className="h-auto whitespace-normal text-left"
+                      className="h-auto px-0 whitespace-normal text-left"
                       onClick={useFieldLabel}
                     >
                       Use field label: {field.label}
                     </Button>
                   </>
                 ) : (
-                  <p>Uses field label: {field.label}</p>
+                  <p className="text-muted-foreground">Uses field label: {field.label}</p>
                 )}
               </div>
             )}

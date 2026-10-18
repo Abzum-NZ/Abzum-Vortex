@@ -54,7 +54,7 @@ export function StudioPlaceList({
 }>) {
   const opener = useStudioPlaceOpener();
   return (
-    <ul className="list-disc space-y-1 pl-5" aria-label={label}>
+    <ul className="space-y-1 text-sm" aria-label={label}>
       {places.map((place, index) => {
         const name = opener.nameOf(place);
         const text =

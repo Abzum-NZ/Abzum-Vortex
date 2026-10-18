@@ -4,11 +4,11 @@ import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
-import { Item, ItemActions, ItemContent, ItemHeader, ItemTitle } from "@vortex/ui/components/item";
 import { Label } from "@vortex/ui/components/label";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import { flowStandardEventKindSchema, workflowValueTypeSchema } from "@vortex/platform/schema";
 import {
+  StudioEntryList,
+  StudioOptionControl,
   StudioReferencePicker,
   StudioHelp,
   StudioInspectorGroup,
@@ -135,19 +135,16 @@ function TriggerEditor({
         {recordType}
         <div className="space-y-1.5">
           <Label htmlFor={`${id}-event`}>After the record</Label>
-          <NativeSelect
+          <StudioOptionControl
             id={`${id}-event`}
-            className="w-full"
             disabled={disabled}
             value={trigger.eventKind}
-            onChange={(event) => onChange({ ...trigger, eventKind: event.target.value })}
-          >
-            {flowStandardEventKindSchema.options.map((kind) => (
-              <NativeSelectOption key={kind} value={kind}>
-                {eventLabels[kind] ?? kind}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            options={flowStandardEventKindSchema.options.map((kind) => ({
+              value: kind,
+              label: eventLabels[kind] ?? studioWords(kind),
+            }))}
+            onChange={(eventKind) => onChange({ ...trigger, eventKind })}
+          />
         </div>
       </div>
     );
@@ -188,87 +185,66 @@ function TriggerEditor({
   );
 }
 
-function InputRow({
+/** The settings of one declared input, shown in its row of the Inputs list. */
+function InputSettings({
   id,
   input,
   recordTypes,
   disabled,
   onChange,
-  onRemove,
 }: Readonly<{
   id: string;
   input: StudioFlowInputDraft;
   recordTypes: readonly Readonly<{ key: string; label: string }>[];
   disabled: boolean;
   onChange: (input: StudioFlowInputDraft, setting?: string) => true | string;
-  onRemove: () => void;
 }>) {
   const recordKind = input.type === "record_reference" || input.type === "record_reference_list";
   return (
-    <Item variant="outline" size="sm">
-      <ItemHeader className="flex-wrap gap-2">
-        <ItemTitle>{studioWords(input.name)}</ItemTitle>
-        <ItemActions>
-          <Button
-            aria-label={`Remove ${input.name}`}
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            disabled={disabled}
-            onClick={onRemove}
-          >
-            <Icon name="close" />
-          </Button>
-        </ItemActions>
-      </ItemHeader>
-      <ItemContent className="basis-full space-y-2">
-        <StartText
-          id={`${id}-name`}
-          label="Name"
+    <>
+      <StartText
+        id={`${id}-name`}
+        label="Name"
+        disabled={disabled}
+        value={input.name}
+        apply={(name) => onChange({ ...input, name }, `${id}-name`)}
+      />
+      <div className="space-y-1.5">
+        <Label htmlFor={`${id}-type`}>Kind of value</Label>
+        <StudioOptionControl
+          id={`${id}-type`}
           disabled={disabled}
-          value={input.name}
-          apply={(name) => onChange({ ...input, name }, `${id}-name`)}
+          value={input.type}
+          options={workflowValueTypeSchema.options.map((type) => ({
+            value: type,
+            label: typeLabels[type] ?? studioWords(type),
+          }))}
+          onChange={(type) => onChange({ ...input, type })}
         />
+      </div>
+      {recordKind && (
         <div className="space-y-1.5">
-          <Label htmlFor={`${id}-type`}>Kind of value</Label>
-          <NativeSelect
-            id={`${id}-type`}
-            className="w-full"
+          <Label htmlFor={`${id}-record`}>Record type</Label>
+          <StudioReferencePicker
+            id={`${id}-record`}
             disabled={disabled}
-            value={input.type}
-            onChange={(event) => onChange({ ...input, type: event.target.value })}
-          >
-            {workflowValueTypeSchema.options.map((type) => (
-              <NativeSelectOption key={type} value={type}>
-                {typeLabels[type] ?? type}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </div>
-        {recordKind && (
-          <div className="space-y-1.5">
-            <Label htmlFor={`${id}-record`}>Record type</Label>
-            <StudioReferencePicker
-              id={`${id}-record`}
-              disabled={disabled}
-              value={input.recordType ?? ""}
-              unset="Choose…"
-              options={recordTypes.map((entry) => ({ value: entry.key, label: entry.label }))}
-              onChange={(next) => onChange({ ...input, recordType: next === "" ? null : next })}
-            />
-          </div>
-        )}
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id={`${id}-required`}
-            disabled={disabled}
-            checked={input.required}
-            onCheckedChange={(checked) => onChange({ ...input, required: checked === true })}
+            value={input.recordType ?? ""}
+            unset="Choose…"
+            options={recordTypes.map((entry) => ({ value: entry.key, label: entry.label }))}
+            onChange={(next) => onChange({ ...input, recordType: next === "" ? null : next })}
           />
-          <Label htmlFor={`${id}-required`}>Required</Label>
         </div>
-      </ItemContent>
-    </Item>
+      )}
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id={`${id}-required`}
+          disabled={disabled}
+          checked={input.required}
+          onCheckedChange={(checked) => onChange({ ...input, required: checked === true })}
+        />
+        <Label htmlFor={`${id}-required`}>Required</Label>
+      </div>
+    </>
   );
 }
 
@@ -463,22 +439,40 @@ export function StudioFlowStartEditor({
       </StudioInspectorGroup>
       <StudioInspectorGroup title="Inputs">
         <StudioHelp hint="The values the flow is given when it starts. Its steps read them." />
-        {shown.inputs.map((input, index) => (
-          <InputRow
-            key={index}
-            id={`flow-start-input-${index}`}
-            input={input}
-            recordTypes={recordTypes}
-            disabled={disabled}
-            onRemove={() => setInputs(shown.inputs.filter((_, at) => at !== index))}
-            onChange={(next, setting) =>
-              setInputs(
-                shown.inputs.map((entry, at) => (at === index ? next : entry)),
-                setting,
-              )
-            }
-          />
-        ))}
+        {/* Keyed by place: renaming an input changes its identity with every keystroke. */}
+        <StudioEntryList
+          label="Inputs"
+          itemName="input"
+          disabled={disabled}
+          items={shown.inputs.map((input, index) => ({
+            key: `input-${index}`,
+            title: studioWords(input.name),
+            summary: [
+              input.type === "record_reference" || input.type === "record_reference_list"
+                ? (recordTypes.find((entry) => entry.key === input.recordType)?.label ??
+                  typeLabels[input.type])
+                : typeLabels[input.type],
+              input.required ? "required" : undefined,
+            ]
+              .filter(Boolean)
+              .join(", "),
+            content: (
+              <InputSettings
+                id={`flow-start-input-${index}`}
+                input={input}
+                recordTypes={recordTypes}
+                disabled={disabled}
+                onChange={(next, setting) =>
+                  setInputs(
+                    shown.inputs.map((entry, at) => (at === index ? next : entry)),
+                    setting,
+                  )
+                }
+              />
+            ),
+          }))}
+          onRemove={(index) => setInputs(shown.inputs.filter((_, at) => at !== index))}
+        />
         <Button
           type="button"
           variant="ghost"
@@ -495,6 +489,7 @@ export function StudioFlowStartEditor({
             ]);
           }}
         >
+          <Icon name="plus" />
           Add an input
         </Button>
       </StudioInspectorGroup>

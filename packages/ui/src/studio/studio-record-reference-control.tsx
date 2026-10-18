@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactElement } from "react";
 import { Button } from "../components/button";
+import { ChevronsDown, RotateCcw } from "lucide-react";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { StudioHelp } from "./studio-field";
 
@@ -191,28 +192,30 @@ export function StudioRecordReferenceControl({
               }
             />
             {note !== undefined && <StudioHelp hint={note} />}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1">
               {next !== undefined && (
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   disabled={disabled}
                   onClick={() => {
                     void more(next);
                   }}
                 >
+                  <ChevronsDown />
                   Show more records
                 </Button>
               )}
               {retry && (
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   disabled={disabled}
                   onClick={() => setAttempt((count) => count + 1)}
                 >
+                  <RotateCcw />
                   Try again
                 </Button>
               )}

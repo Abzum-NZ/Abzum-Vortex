@@ -1,9 +1,8 @@
 "use client";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import { flowRoundingModeSchema, type FlowRoundingMode } from "@vortex/platform/schema";
-import { StudioReferencePicker } from "@vortex/ui/studio";
+import { StudioOptionControl, StudioReferencePicker } from "@vortex/ui/studio";
 import type {
   StudioFlowCalculation,
   StudioFlowCalculationOperand,
@@ -119,24 +118,15 @@ export function StudioFlowCalculationControl({
     <div className="space-y-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={`${id}-operator`}>Operation</Label>
-        <NativeSelect
+        <StudioOptionControl
           id={`${id}-operator`}
-          className="w-full"
           disabled={disabled}
           value={value.operator}
-          onChange={(event) =>
-            onChange({
-              ...value,
-              operator: event.target.value as StudioFlowCalculation["operator"],
-            })
+          options={operators}
+          onChange={(operator) =>
+            onChange({ ...value, operator: operator as StudioFlowCalculation["operator"] })
           }
-        >
-          {operators.map((operator) => (
-            <NativeSelectOption key={operator.value} value={operator.value}>
-              {operator.label}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
+        />
       </div>
       <OperandControl
         id={`${id}-left`}
@@ -166,21 +156,16 @@ export function StudioFlowCalculationControl({
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={`${id}-rounding`}>Rounding</Label>
-        <NativeSelect
+        <StudioOptionControl
           id={`${id}-rounding`}
-          className="w-full"
           disabled={disabled}
           value={value.rounding}
-          onChange={(event) =>
-            onChange({ ...value, rounding: event.target.value as FlowRoundingMode })
-          }
-        >
-          {flowRoundingModeSchema.options.map((mode) => (
-            <NativeSelectOption key={mode} value={mode}>
-              {roundingLabels[mode] ?? mode.replace(/_/g, " ")}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
+          options={flowRoundingModeSchema.options.map((mode) => ({
+            value: mode,
+            label: roundingLabels[mode] ?? mode.replace(/_/g, " "),
+          }))}
+          onChange={(rounding) => onChange({ ...value, rounding: rounding as FlowRoundingMode })}
+        />
       </div>
     </div>
   );

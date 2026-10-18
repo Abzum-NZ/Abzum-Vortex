@@ -2,7 +2,9 @@
 import { useState } from "react";
 import { Button } from "@vortex/ui/components/button";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
+import { Icon } from "@vortex/ui";
 import {
+  StudioIconButton,
   StudioInspectorGroup,
   studioFlowLabel,
   type StudioFlowCreateChoices,
@@ -53,23 +55,28 @@ export function StudioPlacementWorkflows({
           (entry) => entry.id === binding.flow || entry.key === binding.flow,
         );
         return (
-          <div key={binding.id} className="flex items-center justify-between gap-2 text-sm">
-            <span className="min-w-0 truncate">
-              {eventNames[binding.event] ?? "When used"}:{" "}
-              {flow === undefined ? "a flow that is missing" : studioFlowLabel(flow)}
+          <div
+            key={binding.id}
+            className="flex min-h-9 items-center justify-between gap-2 rounded-md px-1 text-sm hover:bg-muted"
+          >
+            <span className="min-w-0">
+              <span className="block truncate font-medium">
+                {flow === undefined ? "A flow that is missing" : studioFlowLabel(flow)}
+              </span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {eventNames[binding.event] ?? "When used"}
+              </span>
             </span>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
+            <StudioIconButton
+              label="Edit workflow"
               disabled={disabled || flow === undefined}
               onClick={() => {
                 if (flow !== undefined)
                   onOpen({ kind: "flow", flowAlias: flow.id, moduleKey: null });
               }}
             >
-              Edit workflow
-            </Button>
+              <Icon name="workflow" />
+            </StudioIconButton>
           </div>
         );
       })}
@@ -81,10 +88,11 @@ export function StudioPlacementWorkflows({
           <Button
             type="button"
             size="sm"
-            variant="outline"
+            variant="ghost"
             disabled={disabled}
             onClick={() => setCreating(true)}
           >
+            <Icon name="plus" />
             Create workflow
           </Button>
           <StudioNewFlowDialog

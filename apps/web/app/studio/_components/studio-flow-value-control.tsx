@@ -3,10 +3,10 @@ import { useState } from "react";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import { Textarea } from "@vortex/ui/components/textarea";
 import type { FlowLiteral, FlowReference } from "@vortex/platform/schema";
 import {
+  StudioOptionControl,
   StudioReferencePicker,
   describeStudioFlowValue,
   studioFixedLiteral,
@@ -86,24 +86,14 @@ function FixedInput({
     );
   if (literal.type === "choice" && options.length > 0)
     return (
-      <NativeSelect
+      <StudioOptionControl
         id={id}
         aria-label={`${label} value`}
-        className="w-full"
         disabled={disabled}
         value={current}
-        aria-invalid={!options.some((option) => option.value === current)}
-        onChange={(event) => onChange({ type: "choice", value: event.target.value })}
-      >
-        {options.some((option) => option.value === current) ? null : (
-          <NativeSelectOption value={current}>{`${current} (not an option)`}</NativeSelectOption>
-        )}
-        {options.map((option) => (
-          <NativeSelectOption key={option.value} value={option.value}>
-            {option.label}
-          </NativeSelectOption>
-        ))}
-      </NativeSelect>
+        options={options}
+        onChange={(next) => onChange({ type: "choice", value: next })}
+      />
     );
   const change = (text: string) => {
     setDraft(text);

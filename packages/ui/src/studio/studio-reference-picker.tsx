@@ -11,6 +11,8 @@ import {
   ComboboxTrigger,
 } from "../components/combobox";
 import { InputGroup, InputGroupAddon } from "../components/input-group";
+import { Badge } from "../components/badge";
+import { Lock } from "lucide-react";
 
 export type StudioReferencePickerOption = Readonly<{
   value: string;
@@ -18,7 +20,13 @@ export type StudioReferencePickerOption = Readonly<{
   group?: string | undefined;
   description?: string | undefined;
   disabled?: boolean | undefined;
+  /** Chosen as it is: it belongs to another application and is changed there. */
+  readOnly?: boolean | undefined;
 }>;
+
+/** The group of a choice owned by another application: named by that application, read-only. */
+export const studioBorrowedGroup = (application: string): string =>
+  `From ${application} (read-only)`;
 
 /** Search authored references without dropping an unavailable current selection. */
 export function StudioReferencePicker({
@@ -30,15 +38,15 @@ export function StudioReferencePicker({
   onChange,
   ...accessibility
 }: Readonly<{
-  id?: string;
+  id?: string | undefined;
   value: string;
   options: readonly StudioReferencePickerOption[];
   unset?: string | undefined;
   disabled?: boolean;
   onChange: (value: string) => void;
-  "aria-label"?: string;
+  "aria-label"?: string | undefined;
   "aria-describedby"?: string | undefined;
-  "aria-invalid"?: boolean;
+  "aria-invalid"?: boolean | undefined;
 }>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -105,8 +113,16 @@ export function StudioReferencePicker({
               <Primitive.Collection>
                 {(entry: StudioReferencePickerOption) => (
                   <ComboboxItem key={entry.value} value={entry} disabled={entry.disabled}>
-                    <span className="flex min-w-0 flex-col text-sm">
-                      <span className="truncate">{entry.label}</span>
+                    <span className="flex min-w-0 flex-1 flex-col text-sm">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate">{entry.label}</span>
+                        {entry.readOnly === true && (
+                          <Badge variant="secondary" className="shrink-0 gap-1">
+                            <Lock className="size-3" />
+                            Read-only
+                          </Badge>
+                        )}
+                      </span>
                       {entry.description !== undefined && (
                         <span className="line-clamp-1 text-muted-foreground">
                           {entry.description}

@@ -1,15 +1,16 @@
 "use client";
 import {
+  StudioField,
   StudioInspectorActions,
   StudioInspectorGroup,
   StudioReferencePicker,
   StudioHelp,
+  StudioSegmentedControl,
 } from "@vortex/ui/studio";
 import { Icon } from "@vortex/ui";
-import { Checkbox } from "@vortex/ui/components/checkbox";
+import { Switch } from "@vortex/ui/components/switch";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
-import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useId, useMemo, useState } from "react";
 import { studioPlacementLabels } from "../_lib/studio-labels";
@@ -169,9 +170,9 @@ export function ApplicationCompositionEditor(props: Props) {
 
   if (model.kind !== "available" || layout.value === null)
     return (
-      <section className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-4">
-        <h3 className="font-semibold">Item order and size</h3>
-        <p role="status">
+      <section className="space-y-2">
+        <h3 className="text-sm font-medium">Item order and size</h3>
+        <p role="status" className="text-sm text-muted-foreground">
           {model.kind === "unsupported"
             ? "This area uses an item type that cannot be edited here. Nothing was changed."
             : "This item is not in the current draft."}
@@ -328,7 +329,7 @@ export function ApplicationCompositionEditor(props: Props) {
               onChange={(settings) => changeSettings({ ...settingsInputs, settings })}
             />
           </fieldset>
-          <p className="text-sm">A setting you leave unset uses its default.</p>
+          <StudioHelp hint="A setting you leave unset uses its default." />
           {settings.problem !== "" && (
             <p role="alert" className="text-sm text-destructive">
               {settings.problem}
@@ -336,187 +337,207 @@ export function ApplicationCompositionEditor(props: Props) {
           )}
         </StudioInspectorGroup>
       ) : (
-        <p role="status">
+        <p role="status" className="text-sm text-muted-foreground">
           {settingsModel.kind === "unsupported"
             ? "This item's settings can't be changed here."
             : "This item's settings can't be read."}
         </p>
       )}
       <StudioInspectorGroup title="Behaviour">
-        <label className="flex flex-col gap-2 text-sm">
-          <span>Screen size</span>
-          <NativeSelect
-            className={fieldClass}
-            value={breakpoint}
-            disabled={props.disabled}
-            onChange={(event) => {
-              const value = event.target.value;
-              if (value === "desktop" || value === "tablet" || value === "phone")
-                setBreakpoint(value);
-            }}
-          >
-            <option value="desktop">Desktop</option>
-            <option value="tablet">Tablet</option>
-            <option value="phone">Phone</option>
-          </NativeSelect>
-        </label>
+        <StudioField label="Screen size">
+          {() => (
+            <StudioSegmentedControl
+              label="Screen size"
+              value={breakpoint}
+              disabled={props.disabled}
+              onChange={setBreakpoint}
+              options={[
+                { value: "desktop", label: "Desktop", icon: <Icon name="monitor" /> },
+                { value: "tablet", label: "Tablet", icon: <Icon name="tablet" /> },
+                { value: "phone", label: "Phone", icon: <Icon name="smartphone" /> },
+              ]}
+            />
+          )}
+        </StudioField>
         <fieldset
           className="space-y-2"
           disabled={props.disabled || !orderEditable}
           aria-describedby={hintId}
         >
-          <legend className="font-medium">Order among its neighbours</legend>
-          <ol className="list-decimal pl-6">
-            {model.order.map((alias) => (
-              <li key={alias} aria-current={alias === model.placementAlias ? "true" : undefined}>
-                {names.get(alias) ?? "Item"}
+          <legend className="text-sm font-medium">Order among its neighbours</legend>
+          <ol className="space-y-px">
+            {model.order.map((alias, index) => (
+              <li
+                key={alias}
+                aria-current={alias === model.placementAlias ? "true" : undefined}
+                className={
+                  alias === model.placementAlias
+                    ? "flex items-center gap-2 rounded-md bg-muted px-2 py-1 text-sm font-medium"
+                    : "flex items-center gap-2 rounded-md px-2 py-1 text-sm"
+                }
+              >
+                <span className="w-4 text-xs text-muted-foreground tabular-nums">{index + 1}</span>
+                <span className="truncate">{names.get(alias) ?? "Item"}</span>
               </li>
             ))}
           </ol>
+          <StudioHelp
+            id={hintId}
+            hint={
+              breakpoint !== "desktop" && !model.responsiveOrder
+                ? "This area uses one order at every screen size."
+                : model.explicitOrder
+                  ? "This order is set for this screen size."
+                  : "This order is inherited from the larger screen size."
+            }
+          />
           {breakpoint !== "desktop" && (
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
               disabled={!model.explicitOrder}
               onClick={() => {
                 command({ kind: "order", breakpoint, order: null }, undefined, "Order changed.");
               }}
             >
+              <Icon name="undo" />
               Use the larger screen&apos;s order
             </Button>
           )}
         </fieldset>
-        <StudioHelp
-          id={hintId}
-          hint={
-            breakpoint !== "desktop" && !model.responsiveOrder
-              ? "This area uses one order at every screen size."
-              : model.explicitOrder
-                ? "This order is set for this screen size."
-                : "This order is inherited from the larger screen size."
-          }
-        />
         <fieldset className="space-y-4" disabled={props.disabled}>
-          <legend className="font-medium">Size</legend>
-          <label className="flex items-center gap-2">
-            <Checkbox
+          <legend className="text-sm font-medium">Size</legend>
+          <label className="flex items-center justify-between gap-2 text-sm">
+            Shown at this screen size
+            <Switch
               checked={inputs.visible}
-              disabled={!model.capabilities.responsiveVisibility}
+              disabled={props.disabled || !model.capabilities.responsiveVisibility}
               onCheckedChange={(checked) => changeLayout({ ...inputs, visible: checked })}
             />
-            Shown at this screen size
           </label>
-          <label className="flex flex-col gap-2 text-sm">
-            <span>Width</span>
-            <NativeSelect
-              className={fieldClass}
-              value={inputs.width}
-              onChange={(event) => {
-                const width = event.target.value;
-                if (width === "content" || width === "fill" || width === "grid")
-                  changeLayout({ ...inputs, width });
-              }}
-            >
-              <option value="content">Content</option>
-              <option value="fill">Fill</option>
-              {model.capabilities.gridWidth && <option value="grid">Columns</option>}
-            </NativeSelect>
-          </label>
+          <StudioField label="Width">
+            {() => (
+              <StudioSegmentedControl
+                label="Width"
+                value={inputs.width}
+                disabled={props.disabled}
+                onChange={(width) => changeLayout({ ...inputs, width })}
+                options={[
+                  { value: "content", label: "Content" },
+                  { value: "fill", label: "Fill" },
+                  ...(model.capabilities.gridWidth
+                    ? [{ value: "grid" as const, label: "Columns" }]
+                    : []),
+                ]}
+              />
+            )}
+          </StudioField>
           {inputs.width === "grid" && (
             <div className="grid grid-cols-2 gap-2">
-              <label className="flex flex-col gap-2 text-sm">
-                <span>Starts at column</span>
-                <Input
-                  className={fieldClass}
-                  type="number"
-                  required
-                  min={1}
-                  max={12}
-                  step={1}
-                  value={inputs.startColumn}
-                  onChange={(event) => changeLayout({ ...inputs, startColumn: event.target.value })}
-                />
-              </label>
-              <label className="flex flex-col gap-2 text-sm">
-                <span>Number of columns</span>
-                <Input
-                  className={fieldClass}
-                  type="number"
-                  required
-                  min={1}
-                  max={12}
-                  step={1}
-                  value={inputs.span}
-                  onChange={(event) => changeLayout({ ...inputs, span: event.target.value })}
-                />
-              </label>
+              <StudioField label="Starts at column">
+                {(control) => (
+                  <Input
+                    {...control}
+                    className={fieldClass}
+                    type="number"
+                    required
+                    min={1}
+                    max={12}
+                    step={1}
+                    value={inputs.startColumn}
+                    onChange={(event) =>
+                      changeLayout({ ...inputs, startColumn: event.target.value })
+                    }
+                  />
+                )}
+              </StudioField>
+              <StudioField label="Number of columns">
+                {(control) => (
+                  <Input
+                    {...control}
+                    className={fieldClass}
+                    type="number"
+                    required
+                    min={1}
+                    max={12}
+                    step={1}
+                    value={inputs.span}
+                    onChange={(event) => changeLayout({ ...inputs, span: event.target.value })}
+                  />
+                )}
+              </StudioField>
             </div>
           )}
-          <label className="flex flex-col gap-2 text-sm">
-            <span>Height</span>
-            <NativeSelect
-              className={fieldClass}
-              value={inputs.height}
-              onChange={(event) => {
-                const height = event.target.value;
-                if (height === "content" || height === "bounded")
-                  changeLayout({ ...inputs, height });
+          <StudioField label="Height">
+            {() => (
+              <StudioSegmentedControl
+                label="Height"
+                value={inputs.height}
+                disabled={props.disabled}
+                onChange={(height) => changeLayout({ ...inputs, height })}
+                options={[
+                  { value: "content", label: "Content" },
+                  ...(model.capabilities.height === "content_or_bounded"
+                    ? [{ value: "bounded" as const, label: "Fixed height" }]
+                    : []),
+                ]}
+              />
+            )}
+          </StudioField>
+          {inputs.height === "bounded" && (
+            <StudioField label="Fixed height">
+              {(control) => (
+                <Input
+                  {...control}
+                  className={fieldClass}
+                  type="number"
+                  required
+                  min={0}
+                  step="any"
+                  value={inputs.units}
+                  onChange={(event) => changeLayout({ ...inputs, units: event.target.value })}
+                />
+              )}
+            </StudioField>
+          )}
+          {layout.problem !== "" && (
+            <p role="alert" className="text-sm text-destructive">
+              {layout.problem}
+            </p>
+          )}
+          <StudioHelp
+            hint={
+              model.explicitLayout
+                ? "This size is set for this screen size."
+                : "This size is inherited from the larger screen size."
+            }
+          />
+          {breakpoint !== "desktop" && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={props.disabled || !model.explicitLayout}
+              onClick={() => {
+                command({ kind: "resize", breakpoint, layout: null }, undefined, "Size changed.");
               }}
             >
-              <option value="content">Content</option>
-              {model.capabilities.height === "content_or_bounded" && (
-                <option value="bounded">Fixed height</option>
-              )}
-            </NativeSelect>
-          </label>
-          {inputs.height === "bounded" && (
-            <label className="flex flex-col gap-2 text-sm">
-              <span>Height</span>
-              <Input
-                className={fieldClass}
-                type="number"
-                required
-                min={0}
-                step="any"
-                value={inputs.units}
-                onChange={(event) => changeLayout({ ...inputs, units: event.target.value })}
-              />
-            </label>
+              <Icon name="undo" />
+              Use the larger screen&apos;s size
+            </Button>
           )}
         </fieldset>
-        {layout.problem !== "" && (
-          <p role="alert" className="text-sm text-destructive">
-            {layout.problem}
-          </p>
-        )}
-        <p className="text-sm">
-          {model.explicitLayout
-            ? "This size is set for this screen size."
-            : "This size is inherited from the larger screen size."}
-        </p>
-        {breakpoint !== "desktop" && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={props.disabled || !model.explicitLayout}
-            onClick={() => {
-              command({ kind: "resize", breakpoint, layout: null }, undefined, "Size changed.");
-            }}
-          >
-            Use the larger screen&apos;s size
-          </Button>
-        )}
-        <fieldset className="space-y-4" disabled={props.disabled || destinations.length === 0}>
-          <legend className="font-medium">Move to another area</legend>
-          <label className="flex flex-col gap-2 text-sm">
-            <span>Where to move it</span>
+        <StudioField
+          label="Move to another area"
+          hint="Moves this item, with what is inside it, to the end of the area you choose on this page. Required content and nesting limits are checked first."
+        >
+          {(control) => (
             <StudioReferencePicker
+              {...control}
               value=""
               unset="Choose a destination"
               disabled={props.disabled || destinations.length === 0}
-              aria-label="Where to move it"
               options={destinations.map((item) => ({
                 value: destinationOptionKey(item.destination),
                 label:
@@ -528,33 +549,30 @@ export function ApplicationCompositionEditor(props: Props) {
                 if (next !== "") moveTo(next);
               }}
             />
-          </label>
-          <StudioHelp hint="Moves this item, with what is inside it, to the end of the area you choose on this page. Required content and nesting limits are checked first." />
-          {destinations.length === 0 && (
-            <p role="status">
-              {moveModel.kind === "unsupported"
-                ? "Items can only be moved within the main area of an ordinary page."
-                : "There is no other area this item can move to."}
-            </p>
           )}
-        </fieldset>
-        <section className="space-y-2" aria-label="Removal restrictions">
-          {removalModel.kind === "blocked" && (
-            <p role="status">
-              {removalModel.reason === "required_slot"
+        </StudioField>
+        {destinations.length === 0 && (
+          <p role="status" className="text-sm text-muted-foreground">
+            {moveModel.kind === "unsupported"
+              ? "Items can only be moved within the main area of an ordinary page."
+              : "There is no other area this item can move to."}
+          </p>
+        )}
+        {removalModel.kind !== "available" && (
+          <p
+            role="status"
+            className="text-sm text-muted-foreground"
+            aria-label="Removal restrictions"
+          >
+            {removalModel.kind === "blocked"
+              ? removalModel.reason === "required_slot"
                 ? "This area needs at least this item."
                 : removalModel.reason === "unresolved_target"
                   ? "Something this item points to cannot be found. It cannot be removed."
-                  : "A flow still uses this item. It cannot be removed."}
-            </p>
-          )}
-          {(removalModel.kind === "invalid" || removalModel.kind === "unsupported") && (
-            <p role="status">
-              Only display items in the main area of a list, detail or dashboard page can be
-              removed.
-            </p>
-          )}
-        </section>
+                  : "A flow still uses this item. It cannot be removed."
+              : "Only display items in the main area of a list, detail or dashboard page can be removed."}
+          </p>
+        )}
       </StudioInspectorGroup>
       <p role="status" aria-live="polite">
         {message}

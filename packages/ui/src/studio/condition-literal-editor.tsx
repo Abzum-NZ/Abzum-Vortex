@@ -3,7 +3,7 @@ import { useId } from "react";
 import { FieldError } from "../components/field";
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
-import { NativeSelect } from "@vortex/ui/components/native-select";
+import { StudioOptionControl } from "./studio-setting-controls";
 import { useDateFormatOptions } from "../display/date-format-context";
 import { jsonValueSchema, isRecord, type JsonValue } from "@vortex/platform/schema";
 import {
@@ -54,6 +54,30 @@ const collectionTypeLabel = (
   }
 };
 
+/** The kind of value, in words. */
+const typeLabel = (type: StudioConditionSemanticType): string => {
+  switch (type) {
+    case "text":
+      return "text";
+    case "text_collection":
+      return "list of text";
+    case "opaque_json":
+      return "data";
+    case "organization_account_reference":
+      return "person";
+    case "record_reference":
+      return "record";
+    case "yes_no":
+      return "yes or no";
+    case "money":
+      return "amount of money";
+    case "date_time":
+      return "date and time";
+    default:
+      return collectionTypeLabel(type).replace(/s$/u, "");
+  }
+};
+
 export function LiteralEditor({
   operand,
   semanticType,
@@ -71,7 +95,7 @@ export function LiteralEditor({
   const label =
     collectionElementType && collectionElementType !== "text"
       ? `Values (list of ${collectionTypeLabel(collectionElementType)})`
-      : `Value${semanticType ? ` (${semanticType.replaceAll("_", " ")})` : ""}`;
+      : `Value${semanticType ? ` (${typeLabel(semanticType)})` : ""}`;
   const collectionMessage =
     collectionElementType === undefined
       ? "Enter a list with values of the selected type"
@@ -112,15 +136,18 @@ export function LiteralEditor({
     return (
       <label className="flex flex-col gap-2 text-sm">
         {label}
-        <NativeSelect
+        <StudioOptionControl
+          aria-label={label}
           aria-invalid={error !== undefined}
           aria-describedby={error === undefined ? undefined : errorId}
           value={operand.value === true ? "true" : "false"}
-          onChange={(event) => onCommit(event.currentTarget.value === "true")}
-        >
-          <option value="true">True</option>
-          <option value="false">False</option>
-        </NativeSelect>
+          disabled={false}
+          options={[
+            { value: "true", label: "Yes" },
+            { value: "false", label: "No" },
+          ]}
+          onChange={(next) => onCommit(next === "true")}
+        />
         {error && <FieldError id={errorId}>{error}</FieldError>}
       </label>
     );

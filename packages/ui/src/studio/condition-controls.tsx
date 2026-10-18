@@ -2,8 +2,17 @@
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { StudioField } from "./studio-field";
 import { Button } from "@vortex/ui/components/button";
-import { NativeSelect } from "@vortex/ui/components/native-select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@vortex/ui/components/dropdown-menu";
+import { Plus, RotateCcw } from "lucide-react";
 import { useState } from "react";
+import { StudioOptionControl } from "./studio-setting-controls";
+import { StudioEntryList, StudioIconButton } from "./studio-entry-list";
+import { StudioInspectorActions } from "./studio-inspector-actions";
 import {
   conditionMaximumNestingDepth,
   conditionMaximumOperandCount,
@@ -56,7 +65,6 @@ type TreeEditorProps = Readonly<{
   path: ConditionPath;
   remainingOperandCount: number;
   onReplace: (condition: ConditionNode, resolvedPath?: ConditionPath) => void;
-  onRemove?: () => void;
   onInvalid: (issue: StudioConditionValidationIssue) => void;
 }>;
 
@@ -67,7 +75,6 @@ function TreeEditor({
   path,
   remainingOperandCount,
   onReplace,
-  onRemove,
   onInvalid,
 }: TreeEditorProps) {
   if (condition.kind === "all" || condition.kind === "any") {
@@ -92,122 +99,117 @@ function TreeEditor({
             : { kind, conditions: [leaf] };
       onReplace({ ...condition, conditions: [...condition.conditions, child] });
     };
+    const addDisabled =
+      condition.conditions.length >= maximumGroupChildren ||
+      createInitialStudioCondition(context) === undefined;
     return (
-      <fieldset className="min-w-0 space-y-4 text-sm">
-        <legend>
-          {condition.kind === "all" ? "All of these conditions" : "Any of these conditions"}
-        </legend>
+      <div className="min-w-0 space-y-3 text-sm">
         <label className="flex flex-col gap-2 text-sm">
           Match when
-          <NativeSelect
+          <StudioOptionControl
+            aria-label="Match when"
             value={condition.kind}
-            onChange={(event) => {
-              const kind = event.currentTarget.value === "any" ? "any" : "all";
-              onReplace({ kind, conditions: condition.conditions });
-            }}
-          >
-            <option value="all">Every condition matches</option>
-            <option value="any">At least one condition matches</option>
-          </NativeSelect>
+            disabled={false}
+            options={[
+              { value: "all", label: "Every condition matches" },
+              { value: "any", label: "At least one condition matches" },
+            ]}
+            onChange={(next) =>
+              onReplace({ kind: next === "any" ? "any" : "all", conditions: condition.conditions })
+            }
+          />
         </label>
-        {condition.conditions.map((child, index) => {
-          const childPath = [...path, "conditions", index];
-          return (
-            <TreeEditor
-              key={pointerForPath(childPath)}
-              condition={child}
-              context={context}
-              validation={validation}
-              path={childPath}
-              remainingOperandCount={remainingOperandCount}
-              onReplace={(next, resolvedPath) => {
-                const conditions = [...condition.conditions];
-                conditions[index] = next;
-                onReplace({ ...condition, conditions }, resolvedPath);
-              }}
-              onRemove={() => {
-                if (condition.conditions.length <= 1) return;
-                onReplace(
-                  {
-                    ...condition,
-                    conditions: condition.conditions.filter(
-                      (_, childIndex) => childIndex !== index,
-                    ),
-                  },
-                  path,
-                );
-              }}
-              onInvalid={onInvalid}
-            />
-          );
-        })}
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={
-              !canAddComparison ||
-              condition.conditions.length >= maximumGroupChildren ||
-              createInitialStudioCondition(context) === undefined
-            }
-            onClick={() => addChild("comparison")}
-          >
-            Add condition
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={
-              !canAddGroup ||
-              condition.conditions.length >= maximumGroupChildren ||
-              createInitialStudioCondition(context) === undefined
-            }
-            onClick={() => addChild("all")}
-          >
-            Add group: all must match
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={
-              !canAddGroup ||
-              condition.conditions.length >= maximumGroupChildren ||
-              createInitialStudioCondition(context) === undefined
-            }
-            onClick={() => addChild("any")}
-          >
-            Add group: any may match
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={
-              !canAddGroup ||
-              condition.conditions.length >= maximumGroupChildren ||
-              createInitialStudioCondition(context) === undefined
-            }
-            onClick={() => addChild("not")}
-          >
-            Add a group to exclude
-          </Button>
-          {onRemove && (
-            <Button type="button" variant="outline" size="sm" onClick={onRemove}>
-              Remove group
+        <StudioEntryList
+          label={condition.kind === "all" ? "All of these conditions" : "Any of these conditions"}
+          itemName="condition"
+          items={condition.conditions.map((child, index) => {
+            const childPath = [...path, "conditions", index];
+            return {
+              key: pointerForPath(childPath),
+              title: describeCondition(child, context),
+              invalid: validation.issues.some((issue) => pathStartsWith(issue.path, childPath)),
+              content: (
+                <TreeEditor
+                  condition={child}
+                  context={context}
+                  validation={validation}
+                  path={childPath}
+                  remainingOperandCount={remainingOperandCount}
+                  onReplace={(next, resolvedPath) => {
+                    const conditions = [...condition.conditions];
+                    conditions[index] = next;
+                    onReplace({ ...condition, conditions }, resolvedPath);
+                  }}
+                  onInvalid={onInvalid}
+                />
+              ),
+            };
+          })}
+          onMove={(from, to) => {
+            const conditions = [...condition.conditions];
+            const [moved] = conditions.splice(from, 1);
+            if (moved === undefined) return;
+            conditions.splice(to, 0, moved);
+            onReplace({ ...condition, conditions }, path);
+          }}
+          onRemove={
+            condition.conditions.length <= 1
+              ? undefined
+              : (index) =>
+                  onReplace(
+                    {
+                      ...condition,
+                      conditions: condition.conditions.filter(
+                        (_, childIndex) => childIndex !== index,
+                      ),
+                    },
+                    path,
+                  )
+          }
+        >
+          <div className="flex flex-wrap gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={!canAddComparison || addDisabled}
+              onClick={() => addChild("comparison")}
+            >
+              <Plus />
+              Add condition
             </Button>
-          )}
-        </div>
-      </fieldset>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={!canAddGroup || addDisabled}
+                  />
+                }
+              >
+                <Plus />
+                Add group
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-48">
+                <DropdownMenuItem onClick={() => addChild("all")}>All must match</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => addChild("any")}>Any may match</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => addChild("not")}>
+                  Exclude matching records
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </StudioEntryList>
+      </div>
     );
   }
 
   if (condition.kind === "not")
     return (
-      <fieldset className="min-w-0 space-y-4 text-sm">
-        <legend>Exclude matching records</legend>
+      <div className="min-w-0 space-y-3 text-sm">
+        <p className="font-medium">Exclude records that match</p>
         <TreeEditor
           condition={condition.condition}
           context={context}
@@ -221,18 +223,13 @@ function TreeEditor({
         />
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={() => onReplace(condition.condition, path)}
         >
           Stop excluding matches
         </Button>
-        {onRemove && (
-          <Button type="button" variant="outline" size="sm" onClick={onRemove}>
-            Remove group
-          </Button>
-        )}
-      </fieldset>
+      </div>
     );
 
   if (!isComparisonCondition(condition)) return null;
@@ -328,27 +325,17 @@ function TreeEditor({
       return (
         <label className="flex flex-col gap-2 text-sm">
           Option
-          <NativeSelect
+          <StudioOptionControl
+            aria-label="Option"
             value={typeof operand.value === "string" ? operand.value : ""}
             aria-invalid={optionError !== undefined}
-            onChange={(event) => commitLiteral(event.currentTarget.value)}
-          >
-            <option value="" disabled>
-              Choose an option…
-            </option>
-            {choiceOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-            {typeof operand.value === "string" &&
-              operand.value !== "" &&
-              !choiceOptions.some((option) => option.value === operand.value) && (
-                <option value={operand.value} disabled>
-                  {operand.value} (not an option)
-                </option>
-              )}
-          </NativeSelect>
+            disabled={false}
+            unset="Choose an option…"
+            options={choiceOptions.map((option) => ({ value: option.value, label: option.label }))}
+            onChange={(next) => {
+              if (next !== "") commitLiteral(next);
+            }}
+          />
           {optionError && <span role="alert">{optionError}</span>}
         </label>
       );
@@ -366,8 +353,9 @@ function TreeEditor({
       return (
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="sm"
+          className="self-start"
           onClick={() => commitLiteral(editableValue)}
         >
           Enter a value (currently empty)
@@ -376,7 +364,13 @@ function TreeEditor({
     }
     return (
       <>
-        <Button type="button" variant="outline" size="sm" onClick={() => commitLiteral(null)}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="self-start"
+          onClick={() => commitLiteral(null)}
+        >
           Use an empty value
         </Button>
         <LiteralEditor
@@ -415,9 +409,11 @@ function TreeEditor({
         ? selectableLiteral !== undefined
         : referenceOptions.some((option) => contextOperandToken(option) === operandToken(operand));
     return (
-      <fieldset className="min-w-0 space-y-4 text-sm">
-        <legend>{side === "left" ? "Field or value" : "Compare with"}</legend>
-        <StudioField label="Value source" error={operandError}>
+      <div className="flex min-w-0 flex-col gap-3 text-sm">
+        <StudioField
+          label={side === "left" ? "Field or value" : "Compare with"}
+          error={operandError}
+        >
           {(control) => (
             <StudioReferencePicker
               {...control}
@@ -444,7 +440,7 @@ function TreeEditor({
           )}
         </StudioField>
         {literalEditor(operand, other, side)}
-      </fieldset>
+      </div>
     );
   };
 
@@ -452,71 +448,86 @@ function TreeEditor({
   const rightForOperator = (operator: ConditionOperator): ConditionOperand | undefined =>
     defaultRightForOperator(operator, condition.left, context);
 
+  const currentOperatorLabel =
+    operatorOptions.find((option) => option.operator === condition.operator)?.label ??
+    condition.operator;
+  const changeOperator = (operator: ConditionOperator) => {
+    if (unaryOperators.has(operator)) {
+      onReplace({ kind: "comparison", operator, left: condition.left });
+      return;
+    }
+    const existingRight = condition.right;
+    const candidate =
+      existingRight &&
+      operatorAcceptsOperands(
+        operator,
+        leftInfo ?? { source: "value", semanticType: undefined, literal: null },
+        infoForOperand(existingRight, context),
+      )
+        ? existingRight
+        : rightForOperator(operator);
+    if (!candidate) return;
+    onReplace({ kind: "comparison", operator, left: condition.left, right: candidate });
+  };
+
   return (
-    <fieldset className="min-w-0 space-y-4 text-sm">
-      <legend>Condition</legend>
+    <div className="min-w-0 space-y-4 text-sm">
       {operandSelector("left")}
       <label className="flex flex-col gap-2 text-sm">
         Comparison
-        <NativeSelect
+        <StudioOptionControl
+          aria-label="Comparison"
           aria-invalid={operatorIssue !== undefined || !currentOperatorAvailable}
           value={condition.operator}
-          onChange={(event) => {
-            const operator = event.currentTarget.value as ConditionOperator;
-            if (unaryOperators.has(operator)) {
-              onReplace({ kind: "comparison", operator, left: condition.left });
-              return;
-            }
-            const existingRight = condition.right;
-            const candidate =
-              existingRight &&
-              operatorAcceptsOperands(
-                operator,
-                leftInfo ?? { source: "value", semanticType: undefined, literal: null },
-                infoForOperand(existingRight, context),
-              )
-                ? existingRight
-                : rightForOperator(operator);
-            if (!candidate) return;
-            onReplace({ kind: "comparison", operator, left: condition.left, right: candidate });
-          }}
-        >
-          {!currentOperatorAvailable && (
-            <option value={condition.operator} disabled>
-              {operatorOptions.find((option) => option.operator === condition.operator)?.label ??
-                condition.operator}{" "}
-              (not valid for these values)
-            </option>
-          )}
-          {rightOptions.map((option) => (
-            <option key={option.operator} value={option.operator}>
-              {option.label}
-            </option>
-          ))}
-        </NativeSelect>
+          disabled={false}
+          options={[
+            ...(currentOperatorAvailable
+              ? []
+              : [
+                  {
+                    value: condition.operator,
+                    label: `${currentOperatorLabel} (not valid for these values)`,
+                    disabled: true,
+                  },
+                ]),
+            ...rightOptions.map((option) => ({ value: option.operator, label: option.label })),
+          ]}
+          onChange={(next) => changeOperator(next as ConditionOperator)}
+        />
         {operatorIssue && <span role="alert">{operatorIssue}</span>}
       </label>
       {!unaryOperators.has(condition.operator) && <>{operandSelector("right")}</>}
-      {onRemove && (
-        <Button type="button" variant="outline" size="sm" onClick={onRemove}>
-          Remove condition
-        </Button>
-      )}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
+      <StudioIconButton
+        label="Reset condition"
         disabled={createInitialStudioCondition(context) === undefined}
         onClick={() => {
           const replacement = createInitialStudioCondition(context);
           if (replacement) onReplace(replacement, path);
         }}
       >
-        Reset condition
-      </Button>
-    </fieldset>
+        <RotateCcw />
+      </StudioIconButton>
+    </div>
   );
 }
+
+/** Where an issue sits, in the words the controls use. */
+const issuePlace = (path: ConditionPath): string => {
+  const words: string[] = [];
+  for (let index = 0; index < path.length; index += 1) {
+    const part = path[index];
+    const next = path[index + 1];
+    if (part === "conditions" && typeof next === "number") {
+      words.push(`condition ${next + 1}`);
+      index += 1;
+    } else if (part === "condition") words.push("excluded condition");
+    else if (part === "left") words.push("field or value");
+    else if (part === "right") words.push("compare with");
+    else if (part === "operator") words.push("comparison");
+  }
+  const place = words.join(", ") || "condition";
+  return place.charAt(0).toUpperCase() + place.slice(1);
+};
 
 export type StudioConditionControlsProps = Readonly<{
   value?: ConditionNode;
@@ -556,7 +567,7 @@ export function StudioConditionControls({
     <ul aria-live="polite" role="status">
       {validation.issues.map((issue, index) => (
         <li key={`${issue.pointer}:${issue.code}:${index}`}>
-          <strong>{issue.pointer || "Condition"}:</strong> {issue.message}
+          <strong>{issuePlace(issue.path)}:</strong> {issue.message}
         </li>
       ))}
     </ul>
@@ -568,23 +579,60 @@ export function StudioConditionControls({
       {contextIsInvalid ? (
         <p role="alert">These conditions cannot be edited with the available fields and inputs.</p>
       ) : !current ? (
-        <div>
-          <p>No condition has been configured.</p>
+        <div className="space-y-2">
+          <p className="text-muted-foreground">No condition has been configured.</p>
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="sm"
             disabled={!initial}
             onClick={() => emit(initial)}
           >
+            <Plus />
             Start with a condition
           </Button>
         </div>
       ) : (
         <>
-          <p aria-live="polite">
-            <strong>Preview:</strong> {describeCondition(current, context)}
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <p aria-live="polite" className="text-muted-foreground">
+              {describeCondition(current, context)}
+            </p>
+            <StudioInspectorActions
+              actions={[
+                {
+                  label: "Group: all must match",
+                  disabled: conditionDepth(current) >= conditionMaximumNestingDepth,
+                  onSelect: () => emit({ kind: "all", conditions: [current] }),
+                },
+                {
+                  label: "Group: any may match",
+                  disabled: conditionDepth(current) >= conditionMaximumNestingDepth,
+                  onSelect: () => emit({ kind: "any", conditions: [current] }),
+                },
+                current.kind === "not"
+                  ? { label: "Stop excluding matches", onSelect: () => emit(current.condition) }
+                  : {
+                      label: "Exclude matching records",
+                      disabled: conditionDepth(current) >= conditionMaximumNestingDepth,
+                      onSelect: () => emit({ kind: "not", condition: current }),
+                    },
+                ...((current.kind === "all" || current.kind === "any") &&
+                current.conditions.length === 1
+                  ? [
+                      {
+                        label: "Remove group",
+                        onSelect: () => {
+                          const onlyChild = current.conditions[0];
+                          if (onlyChild) emit(onlyChild);
+                        },
+                      },
+                    ]
+                  : []),
+                { label: "Clear condition", destructive: true, onSelect: () => emit(undefined) },
+              ]}
+            />
+          </div>
           <TreeEditor
             condition={current}
             context={context}
@@ -602,64 +650,6 @@ export function StudioConditionControls({
               onChange(nextValidation.condition, withDraftIssues(nextValidation, issues));
             }}
           />
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={conditionDepth(current) >= conditionMaximumNestingDepth}
-              onClick={() => emit({ kind: "all", conditions: [current] })}
-            >
-              Group: all must match
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={conditionDepth(current) >= conditionMaximumNestingDepth}
-              onClick={() => emit({ kind: "any", conditions: [current] })}
-            >
-              Group: any may match
-            </Button>
-            {current.kind !== "not" && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={conditionDepth(current) >= conditionMaximumNestingDepth}
-                onClick={() => emit({ kind: "not", condition: current })}
-              >
-                Exclude matching records
-              </Button>
-            )}
-            {current.kind === "not" && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => emit(current.condition)}
-              >
-                Stop excluding matches
-              </Button>
-            )}
-            {(current.kind === "all" || current.kind === "any") &&
-              current.conditions.length === 1 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const onlyChild = current.conditions[0];
-                    if (onlyChild) emit(onlyChild);
-                  }}
-                >
-                  Remove group
-                </Button>
-              )}
-            <Button type="button" variant="outline" size="sm" onClick={() => emit(undefined)}>
-              Clear condition
-            </Button>
-          </div>
         </>
       )}
       {validation.condition && !validation.isValid && (

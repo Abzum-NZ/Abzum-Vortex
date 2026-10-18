@@ -63,7 +63,7 @@ export function StudioLinkSection({
   return (
     <StudioInspectorGroup title="Relationship">
       <fieldset className="space-y-2">
-        <legend className="text-sm">
+        <legend className="text-sm font-medium">
           How many {recordPlural.toLowerCase()} may link to one {names}?
         </legend>
         <RadioGroup

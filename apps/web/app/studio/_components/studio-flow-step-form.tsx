@@ -1,15 +1,15 @@
 "use client";
 import { useState } from "react";
-import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
-import { Item, ItemActions, ItemContent, ItemHeader, ItemTitle } from "@vortex/ui/components/item";
 import { Label } from "@vortex/ui/components/label";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
+import { Icon } from "@vortex/ui";
 import { Textarea } from "@vortex/ui/components/textarea";
 import type { ConditionNode, FlowFormula, SourceFlow } from "@vortex/platform/schema";
 import {
   StudioConditionControls,
+  StudioEntryList,
+  StudioOptionControl,
   StudioReferencePicker,
   StudioHelp,
   StudioInspectorGroup,
@@ -106,76 +106,75 @@ function EntryRows({
         />
       ))}
       {/* Keyed by place: the name is edited here, and a key that changed with it would lose the focus. */}
-      {extra.map((entry, index) => (
-        <Item key={index} variant="outline" size="sm">
-          <ItemHeader className="flex-wrap gap-2">
-            <ItemTitle>{studioWords(entry.name)}</ItemTitle>
-            <ItemActions>
-              <Button
-                aria-label={`Remove ${entry.name}`}
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                disabled={disabled}
-                onClick={() => set(entry.name, null)}
-              >
-                <Icon name="close" />
-              </Button>
-            </ItemActions>
-          </ItemHeader>
-          <ItemContent className="basis-full space-y-2">
-            <div className="space-y-1.5">
-              <Label htmlFor={`${id}-extra-${index}-name`}>Name</Label>
-              <Input
-                id={`${id}-extra-${index}-name`}
-                disabled={disabled}
-                value={entry.name}
-                onChange={(event) =>
-                  onChange(
-                    entries.map((candidate) =>
-                      candidate === entry ? { ...entry, name: event.target.value } : candidate,
-                    ),
-                  )
-                }
-              />
-            </div>
-            <StudioFlowValueControl
-              id={`${id}-extra-${index}`}
-              label="Value"
-              valueType={undefined}
-              references={references}
-              value={entry.source}
-              disabled={disabled}
-              onChange={(source) => {
-                if (source === null) set(entry.name, null);
-                else
-                  onChange(
-                    entries.map((candidate) =>
-                      candidate === entry ? { ...entry, source } : candidate,
-                    ),
-                  );
-              }}
-            />
-          </ItemContent>
-        </Item>
-      ))}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
+      <StudioEntryList
+        label={`${label}: other entries`}
+        itemName="entry"
         disabled={disabled}
-        onClick={() =>
-          onChange([
-            ...entries,
-            {
-              name: `entry_${entries.length + 1}`,
-              source: { kind: "fixed", literal: { type: "text", value: "" } },
-            },
-          ])
-        }
+        items={extra.map((entry, index) => ({
+          key: `extra-${index}`,
+          title: studioWords(entry.name),
+          summary: describeStudioFlowValue(entry.source, references),
+          content: (
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor={`${id}-extra-${index}-name`}>Name</Label>
+                <Input
+                  id={`${id}-extra-${index}-name`}
+                  disabled={disabled}
+                  value={entry.name}
+                  onChange={(event) =>
+                    onChange(
+                      entries.map((candidate) =>
+                        candidate === entry ? { ...entry, name: event.target.value } : candidate,
+                      ),
+                    )
+                  }
+                />
+              </div>
+              <StudioFlowValueControl
+                id={`${id}-extra-${index}`}
+                label="Value"
+                valueType={undefined}
+                references={references}
+                value={entry.source}
+                disabled={disabled}
+                onChange={(source) => {
+                  if (source === null) set(entry.name, null);
+                  else
+                    onChange(
+                      entries.map((candidate) =>
+                        candidate === entry ? { ...entry, source } : candidate,
+                      ),
+                    );
+                }}
+              />
+            </>
+          ),
+        }))}
+        onRemove={(index) => {
+          const entry = extra[index];
+          if (entry !== undefined) set(entry.name, null);
+        }}
       >
-        Add an entry
-      </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={disabled}
+          onClick={() =>
+            onChange([
+              ...entries,
+              {
+                name: `entry_${entries.length + 1}`,
+                source: { kind: "fixed", literal: { type: "text", value: "" } },
+              },
+            ])
+          }
+        >
+          <Icon name="plus" />
+          Add an entry
+        </Button>
+      </StudioEntryList>
     </fieldset>
   );
 }
@@ -208,15 +207,18 @@ function FieldValues({
         {field.label}
         {!field.required && <span className="text-xs text-muted-foreground"> Optional</span>}
       </legend>
-      <NativeSelect
+      <StudioOptionControl
         id={`${id}-mode`}
         aria-label={`${field.label}: how they are given`}
-        className="w-full"
         disabled={disabled}
         value={mode}
-        onChange={(event) =>
+        options={[
+          { value: "whole", label: "All of them from one value, such as a form's answers" },
+          { value: "fields", label: "Field by field" },
+        ]}
+        onChange={(next) =>
           onChange(
-            event.target.value === "fields"
+            next === "fields"
               ? { kind: "fields", entries: [] }
               : {
                   kind: "whole",
@@ -229,12 +231,7 @@ function FieldValues({
                 },
           )
         }
-      >
-        <NativeSelectOption value="whole">
-          All of them from one value, such as a form&apos;s answers
-        </NativeSelectOption>
-        <NativeSelectOption value="fields">Field by field</NativeSelectOption>
-      </NativeSelect>
+      />
       {value?.kind === "whole" && (
         <StudioFlowValueControl
           id={`${id}-whole`}
@@ -262,58 +259,47 @@ function FieldValues({
             </p>
           )}
           {entries.length === 0 && fields.length > 0 && <StudioHelp hint="No field is set yet." />}
-          <ol className="space-y-2">
-            {entries.map((entry) => {
+          <StudioEntryList
+            label={field.label}
+            itemName="field"
+            disabled={disabled}
+            items={entries.map((entry) => {
               const target = fields.find((candidate) => candidate.key === entry.field);
-              return (
-                <Item key={entry.field} render={<li />} variant="outline" size="sm">
-                  <ItemHeader className="flex-wrap gap-2">
-                    <ItemTitle>
-                      {target?.label ??
-                        `${studioWords(entry.field)} (not a field of this record type)`}
-                    </ItemTitle>
-                    <ItemActions>
-                      <Button
-                        aria-label={`Remove ${target?.label ?? entry.field}`}
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        disabled={disabled}
-                        onClick={() =>
-                          onChange({
-                            kind: "fields",
-                            entries: entries.filter((candidate) => candidate !== entry),
-                          })
-                        }
-                      >
-                        <Icon name="close" />
-                      </Button>
-                    </ItemActions>
-                  </ItemHeader>
-                  <ItemContent className="basis-full">
-                    <StudioFlowValueControl
-                      id={`${id}-${entry.field}`}
-                      label="Set to"
-                      valueType={target?.valueType}
-                      options={target?.options ?? []}
-                      references={references}
-                      value={entry.source}
-                      disabled={disabled}
-                      onChange={(source) => {
-                        if (source !== null)
-                          onChange({
-                            kind: "fields",
-                            entries: entries.map((candidate) =>
-                              candidate === entry ? { ...entry, source } : candidate,
-                            ),
-                          });
-                      }}
-                    />
-                  </ItemContent>
-                </Item>
-              );
+              return {
+                key: entry.field,
+                title:
+                  target?.label ?? `${studioWords(entry.field)} (not a field of this record type)`,
+                summary: describeStudioFlowValue(entry.source, references),
+                invalid: target === undefined,
+                content: (
+                  <StudioFlowValueControl
+                    id={`${id}-${entry.field}`}
+                    label="Set to"
+                    valueType={target?.valueType}
+                    options={target?.options ?? []}
+                    references={references}
+                    value={entry.source}
+                    disabled={disabled}
+                    onChange={(source) => {
+                      if (source !== null)
+                        onChange({
+                          kind: "fields",
+                          entries: entries.map((candidate) =>
+                            candidate === entry ? { ...entry, source } : candidate,
+                          ),
+                        });
+                    }}
+                  />
+                ),
+              };
             })}
-          </ol>
+            onRemove={(index) =>
+              onChange({
+                kind: "fields",
+                entries: entries.filter((_, position) => position !== index),
+              })
+            }
+          />
           {unused.length > 0 && (
             <div className="space-y-1.5">
               <Label htmlFor={`${id}-add`}>Set another field</Label>
@@ -705,54 +691,71 @@ function ControlForm({
             disabled={disabled}
             onChange={(source) => keep(source, (value) => ({ ...control, value }))}
           />
-          {control.cases.map((entry, index) => (
-            <div key={index} className="grid gap-2 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor={`${id}-case-${index}`}>Case {index + 1} name</Label>
-                <Input
-                  id={`${id}-case-${index}`}
-                  disabled={disabled}
-                  value={entry.key}
-                  onChange={(event) =>
-                    onChange(
-                      {
-                        ...control,
-                        cases: control.cases.map((candidate, at) =>
-                          at === index ? { ...candidate, key: event.target.value } : candidate,
-                        ),
-                      },
-                      null,
-                    )
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor={`${id}-when-${index}`}>When the value is</Label>
-                <Input
-                  id={`${id}-when-${index}`}
-                  disabled={disabled}
-                  value={
-                    typeof entry.when.value === "string"
-                      ? entry.when.value
-                      : JSON.stringify(entry.when.value)
-                  }
-                  onChange={(event) =>
-                    onChange(
-                      {
-                        ...control,
-                        cases: control.cases.map((candidate, at) =>
-                          at === index
-                            ? { ...candidate, when: { type: "text", value: event.target.value } }
-                            : candidate,
-                        ),
-                      },
-                      null,
-                    )
-                  }
-                />
-              </div>
-            </div>
-          ))}
+          <StudioEntryList
+            label="Cases"
+            itemName="case"
+            disabled={disabled}
+            items={control.cases.map((entry, index) => {
+              const when =
+                typeof entry.when.value === "string"
+                  ? entry.when.value
+                  : JSON.stringify(entry.when.value);
+              return {
+                key: `case-${index}`,
+                title: entry.key === "" ? `Case ${index + 1}` : studioWords(entry.key),
+                summary: when === "" ? undefined : `When the value is ${when}`,
+                content: (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`${id}-case-${index}`}>Name</Label>
+                      <Input
+                        id={`${id}-case-${index}`}
+                        disabled={disabled}
+                        value={entry.key}
+                        onChange={(event) =>
+                          onChange(
+                            {
+                              ...control,
+                              cases: control.cases.map((candidate, at) =>
+                                at === index
+                                  ? { ...candidate, key: event.target.value }
+                                  : candidate,
+                              ),
+                            },
+                            null,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`${id}-when-${index}`}>When the value is</Label>
+                      <Input
+                        id={`${id}-when-${index}`}
+                        disabled={disabled}
+                        value={when}
+                        onChange={(event) =>
+                          onChange(
+                            {
+                              ...control,
+                              cases: control.cases.map((candidate, at) =>
+                                at === index
+                                  ? {
+                                      ...candidate,
+                                      when: { type: "text", value: event.target.value },
+                                    }
+                                  : candidate,
+                              ),
+                            },
+                            null,
+                          )
+                        }
+                      />
+                    </div>
+                  </>
+                ),
+              };
+            })}
+          />
         </div>
       );
     case "wait_until":

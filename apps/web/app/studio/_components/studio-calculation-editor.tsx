@@ -22,7 +22,12 @@ import {
   type FormulaField,
   type ModuleField,
 } from "@vortex/platform/schema";
-import { StudioOptionControl, StudioReferencePicker, StudioHelp } from "@vortex/ui/studio";
+import {
+  StudioEntryList,
+  StudioOptionControl,
+  StudioReferencePicker,
+  StudioHelp,
+} from "@vortex/ui/studio";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
@@ -60,7 +65,6 @@ function NumberValue({
   depth,
   disabled,
   onChange,
-  onRemove,
 }: Readonly<{
   id: string;
   value: CalculationNumber;
@@ -68,7 +72,6 @@ function NumberValue({
   depth: number;
   disabled: boolean;
   onChange: (value: CalculationNumber) => void;
-  onRemove: (() => void) | undefined;
 }>) {
   const numeric = fields
     .filter(numberAccepts)
@@ -88,33 +91,17 @@ function NumberValue({
       });
   };
   return (
-    <li className="space-y-1 rounded-md border border-border p-2">
-      <div className="flex flex-wrap items-center gap-1">
-        <div className="min-w-0 flex-1">
-          <Label className="sr-only" htmlFor={`${id}-source`}>
-            Value comes from
-          </Label>
-          <StudioOptionControl
-            id={`${id}-source`}
-            value={value.source}
-            disabled={disabled}
-            options={depth >= 8 ? sources.slice(0, 2) : sources}
-            onChange={changeSource}
-          />
-        </div>
-        {onRemove === undefined ? null : (
-          <Button
-            type="button"
-            size="icon-xs"
-            variant="ghost"
-            aria-label="Remove this value"
-            disabled={disabled}
-            onClick={onRemove}
-          >
-            <Icon name="close" />
-          </Button>
-        )}
-      </div>
+    <div className="space-y-2">
+      <Label className="sr-only" htmlFor={`${id}-source`}>
+        Value comes from
+      </Label>
+      <StudioOptionControl
+        id={`${id}-source`}
+        value={value.source}
+        disabled={disabled}
+        options={depth >= 8 ? sources.slice(0, 2) : sources}
+        onChange={changeSource}
+      />
       {value.source === "field" ? (
         <>
           <Label className="sr-only" htmlFor={`${id}-field`}>
@@ -153,9 +140,19 @@ function NumberValue({
           onChange={onChange}
         />
       )}
-    </li>
+    </div>
   );
 }
+
+/** One value of a number in words, for its row in the list of values. */
+const numberTitle = (value: CalculationNumber, fields: readonly FormulaField[]): string =>
+  value.source === "field"
+    ? (fields.find((field) => field.key === value.field)?.label ?? "Choose a field")
+    : value.source === "literal"
+      ? value.value === ""
+        ? "A fixed number"
+        : value.value
+      : `${calculationNumberOperationLabels[value.numeric_operation]} of ${value.operands.length} values`;
 
 /** A part of the formula: an operation over two or more values, worked out left to right. */
 function NumberPart({
@@ -179,7 +176,7 @@ function NumberPart({
       operands: part.operands.map((operand, at) => (at === index ? next : operand)),
     });
   return (
-    <div className="space-y-1 ">
+    <div className="space-y-2">
       <Label className="text-sm" htmlFor={`${id}-operation`}>
         Operation
       </Label>
@@ -192,36 +189,51 @@ function NumberPart({
           onChange({ ...part, numeric_operation: operation as CalculationNumberOperation })
         }
       />
-      <ol className="list-none space-y-1" aria-label="Values, worked out in this order">
-        {part.operands.map((operand, index) => (
-          <NumberValue
-            key={index}
-            id={`${id}-${index}`}
-            value={operand}
-            fields={fields}
-            depth={depth}
-            disabled={disabled}
-            onChange={(next) => setOperand(index, next)}
-            onRemove={
-              part.operands.length <= 2
-                ? undefined
-                : () =>
-                    onChange({ ...part, operands: part.operands.filter((_, at) => at !== index) })
-            }
-          />
-        ))}
-      </ol>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        disabled={disabled || part.operands.length >= 20}
-        onClick={() =>
-          onChange({ ...part, operands: [...part.operands, { source: "literal", value: "1" }] })
+      <StudioEntryList
+        label="Values, worked out in this order"
+        itemName="value"
+        disabled={disabled}
+        items={part.operands.map((operand, index) => ({
+          key: String(index),
+          title: numberTitle(operand, fields),
+          content: (
+            <NumberValue
+              id={`${id}-${index}`}
+              value={operand}
+              fields={fields}
+              depth={depth}
+              disabled={disabled}
+              onChange={(next) => setOperand(index, next)}
+            />
+          ),
+        }))}
+        onMove={(from, to) => {
+          const operands = [...part.operands];
+          const [moved] = operands.splice(from, 1);
+          if (moved === undefined) return;
+          operands.splice(to, 0, moved);
+          onChange({ ...part, operands });
+        }}
+        onRemove={
+          part.operands.length <= 2
+            ? undefined
+            : (index) =>
+                onChange({ ...part, operands: part.operands.filter((_, at) => at !== index) })
         }
       >
-        Add a value
-      </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={disabled || part.operands.length >= 20}
+          onClick={() =>
+            onChange({ ...part, operands: [...part.operands, { source: "literal", value: "1" }] })
+          }
+        >
+          <Icon name="plus" />
+          Add a value
+        </Button>
+      </StudioEntryList>
     </div>
   );
 }
@@ -275,59 +287,24 @@ export function StudioCalculationEditor({
         );
         return (
           <>
-            <ol className="list-none space-y-1" aria-label="Joined fields">
-              {joined.fields.map((key, index) => (
-                <li
-                  key={key}
-                  className="flex items-center gap-1 rounded-md border border-border p-2 text-sm"
-                >
-                  <span className="min-w-0 flex-1">{labelOf(key)}</span>
-                  <Button
-                    type="button"
-                    size="icon-xs"
-                    variant="ghost"
-                    aria-label={`Move ${labelOf(key)} earlier`}
-                    disabled={disabled || index === 0}
-                    onClick={() => {
-                      const next = [...joined.fields];
-                      next.splice(index - 1, 0, next.splice(index, 1)[0]!);
-                      setExpression({ ...joined, fields: next });
-                    }}
-                  >
-                    <Icon name="chevron-up" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon-xs"
-                    variant="ghost"
-                    aria-label={`Move ${labelOf(key)} later`}
-                    disabled={disabled || index === joined.fields.length - 1}
-                    onClick={() => {
-                      const next = [...joined.fields];
-                      next.splice(index + 1, 0, next.splice(index, 1)[0]!);
-                      setExpression({ ...joined, fields: next });
-                    }}
-                  >
-                    <Icon name="chevron-down" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon-xs"
-                    variant="ghost"
-                    aria-label={`Remove ${labelOf(key)}`}
-                    disabled={disabled}
-                    onClick={() =>
-                      setExpression({
-                        ...joined,
-                        fields: joined.fields.filter((item) => item !== key),
-                      })
-                    }
-                  >
-                    <Icon name="close" />
-                  </Button>
-                </li>
-              ))}
-            </ol>
+            <StudioEntryList
+              label="Joined fields"
+              itemName="field"
+              disabled={disabled}
+              empty="No field is joined yet."
+              items={joined.fields.map((key) => ({ key, title: labelOf(key) }))}
+              onMove={(from, to) => {
+                const next = [...joined.fields];
+                next.splice(to, 0, next.splice(from, 1)[0]!);
+                setExpression({ ...joined, fields: next });
+              }}
+              onRemove={(index) =>
+                setExpression({
+                  ...joined,
+                  fields: joined.fields.filter((_, at) => at !== index),
+                })
+              }
+            />
             {offered.length === 0 ? null : (
               <StudioField label="Add a field to joined text">
                 {(control) => (
@@ -627,8 +604,10 @@ export function StudioCalculationEditor({
       <section className="space-y-2" aria-label="Formula">
         {body}
       </section>
-      <p className="break-words rounded-md bg-muted p-2 text-sm" aria-label="The formula reads">
-        <span className="font-medium">{calculationResultTypeLabels[settings.result_type]} =</span>{" "}
+      <p className="break-words text-sm text-muted-foreground" aria-label="The formula reads">
+        <span className="font-medium text-foreground">
+          {calculationResultTypeLabels[settings.result_type]} =
+        </span>{" "}
         {describeCalculation(expression, labelOf)}
       </p>
       {results.length > 1 || (results.length === 1 && !results.includes(settings.result_type)) ? (

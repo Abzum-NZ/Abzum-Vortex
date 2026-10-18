@@ -193,6 +193,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     flowsInspector: flows.inspector,
     placementWorkflows: flows.placementWorkflows,
     openTab: setTab,
+    applications,
   });
 
   // The Access tab's one edit path, the same envelope as every other tab.

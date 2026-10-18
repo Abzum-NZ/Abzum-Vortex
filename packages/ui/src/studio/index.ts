@@ -57,6 +57,8 @@ export {
 export * from "./application-item-labels";
 export { tokenName } from "./studio-words";
 export * from "./studio-reference-picker";
+export * from "./studio-entry-list";
+export * from "./studio-segmented-control";
 export * from "./studio-field";
 export * from "./studio-inspector-group";
 export * from "./studio-inspector-actions";
