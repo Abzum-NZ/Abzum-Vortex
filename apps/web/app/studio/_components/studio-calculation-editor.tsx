@@ -222,7 +222,7 @@ export function StudioCalculationEditor({ idPrefix, settings, fields, compiled, 
     <p className="break-words rounded-md bg-muted p-2 text-sm" aria-label="The formula reads">
       <span className="font-medium">{calculationResultTypeLabels[settings.result_type]} =</span> {describeCalculation(expression, labelOf)}
     </p>
-    {results.length > 1
+    {results.length > 1 || (results.length === 1 && !results.includes(settings.result_type))
       ? <StudioField label="Result">
         {(control) => <StudioOptionControl id={control.id} value={settings.result_type} disabled={disabled}
           options={results.map((value) => ({ value, label: calculationResultTypeLabels[value] }))}

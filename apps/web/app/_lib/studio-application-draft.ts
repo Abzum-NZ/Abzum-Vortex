@@ -249,9 +249,12 @@ const studioCompileFailure = (error: unknown): StudioCompileFailure => {
       const segments = current.location?.segments ?? [];
       const block = segments.find((segment) => segment.kind === "block");
       const setting = segments.filter((segment) => segment.kind === "setting").at(-1);
+      const keyOf = (kind: string) => segments.find((segment) => segment.kind === kind)?.key;
+      const located = { moduleKey: keyOf("module"), recordTypeKey: keyOf("record_type"), fieldKey: keyOf("field"), queryKey: keyOf("query") };
       return { reasonCode: current.ruleCode, family: current.family,
         ...(block === undefined ? {} : { blockAlias: block.key }),
-        ...(setting === undefined || setting.key === "theme" ? {} : { tokenKey: setting.key }) };
+        ...(setting === undefined || setting.key === "theme" ? {} : { tokenKey: setting.key }),
+        ...Object.fromEntries(Object.entries(located).filter(([, key]) => key !== undefined)) };
     }
     current = current.cause;
   }
@@ -313,9 +316,15 @@ export const loadStudioApplicationDraft = async (
         let usedModules: StudioDataModule[] | null = null;
         let published: StudioPublishedData | null = null;
         let peopleDirectory: PeopleDirectoryOwner | null = null;
-        if (options.compile !== false) try {
-          const context = await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt });
-          const compiled = await createDatabaseDefinitionPublicationService(installedReleaseCatalogue, transaction, authority)
+        const context = options.compile === false ? null
+          : await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt });
+        const service = createDatabaseDefinitionPublicationService(installedReleaseCatalogue, transaction, authority);
+        // What is published is read from the stored releases, not the compile, so a draft that does
+        // not compile still lets the builder change or remove the fields it has never published.
+        if (context !== null)
+          published = await service.readApplicationDraftPublication(context, { rootId: draft.rootId, expectedDraftRevision: draft.draftRevision });
+        if (context !== null) try {
+          const compiled = await service
             .compileApplicationDraft(context, { rootId: draft.rootId, expectedDraftRevision: draft.draftRevision });
           const envelope = compiled.compilation.canonical.envelope;
           if (!sameId(envelope.rootId, draft.rootId) || !sameId(envelope.organizationId, draft.organizationId) || envelope.key !== draft.key ||
@@ -406,7 +415,6 @@ export const loadStudioApplicationDraft = async (
           borrowedChoices = { usesSignature: studioUsesSignature(draft.source), queries: borrowed,
             actions: borrowedActions, relationships: borrowedRelationships };
           usedModules = used;
-          published = compiled.published;
           peopleDirectory = compiled.peopleDirectory;
           compiledFields = { draftRevision: draft.draftRevision, recordTypes: fieldsByRecord };
         } catch (error) {
