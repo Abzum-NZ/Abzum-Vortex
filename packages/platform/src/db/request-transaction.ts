@@ -155,13 +155,13 @@ const validateContext = (candidate: SessionContext): SessionContext => {
   return parsed.data;
 };
 
-// Bound lock queues, running statements and abandoned transactions on every request path.
+// Bound lock queues and running statements on every request path. Publication can spend
+// time compiling in Node between queries, so database-idle time must not expire a transaction.
 // LOCAL settings disappear at commit/rollback before the pooled connection is reused.
 const setRequestTimeouts = async (transaction: TransactionDriver): Promise<void> => {
   await transaction.query`
     select pg_catalog.set_config('lock_timeout', '5s', true),
-      pg_catalog.set_config('statement_timeout', '60s', true),
-      pg_catalog.set_config('idle_in_transaction_session_timeout', '15s', true)
+      pg_catalog.set_config('statement_timeout', '60s', true)
   `;
 };
 
