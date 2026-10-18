@@ -12,7 +12,6 @@ import {
   type VerifiedSignInResult,
   type IdentityVerificationExecution,
 } from "@vortex/platform/server";
-import { isAuthRefreshDiscardedError, isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { cookies, headers } from "next/headers";
 import { cache } from "react";
 import {
@@ -21,7 +20,12 @@ import {
   type SessionCookieMutation,
   type SessionCookieProfile,
 } from "./session-cookie";
-import { createIdentitySessionClient, type IdentitySessionClient } from "./supabase-session-client";
+import {
+  createIdentitySessionClient,
+  identitySessionProviderFailure,
+  readIdentitySessionProvider,
+  type IdentitySessionClient,
+} from "./supabase-session-client";
 import { identitySessionProxyHeader } from "./session-request-state";
 import { mapWebError } from "../../_lib/web-error-mapper";
 import {
@@ -53,8 +57,11 @@ const staleCookieDeletions = (
 const sessionService = (execution?: IdentityVerificationExecution) => {
   const journey = getIdentityJourneyConfiguration();
   return createDefaultIdentitySessionService(
-    createIdentityVerifier(getIdentityAuthorityConfiguration(), journey.publishableKey,
-      execution === undefined ? {} : { execution }),
+    createIdentityVerifier(
+      getIdentityAuthorityConfiguration(),
+      journey.publishableKey,
+      execution === undefined ? {} : { execution },
+    ),
   );
 };
 
@@ -65,10 +72,8 @@ const invalid = (): IdentitySessionResolution =>
 const revoked = (): IdentitySessionResolution =>
   identitySessionResolutionSchema.parse({ kind: "expired_or_revoked" });
 
-const providerFailure = (error: unknown): IdentitySessionResolution =>
-  isAuthRetryableFetchError(error) || isAuthRefreshDiscardedError(error)
-    ? unavailable()
-    : revoked();
+const providerFailure = (error: unknown, operation: string): IdentitySessionResolution =>
+  identitySessionProviderFailure(error, operation) === "invalid" ? revoked() : unavailable();
 
 const revokeIssuedProviderSession = async (
   signedIn: Extract<VerifiedSignInResult, { ok: true }>,
@@ -113,12 +118,12 @@ export const bootstrapIdentitySession = async (
       refresh_token: signedIn.refreshToken,
     });
     if (setResult.error || !setResult.data.session) {
-      outcome = providerFailure(setResult.error);
+      outcome = providerFailure(setResult.error, "set-session");
     } else {
       const currentToken = setResult.data.session.access_token;
       const live = await boundary.client.auth.getUser(currentToken);
       if (live.error || !live.data.user) {
-        outcome = providerFailure(live.error);
+        outcome = providerFailure(live.error, "get-user");
       } else {
         outcome = await sessionService().bootstrap(
           currentToken,
@@ -170,7 +175,8 @@ const resolveRequestIdentity = async (
   let boundary: IdentitySessionClient;
   try {
     boundary = createIdentitySessionClient(await requestCookies(), {
-      verificationOnly: true, ...(execution === undefined ? {} : { execution }),
+      verificationOnly: true,
+      ...(execution === undefined ? {} : { execution }),
     });
   } catch (error) {
     return {
@@ -187,19 +193,21 @@ const resolveRequestIdentity = async (
   if (boundary.stage.initialState.kind === "invalid") return { resolution: invalid() };
 
   const beforeRead = boundary.stage.snapshot();
-  if (beforeRead.refused || beforeRead.mutations.length > 0)
-    return { resolution: unavailable() };
+  if (beforeRead.refused || beforeRead.mutations.length > 0) return { resolution: unavailable() };
   execution?.checkpoint();
-  const current = await boundary.client.auth.getSession();
+  const current = await readIdentitySessionProvider("get-session", () =>
+    boundary.client.auth.getSession(),
+  );
   execution?.checkpoint();
   if (boundary.verificationRefused()) return { resolution: unavailable() };
-  if (current.error) return { resolution: providerFailure(current.error) };
+  if (!current.ok) return { resolution: current.state === "invalid" ? revoked() : unavailable() };
   if (!current.data.session?.access_token)
     return { resolution: identitySessionResolutionSchema.parse({ kind: "missing" }) };
   const staged = boundary.stage.snapshot();
   if (staged.refused || staged.mutations.length > 0) return { resolution: unavailable() };
   const accessToken = current.data.session.access_token;
-  const { resolution, verifiedPrimaryEmail } = await sessionService(execution).resolveVerified(accessToken);
+  const { resolution, verifiedPrimaryEmail } =
+    await sessionService(execution).resolveVerified(accessToken);
   execution?.checkpoint();
   if (resolution.kind !== "active" || verifiedPrimaryEmail === undefined) return { resolution };
   return { resolution, accessToken, email: verifiedPrimaryEmail };
@@ -221,15 +229,20 @@ export const refreshIdentitySession = async (): Promise<IdentitySessionResolutio
     const boundary = createIdentitySessionClient(await requestCookies());
     if (boundary.stage.initialState.kind !== "valid") return revoked();
     const refreshed = await boundary.client.auth.refreshSession();
-    if (refreshed.error || !refreshed.data.session) return providerFailure(refreshed.error);
+    if (refreshed.error || !refreshed.data.session)
+      return providerFailure(refreshed.error, "refresh-session");
     const result = await sessionService().resolve(refreshed.data.session.access_token);
     const staged = boundary.stage.snapshot();
     if (staged.refused) return invalid();
     if (result.kind === "active") await applyMutations(staged.mutations);
     return result;
   } catch (error) {
-    return mapWebError(error, { route: "auth/session", operation: "refresh-identity-session",
-      code: "SESSION_REFRESH_FAILED", fallback: unavailable() });
+    return mapWebError(error, {
+      route: "auth/session",
+      operation: "refresh-identity-session",
+      code: "SESSION_REFRESH_FAILED",
+      fallback: unavailable(),
+    });
   }
 };
 
