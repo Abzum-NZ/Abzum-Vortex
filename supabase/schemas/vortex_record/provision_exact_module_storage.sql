@@ -287,7 +287,7 @@ begin
       else
         perform vortex_record.create_record_storage_table_internal(
           storage_id, p_module_root_id, record_type_id_value,
-          storage_scope_value, ownership_mode_value
+          storage_scope_value, ownership_mode_value, true
         );
       end if;
 

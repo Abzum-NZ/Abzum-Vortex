@@ -213,10 +213,14 @@ export const createDurableActorRequestService = (dependencies: DurableActorReque
         const value = await runTransaction(
           async (transaction) => {
             if (policy.kind === "initiating_person") {
+              // A durable person actor runs only platform-service operations (Access, accounts and
+              // tenants), most of which advance the Access version. It holds that
+              // version exclusively from the first statement, as every access change does, so two
+              // never deadlock on a lock upgrade.
               const row = single(
                 await transaction.query<PersonScopeRow>`
                   select *
-                  from vortex_access.resolve_human_application_change_scope(
+                  from vortex_access.resolve_human_application_access_change_scope(
                     ${policy.initiator.identityId}::uuid,
                     ${purpose.organizationId}::uuid,
                     ${purpose.applicationRootId}::uuid

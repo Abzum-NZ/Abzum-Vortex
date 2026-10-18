@@ -41,7 +41,7 @@ begin
   perform 1
   from vortex_access.organization_access_versions as access_version
   where access_version.organization_id = context_organization_id
-  for update;
+  for share;
   if not found then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'organization_access_missing');
   end if;

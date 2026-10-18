@@ -211,8 +211,8 @@ export const createFirstInstallCoordinator = (
 ) => {
   let step = 0;
   let preparedRegistration: PreparedFirstInstallRegistration | undefined;
-  const installerRequests: Pick<FirstInstallCoordinatorEnvironment["requests"], "runChange"> = {
-    runChange: async <Result>(
+  const installerRequests: Pick<FirstInstallCoordinatorEnvironment["requests"], "runAccessChange"> = {
+    runAccessChange: async <Result>(
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
       operation: (
@@ -224,7 +224,7 @@ export const createFirstInstallCoordinator = (
       const currentStep = step++;
       if (currentStep > 1) problem("temporarily_unavailable");
       let callbackFailure: unknown;
-      const result = await environment.requests.runChange(session, candidate, async (transaction, scope, issuedAt) => {
+      const result = await environment.requests.runAccessChange(session, candidate, async (transaction, scope, issuedAt) => {
         try {
           if (!sameId(candidate.organizationId, selector.organizationId) ||
             candidate.applicationRootId !== undefined || scope.applicationRootId !== undefined)

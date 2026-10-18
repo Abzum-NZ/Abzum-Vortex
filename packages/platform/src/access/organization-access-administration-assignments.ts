@@ -118,7 +118,7 @@ export const createAccessAdministrationAssignmentOperations = ({
       }
       return mapRecordedRefusal(
         "assignRoleAssignment",
-        requests.runChangeWithRefusal<
+        requests.runAccessChangeWithRefusal<
           AssignOrganizationAdministrationRoleAssignmentResult | typeof recordedRefusal
         >(
           session,
@@ -202,7 +202,7 @@ export const createAccessAdministrationAssignmentOperations = ({
         );
       return mapRecordedRefusal(
         "appointOrganizationSteward",
-        requests.runChange(session, candidate, async (transaction, scope) => {
+        requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<StewardshipAppointmentRow>`
               select outcome, organization_id, appointment_summary, access_version
@@ -291,7 +291,7 @@ export const createAccessAdministrationAssignmentOperations = ({
       }
       return mapRecordedRefusal(
         "revokeRoleAssignment",
-        requests.runChange(session, candidate, async (transaction, scope) => {
+        requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<RoleAssignmentChangeRow>`
           select outcome, organization_id, assignment_summary, access_version
@@ -361,7 +361,7 @@ export const createAccessAdministrationAssignmentOperations = ({
       }
       return mapRecordedRefusal(
         "deactivateRoleActivation",
-        requests.runChange(session, candidate, async (transaction, scope) => {
+        requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<RoleActivationChangeRow>`
           select outcome, organization_id, activation_summary, access_version
@@ -432,7 +432,7 @@ export const createAccessAdministrationAssignmentOperations = ({
       }
       return mapRecordedRefusal(
         "grantDelegationAuthority",
-        requests.runChange(session, candidate, async (transaction, scope) => {
+        requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<DelegationAuthorityChangeRow>`
           select outcome, organization_id, delegation_summary, access_version
@@ -514,7 +514,7 @@ export const createAccessAdministrationAssignmentOperations = ({
       }
       return mapRecordedRefusal(
         "revokeDelegationAuthority",
-        requests.runChange(session, candidate, async (transaction, scope) => {
+        requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<DelegationAuthorityChangeRow>`
           select outcome, organization_id, delegation_summary, access_version
