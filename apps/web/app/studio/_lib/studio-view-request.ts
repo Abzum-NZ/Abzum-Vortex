@@ -13,6 +13,7 @@ export const studioViewRequestSchema = z
   .object({
     kind: z.enum(["source", "canvas", "data", "access", "flows", "theme"]),
     pageAlias: z.string().min(1).optional(),
+    creation: z.enum(["layout", "record_page"]).optional(),
   })
   .strict();
 export type StudioViewRequest = z.infer<typeof studioViewRequestSchema>;

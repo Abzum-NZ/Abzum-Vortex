@@ -40,6 +40,7 @@ import {
   type StudioAccessResult,
 } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
+import type { StudioStructureForm } from "./studio-structure-editor";
 
 /** Where the workspace sits: the organisation it belongs to and the running application it builds. */
 export type StudioWorkspacePlace = Readonly<{
@@ -93,10 +94,13 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   const [tab, setTab] = useState<StudioRailKey>(
     isStudioRailKey(props.initialTab) ? props.initialTab : "structure",
   );
+  const [structureForm, setStructureForm] = useState<StudioStructureForm>("none");
   const draft = useStudioDraft({
     organizationId,
     draft: props.draft,
     tab,
+    creation:
+      structureForm === "shell" ? "layout" : structureForm === "record" ? "record_page" : undefined,
     initialView: props.initialView,
   });
   const catalogue = draft.view.catalogue;
@@ -194,6 +198,8 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     outline,
     hidden: tab !== "structure",
     openAccessPages,
+    form: structureForm,
+    onFormChange: setStructureForm,
   });
   const menuTheme = useStudioMenuThemeTabs({
     draft,
@@ -335,7 +341,11 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                   Loading this editor…
                 </p>
               ) : null}
-              <div className={canvasShown ? "min-h-0 flex-1 overflow-auto" : "min-h-0 flex-1 overflow-auto p-4"}>
+              <div
+                className={
+                  canvasShown ? "min-h-0 flex-1 overflow-auto" : "min-h-0 flex-1 overflow-auto p-4"
+                }
+              >
                 {canvasShown && canvas.centre}
                 {tab === "flows" && flows.centre}
                 {/* The Data tab's centre keeps its paging and reads while another tab is open. */}
@@ -352,5 +362,4 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
       </div>
     </StudioPlaceOpenerProvider>
   );
-
 }

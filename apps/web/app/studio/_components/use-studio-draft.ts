@@ -33,7 +33,7 @@ import type {
   StudioDataModule,
   StudioPublishedData,
 } from "../_lib/studio-data-model";
-import { studioViewRequest } from "../_lib/studio-view-request";
+import { studioViewRequest, type StudioViewRequest } from "../_lib/studio-view-request";
 import { summarizeSourceChange, type SourceChangeRow } from "../_lib/source-change-summary";
 import { conflictMessage, refusalMessage } from "./studio-refusal-messages";
 import { useStudioSession } from "./use-studio-session";
@@ -210,11 +210,13 @@ export function useStudioDraft({
   organizationId,
   draft,
   tab,
+  creation,
   initialView,
 }: Readonly<{
   organizationId: string;
   draft: StudioStoredApplicationDraft;
   tab: string;
+  creation: StudioViewRequest["creation"];
   initialView: Omit<
     StudioCompiledView,
     "source" | "draftRevision" | "sourceFingerprint" | "generation"
@@ -289,7 +291,10 @@ export function useStudioDraft({
     sourceFingerprint: draft.sourceFingerprint,
     generation: 0,
   }));
-  const request = studioViewRequest(tab, selected, parsed(state.source));
+  const request: StudioViewRequest = {
+    ...studioViewRequest(tab, selected, parsed(state.source)),
+    ...(tab === "structure" && creation !== undefined ? { creation } : {}),
+  };
   const requestKey = JSON.stringify(request);
   const requestRef = useRef({ request, key: requestKey });
   requestRef.current = { request, key: requestKey };

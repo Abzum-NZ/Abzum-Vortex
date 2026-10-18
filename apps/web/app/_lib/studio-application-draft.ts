@@ -424,7 +424,8 @@ export const loadStudioApplicationDraft = async (
           return { kind: "refused", reason: "page_missing" };
         const canvas = request.kind === "canvas" || request.kind === "theme";
         const data = request.kind === "data";
-        const choices = data || request.kind === "flows" || canvas;
+        const choices =
+          data || request.kind === "flows" || canvas || request.creation !== undefined;
         const themeRelease = canvas
           ? findPinnedPlatformThemeRelease(draft.source.body.theme.base)
           : undefined;

@@ -7,7 +7,7 @@ import {
 import { applyStudioStructureCommand, type StudioStructureCommand, type StudioStructureResult } from "@vortex/ui/studio";
 import { studioFieldPublication } from "./module-fields-editor";
 import { StudioStructurePanel } from "./studio-outline-panels";
-import { StudioStructureEditor } from "./studio-structure-editor";
+import { StudioStructureEditor, type StudioStructureForm } from "./studio-structure-editor";
 import type { StudioDraft } from "./use-studio-draft";
 
 /**
@@ -15,12 +15,14 @@ import type { StudioDraft } from "./use-studio-draft";
  * rename, move, remove or make home the selected one. Each control is one checked Structure
  * command through the draft's envelope.
  */
-export function useStudioStructureTab({ draft, catalogue, describePlacement, outline, hidden, openAccessPages }: Readonly<{
+export function useStudioStructureTab({ draft, catalogue, describePlacement, outline, hidden, openAccessPages, form, onFormChange }: Readonly<{
   draft: StudioDraft;
   catalogue: ImmutablePlatformBlockCatalogue;
   describePlacement: StudioPlacementDescriber;
   outline: StudioSemanticOutline;
   hidden: boolean;
+  form: StudioStructureForm;
+  onFormChange: (form: StudioStructureForm) => void;
   /** Opens Access on its Pages and menu view, where who can open a page is set. */
   openAccessPages: () => void;
 }>) {
@@ -50,6 +52,7 @@ export function useStudioStructureTab({ draft, catalogue, describePlacement, out
     choose={(node) => { if (node.selection !== null) draft.select(node.selection); }} hidden={hidden}
     homePageKey={homePage === undefined ? undefined : studioSemanticSelectionKey({ kind: "page", pageAlias: homePage.id })}
     editor={<StudioStructureEditor source={source} selected={selected} onCommand={command} onPreview={preview}
+      form={form} onFormChange={onFormChange}
       onOpenAccess={openAccessPages} disabled={draft.locked} />} />;
   return { panel };
 }
