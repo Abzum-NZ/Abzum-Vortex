@@ -515,6 +515,11 @@ export function StudioSettingFields(props: SettingFieldsProps): ReactElement {
 }
 
 function SettingFields({ idPrefix, properties, values, onChange, choices, disabled }: SettingFieldsProps): ReactElement {
+  const visible = (property: BlockPropertySchemaContract, settings: StudioSettingValues) => {
+    if (property.showWhen === undefined) return true;
+    const selected = settings[property.showWhen.property];
+    return selected?.kind === "choice" && property.showWhen.values.includes(selected.value);
+  };
   // A field's optional label is an override. Matching text follows the field when it changes;
   // other text stays authored, with an explicit way to return to the field's label.
   const fieldProperty = properties.find((property) => property.key === "field" && property.kind === "field_reference");
@@ -537,12 +542,15 @@ function SettingFields({ idPrefix, properties, values, onChange, choices, disabl
   };
   return <div className="space-y-3">
     {properties.map((property) => {
+      if (!visible(property, values)) return null;
       const id = `${idPrefix}-${property.key}`;
       const value = Object.hasOwn(values, property.key) ? values[property.key] : undefined;
       const set = (next: SettingValue) => {
         const result: Record<string, SourceBlockPropertyValueContract> = { ...values };
         if (next === undefined) delete result[property.key];
         else result[property.key] = next;
+        for (const sibling of properties)
+          if (!visible(sibling, result)) delete result[sibling.key];
         onChange(result);
       };
       const inline = property.kind === "boolean";
