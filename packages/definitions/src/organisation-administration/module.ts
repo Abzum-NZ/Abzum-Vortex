@@ -180,7 +180,6 @@ const installedApplicationAllFields = [
   "organization_id",
   "revision",
   "key",
-  "name",
   "release_revision",
   "is_default",
 ];
@@ -704,7 +703,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
         key: "installed_application",
         name: "Installed application",
         plural_name: "Installed applications",
-        title_field: "name",
+        title_field: "key",
         storage_contract_id: "srt_org_admin_installed_application",
         storage_scope: "organization_shared",
         ownership_mode: "none",
@@ -715,7 +714,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
           organization_field: "organization_id",
           revision_field: "revision",
           filterable_fields: ["is_default"],
-          sortable_fields: ["key", "name", "release_revision"],
+          sortable_fields: ["key", "release_revision"],
         },
         fields: [
           {
@@ -757,19 +756,6 @@ export const organisationAdministrationModule: SourceApplicationModule =
             public_display: "refused",
             type: "text",
             settings: { max_length: 120 },
-          },
-          {
-            id: "fld_installed_application_name",
-            key: "name",
-            label: "Application name",
-            required: true,
-            unique: false,
-            filterable: false,
-            sortable: true,
-            personal_data: "none",
-            public_display: "refused",
-            type: "text",
-            settings: { max_length: 300 },
           },
           {
             id: "fld_installed_application_release_revision",
@@ -1439,7 +1425,6 @@ export const organisationAdministrationModule: SourceApplicationModule =
         "inputs": [],
         "select": [
           "key",
-          "name",
           "release_revision",
           "is_default"
         ],

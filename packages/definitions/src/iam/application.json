@@ -2543,7 +2543,7 @@
                           "required": true,
                           "choice_source": {
                             "query": "vortex.organisation_administration:installed_applications",
-                            "label_field": "vortex.organisation_administration:installed_application.name"
+                            "label_field": "vortex.organisation_administration:installed_application.key"
                           },
                           "vortex": {
                             "block": {
