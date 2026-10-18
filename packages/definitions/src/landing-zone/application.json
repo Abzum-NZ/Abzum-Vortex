@@ -1063,7 +1063,6 @@
                     "empty_message": "No saved tile records were returned.",
                     "refused_message": "Saved tiles are unavailable for this account.",
                     "error_message": "Saved tiles could not be read.",
-                    "page_size": 200,
                     "columns": [
                       {
                         "field": "vortex.landing_zone:tile.target_kind",
