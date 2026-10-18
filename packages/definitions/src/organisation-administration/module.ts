@@ -180,6 +180,7 @@ const installedApplicationAllFields = [
   "organization_id",
   "revision",
   "key",
+  "name",
   "release_revision",
   "is_default",
 ];
