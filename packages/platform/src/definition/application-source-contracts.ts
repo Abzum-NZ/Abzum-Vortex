@@ -3,6 +3,7 @@ import { previewApplicationKeyNamespace } from "./preview-application-key";
 import { applicationExperienceStateSchema } from "../catalogue/catalogues";
 import { inspectApplicationPageReplacements } from "../pages/application-page-replacement";
 import { applicationSourceContractVersion } from "./application-contract-versions";
+import { maximumApplicationRoles } from "./application-contracts";
 import {
   builderKeySchema,
   namespacedKeySchema,
@@ -317,10 +318,10 @@ export const sourcePageDefinitionSchema = z.discriminatedUnion("type", [
 ]);
 const sourceInterfaceValueTypeSchema = z.enum([
   "text",
-  "number",
+  "whole_number",
   "decimal_number",
   "money",
-  "boolean",
+  "yes_no",
   "date",
   "date_time",
   "record_reference",
@@ -391,8 +392,8 @@ const sourceInterfaceOutputFieldSchema = z
     if (
       value.target_binding.kind === "query_page_information" &&
       ((value.target_binding.value === "continuation_token" && value.type !== "text") ||
-        (value.target_binding.value === "has_more" && value.type !== "boolean") ||
-        (value.target_binding.value === "result_count" && value.type !== "number"))
+        (value.target_binding.value === "has_more" && value.type !== "yes_no") ||
+        (value.target_binding.value === "result_count" && value.type !== "whole_number"))
     )
       context.addIssue({
         code: "custom",
@@ -606,7 +607,7 @@ export const sourceApplicationBodySchema = z
             .strict(),
         )
         .min(1)
-        .max(100)
+        .max(maximumApplicationRoles)
         .refine((roles) => roles.filter((role) => role.default_member === true).length === 1, {
           message: "Exactly one role must be the application's default member role",
         }),

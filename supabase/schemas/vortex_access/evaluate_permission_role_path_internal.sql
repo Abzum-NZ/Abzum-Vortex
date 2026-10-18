@@ -26,6 +26,8 @@ declare
   action_kind_value text := p_action ->> 'actionKind';
   named_action_value text := p_action ->> 'namedAction';
   preview_registration record;
+  preview_projection boolean := false;
+  projection_live_registration boolean := false;
 begin
   -- A preview request decides the permissions of the previewed Application and its own Modules
   -- from the preview's registration alone: the builder who opened the preview holds the draft's
@@ -45,6 +47,9 @@ begin
     if preview_registration.registration_kind is distinct from 'preview' then
       return;
     end if;
+    preview_projection := coalesce(
+      p_record_type_id = any(preview_registration.system_projection_record_type_ids), false
+    );
     if permission_owner_value = any(preview_registration.owned_owner_ids)
       and not coalesce(
         p_record_type_id = any(preview_registration.system_projection_record_type_ids), false
@@ -66,6 +71,16 @@ begin
         and (preview_entry.entry).named_action is not distinct from named_action_value;
       return;
     end if;
+  end if;
+
+  -- A projection has no preview copy or draft grant. A Module's permission is registered by every
+  -- installed Application that links that Module, each under its own Application root, and none of
+  -- those is the address of the previewed Application: a projection of a used Module selects its
+  -- permission from the caller's live registrations rather than from the address it was asked
+  -- about. The common live role-path decision below still proves a current grant, and ordinary
+  -- borrowed record types keep their existing refusal.
+  if preview_projection and permission_owner_kind_value = 'module' then
+    projection_live_registration := true;
   end if;
 
   return query
@@ -98,8 +113,11 @@ begin
       and continuity.meaning_fingerprint = catalogue.meaning_fingerprint
     where registration.organization_id = context_organization_value
       and registration.state = 'active'
-      and catalogue.application_root_id is not distinct from
-        permission_application_value
+      and (
+        projection_live_registration
+        or catalogue.application_root_id is not distinct from
+          permission_application_value
+      )
       and catalogue.owner_kind = permission_owner_kind_value
       and catalogue.owner_id = permission_owner_value
       and catalogue.permission_id = permission_value
@@ -311,11 +329,28 @@ begin
   ), granted as materialized (
     -- Every accepted meaning the caller holds through a live path is granted: a caller holding
     -- two roles with different accepted meanings of the permission has both, each with the
-    -- earliest deadline of the paths that carry it.
-    select distinct on (route.accepted_registration_revision)
+    -- earliest deadline of the paths that carry it. Registration revisions are local to each
+    -- registration, so equal revisions under different Application addresses remain distinct.
+    select distinct on (
+      (route.accepted_entry).organization_id,
+      (route.accepted_entry).application_root_id,
+      (route.accepted_entry).owner_kind,
+      (route.accepted_entry).owner_id,
+      (route.accepted_entry).permission_id,
+      (route.accepted_entry).registration_kind,
+      (route.accepted_entry).registration_owner_id,
+      route.accepted_registration_revision
+    )
       route.accepted_entry as permission_entry, route.path_valid_until
     from route_candidates as route
-    order by route.accepted_registration_revision, route.path_valid_until
+    order by (route.accepted_entry).organization_id,
+      (route.accepted_entry).application_root_id,
+      (route.accepted_entry).owner_kind,
+      (route.accepted_entry).owner_id,
+      (route.accepted_entry).permission_id,
+      (route.accepted_entry).registration_kind,
+      (route.accepted_entry).registration_owner_id,
+      route.accepted_registration_revision, route.path_valid_until
   ), administered as materialized (
     -- A super administrator is evaluated with the registered meaning.
     select available.permission_entry, context_expires_value as path_valid_until
@@ -354,7 +389,7 @@ comment on function
   vortex_access.evaluate_permission_role_path_internal(
     jsonb, timestamptz, jsonb, jsonb, uuid
   ) is
-  'Private current-permission and role-path evidence; null record type selects only non-record permissions. It returns one row per accepted meaning the caller holds through a live role path (never a later registered meaning), the registered meaning for a super administrator, or the registered permission without a deadline when no path is live. A preview request decides the previewed Application''s own permissions from its preview registration. No row authority.';
+  'Private current-permission and role-path evidence; null record type selects only non-record permissions. It returns one row per accepted meaning the caller holds through a live role path (never a later registered meaning), the registered meaning for a super administrator, or the registered permission without a deadline when no path is live. A preview request decides the previewed Application''s own permissions from its preview registration, and a permission on a system projection of a used Module from the caller''s live registrations, under whichever Application links that Module. No row authority.';
 
 alter function vortex_access.evaluate_permission_role_path_internal(p_context jsonb, p_checked_at timestamp with time zone, p_permission jsonb, p_action jsonb, p_record_type_id uuid) owner to vortex_owner;
 

@@ -107,8 +107,8 @@ const validateOne = (input: ActionInputDefinition, value: JsonValue): JsonValue 
     }
     case "formatted_text":
       return recordRichTextDocumentSchema.safeParse(value).success ? value : refuse();
-    case "number": {
-      if (typeof value !== "number" || !Number.isFinite(value)) return refuse();
+    case "whole_number": {
+      if (typeof value !== "number" || !Number.isSafeInteger(value)) return refuse();
       if (input.validation?.minimum !== undefined && value < input.validation.minimum) refuse();
       if (input.validation?.maximum !== undefined && value > input.validation.maximum) refuse();
       return value;
@@ -120,7 +120,7 @@ const validateOne = (input: ActionInputDefinition, value: JsonValue): JsonValue 
       if (typeof value.currency !== "string" || !/^[A-Z]{3}$/.test(value.currency)) return refuse();
       return { amount: exactWithinRange(value.amount, input.validation), currency: value.currency };
     }
-    case "boolean":
+    case "yes_no":
       return typeof value === "boolean" ? value : refuse();
     case "date": {
       if (typeof value !== "string" || !isoDate.safeParse(value).success) return refuse();

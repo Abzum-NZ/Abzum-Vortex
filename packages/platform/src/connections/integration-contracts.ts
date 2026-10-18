@@ -65,7 +65,16 @@ export const connectionAuthenticationSchema = z.discriminatedUnion("kind", [
 export const connectionShapeFieldSchema = z
   .object({
     key: builderKeySchema,
-    type: z.enum(["text", "number", "boolean", "date", "date_time", "record_reference", "json"]),
+    type: z.enum([
+      "text",
+      "whole_number",
+      "decimal_number",
+      "yes_no",
+      "date",
+      "date_time",
+      "record_reference",
+      "json",
+    ]),
     required: z.boolean(),
   })
   .strict();
@@ -231,10 +240,10 @@ export const incomingMessageSchema = z
 
 export const interfaceValueTypeSchema = z.enum([
   "text",
-  "number",
+  "whole_number",
   "decimal_number",
   "money",
-  "boolean",
+  "yes_no",
   "date",
   "date_time",
   "record_reference",
@@ -283,8 +292,8 @@ export const interfaceOutputFieldSchema = z
     if (
       value.targetBinding.kind === "query_page_information" &&
       ((value.targetBinding.value === "continuation_token" && value.type !== "text") ||
-        (value.targetBinding.value === "has_more" && value.type !== "boolean") ||
-        (value.targetBinding.value === "result_count" && value.type !== "number"))
+        (value.targetBinding.value === "has_more" && value.type !== "yes_no") ||
+        (value.targetBinding.value === "result_count" && value.type !== "whole_number"))
     )
       context.addIssue({
         code: "custom",

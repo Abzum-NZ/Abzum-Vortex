@@ -673,10 +673,10 @@ const moduleSourceSharingParameterSchema = z
     type: sourceProvenanceUnchanged(
       z.enum([
         "text",
-        "number",
+        "whole_number",
         "decimal_number",
         "money",
-        "boolean",
+        "yes_no",
         "date",
         "date_time",
         "organization_account_reference",
@@ -708,10 +708,10 @@ const sourceSharingParameterValueSchemas: Record<
   z.ZodType
 > = {
   text: z.string(),
-  number: z.number().finite(),
+  whole_number: z.number().int().safe(),
   decimal_number: sourceExactDecimalTextSchema,
   money: sourceMoneyValueSchema,
-  boolean: z.boolean(),
+  yes_no: z.boolean(),
   date: z.iso.date(),
   date_time: z.iso.datetime({ offset: true }),
   organization_account_reference: organizationAccountIdSchema,

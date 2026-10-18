@@ -243,8 +243,8 @@ begin
               semantic_type := case
                 when field_kind = 'decimal_number' then 'decimal_number'
                 when field_kind = 'money' then 'money'
-                when field_kind = 'whole_number' then 'number'
-                when field_kind = 'yes_no' then 'boolean'
+                when field_kind = 'whole_number' then 'whole_number'
+                when field_kind = 'yes_no' then 'yes_no'
                 when field_kind = 'date' then 'date'
                 when field_kind = 'date_time' then 'date_time'
                 when field_kind = 'several_choices' then 'text_collection'
@@ -296,16 +296,13 @@ begin
             semantic_type := condition_field_types ->> field_id;
             database_value_type := condition_field_database_types ->> field_id;
             if not (
-              (semantic_type = 'boolean' and database_value_type = 'boolean')
+              (semantic_type = 'yes_no' and database_value_type = 'boolean')
               or (semantic_type = 'text' and database_value_type in ('text', 'json'))
               or (semantic_type = 'text_collection' and database_value_type = 'json')
               or (semantic_type = 'opaque_json' and database_value_type = 'json')
               or (semantic_type = 'money' and database_value_type = 'json')
               or (semantic_type = 'decimal_number' and database_value_type = 'decimal')
-              -- A version-1 decimal field is a number to the condition engine
-              -- but is projected as decimal text, which that engine refuses;
-              -- only a whole number is stored as the number it compares.
-              or (semantic_type = 'number' and database_value_type = 'integer')
+              or (semantic_type = 'whole_number' and database_value_type = 'integer')
               or (semantic_type = 'date' and database_value_type = 'date')
               or (semantic_type = 'date_time' and database_value_type = 'timestamp_with_time_zone')
             ) then
