@@ -40,7 +40,7 @@ export const createStudioBoardQuery = (source: ApplicationSourceDocument,
   const existing = module.queries.find((query) => query.record_type === record.key && query.filter === null &&
     query.inputs.length === 0 && query.group_by.length === 1 && query.group_by[0] === stageKey &&
     query.relationship_hops === 0 && query.aggregates.length === 0 &&
-    (query.select.length === 0 || selected.every((key) => query.select.includes(key))));
+    selected.every((key) => query.select.includes(key)));
   if (existing !== undefined) return `${module.key}:${existing.key}`;
   if (module.queries.length >= 100) return undefined;
   const key = uniqueKey(`${record.key}_by_${stageKey}`, "", new Set(module.queries.map((query) => query.key)), 40);
