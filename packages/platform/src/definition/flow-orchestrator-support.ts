@@ -8,16 +8,14 @@ import {
   flowReadFieldsTypeMapSchema,
   flowTaskChildLists,
   isRecord,
-  parseExactDecimal,
   recordTypeIdSchema,
   type FlowDefinition,
   type FlowFieldCorrection,
-  type FlowReadFieldsScalarType,
   type FlowTask,
   type FlowValue,
   type JsonValue,
 } from "../schema";
-import { recordRichTextDocumentSchema } from "../records/module-field-values";
+import { typedValueMatchesType } from "../rules/condition-types";
 import type {
   FlowInterfaceIntent,
   FlowLibrary,
@@ -229,36 +227,6 @@ type CompiledSelectedRecordReadTask = FlowTask &
     readFieldTypes?: Readonly<Record<string, string>>;
   }>;
 
-/** Match the interpreter's scalar runtime checks without parsing text as a Flow literal. */
-const readFieldValueMatchesType = (
-  type: FlowReadFieldsScalarType,
-  candidate: unknown,
-): candidate is JsonValue => {
-  switch (type) {
-    case "yes_no":
-      return typeof candidate === "boolean";
-    case "whole_number":
-      return typeof candidate === "number" && Number.isSafeInteger(candidate);
-    case "decimal_number":
-    case "money":
-      return parseExactDecimal(candidate) !== undefined;
-    case "date":
-      return (
-        typeof candidate === "string" &&
-        /^\d{4}-\d{2}-\d{2}$/.test(candidate) &&
-        Number.isFinite(Date.parse(`${candidate}T00:00:00.000Z`))
-      );
-    case "date_time":
-      return typeof candidate === "string" && Number.isFinite(Date.parse(candidate));
-    case "text":
-      return typeof candidate === "string";
-    case "formatted_text":
-      return recordRichTextDocumentSchema.safeParse(candidate).success;
-    case "choice":
-      return typeof candidate === "string" && candidate.length > 0;
-  }
-};
-
 /** Return every declared alias only when the protected reader returned the whole valid field map. */
 export const aliasSelectedRecordValues = (
   projection: FlowSelectedRecordReadProjection,
@@ -280,7 +248,7 @@ export const aliasSelectedRecordValues = (
     const normalizedFieldId = field.fieldId.toLowerCase();
     if (!valuesByFieldId.has(normalizedFieldId)) return undefined;
     const value = valuesByFieldId.get(normalizedFieldId);
-    if (!readFieldValueMatchesType(field.type, value)) return undefined;
+    if (!typedValueMatchesType(value, field.type, "flow")) return undefined;
     values.push([field.alias, value]);
   }
   return Object.fromEntries(values);

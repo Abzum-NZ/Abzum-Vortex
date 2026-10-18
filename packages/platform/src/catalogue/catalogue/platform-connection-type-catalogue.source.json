@@ -39,7 +39,7 @@
             "key": "delivery_receipt",
             "fields": [
               { "key": "provider_message_id", "type": "text", "required": true },
-              { "key": "accepted", "type": "boolean", "required": true }
+              { "key": "accepted", "type": "yes_no", "required": true }
             ]
           },
           {
@@ -52,7 +52,7 @@
           { "key": "health_check_request", "fields": [] },
           {
             "key": "health_check_result",
-            "fields": [{ "key": "healthy", "type": "boolean", "required": true }]
+            "fields": [{ "key": "healthy", "type": "yes_no", "required": true }]
           }
         ],
         "operations": [
@@ -136,13 +136,13 @@
             "key": "calendar_event_receipt",
             "fields": [
               { "key": "event_id", "type": "text", "required": true },
-              { "key": "accepted", "type": "boolean", "required": true }
+              { "key": "accepted", "type": "yes_no", "required": true }
             ]
           },
           { "key": "health_check_request", "fields": [] },
           {
             "key": "health_check_result",
-            "fields": [{ "key": "healthy", "type": "boolean", "required": true }]
+            "fields": [{ "key": "healthy", "type": "yes_no", "required": true }]
           }
         ],
         "operations": [
@@ -263,7 +263,7 @@
               },
               {
                 "key": "accepted",
-                "type": "boolean",
+                "type": "yes_no",
                 "required": true
               }
             ]
@@ -292,7 +292,7 @@
             "fields": [
               {
                 "key": "healthy",
-                "type": "boolean",
+                "type": "yes_no",
                 "required": true
               }
             ]
@@ -406,7 +406,7 @@
               },
               {
                 "key": "accepted",
-                "type": "boolean",
+                "type": "yes_no",
                 "required": true
               }
             ]
@@ -420,7 +420,7 @@
             "fields": [
               {
                 "key": "healthy",
-                "type": "boolean",
+                "type": "yes_no",
                 "required": true
               }
             ]
@@ -492,7 +492,7 @@
           },
           {
             "key": "webhook_receipt",
-            "fields": [{ "key": "accepted", "type": "boolean", "required": true }]
+            "fields": [{ "key": "accepted", "type": "yes_no", "required": true }]
           },
           {
             "key": "external_case",
@@ -504,7 +504,7 @@
           { "key": "health_check_request", "fields": [] },
           {
             "key": "health_check_result",
-            "fields": [{ "key": "healthy", "type": "boolean", "required": true }]
+            "fields": [{ "key": "healthy", "type": "yes_no", "required": true }]
           }
         ],
         "operations": [

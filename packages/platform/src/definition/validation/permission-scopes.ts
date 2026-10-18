@@ -1,6 +1,4 @@
 import {
-  exactDecimalTextSchema,
-  moneyValueSchema,
   type FlowDefinition,
   type FlowTask,
   flowReadFieldsProjectionSchema,
@@ -9,7 +7,7 @@ import {
 import { flowReadFieldsScalarTypeForField } from "../flow-compilation";
 import type { JsonObject } from "./context";
 import { object, array } from "./helpers";
-import { valueMatchesType } from "./saved-conditions";
+import { typedValueMatchesType } from "./field-types";
 
 export function permissionRecordScopesValid(
   permissions: readonly JsonObject[],
@@ -98,11 +96,7 @@ export function permissionRecordScopesValid(
           expected === undefined ||
           (binding.source === "current_organization_account_id"
             ? !["text", "organization_account_reference"].includes(expected)
-            : !(expected === "decimal_number"
-                ? exactDecimalTextSchema.safeParse(binding.value).success
-                : expected === "money"
-                  ? moneyValueSchema.safeParse(binding.value).success
-                  : valueMatchesType(binding.value, expected)))
+            : !typedValueMatchesType(binding.value, expected))
         );
       })
     )

@@ -16,7 +16,7 @@ export function tableQueryParameterFailures(
   const failures: DefinitionRuleFailure["family"][] = [];
   const declared = new Map(inputs.map((input) => [input.key, input]));
   const supplied = new Set<string>();
-  const pageConversions = new Map<string, "number" | "boolean" | "string">();
+  const pageConversions = new Map<string, "whole_number" | "yes_no" | "string">();
   for (const parameter of table.parameters) {
     if (supplied.has(parameter.input)) failures.push("duplicate_key");
     supplied.add(parameter.input);
@@ -25,7 +25,7 @@ export function tableQueryParameterFailures(
       failures.push("unknown_property");
       continue;
     }
-    // The table's page adapter converts number/boolean scalars and a record id into a reference to
+    // The table's page adapter converts whole-number and yes/no scalars and a record id into a reference to
     // the input's one declared record type. Neither adapter accepts other structured values or
     // identity inputs; fixed settings reach the engine as text unchanged.
     const pageReference =
@@ -34,7 +34,7 @@ export function tableQueryParameterFailures(
       input.recordTypes.length === 1;
     if (
       !["text", "decimal_number", "date", "date_time"].includes(input.type) &&
-      !(parameter.source === "page" && ["number", "boolean"].includes(input.type)) &&
+      !(parameter.source === "page" && ["whole_number", "yes_no"].includes(input.type)) &&
       !pageReference
     ) {
       failures.push("unsupported_choice");
@@ -43,7 +43,7 @@ export function tableQueryParameterFailures(
     if (parameter.pageParameter !== undefined) {
       // Web writes every declared alias, including aliases on fixed-source parameters.
       const conversion =
-        input.type === "number" ? "number" : input.type === "boolean" ? "boolean" : "string";
+        input.type === "whole_number" ? "whole_number" : input.type === "yes_no" ? "yes_no" : "string";
       const previous = pageConversions.get(parameter.pageParameter);
       if (previous !== undefined && previous !== conversion) failures.push("unsupported_choice");
       pageConversions.set(parameter.pageParameter, conversion);

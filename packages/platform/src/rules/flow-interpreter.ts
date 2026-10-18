@@ -1,3 +1,4 @@
+import { typedValueMatchesType } from "./condition-types";
 import {
   PLATFORM_SERVICE_OPERATIONS,
   flowMaximumForEachItemsOther,
@@ -9,7 +10,6 @@ import {
   flowReadFieldsTypeMapSchema,
   flowTaskChildLists,
   flowTaskRegistry,
-  parseExactDecimal,
   platformOperationKey,
   recordLinkValueSchema,
   type FlowDefinition,
@@ -27,7 +27,6 @@ import {
   type FlowFormulaScope,
   type FlowRuntimeValue,
 } from "./flow-formula";
-import { recordRichTextDocumentSchema } from "../records/module-field-values";
 
 /**
  * The pure interpreter of the in-house flow engine (architecture decision 1). It runs the nested
@@ -259,48 +258,6 @@ export type FlowRunResume =
 
 const maximumSteps = 10_000;
 
-const isoDate = /^\d{4}-\d{2}-\d{2}$/;
-const nonEmptyText = (candidate: unknown): boolean =>
-  typeof candidate === "string" && candidate.length > 0;
-
-/** True when a JSON value has the shape a declared value type carries. */
-const valueMatchesType = (type: string, candidate: unknown): candidate is JsonValue => {
-  switch (type) {
-    case "yes_no":
-      return typeof candidate === "boolean";
-    case "whole_number":
-      return typeof candidate === "number" && Number.isSafeInteger(candidate);
-    case "decimal_number":
-    case "money":
-      return parseExactDecimal(candidate) !== undefined;
-    case "date":
-      return typeof candidate === "string" && isoDate.test(candidate) &&
-        Number.isFinite(Date.parse(`${candidate}T00:00:00.000Z`));
-    case "date_time":
-      return typeof candidate === "string" && Number.isFinite(Date.parse(candidate));
-    case "text":
-      return typeof candidate === "string";
-    // A formatted text value is the rich text document the form, the field and the action carry.
-    case "formatted_text":
-      return recordRichTextDocumentSchema.safeParse(candidate).success;
-    case "choice":
-    case "record_reference":
-    case "organization_account_reference":
-    case "workflow_run_reference":
-    case "relationship_reference":
-    case "file_reference":
-      return nonEmptyText(candidate);
-    case "several_choices":
-    case "record_reference_list":
-    case "relationship_reference_list":
-      return Array.isArray(candidate) && candidate.every(nonEmptyText);
-    case "json":
-      return candidate !== undefined;
-    default:
-      return false;
-  }
-};
-
 const typed = (type: string, value: JsonValue): FlowRuntimeValue => ({ type, value });
 const text = (value: string): FlowRuntimeValue => typed("text", value);
 
@@ -454,7 +411,7 @@ const scopeOf = (state: FlowRunState, activation: Activation, flow: FlowDefiniti
           reference.key,
           reference.path,
         );
-        return type !== undefined && valueMatchesType(type, selected)
+        return type !== undefined && typedValueMatchesType(selected, type, "flow")
           ? typed(type, selected as JsonValue)
           : undefined;
       }
@@ -535,7 +492,7 @@ const buildInputs = (
       else if (declaration.required) invalid(`required input "${name}" is missing`);
       continue;
     }
-    if (!valueMatchesType(declaration.type, candidate))
+    if (!typedValueMatchesType(candidate, declaration.type, "flow"))
       invalid(`input "${name}" is not a valid ${declaration.type} value`);
     inputs[name] = typed(declaration.type, candidate as JsonValue);
   }
@@ -657,7 +614,7 @@ const declaredOutputs = (
   for (const [key, type] of Object.entries(declared)) {
     const value = produced?.[key];
     if (value === undefined || value === null) continue;
-    if (valueMatchesType(type, value)) outputs[key] = typed(type, value);
+    if (typedValueMatchesType(value, type, "flow")) outputs[key] = typed(type, value);
   }
   return outputs;
 };
@@ -706,7 +663,7 @@ const validReadFieldsResume = (
     actualAliases.length === declaredAliases.length &&
     declaredAliases.every(
       (alias) =>
-        Object.hasOwn(actual, alias) && valueMatchesType(types.data[alias]!, actual[alias]),
+        Object.hasOwn(actual, alias) && typedValueMatchesType(actual[alias], types.data[alias]!, "flow"),
     )
   );
 };
@@ -1235,7 +1192,7 @@ export const resumeFlowRun = (
           : Object.keys(answers).length !== declared.length
             ? "the submitted answers do not match the form's declared answers"
             : declared.find(
-                ([name, type]) => !Object.hasOwn(answers, name) || !valueMatchesType(type, answers[name]),
+                ([name, type]) => !Object.hasOwn(answers, name) || !typedValueMatchesType(answers[name], type, "flow"),
               );
       if (invalidAnswer !== undefined) {
         replaceTop(machine, failActivation(activation, {
