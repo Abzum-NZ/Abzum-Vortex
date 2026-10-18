@@ -3,7 +3,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
-  applicationSourceDocumentSchema,
   canonicalJson,
   sameId,
   saveDefinitionDraftCommandSchema,
@@ -37,11 +36,6 @@ import type { StudioPersonLabel } from "../_lib/studio-application-restore-contr
 
 const refuse = <Result>(operation: string, code: string, fallback: Result, cause?: unknown): Result =>
   mapWebError(cause, { route: "studio/actions", operation, code, fallback });
-
-const failureCodes = (validation: {
-  readonly failures: readonly { readonly ruleCode: string }[];
-}): string =>
-  validation.failures.map((failure) => failure.ruleCode).slice(0, 8).join(",");
 
 /** Advisory source review only: the existing Save resolves all write authority afresh. */
 export async function reviewStudioApplicationSource(
@@ -128,15 +122,7 @@ export async function resolveStudioApplicationConditionContext(
 
 /** A browser document is authored input, never authority or evidence of an installed Module. */
 export async function createStudioApplication(organizationId: string, candidate: unknown) {
-  const source = applicationSourceDocumentSchema.safeParse(candidate);
-  if (!source.success)
-    return refuse("create-application", "STUDIO_CREATE_SOURCE_SCHEMA_INVALID",
-      { kind: "refused", reason: "source_invalid" } as const, source.error);
-  const validation = validateDefinitionSource(source.data, platformPermissionSource);
-  if (!validation.valid)
-    return refuse("create-application", `STUDIO_CREATE_SOURCE_INVALID:${failureCodes(validation)}`,
-      { kind: "refused", reason: "source_invalid" } as const);
-  return createHumanApplicationDraft(organizationId, { source: source.data });
+  return createHumanApplicationDraft(organizationId, { source: candidate });
 }
 
 /** What one autosave came to: the platform's answer, or a conflict that names the newer saved draft. */
@@ -159,9 +145,9 @@ export type StudioDraftChangedElsewhere = Readonly<{
  * revision and carries it, so the workspace can say what changed.
  */
 export async function saveStudioApplication(organizationId: string, candidate: unknown): Promise<StudioSaveApplicationResult> {
-  const saved = await saveApplicationDraft(organizationId, candidate);
+  const saved = await saveHumanApplicationDraft(organizationId, candidate);
   if (saved.kind !== "conflict" || saved.reason !== "draft_changed") return saved;
-  const command = saveDefinitionDraftCommandSchema.parse(candidate);
+  const command = saveDefinitionDraftCommandSchema.pick({ rootId: true }).strip().parse(candidate);
   const latest = await loadStudioApplicationDraft(organizationId, command.rootId, { compile: false });
   if (latest.kind !== "available") {
     console.error(`[studio] the newer saved draft could not be read after a conflict: STUDIO_SAVE_CONFLICT_READ_${latest.kind.toUpperCase()}`);
@@ -170,21 +156,6 @@ export async function saveStudioApplication(organizationId: string, candidate: u
   const changedBy = await readStudioPersonLabel(organizationId, latest.draft.updatedBy);
   return { kind: "conflict", reason: "draft_changed", elsewhere: { draft: latest.draft, changedBy } };
 }
-
-const saveApplicationDraft = async (organizationId: string, candidate: unknown) => {
-  const command = saveDefinitionDraftCommandSchema.safeParse(candidate);
-  if (!command.success)
-    return refuse("save-application", "STUDIO_SAVE_COMMAND_SCHEMA_INVALID",
-      { kind: "refused", reason: "source_invalid" } as const, command.error);
-  if (command.data.source.kind !== "application")
-    return refuse("save-application", "STUDIO_SAVE_SOURCE_NOT_APPLICATION",
-      { kind: "refused", reason: "source_invalid" } as const);
-  const validation = validateDefinitionSource(command.data.source, platformPermissionSource);
-  if (!validation.valid)
-    return refuse("save-application", `STUDIO_SAVE_SOURCE_INVALID:${failureCodes(validation)}`,
-      { kind: "refused", reason: "source_invalid" } as const);
-  return saveHumanApplicationDraft(organizationId, command.data);
-};
 
 /** The saved draft compiled for the canvas: its page slots, frames, choices and compile failure. */
 export async function reopenStudioApplication(organizationId: string, applicationRootId: string) {

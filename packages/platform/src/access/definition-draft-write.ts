@@ -14,7 +14,6 @@ import {
   revisionSchema,
   sameId,
   saveDefinitionDraftCommandSchema,
-  storedDefinitionDraftSchema,
   type ApplicationSourceDocument,
   type IdentitySession,
   type SelectedOrganizationScope,
@@ -33,11 +32,9 @@ import {
 import {
   BuilderAuthorityError,
   createDefinitionStore,
-  fingerprintCanonicalValue,
   readApplicationDefinitionDraft,
   requireBuilderAuthority,
   extractApplicationSourceIdentityRequirements,
-  validateDefinitionSource,
   type StoredApplicationDefinitionDraft,
 } from "../definition/definition-index";
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
@@ -46,17 +43,11 @@ import { DefinitionError, classifyDatabaseError } from "../definition/definition
 
 /** Why a draft write was refused, in terms the person can act on. */
 export type HumanApplicationDraftRefusalReason =
-  | "permission_missing"
-  | "source_invalid"
-  | "context_changed"
-  | "session_ended";
+  "permission_missing" | "source_invalid" | "context_changed" | "session_ended";
 
 /** Why a draft write conflicted, in terms the person can act on. */
 export type HumanApplicationDraftConflictReason =
-  | "draft_changed"
-  | "key_exists"
-  | "alias_conflict"
-  | "draft_missing";
+  "draft_changed" | "key_exists" | "alias_conflict" | "draft_missing";
 
 export type HumanApplicationDraftWriteResult =
   | Readonly<{ kind: "available"; draft: StoredApplicationDefinitionDraft }>
@@ -157,24 +148,18 @@ const assertLiveCompletion = async (
 };
 
 const verifySavedDraft = (
-  candidate: StoredDefinitionDraft,
-  source: ApplicationSourceDocument,
+  draft: StoredDefinitionDraft,
   scope: SelectedOrganizationScope,
   writeStartedAt: number,
-  previous?: StoredApplicationDefinitionDraft,
+  command?: Readonly<{ rootId: string; expectedDraftRevision: number }>,
 ): StoredApplicationDefinitionDraft => {
-  const parsed = storedDefinitionDraftSchema.safeParse(candidate);
-  if (!parsed.success || parsed.data.kind !== "application") invalidResult();
-  const draft = parsed.data;
+  // The store parsed and bound the returned source once at the database boundary.
+  if (draft.kind !== "application") invalidResult();
   if (
     draft.source.kind !== "application" ||
     !sameId(draft.organizationId, scope.organizationId) ||
-    draft.key !== source.key ||
-    draft.sourceContractVersion !== source.source_contract_version ||
-    draft.sourceFingerprint !== fingerprintCanonicalValue(source) ||
-    canonicalJson(draft.source) !== canonicalJson(source) ||
     !sameId(draft.updatedBy, scope.organizationAccountId) ||
-    draft.draftRevision !== (previous === undefined ? 1 : previous.draftRevision + 1) ||
+    draft.draftRevision !== (command === undefined ? 1 : command.expectedDraftRevision + 1) ||
     Date.parse(draft.updatedAt) < writeStartedAt ||
     Date.parse(draft.updatedAt) < Date.parse(draft.createdAt) ||
     draft.restoredFromReleaseRevision !== undefined ||
@@ -184,32 +169,27 @@ const verifySavedDraft = (
     draft.restoreCorrelationId !== undefined
   )
     invalidResult();
-  if (previous === undefined) {
+  if (command === undefined) {
     if (
       !sameId(draft.createdBy, scope.organizationAccountId) ||
       draft.createdAt !== draft.updatedAt ||
       draft.publishedRevision !== undefined
     )
       invalidResult();
-  } else if (
-    !sameId(draft.rootId, previous.rootId) ||
-    draft.key !== previous.key ||
-    Date.parse(draft.createdAt) !== Date.parse(previous.createdAt) ||
-    !sameId(draft.createdBy, previous.createdBy) ||
-    draft.publishedRevision !== previous.publishedRevision ||
-    Date.parse(draft.updatedAt) < Date.parse(previous.updatedAt)
-  )
-    invalidResult();
+  } else if (!sameId(draft.rootId, command.rootId)) invalidResult();
   return draft;
 };
 
 const safeFailure = (error: unknown): HumanApplicationDraftWriteResult => {
-  if (error instanceof BuilderAuthorityError) return { kind: "refused", reason: "permission_missing" };
+  if (error instanceof BuilderAuthorityError)
+    return { kind: "refused", reason: "permission_missing" };
   if (error instanceof DefinitionError) {
     if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING")
       return { kind: "conflict", reason: "draft_changed" };
-    if (error.code === "DEFINITION_ROOT_MISSING") return { kind: "conflict", reason: "draft_missing" };
-    if (error.code === "DEFINITION_ROOT_ALREADY_EXISTS") return { kind: "conflict", reason: "key_exists" };
+    if (error.code === "DEFINITION_ROOT_MISSING")
+      return { kind: "conflict", reason: "draft_missing" };
+    if (error.code === "DEFINITION_ROOT_ALREADY_EXISTS")
+      return { kind: "conflict", reason: "key_exists" };
     if (error.code === "DEFINITION_IDENTITY_ALIAS_CONFLICT")
       return { kind: "conflict", reason: "alias_conflict" };
     if (error.code === "INVALID_DEFINITION_COMMAND" || error.code === "INVALID_DEFINITION_SOURCE")
@@ -234,7 +214,9 @@ const logDraftWriteFailure = (
   cause: unknown,
 ): void => {
   const reason =
-    result.kind === "refused" || result.kind === "conflict" ? (result.reason ?? "unspecified") : "unavailable";
+    result.kind === "refused" || result.kind === "conflict"
+      ? (result.reason ?? "unspecified")
+      : "unavailable";
   console.error(
     `[studio] application draft ${mode} ${result.kind} ${
       mode === "create" ? "STUDIO_DRAFT_CREATE" : "STUDIO_DRAFT_SAVE"
@@ -254,23 +236,27 @@ export const createHumanApplicationDraftWriter = (
   ): Promise<HumanApplicationDraftWriteResult> => {
     const organization = organizationIdSchema.safeParse(organizationId);
     const createCommand =
-      mode === "create" ? createDefinitionRootCommandSchema.safeParse(candidate) : undefined;
+      mode === "create"
+        ? createDefinitionRootCommandSchema.extend({ source: z.unknown() }).safeParse(candidate)
+        : undefined;
     const saveCommandResult =
-      mode === "save" ? saveDefinitionDraftCommandSchema.safeParse(candidate) : undefined;
+      mode === "save"
+        ? saveDefinitionDraftCommandSchema.extend({ source: z.unknown() }).safeParse(candidate)
+        : undefined;
     const command = createCommand ?? saveCommandResult;
     if (!organization.success || command === undefined || !command.success) {
-      const refused: HumanApplicationDraftWriteResult = { kind: "refused", reason: "source_invalid" };
-      logDraftWriteFailure(mode, refused, command?.success === false ? command.error : organization.error);
-      return refused;
-    }
-    const source = applicationSourceDocumentSchema.safeParse(command.data.source);
-    if (!source.success || !validateDefinitionSource(source.data, dependencies.permissions).valid) {
-      const refused: HumanApplicationDraftWriteResult = { kind: "refused", reason: "source_invalid" };
-      logDraftWriteFailure(mode, refused, source.success ? undefined : source.error);
+      const refused: HumanApplicationDraftWriteResult = {
+        kind: "refused",
+        reason: "source_invalid",
+      };
+      logDraftWriteFailure(
+        mode,
+        refused,
+        command?.success === false ? command.error : organization.error,
+      );
       return refused;
     }
     const saveCommand = saveCommandResult?.success ? saveCommandResult.data : undefined;
-    // Detached validated source is reused for hashing, identities, storage and result comparison.
     let failure: HumanApplicationDraftWriteResult | undefined;
     const result = await dependencies.requests.runChange(
       session,
@@ -290,39 +276,26 @@ export const createHumanApplicationDraftWriter = (
           });
           const store = createDefinitionStore(transaction, authority, dependencies.permissions);
           let saved: StoredDefinitionDraft;
-          let previous: StoredApplicationDefinitionDraft | undefined;
           let writeStartedAt: number;
           if (mode === "create") {
             writeStartedAt = await readDatabaseClock(transaction);
-            saved = await store.createRoot({ source: source.data });
+            saved = await store.createRoot(command.data);
           } else {
             if (saveCommand === undefined) throw new DefinitionError("INVALID_DEFINITION_COMMAND");
-            await targetFacts(transaction, scope, saveCommand.rootId);
-            previous = await readApplicationDefinitionDraft(transaction, scope, {
-              rootId: applicationRootIdSchema.parse(saveCommand.rootId),
-              expectedDraftRevision: saveCommand.expectedDraftRevision,
-            });
-            if (previous.key !== source.data.key)
-              throw new DefinitionError("INVALID_DEFINITION_COMMAND");
+            // save_draft binds the root kind/key and expected revision in its conditional UPDATE.
+            // Root creation/publication metadata is returned by SQL and is not changed by a save.
             writeStartedAt = await readDatabaseClock(transaction);
-            saved = await store.saveDraft({ ...saveCommand, source: source.data });
+            saved = await store.saveDraft(saveCommand);
           }
-          const returned = verifySavedDraft(saved, source.data, scope, writeStartedAt, previous);
-          const stored = await readApplicationDefinitionDraft(transaction, scope, {
-            rootId: returned.rootId,
-            expectedDraftRevision: returned.draftRevision,
-          });
-          const draft = verifySavedDraft(stored, source.data, scope, writeStartedAt, previous);
-          if (
-            !sameId(draft.rootId, returned.rootId) ||
-            Date.parse(draft.createdAt) !== Date.parse(returned.createdAt) ||
-            Date.parse(draft.updatedAt) !== Date.parse(returned.updatedAt) ||
-            !sameId(draft.createdBy, returned.createdBy) ||
-            draft.publishedRevision !== returned.publishedRevision ||
-            (previous !== undefined && draft.createdAt !== previous.createdAt)
-          )
-            invalidResult();
-          await assertLiveCompletion(dependencies.permissions, transaction, scope, session, issuedAt, draft);
+          const draft = verifySavedDraft(saved, scope, writeStartedAt, saveCommand);
+          await assertLiveCompletion(
+            dependencies.permissions,
+            transaction,
+            scope,
+            session,
+            issuedAt,
+            draft,
+          );
           return draft;
         } catch (error) {
           failure = safeFailure(error);
@@ -365,7 +338,10 @@ export const createHumanApplicationDraftWriter = (
     const organization = organizationIdSchema.safeParse(organizationId);
     const command = derivedDraftCommandSchema.safeParse(candidate);
     if (!organization.success || !command.success) {
-      const refused: HumanApplicationDraftWriteResult = { kind: "refused", reason: "source_invalid" };
+      const refused: HumanApplicationDraftWriteResult = {
+        kind: "refused",
+        reason: "source_invalid",
+      };
       logDraftWriteFailure("save", refused, command.success ? organization.error : command.error);
       return refused;
     }
@@ -435,18 +411,20 @@ export const createHumanApplicationDraftWriter = (
             draft: previous,
             command: command.data,
           });
-          const source = applicationSourceDocumentSchema.safeParse(materialized.source);
-          if (!source.success || !validateDefinitionSource(source.data, dependencies.permissions).valid)
-            throw new DefinitionError("INVALID_DEFINITION_SOURCE");
-          if (
-            source.data.key !== previous.key ||
-            !sameId(source.data.root_alias, previous.source.root_alias)
-          )
+          const source = materialized.source;
+          if (source.key !== previous.key || !sameId(source.root_alias, previous.source.root_alias))
             throw new DefinitionError("INVALID_DEFINITION_COMMAND");
 
-          if (canonicalJson(source.data) === canonicalJson(previous.source)) {
+          if (canonicalJson(source) === canonicalJson(previous.source)) {
             await materialized.verifySaved(transaction, scope, previous);
-            await assertLiveCompletion(dependencies.permissions, transaction, scope, session, issuedAt, previous);
+            await assertLiveCompletion(
+              dependencies.permissions,
+              transaction,
+              scope,
+              session,
+              issuedAt,
+              previous,
+            );
             return {
               kind: "no_change",
               draftRevision: previous.draftRevision,
@@ -459,22 +437,19 @@ export const createHumanApplicationDraftWriter = (
           const saved = await store.saveDraft({
             rootId: platformIdSchema.parse(command.data.rootId),
             expectedDraftRevision: command.data.expectedDraftRevision,
-            source: source.data,
+            source,
           });
-          const returned = verifySavedDraft(saved, source.data, scope, writeStartedAt, previous);
-          const reread = await readApplicationDefinitionDraft(transaction, scope, {
-            rootId: returned.rootId,
-            expectedDraftRevision: returned.draftRevision,
-          });
-          const verified = verifySavedDraft(reread, source.data, scope, writeStartedAt, previous);
-          if (
-            !sameId(verified.rootId, returned.rootId) ||
-            canonicalJson(verified) !== canonicalJson(returned) ||
-            verified.publishedRevision !== command.data.expectedPublicationAnchor
-          )
-            invalidResult();
+          const verified = verifySavedDraft(saved, scope, writeStartedAt, command.data);
+          if (verified.publishedRevision !== previous.publishedRevision) invalidResult();
           await materialized.verifySaved(transaction, scope, verified);
-          await assertLiveCompletion(dependencies.permissions, transaction, scope, session, issuedAt, verified);
+          await assertLiveCompletion(
+            dependencies.permissions,
+            transaction,
+            scope,
+            session,
+            issuedAt,
+            verified,
+          );
           return { kind: "saved", draft: verified };
         } catch (error) {
           failure = safeFailure(error);
