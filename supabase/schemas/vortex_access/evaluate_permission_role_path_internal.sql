@@ -134,24 +134,19 @@ begin
       and available.registration_kind = permission.registration_kind
       and available.registration_owner_id is not distinct from
         permission.registration_owner_id
-      and permission.continuity_revision = available.continuity_revision
-      and permission.accepted_registration_revision <= available.registration_revision
-    join vortex_access.permission_catalogue_entries as accepted
-      on accepted.organization_id = permission.organization_id
+    cross join lateral vortex_access.accepted_permission_meaning_internal(
+      permission.organization_id, permission.application_root_id,
+      permission.owner_kind, permission.owner_id, permission.permission_id,
+      permission.continuity_revision, permission.accepted_registration_revision,
+      permission.meaning_fingerprint
+    ) as accepted
+    where role.organization_id = context_organization_value
+      and revision.lifecycle in ('active', 'acceptance_required')
       and accepted.registration_kind = permission.registration_kind
-      and accepted.registration_owner_id is not distinct from
-        permission.registration_owner_id
-      and accepted.registration_revision = permission.accepted_registration_revision
-      and accepted.application_root_id is not distinct from permission.application_root_id
-      and accepted.owner_kind = permission.owner_kind
-      and accepted.owner_id = permission.owner_id
-      and accepted.permission_id = permission.permission_id
-      and accepted.meaning_fingerprint = permission.meaning_fingerprint
+      and accepted.registration_owner_id is not distinct from permission.registration_owner_id
       and accepted.record_type_id is not distinct from p_record_type_id
       and accepted.action_kind = action_kind_value
       and accepted.named_action is not distinct from named_action_value
-    where role.organization_id = context_organization_value
-      and revision.lifecycle in ('active', 'acceptance_required')
   ), route_candidates as (
     select 1 as route_rank, permission.role_id,
       assignment.role_assignment_id, null::uuid as membership_id,

@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.private_current_role_management_scope(p_organization_id uuid, p_role_id uuid, p_role_revision bigint) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_access.private_current_role_management_scope(p_organization_id uuid, p_role_id uuid, p_role_revision bigint) RETURNS jsonb
     LANGUAGE plpgsql STABLE
     SET search_path TO ''
     AS $$
@@ -10,7 +10,9 @@ begin
       'applicationRootId', permission.application_root_id,
       'ownerKind', permission.owner_kind,
       'ownerId', permission.owner_id,
-      'permissionId', permission.permission_id
+      'permissionId', permission.permission_id,
+      'acceptedRegistrationRevision', permission.accepted_registration_revision,
+      'meaningFingerprint', permission.meaning_fingerprint
     )) order by permission.application_root_id nulls first,
       permission.owner_kind collate "C", permission.owner_id,
       permission.permission_id
