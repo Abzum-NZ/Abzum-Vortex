@@ -386,10 +386,10 @@ export const projectStudioFlowStepTypes = (
 
 /** Refuse retained references; never turn deletion into an implicit reference repair. */
 const hasRetainedTaskReference = (
-  source: Readonly<ApplicationSourceDocument>,
+  flow: Readonly<SourceFlow>,
   taskId: string,
 ): boolean => {
-  const pending: unknown[] = [source];
+  const pending: unknown[] = [flow];
   const seen = new WeakSet<object>();
   while (pending.length > 0) {
     const value = pending.pop();
@@ -504,7 +504,7 @@ export const applyStudioFlowCommand = (
           )
           .map(({ task }) => task.id);
         list.splice(index, 1);
-        const referenced = removed.find((id) => hasRetainedTaskReference(candidate, id));
+        const referenced = removed.find((id) => hasRetainedTaskReference(detached, id));
         if (referenced !== undefined)
           return {
             kind: "unsupported",
