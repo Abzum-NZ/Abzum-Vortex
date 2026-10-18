@@ -8,6 +8,8 @@ alter role vortex_runtime password 'vortex-runtime-local-only';
 
 -- The exact-object Storage policies compare signed tokens with this destination identity.
 -- This seed runs only on disposable Local Supabase; hosted projects provision their own ref.
+-- Register the custom setting in this session before the database owner persists its default.
+set vortex.destination_project = 'local';
 alter database postgres set vortex.destination_project = 'local';
 
 -- Local development delivers committed events in process (there is no public webhook endpoint). The
