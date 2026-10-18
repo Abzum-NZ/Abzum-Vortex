@@ -1,14 +1,17 @@
 import "server-only";
 
-import { DefinitionError } from "@vortex/platform/server";
+import { createRecordChoiceReader, DefinitionError } from "@vortex/platform/server";
 import {
   applicationRootIdSchema,
   compiledItemSlots,
   describeFailure,
   fingerprintSchema,
   organizationIdSchema,
+  readRecordDetailContract,
+  readRecordsTableContract,
   recordIdSchema,
   revisionSchema,
+  sameId,
   sourceItemChildSlots,
   sourcePageSlotAddresses,
   sourcePageSlotAt,
@@ -20,7 +23,7 @@ import {
 import { z } from "zod";
 import { pageCompiledSlotsFor } from "./studio-application-draft";
 import { compiledDraftContent } from "./studio-compiled-drafts";
-import { collectPlacements } from "./application-page/placement-helpers";
+import { collectPlacements, pageSubjectParameter } from "./application-page/placement-helpers";
 import { findModuleQuery } from "./application-page/query-helpers";
 import { isStreamablePlacement, readPlacement } from "./application-page/placement-reader";
 import { openStudioPreviewRead } from "./studio-preview-read";
@@ -36,12 +39,16 @@ const requestSchema = z.object({
 
 /**
  * The records the data blocks of one content area of a saved draft page show, by block name, for
- * exactly that draft revision. A block whose records come from elsewhere (the page's own record,
- * a form) is not read here.
+ * exactly that draft revision, including a detail page's sample subject.
  */
 export type StudioCanvasRecordsResult =
   | Readonly<{ kind: "available"; draftRevision: number; sourceFingerprint: string; pageAlias: string;
       area: string; records: Readonly<Record<string, PageDataState>>;
+      /**
+       * On a page of one record (a detail page), the record its blocks show: the first record of
+       * its type the builder can read in the preview, or none when the preview has none yet.
+       */
+      sample?: Readonly<{ recordTypeName: string; title?: string }>;
       /**
        * The preview still runs an older revision's data shape and is moving to this one: blocks
        * whose query it does not have yet have no records here; read again shortly.
@@ -63,6 +70,44 @@ const placementAliases = (stored: readonly SourceItem[], compiled: readonly Comp
     for (const [key, items] of sourceItemChildSlots(item))
       placementAliases(items, children.get(key) ?? [], aliases);
   });
+};
+
+type Placement = ReturnType<typeof collectPlacements>[number];
+type StudioPreview = Extract<Awaited<ReturnType<typeof openStudioPreviewRead>>, { kind: "available" }>;
+type CanvasSample = Readonly<{ recordTypeName: string; recordId?: string; title?: string }>;
+
+/**
+ * The first record of a page's record type the builder can read in the preview, by its title, as a
+ * record picker reads it; only the record type's name when the preview holds none of them yet.
+ * Undefined while the preview does not have the record type yet: it follows once it has moved.
+ */
+const readSample = async (
+  session: IdentitySession,
+  preview: StudioPreview,
+  recordType: Readonly<{ moduleRootId: unknown; recordTypeId: unknown }>,
+): Promise<CanvasSample | "temporarily_unavailable" | undefined> => {
+  const module = preview.context.releaseSet.modules.find((candidate) =>
+    sameId(String(candidate.rootId), String(recordType.moduleRootId)));
+  const record = module?.content.recordTypes.find((candidate) =>
+    sameId(String(candidate.recordTypeId), String(recordType.recordTypeId)));
+  if (module === undefined || record === undefined) return undefined;
+  const read = await createRecordChoiceReader(preview.services.queries).read(session, preview.selection, {
+    targets: [{ moduleRootId: String(module.rootId), recordTypeId: String(record.recordTypeId),
+      titleFieldId: String(record.titleFieldId), label: record.singularLabel }],
+    pageSize: 1,
+  });
+  if (read.kind === "temporarily_unavailable") return "temporarily_unavailable";
+  if (read.kind !== "available") {
+    console.error(`[studio] canvas sample record unread: STUDIO_CANVAS_SAMPLE_REFUSED cause=${read.kind}`);
+    return "temporarily_unavailable";
+  }
+  if (read.value.outcome !== "completed") {
+    console.error(`[studio] canvas sample record unread: STUDIO_CANVAS_SAMPLE_REFUSED cause=${read.value.reasonCode}`);
+    return "temporarily_unavailable";
+  }
+  const first = read.value.choices[0];
+  return first === undefined ? { recordTypeName: record.singularLabel }
+    : { recordTypeName: record.singularLabel, recordId: first.recordId, title: first.title };
 };
 
 /**
@@ -103,17 +148,37 @@ export const readStudioCanvasRecords = async (
 
     // The draft's page, drawn as the running page reads it: its content is this area's blocks.
     const areaPage = { ...compiledPage, composition: { root: { props: {} }, content: slot } };
+    // A detail page shows one record, named by its address in the running application. The canvas
+    // shows the first record of its type the builder can read in the preview, as if it were opened.
+    const subjectType = compiledPage.type === "detail" && compiledPage.recordType?.state === "resolved"
+      ? compiledPage.recordType : undefined;
+    const sample = subjectType === undefined ? undefined : await readSample(session, preview, subjectType);
+    if (sample === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
+    const subjectId = recordIdSchema.safeParse(sample?.recordId);
+    const parameters: Record<string, string> = subjectId.success ? { [pageSubjectParameter]: subjectId.data } : {};
+    const settingsOf = (placement: Placement) => placement.settings as Parameters<typeof readRecordDetailContract>[0];
+    // The page's own record, shown by a Record detail that reads no query.
+    const readsSubject = (placement: Placement) => subjectId.success && typeof placement.vortex.queryId !== "string" &&
+      readRecordDetailContract(settingsOf(placement)) !== undefined;
+    // A table whose query takes a value from the page's address is read only when the canvas has it.
+    const hasPageValues = (placement: Placement) => (readRecordsTableContract(settingsOf(placement))?.parameters ?? [])
+      .every((parameter) => parameter.source !== "page" ||
+        (parameter.pageParameter !== undefined && Object.hasOwn(parameters, parameter.pageParameter)));
     // A query the preview does not run yet is read once the preview has moved to this revision.
-    const placements = collectPlacements(areaPage).filter(isStreamablePlacement)
-      .filter((placement) => findModuleQuery(context, String(placement.vortex.queryId)) !== undefined);
+    const placements = collectPlacements(areaPage).filter((placement) => readsSubject(placement) ||
+      (isStreamablePlacement(placement) && findModuleQuery(context, String(placement.vortex.queryId)) !== undefined &&
+        hasPageValues(placement)));
     const data: Record<string, PageDataState> = {};
-    const noSubject = recordIdSchema.safeParse(undefined);
+    let subjectRead: ReturnType<typeof services.subjects.read> | undefined;
     const input = {
-      pageDefinition: compiledPage, pageSubjectRecordTypeId: undefined, data, page: areaPage, context,
+      pageDefinition: compiledPage, pageSubjectRecordTypeId: subjectType === undefined ? undefined : String(subjectType.recordTypeId),
+      data, page: areaPage, context,
       referenceChoiceInputs: [], referenceChoices: services.referenceChoices, session, selection,
       address: { application: { key: draft.key }, pageKey: page.key },
-      subjectType: undefined, parameters: {}, dependencies, subjectId: noSubject,
-      readSubject: async () => ({ kind: "refused" } as const), linkTiles: services.linkTiles,
+      subjectType, parameters, dependencies, subjectId,
+      readSubject: (recordTypeId: string, recordId: string) =>
+        (subjectRead ??= services.subjects.read(session, selection, { recordTypeId, recordId })),
+      linkTiles: services.linkTiles,
       queryNotices: services.queryNotices, boardContinuation: undefined, permittedApplicationKeys: undefined,
       permittedApplicationsRead: undefined, queries: services.queries,
       readCalendarSettings: services.readCalendarSettings, tables: services.tables,
@@ -127,7 +192,9 @@ export const readStudioCanvasRecords = async (
       if (alias !== undefined) records[alias] = state;
     }
     return { kind: "available", draftRevision: request.draftRevision, sourceFingerprint: request.sourceFingerprint,
-      pageAlias: request.pageAlias, area: request.area, records, behind: preview.behind };
+      pageAlias: request.pageAlias, area: request.area, records, behind: preview.behind,
+      ...(sample === undefined ? {} : { sample: { recordTypeName: sample.recordTypeName,
+        ...(sample.recordId === undefined ? {} : { title: sample.title }) } }) };
   } catch (error) {
     if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING") return { kind: "conflict" };
     console.error(`[studio] canvas records unavailable: STUDIO_CANVAS_RECORDS_FAILED cause=${describeFailure(error)}`);
