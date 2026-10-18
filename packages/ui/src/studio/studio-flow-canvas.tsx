@@ -457,8 +457,8 @@ export function StudioFlowCanvas({
       role="group"
     >
       <div className="shrink-0 space-y-1 px-3 py-3">
-        <p className="truncate text-sm font-medium">{title}</p>
-        <p className="line-clamp-2 text-sm text-muted-foreground">
+        <p className="m-0 truncate text-sm font-medium">{title}</p>
+        <p className="m-0 line-clamp-2 text-sm text-muted-foreground">
           {starts.join(" · ") || "Started by another flow or not started yet"}
         </p>
       </div>
