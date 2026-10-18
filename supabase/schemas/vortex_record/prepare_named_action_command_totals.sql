@@ -109,7 +109,7 @@ begin
     );
     return pg_catalog.jsonb_build_object('outcome', 'refused_recorded');
   end if;
-  access_bounds := vortex_access.resolve_record_field_bounds_internal(access_decision);
+  access_bounds := vortex_record.decide_record_field_bounds_internal(access_decision);
 
   before_closure := vortex_record.named_action_command_closure_internal(
     catalogue, p_record_type_id, p_record_id, p_submitted_values, p_creations
@@ -255,7 +255,7 @@ begin
   if access_decision ->> 'outcome' <> 'allowed' then
     return pg_catalog.jsonb_build_object('outcome', 'restart');
   end if;
-  access_bounds := vortex_access.resolve_record_field_bounds_internal(access_decision);
+  access_bounds := vortex_record.decide_record_field_bounds_internal(access_decision);
 
   -- `not_required` is decided over the union of the subject type and every
   -- creation target type, and only after the locks above, so a command that

@@ -103,7 +103,7 @@ begin
       'correlationId', correlation_id_value
     );
   end if;
-  read_bounds := vortex_access.resolve_record_field_bounds_internal(read_decision);
+  read_bounds := vortex_record.decide_record_field_bounds_internal(read_decision);
   if exists (
     select 1
     from (
