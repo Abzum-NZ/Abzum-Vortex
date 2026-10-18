@@ -264,7 +264,7 @@ export function StudioNavItem({
                 </TooltipTrigger>
                 <TooltipContent>More actions for {label}</TooltipContent>
               </Tooltip>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="min-w-48">
                 {moreActions.map((action) => (
                   <DropdownMenuItem
                     key={action.label}

@@ -254,7 +254,7 @@ export function StudioMenuPanel({
         actions: [...moveActions, removeAction],
         moreActions: [
           {
-            label: `Edit ${item.label}`,
+            label: "Edit entry",
             icon: "sliders-horizontal",
             disabled,
             onClick: () => {
@@ -262,7 +262,10 @@ export function StudioMenuPanel({
               setEditing(item.id);
             },
           },
-          ...moveActions,
+          ...moveActions.map((action, index) => ({
+            ...action,
+            label: index === 0 ? "Move up" : "Move down",
+          })),
           ...(position.headingAlias !== null
             ? [
                 {
@@ -273,7 +276,7 @@ export function StudioMenuPanel({
                 },
               ]
             : []),
-          removeAction,
+          { ...removeAction, label: item.type === "heading" ? "Remove heading" : "Remove entry" },
         ],
         settingsOpen: editing === item.id && !hidden,
         onSettingsOpenChange: (open) => {
