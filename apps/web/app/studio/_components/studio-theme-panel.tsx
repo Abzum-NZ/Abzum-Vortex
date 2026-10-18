@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
 import type { SourceApplicationThemeSelection } from "@vortex/platform/schema";
-import { Icon } from "@vortex/ui";
+import { createVortexStyleRootProps, Icon, VORTEX_STYLES } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@vortex/ui/components/card";
+import { Input } from "@vortex/ui/components/input";
 import {
   Collapsible,
   CollapsibleContent,
@@ -39,6 +41,38 @@ export type StudioThemeChangeOutcome = Readonly<{ kind: "applied" | "refused"; m
 type Feedback = StudioThemeChangeOutcome & Readonly<{ problems?: readonly string[] }>;
 
 const shuffleAttempts = 8;
+
+// Use the runtime's complete style variables and shared components, including nested-scope resets.
+const stylePreviews = new Map(
+  VORTEX_STYLES.map((style) => [
+    style as string,
+    createVortexStyleRootProps({ style, menu: "default", menuAccent: "subtle" }),
+  ]),
+);
+
+function StylePreview({ style }: Readonly<{ style: string }>) {
+  const props = stylePreviews.get(style);
+  if (props === undefined) throw new Error(`No preview for catalogue style ${style}`);
+  return (
+    <div {...props} data-vortex-theme="" aria-hidden="true" inert>
+      <div style={{ zoom: 0.65 }}>
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle>Overview</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <Input placeholder="Search" tabIndex={-1} />
+              <Button type="button" tabIndex={-1}>
+                Go
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
 
 /** Remember each theme disclosure independently, including the closed preset-code form. */
 function ThemeSection({
@@ -168,7 +202,7 @@ export function StudioThemePanel({
     if (unoffered !== undefined) {
       setFeedback({
         kind: "refused",
-        message: `${unoffered.dimension.label} “${unoffered.value}” is not an option of the pinned shadcn 4.21.0 catalogue, so nothing was changed.`,
+        message: `${unoffered.dimension.label} “${unoffered.value}” is not an available theme option, so nothing was changed.`,
       });
       return false;
     }
@@ -290,7 +324,7 @@ export function StudioThemePanel({
     <StudioPanelShell
       title="Theme"
       hidden={hidden}
-      description="shadcn create settings for the whole application. The canvas shows each change at once, and it is saved automatically."
+      description="How every page of this application looks. Changes show on the canvas and save automatically."
       action={
         <Button
           type="button"
@@ -340,23 +374,20 @@ export function StudioThemePanel({
           {dimension("style").options.map((option) => (
             <label
               key={option.id}
+              htmlFor={`studio-theme-style-${option.id}`}
               className={cn(
                 "relative cursor-pointer space-y-2 rounded-lg border p-2 focus-within:ring-2 focus-within:ring-ring",
                 selection.style === option.id && "ring-2 ring-primary",
                 locked && "cursor-not-allowed opacity-50",
               )}
             >
-              <RadioGroupItem value={option.id} className="sr-only" />
-              <div
-                aria-hidden="true"
-                className="space-y-2 rounded-md bg-muted/50 p-2 text-foreground"
-              >
-                <div className="h-2 w-2/3 rounded-sm bg-foreground/30" />
-                <div className="flex gap-1">
-                  <div className="h-6 flex-1 rounded-md border bg-background" />
-                  <div className="h-6 w-8 rounded-md bg-foreground/20" />
-                </div>
-              </div>
+              <RadioGroupItem
+                id={`studio-theme-style-${option.id}`}
+                value={option.id}
+                aria-label={option.label}
+                className="sr-only"
+              />
+              <StylePreview style={option.id} />
               <span className="block text-sm font-medium">{option.label}</span>
             </label>
           ))}
