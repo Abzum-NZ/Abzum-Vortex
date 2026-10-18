@@ -104,7 +104,7 @@ const seedValue = (
       const form = projectStudioFlowDraftChoices({
         ...context,
         source: source as ApplicationSourceDocument,
-      flow,
+        flow,
       }).forms[0];
       return form === undefined ? undefined : text(form.alias);
     }
@@ -385,10 +385,7 @@ export const projectStudioFlowStepTypes = (
 // ─── Removing ────────────────────────────────────────────────────────────────────────────────
 
 /** Refuse retained references; never turn deletion into an implicit reference repair. */
-const hasRetainedTaskReference = (
-  flow: Readonly<SourceFlow>,
-  taskId: string,
-): boolean => {
+const hasRetainedTaskReference = (flow: Readonly<SourceFlow>, taskId: string): boolean => {
   const pending: unknown[] = [flow];
   const seen = new WeakSet<object>();
   while (pending.length > 0) {
