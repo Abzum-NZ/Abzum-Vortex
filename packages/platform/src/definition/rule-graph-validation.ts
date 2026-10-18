@@ -11,6 +11,11 @@ import {
   type RuleGraphTypedValue,
   type RuleGraphValueType,
 } from "../schema";
+import {
+  conditionValueType,
+  operatorAcceptsOperands,
+  type OperandInfo,
+} from "../rules/condition-types";
 
 // Validates executable `BeforeSave` rule graphs and the value types of their referenced fields.
 
@@ -75,13 +80,13 @@ const fieldColumns = (field: ModuleField): readonly RuleTableColumn[] | undefine
       }))
     : undefined;
 
-const fieldValueType = (field: ModuleField): ValueDeclaration["type"] => {
+const ruleFieldResultType = (field: ModuleField): ValueDeclaration["type"] => {
   if (field.type === "calculation" || field.type === "total") return field.settings.resultType;
   return field.type;
 };
 
 const declarationForField = (field: ModuleField): ValueDeclaration => ({
-  type: fieldValueType(field),
+  type: ruleFieldResultType(field),
   field,
   ...(fieldRecordTypeIds(field) ? { recordTypeIds: fieldRecordTypeIds(field) } : {}),
   ...(fieldColumns(field) ? { columns: fieldColumns(field) } : {}),
@@ -97,26 +102,6 @@ const declarationForTypedValue = (value: RuleGraphTypedValue): ValueDeclaration 
     ...(recordTypeId ? { recordTypeIds: [recordTypeId] } : {}),
     ...(value.type === "table" ? { columns: value.columns } : {}),
   };
-};
-
-const textTypes = new Set<ValueDeclaration["type"]>([
-  "text",
-  "long_text",
-  "choice",
-  "email_address",
-  "phone_number",
-  "web_address",
-  "reference_number",
-]);
-
-const semanticType = (type: ValueDeclaration["type"]): string => {
-  if (textTypes.has(type)) return "text";
-  if (type === "yes_no") return "boolean";
-  if (type === "several_choices") return "text_collection";
-  if (type === "link" || type === "link_to_one_of_several") return "record_reference";
-  if (type === "link_to_person") return "organization_account_reference";
-  if (type === "formatted_text" || type === "table" || type === "attachment") return "opaque_json";
-  return type;
 };
 
 const targetsSubset = (
@@ -149,7 +134,8 @@ const columnsCompatible = (
 const assignmentCompatible = (actual: ValueDeclaration, expected: ValueDeclaration): boolean => {
   if (expected.type === "table")
     return actual.type === "table" && columnsCompatible(actual.columns, expected.columns);
-  if (textTypes.has(actual.type) && textTypes.has(expected.type)) return true;
+  if (conditionValueType(actual.type) === "text" && conditionValueType(expected.type) === "text")
+    return true;
   if (
     (actual.type === "link" || actual.type === "link_to_one_of_several") &&
     (expected.type === "link" || expected.type === "link_to_one_of_several")
@@ -158,21 +144,14 @@ const assignmentCompatible = (actual: ValueDeclaration, expected: ValueDeclarati
   return actual.type === expected.type;
 };
 
-const conditionCompatible = (left: ValueDeclaration, right: ValueDeclaration): boolean => {
-  const leftType = semanticType(left.type);
-  const rightType = semanticType(right.type);
-  if (leftType === "record_reference" && rightType === "record_reference")
-    return (
-      left.recordTypeIds !== undefined &&
-      right.recordTypeIds !== undefined &&
-      left.recordTypeIds.some((target) => right.recordTypeIds!.includes(target))
-    );
-  if (leftType === rightType) return true;
-  return (
-    ["whole_number", "decimal_number"].includes(leftType) &&
-    ["whole_number", "decimal_number"].includes(rightType)
-  );
-};
+const conditionOperand = (
+  operand: RuleGraphOperand,
+  declaration: ValueDeclaration,
+): OperandInfo => ({
+  semanticType: conditionValueType(declaration.type),
+  source: operand.source === "literal" ? "value" : "reference",
+  ...(operand.source === "literal" ? { literal: operand.value.value } : {}),
+});
 
 const intersect = (values: readonly Availability[]): Set<string> => {
   if (values.length === 0) return new Set();
@@ -421,29 +400,25 @@ export const validateRuleGraph = ({
     };
     const unary = comparison.operator === "is_empty" || comparison.operator === "is_not_empty";
     const left = declarationForOperand(comparison.left, [...path, "left"], available, unary);
-    if (unary) return;
     const right = comparison.right
       ? declarationForOperand(comparison.right, [...path, "right"], available)
       : undefined;
-    if (!left || !right) return;
-    const leftType = semanticType(left.type);
-    const rightType = semanticType(right.type);
-    let compatible = conditionCompatible(left, right);
-    if (comparison.operator === "contains" || comparison.operator === "not_contains")
-      compatible =
-        (leftType === "text" && rightType === "text") ||
-        (leftType === "text_collection" && rightType === "text");
-    else if (comparison.operator === "in" || comparison.operator === "not_in")
-      compatible = leftType === "text" && rightType === "text_collection";
-    else if (
-      comparison.operator === "greater_than" ||
-      comparison.operator === "greater_than_or_equal" ||
-      comparison.operator === "less_than" ||
-      comparison.operator === "less_than_or_equal"
+    if (!left || (!unary && !right)) return;
+    let compatible = operatorAcceptsOperands(
+      comparison.operator,
+      conditionOperand(comparison.left, left),
+      comparison.right && right ? conditionOperand(comparison.right, right) : undefined,
+    );
+    if (
+      right &&
+      conditionValueType(left.type) === "record_reference" &&
+      conditionValueType(right.type) === "record_reference"
     )
       compatible =
         compatible &&
-        ["whole_number", "decimal_number", "money", "date", "date_time", "text"].includes(leftType);
+        left.recordTypeIds !== undefined &&
+        right.recordTypeIds !== undefined &&
+        left.recordTypeIds.some((target) => right.recordTypeIds!.includes(target));
     if (!compatible) issues.push(issue(ruleGraphValidationCodes.valueTypes, "invalid_value", path));
   };
 

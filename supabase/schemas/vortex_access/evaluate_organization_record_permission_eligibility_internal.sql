@@ -308,7 +308,14 @@ begin
   -- without a live path" apart as distinct refusal reasons.
   with candidate as (
     select declared.ordinality as alternative_ordinal,
-      declared.value as permission_value,
+      -- A preview's system projection uses the builder's live registration. Keep that
+      -- registration's permission address with its accepted meaning for every later reader.
+      pg_catalog.jsonb_build_object(
+        'applicationRootId', (evaluated.permission_entry).application_root_id,
+        'ownerKind', (evaluated.permission_entry).owner_kind,
+        'ownerId', (evaluated.permission_entry).owner_id,
+        'permissionId', (evaluated.permission_entry).permission_id
+      ) as permission_value,
       (evaluated.permission_entry).registration_revision as registration_revision,
       (evaluated.permission_entry).record_scope as record_scope,
       pg_catalog.jsonb_build_object(

@@ -78,7 +78,7 @@ export function LiteralEditor({
         {error && <span role="alert">{error}</span>}
       </label>
     );
-  if (semanticType === "boolean")
+  if (semanticType === "yes_no")
     return (
       <label>
         {label}
@@ -94,7 +94,7 @@ export function LiteralEditor({
       </label>
     );
 
-  if (semanticType === "number" || semanticType === "whole_number")
+  if (semanticType === "whole_number")
     return (
       <label>
         {label}
@@ -112,7 +112,7 @@ export function LiteralEditor({
             } else {
               const numericValue = Number(next);
               const valid = Number.isFinite(numericValue) &&
-                (semanticType !== "whole_number" || Number.isInteger(numericValue));
+                (semanticType !== "whole_number" || Number.isSafeInteger(numericValue));
               if (valid) {
                 event.currentTarget.setCustomValidity("");
                 onCommit(numericValue);

@@ -56,7 +56,12 @@ export type StudioCanvasRecords = Readonly<{
   current: ReadonlyMap<string, string>;
   /** A newer saved revision is being compiled; its records follow. */
   updating: boolean;
+  /** On a page of one record, the record its blocks show: absent elsewhere. */
+  sample?: StudioCanvasSample;
 }>;
+
+/** The record a detail page's blocks show on the canvas: the first of its type in the preview, untitled when there is none. */
+export type StudioCanvasSample = Readonly<{ recordTypeName: string; title?: string }>;
 
 const NO_RECORDS: StudioCanvasRecords = Object.freeze({
   state: "loading", records: {}, saved: new Map<string, string>(), current: new Map<string, string>(),
@@ -93,7 +98,10 @@ const recordsNote = (records: StudioCanvasRecords, id: string): string | undefin
   if (records.state === "loading") return "Reading records…";
   if (records.state === "refused") return "Showing records here needs permission to preview this application.";
   if (records.state === "unavailable") return "Records could not be read just now.";
-  return Object.hasOwn(records.records, id) ? undefined : "This block shows its records in the running application.";
+  if (Object.hasOwn(records.records, id)) return undefined;
+  return records.sample !== undefined && records.sample.title === undefined
+    ? `The preview has no ${records.sample.recordTypeName.toLowerCase()} you can read yet. Add one in the preview to show this block with it.`
+    : "This block shows its records in the running application.";
 };
 
 type StoredBlock = Readonly<{ block_id?: unknown; release_version?: unknown }>;
@@ -200,7 +208,9 @@ function CanvasBlock({
       </ItemContent>
     </Item>;
   const drawn = renderProps(props, release, Object.hasOwn(compiled, id) ? compiled[id] : undefined);
-  if (release === undefined || !studioReleaseReadsQuery(release)) return render(drawn);
+  // A block of the page's own record (a Record detail) draws that record as its saved version read it.
+  if (release === undefined || !(studioReleaseReadsQuery(release) || (release.paletteGroup === "record" && current)))
+    return render(drawn);
   // A data block draws the records its saved version reads, and says so when it has none to show.
   const note = recordsNote(records, id);
   const puck = (props.puck ?? {}) as { metadata?: Record<string, unknown> };

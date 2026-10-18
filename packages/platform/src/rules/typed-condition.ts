@@ -26,10 +26,10 @@ export type TypedConditionParameterDeclaration = Readonly<{
   key: string;
   type:
     | "text"
-    | "number"
+    | "whole_number"
     | "decimal_number"
     | "money"
-    | "boolean"
+    | "yes_no"
     | "date"
     | "date_time"
     | "organization_account_reference";
@@ -46,10 +46,10 @@ export type TypedConditionEvaluationInput = Readonly<{
 
 const parameterTypes = new Set<TypedConditionParameterDeclaration["type"]>([
   "text",
-  "number",
+  "whole_number",
   "decimal_number",
   "money",
-  "boolean",
+  "yes_no",
   "date",
   "date_time",
   "organization_account_reference",

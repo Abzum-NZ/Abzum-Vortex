@@ -119,6 +119,7 @@ begin
         select 1 from vortex_record.relationship_edges as edge
         where edge.relationship_id = pair.relationship_id
           and edge.from_organisation_id = source_row.organisation_id
+          and edge.from_storage_contract_id = pair.storage_id
           and edge.from_record_id = source_row.record_id
           and edge.to_storage_contract_id = target_storage_id
           and edge.to_record_id = account_id
@@ -127,6 +128,7 @@ begin
           select 1 from vortex_record.relationship_edges as edge
           where edge.relationship_id = pair.relationship_id
             and edge.from_organisation_id = source_row.organisation_id
+            and edge.from_storage_contract_id = pair.storage_id
             and edge.from_record_id = source_row.record_id
         ) then
           raise exception using errcode = '55000', message = 'Stored person link edge disagrees with legacy value';

@@ -36,8 +36,8 @@ export function applicationInterfaceRules(scope: ApplicationScope): void {
     const value = String(type);
     if (["decimal_number", "money", "formatted_text"].includes(value)) return value;
     if (["text", "choice"].includes(value)) return "text";
-    if (["number", "whole_number"].includes(value)) return "number";
-    if (value === "yes_no") return "boolean";
+    if (["whole_number"].includes(value)) return "whole_number";
+    if (value === "yes_no") return "yes_no";
     if (value === "date" || value === "date_time") return value;
     if (["record_reference", "organization_account_reference"].includes(value))
       return "record_reference";

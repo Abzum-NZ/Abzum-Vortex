@@ -596,8 +596,8 @@ begin
       semantic_type := case
         when field_kind = 'decimal_number' then 'decimal_number'
         when field_kind = 'money' then 'money'
-        when field_kind = 'whole_number' then 'number'
-        when field_kind = 'yes_no' then 'boolean'
+        when field_kind = 'whole_number' then 'whole_number'
+        when field_kind = 'yes_no' then 'yes_no'
         when field_kind = 'date' then 'date'
         when field_kind = 'date_time' then 'date_time'
         when field_kind = 'several_choices' then 'text_collection'

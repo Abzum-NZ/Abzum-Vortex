@@ -22,9 +22,6 @@ const ACTION_FLOW_TASK_VERSION = "1.0.0" as const;
 
 /** The flow value type of a compiled Module action input. */
 function actionFlowInputType(inputType: string): FlowInputDeclaration["type"] {
-  // An action `number` input accepts any finite number, so it is a decimal, never a whole number.
-  if (inputType === "number") return "decimal_number";
-  if (inputType === "boolean") return "yes_no";
   return inputType as FlowInputDeclaration["type"];
 }
 
