@@ -47,7 +47,7 @@ begin
       or group_selector_item ->> 'fieldType' not in (
         'text', 'whole_number', 'decimal_number', 'yes_no', 'date', 'date_time',
         'choice', 'reference_number', 'email_address', 'phone_number', 'web_address',
-        'link', 'link_to_one_of_several', 'link_to_person'
+        'link', 'link_to_one_of_several'
       ) then
       return null;
     end if;
@@ -98,14 +98,6 @@ begin
             and pg_catalog.jsonb_typeof(group_selector_value -> 'recordId') = 'string'
             and pg_catalog.lower(group_selector_value ->> 'recordId') ~ uuid_pattern
             and pg_catalog.lower(group_selector_value ->> 'recordId') <> '00000000-0000-0000-0000-000000000000'
-          else false end;
-        when 'link_to_person' then
-          group_value_valid := case when pg_catalog.jsonb_typeof(group_selector_value) = 'object' then
-            group_selector_value - array['organizationAccountId']::text[] = '{}'::jsonb
-            and group_selector_value ? 'organizationAccountId'
-            and pg_catalog.jsonb_typeof(group_selector_value -> 'organizationAccountId') = 'string'
-            and pg_catalog.lower(group_selector_value ->> 'organizationAccountId') ~ uuid_pattern
-            and pg_catalog.lower(group_selector_value ->> 'organizationAccountId') <> '00000000-0000-0000-0000-000000000000'
           else false end;
         else
           group_value_valid := false;

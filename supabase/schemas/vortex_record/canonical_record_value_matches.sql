@@ -40,13 +40,6 @@ begin
       and (p_value ->> 'amount') ~ canonical_decimal
       and pg_catalog.jsonb_typeof(p_value -> 'currency') = 'string'
       and (p_value ->> 'currency') ~ '^[A-Z]{3}$';
-  elsif p_field_type = 'link_to_person' then
-    return pg_catalog.jsonb_typeof(p_value) = 'object'
-      and p_value - array['organizationAccountId']::text[] = '{}'::jsonb
-      and p_value ? 'organizationAccountId'
-      and pg_catalog.jsonb_typeof(p_value -> 'organizationAccountId') = 'string'
-      and (p_value ->> 'organizationAccountId') ~ uuid_pattern
-      and pg_catalog.lower(p_value ->> 'organizationAccountId') <> nil_uuid_text;
   elsif p_field_type = 'several_choices' then
     return pg_catalog.jsonb_typeof(p_value) = 'array'
       and not exists (
@@ -128,4 +121,6 @@ alter function vortex_record.canonical_record_value_matches(jsonb, text, text) o
 revoke all on function vortex_record.canonical_record_value_matches(jsonb, text, text) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_record.canonical_record_value_matches(jsonb, text, text) is
-  'Private pure check that one value is the canonical V2 shape for its declared field type; never raises and decides no authority.';
+  'Private pure check that one value is the canonical shape for its declared field type; never raises and decides no authority.';
+
+grant execute on function vortex_record.canonical_record_value_matches(jsonb, text, text) to vortex_owner;
