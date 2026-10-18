@@ -10,6 +10,7 @@ import {
   type SourceFlow,
   type SourceFlowTask,
 } from "@vortex/platform/schema";
+import type { StudioFlowDraftChoices } from "./application-flow-step-form";
 import {
   describeStudioFlowLocation,
   studioFlowDefinitionOf,
@@ -69,6 +70,57 @@ export const studioDraftRecordType = (source: Readonly<ApplicationSourceDocument
   const module = source.body.modules.find((candidate) => candidate.key === owner);
   const record = module?.record_types.find((candidate) => candidate.key === key);
   return module === undefined || record === undefined ? undefined : { module, record };
+};
+
+/** Events must match every possible type of the selected record, or the flow's subject. */
+export const studioFlowEventChoices = (
+  source: Readonly<ApplicationSourceDocument>,
+  flow: SourceFlow,
+  moduleKey: string | null,
+  record?: FlowValue,
+): readonly Readonly<{ value: string; label: string }>[] => {
+  const inputTypes = (name: string): readonly string[] =>
+    flow.inputs?.[name]?.recordTypeIds ??
+    (flow.triggers ?? []).flatMap((trigger) => trigger.inputs?.[name]?.recordTypeIds ?? []);
+  const selectedTypes = (): readonly string[] => {
+    if (record === undefined)
+      return flow.recordInput === undefined
+        ? (flow.triggers ?? []).flatMap((trigger) =>
+            "recordTypeId" in trigger ? [trigger.recordTypeId] : [],
+          )
+        : inputTypes(flow.recordInput);
+    if (record.kind !== "reference") return [];
+    const reference = record.reference;
+    if (reference.source === "input") return inputTypes(reference.name);
+    if (reference.source === "variable")
+      return flow.variables?.[reference.name]?.recordTypeIds ?? [];
+    if (
+      reference.source === "task_output" &&
+      reference.key === "record" &&
+      !reference.path?.length
+    ) {
+      const path = studioFlowTaskPath(flow, reference.task);
+      const task =
+        path === undefined
+          ? undefined
+          : studioFlowListAt(flow, path.slice(0, -1))?.[path.at(-1) as number];
+      const type =
+        task !== undefined && "properties" in task ? task.properties.record_type : undefined;
+      return type?.kind === "literal" && typeof type.literal.value === "string"
+        ? [type.literal.value]
+        : [];
+    }
+    return [];
+  };
+  const types = [
+    ...new Set(selectedTypes().map((type) => (type.includes(":") ? type : `${moduleKey}:${type}`))),
+  ];
+  if (types.length !== 1) return [];
+  return source.body.modules.flatMap((module) =>
+    module.events
+      .filter((event) => `${module.key}:${event.record_type}` === types[0])
+      .map((event) => ({ value: event.key, label: event.key })),
+  );
 };
 
 /** The flow value type a field's values have, or undefined for a field no flow value sets. */
@@ -156,7 +208,7 @@ const outputLabel = (key: string): string => key === "record" ? "the record" : k
 
 /** The outputs one task gives the steps after it. */
 const taskOutputs = (flow: SourceFlow, siblings: readonly SourceFlow[], task: SourceFlowTask,
-  location: string): StudioFlowReferenceChoice[] => {
+  location: string, forms: StudioFlowDraftChoices["forms"]): StudioFlowReferenceChoice[] => {
   const choice = (key: string, type: string | undefined, path?: readonly string[], words?: string): StudioFlowReferenceChoice => {
     const reference: FlowReference = { source: "task_output", task: task.id, key, ...(path === undefined ? {} : { path: [...path] }) };
     return { token: studioFlowReferenceToken(reference), label: `${location}: ${words ?? outputLabel(key)}`, group: "Earlier steps", type, reference };
@@ -169,9 +221,15 @@ const taskOutputs = (flow: SourceFlow, siblings: readonly SourceFlow[], task: So
   const definition = studioFlowDefinitionOf(task.type);
   const outputs = (definition?.outputs ?? []).flatMap((output) => {
     if (task.type === "interface.show_form" && output.key === "values") {
+      const form = task.properties.form;
+      const alias = form?.kind === "literal" ? form.literal.value : undefined;
+      const fields = forms.find((entry) => entry.alias === alias)?.fields ?? [];
       const inputs = task.properties.inputs;
-      return inputs?.kind === "map" ? Object.entries(inputs.entries).map(([name, entry]) =>
-        choice("values", entry.kind === "literal" ? entry.literal.type : undefined, [name], `the answer ${studioWords(name).toLowerCase()}`)) : [];
+      const members = inputs?.kind === "map" ? Object.entries(inputs.entries).map(([name, value]) => {
+        const field = fields.find((field) => field.name === name);
+        return choice("values", field?.type ?? (value.kind === "literal" ? value.literal.type : undefined), [name], `the answer ${(field?.label ?? studioWords(name)).toLowerCase()}`);
+      }) : [];
+      return [choice("values", "json"), ...members];
     }
     return [choice(output.key, output.type)];
   });
@@ -190,6 +248,7 @@ export const studioFlowReferenceChoices = (
   siblings: readonly SourceFlow[],
   moduleKey: string | null,
   path: StudioFlowPath | null,
+  forms: StudioFlowDraftChoices["forms"],
 ): readonly StudioFlowReferenceChoice[] => {
   const choices: StudioFlowReferenceChoice[] = [];
   const add = (reference: FlowReference, label: string, group: StudioFlowReferenceChoice["group"], type: string | undefined) =>
@@ -204,7 +263,7 @@ export const studioFlowReferenceChoices = (
   if (path !== null)
     for (const task of studioFlowTasksBefore(flow, path)) {
       const location = describeStudioFlowLocation(flow, studioFlowTaskPath(flow, task.id) ?? []);
-      choices.push(...taskOutputs(flow, siblings, task, location));
+      choices.push(...taskOutputs(flow, siblings, task, location, forms));
     }
   // The record the flow runs for: the record a trigger saves or announces, or the record an
   // interactive flow's record input names. Each field offers its type and, for a choice, its options.

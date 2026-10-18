@@ -8,6 +8,7 @@ import {
   validateFlow,
   type ApplicationRootId,
   type ApplicationSourceDocument,
+  type ImmutablePlatformBlockCatalogue,
   type FlowTaskTypeDefinition,
   type FlowValidationIssue,
   type SourceFlow,
@@ -31,6 +32,7 @@ export type StudioFlowContext = Readonly<{
   draftRevision: number;
   localLifetime: number;
   source: Readonly<ApplicationSourceDocument>;
+  catalogue: ImmutablePlatformBlockCatalogue;
 }>;
 
 export type StudioFlowSelection = Extract<StudioSemanticSelection, { kind: "flow" }>;
