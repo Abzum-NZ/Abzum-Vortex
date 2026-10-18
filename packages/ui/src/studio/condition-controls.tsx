@@ -15,6 +15,7 @@ import {
   type StudioConditionControlsContext,
   type StudioConditionValidation,
   type StudioConditionValidationIssue,
+  choiceOptionsFor,
   conditionDepth,
   conditionLevelForPath,
   conditionOperandCount,
@@ -249,15 +250,13 @@ function TreeEditor({
       else onReplace({ ...condition, right: replacement }, pathToOperand);
     };
     // A value compared with a choice is one of its options.
-    const otherPermission = other?.source === "parameter"
-      ? context.allowedOperands.find((entry) => entry.operand.source === "parameter" && entry.operand.key === other.key)
-      : undefined;
-    const choiceOptions = otherPermission !== undefined && "options" in otherPermission ? otherPermission.options : undefined;
-    if (choiceOptions !== undefined && choiceOptions.length > 0 && (operand.value === null || typeof operand.value === "string"))
+    const choiceOptions = choiceOptionsFor(other, context);
+    if (choiceOptions !== undefined && choiceOptions.length > 0 && (operand.value === null || typeof operand.value === "string")) {
+      const optionError = errorForPath(validation, pathToOperand);
       return (
         <label>
           Option
-          <NativeSelect value={typeof operand.value === "string" ? operand.value : ""}
+          <NativeSelect value={typeof operand.value === "string" ? operand.value : ""} aria-invalid={optionError !== undefined}
             onChange={(event) => commitLiteral(event.currentTarget.value)}>
             <option value="" disabled>Choose an option…</option>
             {choiceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -266,6 +265,7 @@ function TreeEditor({
           </NativeSelect>
         </label>
       );
+    }
     if (operand.value === null) {
       const initial = defaultLiteralForType(type);
       const editableValue: JsonValue = initial === null

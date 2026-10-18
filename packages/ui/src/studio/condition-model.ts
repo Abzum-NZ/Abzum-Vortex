@@ -8,6 +8,7 @@ import {
   fieldIdSchema,
   jsonValueSchema,
   moduleFieldSchema,
+  moduleFieldValueSchemas,
   moneyValueSchema,
   organizationAccountIdSchema,
   personLinkValueSchema,
@@ -424,6 +425,59 @@ export const infoForOperand = (
   };
 };
 
+type ChoiceOption = Readonly<{ value: string; label: string }>;
+
+/** The options a value compared with this operand is picked from: a choice field's, or a choice input's. */
+export const choiceOptionsFor = (
+  operand: ConditionOperand | undefined,
+  context: StudioConditionControlsContext,
+): readonly ChoiceOption[] | undefined => {
+  if (operand === undefined || operand.source === "value") return undefined;
+  const permission = context.allowedOperands.find(
+    (candidate) => permissionKey(candidate) === referenceKey(operand),
+  );
+  if (!permission) return undefined;
+  if (!isFieldOperandPermission(permission)) return permission.options;
+  if (permission.field.type !== "choice") return undefined;
+  const options = (permission.field.settings as { options?: readonly ChoiceOption[] }).options ?? [];
+  return options.map(({ value, label }) => ({ value, label }));
+};
+
+/** Field types whose stored value contract is the same in the authored and the compiled form. */
+const plainValueFieldTypes = new Set([
+  "text", "long_text", "choice", "reference_number", "email_address", "phone_number", "web_address",
+  "yes_no", "date", "date_time", "whole_number",
+]);
+
+/**
+ * Why a fixed value compared with an operand is one the platform refuses for it, in words, or
+ * undefined: a value compared with a choice is one of its options, and one compared with a field
+ * is a value that field can hold, as publication checks it. An empty value is never saved.
+ */
+const literalProblem = (
+  value: JsonValue,
+  other: ConditionOperand | undefined,
+  operator: ConditionOperator,
+  context: StudioConditionControlsContext,
+): string | undefined => {
+  if (value === null || operator === "contains" || operator === "not_contains") return undefined;
+  const values = (operator === "in" || operator === "not_in") && Array.isArray(value) ? value : [value];
+  const permission = other === undefined || other.source === "value" ? undefined
+    : context.allowedOperands.find((candidate) => permissionKey(candidate) === referenceKey(other));
+  const label = permission?.label ?? "the field";
+  const options = choiceOptionsFor(other, context);
+  if (options !== undefined && options.length > 0) {
+    if (values.some((entry) => entry === "")) return `Choose one of the options of ${label}`;
+    return values.every((entry) => typeof entry === "string" && options.some((option) => option.value === entry))
+      ? undefined : `Choose one of the options of ${label}; this value is not one of them`;
+  }
+  if (permission === undefined || !isFieldOperandPermission(permission) || !plainValueFieldTypes.has(permission.field.type))
+    return undefined;
+  const schema = moduleFieldValueSchemas[permission.field.type as keyof typeof moduleFieldValueSchemas];
+  if (values.every((entry) => schema.safeParse(entry).success)) return undefined;
+  return values.some((entry) => entry === "") ? `Enter a value for ${label}` : `${label} can't hold this value`;
+};
+
 const isValidText = (value: unknown): value is string =>
   typeof value === "string" &&
   !value.includes("\0") &&
@@ -698,7 +752,11 @@ export const defaultRightForOperator = (
 ): ConditionOperand | undefined => {
   const leftInfo = infoForOperand(left, context);
   if (!leftInfo) return undefined;
-  const candidates = candidateRightOperands(left, context);
+  // A fixed value it can hold first: a field is compared with a value more often than with another
+  // field. A type without such a value (a link, an account) is compared with a reference first.
+  const all = candidateRightOperands(left, context);
+  const fixed = (candidate: ConditionOperand) => candidate.source === "value" && candidate.value !== null;
+  const candidates = [...all.filter(fixed), ...all.filter((candidate) => !fixed(candidate))];
   return candidates.find((candidate) => {
     const info = infoForOperand(candidate, context);
     return info !== undefined && operatorAcceptsOperands(operator, leftInfo, info);
@@ -827,6 +885,13 @@ export function validateStudioCondition(
       !operatorAcceptsOperands(condition.operator, left, right)
     )
       issues.push(makeIssue("operator_incompatible", [...path, "operator"], "This operator is not valid for the selected operand types"));
+    else if (!unaryOperators.has(condition.operator))
+      for (const side of ["left", "right"] as const) {
+        const operand = condition[side];
+        if (operand?.source !== "value") continue;
+        const problem = literalProblem(operand.value, side === "left" ? condition.right : condition.left, condition.operator, context);
+        if (problem !== undefined) issues.push(makeIssue("invalid_literal", [...path, side], problem));
+      }
   };
   visit(parsed.data, []);
   return { condition: parsed.data, issues, isValid: issues.length === 0 };
