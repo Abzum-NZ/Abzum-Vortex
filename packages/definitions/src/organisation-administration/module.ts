@@ -1468,7 +1468,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
         group_by: [],
         aggregates: [],
         sort: [{ field: "label", direction: "ascending" }],
-        page_size: 50,
+        page_size: 40,
         relationship_hops: 0,
       },
     ],
