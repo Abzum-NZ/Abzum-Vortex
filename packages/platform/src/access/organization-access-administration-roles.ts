@@ -142,7 +142,7 @@ export const createAccessAdministrationRoleOperations = ({
 
     return mapRecordedRefusal(
       "changeRoleAuthority",
-      requests.runChange(session, candidate, async (transaction, scope) => {
+      requests.runAccessChange(session, candidate, async (transaction, scope) => {
         // The evidence names its organisation; it must be the one the request context selected.
         if (!sameId(evidence.candidate.organizationId, scope.organizationId))
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
@@ -267,7 +267,7 @@ export const createAccessAdministrationRoleOperations = ({
 
       return mapRecordedRefusal(
         "retireRole",
-        requests.runChange(session, candidate, async (transaction, scope) => {
+        requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const prepared = prepareOrganizationRoleChangeEvidence({
             candidate: {
               operation: "retire_role",

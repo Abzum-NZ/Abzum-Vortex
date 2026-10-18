@@ -479,7 +479,7 @@ export const createOrganizationLocalAdministrationService = (
     ): Promise<HumanOrganizationRequestResult<SuspendOrganizationAccountResult>> {
       const command = suspendOrganizationAccountCommandSchema.safeParse(commandCandidate);
       if (!command.success) return { kind: "unavailable" };
-      return requests.runChange(session, selection, async (transaction, scope) => {
+      return requests.runAccessChange(session, selection, async (transaction, scope) => {
         const row = requireOne(
           await transaction.query<AccountChangeRow>`
             select * from vortex_access.suspend_organization_account_for_administration(
@@ -509,7 +509,7 @@ export const createOrganizationLocalAdministrationService = (
     ): Promise<HumanOrganizationRequestResult<ReactivateOrganizationAccountResult>> {
       const command = reactivateOrganizationAccountCommandSchema.safeParse(commandCandidate);
       if (!command.success) return { kind: "unavailable" };
-      return requests.runChange(session, selection, async (transaction, scope) => {
+      return requests.runAccessChange(session, selection, async (transaction, scope) => {
         const row = requireOne(
           await transaction.query<AccountChangeRow>`
             select * from vortex_access.reactivate_organization_account_for_administration(
@@ -539,7 +539,7 @@ export const createOrganizationLocalAdministrationService = (
     ): Promise<HumanOrganizationRequestResult<CloseOrganizationAccountResult>> {
       const command = closeOrganizationAccountCommandSchema.safeParse(commandCandidate);
       if (!command.success) return { kind: "unavailable" };
-      return requests.runChange(session, selection, async (transaction, scope) => {
+      return requests.runAccessChange(session, selection, async (transaction, scope) => {
         const row = requireOne(
           await transaction.query<AccountChangeRow>`
             select * from vortex_access.close_organization_account_for_administration(
@@ -604,10 +604,12 @@ export const createOrganizationLocalAdministrationService = (
       } catch {
         return { kind: "temporarily_unavailable" };
       }
-      return requests.runChange(session, selection, async (transaction, scope) => {
-        let row: ProfileChangeRow;
-        try {
-          row = requireOne(
+      return requests.runProfileChange<UpdateOwnProfileResult | "conflict">(
+        session,
+        selection,
+        command.data.organizationAccountId,
+        async (transaction, scope) => {
+          const row = requireOne(
             await transaction.query<ProfileChangeRow>`
             select outcome, operation, organization_id, organization_account_id,
               account_summary, correlation_id, accepted_at, access_version
@@ -621,40 +623,38 @@ export const createOrganizationLocalAdministrationService = (
             )
             `,
           );
-        } catch (error) {
-          if (isStaleOwnProfileRevision(error)) return "conflict" as const;
-          throw error;
-        }
-        if (
-          typeof row.organization_id !== "string" ||
-          !sameId(row.organization_id, scope.organizationId) ||
-          typeof row.organization_account_id !== "string" ||
-          !sameId(row.organization_account_id, command.data.organizationAccountId) ||
-          databaseRevision(row.access_version) !== scope.accessVersion
-        )
-          throw unavailableError(unavailableCode);
-        const result = updateOwnProfileResultSchema.parse({
-          outcome: row.outcome,
-          operation: row.operation,
-          organizationId: row.organization_id,
-          organizationAccountId: row.organization_account_id,
-          correlationId: row.correlation_id,
-          acceptedAt: databaseTimestamp(row.accepted_at),
-          accessVersion: databaseRevision(row.access_version),
-          ...(row.outcome === "accepted" &&
-          row.account_summary !== null &&
-          row.account_summary !== undefined
-            ? { account: normalizeRevision(row.account_summary) }
-            : {}),
-        });
-        if (
-          result.outcome === "accepted" &&
-          (!sameId(result.account.organizationAccountId, command.data.organizationAccountId) ||
-            result.account.revision !== command.data.expectedRevision + 1)
-        )
-          throw unavailableError(unavailableCode);
-        return result;
-      });
+          if (
+            typeof row.organization_id !== "string" ||
+            !sameId(row.organization_id, scope.organizationId) ||
+            typeof row.organization_account_id !== "string" ||
+            !sameId(row.organization_account_id, command.data.organizationAccountId) ||
+            databaseRevision(row.access_version) !== scope.accessVersion
+          )
+            throw unavailableError(unavailableCode);
+          const result = updateOwnProfileResultSchema.parse({
+            outcome: row.outcome,
+            operation: row.operation,
+            organizationId: row.organization_id,
+            organizationAccountId: row.organization_account_id,
+            correlationId: row.correlation_id,
+            acceptedAt: databaseTimestamp(row.accepted_at),
+            accessVersion: databaseRevision(row.access_version),
+            ...(row.outcome === "accepted" &&
+            row.account_summary !== null &&
+            row.account_summary !== undefined
+              ? { account: normalizeRevision(row.account_summary) }
+              : {}),
+          });
+          if (
+            result.outcome === "accepted" &&
+            (!sameId(result.account.organizationAccountId, command.data.organizationAccountId) ||
+              result.account.revision !== command.data.expectedRevision + 1)
+          )
+            throw unavailableError(unavailableCode);
+          return result;
+        },
+        (_code, error) => (isStaleOwnProfileRevision(error) ? "conflict" : undefined),
+      );
     },
 
     async createOrganizationInvitation(

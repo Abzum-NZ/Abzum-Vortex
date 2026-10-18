@@ -128,7 +128,7 @@ export const createAccessAdministrationGroupOperations = ({
 
       return mapRecordedRefusal(
         "createGroup",
-        requests.runChange(session, candidate, async (transaction, scope) => {
+        requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const rows = await transaction.query<GroupChangeRow>`
             select outcome, organization_id, group_summary, access_version
             from vortex_access.create_organization_group_for_administration(
@@ -179,7 +179,7 @@ export const createAccessAdministrationGroupOperations = ({
 
       return mapRecordedRefusal(
         "renameGroup",
-        requests.runChange(session, candidate, async (transaction, scope) => {
+        requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const rows = await transaction.query<GroupChangeRow>`
             select outcome, organization_id, group_summary, access_version
             from vortex_access.rename_organization_group_for_administration(
@@ -229,7 +229,7 @@ export const createAccessAdministrationGroupOperations = ({
 
       return mapRecordedRefusal(
         "retireGroup",
-        requests.runChange(session, candidate, async (transaction, scope) => {
+        requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<GroupChangeRow>`
             select outcome, organization_id, group_summary, access_version
@@ -294,7 +294,7 @@ export const createAccessAdministrationGroupOperations = ({
 
       return mapRecordedRefusal(
         "addGroupMembership",
-        requests.runChange(session, candidate, async (transaction, scope) => {
+        requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<MembershipChangeRow>`
             select outcome, organization_id, membership_summary, access_version
@@ -372,7 +372,7 @@ export const createAccessAdministrationGroupOperations = ({
 
       return mapRecordedRefusal(
         "removeGroupMembership",
-        requests.runChange(session, candidate, async (transaction, scope) => {
+        requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<MembershipChangeRow>`
             select outcome, organization_id, membership_summary, access_version

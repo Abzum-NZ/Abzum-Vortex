@@ -74,11 +74,14 @@ begin
     end if;
     original_context := checked_context;
     permission_deadline := (checked_context ->> 'expiresAt')::timestamptz;
-    -- Access precedes root/draft locks, as in ordinary draft creation and saving.
+    -- Access precedes root/draft locks, as in ordinary draft creation and saving. A shared lock
+    -- pins the authority checked below until commit (an access change must wait for it) while
+    -- other requests of the organisation, concurrent publications included, go on; the root
+    -- lock below orders publications of one root.
     select version.current_version into locked_access_version
     from vortex_access.organization_access_versions as version
     where version.organization_id = (checked_context ->> 'organizationId')::uuid
-    for update;
+    for share;
     if not found or locked_access_version
       is distinct from (checked_context ->> 'accessVersion')::bigint then
       raise exception using errcode = '42501',

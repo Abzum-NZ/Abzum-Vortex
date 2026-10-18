@@ -108,8 +108,8 @@ begin
       message = 'Record-share consent decision is unavailable';
   end if;
 
-  -- The human change-scope resolver already holds the caller's Access-version
-  -- row FOR UPDATE. Lock both participant versions by organisation ID, then
+  -- The human scope resolver already holds the caller's Access-version row
+  -- FOR SHARE. Lock both participant versions by organisation ID, then
   -- exact application registrations by (organisation ID, application root ID).
   -- FOR SHARE is the weakest lock that blocks non-key updates. NOWAIT avoids a
   -- cross-side deadlock when the preheld caller row reverses UUID order; SQLSTATE
