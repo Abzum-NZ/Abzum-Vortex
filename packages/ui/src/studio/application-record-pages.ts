@@ -744,6 +744,20 @@ const relatedTables = (
             );
             return [];
           }
+          // The table's query keeps the records whose link is this record, and a query can only keep
+          // records by a field people can filter by.
+          if (!link.filterable) {
+            if (context.publishedFields.has(`${module.key}:${child.key}.${link.key}`)) {
+              plan.details.push(
+                `${child.plural_name} link here but are not listed: their ${quoted(link.label)} field can't be filtered by, and a published version fixed that.`,
+              );
+              return [];
+            }
+            (link as { filterable: boolean }).filterable = true;
+            plan.details.push(
+              `People can now filter ${child.plural_name.toLowerCase()} by ${quoted(link.label)}, so a table can list those of one ${lowerFirst(resolved.record.name)}.`,
+            );
+          }
           const input = resolved.record.key;
           const select = [
             ...keyColumns(child, childResolved.title, childResolved.readable)
@@ -818,11 +832,10 @@ const relatedTables = (
               {
                 title: child.plural_name,
                 empty_message: `No ${child.plural_name.toLowerCase()} link to this ${lowerFirst(resolved.record.name)} yet.`,
-                columns: tableColumns(
-                  (entry) => `${module.key}:${child.key}.${entry.key}`,
-                  shown,
-                  childResolved.title.key,
-                ),
+                columns: shown.map((entry) => ({
+                  field: `${module.key}:${child.key}.${entry.key}`,
+                  label: entry.label,
+                })),
                 query_parameters: [{ input, source: "page", page_parameter: "record_id" }],
               },
               {},

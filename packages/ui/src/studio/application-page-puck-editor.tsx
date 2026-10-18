@@ -49,6 +49,7 @@ import {
   StudioCanvasRecordsProvider,
   StudioCanvasViewerProvider,
   type StudioCanvasRecords,
+  type StudioCanvasSample,
   type StudioCanvasViewer,
 } from "./studio-canvas-render";
 import { puckDataForBreakpoint, StudioCanvasBridge, type StudioCanvasFrame } from "./studio-canvas-bridge";
@@ -95,6 +96,8 @@ export type StudioCanvasRecordsRead = Readonly<{
   records: Readonly<Record<string, unknown>>;
   /** Read from a preview still moving to this revision: it is read again shortly. */
   behind?: boolean;
+  /** On a page of one record, the record its blocks were read with. */
+  sample?: StudioCanvasSample;
 }>;
 
 /** One compiled content area: its items, exactly as the published definition holds them. */

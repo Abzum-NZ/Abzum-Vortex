@@ -1654,16 +1654,6 @@ begin
     end if;
   end loop;
 
-  if preview_installation is not null
-    and pg_catalog.jsonb_array_length(relationship_changes) > 0 then
-    perform vortex_record.release_command_receipt_internal(
-      receipt_kind, effective_command_id
-    );
-    return pg_catalog.jsonb_build_object(
-      'outcome', 'refused', 'reasonCode', 'preview_relationship_refused'
-    );
-  end if;
-
   if p_operation = 'update' then
     if action_mode then
       loaded := vortex_record.load_named_action_facts_internal(
@@ -1803,9 +1793,30 @@ begin
             'outcome', 'refused', 'reasonCode', 'relationship_unavailable'
           );
         end if;
-        target_decision := vortex_access.evaluate_organization_record_access_internal(
-          target_loaded -> 'declaration', target_record_id, target_loaded -> 'facts'
-        );
+        -- Only a record of this application's own Module uses preview-owner authority.
+        -- Borrowed records and live projections still need the builder's current permission.
+        if preview_installation is not null
+          and target_loaded ->> 'previewInstallationId' = preview_installation ->> 'previewInstallationId'
+          and exists (
+            select 1 from vortex_definition.roots as root
+            where root.root_id = (target_loaded #>> '{recordTypeMeta,moduleRootId}')::uuid
+              and root.owner_application_root_id = application_root_id_value
+          ) then
+          target_decision := pg_catalog.jsonb_build_object('outcome', 'allowed');
+        else
+          if pg_catalog.jsonb_array_length(
+            target_loaded #> '{declaration,requiredPermissions}'
+          ) = 0 then
+            perform vortex_record.release_command_receipt_internal(receipt_kind, effective_command_id);
+            return pg_catalog.jsonb_build_object(
+              'outcome', 'refused', 'reasonCode', 'relationship_unavailable'
+            );
+          end if;
+          target_decision := vortex_access.evaluate_organization_record_access_internal(
+            pg_catalog.jsonb_set(target_loaded -> 'declaration', '{authority}',
+              '{"kind":"permission"}'::jsonb), target_record_id, target_loaded -> 'facts'
+          );
+        end if;
         if target_decision ->> 'outcome' <> 'allowed' then
           perform vortex_record.release_command_receipt_internal(receipt_kind, effective_command_id);
           return pg_catalog.jsonb_build_object(
