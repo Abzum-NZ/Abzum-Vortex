@@ -23,6 +23,7 @@ import {
 } from "./application-flow-model";
 import {
   studioDraftRecordType,
+  studioFlowEventChoices,
   studioFieldValueType,
   studioFlowValueOf,
   studioFlowValueSourceOf,
@@ -436,11 +437,8 @@ export const projectStudioFlowStepForm = (
     const control = task.type === "event.announce" && key === "event" ? "field" : controlFor(declaration.type)!;
     const entries = control === "input_map" ? expectedEntries(task, key, choices, source) : undefined;
     const recordFieldList = control === "field_values" ? recordFields(source, recordType, moduleKey) : undefined;
-    const subjectType = stepRecordType(flow, task.properties) ?? (flow.recordInput === undefined ? undefined : flow.inputs?.[flow.recordInput]?.recordTypeIds?.[0]);
-    const qualifiedSubject = subjectType === undefined ? undefined : subjectType.includes(":") ? subjectType : `${moduleKey}:${subjectType}`;
     const options = task.type === "event.announce" && key === "event"
-      ? source.body.modules.flatMap((module) => module.events.filter((event) => qualifiedSubject === undefined || `${module.key}:${event.record_type}` === qualifiedSubject)
-        .map((event) => ({ value: event.key, label: event.key })))
+      ? studioFlowEventChoices(source, flow, moduleKey, task.properties.record)
       : control === "field" ? fieldOptions(source, flow, moduleKey, task.properties) : undefined;
     const valueType = control === "value" && declaration.type === "record_change_list" ? "json"
       : control === "value" && declaration.type !== "any_value"

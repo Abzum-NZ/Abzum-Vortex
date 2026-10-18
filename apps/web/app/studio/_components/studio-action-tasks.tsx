@@ -1,5 +1,10 @@
 "use client";
-import type { ApplicationSourceDocument, FlowReference, FlowValue } from "@vortex/platform/schema";
+import {
+  actionValueCompatible,
+  type ApplicationSourceDocument,
+  type FlowReference,
+  type FlowValue,
+} from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Label } from "@vortex/ui/components/label";
@@ -31,12 +36,18 @@ function ActionValues({
   record,
   values,
   references,
+  subject,
+  inputs,
+  subjectType,
   onChange,
 }: Readonly<{
   id: string;
   record: RecordType | undefined;
   values: Record<string, FlowValue>;
   references: readonly StudioFlowReferenceChoice[];
+  subject: RecordType;
+  inputs: Action["inputs"];
+  subjectType: string;
   onChange: (values: Record<string, FlowValue>) => void;
 }>) {
   const fields =
@@ -61,6 +72,16 @@ function ActionValues({
               options={options}
               value={studioFlowValueSourceOf(value)}
               references={references}
+              referenceCompatible={(reference) =>
+                actionValueCompatible(
+                  { kind: "reference", reference },
+                  field,
+                  new Map(subject.fields.map((entry) => [entry.key, entry])),
+                  new Map(inputs.map((entry) => [entry.key, entry])),
+                  subjectType,
+                  "source",
+                )
+              }
               onChange={(next) => {
                 if (next !== null) onChange({ ...values, [key]: studioFlowValueOf(next) });
               }}
@@ -145,6 +166,16 @@ export function StudioActionTasks({
     group,
   });
   const references = [
+    ...(inputs.some((input) => input.key === "record")
+      ? []
+      : [
+          choice(
+            { source: "input", name: "record" },
+            "The subject record",
+            "record_reference",
+            "The record",
+          ),
+        ]),
     ...inputs.map((input) =>
       choice({ source: "input", name: input.key }, input.label, input.type, "Inputs"),
     ),
@@ -289,6 +320,9 @@ export function StudioActionTasks({
               }
               values={task.properties.values}
               references={references}
+              subject={record}
+              inputs={inputs}
+              subjectType={`${module.key}:${record.key}`}
               onChange={(values) =>
                 replace(index, { ...task, properties: { ...task.properties, values } } as Task)
               }

@@ -72,6 +72,57 @@ export const studioDraftRecordType = (source: Readonly<ApplicationSourceDocument
   return module === undefined || record === undefined ? undefined : { module, record };
 };
 
+/** Events must match every possible type of the selected record, or the flow's subject. */
+export const studioFlowEventChoices = (
+  source: Readonly<ApplicationSourceDocument>,
+  flow: SourceFlow,
+  moduleKey: string | null,
+  record?: FlowValue,
+): readonly Readonly<{ value: string; label: string }>[] => {
+  const inputTypes = (name: string): readonly string[] =>
+    flow.inputs?.[name]?.recordTypeIds ??
+    (flow.triggers ?? []).flatMap((trigger) => trigger.inputs?.[name]?.recordTypeIds ?? []);
+  const selectedTypes = (): readonly string[] => {
+    if (record === undefined)
+      return flow.recordInput === undefined
+        ? (flow.triggers ?? []).flatMap((trigger) =>
+            "recordTypeId" in trigger ? [trigger.recordTypeId] : [],
+          )
+        : inputTypes(flow.recordInput);
+    if (record.kind !== "reference") return [];
+    const reference = record.reference;
+    if (reference.source === "input") return inputTypes(reference.name);
+    if (reference.source === "variable")
+      return flow.variables?.[reference.name]?.recordTypeIds ?? [];
+    if (
+      reference.source === "task_output" &&
+      reference.key === "record" &&
+      !reference.path?.length
+    ) {
+      const path = studioFlowTaskPath(flow, reference.task);
+      const task =
+        path === undefined
+          ? undefined
+          : studioFlowListAt(flow, path.slice(0, -1))?.[path.at(-1) as number];
+      const type =
+        task !== undefined && "properties" in task ? task.properties.record_type : undefined;
+      return type?.kind === "literal" && typeof type.literal.value === "string"
+        ? [type.literal.value]
+        : [];
+    }
+    return [];
+  };
+  const types = [
+    ...new Set(selectedTypes().map((type) => (type.includes(":") ? type : `${moduleKey}:${type}`))),
+  ];
+  if (types.length !== 1) return [];
+  return source.body.modules.flatMap((module) =>
+    module.events
+      .filter((event) => `${module.key}:${event.record_type}` === types[0])
+      .map((event) => ({ value: event.key, label: event.key })),
+  );
+};
+
 /** The flow value type a field's values have, or undefined for a field no flow value sets. */
 export const studioFieldValueType = (fieldType: string): LiteralType | undefined => {
   switch (fieldType) {

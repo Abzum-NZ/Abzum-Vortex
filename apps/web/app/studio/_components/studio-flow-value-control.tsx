@@ -5,7 +5,7 @@ import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
 import { NativeSelect, NativeSelectOptGroup, NativeSelectOption } from "@vortex/ui/components/native-select";
 import { Textarea } from "@vortex/ui/components/textarea";
-import type { FlowLiteral } from "@vortex/platform/schema";
+import type { FlowLiteral, FlowReference } from "@vortex/platform/schema";
 import {
   describeStudioFlowValue, studioFixedLiteral, studioFixedLiteralType, studioFlowReferenceToken,
   type StudioFlowReferenceChoice, type StudioFlowValueSource,
@@ -66,7 +66,7 @@ function FixedInput({ id, label, literal, options, long, disabled, onChange }: R
         onChange={(event) => change(event.target.value)} />;
 }
 
-export function StudioFlowValueControl({ id, label, value, valueType, options = [], references, unset, long = false,
+export function StudioFlowValueControl({ id, label, value, valueType, options = [], references, referenceCompatible, unset, long = false,
   disabled, onChange }: Readonly<{
   id: string;
   label: string;
@@ -76,6 +76,8 @@ export function StudioFlowValueControl({ id, label, value, valueType, options = 
   /** The options of a choice, when the value sets one. */
   options?: readonly Readonly<{ value: string; label: string }>[];
   references: readonly StudioFlowReferenceChoice[];
+  /** Field-aware compatibility, when the owning contract supplies it. */
+  referenceCompatible?: (reference: FlowReference) => boolean;
   /** The words for leaving it unset, when it may be left unset. */
   unset?: string;
   long?: boolean;
@@ -83,7 +85,7 @@ export function StudioFlowValueControl({ id, label, value, valueType, options = 
   onChange: (value: StudioFlowValueSource | null) => void;
 }>) {
   const fixedType = options.length > 0 ? "choice" : studioFixedLiteralType(valueType);
-  const offered = references.filter((choice) => valueType === undefined || choice.type === undefined || choice.type === "json" ||
+  const offered = references.filter((choice) => referenceCompatible !== undefined ? referenceCompatible(choice.reference) : valueType === undefined || choice.type === undefined || choice.type === "json" ||
     choice.type === valueType || (valueType === "text" && (choice.type === "choice" || choice.type === "formatted_text")) ||
     (valueType === "choice" && choice.type === "text") || valueType === "json");
   const token = value === null ? "" : value.kind === "fixed" ? "fixed" : value.kind === "kept" ? "kept" : studioFlowReferenceToken(value.reference);

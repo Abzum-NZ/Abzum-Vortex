@@ -197,6 +197,7 @@ export const saveInlineModuleAction = (
     const reference = value.kind === "reference" ? value.reference : undefined;
     if (
       reference?.source === "input" &&
+      reference.name !== "record" &&
       !change.inputs.some((input) => input.key === reference.name)
     )
       issues.push("Task value: choose an input declared by this action.");

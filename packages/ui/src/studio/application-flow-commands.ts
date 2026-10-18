@@ -31,6 +31,7 @@ import {
   applyStudioFlowStepDraft,
   type StudioFlowStepDraft,
 } from "./application-flow-step-form";
+import { studioFlowEventChoices } from "./application-flow-values";
 
 /**
  * The flow commands: one checked edit of the stored flow definition each, taken by the draft
@@ -109,20 +110,9 @@ const seedValue = (
       return form === undefined ? undefined : text(form.alias);
     }
     case "namespaced_key": {
-      const event = source.body.modules
-        .flatMap((module) =>
-          module.events.map((event) => ({
-            event,
-            recordType: `${module.key}:${event.record_type}`,
-          })),
-        )
-        .find(
-          (entry) =>
-            recordType === undefined ||
-            entry.recordType === recordType ||
-            entry.event.record_type === recordType,
-        );
-      return event === undefined ? undefined : text(event.event.key);
+      const moduleKey = modules.find((module) => module.flows.some((candidate) => candidate.id === flow.id))?.key ?? null;
+      const event = studioFlowEventChoices(source, flow, moduleKey)[0];
+      return event === undefined ? undefined : text(event.value);
     }
     case "record_reference": {
       return recordInput === undefined
