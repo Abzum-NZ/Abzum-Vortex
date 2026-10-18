@@ -634,9 +634,6 @@ const applicationCompositionResolution = (
         label: String(field.label),
         required: field.required === true,
         type,
-        ...(type === "text" && settings.format !== undefined
-          ? { textFormat: String(settings.format) }
-          : {}),
         ...(type === "date_time" &&
         (settings.displayTimeZone === "person" ||
           settings.displayTimeZone === "organization" ||

@@ -46,6 +46,8 @@ type BlockPropertySchemaBase = {
   label: string;
   help?: string | undefined;
   required: boolean;
+  /** Show this control only for the declared choices of a sibling setting. */
+  showWhen?: { property: string; values: string[] } | undefined;
   defaultValue?: BlockPropertyValueContract | undefined;
   /** This declaration contains display content whose edits may keep a patch version. */
   presentation?: true | undefined;
@@ -103,6 +105,10 @@ const propertySchemaBase = {
   label: sourceProvenanceUnchanged(labelSchema),
   help: sourceProvenanceUnchanged(z.string().min(1).max(1_000).optional()),
   required: sourceProvenanceUnchanged(z.boolean()),
+  showWhen: sourceProvenanceUnchanged(z.object({
+    property: builderKeySchema,
+    values: z.array(z.string().min(1)).min(1),
+  }).strict().optional()),
   defaultValue: sourceProvenanceUnchanged(blockPropertyValueSchema.optional()),
   presentation: sourceProvenanceUnchanged(z.literal(true).optional()),
   presentationIdentity: sourceProvenanceUnchanged(builderKeySchema.optional()),

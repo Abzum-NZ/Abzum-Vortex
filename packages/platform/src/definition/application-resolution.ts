@@ -57,7 +57,6 @@ export type FieldInputSourceField = Readonly<{
   label: string;
   required: boolean;
   type: string;
-  textFormat?: string | undefined;
   displayTimeZone?: "person" | "organization" | "utc" | undefined;
   maximumSelections?: number | undefined;
   choices: readonly Readonly<{ key: string; label: string }>[];
