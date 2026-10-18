@@ -1,6 +1,6 @@
-﻿create or replace function vortex_access.list_application_role_templates_projection(
+create or replace function vortex_access.list_application_role_templates_projection(
   p_record_ids uuid[], p_sort_key text, p_direction text,
-  p_after jsonb, p_limit integer
+  p_after jsonb, p_limit integer default 40
 )
 returns table (
   organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
@@ -21,6 +21,7 @@ declare
   after_record_id uuid;
   after_text text;
   emitted integer := 0;
+  page_limit integer := coalesce(p_limit, 40);
   scan_sql text;
   comparison text;
   sort_column text;
@@ -28,7 +29,7 @@ begin
   if p_sort_key not in ('record_id', 'source_role_id', 'application_root_id', 'key', 'label')
     or p_direction not in ('ascending', 'descending')
     or p_sort_key is null or p_direction is null
-    or (p_limit is not null and p_limit < 1) then
+    or page_limit not between 1 and 200 then
     raise exception using errcode = '22023',
       message = 'Application role template projection bounds are invalid';
   end if;
@@ -156,7 +157,8 @@ begin
     if pg_catalog.jsonb_typeof(candidate.roles) is distinct from 'array' then
       continue;
     end if;
-    if pg_catalog.jsonb_array_length(candidate.roles) not between 1 and 100 then
+    -- Keep in step with maximumApplicationRoles; p_limit remains the independent page bound.
+    if pg_catalog.jsonb_array_length(candidate.roles) not between 1 and 500 then
       continue;
     end if;
     seen_role_ids := array[]::uuid[];
@@ -204,7 +206,7 @@ begin
         'continuity_revision', candidate.continuity_revision
       );
     emitted := emitted + 1;
-    exit when p_limit is not null and emitted >= p_limit;
+    exit when emitted >= page_limit;
   end loop;
 end
 $function$;
@@ -218,3 +220,7 @@ grant execute on function vortex_access.list_application_role_templates_projecti
 alter function vortex_access.list_application_role_templates_projection(
   uuid[], text, text, jsonb, integer
 ) owner to vortex_owner;
+
+comment on function vortex_access.list_application_role_templates_projection(
+  uuid[], text, text, jsonb, integer
+) is 'Returns one keyset page of registered application role templates, defaulting to 40 rows and limited to 200 rows.';

@@ -789,7 +789,7 @@ begin
           message = 'Protected projection sort field is unavailable';
       end if;
       projection_after := p_after;
-      projection_batch_size := least(p_page_size + 1, scan_limit);
+      projection_batch_size := least(p_page_size, scan_limit);
       select coalesce(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(projected) order by projected.ordinality), '[]'::jsonb)
       into projection_batch
       from vortex_record.read_system_projection_rows_internal(v_storage_contract_id,
@@ -1325,7 +1325,7 @@ begin
   close scan_cursor;
   exit when not projection_page_scan or more_rows or projection_batch_exhausted
     or projection_reader_exhausted;
-  projection_batch_size := least(p_page_size + 1, scan_limit - projection_candidate_count);
+  projection_batch_size := least(p_page_size, scan_limit - projection_candidate_count);
   select coalesce(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(projected) order by projected.ordinality), '[]'::jsonb)
   into projection_batch
   from vortex_record.read_system_projection_rows_internal(v_storage_contract_id,
