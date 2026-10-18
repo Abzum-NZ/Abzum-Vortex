@@ -673,6 +673,10 @@ export const changeOrganizationAdministrationRoleAssignmentResultSchema = z
   })
   .strict();
 
+export type AssignOrganizationAdministrationRoleAssignmentResult =
+  | ChangeOrganizationAdministrationRoleAssignmentResult
+  | Readonly<{ outcome: "refused"; code: "role_acceptance_required"; roleId: string }>;
+
 export const assignOrganizationAdministrationRoleAssignmentCommandSchema = z
   .object({
     roleId: roleIdSchema,

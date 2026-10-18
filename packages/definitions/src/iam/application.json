@@ -5080,6 +5080,39 @@
                           "value": "platform.assign_role_assignment"
                         }
                       },
+                      "refusal_feedback": {
+                        "kind": "map",
+                        "entries": {
+                          "code": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "role_acceptance_required"
+                            }
+                          },
+                          "message": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "This role changed in the latest release and needs accepting in IAM before it can be assigned."
+                            }
+                          },
+                          "link_label": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Review and accept this role in IAM"
+                            }
+                          },
+                          "record_id": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "role_id"
+                            }
+                          }
+                        }
+                      },
                       "inputs": {
                         "kind": "map",
                         "entries": {
@@ -5281,6 +5314,39 @@
                         "literal": {
                           "type": "text",
                           "value": "platform.assign_role_assignment"
+                        }
+                      },
+                      "refusal_feedback": {
+                        "kind": "map",
+                        "entries": {
+                          "code": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "role_acceptance_required"
+                            }
+                          },
+                          "message": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "This role changed in the latest release and needs accepting in IAM before it can be assigned."
+                            }
+                          },
+                          "link_label": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Review and accept this role in IAM"
+                            }
+                          },
+                          "record_id": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "role_id"
+                            }
+                          }
                         }
                       },
                       "inputs": {

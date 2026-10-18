@@ -74,7 +74,7 @@ begin
   if decision ->> 'outcome' is distinct from 'allowed' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_unavailable');
   end if;
-  readable_field_ids := vortex_access.resolve_record_field_bounds_internal(decision)
+  readable_field_ids := vortex_record.decide_record_field_bounds_internal(decision)
     -> 'readableFieldIds';
   if pg_catalog.jsonb_typeof(readable_field_ids) is distinct from 'array' then
     raise exception using errcode = '55000', message = 'Relationship copy field bounds are unavailable';
