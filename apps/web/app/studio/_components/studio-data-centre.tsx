@@ -57,6 +57,13 @@ const notReadable = (result: StudioDataRecordsResult, plural: string, query: boo
   }
 };
 
+const preparationMessage = (preview: StudioPreviewStatus): string =>
+  preview.kind === "preparation_failed"
+    ? `The saved draft could not be prepared for preview (${preview.code}). Correct the draft to try again.`
+    : preview.kind === "refused" ? "Your access does not allow this preview."
+    : preview.kind === "temporarily_unavailable" ? "The preview could not be prepared just now. Your draft remains editable."
+    : "Your preview is catching up with the saved draft.";
+
 /** A summary's totals, as a list of label and value. */
 function Totals({ totals }: Readonly<{ totals: readonly StudioDataTotal[] }>) {
   return totals.length === 0 ? null : <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm" aria-label="Totals">
@@ -110,7 +117,8 @@ function SummaryResults({ result, onPage }: Readonly<{
  * draft revision with their preview access. Paging is keyset paging: next and previous pages,
  * never a page count.
  */
-function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, queryKey, draftRevision, onFollowing }: Readonly<{
+function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, queryKey, draftRevision, onFollowing, preview }: Readonly<{
+  preview: StudioPreviewStatus;
   organizationId: string; rootId: string; moduleKey: string; recordKey: string; plural: string; queryKey: string | undefined;
   /** The latest saved draft revision whose preview the records are read from. */
   draftRevision: number;
@@ -126,7 +134,10 @@ function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, 
   const [read, setRead] = useState<Read | null>(null);
   const latest = useRef("");
   const request = JSON.stringify({ scope, page });
+  const ready = preview.kind === "ready" && preview.draftRevision === draftRevision;
   useEffect(() => {
+    if (!ready) return;
+    let active = true;
     latest.current = request;
     void (async () => {
       let result: StudioDataRecordsResult;
@@ -139,9 +150,10 @@ function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, 
         console.error("[studio] reading data records failed", describeFailure(error));
         result = { kind: "temporarily_unavailable" };
       }
-      if (latest.current === request) setRead({ request, result });
+      if (active && latest.current === request) setRead({ request, result });
     })();
-  }, [organizationId, rootId, draftRevision, moduleKey, recordKey, queryKey, pageSize, page.token, page.direction, request]);
+  return () => { active = false; };
+  }, [organizationId, rootId, draftRevision, moduleKey, recordKey, queryKey, pageSize, page.token, page.direction, request, ready]);
   const current = read?.request === request ? read.result : null;
   useEffect(() => { if (current?.kind === "following") onFollowing(); }, [current, onFollowing]);
   const problem = current === null ? undefined : notReadable(current, plural, queryKey !== undefined);
@@ -160,7 +172,8 @@ function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, 
           onChange={(next) => { setPageSize(Number(next)); setPage({}); }} />
       </div>
     </div>
-    {current === null ? <p role="status" className="text-sm text-muted-foreground">Reading records…</p>
+    {!ready ? <p role="status" className="text-sm">{preparationMessage(preview)}</p>
+      : current === null ? <p role="status" className="text-sm text-muted-foreground">Reading records…</p>
       : problem !== undefined ? <p role="status" className="text-sm">{problem}</p>
         : current.kind === "summary" ? <SummaryResults result={current} onPage={setPage} />
         : current.kind === "available" && <>
@@ -223,12 +236,7 @@ export function StudioDataCentre({ organizationId, rootId, modules, selection, u
       ? <p role="status" className="text-sm">{query === undefined
         ? "Records show once this record type is saved, in a moment."
         : "Results show once this query is saved, in a moment."}</p>
-      : preview.kind !== "ready" ? <p role="status" className="text-sm">{preview.kind === "preparation_failed"
-        ? `The saved draft could not be prepared for preview (${preview.code}). Correct the draft to try again.`
-        : preview.kind === "refused" ? "Your access does not allow this preview."
-        : preview.kind === "temporarily_unavailable" ? "The preview could not be prepared just now. Your draft remains editable."
-        : "Your preview is catching up with the saved draft."}</p>
       : <PreviewResults organizationId={organizationId} rootId={rootId} moduleKey={module.key} recordKey={record.key} plural={record.pluralName}
-        queryKey={query?.key} draftRevision={draftRevision} onFollowing={onFollowing} />}
+        queryKey={query?.key} draftRevision={draftRevision} onFollowing={onFollowing} preview={preview} />}
   </div>;
 }
