@@ -344,7 +344,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                 {releases.panel}
               </>
             }
-            inspector={tab === "data" ? data.inspector : canvas.inspector}
+            inspector={tab === "access" ? null : tab === "data" ? data.inspector : canvas.inspector}
             canvas={({ inspectorOpen, toggleInspector, focused, focusCanvas }) => (
               <>
                 {canvas.toolbar(
