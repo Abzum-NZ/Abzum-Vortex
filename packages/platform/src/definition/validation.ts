@@ -261,8 +261,8 @@ function validatePreparedDefinitionSet(
   const eligibleRules = definitionSemanticRules
     .filter((rule) => validationStageRank[rule.stage] <= validationStageRank[stage])
     .filter((rule) => hasRequiredContext(context, rule.requiredContext));
-  // Each source is parsed once here instead of once per edit-save rule. The canonical walker is
-  // built on first use, so a call whose rules never walk the compiled set still builds none.
+  // The boundary supplies one parse per source, shared by every edit-save rule. The canonical
+  // walker is built on first use, so rules that never walk the compiled set still build none.
   let canonicalWalker: ReturnType<typeof createContractValueWalker> | undefined;
   const preparedContext: PreparedValidationContext = {
     ...context,
