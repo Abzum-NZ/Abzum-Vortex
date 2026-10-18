@@ -2440,7 +2440,7 @@
                         "props": {
                           "id": "button_create_custom_role",
                           "label": "Create custom role",
-                          "action_kind": "action",
+                          "action_kind": "submit",
                           "variant": "primary",
                           "vortex": {
                             "block": {
@@ -6590,9 +6590,9 @@
       },
       {
         "id": "binding_create_custom_role",
-        "control": "button_create_custom_role",
+        "control": "form_create_custom_role",
         "event_id": "event_iam_administration_action",
-        "event": "action",
+        "event": "form_submit",
         "flow": "flow_create_custom_role",
         "inputs": {
           "operation": {
