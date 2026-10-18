@@ -21,7 +21,7 @@ import {
 } from "../schema";
 import { readLiveHumanContext } from "../access/live-context";
 import { createPreviewInstallationRepository } from "./module-index";
-import type { RehearsedPreviewRelease } from "./application-publication";
+import type { PreviewReleasePlan } from "./preview-release-plan";
 import { writePreviewRuntimeReleaseSet } from "./preview-runtime-context";
 import { backfillDerivedFields } from "../records/derived-field-backfill";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
@@ -37,11 +37,15 @@ type InstallerRequests = Pick<
   "runChange"
 >;
 
-type PreviewInstallationDraftRehearsal = Readonly<{
-  rehearseApplicationPreview(
+type PreviewInstallationDraftPlanner = Readonly<{
+  prepareApplicationPreview(
     context: SessionContext,
     command: Readonly<{ rootId: string; expectedDraftRevision: number }>,
-  ): Promise<readonly RehearsedPreviewRelease[]>;
+  ): Promise<void>;
+  planApplicationPreview(
+    context: SessionContext,
+    command: Readonly<{ rootId: string; expectedDraftRevision: number }>,
+  ): Promise<PreviewReleasePlan>;
 }>;
 
 const previewInstallationCoordinatorErrorCodes = [
@@ -67,12 +71,12 @@ type PreviewInstallationCoordinatorDependencies = Readonly<{
   ): BuilderAuthority;
   /**
    * Builds the Definition publication service over the same human request transaction and its
-   * builder authority. It rehearses the publication of the requested draft revision.
+   * builder authority, for permanent identity setup and read-only release planning.
    */
-  draftRehearsal(
+  draftPlanner(
     transaction: RequestDatabaseTransaction,
     authority: BuilderAuthority,
-  ): PreviewInstallationDraftRehearsal;
+  ): PreviewInstallationDraftPlanner;
 }>;
 
 const errorCode = (error: unknown): string | undefined =>
@@ -121,24 +125,10 @@ const toCoordinatorError = (
 };
 
 /**
- * Provisions the preview of an Application draft for the requesting builder in a series of human
- * requests, each checking the builder's authority:
- * 1. An organisation request rehearses the draft's publication, which only it may. It writes the
- *    inline Modules' drafts, as preparing a publication does, and returns the release rows the
- *    undone rehearsal wrote.
- * 2. A second organisation request creates the preview from exactly those rows. It refuses them
- *    unless the draft is still at the revision they were rehearsed from. It writes the preview's
- *    own permission registration (the draft's roles, which only this builder holds) and empty
- *    storage. The Application may not be installed yet.
- * 3. When the Application is installed, a request in its own context seeds the storage. The seed
- *    holds only the live records the builder reads there, with only the fields the builder reads.
- * 4. A request in the preview writes the release set it runs.
- * A refresh moves the builder's existing preview to the current draft revision instead:
- * 1. An organisation request rehearses the draft's publication, as above.
- * 2. One request in the preview itself replaces its releases, pins and registration, evolves its
- *    Record storage in place, keeping the records it holds, and writes the release set it runs.
- *    A change those records cannot take refuses with PREVIEW_INSTALLATION_SHAPE_INCOMPATIBLE.
- * No live installation, live registration or external service is touched.
+ * Establish permanent owned identities in a short authorised request, compile a read-only plan
+ * without holding draft write locks, then atomically apply its exact source/dependency bindings.
+ * Compatible refreshes keep the preview and its records; incompatible shapes request replacement.
+ * Every phase checks fresh authority. Only the installed Application context can seed live records.
  */
 export const createPreviewInstallationCoordinator = (
   dependencies: PreviewInstallationCoordinatorDependencies,
@@ -198,17 +188,27 @@ export const createPreviewInstallationCoordinator = (
       if (!session.success || !request.success)
         throw new DefinitionError("INVALID_PREVIEW_INSTALLATION_COMMAND");
       const { organizationId, applicationRootId, expectedDraftRevision } = request.data;
-      const releases = await builderRequest(
+      await builderRequest(
         session.data,
         { organizationId },
         applicationRootId,
         (transaction, authority, context) =>
           dependencies
-            .draftRehearsal(transaction, authority)
-            .rehearseApplicationPreview(context, {
+            .draftPlanner(transaction, authority)
+            .prepareApplicationPreview(context, {
               rootId: applicationRootId,
               expectedDraftRevision,
             }),
+      );
+      const releases = await builderRequest(
+        session.data,
+        { organizationId },
+        applicationRootId,
+        (transaction, authority, context) =>
+          dependencies.draftPlanner(transaction, authority).planApplicationPreview(context, {
+            rootId: applicationRootId,
+            expectedDraftRevision,
+          }),
       );
       // The preview is created in the organisation's context, as its Application may not be
       // installed yet: its releases, Module pins, own permission registration and empty storage.
@@ -227,7 +227,8 @@ export const createPreviewInstallationCoordinator = (
           session.data,
           { organizationId, applicationRootId },
           applicationRootId,
-          (transaction) => createPreviewInstallationRepository(transaction).seed(previewInstallationId),
+          (transaction) =>
+            createPreviewInstallationRepository(transaction).seed(previewInstallationId),
         );
       // Last, in the preview itself: the release set it runs. A preview without it never runs.
       return builderRequest(
@@ -258,17 +259,27 @@ export const createPreviewInstallationCoordinator = (
         throw new DefinitionError("INVALID_PREVIEW_INSTALLATION_COMMAND");
       const { organizationId, applicationRootId, previewInstallationId, expectedDraftRevision } =
         request.data;
-      const releases = await builderRequest(
+      await builderRequest(
         session.data,
         { organizationId },
         applicationRootId,
         (transaction, authority, context) =>
           dependencies
-            .draftRehearsal(transaction, authority)
-            .rehearseApplicationPreview(context, {
+            .draftPlanner(transaction, authority)
+            .prepareApplicationPreview(context, {
               rootId: applicationRootId,
               expectedDraftRevision,
             }),
+      );
+      const releases = await builderRequest(
+        session.data,
+        { organizationId },
+        applicationRootId,
+        (transaction, authority, context) =>
+          dependencies.draftPlanner(transaction, authority).planApplicationPreview(context, {
+            rootId: applicationRootId,
+            expectedDraftRevision,
+          }),
       );
       const result = await builderRequest(
         session.data,

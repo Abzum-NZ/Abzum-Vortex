@@ -79,6 +79,15 @@ const suppliedByEvent: Readonly<Record<string, readonly Readonly<{ name: string;
   inline_edit: [{ name: "record_id", label: "The edited record" }, { name: "values", label: "The edited values" }],
 };
 
+export const studioFlowCallerNames = (event: string,
+  fields: readonly Readonly<{ name: string; label: string }>[] = []): readonly Readonly<{ name: string; label: string }>[] => {
+  const supplied = [...(suppliedByEvent[event] ?? [])];
+  if (event === "form_submit")
+    for (const field of fields)
+      if (!supplied.some((entry) => entry.name === field.name)) supplied.push({ name: field.name, label: `The form's ${field.label}` });
+  return supplied;
+};
+
 const triggerDraft = (trigger: FlowTrigger): StudioFlowTriggerDraft => {
   if (trigger.type === "BeforeSave" && trigger.operations.every((operation) => operation.kind !== "transition"))
     return { kind: "before_save", recordType: trigger.recordTypeId, create: trigger.operations.some((operation) => operation.kind === "create"),
@@ -140,11 +149,7 @@ export const projectStudioFlowStart = (
       triggers: (flow.triggers ?? []).map(triggerDraft),
     },
     callerNames: Object.fromEntries(bindings.map((binding) => {
-      const supplied = [...(suppliedByEvent[binding.event] ?? [])];
-      if (binding.event === "form_submit")
-        for (const field of formFields(binding.control))
-          if (!supplied.some((entry) => entry.name === field.name)) supplied.push({ name: field.name, label: `The form's ${field.label}` });
-      return [binding.id, supplied];
+      return [binding.id, studioFlowCallerNames(binding.event, formFields(binding.control))];
     })),
   };
 };

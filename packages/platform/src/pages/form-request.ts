@@ -38,6 +38,8 @@ const maximumFormValues = 500;
 /** The answers a surface submits for a `form_submit` binding. */
 export type PrivateFormSubmission = Readonly<{
   values: Readonly<Record<string, unknown>>;
+  /** Whole-record patch membership, independent of individually mapped answers. */
+  recordChanges?: readonly string[];
   selectedOwnerGroupId?: string;
 }>;
 
@@ -51,13 +53,18 @@ export const readPrivateFormSubmission = (
 ): PrivateFormSubmission | undefined => {
   if (!isRecord(candidate)) return undefined;
   if (Object.keys(candidate).some((key) =>
-    key !== "values" && key !== "selectedOwnerGroupId")) return undefined;
+    key !== "values" && key !== "recordChanges" && key !== "selectedOwnerGroupId")) return undefined;
   const values = candidate.values;
   if (!isRecord(values) || Object.keys(values).length > maximumFormValues) return undefined;
+  const changes = candidate.recordChanges;
+  if (changes !== undefined && (!Array.isArray(changes) || changes.length > maximumFormValues ||
+      changes.some((name) => typeof name !== "string" || !Object.hasOwn(values, name)) ||
+      new Set(changes).size !== changes.length)) return undefined;
   if (candidate.selectedOwnerGroupId !== undefined &&
       typeof candidate.selectedOwnerGroupId !== "string") return undefined;
   return {
     values,
+    ...(changes === undefined ? {} : { recordChanges: changes as string[] }),
     ...(candidate.selectedOwnerGroupId === undefined
       ? {}
       : { selectedOwnerGroupId: candidate.selectedOwnerGroupId }),
@@ -67,7 +74,7 @@ export const readPrivateFormSubmission = (
 /**
  * The endpoint's form-submit seam. It returns the caller inputs the binding declares, filled from
  * the submitted answers, or `undefined` so the endpoint refuses the submit. A binding that
- * declares the whole answer receives the submission's own values record; every other declared
+ * declares the whole answer receives its record patch when present; every other declared
  * caller input is named exactly, except that the form's separate owner Group selection maps to
  * the binding's declared `selected_owner_group_id` input.
  *
@@ -95,9 +102,11 @@ export const createPrivateFormSubmitAdapter =
     const adapted: Record<string, unknown> = {};
     for (const input of Object.values(binding.flow.inputs)) {
       if (typeof input !== "object" || input === null || input.kind !== "caller") continue;
-      // A binding that declares the whole answer receives the submission's own values record;
-      // every other declared caller input is named exactly and must be present.
-      if (input.name === "values") adapted[input.name] = submission.values;
+      // The whole-record input receives its patch; individual inputs receive complete answers.
+      // Every other declared caller input is named exactly and must be present.
+      if (input.name === "values") adapted[input.name] = submission.recordChanges === undefined
+        ? submission.values
+        : Object.fromEntries(submission.recordChanges.map((name) => [name, submission.values[name]]));
       else if (input.name === "selected_owner_group_id")
         adapted[input.name] = submission.selectedOwnerGroupId;
       else if (Object.hasOwn(submission.values, input.name))

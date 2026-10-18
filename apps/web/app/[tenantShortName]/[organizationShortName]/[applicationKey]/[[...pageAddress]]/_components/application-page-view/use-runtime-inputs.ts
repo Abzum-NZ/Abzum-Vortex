@@ -362,16 +362,20 @@ export function useRuntimeInputs({
           }
           if (submitBinding === undefined) return;
           const baseline = currentEditFormBaselines[placementId];
-          const values =
+          // Keep every answer for individual caller inputs. Only the whole-record values input
+          // receives the changed fields; read-only prefilled answers are not record writes.
+          const recordValues =
             baseline === undefined
               ? event.values
               : Object.fromEntries(
                   Object.entries(event.values).filter(
                     ([name, value]) =>
-                      Object.hasOwn(baseline, name) && !equalFormValue(value, baseline[name]),
+                      !Object.hasOwn(baseline, name) || !equalFormValue(value, baseline[name]),
                   ),
                 );
-          if (baseline !== undefined && Object.keys(values).length === 0) {
+          const recordSubmission = submitBinding.savesFormValues &&
+            submitBinding.callerInputs.every((name) => name === "values" || name === "record");
+          if (baseline !== undefined && recordSubmission && Object.keys(recordValues).length === 0) {
             setNotice(undefined);
             setFormFeedback((current) => ({
               ...current,
@@ -379,7 +383,7 @@ export function useRuntimeInputs({
             }));
             return;
           }
-          const choiceEvidence = choiceEvidenceFor(placementId, values);
+          const choiceEvidence = choiceEvidenceFor(placementId, event.values);
           submittedFormsRef.current.set(submitBinding.bindingId, {
             formId: placementId,
             values: event.values,
@@ -388,8 +392,9 @@ export function useRuntimeInputs({
           return applyDispatch(
             formBlock.submit(
               asComponentBinding(placementId, submitBinding),
-              values,
+              event.values,
               event.selectedOwnerGroupId,
+              baseline === undefined || !submitBinding.savesFormValues ? undefined : Object.keys(recordValues),
             ),
             placementId,
             undefined,

@@ -463,7 +463,7 @@ const flowCreate = (
   command: StudioFlowCreateCommand,
   what: string,
 ): Readonly<{ id: string; eventId: string }> => {
-  const result = applyStudioFlowCreate(judged(plan.source), command);
+  const result = applyStudioFlowCreate(judged(plan.source), command, null);
   if (result.kind === "refused") return refuse(`${what} could not be made: ${result.reason}`);
   plan.source = result.source;
   return result.binding!;
@@ -557,7 +557,7 @@ const placed = (
 
 /** Sets a row click on a records table: its row_click setting names the event the binding declares. */
 const openRows = (plan: Plan, tableAlias: string, resolved: Resolved, detail: Page): void => {
-  const binding = openFlow(
+  openFlow(
     plan,
     tableAlias,
     "row_clicked",
@@ -565,7 +565,6 @@ const openRows = (plan: Plan, tableAlias: string, resolved: Resolved, detail: Pa
     detail,
     resolved,
   );
-  placed(plan.source, tableAlias)!.item.props.row_click = { event_id: binding.eventId };
 };
 
 /** A button that opens a page, placed beside `besideAlias` (before it) or at `items`' start, and its flow. */
@@ -867,6 +866,8 @@ const addDetail = (
     detailAlias,
     {
       title: record.name,
+      heading_source: "field",
+      heading_field: field(resolved, resolved.title),
       detail_fields: shown.map((entry) => ({ field: field(resolved, entry), label: entry.label })),
     },
     {},
