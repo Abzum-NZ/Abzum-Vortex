@@ -11,6 +11,7 @@ export function StudioOutline({
   disabled = false,
   homePageKey,
   searching = false,
+  label = "Outline tree",
 }: Readonly<{
   nodes: readonly StudioSemanticOutlineNode[];
   selectedKey: string;
@@ -18,6 +19,7 @@ export function StudioOutline({
   disabled?: boolean;
   homePageKey?: string | undefined;
   searching?: boolean;
+  label?: string;
 }>) {
   const project = (node: StudioSemanticOutlineNode): StudioNavNode => ({
     key: node.key,
@@ -39,7 +41,7 @@ export function StudioOutline({
   return (
     <StudioNavTree
       nodes={nodes.map(project)}
-      label="Outline tree"
+      label={label}
       disabled={disabled}
       expandAll={searching}
     />

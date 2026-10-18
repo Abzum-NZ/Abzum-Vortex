@@ -220,7 +220,11 @@ export function StudioHome({
                 <PaginationContent>
                   {organization.after !== null && (
                     <PaginationItem>
-                      <PaginationPrevious href={base} text="First page" />
+                      <PaginationPrevious
+                        href={base}
+                        text="First page"
+                        aria-label="Go to first page"
+                      />
                     </PaginationItem>
                   )}
                   {organization.nextCursor !== null && (

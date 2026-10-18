@@ -114,6 +114,7 @@ export function StudioStructurePanel({
     >
       <StudioOutline
         nodes={[withoutChildren(outline)]}
+        label="Application"
         selectedKey={selectedKey}
         choose={choose}
         disabled={disabled}
@@ -132,6 +133,7 @@ export function StudioStructurePanel({
           >
             <StudioOutline
               nodes={nodes}
+              label={title}
               selectedKey={selectedKey}
               choose={choose}
               disabled={disabled}
