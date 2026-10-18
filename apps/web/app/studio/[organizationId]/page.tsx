@@ -98,7 +98,8 @@ export default async function StudioOrganizationPage({
         <div>
           <h1 className="text-2xl font-semibold">Studio</h1>
           <p className="text-muted-foreground">
-            Applications in this organization. A module is edited inside the application that owns it.
+            Applications in this organization. A module is edited inside the application that owns
+            it.
           </p>
         </div>
         <Link
@@ -116,7 +117,9 @@ export default async function StudioOrganizationPage({
       <Card>
         <CardHeader>
           <CardTitle>Applications</CardTitle>
-          <CardDescription>Open an application to edit it, or look at its published versions.</CardDescription>
+          <CardDescription>
+            Open an application to edit it, or look at its published versions.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {applications.length === 0 ? (

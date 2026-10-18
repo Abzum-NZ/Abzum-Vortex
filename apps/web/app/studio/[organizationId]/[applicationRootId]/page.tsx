@@ -4,7 +4,10 @@ import { loadOrganizationLauncher } from "../../../_lib/organization-context";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { continueStudioSession } from "../../_lib/studio-session";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
-import { ApplicationDraftWorkspace, type StudioWorkspacePlace } from "../../_components/application-draft-workspace";
+import {
+  ApplicationDraftWorkspace,
+  type StudioWorkspacePlace,
+} from "../../_components/application-draft-workspace";
 import { findPinnedPlatformThemeRelease } from "../../_lib/pinned-platform-theme-release";
 import { loadStudioOrganizationHome } from "../../../_lib/studio-organization-home";
 import { studioThemeOptions } from "../../_lib/studio-theme-catalogue";
@@ -22,16 +25,31 @@ const appStoreKey = "vortex.app.app_store";
  * The organisation's name and addresses: the running application, for the breadcrumb and Back to app,
  * and the App Store, which a publish points to for installing or upgrading.
  */
-const loadWorkspacePlace = async (organizationId: string, applicationKey: string): Promise<StudioWorkspacePlace> => {
+const loadWorkspacePlace = async (
+  organizationId: string,
+  applicationKey: string,
+): Promise<StudioWorkspacePlace> => {
   const resolved = await resolveIdentitySession();
-  const launcher = resolved.kind === "active" ? await loadOrganizationLauncher(resolved.session) : undefined;
-  const entry = launcher?.kind === "available"
-    ? launcher.entries.find((candidate) => candidate.organizationId === organizationId) : undefined;
+  const launcher =
+    resolved.kind === "active" ? await loadOrganizationLauncher(resolved.session) : undefined;
+  const entry =
+    launcher?.kind === "available"
+      ? launcher.entries.find((candidate) => candidate.organizationId === organizationId)
+      : undefined;
   if (entry === undefined) {
-    console.error(`[studio] workspace place unavailable: session ${resolved.kind}, launcher ${launcher?.kind ?? "not read"}`);
-    return { organizationName: "Organisation", applicationHref: undefined, appStoreHref: undefined };
+    console.error(
+      `[studio] workspace place unavailable: session ${resolved.kind}, launcher ${launcher?.kind ?? "not read"}`,
+    );
+    return {
+      organizationName: "Organisation",
+      applicationHref: undefined,
+      appStoreHref: undefined,
+    };
   }
-  const organizationPath = organizationAddressPath(entry.tenantShortName, entry.organizationShortName);
+  const organizationPath = organizationAddressPath(
+    entry.tenantShortName,
+    entry.organizationShortName,
+  );
   return {
     organizationName: entry.organizationDisplayName,
     applicationHref: `${organizationPath}/${encodeURIComponent(applicationKey)}`,
@@ -39,11 +57,17 @@ const loadWorkspacePlace = async (organizationId: string, applicationKey: string
   };
 };
 
-export default async function StudioApplicationPage({ params, searchParams }: {
+export default async function StudioApplicationPage({
+  params,
+  searchParams,
+}: {
   params: Promise<{ organizationId: string; applicationRootId: string }>;
   searchParams: Promise<{ tab?: string; section?: string; module?: string }>;
 }) {
-  const [{ organizationId, applicationRootId }, { tab, section, module }] = await Promise.all([params, searchParams]);
+  const [{ organizationId, applicationRootId }, { tab, section, module }] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const session = await continueStudioSession();
   if (session.kind === "temporarily_unavailable")
     return <StudioUnavailable subject="Application draft" result={session} />;
@@ -53,22 +77,43 @@ export default async function StudioApplicationPage({ params, searchParams }: {
   const pin = result.draft.source.body.theme.base;
   const themeRelease = findPinnedPlatformThemeRelease(pin);
   if (themeRelease === undefined)
-    throw new Error(`Draft pins unknown platform theme ${pin.catalogue_theme_id}@${pin.release_version}`);
+    throw new Error(
+      `Draft pins unknown platform theme ${pin.catalogue_theme_id}@${pin.release_version}`,
+    );
   const [place, home] = await Promise.all([
     loadWorkspacePlace(result.organizationId, result.draft.key),
     loadStudioOrganizationHome(result.organizationId),
   ]);
   // The owner of a used Module is named and linked from this list; without it the key is shown.
-  if (home.kind !== "available") console.error(`[studio] application list for module owners unavailable: ${home.kind}`);
-  const applications = home.kind === "available"
-    ? home.roots.map((root) => ({ key: root.key, rootId: root.rootId, name: root.name })) : [];
-  return <ApplicationDraftWorkspace key={`${result.organizationId}:${result.draft.rootId}`}
-    mode="existing" organizationId={result.organizationId} draft={result.draft} place={place}
-    themeOptions={studioThemeOptions}
-    initialTab={tab} initialSection={section}
-    initialModule={module} applications={applications}
-    compiledFields={result.compiledFields} borrowedChoices={result.borrowedChoices} usedModules={result.usedModules} published={result.published} peopleDirectory={result.peopleDirectory} pageCompiledSlots={result.pageCompiledSlots} canvasFrames={result.canvasFrames} compileFailure={result.compileFailure}
-    platformBlockCatalogue={IMMUTABLE_PLATFORM_BLOCK_CATALOGUE}
-    fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
-    platformThemeTokens={themeRelease.tokens} />;
+  if (home.kind !== "available")
+    console.error(`[studio] application list for module owners unavailable: ${home.kind}`);
+  const applications =
+    home.kind === "available"
+      ? home.roots.map((root) => ({ key: root.key, rootId: root.rootId, name: root.name }))
+      : [];
+  return (
+    <ApplicationDraftWorkspace
+      key={`${result.organizationId}:${result.draft.rootId}`}
+      mode="existing"
+      organizationId={result.organizationId}
+      draft={result.draft}
+      place={place}
+      themeOptions={studioThemeOptions}
+      initialTab={tab}
+      initialSection={section}
+      initialModule={module}
+      applications={applications}
+      compiledFields={result.compiledFields}
+      borrowedChoices={result.borrowedChoices}
+      usedModules={result.usedModules}
+      published={result.published}
+      peopleDirectory={result.peopleDirectory}
+      pageCompiledSlots={result.pageCompiledSlots}
+      canvasFrames={result.canvasFrames}
+      compileFailure={result.compileFailure}
+      platformBlockCatalogue={IMMUTABLE_PLATFORM_BLOCK_CATALOGUE}
+      fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
+      platformThemeTokens={themeRelease.tokens}
+    />
+  );
 }

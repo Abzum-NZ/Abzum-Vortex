@@ -10,7 +10,9 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function NewStudioApplicationPage({ params }: {
+export default async function NewStudioApplicationPage({
+  params,
+}: {
   params: Promise<{ organizationId: string }>;
 }) {
   const { organizationId } = await params;
@@ -20,8 +22,13 @@ export default async function NewStudioApplicationPage({ params }: {
   const result = await loadStudioCreateAccess(organizationId);
   if (result.kind !== "available")
     return <StudioUnavailable subject="New application" result={result} />;
-  return <ApplicationDraftWorkspace mode="new" organizationId={result.organizationId}
-    platformBlockCatalogue={IMMUTABLE_PLATFORM_BLOCK_CATALOGUE}
-    fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
-    platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens} />;
+  return (
+    <ApplicationDraftWorkspace
+      mode="new"
+      organizationId={result.organizationId}
+      platformBlockCatalogue={IMMUTABLE_PLATFORM_BLOCK_CATALOGUE}
+      fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
+      platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens}
+    />
+  );
 }
