@@ -553,6 +553,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "hr_department_detail",
+                    "heading_source": "title",
                     "title": "Department",
                     "detail_fields": [
                       {
@@ -972,6 +973,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "hr_position_detail",
+                    "heading_source": "title",
                     "title": "Position",
                     "detail_fields": [
                       {
@@ -1455,6 +1457,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "hr_employee_detail",
+                    "heading_source": "title",
                     "title": "Employee",
                     "detail_fields": [
                       {
@@ -2098,6 +2101,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "hr_leave_request_detail",
+                    "heading_source": "title",
                     "title": "Leave request",
                     "detail_fields": [
                       {
@@ -2791,6 +2795,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "hr_leave_entitlement_detail",
+                    "heading_source": "title",
                     "title": "Leave entitlement",
                     "detail_fields": [
                       {

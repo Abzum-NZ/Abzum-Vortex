@@ -699,6 +699,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "content_2",
+                    "heading_source": "title",
                     "detail_fields": [
                       {
                         "field": "vortex.service_desk.cases:case.case_number",
@@ -1426,6 +1427,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "content_5",
+                    "heading_source": "title",
                     "detail_fields": [
                       {
                         "field": "vortex.service_desk.knowledge:article.article_number",
@@ -1558,6 +1560,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "content_6",
+                    "heading_source": "title",
                     "detail_fields": [
                       {
                         "field": "vortex.service_desk.knowledge:article.article_number",
@@ -1901,6 +1904,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "detail_sd_service_level",
+                    "heading_source": "title",
                     "detail_fields": [
                       {
                         "field": "vortex.service_desk.sla:service_level.name",
@@ -2063,6 +2067,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "detail_sd_customer",
+                    "heading_source": "title",
                     "detail_fields": [
                       {
                         "field": "vortex.crm.organisations:company.company_number",
@@ -2300,6 +2305,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "detail_sd_requester",
+                    "heading_source": "title",
                     "detail_fields": [
                       {
                         "field": "vortex.crm.people:contact.contact_number",
