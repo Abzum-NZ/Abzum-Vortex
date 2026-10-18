@@ -5,6 +5,7 @@ import { fieldInputControlKeys, type FieldInputControlKey } from "@vortex/platfo
 import { DefinitionRenderError } from "../definition-error";
 import type { ControlRenderProps } from "./control-context";
 import type { FieldInputPayload } from "./projected-data";
+import { AttachmentInput } from "./attachment-input";
 import { TableInput } from "./table-input";
 import { TextInput } from "./text-input";
 import { LinkInput } from "./link-input";
@@ -30,6 +31,7 @@ type FieldInputComponent = ComponentType<ControlRenderProps<FieldInputPayload>>;
  */
 const COMPONENTS: Readonly<Record<FieldInputControlKey, FieldInputComponent>> = Object.freeze({
   text: TextInput as unknown as FieldInputComponent,
+  attachment: AttachmentInput as unknown as FieldInputComponent,
   table: TableInput as unknown as FieldInputComponent,
   rich_text: RichTextInput as unknown as FieldInputComponent,
   number: NumberInput as unknown as FieldInputComponent,
@@ -46,6 +48,7 @@ const EXPECTED_PAYLOAD_KIND: Readonly<Record<FieldInputControlKey, FieldInputPay
   Object.freeze({
     text: "text_input",
     table: "table_input",
+    attachment: "attachment_input",
     rich_text: "rich_text_input",
     number: "number_input",
     boolean: "boolean_input",
