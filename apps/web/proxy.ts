@@ -1,7 +1,10 @@
-import { isAuthRefreshDiscardedError, isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
 import { getIdentityJourneyConfiguration } from "./app/auth/_lib/authority-configuration";
-import { createIdentitySessionClient } from "./app/auth/_lib/supabase-session-client";
+import {
+  createIdentitySessionClient,
+  readIdentitySessionProvider,
+} from "./app/auth/_lib/supabase-session-client";
+import { mapWebError } from "./app/_lib/web-error-mapper";
 import { identitySessionCookieDeletions } from "./app/auth/_lib/session-cookie";
 import {
   forwardedIdentitySessionHeaders,
@@ -44,8 +47,13 @@ export async function proxy(request: NextRequest) {
     boundary = createIdentitySessionClient(
       request.cookies.getAll().map(({ name, value }) => ({ name, value })),
     );
-  } catch {
-    return privateResponse(response);
+  } catch (error) {
+    return mapWebError(error, {
+      route: "auth/session",
+      operation: "create-proxy-session-client",
+      code: "SESSION_CLIENT_UNAVAILABLE",
+      fallback: privateResponse(response),
+    });
   }
 
   if (boundary.stage.initialState.kind === "invalid") {
@@ -56,30 +64,21 @@ export async function proxy(request: NextRequest) {
   }
   if (boundary.stage.initialState.kind === "missing") return responseFor("missing");
 
-  let claims = await boundary.client.auth.getClaims();
   // One retry absorbs a transient provider or key-set fetch failure so the first load after
   // sign-in is not shown as unavailable; a second failure is still reported as unavailable.
-  if (claims.error && isAuthRetryableFetchError(claims.error))
-    claims = await boundary.client.auth.getClaims();
+  const claims = await readIdentitySessionProvider(
+    "get-claims",
+    () => boundary.client.auth.getClaims(),
+    true,
+  );
   const staged = boundary.stage.snapshot();
-  if (staged.refused) {
+  if (staged.refused || (claims.ok ? !claims.data : claims.state === "invalid")) {
     response = responseFor("invalid");
     for (const mutation of identitySessionCookieDeletions(boundary.profile))
       response.cookies.set(mutation.name, mutation.value, mutation.options);
     return privateResponse(response);
   }
-  if (
-    (!claims.data && !claims.error) ||
-    (claims.error &&
-      !isAuthRetryableFetchError(claims.error) &&
-      !isAuthRefreshDiscardedError(claims.error))
-  ) {
-    response = responseFor("invalid");
-    for (const mutation of identitySessionCookieDeletions(boundary.profile))
-      response.cookies.set(mutation.name, mutation.value, mutation.options);
-    return privateResponse(response);
-  }
-  if (claims.error) return privateResponse(responseFor("temporarily_unavailable"));
+  if (!claims.ok) return privateResponse(responseFor("temporarily_unavailable"));
   if (staged.mutations.length > 0) {
     // Make the refreshed pair visible to Server Components in this same request,
     // then emit the identical mutations to the browser response.
