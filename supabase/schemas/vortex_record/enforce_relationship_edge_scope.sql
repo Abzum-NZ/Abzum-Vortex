@@ -41,3 +41,5 @@ alter function vortex_record.enforce_relationship_edge_scope() owner to vortex_o
 
 
 REVOKE ALL ON FUNCTION vortex_record.enforce_relationship_edge_scope() FROM PUBLIC;
+
+grant execute on function vortex_record.enforce_relationship_edge_scope() to vortex_owner, vortex_record_adapter;
