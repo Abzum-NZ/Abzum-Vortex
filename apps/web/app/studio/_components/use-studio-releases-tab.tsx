@@ -17,6 +17,8 @@ import { describeStudioCompileFailure } from "../_lib/studio-compile-failure";
 import { StudioReleasesPanel } from "./studio-releases-panel";
 import { studioReleasesSections, type StudioReleasesSection } from "./studio-rail-tabs";
 import type { StudioDraft } from "./use-studio-draft";
+import { studioNotice } from "./studio-save-state";
+import { toast } from "@vortex/ui/components/sonner";
 
 /** The saved revision a publication was prepared for; any edit or reload makes it out of date. */
 type PublicationSnapshot = Readonly<{
@@ -71,12 +73,10 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, appStoreHr
   const [note, setNote] = useState("");
   const [problem, setProblem] = useState("");
   const [preparing, setPreparing] = useState(false);
-  // A new version closes Publish, is named in the top bar with the App Store link, and reloads the history.
-  const [offerAppStore, setOfferAppStore] = useState(false);
+  // A new version closes Publish, is named in a toast, and reloads the history.
   const [historyGeneration, setHistoryGeneration] = useState(0);
   const [prepared, setPreparedState] = useState<PreparedPublication | null>(null);
   const [previewPending, setPreviewPending] = useState(false);
-  const [notice, setNotice] = useState("");
   // The agent tools read the confirmation between calls, so the latest value is kept outside render state.
   const preparedRef = useRef<PreparedPublication | null>(null);
   const setPrepared = useCallback((next: PreparedPublication | null) => { preparedRef.current = next; setPreparedState(next); }, []);
@@ -157,8 +157,8 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, appStoreHr
         parsed.data.contentFingerprint === confirmation.contentFingerprint &&
         parsed.data.resolutionFingerprint === confirmation.resolutionFingerprint &&
         canonicalJson(parsed.data.dependencyManifest) === canonicalJson(confirmation.dependencyManifest)) {
-        setNotice(`Version ${parsed.data.releaseVersion} published.`);
-        setOfferAppStore(true);
+        studioNotice(`Published version ${parsed.data.releaseVersion}`, "success",
+          appStoreHref === undefined ? undefined : { label: "Open App Store", href: appStoreHref });
         setHistoryGeneration((generation) => generation + 1);
         closePublish(false);
         return { kind: "published", publication: parsed.data };
@@ -191,7 +191,6 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, appStoreHr
 
   const openPublish = () => {
     setProblem("");
-    setOfferAppStore(false);
     setNote("");
     setPublishOpen(true);
     void latest.current.flush();
@@ -210,28 +209,28 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, appStoreHr
     if (previewPending) return;
     const previewTab = window.open("", "_blank");
     setPreviewPending(true);
+    const previewToast = toast.loading("Preview is starting…");
     try {
       if (!await latest.current.flush()) {
         previewTab?.close();
-        setNotice("Your latest change is not saved, so there is nothing new to preview. See the message above.");
+        studioNotice("Your latest change is not saved. Open the save-state chip to resolve it, then try Preview again.", "error");
         return;
       }
       const state = history.getState();
-      setNotice("Starting the preview of the saved draft…");
       const result = await previewStudioApplication(organizationId, { rootId: state.rootId, draftRevision: state.draftRevision });
       if (result.kind !== "provisioned") {
         previewTab?.close();
-        setNotice(previewProblem(result));
+        studioNotice(previewProblem(result), "error");
         return;
       }
-      if (previewTab === null) window.open(result.href, "_blank", "noopener");
-      else previewTab.location.href = result.href;
-      setNotice(`Preview of draft revision ${result.draftRevision} opened in a new tab.`);
+      if (previewTab !== null) previewTab.location.href = result.href;
+      toast.success("Preview ready", { action: { label: "Open", onClick: () => { window.open(result.href, "_blank", "noopener"); } } });
     } catch (error) {
       console.error("[studio] the preview could not be started", describeFailure(error));
       previewTab?.close();
-      setNotice("The preview could not be started. Your changes are kept.");
+      studioNotice("The preview could not be started. Your changes are kept.", "error");
     } finally {
+      toast.dismiss(previewToast);
       if (latest.current.isActive()) setPreviewPending(false);
     }
   };
@@ -274,12 +273,12 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, appStoreHr
     {!hidden && section === "history" &&
       <StudioHistoryTab key={historyGeneration} organizationId={organizationId} rootId={draft.state.rootId} savedRevision={draft.saved.draftRevision}
         restoreBlocked={restoreBlocked} hold={(on) => draft.hold("restoring", on)}
-        onRestored={(restored) => { void draft.reload().then((loaded) => setNotice(loaded ? restored
-          : "The version was restored, but the restored draft could not be loaded here. Reload Studio to see it.")); }} />}
+        onRestored={(restored) => { void draft.reload().then((loaded) => studioNotice(loaded ? restored
+          : "The version was restored, but the restored draft could not be loaded here. Reload Studio to see it.", loaded ? "success" : "error")); }} />}
     {!hidden && section === "page-adoption" &&
       <StandardPageAdoption organizationId={organizationId} rootId={draft.state.rootId}
         disabledReason={restoreBlocked} hold={(on) => draft.hold("restoring", on)}
-        onSaved={() => { void draft.reload().then((loaded) => { if (!loaded) setNotice("Your choice was saved, but the draft could not be loaded here. Reload Studio to see it."); }); }} />}
+        onSaved={() => { void draft.reload().then((loaded) => { if (!loaded) studioNotice("Your choice was saved, but the draft could not be loaded here. Reload Studio to see it.", "error"); }); }} />}
     {/* The import keeps what was pasted while another section or tab is open. */}
     <section hidden={section !== "import"} aria-label="Import from source" className="space-y-3">
       <p className="text-sm text-muted-foreground">Replace the draft with a source document. This is for advanced use; the change is checked before it reaches your draft.</p>
@@ -298,9 +297,7 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, appStoreHr
     onPublish={() => { void requestPublication("publish"); }} />;
 
   return {
-    panel, centre, title, dialog, notice,
-    noticeLink: offerAppStore && appStoreHref !== undefined
-      ? { label: "Open in App Store to install or upgrade", href: appStoreHref } : undefined,
+    panel, centre, title, dialog,
     openPublish, openPreview: () => { void openPreview(); }, previewPending,
     agent: {
       readPreparedConfirmation: () => preparedRef.current?.confirmation,

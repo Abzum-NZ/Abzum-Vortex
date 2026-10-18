@@ -204,6 +204,20 @@ export const DEFAULT_APPLICATION_THEME_SELECTION = applicationThemeSelectionSche
   headingFont: "inherit",
 });
 
+/** Studio's platform chrome; the authored application keeps its own selection on the canvas. */
+export const STUDIO_THEME_SELECTION = applicationThemeSelectionSchema.parse({
+  style: "vega",
+  baseColor: "zinc",
+  theme: "indigo",
+  chartColor: "indigo",
+  radius: "medium",
+  menuColor: "default",
+  menuAccent: "subtle",
+  iconLibrary: "lucide",
+  bodyFont: "geist",
+  headingFont: "inherit",
+});
+
 export const DEFAULT_SOURCE_APPLICATION_THEME_SELECTION =
   sourceApplicationThemeSelectionSchema.parse({
     style: "nova",
