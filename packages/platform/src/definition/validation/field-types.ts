@@ -214,7 +214,9 @@ export function typedConditionTypesValid(
     dialect === "source" && condition.right === undefined
       ? condition.parameter !== undefined
         ? { source: "parameter", parameter: condition.parameter }
-        : { source: "value", value: condition.value }
+        : condition.value !== undefined
+          ? { source: "value", value: condition.value }
+          : undefined
       : condition.right;
   const declaration = (operandValue: unknown): ModuleValueDeclaration | undefined => {
     const operand = object(operandValue);
@@ -256,17 +258,7 @@ export function typedConditionTypesValid(
   };
   const left = info(authoredLeft);
   if (!left) return false;
-  const operator = String(condition.operator);
-  if (operator === "is_empty" || operator === "is_not_empty")
-    return (
-      left.semanticType !== undefined &&
-      (dialect === "source"
-        ? condition.left === undefined &&
-          condition.parameter === undefined &&
-          condition.value === undefined
-        : authoredRight === undefined)
-    );
-  const right = info(authoredRight);
-  if (!right) return false;
-  return operatorAcceptsOperands(operator, left, right);
+  const right = authoredRight === undefined ? undefined : info(authoredRight);
+  if (authoredRight !== undefined && !right) return false;
+  return operatorAcceptsOperands(String(condition.operator), left, right);
 }
