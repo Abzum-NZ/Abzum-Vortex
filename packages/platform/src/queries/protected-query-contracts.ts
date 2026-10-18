@@ -333,6 +333,7 @@ export type ProtectedQueryPageRow = z.infer<typeof protectedQueryPageRowSchema>;
 export const protectedQueryRefusalReasonCodes = [
   "request_invalid",
   "query_unavailable",
+  "read_forbidden",
   "descriptor_invalid",
   "input_invalid",
   "field_unbounded",

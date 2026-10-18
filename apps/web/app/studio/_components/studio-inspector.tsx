@@ -1,33 +1,53 @@
 "use client";
-import type { FormEvent, ReactNode } from "react";
-import { Button } from "@vortex/ui/components/button";
+import type { ReactNode } from "react";
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { TechnicalDetails } from "@vortex/ui/components/technical-details";
 import type { resolveStudioSelectionInspectorContext } from "@vortex/ui/studio";
 import { StudioPanelShell } from "./studio-frame";
 import { studioKindLabel } from "../_lib/studio-labels";
+import { useStudioDraftText } from "./use-studio-draft-text";
 
 type InspectorContext = ReturnType<typeof resolveStudioSelectionInspectorContext>;
 
-/** The name and description of the application or a page, edited into the draft with Apply. */
+/** The name and description of the application or a page, edited into the draft as they are typed. */
 export type StudioLabelsForm = Readonly<{
   isApplication: boolean;
   label: string; description: string;
-  inputDisabled: boolean; applyDisabled: boolean; discardDisabled: boolean;
-  onLabel: (value: string) => void; onDescription: (value: string) => void;
-  onApply: (event: FormEvent<HTMLFormElement>) => void; onDiscard: () => void;
+  disabled: boolean;
+  /** Puts a name or description in the draft; answers `true` or why the text was not taken. */
+  onLabel: (value: string) => string | true;
+  onDescription: (value: string) => string | true;
 }>;
+
+function LabelsForm({ labels }: Readonly<{ labels: StudioLabelsForm }>) {
+  const name = useStudioDraftText(labels.label, labels.onLabel);
+  const description = useStudioDraftText(labels.description, labels.onDescription);
+  return <div className="space-y-3">
+    <label className="block space-y-1"><span className="text-sm">Name</span>
+      <Input className="w-full" required maxLength={labels.isApplication ? 120 : 60} aria-invalid={name.problem !== ""}
+        disabled={labels.disabled} value={name.text} onChange={(event) => name.change(event.target.value)} /></label>
+    {name.problem !== "" && <p role="alert" className="text-sm text-destructive">{name.problem}</p>}
+    {labels.isApplication && <>
+      <label className="block space-y-1"><span className="text-sm">Description</span>
+        <Textarea className="w-full" required maxLength={1000} disabled={labels.disabled} aria-invalid={description.problem !== ""}
+          value={description.text} onChange={(event) => description.change(event.target.value)} /></label>
+      {description.problem !== "" && <p role="alert" className="text-sm text-destructive">{description.problem}</p>}
+    </>}
+  </div>;
+}
 
 /**
  * The right-hand inspector: what is selected, its name (when it has one) and the editors for it,
  * which the workspace passes in as `children` because they edit its one draft history.
  */
-export function StudioInspector({ inspector, title, labels, note, children }: Readonly<{
+export function StudioInspector({ inspector, title, labels, labelsKey, note, children }: Readonly<{
   inspector: InspectorContext;
   title: string;
   /** Present when the selection's name can be edited here. */
   labels: StudioLabelsForm | undefined;
+  /** The selection the name form belongs to: another selection starts a new form. */
+  labelsKey: string;
   /** Shown instead of the name form when the selection has none and no editor below. */
   note: string | undefined;
   children: ReactNode;
@@ -41,19 +61,8 @@ export function StudioInspector({ inspector, title, labels, note, children }: Re
         <div><dt className="font-semibold">Source path</dt><dd className="break-all"><code>{inspector.descriptor.sourcePath || "/"}</code></dd></div>
       </dl>
     </TechnicalDetails>}
-    {labels !== undefined ? <form className="space-y-3" onSubmit={labels.onApply}>
-      <label className="block space-y-1"><span className="text-sm">Name</span>
-        <Input className="w-full" required maxLength={labels.isApplication ? 120 : 60}
-          disabled={labels.inputDisabled} value={labels.label} onChange={(event) => labels.onLabel(event.target.value)} /></label>
-      {labels.isApplication && <label className="block space-y-1"><span className="text-sm">Description</span>
-        <Textarea className="w-full" required maxLength={1000} disabled={labels.inputDisabled}
-          value={labels.description} onChange={(event) => labels.onDescription(event.target.value)} /></label>}
-      <div className="flex gap-2">
-        <Button disabled={labels.applyDisabled} type="submit" size="sm">Apply</Button>
-        <Button disabled={labels.discardDisabled} type="button" size="sm" variant="outline" onClick={labels.onDiscard}>Discard</Button>
-      </div>
-      <p className="text-sm text-muted-foreground">Apply puts the change in your draft. Save keeps it.</p>
-    </form> : note === undefined ? null : <p className="text-sm">{note}</p>}
+    {labels !== undefined ? <LabelsForm key={labelsKey} labels={labels} />
+      : note === undefined ? null : <p className="text-sm">{note}</p>}
     {children}
   </StudioPanelShell>;
 }

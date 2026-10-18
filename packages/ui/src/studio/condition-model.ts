@@ -17,6 +17,7 @@ import {
   type ModuleField,
   isRecord,
 } from "@vortex/platform/schema";
+import { formatIsoDate } from "../display/date-format";
 
 
 type ComparisonCondition = Extract<ConditionNode, { kind: "comparison" }>;
@@ -47,7 +48,10 @@ export type StudioConditionSemanticType =
   | "record_reference"
   | "organization_account_reference";
 
-/** Parameter types accepted by Rule . Host-only values use the same parameter source. */
+/**
+ * Parameter types accepted by Rule and query conditions. Host-only values use the same parameter
+ * source; a record reference is a query input that names one record, compared with a link field.
+ */
 export type StudioConditionParameterType =
   | "text"
   | "number"
@@ -56,6 +60,7 @@ export type StudioConditionParameterType =
   | "boolean"
   | "date"
   | "date_time"
+  | "record_reference"
   | "organization_account_reference";
 
 export type StudioConditionOperandRole =
@@ -64,6 +69,9 @@ export type StudioConditionOperandRole =
   | "declared_input"
   | "event_value"
   | "variable"
+  | "step_output"
+  | "record_field"
+  | "run_value"
   | "trusted_account_context"
   | "host_context";
 
@@ -83,6 +91,8 @@ export type StudioConditionOperandPermission =
       operand: ParameterOperand;
       label: string;
       role: Exclude<StudioConditionOperandRole, "current_field">;
+      /** A choice's options: a value compared with this operand is picked from them. */
+      options?: readonly Readonly<{ value: string; label: string }>[];
     }>;
 
 export type StudioConditionParameterDeclaration = Readonly<{
@@ -189,6 +199,9 @@ const roleLabels: Readonly<Record<StudioConditionOperandRole, string>> = {
   declared_input: "Declared inputs",
   event_value: "Event values",
   variable: "Variables",
+  step_output: "Earlier steps",
+  record_field: "Record fields",
+  run_value: "The run",
   trusted_account_context: "Trusted account context",
   host_context: "Host context",
 };
@@ -311,6 +324,7 @@ const contextIssues = (
     "boolean",
     "date",
     "date_time",
+    "record_reference",
     "organization_account_reference",
   ]);
   const parameterDeclarations = new Map<string, StudioConditionParameterType>();
@@ -918,13 +932,40 @@ export const infoForExpectedLiteral = (
 export const literalInputValue = (value: JsonValue): string =>
   value === null ? "" : typeof value === "string" ? value : String(value);
 
-export const localDateTimeInputValue = (value: JsonValue): string => {
+export const localDateTimeInputValue = (value: JsonValue, timeZone: string): string => {
   if (typeof value !== "string" || !isValidInstant(value)) return "";
-  const instant = new Date(value);
-  if (Number.isNaN(instant.getTime())) return "";
-  const pad = (part: number): string => String(part).padStart(2, "0");
-  const year = String(instant.getFullYear()).padStart(4, "0");
-  const date = `${year}-${pad(instant.getMonth() + 1)}-${pad(instant.getDate())}`;
-  const time = `${pad(instant.getHours())}:${pad(instant.getMinutes())}:${pad(instant.getSeconds())}`;
-  return `${date}T${time}`;
+  return formatIsoDate(value, { timeZone }, "input") ?? "";
+};
+
+const localDateTimePattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
+
+/**
+ * The instant a `datetime-local` value names in the same time zone `localDateTimeInputValue` shows
+ * it in, so an edit round-trips; undefined when the text is not a local date and time.
+ */
+export const instantFromLocalDateTimeInput = (
+  value: string,
+  timeZone: string,
+): string | undefined => {
+  const match = localDateTimePattern.exec(value);
+  if (match === null) return undefined;
+  const [year, month, day, hour, minute, second] = match
+    .slice(1)
+    .map((part) => (part === undefined ? 0 : Number(part))) as [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
+  const wall = Date.UTC(year, month - 1, day, hour, minute, second);
+  if (Number.isNaN(wall)) return undefined;
+  const offsetAt = (instant: number): number => {
+    const shown = formatIsoDate(new Date(instant).toISOString(), { timeZone }, "input");
+    return shown === undefined ? 0 : Date.parse(`${shown}Z`) - instant;
+  };
+  // A second pass settles a wall time near a daylight-saving change on the offset in force then.
+  const instant = wall - offsetAt(wall - offsetAt(wall));
+  return new Date(instant).toISOString();
 };

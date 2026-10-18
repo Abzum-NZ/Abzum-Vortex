@@ -159,7 +159,7 @@ begin
     );
   else
     target_loaded := vortex_record.load_record_access_facts_internal(
-      target_type_id, 'read', target_record_id, null
+      target_type_id, 'read', target_record_id, null, null::jsonb
     );
   end if;
   if target_loaded ->> 'outcome' <> 'loaded'

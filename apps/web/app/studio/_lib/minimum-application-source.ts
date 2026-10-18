@@ -110,7 +110,6 @@ export const minimumApplicationSource = (
         },
       }],
       navigation: [],
-      pipelines: [],
       connection_bindings: [],
       interfaces: [],
       events: [],
@@ -126,7 +125,6 @@ export const minimumApplicationSource = (
           release_version: DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY.releaseVersion,
         },
         selection: DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
-        token_overrides: {},
       },
     },
   } as unknown as ApplicationSourceDocument;

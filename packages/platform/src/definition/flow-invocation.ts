@@ -46,6 +46,7 @@ import { createRecordSaveService } from "../records/save-record";
 import type { createDatabaseApplicationBoundReleaseSetService } from "./application-bound-release-set";
 import { readPermittedApplicationsAtAddress } from "./application-address";
 import { createDatabaseFlowStores } from "./flow-continuation-store";
+import { createFlowCurrentRecordReader } from "./flow-current-record";
 import { createFlowOrchestrator } from "./flow-orchestrator";
 import type { FlowNamedAction, FlowRecordType, FlowRelease } from "./flow-orchestrator-types";
 import { createFormContinuationService } from "./form-continuation";
@@ -53,6 +54,7 @@ import { flowReadFieldsScalarTypeForField } from "./flow-compilation";
 import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
 import { installedNamedActionDescriptors, installedNamedActions } from "./installed-named-actions";
 import { createProtectedOperationExecutor } from "./protected-operation-executor";
+import type { ApplicationStoreService } from "./installation-application-store";
 import { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";
 import type { QueryContinuationKey } from "../queries/continuation-token";
 import {
@@ -64,7 +66,7 @@ import {
 type ProjectedFormField = Readonly<{
   fieldKey: string;
   command: RecordReferenceChoiceCommand;
-  releaseVersion: "1.1.0" | "1.2.0" | "1.3.0";
+  releaseVersion: "1.1.0" | "1.2.0";
   dependency?: Readonly<{ key: string; fromField: string }>;
 }>;
 type ProjectedForm = Readonly<{ fields: ReadonlyMap<string, ProjectedFormField> }>;
@@ -98,6 +100,8 @@ type GuidedInvocationPage = Readonly<{
 
 type InvocationDependencies = Readonly<{
   authorityId: IdentityAuthorityId;
+  /** The application catalogue's install and upgrade journeys, run under the initiator's authority. */
+  applicationStore: ApplicationStoreService;
   channel: ProtectedOperationChannel;
   telemetry: NonNullable<Parameters<typeof createRecordSaveService>[0]["telemetry"]>;
   releaseCatalogue: Parameters<typeof createDatabaseApplicationBoundReleaseSetService>[0];
@@ -550,6 +554,7 @@ export async function invokeInstalledFlow(
   });
   const executor = createProtectedOperationExecutor({
     accessAdministration: createOrganizationAccessAdministrationService(requestDependencies),
+    applicationStore: dependencies.applicationStore,
     tenantGovernance: {
       run: (session, selection, operation) =>
         requests.runChange(session, selection, (transaction, scope) =>
@@ -636,6 +641,12 @@ export async function invokeInstalledFlow(
           (await subjectReader.read(session, selection, subject)).kind,
       },
       selectedRecordReads: selectedRecordReadsFor(installation),
+      currentRecords: createFlowCurrentRecordReader({
+        requests,
+        reader: selectedRecordReader,
+        installation,
+        identityId: identity.session.identityId,
+      }),
       recordPins: {
         acquireIdentity: async (session, selection, selector) => {
           if (

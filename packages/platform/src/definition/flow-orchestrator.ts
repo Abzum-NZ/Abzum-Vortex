@@ -133,6 +133,33 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
   });
 
 
+  /**
+   * The record a flow with a record input runs for, read afresh for the verified initiator: at the
+   * start from the input the binding supplied, and at every resume from the run's own input, so a
+   * stored run never holds record values. `undefined` when the flow names no record input.
+   */
+  const readRunRecord = async (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    flow: FlowDefinition | undefined,
+    recordId: unknown,
+  ): Promise<FlowRunState["triggerRecord"] | "unavailable"> => {
+    if (flow?.recordInput === undefined) return undefined;
+    const recordTypeId = flow.inputs[flow.recordInput]?.recordTypeIds?.[0];
+    if (recordTypeId === undefined || typeof recordId !== "string" || recordId.length === 0) {
+      console.error(`[flows] flow ${flow.id} was started without the record its input ${flow.recordInput} names`);
+      return "unavailable";
+    }
+    if (dependencies.currentRecords === undefined) {
+      console.error(`[flows] flow ${flow.id} reads its record, but this host reads no records`);
+      return "unavailable";
+    }
+    const read = await dependencies.currentRecords.read(session, selection, { recordTypeId, recordId });
+    if (read.outcome === "read") return read.values;
+    console.error(`[flows] the record of flow ${flow.id} is not available to the initiator`);
+    return "unavailable";
+  };
+
   /** Suspends at a form or confirmation: stores the run and returns the intent and continuation. */
   const suspend = async (
     run: Run,
@@ -153,12 +180,15 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         unavailable: run.unavailable,
       };
     const { session, selection } = run.authority;
+    // The record the run reads is read again when it resumes, so its values are never stored.
+    const state: FlowRunState = { ...step.state };
+    delete (state as { triggerRecord?: unknown }).triggerRecord;
     const token = newToken();
     let stored: Awaited<ReturnType<FlowContinuationStore["issue"]>> | undefined;
     try {
       // A run holding a sensitive value (in a task output, variable or intent) is never stored, so
       // it ends here instead of waiting for the person.
-      if (!carriesSensitive(step.state, run.sensitive))
+      if (!carriesSensitive(state, run.sensitive))
         stored = await dependencies.continuations.issue({
           tokenHash: sha256(token),
           runId: step.state.runId,
@@ -166,7 +196,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           identityId: session.identityId,
           flowId: run.flowId,
           releaseKey: run.release.releaseKey,
-          state: step.state,
+          state,
           elapsedMilliseconds: Math.min(elapsedMilliseconds(run), 3_600_000),
           lifetimeSeconds: flowContinuationLifetimeSeconds,
         });
@@ -336,6 +366,14 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         if (expectation !== undefined && expectation.releaseKey !== prepared.release.releaseKey)
           return refused;
         const actor = await dependencies.resolveActor?.(session, selection);
+        const flow = prepared.library(prepared.flowId);
+        const triggerRecord = await readRunRecord(
+          session,
+          selection,
+          flow,
+          flow?.recordInput === undefined ? undefined : binding.inputs[flow.recordInput],
+        );
+        if (triggerRecord === "unavailable") return refused;
         const run: Run = {
           authority: { kind: "person", session, selection },
           origin: "person",
@@ -358,6 +396,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
             now: now().toISOString(),
             ...(actor === undefined ? {} : { actor }),
             ...(subject === undefined ? {} : { subject }),
+            ...(triggerRecord === undefined ? {} : { triggerRecord }),
           },
           run.library,
         );
@@ -544,6 +583,15 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           )
             return refused;
         }
+        const root = state.activations[0];
+        const rootFlow = root === undefined ? undefined : prepared.library(root.flowId);
+        const triggerRecord = await readRunRecord(
+          session,
+          selection,
+          rootFlow,
+          rootFlow?.recordInput === undefined ? undefined : root?.inputs[rootFlow.recordInput]?.value,
+        );
+        if (triggerRecord === "unavailable") return refused;
         const run: Run = {
           authority: { kind: "person", session, selection },
           origin: "person",
@@ -558,7 +606,14 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           sensitive: [],
           selectedRecordReadSeen: false,
         };
-        return await drive(run, resumeFlowRun(state, answer, run.library));
+        return await drive(
+          run,
+          resumeFlowRun(
+            triggerRecord === undefined ? state : { ...state, triggerRecord },
+            answer,
+            run.library,
+          ),
+        );
       } catch (error) {
         reportUnexpectedFailure("flow resume", error);
         return refused;

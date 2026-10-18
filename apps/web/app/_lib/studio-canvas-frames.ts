@@ -27,6 +27,11 @@ export type StudioApplicationCanvasFrames = Readonly<{
   applicationName: string;
   shells: readonly ApplicationShell[];
   theme: ApplicationContent["theme"];
+  /**
+   * Each role's permission keys as the compiled draft grants them (a role holding every permission
+   * expanded), keyed by role key: the decisions Studio's "who can see this" preview projects with.
+   */
+  roles: Readonly<Record<string, readonly string[]>>;
   /** Keyed by authored page alias. */
   pages: Readonly<Record<string, Readonly<{
     pageId: string;
@@ -66,6 +71,7 @@ export const studioCanvasFramesFor = (
     applicationName: content.name,
     shells,
     theme: content.theme,
+    roles: Object.fromEntries(content.roles.map((role) => [role.key, role.permissionKeys.map(String)])),
     pages,
   };
 };

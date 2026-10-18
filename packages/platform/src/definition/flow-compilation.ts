@@ -307,37 +307,17 @@ const resolveProperty = (
     case "relationship_id":
       return member((record, alias) => ctx.resolver.relationship(record, alias));
     case "field_values": {
-      // A literal set of values names its fields by alias; a reference or formula names none. A
-      // constructed map is refused because its field aliases would remain unresolved; an array
-      // is not a named field map. Neither may bypass the literal identity-resolution branch.
-      if (value.kind === "map" || value.kind === "array")
+      // Field values are written one way: a whole set (a reference or a formula that yields the
+      // field values, such as a form's answers), or a map of field keys whose every entry is a
+      // flow value of its own (a fixed value, an input, a variable, an earlier step's output).
+      // Every map key must be a field of the task's record type; the run names fields by these
+      // keys. A literal JSON set and an array are refused: neither is a field map.
+      if (value.kind === "literal" || value.kind === "array")
         throw refusal(ctx, "vortex.definition.workflow_node_values", "invalid_value");
-      if (value.kind !== "literal") return value;
-      const literal = value.literal.value;
-      if (
-        value.literal.type !== "json" ||
-        literal === null ||
-        typeof literal !== "object" ||
-        Array.isArray(literal)
-      )
-        throw refusal(ctx, "vortex.definition.workflow_node_values", "invalid_value");
-      const entries = Object.entries(literal);
-      if (entries.length === 0) return value;
+      if (value.kind !== "map") return value;
       const record = fieldValuesRecordType(ctx, properties, savedRecord);
-      const resolved: Record<string, unknown> = {};
-      for (const [alias, fieldValue] of entries) {
-        const field = ctx.resolver.field(record, alias);
-        const fieldId = resolveAt(
-          ctx,
-          field,
-          [...path, "literal", "value", field.identifier],
-          [...path, "literal", "value", alias],
-        );
-        if (Object.hasOwn(resolved, fieldId))
-          throw refusal(ctx, "vortex.definition.duplicate_identity_resolution", "duplicate_key");
-        resolved[fieldId] = fieldValue;
-      }
-      return { kind: "literal", literal: { type: "json", value: resolved as JsonValue } };
+      for (const alias of Object.keys(value.entries)) ctx.resolver.field(record, alias);
+      return value;
     }
     case "record_change_list":
       // A literal change list names record types and fields that have no declared shape to
@@ -664,12 +644,21 @@ const flowProvenance = (
 
 // ─── Entry point ───────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The record types a flow's record can be: those its record triggers name or, for an interactive
+ * flow, the one its record input names.
+ */
+const flowRecordTypes = (source: SourceFlow): string[] => [
+  ...source.triggers.flatMap((trigger) =>
+    trigger.type === "BeforeSave" || trigger.type === "Event" ? [trigger.recordTypeId] : [],
+  ),
+  ...(source.recordInput === undefined
+    ? []
+    : (source.inputs[source.recordInput]?.recordTypeIds ?? [])),
+];
+
 const triggerRecordType = (source: SourceFlow): string | undefined => {
-  const aliases = new Set(
-    source.triggers.flatMap((trigger) =>
-      trigger.type === "BeforeSave" || trigger.type === "Event" ? [trigger.recordTypeId] : [],
-    ),
-  );
+  const aliases = new Set(flowRecordTypes(source));
   return aliases.size === 1 ? [...aliases][0] : undefined;
 };
 
@@ -707,9 +696,7 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
     // Structure, run locations, typed references, outputs and error handling, in one pass. Run
     // flow is checked against its target's declared inputs and outputs, and a trigger record
     // field must exist on every record type the flow's record triggers name.
-    const recordTypes = source.triggers.flatMap((trigger) =>
-      trigger.type === "BeforeSave" || trigger.type === "Event" ? [trigger.recordTypeId] : [],
-    );
+    const recordTypes = flowRecordTypes(source);
     const invalid = validateFlow(source, {
       targetFlow,
       triggerRecordFieldExists: (field) =>

@@ -1,4 +1,5 @@
 import type { StoredDefinitionSource } from "@vortex/platform/schema";
+import { appStoreApplication } from "./app-store";
 import { crmApplication } from "./crm";
 import { hrApplication } from "./hr";
 import { iamApplication } from "./iam";
@@ -12,7 +13,8 @@ import { tenantAdministrationApplication } from "./tenant-administration";
 /**
  * Every Application source shipped with the platform and the origin its root is created with. Each
  * Application carries the Modules it owns: Organisation Administration owns System Directory, and
- * each platform system Application owns its own system Module.
+ * each platform system Application owns its own system Module. The App Store is a platform system
+ * Application: it installs and upgrades the organisation's other Applications.
  */
 export const shippedApplications: readonly Readonly<{
   source: Extract<StoredDefinitionSource, { kind: "application" }>;
@@ -30,4 +32,5 @@ export const shippedApplications: readonly Readonly<{
   { source: tasksApplication, applicationOriginKind: "ordinary" },
   { source: serviceDeskApplication, applicationOriginKind: "ordinary" },
   { source: landingZoneApplication, applicationOriginKind: "platform_system_application" },
+  { source: appStoreApplication, applicationOriginKind: "platform_system_application" },
 ];

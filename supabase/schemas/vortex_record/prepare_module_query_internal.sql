@@ -111,6 +111,11 @@ begin
   end if;
   if p_prior_plan is not null then
     prepared_plan := p_prior_plan;
+    -- A plan for a system projection is a live plan, in a preview too: see below.
+    if preview_mode and not (prepared_plan ? 'preview')
+      and prepared_plan -> 'recordType' ? 'systemProjection' then
+      preview_mode := false;
+    end if;
     if preview_mode then
       if pg_catalog.jsonb_typeof(prepared_plan) is distinct from 'object'
         or prepared_plan ->> 'outcome' is distinct from 'prepared'
@@ -254,6 +259,17 @@ begin
   if preview_mode then
     begin
       resolved := vortex_record.resolve_preview_module_query_internal(p_module_root_id, p_query_id);
+      -- A system projection has no preview copy: it is the platform's live read model, which a
+      -- preview reads on the live path, under the reader's own live access and never under the
+      -- preview's roles.
+      if resolved is null then
+        resolved := vortex_record.resolve_installed_module_query_internal(p_module_root_id, p_query_id);
+        if resolved -> 'recordType' ? 'systemProjection' then
+          preview_mode := false;
+        else
+          resolved := null;
+        end if;
+      end if;
     exception
       -- A refused access context or a stale preview is the expected refusal; any
       -- other failure is logged with its cause before the same safe refusal.
@@ -454,6 +470,11 @@ begin
       -- examined. A planning failure propagates; it never widens the scan.
       select plan.* into access_plan
       from vortex_record.plan_record_read_scan_internal(record_type_id_value) as plan;
+      -- No eligible read alternative admits any record. Report a refusal before
+      -- an empty scan can be mistaken for an empty query result.
+      if access_plan.access_predicate = 'false' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'read_forbidden');
+      end if;
       readable_field_ids := coalesce(access_plan.readable_field_ids, array[]::text[]);
       prepared_plan := prepared_plan || pg_catalog.jsonb_build_object(
         'storage', pg_catalog.jsonb_build_object(

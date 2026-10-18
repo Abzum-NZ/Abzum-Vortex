@@ -1,6 +1,5 @@
 /**
- * Component refresh subscriber for the private invalidation channels (#615,
- * part A).
+ * Component refresh subscriber for the private invalidation channels (#615).
  *
  * #614 publishes a bounded, content-free notice on one private Supabase
  * Realtime Broadcast topic per organisation and application. This module is the
@@ -18,7 +17,7 @@
  * barrel: the scope type is imported type-only and the strict envelope schema is
  * the same canonical contract the server parse uses, taken from the shared
  * contracts package. That keeps the convergence core free of `server-only`, so a
- * browser bundle can use it once a client-safe package entry exists (part B).
+ * browser bundle can use it once a client-safe package entry exists.
  */
 
 import {
@@ -159,10 +158,9 @@ const scopeMatches = (
 
 /**
  * The watch key is the placement, the record type and the optional record. A
- * notice is no longer ordered by a shared per-record-type data version, so the
- * subscriber does not keep a convergence version: every notice it accepts asks
- * its placements to re-read, and the bounded server cache lifetime is what
- * bounds how long any result may be reused.
+ * notice carries no convergence version, so the subscriber keeps none: every
+ * notice it accepts asks its placements to re-read, and the bounded server cache
+ * lifetime is what bounds how long any result may be reused.
  */
 const watchKey = (watch: PrivateInvalidationPlacementWatch): string =>
   JSON.stringify([

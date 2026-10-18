@@ -176,7 +176,7 @@ export const moduleSourceActionInputSchema = z
     z
       .object({
         ...moduleSourceActionInputBase,
-        type: sourceProvenanceTarget(z.literal("organisation_account_reference"), ["type"]),
+        type: sourceProvenanceTarget(z.literal("organization_account_reference"), ["type"]),
       })
       .strict(),
   ])

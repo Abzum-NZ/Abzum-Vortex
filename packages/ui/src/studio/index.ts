@@ -4,24 +4,43 @@ export * from "./semantic-selection";
 export * from "./application-draft-history";
 export * from "./selection-inspector";
 export type {
-  StudioConditionSemanticType, StudioConditionParameterType, StudioConditionOperandRole,
-  StudioConditionOperandPermission, StudioConditionParameterDeclaration,
-  StudioConditionControlsContext, StudioConditionOperator, StudioConditionOperatorOption,
-  StudioConditionValidationIssue, StudioConditionValidation,
+  StudioConditionSemanticType,
+  StudioConditionParameterType,
+  StudioConditionOperandRole,
+  StudioConditionOperandPermission,
+  StudioConditionParameterDeclaration,
+  StudioConditionControlsContext,
+  StudioConditionOperator,
+  StudioConditionOperatorOption,
+  StudioConditionValidationIssue,
+  StudioConditionValidation,
 } from "./condition-model";
 export {
-  studioConditionOperatorsFor, createInitialStudioCondition, validateStudioCondition,
+  studioConditionOperatorsFor,
+  createInitialStudioCondition,
+  validateStudioCondition,
 } from "./condition-model";
 export * from "./condition-controls";
-export * from "./application-appearance";
 export * from "./application-composition-commands";
 export * from "./field-placement";
 export * from "./application-flow-model";
 export * from "./application-flow-commands";
 export * from "./application-flow-create";
+export * from "./application-flow-values";
+export * from "./application-flow-step-form";
+export * from "./application-flow-condition";
+export * from "./application-flow-start";
+export * from "./application-record-rules";
+export * from "./module-action-condition";
 export * from "./application-visibility-condition-commands";
-export * from "./placement-theme-overrides";
+export type { StudioCompileFailure } from "./compile-failure";
 export * from "./studio-setting-controls";
 export * from "./studio-record-reference-control";
 export * from "./theme-preset";
-export { StoredCompositionRefusal, syncStoredBlockDependencies, validateStoredShell } from "./stored-composition";
+export { removeFlowBindingsOf, StoredCompositionRefusal, syncStoredBlockDependencies, validateStoredShell, validateStoredZone } from "./stored-composition";
+export * from "./application-structure-commands";
+export * from "./application-menu-commands";
+export * from "./application-access-commands";
+export { studioRecordPageChoices, studioRecordPageKinds, type StudioRecordPageCommand, type StudioRecordPageKind } from "./application-record-pages";
+export * from "./application-item-labels";
+export { tokenName } from "./studio-words";

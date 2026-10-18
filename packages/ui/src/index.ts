@@ -13,7 +13,6 @@ export {
 export {
   assertRuntimeInputKeysArePlacements,
   createPayloadParser,
-  createPlatformComponentRegistry,
   EMPTY_RUNTIME_INPUTS,
   noRuntimeInputs,
   type PlatformBlockRenderProps,
@@ -138,6 +137,7 @@ export {
   TableDisplay,
   cellValueToText,
   formatIsoDate,
+  FormattedTime,
   getAccessibleName,
   richTextToPlainText,
   type DisplayRenderProps,
@@ -145,7 +145,7 @@ export {
 } from "./display";
 
 // Display Registrations & Registry
-export { DISPLAY_COMPONENT_REGISTRATIONS, createDisplayComponentRegistry } from "./display";
+export { DISPLAY_COMPONENT_REGISTRATIONS } from "./display";
 
 // Per-Block Control Payload & Event Contracts
 export {
@@ -162,6 +162,7 @@ export {
   parseFieldInputPayload,
   parseFormPayload,
   parseLinkInputPayload,
+  parseRecordChoicePage,
   parseNumberInputPayload,
   parseRichTextInputPayload,
   parseTabsPayload,
@@ -193,6 +194,8 @@ export {
   type FormPayload,
   type LinkInputData,
   type LinkInputPayload,
+  type RecordChoiceOption,
+  type RecordChoicePage,
   type NumberInputData,
   type NumberInputPayload,
   type RichTextInputData,
@@ -258,7 +261,7 @@ export {
 } from "./controls";
 
 // Control Registrations & Registry
-export { CONTROL_COMPONENT_REGISTRATIONS, createControlComponentRegistry } from "./controls";
+export { CONTROL_COMPONENT_REGISTRATIONS } from "./controls";
 
 // Launcher List Payload & Binding Contracts
 export {
@@ -282,13 +285,13 @@ export {
 export { ApplicationLauncher, LinkTiles, ViewFilter } from "./launcher";
 
 // Launcher Registrations & Registry
-export { LAUNCHER_COMPONENT_REGISTRATIONS, createLauncherComponentRegistry } from "./launcher";
+export { LAUNCHER_COMPONENT_REGISTRATIONS } from "./launcher";
 
 // General Layout Components (#1008)
 export { Container, Heading, type ContainerProps, type HeadingProps } from "./layout";
 
 // General Layout Registrations & Registry
-export { LAYOUT_COMPONENT_REGISTRATIONS, createLayoutComponentRegistry } from "./layout";
+export { LAYOUT_COMPONENT_REGISTRATIONS } from "./layout";
 
 // Application Navigation (#861)
 export {
@@ -318,13 +321,11 @@ export {
   usePagePresence,
   NAVIGATION_COMPONENT_REGISTRATIONS,
   WebMcpStatus,
-  createNavigationComponentRegistry,
 } from "./navigation";
 
 // Full Platform Component Registry (Display + Controls + Launcher + Layout + Navigation)
 export {
   ALL_PLATFORM_COMPONENT_REGISTRATIONS,
-  createFullPlatformComponentRegistry,
   createPlatformComponentRegistryForReleases,
 } from "./combined-registry";
 
@@ -391,6 +392,7 @@ export {
   type BrowserFlowResult,
   type FlowApplicationAddress,
   type FlowBindingReference,
+  type FlowConfirmAnswer,
   type FlowConfirmIntent,
   type FlowDispatchResult,
   type FormBlockRuntime,
@@ -436,7 +438,6 @@ export {
   createCustomComponentPayloadParser,
   createCustomComponentRegistration,
   createCustomComponentRegistrations,
-  createCustomComponentRegistry,
   customComponentBootstrapUrl,
   validateCustomComponentEventPayload,
   type CustomComponentBootstrapTarget,

@@ -7,7 +7,7 @@ import { Label } from "@vortex/ui/components/label";
 import { StudioOptionControl, type StudioDataSelection } from "@vortex/ui/studio";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@vortex/ui/components/table";
 import { readStudioDataRecords } from "../actions";
-import type { StudioDataRecordsResult } from "../../_lib/studio-data-records";
+import type { StudioDataRecordsResult, StudioDataTotal } from "../../_lib/studio-data-records";
 import {
   fieldTypeLabel, type StudioDataModule, type StudioDataRecordType,
 } from "../_lib/studio-data-model";
@@ -38,18 +38,69 @@ function SchemaGrid({ record, selectedField }: Readonly<{ record: StudioDataReco
 type Page = Readonly<{ token?: string; direction?: "forward" | "backward" }>;
 type Read = Readonly<{ request: string; result: StudioDataRecordsResult }>;
 
-const notReadable = (result: StudioDataRecordsResult, plural: string): string | undefined => {
+const notReadable = (result: StudioDataRecordsResult, plural: string, query: boolean): string | undefined => {
   switch (result.kind) {
-    case "available": return undefined;
-    case "not_installed": return "Preview or publish to see records. The running application does not have this yet.";
+    case "available": case "summary": return undefined;
+    case "not_installed": return query ? "Preview or publish to see results. The running application does not have this query yet."
+      : "Preview or publish to see records. The running application does not have this yet.";
     case "no_query": return `No list of ${plural.toLowerCase()} exists yet. Add a query that lists ${plural.toLowerCase()} to see their records here.`;
     case "query_refused": return result.reason === "input_invalid"
       ? `This query lists records for one chosen record at a time. Select ${plural} in the Data panel to see all of them.`
+      : result.reason === "continuation_invalid"
+        ? "The groups changed while you were paging through them. Choose another number per page to start again from the first page."
       : `Your access does not let you see these ${plural.toLowerCase()}. Ask an administrator for access to see them.`;
     case "refused": return `Your access does not let you see these ${plural.toLowerCase()}. Ask an administrator for access to see them.`;
     case "temporarily_unavailable": return "The records could not be read just now. Try again in a moment.";
   }
 };
+
+/** A summary's totals, as a list of label and value. */
+function Totals({ totals }: Readonly<{ totals: readonly StudioDataTotal[] }>) {
+  return totals.length === 0 ? null : <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm" aria-label="Totals">
+    {totals.map((total) => <div key={total.alias} className="contents">
+      <dt className="text-muted-foreground">{total.label}</dt><dd className="font-medium tabular-nums">{total.value}</dd>
+    </div>)}
+  </dl>;
+}
+
+/**
+ * What a query that groups records or adds totals reads: its overall totals, then its groups one page
+ * at a time, by keyset like records: next and previous pages, and how many groups there are in all.
+ */
+function SummaryResults({ result, onPage }: Readonly<{
+  result: Extract<StudioDataRecordsResult, { kind: "summary" }>;
+  onPage: (page: Page) => void;
+}>) {
+  const totalColumns = result.totals.map((total) => ({ alias: total.alias, label: total.label }));
+  return <div className="space-y-3">
+    <p role="status" className="text-sm">{result.totalRowCount} {result.totalRowCount === 1 ? "record" : "records"} in all.</p>
+    <Totals totals={result.totals} />
+    {result.groupColumns.length === 0 ? null : <Table>
+      <TableCaption>One row for each group, with its number of records and its totals.</TableCaption>
+      <TableHeader><TableRow>
+        {result.groupColumns.map((column) => <TableHead key={column.key}>{column.label}</TableHead>)}
+        <TableHead>Records</TableHead>
+        {totalColumns.map((column) => <TableHead key={column.alias}>{column.label}</TableHead>)}
+      </TableRow></TableHeader>
+      <TableBody>{result.groups.length === 0
+        ? <TableRow><TableCell colSpan={result.groupColumns.length + 1 + totalColumns.length} className="text-muted-foreground">No records yet.</TableCell></TableRow>
+        : result.groups.map((group) => <TableRow key={group.key}>
+          {group.values.map((value, index) => <TableCell key={index} className="whitespace-normal">{value}</TableCell>)}
+          <TableCell className="tabular-nums">{group.count}</TableCell>
+          {group.totals.map((total) => <TableCell key={total.alias} className="tabular-nums">{total.value}</TableCell>)}
+        </TableRow>)}</TableBody>
+    </Table>}
+    {result.groupColumns.length === 0 ? null : <div className="flex items-center justify-between gap-2">
+      <p role="status" className="text-xs text-muted-foreground">{result.groups.length} of {result.groupCount} {result.groupCount === 1 ? "group" : "groups"} on this page</p>
+      <div className="flex gap-2">
+        <Button type="button" size="sm" variant="outline" disabled={result.previous === undefined}
+          onClick={() => onPage({ token: result.previous!, direction: "backward" })}>Previous</Button>
+        <Button type="button" size="sm" variant="outline" disabled={result.next === undefined}
+          onClick={() => onPage({ token: result.next!, direction: "forward" })}>Next</Button>
+      </div>
+    </div>}
+  </div>;
+}
 
 /**
  * The live records of the selected record type or query, read with the builder's own access through
@@ -84,13 +135,13 @@ function LiveResults({ organizationId, rootId, moduleKey, recordKey, plural, que
   // A new record type or query starts on its first page.
   useEffect(() => { setPage({}); }, [moduleKey, recordKey, queryKey]);
   const current = read?.request === request ? read.result : null;
-  const problem = current === null ? undefined : notReadable(current, plural);
+  const problem = current === null ? undefined : notReadable(current, plural, queryKey !== undefined);
   return <section aria-labelledby="studio-data-results" className="space-y-2">
     <div className="flex flex-wrap items-end justify-between gap-2">
       <div>
         <h3 id="studio-data-results" className="text-sm font-semibold">Records</h3>
-        <p className="text-xs text-muted-foreground">{current?.kind === "available"
-          ? `From the running application, through the query ${current.queryLabel}, with your access.`
+        <p className="text-xs text-muted-foreground">{current?.kind === "available" || current?.kind === "summary"
+          ? `From the running application, through its published query ${current.queryLabel}, with your access.`
           : "From the running application, with your access."}</p>
       </div>
       <div className="flex items-center gap-2">
@@ -102,6 +153,7 @@ function LiveResults({ organizationId, rootId, moduleKey, recordKey, plural, que
     </div>
     {current === null ? <p role="status" className="text-sm text-muted-foreground">Reading records…</p>
       : problem !== undefined ? <p role="status" className="text-sm">{problem}</p>
+        : current.kind === "summary" ? <SummaryResults result={current} onPage={setPage} />
         : current.kind === "available" && <>
           <Table>
             <TableHeader><TableRow>{current.columns.map((column) => <TableHead key={column.key}>{column.label}</TableHead>)}</TableRow></TableHeader>
@@ -129,7 +181,7 @@ export function StudioDataCentre({ organizationId, rootId, modules, selection, d
   /** Owned and used modules, as the tree shows them. */
   modules: readonly StudioDataModule[];
   selection: StudioDataSelection | null;
-  /** Whether the selected record type or query exists only in the unsaved or unpublished draft. */
+  /** Whether the selected record type or query is new in the draft, not saved yet. */
   draftOnly: boolean;
   refresh: number;
 }>) {
@@ -156,7 +208,9 @@ export function StudioDataCentre({ organizationId, rootId, modules, selection, d
       <SchemaGrid record={record} selectedField={selection.kind === "field" ? selection.fieldKey : undefined} />
     </section>
     {draftOnly
-      ? <p role="status" className="text-sm">Preview or publish to see records. {query === undefined ? "This record type" : "This query"} is only in the draft so far.</p>
+      ? <p role="status" className="text-sm">{query === undefined
+        ? "Preview or publish to see records. This record type is only in the draft so far."
+        : "Preview or publish to see results. This query is only in the draft so far."}</p>
       : <LiveResults organizationId={organizationId} rootId={rootId} moduleKey={module.key} recordKey={record.key} plural={record.pluralName}
         queryKey={query?.key} refresh={refresh} />}
   </div>;

@@ -12,7 +12,7 @@
       "title_field": "target_kind",
       "storage_contract_id": "srt_landing_zone_tile",
       "storage_scope": "application_contained",
-      "ownership_mode": "organisation_account",
+      "ownership_mode": "organization_account",
       "standard_actions": [
         "create",
         "read",
@@ -317,6 +317,7 @@
           }
         }
       ],
+      "pipelines": [],
       "relationships": []
     },
     {
@@ -326,7 +327,7 @@
       "plural_name": "Applications",
       "title_field": "name",
       "storage_contract_id": "srt_landing_zone_application",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -416,6 +417,7 @@
           }
         }
       ],
+      "pipelines": [],
       "relationships": []
     }
   ],
@@ -1674,6 +1676,7 @@
     {
       "id": "qry_landing_zone_tiles",
       "key": "landing_zone_tiles",
+      "label": "Tiles",
       "record_type": "tile",
       "inputs": [],
       "select": [
@@ -1714,6 +1717,7 @@
     {
       "id": "qry_landing_zone_favourites",
       "key": "landing_zone_favourites",
+      "label": "Favourites",
       "record_type": "tile",
       "inputs": [],
       "select": [
@@ -1758,6 +1762,7 @@
     {
       "id": "qry_landing_zone_applications",
       "key": "landing_zone_applications",
+      "label": "Applications",
       "record_type": "application",
       "inputs": [],
       "select": [

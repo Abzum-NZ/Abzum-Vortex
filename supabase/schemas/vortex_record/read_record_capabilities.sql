@@ -17,7 +17,7 @@ begin
     return null;
   end if;
   return vortex_record.read_record_capabilities_internal(
-    p_record_type_id, p_record_id, read_row.read_facts, read_row.read_bounds
+    p_record_type_id, p_record_id, read_row.read_facts, read_row.read_bounds, null::jsonb
   );
 end
 $function$;
