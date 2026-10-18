@@ -80,6 +80,6 @@ export function StudioFlowsPanel({ source, organizationId, applications, selecte
         })}
       </ul>
     </section>}
-    <StudioNewFlowDialog open={creating} onOpenChange={setCreating} choices={createChoices} onCreate={onCreate} />
+    <StudioNewFlowDialog open={creating} onOpenChange={setCreating} choices={createChoices} source={source} onCreate={onCreate} />
   </StudioPanelShell>;
 }

@@ -218,7 +218,7 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
   const compiledOf = (recordType: string) => context.compiledFields?.recordTypes[recordType];
   const choices: StudioSettingChoices = { fields: [], queries: [], pages: [], recordTypes, actions: [],
     relationships, records: context.readRecords };
-  const offered = adding ? studioFieldPlacements({ ...context.composition, source }, moduleKey, recordKey, form.type) : [];
+  const offered = studioFieldPlacements({ ...context.composition, source }, moduleKey, recordKey, form.type, existing?.key);
   const nextKey = adding && record !== undefined && form.label.trim() !== ""
     ? deriveFieldKey(form.label, new Set(record.fields.map((item) => item.key))) : undefined;
   const unreadable = readFailures.length > 0 && existing !== undefined && form.type === existing.type;
@@ -294,6 +294,18 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
     if (existing === undefined) return;
     const problem = studioEditProblem(edit((current) => moveInlineModuleField(current, moduleKey, recordKey, existing.key, by)));
     setIssues(problem === undefined ? [] : [problem]);
+  };
+  const showOnPages = () => {
+    if (existing === undefined) return;
+    const result = edit((current) => {
+      const placed = applyStudioFieldPlacements({ ...context.composition, source: current },
+        { moduleKey, recordKey, key: existing.key, label: existing.label, type: existing.type }, [...placements]);
+      return placed.kind === "applied" ? { kind: "changed", source: placed.source }
+        : { kind: "invalid", issues: placed.reasons };
+    });
+    const problem = studioEditProblem(result);
+    setIssues(problem === undefined ? [] : [problem]);
+    if (problem === undefined) setPlacements(new Set());
   };
   const remove = async () => {
     if (existing === undefined) return;
@@ -384,22 +396,24 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
         : <p className="text-sm text-muted-foreground">Default value: {defaultModel.reason}</p>}
       {defaultValue.problem === "" ? null : <p role="alert" className="text-sm text-destructive">{defaultValue.problem}</p>}
     </section>
-    {adding && <fieldset className="space-y-2">
+    <fieldset className="space-y-2">
       <legend className="text-sm font-semibold">Also show it on</legend>
       {offered.length === 0
         ? <p className="text-sm text-muted-foreground">{record.name} has no detail, list or form page with a list of fields yet.</p>
         : offered.map((place) => <div key={place.id} className="flex items-start gap-2">
-          <Checkbox id={`module-field-place-${place.id}`} checked={placements.has(place.id)}
-            disabled={disabled || place.unavailable !== undefined}
+          <Checkbox id={`module-field-place-${place.id}`} checked={place.shown === true || placements.has(place.id)}
+            disabled={disabled || place.shown === true || place.unavailable !== undefined}
             onCheckedChange={(checked) => {
               const next = new Set(placements);
               if (checked === true) next.add(place.id); else next.delete(place.id);
               setPlacements(next); setIssues([]);
             }} />
           <Label htmlFor={`module-field-place-${place.id}`} className="font-normal">
-            {place.label}{place.unavailable === undefined ? "" : ` (${place.unavailable})`}</Label>
+            {place.label}{place.shown === true ? " (already shown)" : place.unavailable === undefined ? "" : ` (${place.unavailable})`}</Label>
         </div>)}
-    </fieldset>}
+      {!adding && <Button type="button" size="sm" variant="outline" disabled={disabled || placements.size === 0}
+        onClick={showOnPages}>Show field on selected pages</Button>}
+    </fieldset>
     {adding && <Button type="submit" size="sm" disabled={disabled || form.label.trim() === ""}>Add field</Button>}
     {issues.length === 0 ? null : <ul className="space-y-1 text-sm text-destructive"
       aria-label={adding ? "Why the field was not added" : "Why the field was not changed"} role="alert">

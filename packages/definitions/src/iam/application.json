@@ -1122,6 +1122,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "iam_person_detail",
+                    "heading_source": "title",
                     "title": "Person detail",
                     "detail_fields": [
                       {
@@ -2717,6 +2718,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "iam_access_request_detail_body",
+                    "heading_source": "title",
                     "detail_fields": [
                       {
                         "field": "vortex.iam.core:access_request.request_number",

@@ -343,6 +343,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "store_application_detail",
+                    "heading_source": "title",
                     "title": "Application",
                     "detail_fields": [
                       {

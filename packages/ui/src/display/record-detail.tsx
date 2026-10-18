@@ -1,8 +1,9 @@
 import type { ReactElement } from "react";
 import { readRecordDetailContract } from "@vortex/platform/schema";
+import { DefinitionRenderError } from "../definition-error";
 import { Card, CardContent, CardHeader } from "../components/card";
 import { Separator } from "../components/separator";
-import { DisplayCellView } from "./cell";
+import { cellValueToText, DisplayCellView } from "./cell";
 import { DisplayHeader, RowActionControl } from "./controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
@@ -20,13 +21,17 @@ export function RecordDetailDisplay(
   props: DisplayRenderProps<RecordDetailPayload>,
 ): ReactElement {
   const { placementId, availability } = props;
-  const { title, accessibleName, values, state, emptyMessage, refusedMessage, errorMessage, events } =
+  const { title: configuredTitle, accessibleName, values, state, emptyMessage, refusedMessage, errorMessage, events } =
     resolveDisplayContext<RecordDetailPayload>(
       props,
       (detail) => detail.fields.length === 0,
       "No details to show",
     );
   const contract = readRecordDetailContract(props.settings);
+  if (contract?.headingField !== undefined && values !== undefined && values.heading === undefined)
+    throw new DefinitionRenderError("INVALID_COMPOSITION", "A record heading requires its projected field value", { placementId });
+  const title = contract?.headingField === undefined ? configuredTitle
+    : values?.heading === undefined ? undefined : cellValueToText(values.heading);
   const fields: readonly DisplayField[] =
     values === undefined
       ? []
