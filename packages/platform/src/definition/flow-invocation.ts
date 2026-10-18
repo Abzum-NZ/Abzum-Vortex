@@ -526,7 +526,9 @@ export async function invokeInstalledFlow(
         scope: {
           organizationId: scope.organizationId,
           applicationRootId: scope.applicationRootId,
-          ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
+          ...(scope.previewInstallationId === undefined
+            ? {}
+            : { previewInstallationId: scope.previewInstallationId }),
         },
       });
     },
@@ -678,7 +680,9 @@ export async function invokeInstalledFlow(
               scope: {
                 organizationId: scope.organizationId,
                 applicationRootId: scope.applicationRootId,
-                ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
+                ...(scope.previewInstallationId === undefined
+                  ? {}
+                  : { previewInstallationId: scope.previewInstallationId }),
               },
             }).load();
             const application = current.releaseSet.application;
@@ -769,7 +773,9 @@ export async function invokeInstalledFlow(
               scope: {
                 organizationId: scope.organizationId,
                 applicationRootId: scope.applicationRootId,
-                ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
+                ...(scope.previewInstallationId === undefined
+                  ? {}
+                  : { previewInstallationId: scope.previewInstallationId }),
               },
             }).load();
             const application = current.releaseSet.application;
@@ -1011,7 +1017,9 @@ export async function invokeInstalledFlow(
           scope: {
             organizationId: scope.organizationId,
             applicationRootId: scope.applicationRootId,
-            ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
+            ...(scope.previewInstallationId === undefined
+              ? {}
+              : { previewInstallationId: scope.previewInstallationId }),
           },
         }).load(),
       );
@@ -1139,7 +1147,9 @@ export async function invokeInstalledFlow(
   const selection = {
     organizationId: address.read.organizationId,
     applicationRootId: address.application.applicationRootId,
-    ...(address.application.previewInstallationId === undefined ? {} : { previewInstallationId: address.application.previewInstallationId }),
+    ...(address.application.previewInstallationId === undefined
+      ? {}
+      : { previewInstallationId: address.application.previewInstallationId }),
   };
   // Use the same installed snapshot for this gate and the endpoint. A crafted action on a
   // guided page must not start a flow before its final form submit is confirmed.
