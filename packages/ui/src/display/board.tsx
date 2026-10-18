@@ -449,12 +449,12 @@ export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElem
               ...(column.gatedBy === undefined ? {} : { gatedBy: column.gatedBy }),
             },
           })),
-          {
+          ...(!values.choiceFieldRequired || values.unassigned.rowCount > 0 ? [{
             key: "unassigned",
             label: "Unassigned",
-            selector: { kind: "unassigned" },
+            selector: { kind: "unassigned" as const },
             values: values.unassigned,
-          },
+          }] : []),
         ];
 
   const cardsRef = useRowEntrance<HTMLElement>(
