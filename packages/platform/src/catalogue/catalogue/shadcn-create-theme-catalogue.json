@@ -127,7 +127,16 @@
           "release": {
             "catalogueThemeId": "62d66270-63ec-5860-91de-332109366e93",
             "releaseVersion": "4.21.0"
-          }
+          },
+          "contrastDerivations": [
+            {
+              "token": "ring",
+              "mode": "light",
+              "from": "oklch(0.708 0 0)",
+              "to": "oklch(0.669432 0 0)",
+              "requirement": "3:1 on background (non-text focus indicator)"
+            }
+          ]
         },
         {
           "id": "stone",
@@ -171,7 +180,16 @@
           "release": {
             "catalogueThemeId": "15794aff-93dd-5c57-a3de-425c270dac7d",
             "releaseVersion": "4.21.0"
-          }
+          },
+          "contrastDerivations": [
+            {
+              "token": "ring",
+              "mode": "light",
+              "from": "oklch(0.709 0.01 56.259)",
+              "to": "oklch(0.670045 0.01 56.259)",
+              "requirement": "3:1 on background (non-text focus indicator)"
+            }
+          ]
         },
         {
           "id": "zinc",
@@ -215,7 +233,16 @@
           "release": {
             "catalogueThemeId": "0e8fdb85-f085-5987-b169-36cf02aa6aae",
             "releaseVersion": "4.21.0"
-          }
+          },
+          "contrastDerivations": [
+            {
+              "token": "ring",
+              "mode": "light",
+              "from": "oklch(0.705 0.015 286.067)",
+              "to": "oklch(0.670181 0.015 286.067)",
+              "requirement": "3:1 on background (non-text focus indicator)"
+            }
+          ]
         },
         {
           "id": "gray",
@@ -259,7 +286,16 @@
           "release": {
             "catalogueThemeId": "c60c7981-7b21-5045-bd04-020985d2df9b",
             "releaseVersion": "4.21.0"
-          }
+          },
+          "contrastDerivations": [
+            {
+              "token": "ring",
+              "mode": "light",
+              "from": "oklch(0.707 0.022 261.325)",
+              "to": "oklch(0.669373 0.022 261.325)",
+              "requirement": "3:1 on background (non-text focus indicator)"
+            }
+          ]
         },
         {
           "id": "mauve",
@@ -303,7 +339,16 @@
           "release": {
             "catalogueThemeId": "84aa5ab8-6bc8-5062-900e-4e3b038ae519",
             "releaseVersion": "4.21.0"
-          }
+          },
+          "contrastDerivations": [
+            {
+              "token": "ring",
+              "mode": "light",
+              "from": "oklch(0.711 0.019 323.02)",
+              "to": "oklch(0.671534 0.019 323.02)",
+              "requirement": "3:1 on background (non-text focus indicator)"
+            }
+          ]
         },
         {
           "id": "olive",
@@ -351,6 +396,13 @@
               "from": "oklch(0.58 0.031 107.3)",
               "to": "oklch(0.566 0.031 107.3)",
               "requirement": "4.5:1 on background"
+            },
+            {
+              "token": "ring",
+              "mode": "light",
+              "from": "oklch(0.737 0.021 106.9)",
+              "to": "oklch(0.668468 0.021 106.9)",
+              "requirement": "3:1 on background (non-text focus indicator)"
             }
           ],
           "release": {
@@ -400,7 +452,16 @@
           "release": {
             "catalogueThemeId": "3b3c7792-c7de-5ad2-a6a3-d46d1202d4b5",
             "releaseVersion": "4.21.0"
-          }
+          },
+          "contrastDerivations": [
+            {
+              "token": "ring",
+              "mode": "light",
+              "from": "oklch(0.723 0.014 214.4)",
+              "to": "oklch(0.668078 0.014 214.4)",
+              "requirement": "3:1 on background (non-text focus indicator)"
+            }
+          ]
         },
         {
           "id": "taupe",
@@ -444,7 +505,16 @@
           "release": {
             "catalogueThemeId": "86b80069-9c51-5096-9fd9-7f80364a4be5",
             "releaseVersion": "4.21.0"
-          }
+          },
+          "contrastDerivations": [
+            {
+              "token": "ring",
+              "mode": "light",
+              "from": "oklch(0.714 0.014 41.2)",
+              "to": "oklch(0.670672 0.014 41.2)",
+              "requirement": "3:1 on background (non-text focus indicator)"
+            }
+          ]
         }
       ]
     },
@@ -1134,13 +1204,7 @@
           "id": "neutral",
           "label": "Neutral",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_NEUTRAL",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "5669f285-8c4e-5284-b8ed-5be8fda4b007",
             "releaseVersion": "4.21.0"
@@ -1150,13 +1214,7 @@
           "id": "stone",
           "label": "Stone",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_STONE",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "3fa6bbe5-9783-5998-9aed-a6946d2f764d",
             "releaseVersion": "4.21.0"
@@ -1166,13 +1224,7 @@
           "id": "zinc",
           "label": "Zinc",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_ZINC",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "89da51fa-7dd8-50f1-8039-4363db458a04",
             "releaseVersion": "4.21.0"
@@ -1182,13 +1234,7 @@
           "id": "gray",
           "label": "Gray",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_GRAY",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "fa0bfba2-d5b1-5730-ac33-0d046c17c8be",
             "releaseVersion": "4.21.0"
@@ -1198,13 +1244,7 @@
           "id": "amber",
           "label": "Amber",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_AMBER",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "0e045acf-e1b3-5a5c-9753-49f60548835a",
             "releaseVersion": "4.21.0"
@@ -1214,13 +1254,7 @@
           "id": "blue",
           "label": "Blue",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_BLUE",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "55e9aeb5-f425-508a-870b-1e826759efba",
             "releaseVersion": "4.21.0"
@@ -1230,13 +1264,7 @@
           "id": "cyan",
           "label": "Cyan",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_CYAN",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "a725d310-38af-593e-a34d-91cbe728def6",
             "releaseVersion": "4.21.0"
@@ -1246,13 +1274,7 @@
           "id": "emerald",
           "label": "Emerald",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_EMERALD",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "a1833261-c101-58d9-873f-db39cac8d463",
             "releaseVersion": "4.21.0"
@@ -1262,13 +1284,7 @@
           "id": "fuchsia",
           "label": "Fuchsia",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_FUCHSIA",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "df293490-4506-5870-9cdd-71cbf45f284b",
             "releaseVersion": "4.21.0"
@@ -1278,13 +1294,7 @@
           "id": "green",
           "label": "Green",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_GREEN",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "ab4ba2e3-9524-583a-ab4e-8a12dfc154f0",
             "releaseVersion": "4.21.0"
@@ -1294,13 +1304,7 @@
           "id": "indigo",
           "label": "Indigo",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_INDIGO",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "0972b977-eb84-5dd5-a3cb-962e86a6f51a",
             "releaseVersion": "4.21.0"
@@ -1310,13 +1314,7 @@
           "id": "lime",
           "label": "Lime",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_LIME",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "564cc989-3d7c-50a2-be69-212d38e49c17",
             "releaseVersion": "4.21.0"
@@ -1326,13 +1324,7 @@
           "id": "orange",
           "label": "Orange",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_ORANGE",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "d9e41082-dff6-5753-bfc5-5515c85de508",
             "releaseVersion": "4.21.0"
@@ -1342,13 +1334,7 @@
           "id": "pink",
           "label": "Pink",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_PINK",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "7af682b2-c312-5b2a-b1fc-e9055b2be92c",
             "releaseVersion": "4.21.0"
@@ -1358,13 +1344,7 @@
           "id": "purple",
           "label": "Purple",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_PURPLE",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "69668a50-257e-54eb-9dd3-9cd263b88fc3",
             "releaseVersion": "4.21.0"
@@ -1374,13 +1354,7 @@
           "id": "red",
           "label": "Red",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_RED",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "1c6b7a84-f139-5db0-a726-383b602c27ba",
             "releaseVersion": "4.21.0"
@@ -1390,13 +1364,7 @@
           "id": "rose",
           "label": "Rose",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_ROSE",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "85d9f9a8-07b8-5762-a084-bec08ec42a54",
             "releaseVersion": "4.21.0"
@@ -1406,13 +1374,7 @@
           "id": "sky",
           "label": "Sky",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_SKY",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "de0180d3-9aaa-5794-97af-0bdedffdc48c",
             "releaseVersion": "4.21.0"
@@ -1422,13 +1384,7 @@
           "id": "teal",
           "label": "Teal",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_TEAL",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "2299d7e0-c76f-5aa8-ac86-38868d50cf20",
             "releaseVersion": "4.21.0"
@@ -1438,13 +1394,7 @@
           "id": "violet",
           "label": "Violet",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_VIOLET",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "8d2a9740-4b35-5d63-9b3c-f5b486638305",
             "releaseVersion": "4.21.0"
@@ -1454,13 +1404,7 @@
           "id": "yellow",
           "label": "Yellow",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_YELLOW",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "5dffd10d-1a9e-58d7-b8af-56afe8e25881",
             "releaseVersion": "4.21.0"
@@ -1470,13 +1414,7 @@
           "id": "mauve",
           "label": "Mauve",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_MAUVE",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "21c92e41-fb44-5e51-a4c8-b8b1e0f01684",
             "releaseVersion": "4.21.0"
@@ -1486,13 +1424,7 @@
           "id": "olive",
           "label": "Olive",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_OLIVE",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "32487a5d-6333-57d4-88e5-b57cced60127",
             "releaseVersion": "4.21.0"
@@ -1502,13 +1434,7 @@
           "id": "mist",
           "label": "Mist",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_MIST",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "eb7f09e3-759e-5cf7-8202-655d172e6f0b",
             "releaseVersion": "4.21.0"
@@ -1518,13 +1444,7 @@
           "id": "taupe",
           "label": "Taupe",
           "releaseKey": "SHADCN_CREATE_CHART_COLOR_TAUPE",
-          "tokenKeys": [
-            "chart_1",
-            "chart_2",
-            "chart_3",
-            "chart_4",
-            "chart_5"
-          ],
+          "tokenKeys": ["chart_1", "chart_2", "chart_3", "chart_4", "chart_5"],
           "release": {
             "catalogueThemeId": "6f3a32d0-1d5b-55a3-8a7c-6ca569b8b908",
             "releaseVersion": "4.21.0"
@@ -1540,9 +1460,7 @@
           "label": "Default",
           "rem": 0.625,
           "releaseKey": "SHADCN_CREATE_RADIUS_DEFAULT",
-          "tokenKeys": [
-            "radius_base"
-          ],
+          "tokenKeys": ["radius_base"],
           "release": {
             "catalogueThemeId": "a1258913-c3be-55a6-aec7-144d7e96f341",
             "releaseVersion": "4.21.0"
@@ -1553,9 +1471,7 @@
           "label": "None",
           "rem": 0,
           "releaseKey": "SHADCN_CREATE_RADIUS_NONE",
-          "tokenKeys": [
-            "radius_base"
-          ],
+          "tokenKeys": ["radius_base"],
           "release": {
             "catalogueThemeId": "b14b192b-6731-5c14-be1a-636843705f2d",
             "releaseVersion": "4.21.0"
@@ -1566,9 +1482,7 @@
           "label": "Small",
           "rem": 0.45,
           "releaseKey": "SHADCN_CREATE_RADIUS_SMALL",
-          "tokenKeys": [
-            "radius_base"
-          ],
+          "tokenKeys": ["radius_base"],
           "release": {
             "catalogueThemeId": "e15e1201-cde6-5314-b195-9b3da61a3446",
             "releaseVersion": "4.21.0"
@@ -1579,9 +1493,7 @@
           "label": "Medium",
           "rem": 0.625,
           "releaseKey": "SHADCN_CREATE_RADIUS_MEDIUM",
-          "tokenKeys": [
-            "radius_base"
-          ],
+          "tokenKeys": ["radius_base"],
           "release": {
             "catalogueThemeId": "a0c050f1-12b9-5bcf-a5e9-9e52a7459b2b",
             "releaseVersion": "4.21.0"
@@ -1592,9 +1504,7 @@
           "label": "Large",
           "rem": 0.875,
           "releaseKey": "SHADCN_CREATE_RADIUS_LARGE",
-          "tokenKeys": [
-            "radius_base"
-          ],
+          "tokenKeys": ["radius_base"],
           "release": {
             "catalogueThemeId": "c3d480f6-6731-532f-87b4-88c0a7d9b58f",
             "releaseVersion": "4.21.0"
