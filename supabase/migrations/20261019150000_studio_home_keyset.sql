@@ -1,5 +1,4 @@
-begin;
-set local role vortex_owner;
+set role vortex_owner;
 drop function vortex_definition.list_organization_builder_roots();
 
 create or replace function vortex_definition.list_organization_builder_roots(p_after_key text default null)
@@ -71,4 +70,3 @@ comment on function vortex_definition.list_organization_builder_roots(text) is
 alter function vortex_definition.list_organization_builder_roots(text) owner to vortex_owner;
 
 reset role;
-commit;
