@@ -39,7 +39,7 @@ export function StudioInspectorGroup({
         {title}
         <Icon name="chevron-down" className={open ? "size-4" : "size-4 -rotate-90"} />
       </CollapsibleTrigger>
-      <CollapsibleContent>
+      <CollapsibleContent keepMounted>
         <div className="space-y-4 pt-3">{children}</div>
       </CollapsibleContent>
     </Collapsible>

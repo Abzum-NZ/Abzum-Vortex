@@ -376,9 +376,7 @@ export function StudioFlowInspector({
             return result.kind === "applied" ? true : result.reason;
           }}
         />
-        {ownerNote === undefined ? null : (
-          <p className="text-sm text-muted-foreground">{ownerNote}</p>
-        )}
+        {ownerNote === undefined ? null : <StudioHelp hint={ownerNote} />}
         <StudioHelp hint="Select a step on the canvas to change its settings, move it or add a step after it." />
         {main !== undefined && (
           <StepTypePicker
