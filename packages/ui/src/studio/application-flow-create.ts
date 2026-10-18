@@ -8,21 +8,23 @@ import {
   type ImmutablePlatformBlockCatalogue,
   type SourceFlow,
 } from "@vortex/platform/schema";
-import { describeStudioFlowLocation, studioWords } from "./application-flow-model";
+import { describeStudioFlowLocation } from "./application-flow-model";
 import { traverseStudioSemanticSelectionDraft, type StudioSemanticSelection } from "./semantic-selection";
 
 /**
  * Creating a flow and binding it, the one way flows are created and bound:
  * - for an action control: an interactive flow started by the person, with one Show message step,
  *   and one flow binding of the control's action event to it (the existing `flow_bindings` model);
- *   on a record page the flow reads the record the page shows as its `record_id` input;
+ *   on a record page the flow runs for the record the page shows, its `record_id` record input;
  * - for a board: an interactive flow bound to its card moves, with one Save record step that saves
- *   the moved card's new stage, so its pipeline and the action that owns the stage apply;
+ *   the moved card's new stage, so its pipeline and the action that owns the stage apply; it runs
+ *   for the moved card, its `record` record input;
  * - for a control event with its steps given (a generated page's Open, New, Edit and Save): an
  *   interactive flow with exactly those inputs, steps and outputs, bound to that control event;
  * - for another control of an existing flow (each form of a guided form): one more binding;
  * - for a record event: a transaction flow an owned Module runs before one of its record types is
- *   saved, with one Warn step (the trigger is the flow's own `triggers`, as Module rules have).
+ *   saved, with one Warn step (the trigger is the flow's own `triggers`): a before-save rule, added
+ *   on its record type in the Data tab.
  * A binding of a control on a page of a record type declares its event for that record type, as
  * publication requires of every bound event.
  */
@@ -56,8 +58,6 @@ export type StudioFlowCreateChoices = Readonly<{
    */
   actions: readonly Readonly<{ controlAlias: string; label: string; recordType: string | null;
     event: "action" | "card_moved" }>[];
-  /** Record types of the Modules this application owns. */
-  recordTypes: readonly Readonly<{ moduleKey: string; moduleName: string; recordTypeKey: string; label: string }>[];
 }>;
 
 export const projectStudioFlowCreateChoices = (
@@ -89,11 +89,7 @@ export const projectStudioFlowCreateChoices = (
     const recordType = page?.type === "detail" && "record_type" in page && typeof page.record_type === "string" ? page.record_type : null;
     actions.push({ controlAlias: alias, label: controlLabel(alias), recordType, event: "action" });
   });
-  const recordTypes = draft.source.body.modules.flatMap((module) => module.record_types.map((recordType) => ({
-    moduleKey: module.key, moduleName: module.name, recordTypeKey: recordType.key,
-    label: "name" in recordType && typeof recordType.name === "string" ? recordType.name : studioWords(recordType.key),
-  })));
-  return { actions, recordTypes };
+  return { actions };
 };
 
 /** A builder key from a name, unique among the taken ones. */
@@ -145,9 +141,10 @@ const bindControl = (body: ApplicationSourceDocument["body"], controlAlias: stri
 };
 
 const interactiveFlow = (key: string, name: string, parts: Pick<SourceFlow, "inputs" | "tasks" | "outputs"> &
-  Readonly<{ description?: string }>): SourceFlow => ({
+  Readonly<{ description?: string; recordInput?: string }>): SourceFlow => ({
   contractVersion: flowContractVersion, id: key, key, ...(parts.description === undefined ? {} : { description: parts.description }),
-  labels: { name }, execution: "interactive", runAs: { kind: "initiator" }, inputs: parts.inputs, variables: {}, triggers: [],
+  labels: { name }, execution: "interactive", runAs: { kind: "initiator" }, inputs: parts.inputs,
+  ...(parts.recordInput === undefined ? {} : { recordInput: parts.recordInput }), variables: {}, triggers: [],
   tasks: parts.tasks, outputs: parts.outputs, errors: [], finally: [],
 });
 
@@ -203,7 +200,7 @@ export const applyStudioFlowCreate = (
     let binding: Readonly<{ id: string; eventId: string }>;
     if (command.kind === "action" && command.event === "card_moved" && command.recordType !== null) {
       // The board's card move saves the moved card's new stage through its pipeline.
-      flow = interactiveFlow(key, name, { outputs: {},
+      flow = interactiveFlow(key, name, { outputs: {}, recordInput: "record",
         inputs: { record: { type: "record_reference", required: true, recordTypeIds: [command.recordType] },
           values: { type: "json", required: true } },
         tasks: [{ id: "save_stage", type: "record.save", version: "1.0.0", properties: {
@@ -213,7 +210,7 @@ export const applyStudioFlowCreate = (
       binding = bindControl(body, command.controlAlias, "card_moved", key,
         { record: { kind: "caller", name: "record_id" }, values: { kind: "caller", name: "values" } });
     } else if (command.kind === "action") {
-      flow = interactiveFlow(key, name, { outputs: {},
+      flow = interactiveFlow(key, name, { outputs: {}, ...(command.recordType === null ? {} : { recordInput: "record_id" }),
         inputs: command.recordType === null ? {}
           : { record_id: { type: "record_reference", required: true, recordTypeIds: [command.recordType] } },
         tasks: [{ id: "show_message", type: "interface.show_message", version: "1.0.0", properties: { message: message("Edit this message") } }] });

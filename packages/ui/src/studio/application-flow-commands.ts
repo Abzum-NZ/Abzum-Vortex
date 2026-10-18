@@ -80,16 +80,28 @@ const seedValue = (type: FlowTaskPropertyType, flow: SourceFlow, source: Readonl
       const formAnswers = Object.entries(flow.inputs ?? {}).find(([, declaration]) => declaration.type === "json")?.[0];
       return formAnswers === undefined ? { kind: "map", entries: {} } : { kind: "reference", reference: { source: "input", name: formAnswers } };
     }
+    case "field_id": {
+      // A save rule names a field of the record it runs for, as `<record type>.<field>`: its title field first.
+      const recordTypeId = (flow.triggers ?? []).flatMap((trigger) => trigger.type === "BeforeSave" ? [trigger.recordTypeId] : [])[0];
+      if (recordTypeId === undefined) return undefined;
+      const owner = modules.find((module) => module.flows.some((candidate) => candidate.id === flow.id));
+      const record = owner?.record_types.find((candidate) => candidate.key === recordTypeId);
+      const field = record?.fields.find((candidate) => candidate.key === record.title_field) ?? record?.fields[0];
+      return field === undefined ? undefined : text(`${recordTypeId}.${field.key}`);
+    }
     default: return undefined;
   }
 };
+
+/** The reason key a new Refuse save step starts with; the builder words its message. */
+const refusalReasonSeed = text("save_refused");
 
 const seededTask = (definition: FlowTaskTypeDefinition, id: string, flow: SourceFlow,
   source: Readonly<ApplicationSourceDocument>): RegisteredTask | undefined => {
   const properties: RegisteredTask["properties"] = {};
   for (const [key, declaration] of Object.entries(definition.properties)) {
     if (!declaration.required) continue;
-    const seed = seedValue(declaration.type, flow, source);
+    const seed = definition.type === "rule.refuse" && key === "reason" ? refusalReasonSeed : seedValue(declaration.type, flow, source);
     if (seed === undefined) return undefined;
     properties[key] = seed;
   }
@@ -292,8 +304,7 @@ export const applyStudioFlowCommand = (
         const built = applyStudioFlowStepDraft(current.source, original.flow, expectedSelection.moduleKey, list[index]!,
           command.taskPath, command.draft);
         if (!built.ok) return { kind: "invalid", reason: built.reason };
-        if (JSON.stringify(built.value) === JSON.stringify(list[index]))
-          return { kind: "invalid", reason: "This step already has these settings. Nothing was changed." };
+        // Settings that come out as the step already has them apply as no change.
         list[index] = built.value;
         return done(command.taskId);
       }

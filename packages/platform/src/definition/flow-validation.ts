@@ -235,6 +235,8 @@ export function validateFlow(
   const hasRecordTrigger = flow.triggers.some(
     (trigger) => trigger.type === "BeforeSave" || trigger.type === "Event",
   );
+  // An interactive flow reads the record it runs for the same way a triggered flow reads its record.
+  const hasRecord = hasRecordTrigger || flow.recordInput !== undefined;
 
   // ── Typed references. ──
   type Where = { nowAllowed: boolean; scope: ReadonlyMap<string, FlowTask>; triggerOnly: boolean };
@@ -316,12 +318,14 @@ export function validateFlow(
         return variableTypes.get(reference.name);
       case "trigger_record":
       case "trigger_previous":
-        if (!hasRecordTrigger)
+        if (reference.source === "trigger_previous" ? !hasRecordTrigger : !hasRecord)
           add(
             path,
             "vortex.definition.trigger_record_required",
             "required_value",
-            "Only a flow with a BeforeSave or Event trigger has a trigger record",
+            reference.source === "trigger_previous"
+              ? "Only a flow with a BeforeSave or Event trigger has the record's values before the change"
+              : "Only a flow with a BeforeSave or Event trigger, or an interactive flow that names its record input, has a record",
           );
         else if (options.triggerRecordFieldExists?.(reference.field) === false)
           add(
@@ -1163,6 +1167,32 @@ const validateStructure = (flow: FlowSource, add: Add) => {
         `A ${trigger.type} trigger cannot start a ${flow.execution} flow`,
       );
   });
+
+  // Only an interactive flow names the input that carries its record: one required record input.
+  if (flow.recordInput !== undefined) {
+    const declaration = Object.hasOwn(flow.inputs, flow.recordInput)
+      ? flow.inputs[flow.recordInput]
+      : undefined;
+    if (flow.execution !== "interactive")
+      add(
+        ["recordInput"],
+        "vortex.definition.workflow_node_values",
+        "invalid_value",
+        "Only an interactive flow names the input that carries its record; a record trigger supplies it otherwise",
+      );
+    else if (
+      declaration === undefined ||
+      declaration.type !== "record_reference" ||
+      !declaration.required ||
+      declaration.recordTypeIds?.length !== 1
+    )
+      add(
+        ["recordInput"],
+        "vortex.definition.workflow_node_references",
+        "broken_reference",
+        "The record input must be a declared, required input naming one record of one record type",
+      );
+  }
 
   // Run as follows from the execution kind and how the flow starts.
   const systemStarted = flow.triggers.some(

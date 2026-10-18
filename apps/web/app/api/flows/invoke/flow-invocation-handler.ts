@@ -12,6 +12,7 @@ import {
   loadProjectedReferenceChoiceForm,
 } from "../../../_lib/application-page";
 import { installedReleaseCatalogue } from "../../../_lib/definition-catalogue";
+import { applicationStoreService } from "../../../_lib/application-store-service";
 import {
   getGuidedFormControlIds,
   getGuidedFormFlowId,
@@ -95,6 +96,7 @@ export const createFlowInvocationHandler =
 
       const result = await invokeInstalledFlow(identity.session, body, address, {
         authorityId: getIdentityAuthorityConfiguration().authorityId,
+        applicationStore: applicationStoreService(),
         channel,
         telemetry: appTelemetry,
         releaseCatalogue: installedReleaseCatalogue,

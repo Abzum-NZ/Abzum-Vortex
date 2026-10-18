@@ -1,8 +1,8 @@
 import {
-  applicationSourceDocumentSchema, builderKeySchema, changeableByPeople, standardPermissionKeys,
-  type ApplicationSourceDocument,
+  applicationSourceDocumentSchema, applicationUses, builderKeySchema, changeableByPeople, standardPermissionKeys,
+  type ApplicationSourceDocument, type ApplicationUsePlace,
 } from "@vortex/platform/schema";
-import { tokenName } from "./studio-labels";
+import { tokenName } from "./studio-words";
 
 /**
  * The Access tab's model and edits of the application draft: its roles (access groups), what each
@@ -46,15 +46,6 @@ export type StudioAccessPermission = Readonly<{
   standard: boolean;
 }>;
 
-/** Somewhere the draft names a role or a permission, for "Show me where". */
-export type StudioAccessPlace =
-  | Readonly<{ kind: "role"; roleKey: string; label: string }>
-  | Readonly<{ kind: "page"; pageAlias: string; label: string }>
-  | Readonly<{ kind: "navigation"; alias: string; label: string }>
-  | Readonly<{ kind: "placement"; placementAlias: string; label: string }>
-  | Readonly<{ kind: "data"; moduleKey: string; label: string }>
-  | Readonly<{ kind: "other"; label: string }>;
-
 export type StudioAccessGate = Readonly<{ kind: "existing"; key: string } | { kind: "new"; label: string }>;
 
 export type StudioAccessCommand =
@@ -76,12 +67,12 @@ export type StudioAccessCommand =
 
 export type StudioAccessResult =
   | Readonly<{ kind: "applied"; source: Source; message: string; roleKey?: string | undefined }>
-  | Readonly<{ kind: "refused"; message: string; where?: readonly StudioAccessPlace[] }>;
+  | Readonly<{ kind: "refused"; message: string; where?: readonly ApplicationUsePlace[] }>;
 
 class AccessRefusal extends Error {
-  constructor(message: string, readonly where?: readonly StudioAccessPlace[]) { super(message); }
+  constructor(message: string, readonly where?: readonly ApplicationUsePlace[]) { super(message); }
 }
-const refuse = (message: string, where?: readonly StudioAccessPlace[]): never => { throw new AccessRefusal(message, where); };
+const refuse = (message: string, where?: readonly ApplicationUsePlace[]): never => { throw new AccessRefusal(message, where); };
 const quoted = (name: string) => `“${name}”`;
 const labelLimit = 60;
 
@@ -175,63 +166,6 @@ const menuEntries = (items: readonly Navigation[], into: Navigation[] = []): Nav
 };
 export const studioAccessMenuEntries = (source: Source) => menuEntries(source.body.navigation)
   .flatMap((entry) => entry.type === "heading" ? [] : [entry]);
-
-// ---------------------------------------------------------------------------------------------
-// Where a key is used.
-// ---------------------------------------------------------------------------------------------
-
-type Json = Record<string, unknown>;
-const isObject = (value: unknown): value is Json => typeof value === "object" && value !== null && !Array.isArray(value);
-const areaWords: Readonly<Record<string, string>> = {
-  pipelines: "A pipeline", interfaces: "An interface operation", flows: "A flow", search: "Search",
-  public_addresses: "A public address", experiences: "A page shown when another cannot be opened",
-};
-
-/** Every place outside its own declaration that names a permission key, with what a builder knows it by. */
-export const studioPermissionUses = (source: Source, key: string): readonly StudioAccessPlace[] => {
-  const places: StudioAccessPlace[] = [];
-  const seen = new Set<string>();
-  const add = (place: StudioAccessPlace) => {
-    const identity = JSON.stringify(place);
-    if (!seen.has(identity)) { seen.add(identity); places.push(place); }
-  };
-  const body = source.body as unknown as Json;
-  const visit = (value: unknown, path: readonly (string | number)[], chain: readonly Json[]): void => {
-    if (typeof value === "string") {
-      if (value !== key || path[path.length - 1] === "key") return;
-      const [area, index] = path;
-      if (area === "roles" && typeof index === "number") {
-        const role = source.body.roles[index]!;
-        add({ kind: "role", roleKey: role.key, label: `The role ${quoted(role.name)} holds it` });
-      } else if (area === "pages" && typeof index === "number") {
-        const page = source.body.pages[index]!;
-        const block = [...chain].reverse().find((entry) => isObject(entry.props) && typeof entry.props.id === "string");
-        if (path[2] === "permission") add({ kind: "page", pageAlias: page.id, label: `It opens the page ${quoted(page.name)}` });
-        else if (block !== undefined) add({ kind: "placement", placementAlias: String((block.props as Json).id),
-          label: `A block on the page ${quoted(page.name)} is shown or used with it` });
-        else add({ kind: "page", pageAlias: page.id, label: `The page ${quoted(page.name)} uses it` });
-      } else if (area === "shells" && typeof index === "number") {
-        const block = [...chain].reverse().find((entry) => isObject(entry.props) && typeof entry.props.id === "string");
-        const shell = source.body.shells[index]!;
-        add(block === undefined ? { kind: "other", label: `The layout ${quoted(shell.name)} uses it` }
-          : { kind: "placement", placementAlias: String((block.props as Json).id),
-            label: `A block of the layout ${quoted(shell.name)} is shown or used with it` });
-      } else if (area === "navigation") {
-        const entry = [...chain].reverse().find((candidate) => typeof candidate.id === "string" && typeof candidate.label === "string");
-        if (entry !== undefined) add({ kind: "navigation", alias: String(entry.id), label: `It shows the menu entry ${quoted(String(entry.label))}` });
-      } else if (area === "modules" && typeof index === "number") {
-        const module = source.body.modules[index]!;
-        add({ kind: "data", moduleKey: module.key, label: `An action or rule of the module ${quoted(module.name)} needs it` });
-      } else if (typeof area === "string") add({ kind: "other", label: `${areaWords[area] ?? tokenName(area)} uses it` });
-      return;
-    }
-    if (Array.isArray(value)) value.forEach((entry, index) => visit(entry, [...path, index], chain));
-    else if (isObject(value))
-      for (const [field, entry] of Object.entries(value)) visit(entry, [...path, field], [...chain, value]);
-  };
-  visit(body, [], []);
-  return places;
-};
 
 // ---------------------------------------------------------------------------------------------
 // Field access of one role on one record type.
@@ -348,7 +282,7 @@ const judged = (candidate: Source): Source => {
   return refuse(`This change would leave ${typeof issue.path[1] === "string" ? tokenName(issue.path[1]).toLowerCase() : "the application"} invalid (${issue.message}). Nothing was changed.`);
 };
 const applied = (candidate: Source, message: string, roleKey?: string): StudioAccessResult =>
-  ({ kind: "applied", source: judged(candidate), message: `${message} Save to keep it.`, roleKey });
+  ({ kind: "applied", source: judged(candidate), message, roleKey });
 
 const requireRole = (body: Body, roleKey: string): Role =>
   body.roles.find((role) => role.key === roleKey) ?? refuse("That role is no longer in the draft.");
@@ -430,7 +364,7 @@ const grant = (candidate: Source, command: Extract<StudioAccessCommand, { kind: 
   const home = pageOf(candidate.body, role.home_page);
   if (home?.permission === command.permissionKey)
     refuse(`${quoted(role.name)} starts on ${quoted(home.name)}, which opens with ${quoted(label)}. Choose another start page first.`,
-      [{ kind: "role", roleKey: role.key, label: `The start page of ${quoted(role.name)}` }]);
+      [{ label: `The start page of ${quoted(role.name)}`, open: { kind: "role", roleKey: role.key } }]);
   entries.splice(entries.indexOf(command.permissionKey), 1);
   return applied(candidate, `${quoted(role.name)} no longer holds ${quoted(label)}.`, role.key);
 };
@@ -454,7 +388,7 @@ const removeRole = (candidate: Source, roleKey: string): StudioAccessResult => {
   if (candidate.body.roles.length === 1) refuse(`${quoted(role.name)} is the application's only role. Add another role first.`);
   if (role.default_member === true)
     refuse(`${quoted(role.name)} is the default member role. Make another role the default member role first.`,
-      [{ kind: "role", roleKey: role.key, label: `${quoted(role.name)} is offered to whoever installs the application` }]);
+      [{ label: `${quoted(role.name)} is offered to whoever installs the application`, open: { kind: "role", roleKey: role.key } }]);
   candidate.body.roles = candidate.body.roles.filter((entry) => entry.key !== roleKey);
   return applied(candidate, `Role ${quoted(role.name)} removed.`);
 };
@@ -463,7 +397,7 @@ const removePermission = (candidate: Source, key: string): StudioAccessResult =>
   const permission = permissionOf(candidate, key);
   if (permission.standard)
     refuse(`${quoted(permission.label)} comes with its record type. It goes when the record type is removed in Data.`);
-  const where = studioPermissionUses(candidate, key);
+  const where = applicationUses(candidate, { kind: "permission", permissionKey: key });
   if (where.length > 0) refuse(`${quoted(permission.label)} is still in use, so it was not removed.`, where);
   if (permission.moduleKey === undefined) candidate.body.permissions = candidate.body.permissions.filter((entry) => entry.key !== key);
   else {
@@ -511,7 +445,7 @@ export const applyStudioAccessCommand = (source: Source, command: StudioAccessCo
       case "list_role_permissions": {
         const role = requireRole(body, command.roleKey);
         if (!role.permissions.includes("*")) refuse(`${quoted(role.name)} already lists its permissions.`);
-        if (command.permissionKeys.length === 0) refuse("Save the draft first, so the permissions this role holds can be listed.");
+        if (command.permissionKeys.length === 0) refuse("The permissions this role holds are listed once your latest change is saved. Try again in a moment.");
         (role as { permissions: string[] }).permissions = [...command.permissionKeys];
         return applied(candidate, `${quoted(role.name)} now lists its ${command.permissionKeys.length} permissions one by one.`, role.key);
       }
