@@ -25,7 +25,6 @@ declare
   supplied_key text;
   supplied_value jsonb;
   contract_version text;
-  exact_values boolean;
   canonical_decimal constant text :=
     '^(?:(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?|-(?:0\.[0-9]*[1-9]|[1-9][0-9]*(?:\.[0-9]*[1-9])?))$';
 begin
@@ -43,10 +42,9 @@ begin
   contract_version := p_source_record_type ->> 'validationContractVersion';
   if not (p_source_record_type ? 'validationContractVersion')
     or pg_catalog.jsonb_typeof(p_source_record_type -> 'validationContractVersion') is distinct from 'string'
-    or contract_version not in ('1.0.0', '2.0.0', '3.0.0') then
+    or contract_version <> all (vortex_definition.accepted_contract_version('record_type')) then
     raise exception using errcode = '22023', message = 'Typed record condition is invalid';
   end if;
-  exact_values := contract_version in ('2.0.0', '3.0.0');
 
   scope_condition := p_record_scope -> 'savedCondition';
   if pg_catalog.jsonb_typeof(scope_condition) is distinct from 'object' then
@@ -100,9 +98,9 @@ begin
       raise exception using errcode = '22023', message = 'Typed record condition is invalid';
     end if;
     semantic_type := case
-      when exact_values and field_kind = 'decimal_number' then 'decimal_number'
-      when exact_values and field_kind = 'money' then 'money'
-      when field_kind in ('whole_number', 'decimal_number', 'money') then 'number'
+      when field_kind = 'decimal_number' then 'decimal_number'
+      when field_kind = 'money' then 'money'
+      when field_kind = 'whole_number' then 'number'
       when field_kind = 'yes_no' then 'boolean'
       when field_kind = 'date' then 'date'
       when field_kind = 'date_time' then 'date_time'
@@ -119,9 +117,9 @@ begin
     if field_kind in ('calculation', 'total') then
       result_kind := field_entry #>> '{settings,resultType}';
       semantic_type := case
-        when exact_values and result_kind = 'decimal_number' then 'decimal_number'
-        when exact_values and result_kind = 'money' then 'money'
-        when result_kind in ('whole_number', 'decimal_number', 'money') then 'number'
+        when result_kind = 'decimal_number' then 'decimal_number'
+        when result_kind = 'money' then 'money'
+        when result_kind = 'whole_number' then 'number'
         when result_kind = 'yes_no' then 'boolean'
         when result_kind = 'date' then 'date'
         when result_kind = 'date_time' then 'date_time'
@@ -178,7 +176,7 @@ begin
         parameter_type in (
           'text', 'number', 'boolean', 'date', 'date_time', 'organization_account_reference'
         )
-        or (exact_values and parameter_type in ('decimal_number', 'money'))
+        or parameter_type in ('decimal_number', 'money')
       )
       or parameter_types ? parameter_key then
       raise exception using errcode = '22023', message = 'Typed record condition is invalid';

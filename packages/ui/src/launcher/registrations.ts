@@ -3,15 +3,12 @@ import {
   projectedApplicationPageLinkTilesSchema,
   projectedRecordPinTilesSchema,
   mountedRecordPinFrameSchema,
-  type PlatformBlockRelease,
 } from "@vortex/platform/schema";
 import {
   createPayloadParser,
-  createPlatformComponentRegistry,
   noRuntimeInputs,
   type PlatformComponentPayloadParser,
   type PlatformComponentRegistration,
-  type PlatformComponentRegistry,
 } from "../registry";
 import type { DefinitionRenderErrorLocation } from "../definition-error";
 import { DefinitionRenderError } from "../definition-error";
@@ -108,10 +105,3 @@ export const LAUNCHER_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistr
       parsePayload: noRuntimeInputs,
     }),
   ]);
-
-/** Creates an immutable PlatformComponentRegistry populated with all launcher components. */
-export function createLauncherComponentRegistry(
-  platformReleases: readonly PlatformBlockRelease[],
-): PlatformComponentRegistry {
-  return createPlatformComponentRegistry(LAUNCHER_COMPONENT_REGISTRATIONS, platformReleases);
-}

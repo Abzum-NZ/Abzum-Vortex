@@ -11,7 +11,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   type FieldInputControlReleaseMap,
-  type createFullPlatformComponentRegistry,
+  type createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
   type ControlSemanticEvent,
   type ChoiceInputPayload,
@@ -36,14 +36,6 @@ import { Button } from "@vortex/ui/components/button";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { FirstRecordTypeEmptyState } from "../../../../../../_components/first-record-type-empty-state";
 import { toast } from "@vortex/ui/components/sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@vortex/ui/components/dialog";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { PageWebMcpTool } from "../../../../../../_lib/application-page";
 import type { GuidedFormActions, Notice, SubmittedForm, RefreshedPlacementData } from "./types";
@@ -97,7 +89,7 @@ export function ApplicationPageViewContent({
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
   adoptReleaseAction?: ((formData: FormData) => Promise<void>) | undefined;
   pageFeedback?: ReactNode;
-  platformComponentRegistry: ReturnType<typeof createFullPlatformComponentRegistry>;
+  platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
 }>): ReactElement {
@@ -179,8 +171,7 @@ export function ApplicationPageViewContent({
   const continuingFormsRef = useRef(new Map<string, SubmittedForm>());
   /** Set when the person cancels a form a running flow paused at; a board move clears it when it starts. */
   const formCancelledRef = useRef(false);
-  const { unsavedWorkRegistry, unsavedWork, leavePromptOpen, settleDiscardConfirmation } =
-    useUnsavedWorkPrompt({ router });
+  const { unsavedWorkRegistry, unsavedWork, confirmDialog } = useUnsavedWorkPrompt({ router });
 
   const application = model.invocation;
   const formOwners = useMemo(
@@ -660,33 +651,7 @@ export function ApplicationPageViewContent({
         />
       </div>
       {intentHostElement}
-      <Dialog
-        open={leavePromptOpen}
-        disablePointerDismissal
-        onOpenChange={(open) => {
-          if (!open) settleDiscardConfirmation(false);
-        }}
-      >
-        <DialogContent showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>Leave this page?</DialogTitle>
-            <DialogDescription>Your unsaved changes will be lost.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col sm:flex-row">
-            <Button
-              type="button"
-              variant="secondary"
-              autoFocus
-              onClick={() => settleDiscardConfirmation(false)}
-            >
-              Stay
-            </Button>
-            <Button type="button" onClick={() => settleDiscardConfirmation(true)}>
-              Leave
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {confirmDialog}
     </>
   );
 }

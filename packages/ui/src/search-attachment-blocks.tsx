@@ -11,6 +11,7 @@ import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "./def
 import { DisplayStateContainer } from "./display/display-state-container";
 import { DisplayHeader } from "./display/controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./display/context";
+import { formatLocaleNumber } from "./display/date-format";
 import { parseDisplayData, parseDisplayEventHandlers } from "./display/projected-data";
 import { createPayloadParser, type PlatformComponentRegistration } from "./registry";
 
@@ -51,7 +52,7 @@ const ATTACHMENT_PAYLOAD_PARSER = createPayloadParser({
   },
 });
 
-const formatBytes = (bytes: number): string => `${new Intl.NumberFormat().format(bytes)} bytes`;
+const formatBytes = (bytes: number): string => `${formatLocaleNumber(bytes)} bytes`;
 
 /** A read-only accessible list. Download clicks return to the existing protected File GET route. */
 export function SearchAttachmentDisplay(

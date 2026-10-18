@@ -7,7 +7,7 @@ import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-e
 import { applicationSourceDocumentSchema, canonicalJson, describeFailure,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
   type ApplicationSourceDocument, type DefinitionPublicationConfirmation,
-  holdsPermission, type NavigationPermissionDecisions, type PublishDefinitionResult, type ImmutablePlatformBlockCatalogue,
+  holdsPermission, type NavigationPermissionDecisions, type ImmutablePlatformBlockCatalogue,
   type PeopleDirectoryOwner } from "@vortex/platform/schema";
 import {
   applyStudioCompositionCommand,
@@ -35,11 +35,10 @@ import {
 import { createAppearanceRootProps, Icon, type FieldInputControlReleaseMap, type PlatformThemeTokens } from "@vortex/ui";
 import type { StudioCanvasAddRequest, StudioCanvasBreakpoint, StudioCanvasFrame } from "@vortex/ui/studio/page-puck-editor";
 import { readStudioCanvasRecords, readStudioDataRecords, reopenStudioApplication, saveStudioApplication,
-  prepareStudioApplicationPublication, publishStudioApplication, validateStudioPlacementThemeOverrides } from "../actions";
+  prepareStudioApplicationPublication, publishStudioApplication } from "../actions";
 import { applyStudioItemLabels } from "../_lib/application-item-labels";
 import { createStudioPlacementDescriber, studioOutlineLabels } from "../_lib/studio-labels";
 import { ApplicationDraftAgentTools, type StudioPublicationOutcome } from "./application-draft-agent-tools";
-import { ApplicationAppearanceEditor } from "./application-appearance-editor";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
 import { ApplicationVisibilityConditionEditor, type StudioVisibilityWorkspaceSnapshot } from "./application-visibility-condition-editor";
 import { useStudioFlowsTab } from "./use-studio-flows-tab";
@@ -261,7 +260,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const [publicationNote, setPublicationNote] = useState("");
   const [publicationProblem, setPublicationProblem] = useState("");
   const [preparing, setPreparing] = useState(false);
-  const [publishedPublication, setPublishedPublication] = useState<PublishDefinitionResult | null>(null);
+  const [releaseListGeneration, setReleaseListGeneration] = useState(0);
   const [preparedPublication, setPreparedState] = useState<PreparedPublication | null>(null);
   // The agent tools read the confirmation between calls, so the latest value is kept outside render state.
   const preparedRef = useRef<PreparedPublication | null>(null);
@@ -302,12 +301,9 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   // The selection the name and description fields were loaded for; a field loaded for another item is never an unapplied edit.
   const [labelKey, setLabelKey] = useState("");
   const [description, setDescription] = useState("");
-  const [themeOverrideProblems, setThemeOverrideProblems] = useState(false);
   const [paletteHost, setPaletteHost] = useState<HTMLElement | null>(null);
   const [paletteMessage, setPaletteMessage] = useState("");
   const [blockSetup, setBlockSetup] = useState<StudioBlockSetupRequest | null>(null);
-  const [appearanceEpoch, setAppearanceEpoch] = useState(0);
-  const [appearanceValidationEpoch, setAppearanceValidationEpoch] = useState(0);
   const [compositionEpoch, setCompositionEpoch] = useState(0);
   const [conditionEpoch, setConditionEpoch] = useState(0);
   const [flowEpoch, setFlowEpoch] = useState(0);
@@ -383,7 +379,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   };
   const reportSearchPending = useCallback((pending: boolean) => { busy.report("search", pending); }, [busy]);
   const reportModuleFieldPending = useCallback((pending: boolean) => { busy.report("moduleField", pending); }, [busy]);
-  const reportAppearancePending = useCallback((pending: boolean) => { busy.report("appearance", pending); }, [busy]);
   const reportCompositionPending = useCallback((pending: boolean) => { busy.report("composition", pending); }, [busy]);
   const reportConditionPending = useCallback((pending: boolean) => { busy.report("condition", pending); }, [busy]);
   const resetFlowPending = () => busy.clear("flowStep");
@@ -510,7 +505,9 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         parsed.data.resolutionFingerprint === confirmation.resolutionFingerprint &&
         canonicalJson(parsed.data.dependencyManifest) === canonicalJson(confirmation.dependencyManifest)) {
         previewGeneration.current += 1;
-        setPublishedPublication(parsed.data);
+        setMessage(`Version ${parsed.data.releaseVersion} published.`);
+        setReleaseListGeneration((generation) => generation + 1);
+        closePublish(false);
         return { kind: "published", publication: parsed.data };
       }
       if (result.kind === "available") {
@@ -540,7 +537,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   };
   const openPublish = () => {
     setPublicationProblem("");
-    setPublishedPublication(null);
     setPublicationNote("");
     setPublishOpen(true);
   };
@@ -637,7 +633,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   };
 
   const save = async () => {
-    if (themeOverrideProblems || busy.any() || history.getState().isSaving) return;
+    if (busy.any() || history.getState().isSaving) return;
     publicationEpoch.current += 1;
     setPreparedPublication(null);
     const requestLifetime = lifetime.current;
@@ -679,7 +675,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     busy.report("reopening", true);
     sourceImportGeneration.current += 1;
     previewGeneration.current += 1;
-    setAppearanceValidationEpoch((value) => value + 1);
     setMessage("Reading the saved draft…");
     try {
       const result = await reopenStudioApplication(organizationId, draft.rootId);
@@ -855,13 +850,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     discardSourceImport();
     setConditionEpoch((value) => value + 1);
     reportConditionPending(false);
-    // The Theme editor is the whole application's, not the selection's: it is reset only when it
-    // holds input to discard. Remounting it on every selection re-ran its theme check, which held
-    // the inspector busy for seconds after each click.
-    if (busy.is("appearance")) {
-      setAppearanceEpoch((value) => value + 1);
-      reportAppearancePending(false);
-    }
     setCompositionEpoch((value) => value + 1);
     reportCompositionPending(false);
     setFlowEpoch((value) => value + 1);
@@ -917,7 +905,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     [state.rootId, source, platformBlockCatalogue, describePlacement]);
   const labels = useMemo(() => studioOutlineLabels(outline), [outline]);
   const selectedName = selected === null ? undefined : labels.get(selectionKey);
-  const savedStateLabel = state.isSaving ? "Saving…" : state.isDirty ? "Unsaved changes" : "Saved";
+  const savedStateLabel = state.isDirty ? "Unsaved changes" : "Saved";
   const pendingNote = busy.isRendered("search")
     ? "Apply or discard your search settings before saving or changing anything else." : busy.isRendered("sourceImport")
     ? "Apply or discard the imported source before saving or changing anything else." : busy.isRendered("condition")
@@ -972,9 +960,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     discardSourceImport();
     setConditionEpoch((value) => value + 1);
     reportConditionPending(false);
-    setAppearanceEpoch((value) => value + 1);
-    setAppearanceValidationEpoch((value) => value + 1);
-    reportAppearancePending(false);
     setCompositionEpoch((value) => value + 1);
     reportCompositionPending(false);
     setFlowEpoch((value) => value + 1);
@@ -1119,7 +1104,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     Promise<StudioThemeChangeOutcome & Readonly<{ problems?: readonly string[] }>> => {
     const waiting = { kind: "refused", message: "Apply or discard the change that is waiting, or let the save finish, then try again." } as const;
     const before = history.getState();
-    if (!active.current || busy.any("appearance") || before.isSaving) return waiting;
+    if (!active.current || busy.any() || before.isSaving) return waiting;
     const candidate = applicationSourceDocumentSchema.parse(structuredClone(before.source));
     candidate.body.theme.selection = next;
     const result = await draftTheme.resolve(candidate.body.theme);
@@ -1129,7 +1114,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         : "The theme could not be checked just now, so nothing was changed. Try again." };
     if (!result.valid) return { kind: "refused", message: `${what}: refused, so nothing was changed.`, problems: result.problems };
     // The check is asynchronous: the change applies only to the draft it was checked against.
-    if (!active.current || history.getState().source !== before.source || busy.any("appearance") || history.getState().isSaving)
+    if (!active.current || history.getState().source !== before.source || busy.any() || history.getState().isSaving)
       return { kind: "refused", message: "The draft changed while the theme was checked, so nothing was changed. Try again." };
     if (!history.edit(candidate)) return { kind: "refused", message: "The draft history did not accept this change, so nothing was changed." };
     setMessage(`${what}. Save to keep it.`);
@@ -1156,20 +1141,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     {data.panel}
     {flows.panel(tab !== "flows")}
     <StudioThemePanel hidden={tab !== "theme"} selection={source.body.theme.selection} options={themeOptions}
-      disabled={busy.anyRendered("appearance") || state.isSaving || workspaceLifetime === 0} onChange={changeThemeSelection}
-      advanced={<ApplicationAppearanceEditor key={appearanceEpoch} organizationId={organizationId}
-        rootId={state.rootId} draftRevision={state.draftRevision} source={source}
-        validationEpoch={appearanceValidationEpoch}
-        disabled={busy.anyRendered("appearance") || state.isSaving} onPendingChange={reportAppearancePending}
-        onApply={(expected, next) => {
-          const current = history.getState();
-          if (!active.current || lifetime.current !== workspaceLifetime || current.isSaving || busy.any("appearance") ||
-              current.rootId !== state.rootId || current.draftRevision !== state.draftRevision ||
-              current.source !== state.source || expected !== source) return false;
-          const applied = history.edit(next);
-          if (applied) setMessage("Appearance changed. Save to keep it.");
-          return applied;
-        }} />} />
+      disabled={busy.anyRendered() || state.isSaving || workspaceLifetime === 0} onChange={changeThemeSelection} />
     {access.panel}
     <StudioReleasesPanel hidden={tab !== "releases"} section={releasesSection} onSection={setReleasesSection}
       savedStateLabel={savedStateLabel} />
@@ -1253,9 +1225,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
           breakpoint={canvasBreakpoint}
           disabled={locked || noEdit}
           compileFailure={compiled.failure}
-          validateThemeOverrides={(theme, placements) => validateStudioPlacementThemeOverrides(organizationId, {
-            rootId: draft.rootId, expectedDraftRevision: history.getState().draftRevision, theme, placements })}
-          onThemeOverrideProblems={setThemeOverrideProblems}
           onChange={applyPuckPageEdit}
           readRecords={readCanvasRecords} updating={compiling}
           palette={addTargets === null ? undefined
@@ -1281,10 +1250,10 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         canUndo={state.canUndo} canRedo={state.canRedo} undoDisabled={locked}
         onUndo={() => { if (!busy.any()) history.undo(); }} onRedo={() => { if (!busy.any()) history.redo(); }}
         onRevert={() => { void reopen(); }} revertDisabled={busy.anyOfRendered("publication", "reopening") || state.isSaving}
-        onSave={() => { void save(); }} saveDisabled={!state.isDirty || themeOverrideProblems || state.isSaving || locked}
+        onSave={() => { void save(); }} saveDisabled={!state.isDirty || state.isSaving || locked}
         backToAppHref={place.applicationHref}
         onPreview={() => { void openPreview(); }} previewPending={previewPending}
-        previewDisabled={state.isSaving || locked || themeOverrideProblems}
+        previewDisabled={state.isSaving || locked}
         onPublish={openPublish} publishDisabled={busy.isRendered("reopening") || state.isSaving || locked} />}
       panel={panels}
       inspector={tab === "data" ? data.inspector : inspectorPanel}
@@ -1302,7 +1271,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
           <div hidden={tab !== "data"}>{data.centre}</div>
           {tab === "access" && access.centre}
           {tab === "releases" && releasesSection === "history" &&
-            <StudioHistoryTab organizationId={organizationId} rootId={state.rootId} savedRevision={savedPreviewDraft.current.draftRevision}
+            <StudioHistoryTab key={releaseListGeneration} organizationId={organizationId} rootId={state.rootId}
+              savedRevision={savedPreviewDraft.current.draftRevision}
               restoreBlocked={state.isDirty || locked || state.isSaving ? "Save or undo your changes first: restoring replaces the saved draft." : undefined}
               onRestored={(restored) => { void reopen().then(() => setMessage(restored)); }} />}
           {tab === "releases" && releasesSection === "page-adoption" &&
@@ -1325,7 +1295,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       hasUnsavedChanges={state.isDirty} saving={state.isSaving} onSave={() => { void save(); }}
       canPrepare={canPrepare} preparing={preparing} publishing={busy.isRendered("publication") && !preparing}
       prepared={preparedPublication} note={publicationNote} onNoteChange={setPublicationNote}
-      problem={publicationProblem} published={publishedPublication}
+      problem={publicationProblem}
       onPrepare={() => { void requestPublication("prepare"); }}
       onPublish={() => { void requestPublication("publish"); }} />
     <StudioBlockSetupDialog request={blockSetup} choices={draftChoices} onClose={() => setBlockSetup(null)} />
