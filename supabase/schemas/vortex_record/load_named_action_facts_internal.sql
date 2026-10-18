@@ -17,24 +17,17 @@ declare
   release_content jsonb;
   release_revision_value bigint;
   release_validation_contract_version text;
-  record_type_item jsonb;
-  field_item jsonb;
-  relationship_item jsonb;
-  condition_item jsonb;
-  permission_item jsonb;
   module_root_value uuid;
-  record_type_id_value uuid;
-  storage_contract_value uuid;
   type_meta jsonb := '{}'::jsonb;
+  module_type_meta jsonb;
+  storage_disagrees boolean;
+  type_columns jsonb;
+  target_columns jsonb;
   relationship_by_id jsonb := '{}'::jsonb;
   condition_list jsonb := '[]'::jsonb;
   permission_by_id jsonb := '{}'::jsonb;
   required_permissions jsonb;
   declaration jsonb;
-  catalogue_row vortex_record.storage_catalogue%rowtype;
-  mapping_row vortex_record.field_storage_mappings%rowtype;
-  columns_value jsonb;
-  value_expression text;
   target_meta jsonb;
   target_table text;
   target_scope text;
@@ -99,8 +92,10 @@ begin
 
   -- Step 3: the pinned definitions. Record types, relationships and saved
   -- conditions of every bound Module, plus the declared permissions of the
-  -- Application release and of each Module release. Physical tokens are
-  -- resolved here; only record types actually loaded require record_data.
+  -- Application release and of each Module release. Each release is read in a
+  -- few set-based statements instead of a PL/pgSQL round trip for every type,
+  -- field and permission. Physical tokens are resolved here; a type's column
+  -- map and value expression are built only when one of its rows is loaded.
   for binding_item in
     select item.value
     from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as item(value)
@@ -120,109 +115,43 @@ begin
         message = 'Installed Module definition is unavailable';
     end if;
 
-    for record_type_item in
-      select item.value
-      from pg_catalog.jsonb_array_elements(release_content -> 'recordTypes') as item(value)
-    loop
-      record_type_id_value := (record_type_item ->> 'recordTypeId')::uuid;
-      storage_contract_value := (record_type_item ->> 'storageContractId')::uuid;
-
-      select catalogue.* into catalogue_row
-      from vortex_record.storage_catalogue as catalogue
-      where catalogue.storage_contract_id = storage_contract_value;
-      if not found
-        or catalogue_row.state <> 'active'
-        or catalogue_row.module_root_id <> module_root_value
-        or catalogue_row.record_type_id <> record_type_id_value
-        or catalogue_row.storage_scope is distinct from (record_type_item ->> 'storageScope')
+    -- Every record type must agree with its storage: an active catalogue entry
+    -- for this Module and type, provisioned by this release, with an active
+    -- column for each declared field.
+    select coalesce(pg_catalog.bool_or(
+        catalogue.storage_contract_id is null
+        or catalogue.state <> 'active'
+        or catalogue.module_root_id <> module_root_value
+        or catalogue.record_type_id <> (record_type_item.value ->> 'recordTypeId')::uuid
+        or catalogue.storage_scope is distinct from (record_type_item.value ->> 'storageScope')
         or not exists (
           select 1
           from vortex_record.release_provisions as provision
           where provision.module_root_id = module_root_value
             and provision.release_revision = release_revision_value
-            and storage_contract_value = any (provision.storage_contract_ids)
-        ) then
-        raise exception using errcode = '55000',
-          message = 'Record storage disagrees with the installed definition';
-      end if;
-
-      -- The column map and the one value expression that reads this record
-      -- type's row, built once here and reused by every load below.
-      columns_value := '{}'::jsonb;
-      for field_item in
-        select item.value
-        from pg_catalog.jsonb_array_elements(record_type_item -> 'fields') as item(value)
-      loop
-        select mapping.* into mapping_row
-        from vortex_record.field_storage_mappings as mapping
-        where mapping.storage_contract_id = storage_contract_value
-          and mapping.field_id = (field_item ->> 'fieldId')::uuid;
-        if not found or mapping_row.state <> 'active' then
-          raise exception using errcode = '55000',
-            message = 'Record storage disagrees with the installed definition';
-        end if;
-        columns_value := columns_value || pg_catalog.jsonb_build_object(
-          pg_catalog.lower(field_item ->> 'fieldId'), pg_catalog.jsonb_build_object(
-            'token', mapping_row.physical_column_token,
-            'databaseValueType', mapping_row.database_value_type,
-            'type', field_item ->> 'type'
-          )
-        );
-      end loop;
-
-      select pg_catalog.string_agg(
-        field_chunk.pairs_text,
-        ') || pg_catalog.jsonb_build_object(' order by field_chunk.chunk_index
-      )
-      into value_expression
-      from (
-        select (ordered_fields.field_number - 1) / 50 as chunk_index,
-          pg_catalog.string_agg(
-            pg_catalog.format(
-              '%L, %s',
-              ordered_fields.key,
-              case ordered_fields.value ->> 'databaseValueType'
-                when 'decimal' then
-                  pg_catalog.format('pg_catalog.to_jsonb(%I::text)', ordered_fields.value ->> 'token')
-                when 'timestamp_with_time_zone' then
-                  pg_catalog.format(
-                    'pg_catalog.to_jsonb(pg_catalog.to_char(pg_catalog.timezone(''UTC'', %I), ''YYYY-MM-DD"T"HH24:MI:SS.US"Z"''))',
-                    ordered_fields.value ->> 'token'
-                  )
-                when 'date' then
-                  pg_catalog.format(
-                    'pg_catalog.to_jsonb(pg_catalog.to_char(%I, ''YYYY-MM-DD''))',
-                    ordered_fields.value ->> 'token'
-                  )
-                else pg_catalog.format('pg_catalog.to_jsonb(%I)', ordered_fields.value ->> 'token')
-              end
-            ),
-            ', ' order by ordered_fields.key collate "C"
-          ) as pairs_text
-        from (
-          select column_entry.key, column_entry.value,
-            pg_catalog.row_number() over (
-              order by column_entry.key collate "C"
-            ) as field_number
-          from pg_catalog.jsonb_each(columns_value) as column_entry(key, value)
-        ) as ordered_fields
-        group by (ordered_fields.field_number - 1) / 50
-      ) as field_chunk;
-
-      type_meta := type_meta || pg_catalog.jsonb_build_object(
-        pg_catalog.lower(record_type_id_value::text),
+            and catalogue.storage_contract_id = any (provision.storage_contract_ids)
+        )
+        or exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(record_type_item.value -> 'fields') as field_item(value)
+          left join vortex_record.field_storage_mappings as mapping
+            on mapping.storage_contract_id = catalogue.storage_contract_id
+            and mapping.field_id = (field_item.value ->> 'fieldId')::uuid
+          where mapping.storage_contract_id is null or mapping.state <> 'active'
+        )
+      ), false),
+      pg_catalog.jsonb_object_agg(
+        pg_catalog.lower(record_type_item.value ->> 'recordTypeId'),
         pg_catalog.jsonb_build_object(
           'moduleRootId', module_root_value,
-          'recordTypeId', record_type_id_value,
-          'storageContractId', storage_contract_value,
-          'storageScope', record_type_item ->> 'storageScope',
-          'physicalSchemaToken', catalogue_row.physical_schema_token,
-          'ownershipMode', record_type_item ->> 'ownershipMode',
+          'recordTypeId', (record_type_item.value ->> 'recordTypeId')::uuid,
+          'storageContractId', (record_type_item.value ->> 'storageContractId')::uuid,
+          'storageScope', record_type_item.value ->> 'storageScope',
+          'physicalSchemaToken', catalogue.physical_schema_token,
+          'ownershipMode', record_type_item.value ->> 'ownershipMode',
           'releaseRevision', release_revision_value,
           'validationContractVersion', release_validation_contract_version,
-          'table', catalogue_row.physical_table_token,
-          'columns', columns_value,
-          'valueExpression', value_expression,
+          'table', catalogue.physical_table_token,
           'fields', coalesce((
             select pg_catalog.jsonb_agg(
               pg_catalog.jsonb_build_object(
@@ -235,84 +164,92 @@ begin
               end
               order by declared.ordinality
             )
-            from pg_catalog.jsonb_array_elements(record_type_item -> 'fields')
+            from pg_catalog.jsonb_array_elements(record_type_item.value -> 'fields')
               with ordinality as declared(value, ordinality)
           ), '[]'::jsonb)
         ) || case
-          when record_type_item ? 'ownershipRelationshipId'
+          when record_type_item.value ? 'ownershipRelationshipId'
             then pg_catalog.jsonb_build_object(
-              'ownershipRelationshipId', record_type_item -> 'ownershipRelationshipId'
+              'ownershipRelationshipId', record_type_item.value -> 'ownershipRelationshipId'
             )
           else '{}'::jsonb
         end
-      );
+        order by record_type_item.ordinality
+      )
+    into storage_disagrees, module_type_meta
+    from pg_catalog.jsonb_array_elements(release_content -> 'recordTypes')
+      with ordinality as record_type_item(value, ordinality)
+    left join vortex_record.storage_catalogue as catalogue
+      on catalogue.storage_contract_id = (record_type_item.value ->> 'storageContractId')::uuid;
+    if storage_disagrees then
+      raise exception using errcode = '55000',
+        message = 'Record storage disagrees with the installed definition';
+    end if;
+    type_meta := type_meta || coalesce(module_type_meta, '{}'::jsonb);
 
-      for relationship_item in
-        select item.value
-        from pg_catalog.jsonb_array_elements(record_type_item -> 'relationships') as item(value)
-      loop
-        -- Every declared target, single or polymorphic, as one uniform list;
-        -- Access proves a concrete edge target a member of it.
-        relationship_by_id := relationship_by_id || pg_catalog.jsonb_build_object(
-          pg_catalog.lower(relationship_item ->> 'relationshipId'),
-          pg_catalog.jsonb_build_object(
-            'relationshipId', relationship_item -> 'relationshipId',
-            'fromModuleRootId', module_root_value,
-            'fromRecordTypeId', record_type_item -> 'recordTypeId',
-            'toRecordTypes', coalesce((
-              select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
-                'moduleRootId', target.value -> 'moduleRootId',
-                'recordTypeId', target.value -> 'recordTypeId'
-              ) order by target.ordinality)
-              from pg_catalog.jsonb_array_elements(
-                case when relationship_item ? 'toRecordType'
-                  then pg_catalog.jsonb_build_array(relationship_item -> 'toRecordType')
-                  else relationship_item -> 'toRecordTypes'
-                end
-              ) with ordinality as target(value, ordinality)
-            ), '[]'::jsonb)
-          )
-        );
-      end loop;
-    end loop;
+    -- Every declared target, single or polymorphic, as one uniform list;
+    -- Access proves a concrete edge target a member of it.
+    relationship_by_id := relationship_by_id || coalesce((
+      select pg_catalog.jsonb_object_agg(
+        pg_catalog.lower(relationship_item.value ->> 'relationshipId'),
+        pg_catalog.jsonb_build_object(
+          'relationshipId', relationship_item.value -> 'relationshipId',
+          'fromModuleRootId', module_root_value,
+          'fromRecordTypeId', record_type_item.value -> 'recordTypeId',
+          'toRecordTypes', coalesce((
+            select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+              'moduleRootId', target.value -> 'moduleRootId',
+              'recordTypeId', target.value -> 'recordTypeId'
+            ) order by target.ordinality)
+            from pg_catalog.jsonb_array_elements(
+              case when relationship_item.value ? 'toRecordType'
+                then pg_catalog.jsonb_build_array(relationship_item.value -> 'toRecordType')
+                else relationship_item.value -> 'toRecordTypes'
+              end
+            ) with ordinality as target(value, ordinality)
+          ), '[]'::jsonb)
+        )
+        order by record_type_item.ordinality, relationship_item.ordinality
+      )
+      from pg_catalog.jsonb_array_elements(release_content -> 'recordTypes')
+        with ordinality as record_type_item(value, ordinality)
+      cross join lateral pg_catalog.jsonb_array_elements(record_type_item.value -> 'relationships')
+        with ordinality as relationship_item(value, ordinality)
+    ), '{}'::jsonb);
 
-    for condition_item in
-      select item.value
+    condition_list := condition_list || coalesce((
+      select pg_catalog.jsonb_agg(condition_item.value order by condition_item.ordinality)
       from pg_catalog.jsonb_array_elements(
         case
           when pg_catalog.jsonb_typeof(release_content -> 'sharingConditions') = 'array'
             then release_content -> 'sharingConditions'
           else '[]'::jsonb
         end
-      ) as item(value)
-    loop
-      condition_list := condition_list || pg_catalog.jsonb_build_array(condition_item);
-    end loop;
+      ) with ordinality as condition_item(value, ordinality)
+    ), '[]'::jsonb);
 
-    for permission_item in
-      select item.value
+    permission_by_id := permission_by_id || coalesce((
+      select pg_catalog.jsonb_object_agg(
+        pg_catalog.lower(permission_item.value ->> 'permissionId'),
+        pg_catalog.jsonb_build_object(
+          'ownerKind', 'module',
+          'ownerId', module_root_value,
+          'recordTypeId', permission_item.value -> 'recordTypeId',
+          'actionKind', permission_item.value -> 'actionKind',
+          'namedAction', permission_item.value -> 'namedAction',
+          'recordScope', permission_item.value -> 'recordScope'
+        )
+        order by permission_item.ordinality
+      )
       from pg_catalog.jsonb_array_elements(
         case
           when pg_catalog.jsonb_typeof(release_content -> 'permissions') = 'array'
             then release_content -> 'permissions'
           else '[]'::jsonb
         end
-      ) as item(value)
-    loop
-      if pg_catalog.jsonb_typeof(permission_item -> 'recordScope') = 'object' then
-        permission_by_id := permission_by_id || pg_catalog.jsonb_build_object(
-          pg_catalog.lower(permission_item ->> 'permissionId'),
-          pg_catalog.jsonb_build_object(
-            'ownerKind', 'module',
-            'ownerId', module_root_value,
-            'recordTypeId', permission_item -> 'recordTypeId',
-            'actionKind', permission_item -> 'actionKind',
-            'namedAction', permission_item -> 'namedAction',
-            'recordScope', permission_item -> 'recordScope'
-          )
-        );
-      end if;
-    end loop;
+      ) with ordinality as permission_item(value, ordinality)
+      where pg_catalog.jsonb_typeof(permission_item.value -> 'recordScope') = 'object'
+    ), '{}'::jsonb);
   end loop;
 
   select release.compilation_output #> '{canonical,content}'
@@ -321,30 +258,28 @@ begin
   where release.root_id = context_application_root_id
     and release.release_revision = (installation ->> 'applicationReleaseRevision')::bigint;
 
-  for permission_item in
-    select item.value
+  permission_by_id := permission_by_id || coalesce((
+    select pg_catalog.jsonb_object_agg(
+      pg_catalog.lower(permission_item.value ->> 'permissionId'),
+      pg_catalog.jsonb_build_object(
+        'ownerKind', 'application',
+        'ownerId', context_application_root_id,
+        'recordTypeId', permission_item.value -> 'recordTypeId',
+        'actionKind', permission_item.value -> 'actionKind',
+        'namedAction', permission_item.value -> 'namedAction',
+        'recordScope', permission_item.value -> 'recordScope'
+      )
+      order by permission_item.ordinality
+    )
     from pg_catalog.jsonb_array_elements(
       case
         when pg_catalog.jsonb_typeof(release_content -> 'permissions') = 'array'
           then release_content -> 'permissions'
         else '[]'::jsonb
       end
-    ) as item(value)
-  loop
-    if pg_catalog.jsonb_typeof(permission_item -> 'recordScope') = 'object' then
-      permission_by_id := permission_by_id || pg_catalog.jsonb_build_object(
-        pg_catalog.lower(permission_item ->> 'permissionId'),
-        pg_catalog.jsonb_build_object(
-          'ownerKind', 'application',
-          'ownerId', context_application_root_id,
-          'recordTypeId', permission_item -> 'recordTypeId',
-          'actionKind', permission_item -> 'actionKind',
-          'namedAction', permission_item -> 'namedAction',
-          'recordScope', permission_item -> 'recordScope'
-        )
-      );
-    end if;
-  end loop;
+    ) with ordinality as permission_item(value, ordinality)
+    where pg_catalog.jsonb_typeof(permission_item.value -> 'recordScope') = 'object'
+  ), '{}'::jsonb);
 
   target_meta := type_meta -> pg_catalog.lower(p_record_type_id::text);
   if target_meta is null then
@@ -355,6 +290,12 @@ begin
     raise exception using errcode = '55000',
       message = 'Record storage disagrees with the installed definition';
   end if;
+  target_columns := vortex_record.named_action_storage_columns_internal(
+    (target_meta ->> 'storageContractId')::uuid, target_meta -> 'fields'
+  );
+  type_columns := pg_catalog.jsonb_build_object(
+    target_meta ->> 'storageContractId', target_columns
+  );
   target_table := target_meta ->> 'table';
   target_scope := target_meta ->> 'storageScope';
   target_module_root_id := (target_meta ->> 'moduleRootId')::uuid;
@@ -394,7 +335,7 @@ begin
      where stored.organisation_id = $1 and stored.record_id = $2%s',
     target_scope, target_module_root_id, p_record_type_id,
     (target_meta ->> 'storageContractId')::uuid, target_scope,
-    target_meta ->> 'valueExpression', target_table,
+    target_columns ->> 'valueExpression', target_table,
     case when p_expected_concurrency_number is null then '' else ' for update' end
   );
 
@@ -458,6 +399,14 @@ begin
         raise exception using errcode = '55000',
           message = 'Record storage disagrees with the installed definition';
       end if;
+      if not (type_columns ? (current_meta ->> 'storageContractId')) then
+        type_columns := type_columns || pg_catalog.jsonb_build_object(
+          current_meta ->> 'storageContractId',
+          vortex_record.named_action_storage_columns_internal(
+            (current_meta ->> 'storageContractId')::uuid, current_meta -> 'fields'
+          )
+        );
+      end if;
 
       load_sql := pg_catalog.format(
         'select pg_catalog.jsonb_build_object(
@@ -484,7 +433,8 @@ begin
          where stored.organisation_id = $1 and stored.record_id = $2',
         current_meta ->> 'storageScope', (current_meta ->> 'moduleRootId')::uuid,
         (current_meta ->> 'recordTypeId')::uuid, current_contract,
-        current_meta ->> 'storageScope', current_meta ->> 'valueExpression',
+        current_meta ->> 'storageScope',
+        type_columns #>> array[current_meta ->> 'storageContractId', 'valueExpression'],
         current_meta ->> 'table'
       );
 
@@ -635,7 +585,7 @@ begin
     'declaration', declaration,
     'facts', facts,
     'table', target_table,
-    'columns', target_meta -> 'columns',
+    'columns', target_columns -> 'columns',
     'concurrencyNumber', target_concurrency_number,
     'definitionRevision', target_definition_revision,
     'moduleReleaseRevision', target_release_revision,

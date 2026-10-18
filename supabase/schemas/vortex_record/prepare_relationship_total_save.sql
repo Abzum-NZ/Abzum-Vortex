@@ -106,7 +106,7 @@ begin
       );
       return pg_catalog.jsonb_build_object('outcome', 'refused_recorded');
     end if;
-    access_bounds := vortex_access.resolve_record_field_bounds_internal(access_decision);
+    access_bounds := vortex_record.decide_record_field_bounds_internal(access_decision);
   end if;
 
   before_closure := vortex_record.discover_relationship_total_closure_internal(
@@ -185,7 +185,7 @@ begin
     if access_decision ->> 'outcome' <> 'allowed' then
       return pg_catalog.jsonb_build_object('outcome', 'restart');
     end if;
-    access_bounds := vortex_access.resolve_record_field_bounds_internal(access_decision);
+    access_bounds := vortex_record.decide_record_field_bounds_internal(access_decision);
   end if;
 
   -- Materialize only the declared aggregate sources for each locked affected

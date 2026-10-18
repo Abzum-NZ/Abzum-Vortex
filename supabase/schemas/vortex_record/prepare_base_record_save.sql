@@ -209,7 +209,7 @@ begin
           'correlationId', correlation_id_value
         );
       end if;
-      bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+      bounds := vortex_record.decide_record_field_bounds_internal(decision);
     else
       preview_bounds := vortex_record.preview_record_field_bounds_internal(
         p_record_type_id, (meta ->> 'storageContractId')::uuid,
@@ -220,12 +220,6 @@ begin
       end if;
       bounds := preview_bounds;
     end if;
-    bounds := bounds || pg_catalog.jsonb_build_object(
-      'readableFieldIds', vortex_record.filter_calculated_readable_field_ids(
-        loaded -> 'facts' -> 'recordTypes', p_record_type_id,
-        bounds -> 'readableFieldIds'
-      )
-    );
     return pg_catalog.jsonb_build_object(
       'outcome', 'prepared',
       'recordType', meta -> 'recordType',
@@ -277,14 +271,8 @@ begin
           'correlationId', correlation_id_value
         );
       end if;
-      bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+      bounds := vortex_record.decide_record_field_bounds_internal(decision);
     end if;
-    bounds := bounds || pg_catalog.jsonb_build_object(
-      'readableFieldIds', vortex_record.filter_calculated_readable_field_ids(
-        loaded -> 'facts' -> 'recordTypes', p_record_type_id,
-        bounds -> 'readableFieldIds'
-      )
-    );
   end if;
 
   return pg_catalog.jsonb_build_object(

@@ -385,11 +385,12 @@ export const createDefinitionPublicationService = (
         candidate,
       );
       const compilation = compiled.output;
-      // The stored current release of each own Module (not the draft's, which the overlay holds).
+      // The stored current release of each own Module (not the draft's, which the overlay holds
+      // at a newer revision), read once for the whole compile.
       const published = { recordTypes: [] as string[], fields: [] as string[] };
       for (const root of ownedRoots) {
         if (root.currentReleaseRevision === null) continue;
-        const release = await reader.readModuleRelease(candidate.draft.organizationId, root.rootId, root.currentReleaseRevision);
+        const release = await overlay.readModuleRelease(candidate.draft.organizationId, root.rootId, root.currentReleaseRevision);
         if (release === undefined) return refuse("DEFINITION_COMPILATION_REFUSED");
         for (const record of release.compilationOutput.canonical.content.recordTypes as readonly {
           key: string; fields: readonly { key: string }[];

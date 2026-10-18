@@ -76,7 +76,7 @@ const assignRoles = async (
         startsAt: new Date(Date.now() - 1_000).toISOString(),
       }),
     );
-    if (assigned.kind !== "available")
+    if (assigned.kind !== "available" || !("assignment" in assigned.value))
       throw new Error(`Role ${role.role_key} could not be assigned (${assigned.kind}).`);
     log(`assigned ${role.role_key as string}`);
   }
