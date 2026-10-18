@@ -142,10 +142,14 @@ export const projectStudioFlowDraftChoices = (draft: Readonly<{
       String(candidate.releaseVersion) === node.block.release_version);
     const isForm = release?.supportedEvents.includes("form_submit") === true;
     if (phase === "exit") { if (isForm) open.pop(); return; }
-    const name = node.settings.name;
+    const fieldReference = node.settings.field;
+    const fieldKey = typeof fieldReference === "string" ? fieldReference.slice(fieldReference.lastIndexOf(".") + 1) : undefined;
+    const declared = typeof fieldReference === "string" ? source.body.modules.flatMap((module) => module.record_types.flatMap((record) =>
+      record.fields.filter((field) => `${module.key}:${record.key}.${field.key}` === fieldReference)))[0] : undefined;
+    const name = node.settings.name ?? fieldKey;
     if (!isForm && typeof name === "string" && open.length > 0)
-      open[open.length - 1]!.fields.push({ name, label: typeof node.settings.label === "string" ? node.settings.label : studioWords(name),
-        type: undefined, required: node.settings.required === true });
+      open[open.length - 1]!.fields.push({ name, label: typeof node.settings.label === "string" ? node.settings.label : declared?.label ?? studioWords(name),
+        type: declared?.type, required: node.settings.required === true || declared?.required === true });
     if (isForm) {
       const entry = { alias: node.selection.placementAlias, label: node.label, fields: [] as StudioFlowNamedEntry[] };
       forms.push(entry);

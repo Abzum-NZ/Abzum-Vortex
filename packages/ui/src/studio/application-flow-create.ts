@@ -8,6 +8,9 @@ import {
   type ImmutablePlatformBlockCatalogue,
   type SourceFlow,
 } from "@vortex/platform/schema";
+import { studioQueryChoices } from "./contextual-palette";
+import { studioFlowCallerNames } from "./application-flow-start";
+import { projectStudioFlowDraftChoices } from "./application-flow-step-form";
 import { describeStudioFlowLocation } from "./application-flow-model";
 import { traverseStudioSemanticSelectionDraft, type StudioSemanticSelection } from "./semantic-selection";
 
@@ -32,11 +35,18 @@ import { traverseStudioSemanticSelectionDraft, type StudioSemanticSelection } fr
 type SourceBinding = ApplicationSourceDocument["body"]["flow_bindings"][number];
 /** A control event a flow can be bound to. */
 export type StudioFlowControlEvent = SourceBinding["event"];
+export type StudioFlowAuthoringEvent = Extract<StudioFlowControlEvent,
+  "action" | "card_moved" | "form_submit" | "row_clicked" | "row_action">;
+
+export const studioFlowEventLabels: Readonly<Record<StudioFlowAuthoringEvent, string>> = {
+  action: "When used", card_moved: "When a card is moved", form_submit: "When submitted",
+  row_clicked: "When a row is clicked", row_action: "Row action",
+};
 
 export type StudioFlowCreateCommand =
   /** On a record page, the flow gets the record the page shows as its record_id input. */
   | Readonly<{ kind: "action"; controlAlias: string; name: string; recordType: string | null;
-      event: "action" | "card_moved" }>
+      event: StudioFlowAuthoringEvent }>
   | Readonly<{ kind: "control"; controlAlias: string; event: StudioFlowControlEvent; name: string; description: string;
       inputs: SourceFlow["inputs"]; tasks: SourceFlow["tasks"]; outputs: SourceFlow["outputs"];
       bindingInputs: SourceBinding["inputs"] }>
@@ -57,7 +67,7 @@ export type StudioFlowCreateChoices = Readonly<{
    * its own flow) with no flow bound yet; on a record page, the record type the page shows.
    */
   actions: readonly Readonly<{ controlAlias: string; label: string; recordType: string | null;
-    event: "action" | "card_moved" }>[];
+    event: StudioFlowAuthoringEvent; callerNames: readonly Readonly<{ name: string; label: string }>[] }>[];
 }>;
 
 export const projectStudioFlowCreateChoices = (
@@ -65,29 +75,32 @@ export const projectStudioFlowCreateChoices = (
     source: ApplicationSourceDocument; catalogue: ImmutablePlatformBlockCatalogue }>,
   controlLabel: (alias: string) => string,
 ): StudioFlowCreateChoices => {
-  const bound = new Set(draft.source.body.flow_bindings.filter((binding) => binding.event === "action" ||
-    binding.event === "card_moved").map((binding) => `${binding.control} ${binding.event}`));
-  const actions: { controlAlias: string; label: string; recordType: string | null; event: "action" | "card_moved" }[] = [];
+  const bound = new Set(draft.source.body.flow_bindings.map((binding) => `${binding.control} ${binding.event}`));
+  const actions: StudioFlowCreateChoices["actions"][number][] = [];
+  const queries = studioQueryChoices(draft.source, null);
+  const forms = projectStudioFlowDraftChoices(draft).forms;
+  const placements = new Map(draft.source.body.pages.flatMap((page) => sourcePageItems(page.composition))
+    .map((item) => [item.props.id, item]));
   traverseStudioSemanticSelectionDraft(draft, ({ phase, node }) => {
     if (phase !== "enter" || node.kind !== "placement") return;
     const alias = node.selection.placementAlias;
     const release = draft.catalogue.releases.find((candidate) => String(candidate.blockId) === node.block.block_id &&
       String(candidate.releaseVersion) === node.block.release_version);
-    // A board moves a card by saving its record's stage; its record type is its choice field's.
-    const choiceField = node.settings.choice_field;
-    if (release?.supportedEvents.includes("card_moved") === true && typeof choiceField === "string" &&
-        choiceField.includes(".")) {
-      if (!bound.has(`${alias} card_moved`))
-        actions.push({ controlAlias: alias, label: `${controlLabel(alias)} (moving a card)`,
-          recordType: choiceField.slice(0, choiceField.lastIndexOf(".")), event: "card_moved" });
-      return;
-    }
-    if (bound.has(`${alias} action`)) return;
-    if (release?.supportedEvents.includes("action") !== true || node.settings.action_kind === "submit") return;
     const owner = node.owner;
     const page = owner.kind === "page" ? draft.source.body.pages.find((candidate) => candidate.id === owner.pageAlias) : undefined;
-    const recordType = page?.type === "detail" && "record_type" in page && typeof page.record_type === "string" ? page.record_type : null;
-    actions.push({ controlAlias: alias, label: controlLabel(alias), recordType, event: "action" });
+    const pageRecord = page?.type === "detail" && "record_type" in page && typeof page.record_type === "string" ? page.record_type : null;
+    const queryRecord = queries.find((query) => query.reference === placements.get(alias)?.props.vortex.query)?.recordType;
+    const choiceField = node.settings.choice_field;
+    const boardRecord = typeof choiceField === "string" && choiceField.includes(".")
+      ? choiceField.slice(0, choiceField.lastIndexOf(".")) : undefined;
+    for (const event of Object.keys(studioFlowEventLabels) as StudioFlowAuthoringEvent[]) {
+      if (release?.supportedEvents.includes(event) !== true || bound.has(`${alias} ${event}`) ||
+          (event === "action" && node.settings.action_kind === "submit")) continue;
+      const recordType = event === "card_moved" ? boardRecord ?? null
+        : event === "row_clicked" || event === "row_action" ? queryRecord ?? boardRecord ?? pageRecord : pageRecord;
+      actions.push({ controlAlias: alias, label: controlLabel(alias), recordType, event,
+        callerNames: studioFlowCallerNames(event, forms.find((form) => form.alias === alias)?.fields) });
+    }
   });
   return { actions };
 };
@@ -122,7 +135,14 @@ const bindControl = (body: ApplicationSourceDocument["body"], controlAlias: stri
   const id = keyFrom(`binding_${flowKey}`, aliases);
   if (id === undefined) return refuse("No free name could be made for the binding. Choose another name.");
   const page = body.pages.find((candidate) => sourcePageItems(candidate.composition).some((item) => item.props.id === controlAlias));
-  const recordType = page !== undefined && "record_type" in page && typeof page.record_type === "string" ? page.record_type : undefined;
+  const item = page === undefined ? undefined : sourcePageItems(page.composition).find((entry) => entry.props.id === controlAlias);
+  const queryRef = item?.props.vortex.query;
+  const module = typeof queryRef === "string" ? body.modules.find((entry) => queryRef.startsWith(`${entry.key}:`)) : undefined;
+  const query = module?.queries.find((entry) => `${module.key}:${entry.key}` === queryRef);
+  const choiceField = item?.props.choice_field;
+  const recordType = query !== undefined ? `${module!.key}:${query.record_type}`
+    : typeof choiceField === "string" && choiceField.includes(".") ? choiceField.slice(0, choiceField.lastIndexOf("."))
+      : page !== undefined && "record_type" in page && typeof page.record_type === "string" ? page.record_type : undefined;
   // A binding is unique by its control and event, so every control of one record type raising one
   // kind of event shares that record type's one declared event of that kind.
   const declared = new Set(body.events.filter((entry) => entry.record_type === recordType).map((entry) => entry.id));
@@ -137,6 +157,9 @@ const bindControl = (body: ApplicationSourceDocument["body"], controlAlias: stri
       personal_or_sensitive_values_allowed: false });
   }
   body.flow_bindings.push({ id, control: controlAlias, event_id: eventId, event, flow: flowKey, inputs });
+  if (event === "row_clicked") {
+    if (item !== undefined) item.props.row_click = { event_id: eventId };
+  }
   return { id, eventId };
 };
 
@@ -214,8 +237,14 @@ export const applyStudioFlowCreate = (
         inputs: command.recordType === null ? {}
           : { record_id: { type: "record_reference", required: true, recordTypeIds: [command.recordType] } },
         tasks: [{ id: "show_message", type: "interface.show_message", version: "1.0.0", properties: { message: message("Edit this message") } }] });
-      binding = bindControl(body, command.controlAlias, "action", key,
-        command.recordType === null ? {} : { record_id: { kind: "caller", name: "record_id" } });
+      if (command.event === "form_submit") {
+        flow.inputs = { ...flow.inputs, values: { type: "json", required: true } };
+      }
+      binding = bindControl(body, command.controlAlias, command.event, key,
+        command.event === "form_submit"
+          ? { values: { kind: "caller", name: "values" }, ...(command.recordType === null ? {}
+            : { record_id: { kind: "caller" as const, name: "record" } }) }
+          : command.recordType === null ? {} : { record_id: { kind: "caller", name: "record_id" } });
     } else {
       flow = interactiveFlow(key, name, { description: command.description, inputs: command.inputs, tasks: command.tasks, outputs: command.outputs });
       binding = bindControl(body, command.controlAlias, command.event, key, command.bindingInputs);

@@ -9,6 +9,7 @@ import {
 } from "./module-field-shape";
 import { applicationUses, type ApplicationUsePlace } from "./application-uses";
 import { fullRecordAccessRoleKeys } from "./module-permission-shape";
+import { recordTitleFieldEligible } from "./record-title-field";
 
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
@@ -244,6 +245,29 @@ export const renameInlineRecordType = (
   destination.name = name;
   destination.plural_name = pluralName;
   return parsedResult(source, module.key, record.key);
+};
+
+/** Chooses an existing scalar title; publication classifies a changed title as a major version. */
+export const setInlineRecordTitleField = (
+  current: ApplicationSourceDocument,
+  change: Readonly<{ moduleKey: string; recordKey: string; fieldKey: string }>,
+): InlineRecordTypeResult => {
+  const source = structuredClone(current);
+  const record = source.body.modules.find((module) => module.key === change.moduleKey)?.record_types
+    .find((entry) => entry.key === change.recordKey);
+  const field = record?.fields.find((entry) => entry.key === change.fieldKey);
+  if (record === undefined || field === undefined)
+    return { kind: "invalid", issues: ["Choose an existing field of this record type."] };
+  if (!recordTitleFieldEligible(field))
+    return { kind: "invalid", issues: ["Choose a text, number, choice or date field, or a stored calculation with one of those results."] };
+  const previousTitle = record.title_field;
+  (record as { title_field: string }).title_field = field.key;
+  // Search results that followed the old record title keep following its chosen title.
+  const reference = `${change.moduleKey}:${record.key}`;
+  for (const entry of source.body.search?.record_types ?? [])
+    if (entry.record_type === reference && entry.title_field === `${reference}.${previousTitle}`)
+      entry.title_field = `${reference}.${field.key}`;
+  return parsedResult(source, change.moduleKey, change.recordKey);
 };
 
 /** Renames an owned Module: its name changes, its key stays. */

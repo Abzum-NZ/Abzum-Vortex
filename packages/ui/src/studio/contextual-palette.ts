@@ -8,6 +8,7 @@ import {
   type PlatformBlockReleaseSummary,
 } from "@vortex/platform/schema";
 import { PALETTE_GROUP_TITLES } from "../palette-groups";
+import { studioHasSlotStarter } from "./composition-starters";
 
 /**
  * The Studio block palette for one place on a page: the newest release of each block the catalogue
@@ -73,7 +74,7 @@ export const studioReleaseReadsQuery = (release: PlatformBlockRelease): boolean 
   release.paletteGroup === "data" || release.paletteGroup === "figures";
 
 /** What a new block of this release needs, or why Studio cannot create one yet. */
-const choiceFor = (release: PlatformBlockRelease): StudioPaletteChoice => {
+const choiceFor = (catalogue: ImmutablePlatformBlockCatalogue, release: PlatformBlockRelease): StudioPaletteChoice => {
   const setup: BlockPropertySchemaContract[] = [];
   let unavailable: string | undefined;
   for (const property of release.properties) {
@@ -81,7 +82,8 @@ const choiceFor = (release: PlatformBlockRelease): StudioPaletteChoice => {
     if (studioSettingEditable(property)) setup.push(property);
     else unavailable ??= `It needs its ${property.label} setting, which Studio can't set yet.`;
   }
-  const requiredSlot = release.slots.find((slot) => slot.required && slot.repeats === undefined);
+  const requiredSlot = release.slots.find((slot) => slot.required && slot.repeats === undefined &&
+    !studioHasSlotStarter(catalogue, release, slot.key));
   if (requiredSlot !== undefined)
     unavailable ??= `Its ${requiredSlot.label} area must hold a block, so it can't start empty.`;
   return Object.freeze({
@@ -127,7 +129,7 @@ export function studioPaletteChoices(
     const known = newest.get(release.key);
     if (known === undefined || newer(release.releaseVersion, known.releaseVersion)) newest.set(release.key, release);
   }
-  return Object.freeze([...newest.values()].map(choiceFor));
+  return Object.freeze([...newest.values()].map((release) => choiceFor(catalogue, release)));
 }
 
 /** Whether a choice matches the search: its name, description, group or key holds every word. */

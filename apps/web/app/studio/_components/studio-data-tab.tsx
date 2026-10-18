@@ -6,10 +6,12 @@ import {
 } from "@vortex/ui/studio";
 import {
   deleteInlineRecordType, peopleDirectory as directory, renameInlineModule, renameInlineRecordType,
+  recordTitleFieldEligible, setInlineRecordTitleField,
   type ApplicationSourceDocument, type ApplicationUsePlace,
 } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
+import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { StudioPanelShell } from "./studio-frame";
 import { StudioField } from "./studio-field";
@@ -89,7 +91,6 @@ function RecordTypeInspector({ source, moduleKey, recordKey, disabled, fieldCont
   const name = useStudioDraftText(record.name, (next) => rename({ name: next }, `record-name:${moduleKey}:${recordKey}`));
   const plural = useStudioDraftText(record.plural_name, (next) => rename({ pluralName: next }, `record-plural:${moduleKey}:${recordKey}`));
   const dataRecord = dataModule.recordTypes.find((item) => item.key === recordKey);
-  const title = record.fields.find((field) => field.key === record.title_field);
   const remove = async () => {
     setIssues([]);
     const check = deleteInlineRecordType(source, moduleKey, recordKey);
@@ -116,7 +117,17 @@ function RecordTypeInspector({ source, moduleKey, recordKey, disabled, fieldCont
           onChange={(event) => plural.change(event.target.value)} />}
       </StudioField>
       <p className="text-sm text-muted-foreground">Key: {record.key}. It stays the same when you rename the record type.</p>
-      <p className="text-sm">Title field: {title?.label ?? record.title_field}</p>
+      <StudioField label="Title field" hint="Names records in pickers and headings. Changing a published title requires a major version.">
+        {(control) => <NativeSelect {...control} className="w-full" value={record.title_field} disabled={disabled}
+          onChange={(event) => {
+            const problem = studioEditProblem(edit((current) => setInlineRecordTitleField(current,
+              { moduleKey, recordKey, fieldKey: event.target.value })));
+            setIssues(problem === undefined ? [] : [problem]);
+          }}>
+          {record.fields.filter(recordTitleFieldEligible).map((field) =>
+            <NativeSelectOption key={field.key} value={field.key}>{field.label} ({fieldTypeLabel(field.type)})</NativeSelectOption>)}
+        </NativeSelect>}
+      </StudioField>
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant="outline" disabled={disabled}
           aria-expanded={adding === "field"} onClick={() => setAdding(adding === "field" ? null : "field")}>Add a field</Button>
