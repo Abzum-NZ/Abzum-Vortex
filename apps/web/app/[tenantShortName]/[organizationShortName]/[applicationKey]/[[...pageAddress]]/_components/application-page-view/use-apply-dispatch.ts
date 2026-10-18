@@ -127,11 +127,12 @@ export function useApplyDispatch({
           const correctionMessages = (diagnostic?.corrections ?? []).flatMap((correction) =>
             correction.message === undefined ? [] : [correction.message],
           );
-          const ruleMessage =
-            diagnostic?.ruleRefusal?.message ??
-            (correctionMessages.length > 0
-              ? [...new Set(correctionMessages)].join(" ")
-              : undefined);
+          const ruleMessages =
+            diagnostic?.ruleRefusal !== undefined
+              ? [diagnostic.ruleRefusal.message]
+              : correctionMessages.length > 0
+                ? [...new Set(correctionMessages)]
+                : undefined;
           const refusalFeedback: Extract<FormFlowFeedback, { kind: "refusal" }> | undefined =
             diagnostic === undefined
               ? undefined
@@ -142,14 +143,14 @@ export function useApplyDispatch({
                   ...(diagnostic.corrections === undefined
                     ? {}
                     : { corrections: diagnostic.corrections }),
-                  ...(ruleMessage === undefined ? {} : { ruleMessage }),
+                  ...(ruleMessages === undefined ? {} : { ruleMessages }),
                   ...(recovery === undefined ? {} : { recovery }),
                 };
           if (diagnostic !== undefined) {
             const reason: Notice =
-              ruleMessage === undefined
+              ruleMessages === undefined
                 ? refusalNotices[diagnostic.code]
-                : { tone: "problem", text: ruleMessage };
+                : { tone: "problem", text: ruleMessages.join(" ") };
             const presentation = diagnostic.presentation;
             resultNotice = {
               ...reason,
