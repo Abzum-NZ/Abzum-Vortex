@@ -886,20 +886,17 @@
                           "title": "Assign case",
                           "content": [
                             {
-                              "type": "platform.renderer.choice_input",
+                              "type": "platform.renderer.link_input",
                               "props": {
                                 "id": "input_sd_case_assign_owner",
                                 "name": "owner",
                                 "label": "Owner",
                                 "required": true,
-                                "choice_source": {
-                                  "query": "vortex.system_directory:people",
-                                  "label_field": "vortex.system_directory:person.display_name"
-                                },
+                                "record_types": ["vortex.system_directory:person"],
                                 "vortex": {
                                   "block": {
-                                    "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                                    "release_version": "1.1.0"
+                                    "block_id": "8d1b6a2f-4c3e-4f0a-9c2b-6f1d2e7a5b94",
+                                    "release_version": "1.0.0"
                                   },
                                   "responsive": {
                                     "desktop": {
@@ -1914,20 +1911,14 @@
                               }
                             },
                             {
-                              "type": "platform.renderer.choice_input",
+                              "type": "platform.renderer.field_input",
                               "props": {
                                 "id": "input_service_desk_case_edit_requester",
-                                "name": "requester",
-                                "label": "Requester",
-                                "required": true,
-                                "choice_source": {
-                                  "query": "vortex.service_desk.cases:service_desk_requesters",
-                                  "label_field": "vortex.crm.people:contact.full_name"
-                                },
+                                "field": "vortex.service_desk.cases:case.requester",
                                 "vortex": {
                                   "block": {
-                                    "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                                    "release_version": "1.1.0"
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
                                   },
                                   "responsive": {
                                     "desktop": {
