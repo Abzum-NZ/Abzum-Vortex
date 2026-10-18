@@ -5959,6 +5959,18 @@
     "icon": "grid",
     "paletteGroup": "data",
     "rendererKey": "platform.renderer.board",
+    "studioSetup": {
+      "kind": "pipeline",
+      "fieldProperty": "choice_field",
+      "titleFieldProperty": "card_title_field",
+      "label": "Pipeline",
+      "moveFlowName": "Move card",
+      "help": "Cards show every record in the column for its current stage. Moves follow the pipeline's rules and permissions.",
+      "emptyLabel": "No pipelines are available. Create one in Data, or make an existing pipeline stage field filterable.",
+      "fieldHasNoPipeline": "Create a pipeline for this field in Data before using it for board columns.",
+      "stageFilterError": "Make this pipeline's stage field filterable in Data to use it for board columns.",
+      "queryUnavailable": "This record type has reached its query limit. Remove an unused query in Data before adding the board."
+    },
     "properties": [
       {
         "kind": "text",
@@ -5973,15 +5985,15 @@
       {
         "kind": "field_reference",
         "key": "choice_field",
-        "label": "Choice field",
-        "help": "Installed choice field that determines each board column",
+        "label": "Column field",
+        "help": "The pipeline stage that determines the column for each record",
         "required": true
       },
       {
         "kind": "field_reference",
         "key": "card_title_field",
         "label": "Card title field",
-        "help": "Readable query field shown as each card title",
+        "help": "The field shown as each card's title",
         "required": true
       },
       {
@@ -6113,6 +6125,18 @@
     "icon": "grid",
     "paletteGroup": "data",
     "rendererKey": "platform.renderer.board",
+    "studioSetup": {
+      "kind": "pipeline",
+      "fieldProperty": "choice_field",
+      "titleFieldProperty": "card_title_field",
+      "label": "Pipeline",
+      "moveFlowName": "Move card",
+      "help": "Cards show every record in the column for its current stage. Moves follow the pipeline's rules and permissions.",
+      "emptyLabel": "No pipelines are available. Create one in Data, or make an existing pipeline stage field filterable.",
+      "fieldHasNoPipeline": "Create a pipeline for this field in Data before using it for board columns.",
+      "stageFilterError": "Make this pipeline's stage field filterable in Data to use it for board columns.",
+      "queryUnavailable": "This record type has reached its query limit. Remove an unused query in Data before adding the board."
+    },
     "properties": [
       {
         "kind": "text",
@@ -6127,15 +6151,15 @@
       {
         "kind": "field_reference",
         "key": "choice_field",
-        "label": "Choice field",
-        "help": "Installed choice field that determines each board column",
+        "label": "Column field",
+        "help": "The pipeline stage that determines the column for each record",
         "required": true
       },
       {
         "kind": "field_reference",
         "key": "card_title_field",
         "label": "Card title field",
-        "help": "Readable query field shown as each card title",
+        "help": "The field shown as each card's title",
         "required": true
       },
       {

@@ -1,5 +1,5 @@
 export * from "./contextual-palette";
-export { boardBlockKey, studioBoardPipelines } from "./board-source";
+export { studioBoardPipelines } from "./board-source";
 export * from "./discovery-adapter";
 export * from "./semantic-selection";
 export * from "./application-draft-history";
