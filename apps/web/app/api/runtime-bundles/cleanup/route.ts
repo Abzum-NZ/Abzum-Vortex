@@ -2,6 +2,7 @@ import { describeFailure } from "@vortex/platform/schema";
 import type { NextRequest, NextResponse } from "next/server";
 import {
   authenticateRuntimeBundleCleanup,
+  dropRetiredPreviewStorage,
   runScheduledPreviewInstallationExpiry,
   runScheduledRuntimeBundleCleanup,
 } from "@vortex/platform/server";
@@ -18,9 +19,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       authentication.reason === "cleanup_not_configured" ? 503 : 401,
     );
 
+  // Expired previews are removed first; their storage, and that of replaced previews, is then
+  // dropped one storage identity per short transaction.
   const [bundles, previews] = await Promise.allSettled([
     runScheduledRuntimeBundleCleanup(),
-    runScheduledPreviewInstallationExpiry(),
+    runScheduledPreviewInstallationExpiry().then(async (expired) => {
+      await dropRetiredPreviewStorage();
+      return expired;
+    }),
   ]);
   const reasons: string[] = [];
   if (bundles.status === "rejected") {

@@ -28,10 +28,11 @@ begin
   end if;
   permission_deadline := (checked_context ->> 'expiresAt')::timestamptz;
 
+  -- A shared lock pins the authority checked below until commit; the root lock orders writes.
   select version.current_version into locked_access_version
   from vortex_access.organization_access_versions as version
   where version.organization_id = (checked_context ->> 'organizationId')::uuid
-  for update;
+  for share;
   if not found or locked_access_version
     is distinct from (checked_context ->> 'accessVersion')::bigint then
     raise exception using errcode = '42501',

@@ -153,7 +153,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
   ): Promise<Result> => {
     const captured: { failure?: DefinitionError<ApplicationInstallationCoordinatorErrorCode> } = {};
     const outcome = await dependencies.installerRequests
-      .runChange(session, { organizationId }, async (transaction, scope) => {
+      .runAccessChange(session, { organizationId }, async (transaction, scope) => {
         try {
           // The builder authority is decided first, from the installer's own request scope, before
           // anything is read or written in this transaction.

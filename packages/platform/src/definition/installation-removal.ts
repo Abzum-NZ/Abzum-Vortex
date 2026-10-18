@@ -166,9 +166,9 @@ export const removeApplication = async (
   );
   const coordinator = createApplicationInstallationCoordinator({
     installerRequests: {
-      runChange: async (requestSession, selection, callback) => {
+      runAccessChange: async (requestSession, selection, callback) => {
         let failure: unknown;
-        const result = await environment.requests.runChange(
+        const result = await environment.requests.runAccessChange(
           requestSession,
           selection,
           async (transaction, scope, issuedAt) => {
