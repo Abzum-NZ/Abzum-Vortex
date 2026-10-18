@@ -19,7 +19,7 @@ import {
 
 type LiteralType = FlowLiteral["type"];
 
-const groups = ["Inputs", "Variables", "Earlier steps", "The record that started it", "The run"] as const;
+const groups = ["Inputs", "Variables", "Earlier steps", "The record", "The run"] as const;
 
 /** A fixed value's starting literal for a type. */
 const startLiteral = (type: LiteralType, options: readonly Readonly<{ value: string }>[]): FlowLiteral =>
@@ -54,7 +54,7 @@ function FixedInput({ id, literal, options, long, disabled, onChange }: Readonly
   const change = (text: string) => {
     setDraft(text);
     const built = studioFixedLiteral(literal.type, text, "value");
-    // A value that does not fit its type is kept as typed; the step is refused with where it is on Apply.
+    // A value that does not fit its type is kept as typed; the step refuses it, saying where it is.
     onChange(built.ok ? built.literal : { type: literal.type, value: text });
   };
   const hint = literal.type === "date" ? "2026-01-31" : literal.type === "date_time" ? "2026-01-31T09:30:00Z"

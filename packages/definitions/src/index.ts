@@ -5,6 +5,7 @@ export * from "./service-desk";
 export * from "./organisation-administration";
 export * from "./operations";
 export * from "./landing-zone";
+export * from "./app-store";
 export * from "./hr";
 export * from "./tasks";
 export * from "./platform-permissions";

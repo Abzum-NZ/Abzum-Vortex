@@ -181,7 +181,7 @@ export function StudioDataCentre({ organizationId, rootId, modules, selection, d
   /** Owned and used modules, as the tree shows them. */
   modules: readonly StudioDataModule[];
   selection: StudioDataSelection | null;
-  /** Whether the selected record type or query exists only in the unsaved or unpublished draft. */
+  /** Whether the selected record type or query is new in the draft, not saved yet. */
   draftOnly: boolean;
   refresh: number;
 }>) {

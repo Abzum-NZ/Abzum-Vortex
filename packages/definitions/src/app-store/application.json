@@ -1,0 +1,1840 @@
+{
+  "source_contract_version": "3.0.0",
+  "root_alias": "app_app_store",
+  "key": "vortex.app.app_store",
+  "kind": "application",
+  "body": {
+    "name": "App Store",
+    "description": "The one place to install applications in this organisation and to upgrade them to their latest published version.",
+    "icon": "blocks",
+    "home_page": "app_store_catalogue",
+    "uses": [],
+    "permissions": [
+      {
+        "id": "app_permission_open",
+        "key": "application.app_store.open",
+        "label": "Open App Store",
+        "description": "Allows opening the App Store.",
+        "action_kind": "named",
+        "named_action": "open",
+        "administrative": false
+      },
+      {
+        "id": "app_permission_manage",
+        "key": "application.app_store.manage",
+        "label": "Manage App Store",
+        "description": "Allows managing App Store definition-level administration.",
+        "action_kind": "manage",
+        "administrative": true
+      }
+    ],
+    "roles": [
+      {
+        "id": "role_app_store_user",
+        "key": "app_store_user",
+        "default_member": true,
+        "name": "App Store user",
+        "home_page": "app_store_catalogue",
+        "permissions": ["application.app_store.open", "vortex.app_store.store_application.read"]
+      }
+    ],
+    "navigation": [
+      {
+        "id": "nav_store",
+        "type": "heading",
+        "label": "App Store",
+        "icon": "blocks",
+        "children": [
+          {
+            "id": "nav_applications",
+            "type": "page",
+            "label": "Applications",
+            "icon": "blocks",
+            "page": "app_store_catalogue",
+            "permission": "application.app_store.open"
+          }
+        ]
+      }
+    ],
+    "connection_bindings": [],
+    "interfaces": [],
+    "events": [
+      {
+        "id": "event_install_or_upgrade",
+        "key": "vortex.app.app_store.install_or_upgrade",
+        "record_type": "vortex.app_store:store_application",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_open_store_application",
+        "key": "vortex.app.app_store.open_application",
+        "record_type": "vortex.app_store:store_application",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      }
+    ],
+    "public_addresses": [],
+    "platform_block_dependencies": [],
+    "shells": [
+      {
+        "id": "shell_app_store",
+        "key": "app_store_shell",
+        "name": "App Store shell",
+        "presentation": {
+          "sidebar": {
+            "collapsible": "icon",
+            "default_collapsed": false
+          },
+          "top_bar": {
+            "breadcrumbs": true,
+            "organization_switcher": true,
+            "application_switcher": true,
+            "account_menu": true,
+            "appearance_toggle": true
+          }
+        },
+        "layout": {
+          "root": {
+            "props": {
+              "vortex": {
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": [
+            {
+              "type": "platform.renderer.container",
+              "props": {
+                "id": "shell_root",
+                "direction": "column",
+                "gap": "medium",
+                "padding": "medium",
+                "content_width": "fill",
+                "header": [],
+                "content": [
+                  {
+                    "type": "platform.renderer.container",
+                    "props": {
+                      "id": "shell_body",
+                      "direction": "row",
+                      "gap": "medium",
+                      "menu_width": 16,
+                      "menu_placement": "sticky",
+                      "content_landmark": true,
+                      "tablet_menu_width": 14,
+                      "phone_direction": "column",
+                      "phone_menu_placement": "flow",
+                      "menu": [
+                        {
+                          "type": "platform.renderer.application_navigation",
+                          "props": {
+                            "id": "shell_navigation",
+                            "title": "App Store",
+                            "vortex": {
+                              "block": {
+                                "block_id": "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
+                                "release_version": "1.0.0"
+                              },
+                              "responsive": {
+                                "desktop": {
+                                  "visible": true,
+                                  "width": {
+                                    "kind": "fill"
+                                  },
+                                  "height": {
+                                    "kind": "content"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ],
+                      "content": [],
+                      "vortex": {
+                        "block": {
+                          "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                          "release_version": "1.2.0"
+                        },
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                ],
+                "vortex": {
+                  "block": {
+                    "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                    "release_version": "1.3.0"
+                  },
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "content_slots": [
+          {
+            "id": "slot_primary",
+            "key": "primary",
+            "label": "Primary",
+            "required": true,
+            "allowed_child_categories": [
+              "content",
+              "data",
+              "figures",
+              "record",
+              "actions",
+              "input",
+              "layout"
+            ],
+            "parent_placement": "shell_body",
+            "parent_slot": "content"
+          }
+        ]
+      }
+    ],
+    "pages": [
+      {
+        "id": "page_app_store_catalogue",
+        "key": "app_store_catalogue",
+        "name": "Applications",
+        "type": "dashboard",
+        "permission": "application.app_store.open",
+        "composition": {
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "catalogue_text",
+                    "title": "App Store",
+                    "text": "Every application this organisation has published. Install an application to make it available here, or upgrade one to its latest version. Select an application to see what its latest version changes.",
+                    "vortex": {
+                      "block": {
+                        "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                        "release_version": "1.0.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.table",
+                  "props": {
+                    "id": "store_applications_region",
+                    "title": "Applications",
+                    "row_click": {
+                      "event_id": "event_open_store_application"
+                    },
+                    "columns": [
+                      {
+                        "field": "vortex.app_store:store_application.name",
+                        "label": "Application"
+                      },
+                      {
+                        "field": "vortex.app_store:store_application.status",
+                        "label": "Status"
+                      },
+                      {
+                        "field": "vortex.app_store:store_application.installed_version",
+                        "label": "Installed version"
+                      },
+                      {
+                        "field": "vortex.app_store:store_application.latest_version",
+                        "label": "Latest version"
+                      },
+                      {
+                        "field": "vortex.app_store:store_application.published_at",
+                        "label": "Published"
+                      }
+                    ],
+                    "row_actions": [
+                      {
+                        "event_id": "event_install_or_upgrade",
+                        "label": "Install or upgrade"
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                        "release_version": "1.4.0"
+                      },
+                      "view_permission": "vortex.app_store.store_application.read",
+                      "query": "vortex.app_store:store_applications",
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "vortex": {
+                "shell": "shell_app_store",
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": []
+        }
+      },
+      {
+        "id": "page_app_store_application",
+        "key": "app_store_application",
+        "name": "Application details",
+        "type": "detail",
+        "record_type": "vortex.app_store:store_application",
+        "permission": "application.app_store.open",
+        "composition": {
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.record_detail",
+                  "props": {
+                    "id": "store_application_detail",
+                    "title": "Application",
+                    "detail_fields": [
+                      {
+                        "field": "vortex.app_store:store_application.name",
+                        "label": "Application"
+                      },
+                      {
+                        "field": "vortex.app_store:store_application.description",
+                        "label": "Description"
+                      },
+                      {
+                        "field": "vortex.app_store:store_application.status",
+                        "label": "Status"
+                      },
+                      {
+                        "field": "vortex.app_store:store_application.installed_version",
+                        "label": "Installed version"
+                      },
+                      {
+                        "field": "vortex.app_store:store_application.latest_version",
+                        "label": "Latest version"
+                      },
+                      {
+                        "field": "vortex.app_store:store_application.published_at",
+                        "label": "Published"
+                      },
+                      {
+                        "field": "vortex.app_store:store_application.latest_release_note",
+                        "label": "What's new"
+                      },
+                      {
+                        "field": "vortex.app_store:store_application.key",
+                        "label": "Technical name"
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                        "release_version": "1.2.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "vortex": {
+                "shell": "shell_app_store",
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": []
+        }
+      }
+    ],
+    "flows": [
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_install_or_upgrade_application",
+        "key": "install_or_upgrade_application",
+        "description": "Reviews the latest published version of the selected application, then installs it for the first time or upgrades to it after the person confirms.",
+        "labels": {
+          "name": "Install or upgrade"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "application_root_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.app_store:store_application"]
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "review",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "allowRefusal": true,
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.review_application_installation"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "application_root_id": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "application_root_id"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "review_result",
+            "type": "switch",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "review",
+                "key": "outcome"
+              }
+            },
+            "cases": [
+              {
+                "key": "completed",
+                "when": {
+                  "type": "choice",
+                  "value": "completed"
+                },
+                "tasks": [
+                  {
+                    "id": "change",
+                    "type": "switch",
+                    "value": {
+                      "kind": "reference",
+                      "reference": {
+                        "source": "task_output",
+                        "task": "review",
+                        "key": "result",
+                        "path": ["change"]
+                      }
+                    },
+                    "cases": [
+                      {
+                        "key": "install",
+                        "when": {
+                          "type": "choice",
+                          "value": "install"
+                        },
+                        "tasks": [
+                          {
+                            "id": "confirm_install",
+                            "type": "interface.confirm",
+                            "version": "1.0.0",
+                            "properties": {
+                              "title": {
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "join",
+                                  "parts": [
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": "Install "
+                                    },
+                                    {
+                                      "op": "reference",
+                                      "reference": {
+                                        "source": "task_output",
+                                        "task": "review",
+                                        "key": "result",
+                                        "path": ["application_name"]
+                                      }
+                                    },
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": " "
+                                    },
+                                    {
+                                      "op": "reference",
+                                      "reference": {
+                                        "source": "task_output",
+                                        "task": "review",
+                                        "key": "result",
+                                        "path": ["release_version"]
+                                      }
+                                    },
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": "?"
+                                    }
+                                  ]
+                                }
+                              },
+                              "message": {
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "join",
+                                  "parts": [
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": "What's new: "
+                                    },
+                                    {
+                                      "op": "reference",
+                                      "reference": {
+                                        "source": "task_output",
+                                        "task": "review",
+                                        "key": "result",
+                                        "path": ["release_note"]
+                                      }
+                                    },
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": "\n\nThe application becomes available in this organisation. Its default member role, "
+                                    },
+                                    {
+                                      "op": "reference",
+                                      "reference": {
+                                        "source": "task_output",
+                                        "task": "review",
+                                        "key": "result",
+                                        "path": ["member_role_name"]
+                                      }
+                                    },
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": ", lets people:"
+                                    }
+                                  ]
+                                }
+                              },
+                              "details": {
+                                "kind": "reference",
+                                "reference": {
+                                  "source": "task_output",
+                                  "task": "review",
+                                  "key": "result",
+                                  "path": ["member_role_permissions"]
+                                }
+                              },
+                              "choice": {
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "join",
+                                  "parts": [
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": "Give me the role "
+                                    },
+                                    {
+                                      "op": "reference",
+                                      "reference": {
+                                        "source": "task_output",
+                                        "task": "review",
+                                        "key": "result",
+                                        "path": ["member_role_name"]
+                                      }
+                                    },
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": " now. Otherwise roles are assigned in IAM."
+                                    }
+                                  ]
+                                }
+                              },
+                              "confirm_label": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Install"
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "id": "install_declined",
+                            "type": "if",
+                            "condition": {
+                              "op": "not",
+                              "arg": {
+                                "op": "reference",
+                                "reference": {
+                                  "source": "task_output",
+                                  "task": "confirm_install",
+                                  "key": "confirmed"
+                                }
+                              }
+                            },
+                            "then": [
+                              {
+                                "id": "stop_install_declined",
+                                "type": "stop",
+                                "outcome": "declined"
+                              }
+                            ]
+                          },
+                          {
+                            "id": "install",
+                            "type": "operation.call",
+                            "version": "1.0.0",
+                            "allowRefusal": true,
+                            "properties": {
+                              "operation": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "platform.install_application"
+                                }
+                              },
+                              "inputs": {
+                                "kind": "map",
+                                "entries": {
+                                  "application_root_id": {
+                                    "kind": "reference",
+                                    "reference": {
+                                      "source": "input",
+                                      "name": "application_root_id"
+                                    }
+                                  },
+                                  "expected": {
+                                    "kind": "reference",
+                                    "reference": {
+                                      "source": "task_output",
+                                      "task": "review",
+                                      "key": "result",
+                                      "path": ["expected"]
+                                    }
+                                  },
+                                  "accept_member_role": {
+                                    "kind": "reference",
+                                    "reference": {
+                                      "source": "task_output",
+                                      "task": "confirm_install",
+                                      "key": "choice"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "id": "install_result",
+                            "type": "switch",
+                            "value": {
+                              "kind": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "install",
+                                "key": "outcome"
+                              }
+                            },
+                            "cases": [
+                              {
+                                "key": "committed",
+                                "when": {
+                                  "type": "choice",
+                                  "value": "committed"
+                                },
+                                "tasks": [
+                                  {
+                                    "id": "install_done",
+                                    "type": "interface.show_message",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "message": {
+                                        "kind": "formula",
+                                        "formula": {
+                                          "op": "join",
+                                          "parts": [
+                                            {
+                                              "op": "reference",
+                                              "reference": {
+                                                "source": "task_output",
+                                                "task": "install",
+                                                "key": "result",
+                                                "path": ["application_name"]
+                                              }
+                                            },
+                                            {
+                                              "op": "literal",
+                                              "type": "text",
+                                              "value": " "
+                                            },
+                                            {
+                                              "op": "reference",
+                                              "reference": {
+                                                "source": "task_output",
+                                                "task": "install",
+                                                "key": "result",
+                                                "path": ["release_version"]
+                                              }
+                                            },
+                                            {
+                                              "op": "literal",
+                                              "type": "text",
+                                              "value": " is installed. People with one of its roles find it in the launcher."
+                                            }
+                                          ]
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "key": "conflict",
+                                "when": {
+                                  "type": "choice",
+                                  "value": "conflict"
+                                },
+                                "tasks": [
+                                  {
+                                    "id": "install_conflict",
+                                    "type": "interface.show_message",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "message": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "This application changed while you were reviewing it. Choose Install or upgrade again to see its current state."
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "key": "refused",
+                                "when": {
+                                  "type": "choice",
+                                  "value": "refused"
+                                },
+                                "tasks": [
+                                  {
+                                    "id": "install_refused",
+                                    "type": "interface.show_message",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "message": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "You cannot install or upgrade this application. That needs permission to manage applications, delegated management of the organisation's catalogue, and for some versions a recent sign-in."
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            ],
+                            "default": [
+                              {
+                                "id": "install_unknown",
+                                "type": "interface.show_message",
+                                "version": "1.0.0",
+                                "properties": {
+                                  "message": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "The result could not be confirmed. Refresh the App Store before trying again."
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "key": "upgrade",
+                        "when": {
+                          "type": "choice",
+                          "value": "upgrade"
+                        },
+                        "tasks": [
+                          {
+                            "id": "role_changes",
+                            "type": "if",
+                            "condition": {
+                              "op": "is_not_empty",
+                              "arg": {
+                                "op": "reference",
+                                "reference": {
+                                  "source": "task_output",
+                                  "task": "review",
+                                  "key": "result",
+                                  "path": ["role_ids"]
+                                }
+                              }
+                            },
+                            "then": [
+                              {
+                                "id": "confirm_upgrade_roles",
+                                "type": "interface.confirm",
+                                "version": "1.0.0",
+                                "properties": {
+                                  "title": {
+                                    "kind": "formula",
+                                    "formula": {
+                                      "op": "join",
+                                      "parts": [
+                                        {
+                                          "op": "literal",
+                                          "type": "text",
+                                          "value": "Upgrade "
+                                        },
+                                        {
+                                          "op": "reference",
+                                          "reference": {
+                                            "source": "task_output",
+                                            "task": "review",
+                                            "key": "result",
+                                            "path": ["application_name"]
+                                          }
+                                        },
+                                        {
+                                          "op": "literal",
+                                          "type": "text",
+                                          "value": " to version "
+                                        },
+                                        {
+                                          "op": "reference",
+                                          "reference": {
+                                            "source": "task_output",
+                                            "task": "review",
+                                            "key": "result",
+                                            "path": ["release_version"]
+                                          }
+                                        },
+                                        {
+                                          "op": "literal",
+                                          "type": "text",
+                                          "value": "?"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "message": {
+                                    "kind": "formula",
+                                    "formula": {
+                                      "op": "join",
+                                      "parts": [
+                                        {
+                                          "op": "literal",
+                                          "type": "text",
+                                          "value": "Version in use now: "
+                                        },
+                                        {
+                                          "op": "reference",
+                                          "reference": {
+                                            "source": "task_output",
+                                            "task": "review",
+                                            "key": "result",
+                                            "path": ["installed_version"]
+                                          }
+                                        },
+                                        {
+                                          "op": "literal",
+                                          "type": "text",
+                                          "value": ".\n\nWhat's new: "
+                                        },
+                                        {
+                                          "op": "reference",
+                                          "reference": {
+                                            "source": "task_output",
+                                            "task": "review",
+                                            "key": "result",
+                                            "path": ["release_note"]
+                                          }
+                                        },
+                                        {
+                                          "op": "literal",
+                                          "type": "text",
+                                          "value": "\n\nThese roles change against what was accepted for them. Until a change is accepted, people in the role keep exactly the access they have now."
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "details": {
+                                    "kind": "reference",
+                                    "reference": {
+                                      "source": "task_output",
+                                      "task": "review",
+                                      "key": "result",
+                                      "path": ["role_changes"]
+                                    }
+                                  },
+                                  "choice": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Accept these role changes now. Left unticked, they wait in IAM and the roles keep their accepted access."
+                                    }
+                                  },
+                                  "confirm_label": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Upgrade"
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "id": "upgrade_with_roles_declined",
+                                "type": "if",
+                                "condition": {
+                                  "op": "not",
+                                  "arg": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "task_output",
+                                      "task": "confirm_upgrade_roles",
+                                      "key": "confirmed"
+                                    }
+                                  }
+                                },
+                                "then": [
+                                  {
+                                    "id": "stop_upgrade_with_roles_declined",
+                                    "type": "stop",
+                                    "outcome": "declined"
+                                  }
+                                ]
+                              },
+                              {
+                                "id": "upgrade_with_roles",
+                                "type": "operation.call",
+                                "version": "1.0.0",
+                                "allowRefusal": true,
+                                "properties": {
+                                  "operation": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "platform.upgrade_application"
+                                    }
+                                  },
+                                  "inputs": {
+                                    "kind": "map",
+                                    "entries": {
+                                      "application_root_id": {
+                                        "kind": "reference",
+                                        "reference": {
+                                          "source": "input",
+                                          "name": "application_root_id"
+                                        }
+                                      },
+                                      "expected": {
+                                        "kind": "reference",
+                                        "reference": {
+                                          "source": "task_output",
+                                          "task": "review",
+                                          "key": "result",
+                                          "path": ["expected"]
+                                        }
+                                      },
+                                      "role_ids": {
+                                        "kind": "reference",
+                                        "reference": {
+                                          "source": "task_output",
+                                          "task": "review",
+                                          "key": "result",
+                                          "path": ["role_ids"]
+                                        }
+                                      },
+                                      "accept_role_changes": {
+                                        "kind": "reference",
+                                        "reference": {
+                                          "source": "task_output",
+                                          "task": "confirm_upgrade_roles",
+                                          "key": "choice"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "id": "upgrade_with_roles_result",
+                                "type": "switch",
+                                "value": {
+                                  "kind": "reference",
+                                  "reference": {
+                                    "source": "task_output",
+                                    "task": "upgrade_with_roles",
+                                    "key": "outcome"
+                                  }
+                                },
+                                "cases": [
+                                  {
+                                    "key": "committed",
+                                    "when": {
+                                      "type": "choice",
+                                      "value": "committed"
+                                    },
+                                    "tasks": [
+                                      {
+                                        "id": "upgrade_with_roles_done",
+                                        "type": "interface.show_message",
+                                        "version": "1.0.0",
+                                        "properties": {
+                                          "message": {
+                                            "kind": "formula",
+                                            "formula": {
+                                              "op": "join",
+                                              "parts": [
+                                                {
+                                                  "op": "reference",
+                                                  "reference": {
+                                                    "source": "task_output",
+                                                    "task": "upgrade_with_roles",
+                                                    "key": "result",
+                                                    "path": ["application_name"]
+                                                  }
+                                                },
+                                                {
+                                                  "op": "literal",
+                                                  "type": "text",
+                                                  "value": " is upgraded to version "
+                                                },
+                                                {
+                                                  "op": "reference",
+                                                  "reference": {
+                                                    "source": "task_output",
+                                                    "task": "upgrade_with_roles",
+                                                    "key": "result",
+                                                    "path": ["release_version"]
+                                                  }
+                                                },
+                                                {
+                                                  "op": "literal",
+                                                  "type": "text",
+                                                  "value": ". Role changes accepted now: "
+                                                },
+                                                {
+                                                  "op": "reference",
+                                                  "reference": {
+                                                    "source": "task_output",
+                                                    "task": "upgrade_with_roles",
+                                                    "key": "result",
+                                                    "path": ["accepted_role_count"]
+                                                  }
+                                                },
+                                                {
+                                                  "op": "literal",
+                                                  "type": "text",
+                                                  "value": ". Role changes waiting in IAM: "
+                                                },
+                                                {
+                                                  "op": "reference",
+                                                  "reference": {
+                                                    "source": "task_output",
+                                                    "task": "upgrade_with_roles",
+                                                    "key": "result",
+                                                    "path": ["waiting_role_count"]
+                                                  }
+                                                },
+                                                {
+                                                  "op": "literal",
+                                                  "type": "text",
+                                                  "value": "."
+                                                }
+                                              ]
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "key": "conflict",
+                                    "when": {
+                                      "type": "choice",
+                                      "value": "conflict"
+                                    },
+                                    "tasks": [
+                                      {
+                                        "id": "upgrade_with_roles_conflict",
+                                        "type": "interface.show_message",
+                                        "version": "1.0.0",
+                                        "properties": {
+                                          "message": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "This application changed while you were reviewing it. Choose Install or upgrade again to see its current state."
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "key": "refused",
+                                    "when": {
+                                      "type": "choice",
+                                      "value": "refused"
+                                    },
+                                    "tasks": [
+                                      {
+                                        "id": "upgrade_with_roles_refused",
+                                        "type": "interface.show_message",
+                                        "version": "1.0.0",
+                                        "properties": {
+                                          "message": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "You cannot install or upgrade this application. That needs permission to manage applications, delegated management of the organisation's catalogue, and for some versions a recent sign-in."
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ],
+                                "default": [
+                                  {
+                                    "id": "upgrade_with_roles_unknown",
+                                    "type": "interface.show_message",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "message": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "The result could not be confirmed. Refresh the App Store before trying again."
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            ],
+                            "else": [
+                              {
+                                "id": "confirm_upgrade",
+                                "type": "interface.confirm",
+                                "version": "1.0.0",
+                                "properties": {
+                                  "title": {
+                                    "kind": "formula",
+                                    "formula": {
+                                      "op": "join",
+                                      "parts": [
+                                        {
+                                          "op": "literal",
+                                          "type": "text",
+                                          "value": "Upgrade "
+                                        },
+                                        {
+                                          "op": "reference",
+                                          "reference": {
+                                            "source": "task_output",
+                                            "task": "review",
+                                            "key": "result",
+                                            "path": ["application_name"]
+                                          }
+                                        },
+                                        {
+                                          "op": "literal",
+                                          "type": "text",
+                                          "value": " to version "
+                                        },
+                                        {
+                                          "op": "reference",
+                                          "reference": {
+                                            "source": "task_output",
+                                            "task": "review",
+                                            "key": "result",
+                                            "path": ["release_version"]
+                                          }
+                                        },
+                                        {
+                                          "op": "literal",
+                                          "type": "text",
+                                          "value": "?"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "message": {
+                                    "kind": "formula",
+                                    "formula": {
+                                      "op": "join",
+                                      "parts": [
+                                        {
+                                          "op": "literal",
+                                          "type": "text",
+                                          "value": "Version in use now: "
+                                        },
+                                        {
+                                          "op": "reference",
+                                          "reference": {
+                                            "source": "task_output",
+                                            "task": "review",
+                                            "key": "result",
+                                            "path": ["installed_version"]
+                                          }
+                                        },
+                                        {
+                                          "op": "literal",
+                                          "type": "text",
+                                          "value": ".\n\nWhat's new: "
+                                        },
+                                        {
+                                          "op": "reference",
+                                          "reference": {
+                                            "source": "task_output",
+                                            "task": "review",
+                                            "key": "result",
+                                            "path": ["release_note"]
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "details": {
+                                    "kind": "reference",
+                                    "reference": {
+                                      "source": "task_output",
+                                      "task": "review",
+                                      "key": "result",
+                                      "path": ["role_changes"]
+                                    }
+                                  },
+                                  "confirm_label": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Upgrade"
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "id": "upgrade_declined",
+                                "type": "if",
+                                "condition": {
+                                  "op": "not",
+                                  "arg": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "task_output",
+                                      "task": "confirm_upgrade",
+                                      "key": "confirmed"
+                                    }
+                                  }
+                                },
+                                "then": [
+                                  {
+                                    "id": "stop_upgrade_declined",
+                                    "type": "stop",
+                                    "outcome": "declined"
+                                  }
+                                ]
+                              },
+                              {
+                                "id": "upgrade",
+                                "type": "operation.call",
+                                "version": "1.0.0",
+                                "allowRefusal": true,
+                                "properties": {
+                                  "operation": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "platform.upgrade_application"
+                                    }
+                                  },
+                                  "inputs": {
+                                    "kind": "map",
+                                    "entries": {
+                                      "application_root_id": {
+                                        "kind": "reference",
+                                        "reference": {
+                                          "source": "input",
+                                          "name": "application_root_id"
+                                        }
+                                      },
+                                      "expected": {
+                                        "kind": "reference",
+                                        "reference": {
+                                          "source": "task_output",
+                                          "task": "review",
+                                          "key": "result",
+                                          "path": ["expected"]
+                                        }
+                                      },
+                                      "role_ids": {
+                                        "kind": "reference",
+                                        "reference": {
+                                          "source": "task_output",
+                                          "task": "review",
+                                          "key": "result",
+                                          "path": ["role_ids"]
+                                        }
+                                      },
+                                      "accept_role_changes": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "yes_no",
+                                          "value": false
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "id": "upgrade_result",
+                                "type": "switch",
+                                "value": {
+                                  "kind": "reference",
+                                  "reference": {
+                                    "source": "task_output",
+                                    "task": "upgrade",
+                                    "key": "outcome"
+                                  }
+                                },
+                                "cases": [
+                                  {
+                                    "key": "committed",
+                                    "when": {
+                                      "type": "choice",
+                                      "value": "committed"
+                                    },
+                                    "tasks": [
+                                      {
+                                        "id": "upgrade_done",
+                                        "type": "interface.show_message",
+                                        "version": "1.0.0",
+                                        "properties": {
+                                          "message": {
+                                            "kind": "formula",
+                                            "formula": {
+                                              "op": "join",
+                                              "parts": [
+                                                {
+                                                  "op": "reference",
+                                                  "reference": {
+                                                    "source": "task_output",
+                                                    "task": "upgrade",
+                                                    "key": "result",
+                                                    "path": ["application_name"]
+                                                  }
+                                                },
+                                                {
+                                                  "op": "literal",
+                                                  "type": "text",
+                                                  "value": " is upgraded to version "
+                                                },
+                                                {
+                                                  "op": "reference",
+                                                  "reference": {
+                                                    "source": "task_output",
+                                                    "task": "upgrade",
+                                                    "key": "result",
+                                                    "path": ["release_version"]
+                                                  }
+                                                },
+                                                {
+                                                  "op": "literal",
+                                                  "type": "text",
+                                                  "value": "."
+                                                }
+                                              ]
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "key": "conflict",
+                                    "when": {
+                                      "type": "choice",
+                                      "value": "conflict"
+                                    },
+                                    "tasks": [
+                                      {
+                                        "id": "upgrade_conflict",
+                                        "type": "interface.show_message",
+                                        "version": "1.0.0",
+                                        "properties": {
+                                          "message": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "This application changed while you were reviewing it. Choose Install or upgrade again to see its current state."
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "key": "refused",
+                                    "when": {
+                                      "type": "choice",
+                                      "value": "refused"
+                                    },
+                                    "tasks": [
+                                      {
+                                        "id": "upgrade_refused",
+                                        "type": "interface.show_message",
+                                        "version": "1.0.0",
+                                        "properties": {
+                                          "message": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "You cannot install or upgrade this application. That needs permission to manage applications, delegated management of the organisation's catalogue, and for some versions a recent sign-in."
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ],
+                                "default": [
+                                  {
+                                    "id": "upgrade_unknown",
+                                    "type": "interface.show_message",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "message": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "The result could not be confirmed. Refresh the App Store before trying again."
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "key": "current",
+                        "when": {
+                          "type": "choice",
+                          "value": "current"
+                        },
+                        "tasks": [
+                          {
+                            "id": "up_to_date",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "join",
+                                  "parts": [
+                                    {
+                                      "op": "reference",
+                                      "reference": {
+                                        "source": "task_output",
+                                        "task": "review",
+                                        "key": "result",
+                                        "path": ["application_name"]
+                                      }
+                                    },
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": " is up to date: version "
+                                    },
+                                    {
+                                      "op": "reference",
+                                      "reference": {
+                                        "source": "task_output",
+                                        "task": "review",
+                                        "key": "result",
+                                        "path": ["installed_version"]
+                                      }
+                                    },
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": " is in use."
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "key": "unavailable",
+                        "when": {
+                          "type": "choice",
+                          "value": "unavailable"
+                        },
+                        "tasks": [
+                          {
+                            "id": "unavailable_reason",
+                            "type": "switch",
+                            "value": {
+                              "kind": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "review",
+                                "key": "result",
+                                "path": ["reason"]
+                              }
+                            },
+                            "cases": [
+                              {
+                                "key": "recent_sign_in_required",
+                                "when": {
+                                  "type": "text",
+                                  "value": "recent_sign_in_required"
+                                },
+                                "tasks": [
+                                  {
+                                    "id": "unavailable_recent_sign_in_required",
+                                    "type": "interface.show_message",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "message": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Installing and upgrading need a sign-in within the last 15 minutes. Sign out, sign in again and try once more."
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "key": "not_published",
+                                "when": {
+                                  "type": "text",
+                                  "value": "not_published"
+                                },
+                                "tasks": [
+                                  {
+                                    "id": "unavailable_not_published",
+                                    "type": "interface.show_message",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "message": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "This application has no published version yet. Publish it in Studio first."
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "key": "module_set_changed",
+                                "when": {
+                                  "type": "text",
+                                  "value": "module_set_changed"
+                                },
+                                "tasks": [
+                                  {
+                                    "id": "unavailable_module_set_changed",
+                                    "type": "interface.show_message",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "message": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "The latest version adds or removes modules, so it cannot be upgraded to here."
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "key": "installation_incomplete",
+                                "when": {
+                                  "type": "text",
+                                  "value": "installation_incomplete"
+                                },
+                                "tasks": [
+                                  {
+                                    "id": "unavailable_installation_incomplete",
+                                    "type": "interface.show_message",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "message": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "The current installation of this application is incomplete, so it cannot be changed here."
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "key": "registration_misaligned",
+                                "when": {
+                                  "type": "text",
+                                  "value": "registration_misaligned"
+                                },
+                                "tasks": [
+                                  {
+                                    "id": "unavailable_registration_misaligned",
+                                    "type": "interface.show_message",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "message": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "The current installation does not match the version it says it uses, so it cannot be changed here."
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            ],
+                            "default": [
+                              {
+                                "id": "unavailable_other",
+                                "type": "interface.show_message",
+                                "version": "1.0.0",
+                                "properties": {
+                                  "message": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "This application cannot be installed or upgraded here."
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ],
+                    "default": [
+                      {
+                        "id": "change_unknown",
+                        "type": "interface.show_message",
+                        "version": "1.0.0",
+                        "properties": {
+                          "message": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "The result could not be confirmed. Refresh the App Store before trying again."
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "key": "refused",
+                "when": {
+                  "type": "choice",
+                  "value": "refused"
+                },
+                "tasks": [
+                  {
+                    "id": "review_refused",
+                    "type": "interface.show_message",
+                    "version": "1.0.0",
+                    "properties": {
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "You cannot install or upgrade this application. That needs permission to manage applications, delegated management of the organisation's catalogue, and for some versions a recent sign-in."
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "default": [
+              {
+                "id": "review_unknown",
+                "type": "interface.show_message",
+                "version": "1.0.0",
+                "properties": {
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "The result could not be confirmed. Refresh the App Store before trying again."
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "outputs": {},
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_open_store_application",
+        "key": "open_store_application",
+        "labels": {
+          "name": "Open application details"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "application_root_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.app_store:store_application"]
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "open_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "app_store_application"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.application_root_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "errors": [],
+        "finally": []
+      }
+    ],
+    "flow_bindings": [
+      {
+        "id": "binding_install_or_upgrade",
+        "control": "store_applications_region",
+        "event_id": "event_install_or_upgrade",
+        "event": "row_action",
+        "flow": "flow_install_or_upgrade_application",
+        "inputs": {
+          "application_root_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_open_store_application",
+        "control": "store_applications_region",
+        "event_id": "event_open_store_application",
+        "event": "row_clicked",
+        "flow": "flow_open_store_application",
+        "inputs": {
+          "application_root_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      }
+    ]
+  }
+}

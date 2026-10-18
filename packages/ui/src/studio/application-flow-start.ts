@@ -19,8 +19,10 @@ import {
 
 /**
  * How a flow starts, as the Start node's inspector edits it: the flow's name, the inputs it
- * declares, where each input of each binding comes from (what the control that starts it supplies,
- * or a fixed value), and its record triggers (before a record is saved, after a record event).
+ * declares, the input that names the record an interactive flow runs for (whose fields its steps
+ * then read), where each input of each binding comes from (what the control that starts it
+ * supplies, or a fixed value), and its record triggers (before a record is saved, after a record
+ * event).
  * A change is one edit of the stored flow and its bindings, checked as every flow edit is.
  */
 
@@ -52,6 +54,8 @@ export type StudioFlowBindingDraft = Readonly<{ id: string; control: string; eve
 export type StudioFlowStartDraft = Readonly<{
   name: string;
   inputs: readonly StudioFlowInputDraft[];
+  /** The form identity of the input that names the record the flow runs for, or null for none. */
+  recordInput: string | null;
   bindings: readonly StudioFlowBindingDraft[];
   triggers: readonly StudioFlowTriggerDraft[];
 }>;
@@ -130,6 +134,7 @@ export const projectStudioFlowStart = (
     draft: {
       name: flow.labels?.name ?? studioWords(flow.key),
       inputs,
+      recordInput: flow.recordInput ?? null,
       bindings: bindings.map((binding) => ({ id: binding.id, control: binding.control, event: binding.event,
         inputs: Object.fromEntries(inputs.map((input) => [input.id, bindingInputDraft(binding.inputs[input.name])])) })),
       triggers: (flow.triggers ?? []).map(triggerDraft),
@@ -178,6 +183,13 @@ export const applyStudioFlowStart = (
   const renames = new Map(draft.inputs.filter((input) => input.id !== input.name && Object.hasOwn(flow.inputs ?? {}, input.id))
     .map((input) => [input.id, input.name]));
   flow.inputs = inputs;
+  if (draft.recordInput === null) delete flow.recordInput;
+  else {
+    const recordInput = draft.inputs.find((input) => input.id === draft.recordInput);
+    if (recordInput === undefined || recordInput.type !== "record_reference" || !recordInput.required)
+      return { kind: "invalid", reason: "How it starts, Runs for: choose a required input that names one record." };
+    flow.recordInput = recordInput.name;
+  }
   if (renames.size > 0) {
     const renamed = renameInputReferences({ tasks: flow.tasks, errors: flow.errors, finally: flow.finally, outputs: flow.outputs }, renames) as
       Pick<SourceFlow, "tasks" | "errors" | "finally" | "outputs">;
