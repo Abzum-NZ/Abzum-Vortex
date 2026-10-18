@@ -55,7 +55,7 @@ const placementSubtreeIsOptionalPresentation = (item: RecordValue): boolean => {
     vortex.usePermissionKey === undefined &&
     vortex.visibilityCondition === undefined &&
     vortex.queryId === undefined &&
-    // Flow bindings for interactive entries are compared separately as major changes.
+    // Flow bindings for interactive entries are compared with their owning placements.
     Object.entries(placementSettings(props)).every(([key, value]) => {
       const declaration = declarations.find((property) => property.key === key);
       if (declaration === undefined) throw new Error(`Block release has no setting '${key}'`);
@@ -180,6 +180,21 @@ const comparePlacements = (
 ): void => {
   const previous = collectPlacements(previousContent);
   const candidate = collectPlacements(candidateContent);
+  // A binding on a new control belongs to the new capability. Binding an existing
+  // control changes its behaviour; edits and removals remain breaking changes too.
+  compareKeyed(
+    reasons,
+    previousContent.flowBindings as RecordValue[],
+    candidateContent.flowBindings as RecordValue[],
+    "bindingId",
+    "flow_binding",
+    (before, after) =>
+      compareSimpleComponent(reasons, "flow_binding", after.bindingId, before, after),
+    (binding) => {
+      const controlId = String(binding.controlId);
+      return candidate.has(controlId) && !previous.has(controlId) ? "minor" : "major";
+    },
+  );
   const previousPageIds = new Set(
     (asRecord(previousContent).pages as RecordValue[]).map((page) => String(page.pageId)),
   );
