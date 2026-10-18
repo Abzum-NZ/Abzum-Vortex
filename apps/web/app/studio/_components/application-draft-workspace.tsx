@@ -74,7 +74,7 @@ type ExistingProps = Extract<WorkspaceProps, { mode: "existing" }>;
 
 export function ApplicationDraftWorkspace(props: WorkspaceProps) {
   return props.mode === "new"
-    ? <NewApplicationWorkspace organizationId={props.organizationId} />
+    ? <NewApplicationWorkspace organizationId={props.organizationId} catalogue={props.platformBlockCatalogue} />
     : <ExistingApplicationWorkspace {...props} />;
 }
 

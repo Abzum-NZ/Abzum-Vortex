@@ -5,7 +5,7 @@ import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { describeFailure } from "@vortex/platform/schema";
+import { describeFailure, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
 import { createStudioApplication } from "../actions";
 import {
   applicationKeyFromName, minimumApplicationSource, type MinimumApplicationInputs,
@@ -19,9 +19,12 @@ const inputClass = "w-full";
 /**
  * The new application form: a name and a description. The key is made from the name (it can be
  * set under Advanced); the home page, who can open it and the application's own empty Module are
- * made with it.
+ * made with it, and it starts in a layout with the application menu.
  */
-export function NewApplicationWorkspace({ organizationId }: { organizationId: string }) {
+export function NewApplicationWorkspace({ organizationId, catalogue }: Readonly<{
+  organizationId: string;
+  catalogue: ImmutablePlatformBlockCatalogue;
+}>) {
   const router = useRouter();
   const [inputs, setInputs] = useState<MinimumApplicationInputs>({ name: "", description: "", key: "" });
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -46,7 +49,7 @@ export function NewApplicationWorkspace({ organizationId }: { organizationId: st
   const create = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (pending.current) return;
-    const candidate = minimumApplicationSource(inputs);
+    const candidate = minimumApplicationSource(inputs, catalogue);
     if (candidate.kind !== "valid") {
       setFieldErrors(candidate.fieldErrors);
       if (candidate.fieldErrors.key !== undefined) setAdvancedOpen(true);
@@ -84,8 +87,8 @@ export function NewApplicationWorkspace({ organizationId }: { organizationId: st
 
   return <main className="mx-auto max-w-3xl space-y-6 p-6">
     <header><h1 className="text-2xl font-semibold">New application</h1>
-      <p>This creates an unpublished draft with an empty home page and a place for its records. Add record types and
-        pages next. Nothing is published or installed yet.</p>
+      <p>This creates an unpublished draft with a layout that shows its menu, a home page saying what to do next
+        and a place for its records. Add record types and pages next; each list page gets a menu entry. Nothing is published or installed yet.</p>
       <TechnicalDetails><p className="break-all text-sm">Organization id: {organizationId}</p></TechnicalDetails></header>
     <form onSubmit={create} className="grid gap-4" aria-busy={isCreating} noValidate>
       <StudioField label="Name" hint="For example Assets Hub." error={fieldErrors.name}>
