@@ -598,6 +598,7 @@ export const uploadGrantSchema = z
   .object({
     ...transferGrantBase,
     kind: z.literal("upload"),
+    recordId: recordIdSchema.optional(),
     policyFingerprint: fingerprintSchema,
     maximumBytes: z.number().int().positive(),
     oneTimeId: platformIdSchema,

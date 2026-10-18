@@ -83,3 +83,13 @@ export const fileStorageSigningConfiguration = (supabaseUrl: string) => {
       .toString(),
   };
 };
+
+/** Scanner selection is explicit; the no-op adapter checks the local destination itself. */
+export const fileScannerConfiguration = (): import("@vortex/platform/server").FileScannerConfiguration => {
+  const kind=requiredEnvironmentValue("VORTEX_FILE_SCANNER");
+  if(kind==="local_development_noop") return {kind};
+  if(kind!=="clamav") throw new Error("FILE_SCANNER_KIND_INVALID");
+  const port=Number(requiredEnvironmentValue("VORTEX_CLAMAV_PORT"));
+  if(!Number.isSafeInteger(port)||port<1||port>65535) throw new Error("FILE_SCANNER_PORT_INVALID");
+  return {kind,host:requiredEnvironmentValue("VORTEX_CLAMAV_HOST"),port,timeoutMilliseconds:60_000};
+};

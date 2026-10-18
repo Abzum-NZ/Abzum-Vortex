@@ -17,7 +17,6 @@ import {
   type FieldId,
   type FileId,
   type FileRecord,
-  type FileUploadActivationRefusalReason,
   type FileUploadAdmissionRefusalReason,
   type FileUploadCompletionRefusalReason,
   type FileUploadRenewalRefusalReason,
@@ -85,7 +84,7 @@ export type UploadAttachmentSettings = Readonly<{
 
 type AttachmentOwner = Readonly<{
   recordTypeId: RecordTypeId;
-  recordId: RecordId;
+  recordId?: RecordId;
   fieldId: FieldId;
 }>;
 
@@ -100,7 +99,7 @@ type CurrentUploadAuthority = Readonly<{
   sessionContext: SessionContext;
   /** The record the field permissions below were resolved for. */
   recordTypeId: RecordTypeId;
-  recordId: RecordId;
+  recordId?: RecordId;
   readableFieldIds: readonly FieldId[];
   changeableFieldIds: readonly FieldId[];
 }>;
@@ -197,26 +196,7 @@ export type FileUploadRepository = Readonly<{
         >;
       }>
   >;
-  /**
-   * Activates a clean scanned upload for the record save that attaches it,
-   * recording the attachment reference. A replacement still requires its
-   * replaced file to be active in the same field.
-   */
-  activateUploadedFile(
-    input: Readonly<{
-      fileId: FileId;
-      expectedRevision: number;
-      owner: AttachmentOwner;
-      attachmentReferenceId: PlatformId;
-      replacingFileId?: FileId;
-    }>,
-  ): Promise<
-    | Readonly<{ outcome: "activated"; fileRecord: FileRecord }>
-    | Readonly<{
-        outcome: "refused";
-        reason: Exclude<FileUploadActivationRefusalReason, "field_not_writable">;
-      }>
-  >;
+
 }>;
 
 export type UploadedObjectLocation = Readonly<{
@@ -316,23 +296,10 @@ export type FileUploadCompletionResult =
     }>
   | Readonly<{ outcome: "refused"; reason: FileUploadCompletionRefusalReason; message: string }>;
 
-export type FileUploadActivationInput = CurrentUploadAuthority &
-  Readonly<{
-    fileId: FileId;
-    owner: AttachmentOwner;
-    attachmentReferenceId: PlatformId;
-    replacingFileId?: FileId;
-  }>;
-
-export type FileUploadActivationResult =
-  | Readonly<{ outcome: "activated"; fileRecord: FileRecord }>
-  | Readonly<{ outcome: "refused"; reason: FileUploadActivationRefusalReason; message: string }>;
-
 export type FileUploadCoordinator = Readonly<{
   admitUpload(input: FileUploadAdmissionInput): Promise<FileUploadAdmissionResult>;
   renewUpload(input: FileUploadRenewalInput): Promise<FileUploadRenewalResult>;
   completeUpload(input: FileUploadCompletionInput): Promise<FileUploadCompletionResult>;
-  activateUpload(input: FileUploadActivationInput): Promise<FileUploadActivationResult>;
 }>;
 
 const REFUSAL_MESSAGES = {
@@ -923,64 +890,6 @@ export const completeFileUpload = async (
  * file it replaces: that attachment stays current until this save commits, and
  * the save's own detachment then retires it through the ordinary lifecycle.
  */
-export const activateUploadedFile = async (
-  dependencies: FileUploadCoordinatorDependencies,
-  input: FileUploadActivationInput,
-): Promise<FileUploadActivationResult> => {
-  const now = (dependencies.clock ?? defaultClock)();
-
-  const state = await dependencies.repository.readPendingUpload(input.fileId);
-  if (state === null) return refuse("file_not_found");
-
-  const authority = authorizeUploader(state, input);
-  if (!authority.authorized) return refuse(authority.reason);
-
-  const fileRecord = state.fileRecord;
-  if (
-    !sameId(fileRecord.ownerRecordTypeId, input.owner.recordTypeId) ||
-    !sameId(fileRecord.ownerRecordId, input.owner.recordId) ||
-    !sameId(fileRecord.ownerFieldId, input.owner.fieldId)
-  ) {
-    return refuse("owner_mismatch");
-  }
-  if (
-    fileRecord.lifecycleState === "active" &&
-    fileRecord.owningAttachmentReferences.some((reference) =>
-      sameId(reference, input.attachmentReferenceId),
-    )
-  ) {
-    return Object.freeze({ outcome: "activated" as const, fileRecord });
-  }
-  if (fileRecord.lifecycleState !== "scanning" || fileRecord.scannerResult !== "clean") {
-    return refuse("invalid_lifecycle_state");
-  }
-  if (!isOpen(state, now)) return refuse("upload_expired");
-  if (!sameId(state.replacingFileId, input.replacingFileId)) {
-    return refuse("replacement_file_not_found");
-  }
-
-  const activated = await dependencies.repository.activateUploadedFile({
-    fileId: fileRecord.fileId,
-    expectedRevision: state.revision,
-    owner: input.owner,
-    attachmentReferenceId: input.attachmentReferenceId,
-    ...(input.replacingFileId === undefined ? {} : { replacingFileId: input.replacingFileId }),
-  });
-  if (activated.outcome === "refused") return refuse(activated.reason);
-
-  const stored = fileRecordSchema.parse(activated.fileRecord);
-  if (
-    stored.fileId !== fileRecord.fileId ||
-    stored.lifecycleState !== "active" ||
-    !stored.owningAttachmentReferences.some((reference) =>
-      sameId(reference, input.attachmentReferenceId),
-    )
-  ) {
-    throw new Error("FILE_UPLOAD_ACTIVATION_INCONSISTENT");
-  }
-  return Object.freeze({ outcome: "activated" as const, fileRecord: stored });
-};
-
 /**
  * The Storage credential bridge's authority for upload-side operations. An
  * upload credential is issued once per current, unexpired grant of a pending
@@ -1061,5 +970,4 @@ export const createFileUploadCoordinator = (
     admitUpload: (input) => reservePendingUpload(dependencies, input),
     renewUpload: (input) => renewPendingUpload(dependencies, input),
     completeUpload: (input) => completeFileUpload(dependencies, input),
-    activateUpload: (input) => activateUploadedFile(dependencies, input),
   });

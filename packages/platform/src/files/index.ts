@@ -62,15 +62,12 @@ export {
 } from "./upload-capability-admission";
 export {
   PENDING_UPLOAD_WINDOW_SECONDS,
-  activateUploadedFile,
   completeFileUpload,
   createFileUploadCoordinator,
   createUploadStorageAuthorityResolver,
   renewPendingUpload,
   reservePendingUpload,
   type ClaimedUploadGrant,
-  type FileUploadActivationInput,
-  type FileUploadActivationResult,
   type FileUploadAdmissionInput,
   type FileUploadAdmissionResult,
   type FileUploadCompletionInput,
@@ -192,3 +189,5 @@ export {
   type ComponentBootstrapDocument,
   type ComponentBootstrapTarget,
 } from "./component-bootstrap-serving";
+
+export { uploadAttachmentFile, type AttachmentUploadResult } from "./upload-file";

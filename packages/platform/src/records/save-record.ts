@@ -887,6 +887,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               (check) =>
                 check.kind !== "record_reference" &&
                 check.kind !== "person_reference" &&
+                check.kind !== "file_reference" &&
                 !(
                   preview &&
                   check.kind === "choice_permission"
