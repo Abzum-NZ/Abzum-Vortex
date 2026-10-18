@@ -246,20 +246,31 @@ const read = async (
   return { outcome: "read", title: title.data };
 };
 
+const viewerSafeRecordValuesReadCommandSchema = z
+  .object({
+    identity: viewerSafeRecordLinkIdentitySchema,
+    /** The exact Application revision already checked by App's installed-context loader. */
+    applicationReleaseRevision: revisionSchema,
+  })
+  .strict();
+
+/** The fields the viewer may read of one record, by field ID; a withheld field is absent. */
+export type ViewerSafeRecordValuesReadResult =
+  | Readonly<{ outcome: "read"; values: Readonly<Record<string, z.infer<typeof jsonValueSchema>>> }>
+  | Readonly<{ outcome: "unavailable" }>;
+
 /**
- * Reads only the requested values from the current protected Record projection. The trusted
- * caller supplies IDs from the exact installed Module release; Query still validates the list,
- * installation identity and current Record authority before returning any values. The caller
- * must resolve the target and fields from the installed release; these inputs select a read but
- * never grant authority.
+ * The current protected Record projection of one record behind the exact current-installation
+ * gate: the values of the fields the viewer may read, or unavailable for a record the viewer may
+ * not read, a foreign record and a missing one alike.
  */
-const readFields = async (
+const readValues = async (
   transaction: RequestDatabaseTransaction,
   scopeCandidate: unknown,
   commandCandidate: unknown,
-): Promise<ViewerSafeRecordLinkFieldsReadResult> => {
+): Promise<ViewerSafeRecordValuesReadResult> => {
   const scope = selectedOrganizationScopeSchema.safeParse(scopeCandidate);
-  const command = viewerSafeRecordLinkReadFieldsCommandSchema.safeParse(commandCandidate);
+  const command = viewerSafeRecordValuesReadCommandSchema.safeParse(commandCandidate);
   if (!scope.success || !command.success) return unavailable;
   if (
     scope.data.applicationRootId === undefined ||
@@ -295,10 +306,32 @@ const readFields = async (
     throw contractError("RECORD_LINK_READ_CAPABILITIES_INVALID", capabilities.error);
   if (!sameId(record.data.recordId, command.data.identity.recordId))
     throw contractError("RECORD_LINK_READ_IDENTITY_INVALID");
+  return { outcome: "read", values: record.data.values };
+};
+
+/**
+ * Reads only the requested values from the current protected Record projection. The trusted
+ * caller supplies IDs from the exact installed Module release; Query still validates the list,
+ * installation identity and current Record authority before returning any values. The caller
+ * must resolve the target and fields from the installed release; these inputs select a read but
+ * never grant authority.
+ */
+const readFields = async (
+  transaction: RequestDatabaseTransaction,
+  scopeCandidate: unknown,
+  commandCandidate: unknown,
+): Promise<ViewerSafeRecordLinkFieldsReadResult> => {
+  const command = viewerSafeRecordLinkReadFieldsCommandSchema.safeParse(commandCandidate);
+  if (!command.success) return unavailable;
+  const record = await readValues(transaction, scopeCandidate, {
+    identity: command.data.identity,
+    applicationReleaseRevision: command.data.applicationReleaseRevision,
+  });
+  if (record.outcome !== "read") return unavailable;
 
   const values: Record<string, z.infer<typeof jsonValueSchema>> = {};
   for (const fieldId of command.data.fieldIds) {
-    const matchingEntries = Object.entries(record.data.values).filter(([candidateFieldId]) =>
+    const matchingEntries = Object.entries(record.values).filter(([candidateFieldId]) =>
       sameId(candidateFieldId, fieldId),
     );
     if (matchingEntries.length !== 1) return unavailable;
@@ -429,9 +462,9 @@ const readTitles = async (
   return { outcome: "read", titles };
 };
 
-/** One uncached protected Query reader for a target record's title or selected fields. */
+/** One uncached protected Query reader for a target record's title, selected fields or readable values. */
 export const createViewerSafeRecordLinkReadService = () =>
-  Object.freeze({ read, readFields, readTitles });
+  Object.freeze({ read, readFields, readValues, readTitles });
 
 export type ViewerSafeRecordLinkReadService = ReturnType<
   typeof createViewerSafeRecordLinkReadService

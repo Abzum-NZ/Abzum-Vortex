@@ -300,6 +300,11 @@ const eventWords: Readonly<Record<string, string>> = {
 const operationWords: Readonly<Record<string, string>> = { create: "created", update: "changed", transition: "moved on" };
 
 const recordWords = (recordTypeId: string): string => studioWords(recordTypeId.split(":").pop() ?? recordTypeId).toLowerCase();
+/** "a company", "an item". */
+const aRecord = (recordTypeId: string): string => {
+  const words = recordWords(recordTypeId);
+  return `${/^[aeiou]/.test(words) ? "an" : "a"} ${words}`;
+};
 
 /**
  * How a flow starts, in words: one entry per trigger it declares and per control event bound to it.
@@ -315,10 +320,10 @@ export const describeStudioFlowStarts = (
   const triggers = (flow.triggers ?? []).map((trigger): string => {
     switch (trigger.type) {
       case "BeforeSave":
-        return `Before a ${recordWords(trigger.recordTypeId)} is ${
+        return `Before ${aRecord(trigger.recordTypeId)} is ${
           trigger.operations.map((operation) => operationWords[operation.kind] ?? operation.kind).join(" or ")}`;
       case "Event":
-        return `After a ${recordWords(trigger.recordTypeId)} is ${trigger.event.kind === "standard"
+        return `After ${aRecord(trigger.recordTypeId)} is ${trigger.event.kind === "standard"
           ? studioWords(trigger.event.eventKind).toLowerCase() : studioWords(trigger.event.eventKey.split(".").pop() ?? "").toLowerCase()}`;
       case "Schedule": return "On a schedule";
       case "IncomingMessage": return "When a message arrives";
