@@ -2,6 +2,7 @@ import {
   applicationSourceDocumentSchema,
   type ApplicationSourceDocument,
 } from "./application-source-contracts";
+import { walkSourceStrings } from "./application-uses";
 
 type ModuleEvent = ApplicationSourceDocument["body"]["modules"][number]["events"][number];
 
@@ -30,13 +31,27 @@ export const saveInlineModuleEvent = (
   if (change.eventId !== undefined && existing === undefined)
     return { kind: "invalid", issues: ["The event is no longer in this module."] };
   const issues: string[] = [];
-  if (
-    existing !== undefined &&
-    (existing.key !== change.key || existing.record_type !== record.key)
-  )
-    issues.push(
-      "An existing event keeps its key and record type so its announcements remain valid.",
-    );
+  if (existing !== undefined && existing.key !== change.key)
+    issues.push("An existing event keeps its key so its references remain valid.");
+  if (existing !== undefined && existing.record_type !== record.key) {
+    let referenced = false;
+    walkSourceStrings(source.body, [], (text, path) => {
+      if (
+        (text === existing.key || text === existing.id) &&
+        !(
+          path[0] === "modules" &&
+          path[1] === source.body.modules.indexOf(module) &&
+          path[2] === "events" &&
+          path[3] === module.events.indexOf(existing)
+        )
+      )
+        referenced = true;
+    });
+    if (referenced)
+      issues.push(
+        "Remove this event's announcements and flow references before changing its record type.",
+      );
+  }
   if (module.events.some((entry) => entry !== existing && entry.key === change.key))
     issues.push("This event key is already declared.");
   if (new Set(change.carries).size !== change.carries.length)

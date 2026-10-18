@@ -12,6 +12,7 @@ import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-s
 import {
   StudioOptionControl,
   studioFieldValueType,
+  studioFixedLiteralType,
   studioFlowReferenceToken,
   studioFlowValueOf,
   studioFlowValueSourceOf,
@@ -116,14 +117,31 @@ function ActionValues({
             field?.type === "choice"
               ? (field.settings as { options: { value: string }[] }).options[0]
               : undefined;
+          const type = studioFixedLiteralType(
+            field === undefined ? undefined : studioFieldValueType(field.type),
+          );
+          const reference = references.find((entry) =>
+            actionValueCompatible(
+              { kind: "reference", reference: entry.reference },
+              field,
+              new Map(subject.fields.map((entry) => [entry.key, entry])),
+              new Map(inputs.map((entry) => [entry.key, entry])),
+              subjectType,
+              "source",
+            ),
+          );
           const value: FlowValue =
             option !== undefined
               ? { kind: "literal", literal: { type: "choice", value: option.value } }
-              : field?.type === "yes_no"
-                ? { kind: "literal", literal: { type: "yes_no", value: false } }
-                : field?.type === "whole_number"
-                  ? { kind: "literal", literal: { type: "whole_number", value: 0 } }
-                  : { kind: "literal", literal: { type: "text", value: "" } };
+              : type === undefined && reference !== undefined
+                ? { kind: "reference", reference: reference.reference }
+                : type === "several_choices"
+                  ? { kind: "literal", literal: { type, value: [] } }
+                  : type === "yes_no"
+                    ? { kind: "literal", literal: { type: "yes_no", value: false } }
+                    : type === "whole_number"
+                      ? { kind: "literal", literal: { type: "whole_number", value: 0 } }
+                      : { kind: "literal", literal: { type: type ?? "text", value: "" } };
           onChange({ ...values, [key]: value });
         }}
       />
@@ -360,7 +378,23 @@ export function StudioActionTasks({
                     },
                   });
                 return (
-                  <div className="space-y-2" key={at}>
+                  <div className="space-y-2 rounded-md border p-2" key={at}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={task.properties.changes.length === 1}
+                      onClick={() =>
+                        replace(index, {
+                          ...task,
+                          properties: {
+                            changes: task.properties.changes.filter((_, place) => place !== at),
+                          },
+                        })
+                      }
+                    >
+                      Remove copy group
+                    </Button>
                     <Label htmlFor={`${task.id}-target-${at}`}>Copy relationships to input</Label>
                     <NativeSelect
                       id={`${task.id}-target-${at}`}
@@ -398,6 +432,33 @@ export function StudioActionTasks({
                   </div>
                 );
               })}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={
+                  task.properties.changes.length >= 10 ||
+                  targets.length === 0 ||
+                  record.relationships.length === 0
+                }
+                onClick={() =>
+                  replace(index, {
+                    ...task,
+                    properties: {
+                      changes: [
+                        ...task.properties.changes,
+                        {
+                          kind: "copy_relationships",
+                          target_input: targets[0]!.key,
+                          relationships: [record.relationships[0]!.key],
+                        },
+                      ],
+                    },
+                  })
+                }
+              >
+                Add copy group
+              </Button>
             </div>
           )}
           {task.type === "record.delete" && (
