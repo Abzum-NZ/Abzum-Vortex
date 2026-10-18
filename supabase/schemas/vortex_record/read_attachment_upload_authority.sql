@@ -48,7 +48,7 @@ begin
     if decision ->> 'outcome' is distinct from 'allowed' then
       return pg_catalog.jsonb_build_object('outcome', 'refused');
     end if;
-    bounds := vortex_record.resolve_record_field_bounds_internal(decision);
+    bounds := vortex_access.resolve_record_field_bounds_internal(decision);
   end if;
   if not coalesce(bounds -> 'readableFieldIds' @> pg_catalog.jsonb_build_array(p_field_id::text), false)
     or not coalesce(bounds -> 'changeableFieldIds' @> pg_catalog.jsonb_build_array(p_field_id::text), false) then
