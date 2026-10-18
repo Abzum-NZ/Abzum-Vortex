@@ -506,8 +506,23 @@ else {
   const mainFiles = new Set(mainMigrationList.split("\n").filter(Boolean).map(normalize));
   const mainVersions = [...mainFiles].filter((file) => file.endsWith(".sql")).map(versionOf);
   const highest = mainVersions.reduce((a, b) => (b > a ? b : a), "");
-  for (const file of migrationFiles) {
-    if (mainFiles.has(file) || baselineMigrationFiles.has(file)) continue;
+  const newMigrationFiles = migrationFiles.filter(
+    (file) => !mainFiles.has(file) && !baselineMigrationFiles.has(file),
+  );
+  if (newMigrationFiles.length > 0) {
+    const mainCommit = gitOutput(["rev-parse", "origin/main"]);
+    const mergeBase = gitOutput(["merge-base", "origin/main", "HEAD"]);
+    if (mainCommit === undefined || mergeBase !== mainCommit) {
+      for (const file of newMigrationFiles)
+        add(
+          "migration-version-order",
+          file,
+          1,
+          "branch does not contain the current origin/main commit; update the branch before adding a migration",
+        );
+    }
+  }
+  for (const file of newMigrationFiles) {
     const version = versionOf(file);
     if (version > highest) continue;
     const next = (BigInt(highest) + 100n).toString();
