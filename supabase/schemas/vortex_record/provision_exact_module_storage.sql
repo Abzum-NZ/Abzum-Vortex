@@ -53,8 +53,6 @@ declare
   reader_sort_key_value text;
   field_columns_sql text;
   projection_view_sql text;
-  existing_columns text[];
-  expected_columns text[];
 begin
   if not vortex_platform.is_non_nil_uuid(p_module_root_id::text)
     or p_module_release_revision not between 1 and 9007199254740991 then
@@ -184,8 +182,8 @@ begin
     projection_view_sql := null;
     if is_projection then
       protected_view_key := record_type #>> '{systemProjection,protectedView}';
-      -- The view reads every row in the reader's first registered cursor order, which each
-      -- reader accepts without a page limit.
+      -- The view exhausts bounded pages in the reader's first registered cursor
+      -- order. Filters on the view must see every candidate, not just page one.
       select registered.reader_schema, registered.reader_function,
         registered.cursor_sort_keys[1]
       into reader_schema_value, reader_function_value, reader_sort_key_value
@@ -200,7 +198,6 @@ begin
           message = 'Protected projection storage must be organisation shared';
       end if;
       field_columns_sql := '';
-      expected_columns := array[]::text[];
       for field_value in
         select item.value
         from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
@@ -219,7 +216,6 @@ begin
             message = 'Record field storage type is unsupported';
         end if;
         sql_type := vortex_record.sql_value_type(database_type);
-        expected_columns := expected_columns || column_token;
         if field_value ->> 'fieldId' = record_type #>> '{systemProjection,organizationFieldId}' then
           field_columns_sql := field_columns_sql
             || pg_catalog.format('projection.organization_id::text as %I, ', column_token);
@@ -239,14 +235,36 @@ begin
             );
         end if;
       end loop;
-      select pg_catalog.array_agg(item.column_name order by item.column_name)
-      into expected_columns
-      from pg_catalog.unnest(expected_columns) as item(column_name);
       field_columns_sql := pg_catalog.left(
         field_columns_sql, pg_catalog.length(field_columns_sql) - 2
       );
       projection_view_sql := pg_catalog.format(
-        'create view record_data.%I as select
+        'create view record_data.%I as
+         with recursive projection_pages(rows) as (
+           values (null::jsonb)
+           union all
+           select page.rows
+           from projection_pages as previous
+           cross join lateral (
+             select coalesce(pg_catalog.jsonb_agg(
+               pg_catalog.to_jsonb(projected) - ''ordinality'' order by projected.ordinality
+             ), ''[]''::jsonb) as rows
+             from %I.%I(null::uuid[], %L, ''ascending'',
+               case when previous.rows is null then null else
+                 pg_catalog.jsonb_build_object(
+                   ''recordId'', previous.rows -> -1 ->> ''record_id'',
+                   ''sortKey'', case when %L = ''record_id'' then ''[]''::jsonb
+                     else pg_catalog.jsonb_build_array(
+                       previous.rows -> -1 -> ''attribute_values'' -> %L
+                     ) end
+                 ) end, 40
+             ) with ordinality as projected(
+               organization_id, record_id, revision, attribute_values, ordinality
+             )
+           ) as page
+           where previous.rows is null or pg_catalog.jsonb_array_length(previous.rows) = 40
+         )
+         select
            projection.organization_id as organisation_id,
            %L::uuid as module_root_id,
            %L::uuid as record_type_id,
@@ -266,10 +284,14 @@ begin
            null::uuid as deleted_by,
            null::timestamptz as removal_due_at,
            %s
-         from %I.%I(null::uuid[], %L, ''ascending'', null, null) as projection',
-        table_token, p_module_root_id, record_type_id_value, storage_id,
-        p_module_release_revision, field_columns_sql,
-        reader_schema_value, reader_function_value, reader_sort_key_value
+         from projection_pages as page
+         cross join lateral pg_catalog.jsonb_to_recordset(page.rows) as projection(
+           organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
+         )',
+        table_token, reader_schema_value, reader_function_value, reader_sort_key_value,
+        reader_sort_key_value, reader_sort_key_value,
+        p_module_root_id, record_type_id_value, storage_id,
+        p_module_release_revision, field_columns_sql
       );
     end if;
 
@@ -412,27 +434,13 @@ begin
           end if;
         end loop;
 
-        select coalesce(
-            pg_catalog.array_agg(attribute.attname order by attribute.attname),
-            array[]::text[]
-          )
-        into existing_columns
-        from pg_catalog.pg_attribute as attribute
-        where attribute.attrelid = pg_catalog.to_regclass(
-            pg_catalog.format('%I.%I', 'record_data', table_token)
-          )
-          and attribute.attnum > 0
-          and not attribute.attisdropped
-          and attribute.attname like 'f\_%';
         -- The view always carries the newest compatible release's shape, as a
-        -- generated table keeps every column a newer release added. A newer
-        -- release, or the newest one with a different field set, recreates it
-        -- exactly; an older release, which the field checks below prove is a
-        -- compatible subset, leaves the newer view alone. The projection has no
-        -- indexes or dependent objects.
-        if p_module_release_revision > stored_catalogue.last_compatible_release_revision
-          or (p_module_release_revision = stored_catalogue.last_compatible_release_revision
-            and existing_columns is distinct from expected_columns) then
+        -- generated table keeps every column a newer release added. Provisioning
+        -- the newest release also refreshes its reader expression; an older
+        -- release, which the field checks above prove is a compatible subset,
+        -- leaves the newer view alone. The projection has no indexes or
+        -- dependent objects.
+        if p_module_release_revision >= stored_catalogue.last_compatible_release_revision then
           execute pg_catalog.format('drop view record_data.%I', table_token);
           execute projection_view_sql;
           execute pg_catalog.format(
