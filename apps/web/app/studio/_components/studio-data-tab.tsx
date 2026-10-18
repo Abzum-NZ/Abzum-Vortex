@@ -245,7 +245,8 @@ export function useStudioDataTab({ draft, applications, initialModule, hidden, c
 }>) {
   const { source, organizationId, view } = draft;
   const disabled = draft.locked;
-  const select = (next: StudioDataSelection | null) => { draft.select(next); };
+  const [searchOpen, setSearchOpen] = useState(false);
+  const select = (next: StudioDataSelection | null) => { setSearchOpen(false); draft.select(next); };
   // A Studio address that names a module opens it once.
   const opened = useRef(false);
   useEffect(() => {
@@ -304,8 +305,9 @@ export function useStudioDataTab({ draft, applications, initialModule, hidden, c
 
   const panel = <StudioDataPanel hidden={hidden} owned={owned} used={used} applications={applications}
     selected={current} onSelect={select} onCreate={() => setCreating(true)} disabled={disabled}
-    search={<StudioSearchOverview source={source} modules={modules} disabled={disabled} edit={edit} onSelect={select} />} />;
-  const centre = <StudioDataCentre organizationId={organizationId} rootId={draft.state.rootId} modules={modules}
+    searchSelected={searchOpen} onSearch={() => setSearchOpen(true)} />;
+  const centre = searchOpen ? <div className="mx-auto max-w-4xl px-8 py-6"><h2 className="mb-6 text-xl font-semibold tracking-tight">Search settings</h2>
+    <StudioSearchOverview source={source} modules={modules} disabled={disabled} edit={edit} onSelect={select} /></div> : <StudioDataCentre organizationId={organizationId} rootId={draft.state.rootId} modules={modules}
     selection={current} unsaved={unsaved} draftRevision={view.draftRevision} />;
   // Each editor is keyed by the item it edits only, so an applied edit never draws it afresh.
   const inspectorBody = current === null || module === undefined
@@ -348,5 +350,5 @@ export function useStudioDataTab({ draft, applications, initialModule, hidden, c
   const dialog = <StudioRecordTypeDialog key={creating ? "open" : "closed"} open={creating} source={source} edit={edit}
     onClose={() => setCreating(false)}
     onCreated={(moduleKey, recordKey) => select({ kind: "record_type", moduleKey, recordKey })} />;
-  return { panel, centre, inspector, dialog, title: describeSelection(modules, current) };
+  return { panel, centre, inspector: searchOpen ? null : inspector, dialog, title: searchOpen ? "Search settings" : describeSelection(modules, current) };
 }

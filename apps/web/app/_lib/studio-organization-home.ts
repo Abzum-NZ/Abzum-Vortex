@@ -5,6 +5,7 @@ import {
   createBuilderAuthority,
   listOrganizationBuilderRoots,
   requireBuilderAuthority,
+  readVisiblePersonLabels,
   type BuilderTargetFactsReader,
   type OrganizationBuilderRoot,
 } from "@vortex/platform/server";
@@ -18,7 +19,8 @@ export type StudioOrganizationHomeResult =
       kind: "available";
       organizationId: OrganizationId;
       roots: readonly OrganizationBuilderRoot[];
-      mayHaveMore: boolean;
+      nextCursor: string | null;
+      editorNames: Readonly<Record<string, string>>;
     }>
   | Readonly<{ kind: "refused"; reason: string }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
@@ -27,6 +29,7 @@ const permissionRefusal = "You need permission to manage definition drafts in th
 
 export const loadStudioOrganizationHome = async (
   candidateOrganizationId: string,
+  afterKey: string | null = null,
 ): Promise<StudioOrganizationHomeResult> => {
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
   if (!organization.success) {
@@ -67,21 +70,31 @@ export const loadStudioOrganizationHome = async (
         }
         throw error;
       }
-      const roots = await listOrganizationBuilderRoots(transaction);
+      const page = await listOrganizationBuilderRoots(transaction, afterKey);
+      const roots = page.roots;
+      const labels = await readVisiblePersonLabels(transaction, [
+        ...new Set(roots.map((root) => root.editedBy)),
+      ]);
+      const paging = { nextCursor: page.nextCursor, editorNames: Object.fromEntries(labels) };
       const systemRoot = roots.find((root) => root.isSystemApplication);
       if (systemRoot === undefined)
         return {
           kind: "available" as const,
           organizationId: scope.organizationId,
           roots,
-          mayHaveMore: roots.length === 200,
+          ...paging,
         };
 
       const targetFacts: BuilderTargetFactsReader = async (_transaction, _scope, rootId) => {
         if (rootId !== systemRoot.rootId) throw new Error("STUDIO_ROOT_LIST_TARGET_MISSING");
         return { isSystemApplication: true };
       };
-      const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
+      const authority = createBuilderAuthority({
+        transaction,
+        scope,
+        targetFacts,
+        permissions: platformPermissionSource,
+      });
       try {
         await requireBuilderAuthority(authority, {
           kind: "draft_change",
@@ -91,7 +104,7 @@ export const loadStudioOrganizationHome = async (
           kind: "available" as const,
           organizationId: scope.organizationId,
           roots,
-          mayHaveMore: roots.length === 200,
+          ...paging,
         };
       } catch (error) {
         if (error instanceof BuilderAuthorityError && error.code === "BUILDER_PERMISSION_REFUSED")
@@ -99,7 +112,7 @@ export const loadStudioOrganizationHome = async (
             kind: "available" as const,
             organizationId: scope.organizationId,
             roots: roots.filter((root) => !root.isSystemApplication),
-            mayHaveMore: roots.length === 200,
+            ...paging,
           };
         throw error;
       }

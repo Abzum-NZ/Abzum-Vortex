@@ -142,7 +142,6 @@ export function StudioSearchOverview({ source, modules, disabled, edit, onSelect
   const toggle = (enabled: boolean) =>
     setProblem(studioEditProblem(edit((current) => setApplicationSearchEnabled(current, enabled))) ?? "");
   return <div className="space-y-2">
-    <h3 className="text-xs font-semibold uppercase text-muted-foreground">Search</h3>
     {search === undefined
       ? <p className="text-sm text-muted-foreground">People can&apos;t search this application yet. Select a record type and turn on its search.</p>
       : <>

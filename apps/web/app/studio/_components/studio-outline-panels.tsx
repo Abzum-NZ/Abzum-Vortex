@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState, type ReactNode } from "react";
 import type { StudioSemanticOutline, StudioSemanticOutlineNode } from "@vortex/ui/studio";
-import { StudioPanelShell, StudioSearchBox } from "./studio-frame";
+import { StudioPanelShell, StudioSearchBox, StudioSection } from "./studio-frame";
 import { StudioOutline } from "./studio-outline";
 
 /**
@@ -12,10 +12,16 @@ import { StudioOutline } from "./studio-outline";
 
 type Choose = (node: StudioSemanticOutlineNode) => void;
 
-const sectionOf = (outline: StudioSemanticOutline, section: string): StudioSemanticOutlineNode | undefined =>
+const sectionOf = (
+  outline: StudioSemanticOutline,
+  section: string,
+): StudioSemanticOutlineNode | undefined =>
   outline.children.find((child) => child.key === JSON.stringify([outline.key, "section", section]));
 
-const findNode = (node: StudioSemanticOutlineNode, key: string): StudioSemanticOutlineNode | undefined => {
+const findNode = (
+  node: StudioSemanticOutlineNode,
+  key: string,
+): StudioSemanticOutlineNode | undefined => {
   if (node.key === key) return node;
   for (const child of node.children) {
     const found = findNode(child, key);
@@ -25,7 +31,10 @@ const findNode = (node: StudioSemanticOutlineNode, key: string): StudioSemanticO
 };
 
 /** Keeps the nodes whose label matches, with the branches that lead to them. */
-const filterNodes = (nodes: readonly StudioSemanticOutlineNode[], query: string): readonly StudioSemanticOutlineNode[] => {
+const filterNodes = (
+  nodes: readonly StudioSemanticOutlineNode[],
+  query: string,
+): readonly StudioSemanticOutlineNode[] => {
   const needle = query.trim().toLocaleLowerCase();
   if (needle.length === 0) return nodes;
   return nodes.flatMap((node) => {
@@ -35,59 +44,158 @@ const filterNodes = (nodes: readonly StudioSemanticOutlineNode[], query: string)
   });
 };
 
-const withoutChildren = (node: StudioSemanticOutlineNode): StudioSemanticOutlineNode => ({ ...node, children: [] });
+const withoutChildren = (node: StudioSemanticOutlineNode): StudioSemanticOutlineNode => ({
+  ...node,
+  children: [],
+});
 
-function OutlineList({ nodes, selectedKey, choose, disabled, empty }: Readonly<{
-  nodes: readonly StudioSemanticOutlineNode[]; selectedKey: string; choose: Choose; disabled: boolean; empty: string;
+function OutlineList({
+  nodes,
+  selectedKey,
+  choose,
+  disabled,
+  empty,
+}: Readonly<{
+  nodes: readonly StudioSemanticOutlineNode[];
+  selectedKey: string;
+  choose: Choose;
+  disabled: boolean;
+  empty: string;
 }>) {
   if (nodes.length === 0) return <p className="text-sm text-muted-foreground">{empty}</p>;
-  return <ul className="list-none space-y-1">
-    {nodes.map((node) => <StudioOutline key={node.key} node={node} selectedKey={selectedKey} choose={choose} disabled={disabled} />)}
-  </ul>;
+  return (
+    <StudioOutline nodes={nodes} selectedKey={selectedKey} choose={choose} disabled={disabled} />
+  );
 }
 
 type PanelProps = Readonly<{
-  outline: StudioSemanticOutline; selectedKey: string; choose: Choose; disabled: boolean; hidden: boolean;
+  outline: StudioSemanticOutline;
+  selectedKey: string;
+  choose: Choose;
+  disabled: boolean;
+  hidden: boolean;
 }>;
 
-export function StudioStructurePanel({ outline, selectedKey, choose, disabled, hidden, homePageKey, editor }: PanelProps & Readonly<{
-  /** The selection key of the home page, marked in the tree. */
-  homePageKey: string | undefined;
-  /** The controls that add, rename and remove pages and layouts. */
-  editor: ReactNode;
-}>) {
+export function StudioStructurePanel({
+  outline,
+  selectedKey,
+  choose,
+  disabled,
+  hidden,
+  homePageKey,
+  editor,
+  action,
+}: PanelProps &
+  Readonly<{
+    homePageKey: string | undefined;
+    editor: ReactNode;
+    action: ReactNode;
+  }>) {
   const [query, setQuery] = useState("");
-  // The application, its layouts and its pages; their blocks are in the Outline tab.
-  const tree = useMemo(() => {
-    const shells = sectionOf(outline, "shells");
-    const pages = sectionOf(outline, "pages");
-    const sections = [shells, pages].flatMap((section) => section === undefined ? []
-      : [{ ...section, children: section.children.map((node) => withoutChildren(
-        node.key === homePageKey ? { ...node, label: `${node.label} (home page)` } : node)) }]);
-    return [{ ...outline, children: filterNodes(sections, query) }];
-  }, [outline, query, homePageKey]);
-  return <StudioPanelShell title="Structure" description="The application, its layouts and its pages." hidden={hidden}>
-    {editor}
-    <StudioSearchBox value={query} onChange={setQuery} placeholder="Find a page or layout" label="Find a page or layout" />
-    <OutlineList nodes={tree} selectedKey={selectedKey} choose={choose} disabled={disabled} empty="Nothing matches." />
-  </StudioPanelShell>;
+  const sections = [
+    ["pages", "Pages"],
+    ["shells", "Layouts"],
+  ] as const;
+  return (
+    <StudioPanelShell
+      title="Structure"
+      hidden={hidden}
+      action={action}
+      search={
+        <StudioSearchBox
+          value={query}
+          onChange={setQuery}
+          placeholder="Find a page or layout"
+          label="Find a page or layout"
+        />
+      }
+    >
+      <StudioOutline
+        nodes={[withoutChildren(outline)]}
+        selectedKey={selectedKey}
+        choose={choose}
+        disabled={disabled}
+      />
+      {sections.map(([key, title]) => {
+        const nodes = filterNodes(
+          sectionOf(outline, key)?.children.map(withoutChildren) ?? [],
+          query,
+        );
+        return (
+          <StudioSection
+            key={key}
+            title={title}
+            count={nodes.length}
+            storageKey={`structure:${key}`}
+          >
+            <StudioOutline
+              nodes={nodes}
+              selectedKey={selectedKey}
+              choose={choose}
+              disabled={disabled}
+              homePageKey={homePageKey}
+              searching={query !== ""}
+            />
+            {nodes.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                {query ? "Nothing matches." : `No ${title.toLowerCase()} yet.`}
+              </p>
+            )}
+          </StudioSection>
+        );
+      })}
+      {editor}
+    </StudioPanelShell>
+  );
 }
 
-export function StudioBlockOutlinePanel({ outline, selectedKey, choose, disabled, hidden, ownerKey }: PanelProps & Readonly<{
-  /** The page or layout the canvas shows, whose blocks are listed. */
-  ownerKey: string | undefined;
-}>) {
+export function StudioBlockOutlinePanel({
+  outline,
+  selectedKey,
+  choose,
+  disabled,
+  hidden,
+  ownerKey,
+}: PanelProps &
+  Readonly<{
+    /** The page or layout the canvas shows, whose blocks are listed. */
+    ownerKey: string | undefined;
+  }>) {
   const [query, setQuery] = useState("");
   const owner = ownerKey === undefined ? undefined : findNode(outline, ownerKey);
   const blocks = useMemo(() => filterNodes(owner?.children ?? [], query), [owner, query]);
-  return <StudioPanelShell title="Outline" hidden={hidden}
-    description={owner === undefined ? "The blocks of the page you are working on." : `The blocks of ${owner.label}.`}>
-    {owner === undefined
-      ? <p className="text-sm text-muted-foreground">Choose a page or layout in Structure to see its blocks here.</p>
-      : <>
-        <StudioSearchBox value={query} onChange={setQuery} placeholder="Find a block" label="Find a block" />
-        <OutlineList nodes={blocks} selectedKey={selectedKey} choose={choose} disabled={disabled}
-          empty={query.length > 0 ? "No block matches." : "This has no blocks yet."} />
-      </>}
-  </StudioPanelShell>;
+  return (
+    <StudioPanelShell
+      title="Outline"
+      hidden={hidden}
+      search={
+        owner === undefined ? undefined : (
+          <StudioSearchBox
+            value={query}
+            onChange={setQuery}
+            placeholder="Find a block"
+            label="Find a block"
+          />
+        )
+      }
+    >
+      {owner === undefined ? (
+        <p className="text-sm text-muted-foreground">
+          Choose a page or layout in Structure to see its blocks here.
+        </p>
+      ) : (
+        <>
+          <StudioSection title={owner.label} count={blocks.length}>
+            <OutlineList
+              nodes={blocks}
+              selectedKey={selectedKey}
+              choose={choose}
+              disabled={disabled}
+              empty={query.length > 0 ? "No block matches." : "This has no blocks yet."}
+            />
+          </StudioSection>
+        </>
+      )}
+    </StudioPanelShell>
+  );
 }

@@ -3,7 +3,15 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { ApplicationSourceDocument, ApplicationUsePlace } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
-import { Item, ItemContent, ItemDescription, ItemTitle } from "@vortex/ui/components/item";
+import { Icon } from "@vortex/ui";
+import { Badge } from "@vortex/ui/components/badge";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  PopoverTitle,
+} from "@vortex/ui/components/popover";
+import { StudioNavItem } from "./studio-nav-tree";
 import { toast } from "@vortex/ui/components/sonner";
 import type {
   StudioAccessCommand,
@@ -13,7 +21,7 @@ import type {
 import { StudioAccessPageGates, StudioAccessPermissionList } from "./studio-access-gates";
 import { StudioAccessRoleEditor } from "./studio-access-role";
 import { StudioField } from "./studio-field";
-import { StudioPanelShell } from "./studio-frame";
+import { StudioPanelShell, StudioSection } from "./studio-frame";
 import { StudioReferencesAlert } from "./studio-used-in";
 
 /** What the centre edits: the selected role, or one of the two application-wide views. */
@@ -87,6 +95,7 @@ export function useStudioAccessTab({
   const [view, setView] = useState<View>("role");
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [newRole, setNewRole] = useState("");
+  const [addingRole, setAddingRole] = useState(false);
   // A role selected anywhere (a "Used in" entry, a refusal's place) is shown at once.
   const selectedRoleKey = selected?.kind === "role" ? selected.roleKey : null;
   useEffect(() => {
@@ -121,83 +130,82 @@ export function useStudioAccessTab({
   };
   const addRole = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (run({ kind: "add_role", name: newRole })) setNewRole("");
+    if (run({ kind: "add_role", name: newRole })) {
+      setNewRole("");
+      setAddingRole(false);
+    }
   };
 
-  const choice = (selected: boolean, title: string, description: string, onClick: () => void) => (
-    <Item
-      size="sm"
-      variant={selected ? "muted" : "default"}
-      render={<button type="button" aria-pressed={selected} onClick={onClick} />}
-    >
-      <ItemContent>
-        <ItemTitle>{title}</ItemTitle>
-        <ItemDescription>{description}</ItemDescription>
-      </ItemContent>
-    </Item>
-  );
   const panel = (
     <StudioPanelShell
       title="Access"
       hidden={hidden}
-      description="Roles, what each can do, and who sees each page and menu entry."
+      action={
+        <Popover open={addingRole} onOpenChange={setAddingRole}>
+          <PopoverTrigger
+            render={<Button type="button" size="sm" variant="secondary" disabled={disabled} />}
+          >
+            <Icon name="plus" />
+            Role
+          </PopoverTrigger>
+          <PopoverContent align="end">
+            <PopoverTitle>Add role</PopoverTitle>
+            <form className="space-y-4" onSubmit={addRole}>
+              <StudioField label="Role name">
+                {(control) => (
+                  <Input
+                    {...control}
+                    value={newRole}
+                    maxLength={60}
+                    autoFocus
+                    disabled={disabled}
+                    onChange={(event) => setNewRole(event.target.value)}
+                  />
+                )}
+              </StudioField>
+              {feedback?.kind === "refused" && <AccessFeedback feedback={feedback} />}
+              <Button type="submit" disabled={disabled || newRole.trim().length === 0}>
+                Add role
+              </Button>
+            </form>
+          </PopoverContent>
+        </Popover>
+      }
     >
-      <section aria-label="Roles" className="space-y-1">
-        <h3 className="text-sm font-medium">Roles</h3>
-        <ul className="list-none space-y-1">
+      <StudioSection title="Roles" count={roles.length}>
+        <ul className="space-y-1">
           {roles.map((entry) => (
             <li key={entry.key}>
-              {choice(
-                view === "role" && role?.key === entry.key,
-                entry.name,
-                (entry.permissions.includes("*")
-                  ? "Holds every permission"
-                  : `${entry.permissions.length} ${entry.permissions.length === 1 ? "permission" : "permissions"}`) +
-                  (entry.default_member === true ? " · default member role" : ""),
-                () => showRole(entry.key),
-              )}
+              <StudioNavItem
+                label={entry.name}
+                icon="shield"
+                selected={view === "role" && role?.key === entry.key}
+                description={
+                  entry.permissions.includes("*")
+                    ? "Every permission"
+                    : `${entry.permissions.length} permissions`
+                }
+                meta={entry.default_member ? <Badge variant="outline">Default</Badge> : undefined}
+                onClick={() => showRole(entry.key)}
+              />
             </li>
           ))}
         </ul>
-      </section>
-      <form className="flex items-end gap-2" onSubmit={addRole}>
-        <StudioField label="New role">
-          {(control) => (
-            <Input
-              {...control}
-              value={newRole}
-              maxLength={60}
-              placeholder="For example: Viewer"
-              disabled={disabled}
-              onChange={(event) => setNewRole(event.target.value)}
-            />
-          )}
-        </StudioField>
-        <Button type="submit" size="sm" disabled={disabled || newRole.trim().length === 0}>
-          Add role
-        </Button>
-      </form>
-      <section aria-label="Across the application" className="space-y-1">
-        <h3 className="text-sm font-medium">Across the application</h3>
-        <ul className="list-none space-y-1">
-          <li>
-            {choice(
-              view === "pages",
-              "Pages and menu",
-              "Which permission opens each page and shows each menu entry.",
-              () => show("pages"),
-            )}
-          </li>
-          <li>
-            {choice(
-              view === "permissions",
-              "Permissions",
-              "Every permission, who holds it, and adding or removing one.",
-              () => show("permissions"),
-            )}
-          </li>
-        </ul>
-      </section>
+      </StudioSection>
+      <StudioSection title="Across the application">
+        <StudioNavItem
+          label="Pages and menu"
+          icon="grid"
+          selected={view === "pages"}
+          onClick={() => show("pages")}
+        />
+        <StudioNavItem
+          label="Permissions"
+          icon="shield"
+          selected={view === "permissions"}
+          onClick={() => show("permissions")}
+        />
+      </StudioSection>
     </StudioPanelShell>
   );
 

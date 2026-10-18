@@ -1,23 +1,47 @@
 "use client";
-import { Button } from "@vortex/ui/components/button";
+import { Badge } from "@vortex/ui/components/badge";
 import { studioSemanticSelectionKey, type StudioSemanticOutlineNode } from "@vortex/ui/studio";
+import { StudioNavTree, type StudioNavNode } from "./studio-nav-tree";
 
-/** The workspace outline: a tree of the application's pages, layouts, menu entries and flows by their business names. */
-export function StudioOutline({ node, selectedKey, choose, disabled = false }: {
-  node: StudioSemanticOutlineNode;
+/** Both semantic navigators use the same keyboard tree and selection. */
+export function StudioOutline({
+  nodes,
+  selectedKey,
+  choose,
+  disabled = false,
+  homePageKey,
+  searching = false,
+}: Readonly<{
+  nodes: readonly StudioSemanticOutlineNode[];
   selectedKey: string;
   choose: (node: StudioSemanticOutlineNode) => void;
   disabled?: boolean;
-}) {
-  return <li className="space-y-1">
-    {node.selection === null ? <span className="block break-words text-sm text-muted-foreground" title={node.label}>{node.label}</span>
-      : <Button type="button" variant="outline" size="sm" disabled={disabled} title={node.label}
-        className="h-auto min-h-8 w-full justify-start whitespace-normal text-left"
-        aria-pressed={selectedKey === studioSemanticSelectionKey(node.selection)} onClick={() => choose(node)}>
-        <span className="min-w-0 break-words">{node.label}</span>
-      </Button>}
-    {node.children.length > 0 && <ul className="list-none space-y-1 border-l border-border pl-3">
-      {node.children.map((child) => <StudioOutline key={child.key} node={child} selectedKey={selectedKey} choose={choose} disabled={disabled} />)}
-    </ul>}
-  </li>;
+  homePageKey?: string | undefined;
+  searching?: boolean;
+}>) {
+  const project = (node: StudioSemanticOutlineNode): StudioNavNode => ({
+    key: node.key,
+    label: node.label,
+    icon:
+      node.selection?.kind === "shell"
+        ? "grid"
+        : node.selection?.kind === "page"
+          ? "panel-left"
+          : "blocks",
+    selected: node.selection !== null && selectedKey === studioSemanticSelectionKey(node.selection),
+    meta:
+      node.selection !== null && studioSemanticSelectionKey(node.selection) === homePageKey ? (
+        <Badge variant="secondary">Home</Badge>
+      ) : undefined,
+    onSelect: () => choose(node),
+    children: node.children.map(project),
+  });
+  return (
+    <StudioNavTree
+      nodes={nodes.map(project)}
+      label="Outline tree"
+      disabled={disabled}
+      expandAll={searching}
+    />
+  );
 }

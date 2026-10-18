@@ -1,62 +1,18 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@vortex/ui/components/card";
-import type { OrganizationBuilderRoot } from "@vortex/platform/server";
+import { namespacedKeySchema } from "@vortex/platform/schema";
+import { StudioHome } from "./_components/studio-home";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { loadOrganizationLauncher } from "../_lib/organization-context";
 import { loadStudioOrganizationHome } from "../_lib/studio-organization-home";
 
 export const dynamic = "force-dynamic";
 
-const defaultPageSize = 40;
-const maxPageSize = 200;
-
-const pageSizeFrom = (candidate: string | string[] | undefined): number => {
-  const parsed = Number(Array.isArray(candidate) ? candidate[0] : candidate);
-  return Number.isInteger(parsed) && parsed >= 1 ? Math.min(parsed, maxPageSize) : defaultPageSize;
-};
-
-const byName = (left: OrganizationBuilderRoot, right: OrganizationBuilderRoot): number =>
-  left.name.localeCompare(right.name);
-
-function RootList({
-  roots,
-  organizationId,
-  size,
-  empty,
-}: Readonly<{
-  roots: readonly OrganizationBuilderRoot[];
-  organizationId: string;
-  size: number;
-  empty: string;
-}>) {
-  if (roots.length === 0) return <p className="text-muted-foreground">{empty}</p>;
-  return (
-    <ul className="divide-y">
-      {roots.slice(0, size).map((root) => (
-        <li key={root.rootId}>
-          <Link
-            className="block py-2 font-medium underline-offset-4 hover:underline"
-            href={`/studio/${organizationId}/${root.rootId}`}
-          >
-            {root.name}
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 export default async function StudioLandingPage({
   searchParams,
-}: Readonly<{ searchParams: Promise<{ size?: string | string[] }> }>) {
-  const size = pageSizeFrom((await searchParams).size);
+}: Readonly<{ searchParams: Promise<{ after?: string; organization?: string }> }>) {
+  const paging = await searchParams;
+  if (paging.after !== undefined && !namespacedKeySchema.safeParse(paging.after).success)
+    notFound();
   const resolved = await resolveIdentitySession();
   if (resolved.kind !== "active") notFound();
   const launcher = await loadOrganizationLauncher(resolved.session);
@@ -73,7 +29,10 @@ export default async function StudioLandingPage({
   const homes = await Promise.all(
     launcher.entries.map(async (entry) => ({
       entry,
-      home: await loadStudioOrganizationHome(entry.organizationId),
+      home: await loadStudioOrganizationHome(
+        entry.organizationId,
+        paging.organization === entry.organizationId ? (paging.after ?? null) : null,
+      ),
     })),
   );
   const buildable = homes.flatMap(({ entry, home }) =>
@@ -93,48 +52,17 @@ export default async function StudioLandingPage({
   const organizations = [...buildable].sort((left, right) =>
     left.entry.organizationDisplayName.localeCompare(right.entry.organizationDisplayName),
   );
-  const sizeLinks = size < maxPageSize && (
-    <Link className="text-sm underline underline-offset-4" href={`/studio?size=${Math.min(size * 5, maxPageSize)}`}>
-      Show more
-    </Link>
-  );
   return (
-    <main className="mx-auto max-w-5xl space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Studio</h1>
-        <p className="text-muted-foreground">
-          Applications you can build. A module is edited inside the application that owns it.
-        </p>
-      </div>
-      {organizations.map(({ entry, home }) => {
-        const applications = [...home.roots].sort(byName);
-        return (
-          <Card key={entry.organizationId}>
-            <CardHeader>
-              <CardTitle>{entry.organizationDisplayName}</CardTitle>
-              {entry.tenantDisplayName !== entry.organizationDisplayName && <CardDescription>{entry.tenantDisplayName}</CardDescription>}
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <section className="space-y-2">
-                <h2 className="text-lg font-medium">Applications</h2>
-                <RootList
-                  roots={applications}
-                  organizationId={home.organizationId}
-                  size={size}
-                  empty="No applications yet."
-                />
-                {applications.length > size && sizeLinks}
-                <Link
-                  className="block text-sm underline underline-offset-4"
-                  href={`/studio/${home.organizationId}/new`}
-                >
-                  Create an application
-                </Link>
-              </section>
-            </CardContent>
-          </Card>
-        );
-      })}
-    </main>
+    <StudioHome
+      organizations={organizations.map(({ entry, home }) => ({
+        organizationId: home.organizationId,
+        name: entry.organizationDisplayName,
+        tenantName: entry.tenantDisplayName,
+        roots: home.roots,
+        editorNames: home.editorNames,
+        nextCursor: home.nextCursor,
+        after: paging.organization === entry.organizationId ? (paging.after ?? null) : null,
+      }))}
+    />
   );
 }
