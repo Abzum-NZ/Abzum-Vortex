@@ -6,7 +6,7 @@ import { Button } from "@vortex/ui/components/button";
 import { Label } from "@vortex/ui/components/label";
 import { StudioOptionControl, type StudioDataSelection } from "@vortex/ui/studio";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@vortex/ui/components/table";
-import { readStudioDataRecords } from "../_lib/studio-read-client";
+import { readStudioDataRecords } from "../actions";
 import type { StudioDataRecordsResult, StudioDataTotal } from "../../_lib/studio-data-records";
 import {
   fieldTypeLabel, type StudioDataModule, type StudioDataRecordType,

@@ -6,14 +6,6 @@ import { tokenName, type StudioApplicationConditionContextResult } from "@vortex
 import { findPinnedPlatformThemeRelease } from "../studio/_lib/pinned-platform-theme-release";
 import type { StudioThemeResolution } from "../studio/_lib/studio-theme-options";
 import { loadStudioApplicationDraft } from "./studio-application-draft";
-import {
-  readStudioCanvasRecords as readStudioCanvasRecordsWithSession,
-  type StudioCanvasRecordsResult,
-} from "./studio-canvas-records";
-import {
-  readStudioDataRecords as readStudioDataRecordsWithSession,
-  type StudioDataRecordsResult,
-} from "./studio-data-records";
 import { readSavedStudioApplicationConditionContext } from "./studio-application-condition-context";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { mapWebError } from "./web-error-mapper";
@@ -58,50 +50,6 @@ export async function resolveStudioApplicationConditionContext(
 /** The saved draft compiled for the canvas: its page slots, frames, choices and compile failure. */
 export async function reopenStudioApplication(organizationId: string, applicationRootId: string) {
   return loadStudioApplicationDraft(organizationId, applicationRootId);
-}
-
-/** The records the data blocks of one saved draft page area show, read with the builder's own access. */
-export async function readStudioCanvasRecords(
-  organizationId: string,
-  candidate: unknown,
-): Promise<StudioCanvasRecordsResult> {
-  try {
-    const resolved = await resolveIdentitySession();
-    if (resolved.kind !== "active")
-      return resolved.kind === "temporarily_unavailable"
-        ? { kind: "temporarily_unavailable" }
-        : { kind: "refused" };
-    return await readStudioCanvasRecordsWithSession(resolved.session, organizationId, candidate);
-  } catch (error) {
-    return refuse(
-      "read-canvas-records",
-      "STUDIO_CANVAS_RECORDS_FAILED",
-      { kind: "temporarily_unavailable" } as const,
-      error,
-    );
-  }
-}
-
-/** One page of the records of a record type or query in the running application, read with the builder's own access. */
-export async function readStudioDataRecords(
-  organizationId: string,
-  candidate: unknown,
-): Promise<StudioDataRecordsResult> {
-  try {
-    const resolved = await resolveIdentitySession();
-    if (resolved.kind !== "active")
-      return resolved.kind === "temporarily_unavailable"
-        ? { kind: "temporarily_unavailable" }
-        : { kind: "refused" };
-    return await readStudioDataRecordsWithSession(resolved.session, organizationId, candidate);
-  } catch (error) {
-    return refuse(
-      "read-data-records",
-      "STUDIO_DATA_RECORDS_FAILED",
-      { kind: "temporarily_unavailable" } as const,
-      error,
-    );
-  }
 }
 
 const themeFailureWords: Readonly<Record<string, string>> = {

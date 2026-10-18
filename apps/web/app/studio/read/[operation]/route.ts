@@ -2,8 +2,6 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import {
   reopenStudioApplication,
-  readStudioCanvasRecords,
-  readStudioDataRecords,
   resolveStudioApplicationConditionContext,
   resolveStudioApplicationTheme,
 } from "../../../_lib/studio-read-operations";
@@ -28,12 +26,6 @@ export async function GET(
           organizationId,
           typeof candidate === "string" ? candidate : "",
         );
-        break;
-      case "canvas-records":
-        result = await readStudioCanvasRecords(organizationId, candidate);
-        break;
-      case "data-records":
-        result = await readStudioDataRecords(organizationId, candidate);
         break;
       case "condition-context":
         result = await resolveStudioApplicationConditionContext(organizationId, candidate);

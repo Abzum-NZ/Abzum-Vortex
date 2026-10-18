@@ -20,14 +20,6 @@ export const reopenStudioApplication: typeof Operations.reopenStudioApplication 
   organizationId,
   rootId,
 ) => read("draft", organizationId, rootId);
-export const readStudioCanvasRecords: typeof Operations.readStudioCanvasRecords = (
-  organizationId,
-  candidate,
-) => read("canvas-records", organizationId, candidate);
-export const readStudioDataRecords: typeof Operations.readStudioDataRecords = (
-  organizationId,
-  candidate,
-) => read("data-records", organizationId, candidate);
 export const resolveStudioApplicationConditionContext: typeof Operations.resolveStudioApplicationConditionContext =
   (organizationId, candidate) => read("condition-context", organizationId, candidate);
 export const resolveStudioApplicationTheme: typeof Operations.resolveStudioApplicationTheme = (
