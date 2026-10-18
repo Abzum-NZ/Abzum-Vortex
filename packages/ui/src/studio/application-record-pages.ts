@@ -832,10 +832,11 @@ const relatedTables = (
               {
                 title: child.plural_name,
                 empty_message: `No ${child.plural_name.toLowerCase()} link to this ${lowerFirst(resolved.record.name)} yet.`,
-                columns: shown.map((entry) => ({
-                  field: `${module.key}:${child.key}.${entry.key}`,
-                  label: entry.label,
-                })),
+                columns: tableColumns(
+                  (entry) => `${module.key}:${child.key}.${entry.key}`,
+                  shown,
+                  childResolved.title.key,
+                ),
                 query_parameters: [{ input, source: "page", page_parameter: "record_id" }],
               },
               {},
