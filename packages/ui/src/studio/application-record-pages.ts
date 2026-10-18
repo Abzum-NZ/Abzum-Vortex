@@ -202,14 +202,15 @@ const listQuery = (plan: Plan, resolved: Resolved, columns: readonly Field[]): R
 };
 
 /**
- * The fields a table of the record type shows: its numbers, its title, then compact fields, each
- * one its read permission lets people read.
+ * The fields a table of the record type shows: its numbers, its title, its first choice, then
+ * compact fields, each one its read permission lets people read.
  */
 const keyColumns = (record: RecordType, title: Field, readable: ReadonlySet<string>): Field[] => {
   const shown = record.fields.filter((entry) => readable.has(entry.key));
   const numbers = shown.filter((entry) => entry.type === "reference_number");
-  const rest = shown.filter((entry) => entry !== title && entry.type !== "reference_number" && columnTypes.has(entry.type));
-  return [...numbers, title, ...rest].slice(0, columnLimit);
+  const state = shown.find((entry) => entry !== title && entry.type === "choice");
+  const rest = shown.filter((entry) => entry !== title && entry !== state && entry.type !== "reference_number" && columnTypes.has(entry.type));
+  return [...numbers.filter((entry) => entry !== title), title, ...(state === undefined ? [] : [state]), ...rest].slice(0, columnLimit);
 };
 
 /**
