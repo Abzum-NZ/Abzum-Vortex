@@ -2,6 +2,7 @@ import { loadStudioApplicationDraft } from "../../../_lib/studio-application-dra
 import { organizationAddressPath } from "../../../_lib/address-paths";
 import { loadOrganizationLauncher } from "../../../_lib/organization-context";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
+import { continueStudioSession } from "../../_lib/studio-session";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
 import { ApplicationDraftWorkspace, type StudioWorkspacePlace } from "../../_components/application-draft-workspace";
 import { findPinnedPlatformThemeRelease } from "../../_lib/pinned-platform-theme-release";
@@ -43,6 +44,9 @@ export default async function StudioApplicationPage({ params, searchParams }: {
   searchParams: Promise<{ tab?: string; section?: string; module?: string }>;
 }) {
   const [{ organizationId, applicationRootId }, { tab, section, module }] = await Promise.all([params, searchParams]);
+  const session = await continueStudioSession();
+  if (session.kind === "temporarily_unavailable")
+    return <StudioUnavailable subject="Application draft" result={session} />;
   const result = await loadStudioApplicationDraft(organizationId, applicationRootId);
   if (result.kind !== "available")
     return <StudioUnavailable subject="Application draft" result={result} />;

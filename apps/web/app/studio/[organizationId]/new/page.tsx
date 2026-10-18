@@ -1,4 +1,5 @@
 import { loadStudioCreateAccess } from "../../../_lib/studio-application-draft";
+import { continueStudioSession } from "../../_lib/studio-session";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
 import { ApplicationDraftWorkspace } from "../../_components/application-draft-workspace";
 import {
@@ -13,6 +14,9 @@ export default async function NewStudioApplicationPage({ params }: {
   params: Promise<{ organizationId: string }>;
 }) {
   const { organizationId } = await params;
+  const session = await continueStudioSession();
+  if (session.kind === "temporarily_unavailable")
+    return <StudioUnavailable subject="New application" result={session} />;
   const result = await loadStudioCreateAccess(organizationId);
   if (result.kind !== "available")
     return <StudioUnavailable subject="New application" result={result} />;

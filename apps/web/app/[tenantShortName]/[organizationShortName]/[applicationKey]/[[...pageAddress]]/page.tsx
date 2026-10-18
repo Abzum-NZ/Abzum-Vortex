@@ -20,7 +20,7 @@ import {
   unavailableAddress,
 } from "../../_components/address-states";
 import { openPermittedApplication } from "../../_components/open-application";
-import { applicationHomeContinuationFromAddress } from "../../../../auth/_lib/application-home-continuation";
+import { applicationHomeContinuationFromAddress } from "../../../../auth/_lib/sign-in-continuation";
 import { continueSessionOrEnd } from "../../../../auth/_lib/session-redirect";
 import {
   resolveIdentitySession,
@@ -89,13 +89,13 @@ export default async function ApplicationAddressPage({
 }: ApplicationAddressPageProps) {
   const { tenantShortName, organizationShortName, applicationKey, pageAddress } = await params;
   const pageSegments = pageAddress ?? [];
-  const applicationHome = applicationHomeContinuationFromAddress(
+  const continuation = applicationHomeContinuationFromAddress(
     tenantShortName,
     organizationShortName,
     [applicationKey, ...pageSegments],
   );
   const { resolution, email } = await resolveIdentitySessionWithEmail();
-  const identity = await continueSessionOrEnd(resolution, applicationHome);
+  const identity = await continueSessionOrEnd(resolution, continuation);
   // A read that cannot be made right now (an overloaded or stopped request) is retried at this same
   // address, so a transient failure never sends the person to another application.
   const parameters = await searchParams;

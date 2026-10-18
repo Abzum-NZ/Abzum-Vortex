@@ -13,22 +13,22 @@ import { projectPreApplicationStatus } from "../_lib/pre-application-status";
 import { identitySessionNavigationHint } from "../_lib/session-request-state";
 import { getLocalDevelopmentSignInConfiguration } from "../_lib/authority-configuration";
 import {
-  applicationHomeAddressPath,
-  parseApplicationHomeContinuation,
-  serializeApplicationHomeContinuation,
-} from "../_lib/application-home-continuation";
+  signInContinuationAddressPath,
+  parseSignInContinuation,
+  serializeSignInContinuation,
+} from "../_lib/sign-in-continuation";
 import { signIn, signInWithDevelopmentAccount } from "../actions";
 
 type SignInPageProps = Readonly<{
-  searchParams: Promise<{ status?: string; applicationHome?: unknown }>;
+  searchParams: Promise<{ status?: string; continuation?: unknown }>;
 }>;
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
-  const [{ status, applicationHome: applicationHomeValue }, requestHeaders] = await Promise.all([
+  const [{ status, continuation: continuationValue }, requestHeaders] = await Promise.all([
     searchParams,
     headers(),
   ]);
-  const applicationHome = parseApplicationHomeContinuation(applicationHomeValue);
+  const continuation = parseSignInContinuation(continuationValue);
   const localDevelopmentSignInEnabled = getLocalDevelopmentSignInConfiguration() !== undefined;
   let sessionState: ReturnType<typeof identitySessionNavigationHint> = "temporarily_unavailable";
   try {
@@ -38,23 +38,19 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   }
   if (sessionState === "verified")
     redirect(
-      applicationHome === undefined
-        ? "/signed-in"
-        : applicationHomeAddressPath(applicationHome),
+      continuation === undefined ? "/signed-in" : signInContinuationAddressPath(continuation),
     );
   if (sessionState === "temporarily_unavailable") {
     const projection = projectPreApplicationStatus(requestHeaders);
     const retryBasePath =
-      projection.kind === "catalogue_notice"
-        ? projection.notice.linkBasePath
-        : "/auth/sign-in";
+      projection.kind === "catalogue_notice" ? projection.notice.linkBasePath : "/auth/sign-in";
     const retryHref =
-      applicationHome === undefined
+      continuation === undefined
         ? retryBasePath
         : retryBasePath +
           "?" +
           new URLSearchParams({
-            applicationHome: serializeApplicationHomeContinuation(applicationHome),
+            continuation: serializeSignInContinuation(continuation),
           }).toString();
     const title =
       projection.kind === "catalogue_notice" ? projection.notice.title : "Account access";
@@ -64,11 +60,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         : "Review the sign-in status below.";
 
     return (
-      <AuthShell
-        eyebrow="Account access"
-        title={title}
-        description={description}
-      >
+      <AuthShell eyebrow="Account access" title={title} description={description}>
         <PreApplicationStatusNotice projection={projection} retryHref={retryHref} />
       </AuthShell>
     );
@@ -98,11 +90,11 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
     >
       <StatusMessage status={status} />
       <form className="flex flex-col gap-5" action={signIn}>
-        {applicationHome === undefined ? null : (
+        {continuation === undefined ? null : (
           <input
             type="hidden"
-            name="applicationHome"
-            value={serializeApplicationHomeContinuation(applicationHome)}
+            name="continuation"
+            value={serializeSignInContinuation(continuation)}
           />
         )}
         <Field>
@@ -131,11 +123,11 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
             </span>
           </div>
           <form className="flex flex-col gap-3" action={signInWithDevelopmentAccount}>
-            {applicationHome === undefined ? null : (
+            {continuation === undefined ? null : (
               <input
                 type="hidden"
-                name="applicationHome"
-                value={serializeApplicationHomeContinuation(applicationHome)}
+                name="continuation"
+                value={serializeSignInContinuation(continuation)}
               />
             )}
             <SubmitButton variant="outline" pendingLabel="Signing in…">
