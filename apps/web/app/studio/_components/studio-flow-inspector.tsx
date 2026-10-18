@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Label } from "@vortex/ui/components/label";
 
@@ -134,6 +135,7 @@ function StepTypePicker({
         />
         <Button
           type="button"
+          variant="secondary"
           size="sm"
           disabled={
             disabled ||
@@ -447,8 +449,11 @@ export function StudioFlowInspector({
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="text-base font-semibold">{step.title}</h3>
-          <StudioHelp hint="Flow step" />
+          <h3 className="flex items-center gap-2 text-base font-semibold">
+            <Icon name="workflow" className="size-4 shrink-0" />
+            {step.title}
+          </h3>
+          <p className="text-xs text-muted-foreground">Flow step</p>
         </div>
         <StudioInspectorActions
           actions={[
