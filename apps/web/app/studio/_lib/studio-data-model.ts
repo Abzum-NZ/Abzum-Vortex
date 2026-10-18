@@ -21,7 +21,8 @@ export const studioEditProblem = (result: Readonly<{ kind: string }>): string | 
 /**
  * What the current published versions of the application's own modules hold, as qualified
  * references: record types (`module:record`) and fields (`module:record.field`). Their stored shape
- * is fixed; null when the draft could not be compiled, and then every saved one counts as published.
+ * is fixed. It is read from the stored releases, so a draft that does not compile still has it; an
+ * application never published has none.
  */
 export type StudioPublishedData = Readonly<{ recordTypes: readonly string[]; fields: readonly string[] }>;
 

@@ -67,17 +67,14 @@ export type ApplicationDraftCompilation = Readonly<{
   /** The root's current published release revision; preview only labels it and never reads it. */
   currentReleaseRevision: Revision | null;
   /**
-   * What the current published releases of the draft's own Modules hold, as qualified references:
-   * every record type (`module:record`) and field (`module:record.field`). Their stored shape is
-   * fixed, so Studio offers only the changes an upgrade accepts.
-   */
-  published: Readonly<{ recordTypes: readonly string[]; fields: readonly string[] }>;
-  /**
    * The organisation's people directory, which a Person link points at: the Application that owns
    * it and the label people are shown by. Null when the organisation has no released directory.
    */
   peopleDirectory: PeopleDirectoryOwner | null;
 }>;
+
+/** The record types (`module:record`) and fields (`module:record.field`) the draft's own Modules have published. */
+export type ApplicationDraftPublication = Readonly<{ recordTypes: readonly string[]; fields: readonly string[] }>;
 
 /** The owner and person title of a release of the people directory Module. */
 const peopleDirectoryOwnerOf = (release: ResolvableModuleRelease): PeopleDirectoryOwner | null => {
@@ -385,20 +382,6 @@ export const createDefinitionPublicationService = (
         candidate,
       );
       const compilation = compiled.output;
-      // The stored current release of each own Module (not the draft's, which the overlay holds
-      // at a newer revision), read once for the whole compile.
-      const published = { recordTypes: [] as string[], fields: [] as string[] };
-      for (const root of ownedRoots) {
-        if (root.currentReleaseRevision === null) continue;
-        const release = await overlay.readModuleRelease(candidate.draft.organizationId, root.rootId, root.currentReleaseRevision);
-        if (release === undefined) return refuse("DEFINITION_COMPILATION_REFUSED");
-        for (const record of release.compilationOutput.canonical.content.recordTypes as readonly {
-          key: string; fields: readonly { key: string }[];
-        }[]) {
-          published.recordTypes.push(`${root.key}:${record.key}`);
-          for (const field of record.fields) published.fields.push(`${root.key}:${record.key}.${field.key}`);
-        }
-      }
       if (
         compilation.kind !== "application" ||
         compilation.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION
@@ -423,9 +406,50 @@ export const createDefinitionPublicationService = (
           compiled.resolution,
         ),
         currentReleaseRevision: candidate.draft.publishedRevision ?? null,
-        published,
         peopleDirectory: directory === undefined ? null : peopleDirectoryOwnerOf(directory),
       });
+    });
+  },
+
+  /**
+   * What the current published releases of the caller organisation's Application draft's own
+   * Modules hold, as qualified references: every record type (`module:record`) and field
+   * (`module:record.field`). Their stored shape is fixed, so Studio offers only the changes an
+   * upgrade accepts. It reads the stored releases only, never compiles the draft, so it answers
+   * for a draft that does not compile too: an Application never published has no published fields.
+   */
+  readApplicationDraftPublication: async (
+    context: SessionContext,
+    input: unknown,
+  ): Promise<ApplicationDraftPublication> => {
+    const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
+    if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
+    const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
+    await authorize(authority, context, { kind: "draft_change", rootId: parsedCommand.rootId });
+    return repository.read(context, async (reader) => {
+      const candidate = validateDraftCandidate(
+        context,
+        await reader.readDraftCandidate(parsedCommand.rootId),
+        parsedCommand,
+      );
+      if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
+        refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+      const overlay = createDraftModuleOverlay(reader, context, candidate.draft);
+      const ownedRoots = await overlay.readOwnedModuleRoots(String(candidate.draft.rootId));
+      // The stored current release of each own Module, not the draft's newer revision.
+      const published = { recordTypes: [] as string[], fields: [] as string[] };
+      for (const root of ownedRoots) {
+        if (root.currentReleaseRevision === null) continue;
+        const release = await overlay.readModuleRelease(candidate.draft.organizationId, root.rootId, root.currentReleaseRevision);
+        if (release === undefined) return refuse("DEFINITION_COMPILATION_REFUSED");
+        for (const record of release.compilationOutput.canonical.content.recordTypes as readonly {
+          key: string; fields: readonly { key: string }[];
+        }[]) {
+          published.recordTypes.push(`${root.key}:${record.key}`);
+          for (const field of record.fields) published.fields.push(`${root.key}:${record.key}.${field.key}`);
+        }
+      }
+      return published;
     });
   },
 
