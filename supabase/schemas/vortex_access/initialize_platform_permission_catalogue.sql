@@ -47,6 +47,10 @@ begin
       message = 'Platform permission registration scope is unavailable';
   end if;
 
+  perform pg_catalog.set_config(
+    'vortex_access.exclusive_organization_id', p_organization_id::text, true
+  );
+
   select registration.* into current_registration
   from vortex_access.permission_registrations as registration
   where registration.organization_id = p_organization_id
