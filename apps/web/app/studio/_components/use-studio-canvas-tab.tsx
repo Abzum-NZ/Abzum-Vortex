@@ -384,7 +384,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
       </div>}
   </section>;
 
-  const toolbar = (inspectorOpen: boolean, toggleInspector: () => void, centreTitle: string, showsCanvas: boolean,
+  const toolbar = (inspectorOpen: boolean, toggleInspector: (() => void) | undefined, centreTitle: string, showsCanvas: boolean,
     focused: boolean, focusCanvas: () => void) =>
     <StudioCanvasToolbar title={centreTitle} breakpoint={breakpoint} onBreakpoint={setBreakpoint}
       zoom={canvasZoom} onZoom={setCanvasZoom} showsCanvas={showsCanvas && canvasPage !== undefined}
