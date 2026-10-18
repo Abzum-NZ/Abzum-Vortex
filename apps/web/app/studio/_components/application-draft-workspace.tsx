@@ -188,7 +188,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
       inspector={tab === "access" ? null : tab === "data" ? data.inspector : canvas.inspector}
       canvas={({ inspectorOpen, toggleInspector, focused, focusCanvas }) => <>
         {canvas.toolbar(inspectorOpen, toggleInspector, centreTitle, canvasShown, focused, focusCanvas)}
-        <div className="min-h-0 flex-1 overflow-auto p-4">
+        <div className={canvasShown ? "min-h-0 flex-1 overflow-auto" : "min-h-0 flex-1 overflow-auto p-4"}>
           {canvasShown && canvas.centre}
           {tab === "flows" && flows.centre}
           {/* The Data tab's centre keeps its paging and reads while another tab is open. */}

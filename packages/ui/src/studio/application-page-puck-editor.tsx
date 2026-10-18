@@ -59,6 +59,7 @@ import {
   type StudioCanvasFrame,
 } from "./studio-canvas-bridge";
 import { studioPuckStyle } from "./studio-puck-style";
+import { StudioCanvasActions, studioCanvasOverrides } from "./studio-canvas-actions";
 import { StudioBlockPalette, type StudioCanvasAddRequest } from "./studio-block-palette";
 import type {
   StudioCompositionAddTargetsModel,
@@ -368,6 +369,7 @@ function ApplicationPageSlotPuckEditor({
   viewer,
 }: ApplicationPagePuckEditorProps & { at: PageSlotAddress }) {
   const well = useRef<HTMLDivElement>(null);
+  const [actionsHost, setActionsHost] = useState<HTMLDivElement | null>(null);
   const [availableWidth, setAvailableWidth] = useState(0);
   const width = deviceWidths[breakpoint];
   const scale = zoom === "fit" ? Math.min(1, availableWidth / width) : zoom / 100;
@@ -642,15 +644,12 @@ function ApplicationPageSlotPuckEditor({
           <AlertDescription>{message}</AlertDescription>
         </Alert>
       )}
-      <div
-        ref={well}
-        data-vortex-studio-canvas-well=""
-        className="min-h-96 overflow-x-auto bg-muted/40 px-8"
-      >
+      <div ref={setActionsHost} className="sticky top-0 z-10 min-h-9 bg-background px-4" />
+      <div ref={well} data-vortex-studio-canvas-well="" className="min-h-96 bg-muted/40 px-4 py-4">
         <div
           {...createAppearanceRootProps(appearance)}
           data-vortex-studio-page-frame=""
-          className="mx-auto my-8 overflow-hidden rounded-xl bg-background shadow-lg ring-1 ring-border"
+          className="mx-auto overflow-clip rounded-xl bg-background shadow-lg ring-1 ring-border"
           style={
             {
               ...createAppearanceRootProps(appearance).style,
@@ -670,6 +669,8 @@ function ApplicationPageSlotPuckEditor({
                   onChange={change}
                   onAction={dropped}
                   iframe={{ enabled: false }}
+                  height="auto"
+                  overrides={studioCanvasOverrides}
                   metadata={{ breakpoint }}
                   permissions={{
                     drag: editable,
@@ -679,6 +680,7 @@ function ApplicationPageSlotPuckEditor({
                     insert: false,
                   }}
                 >
+                  <StudioCanvasActions host={actionsHost} />
                   {palette?.targets.kind !== "available"
                     ? paletteNote(
                         palette?.targets.kind === "unsupported"
