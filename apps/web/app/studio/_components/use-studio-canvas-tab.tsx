@@ -391,7 +391,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
         roles: source.body.roles.filter((role) => view.frames?.roles[role.key] !== undefined) }}
       inspectorOpen={inspectorOpen} onToggleInspector={toggleInspector} />;
 
-  const dialog = <StudioBlockSetupDialog request={blockSetup} choices={draftChoices} onClose={() => setBlockSetup(null)} />;
+  const dialog = <StudioBlockSetupDialog request={blockSetup} source={source} choices={draftChoices} onClose={() => setBlockSetup(null)} />;
 
   return {
     panels, inspector: inspectorPanel, centre, toolbar, dialog, title, breadcrumbItem, compositionContext,
