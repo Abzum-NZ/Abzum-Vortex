@@ -185,7 +185,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
         {access.panel}
         {releases.panel}
       </>}
-      inspector={tab === "data" ? data.inspector : canvas.inspector}
+      inspector={tab === "access" ? null : tab === "data" ? data.inspector : canvas.inspector}
       canvas={({ inspectorOpen, toggleInspector, focused, focusCanvas }) => <>
         {canvas.toolbar(inspectorOpen, toggleInspector, centreTitle, canvasShown, focused, focusCanvas)}
         <div className="min-h-0 flex-1 overflow-auto p-4">

@@ -223,6 +223,7 @@ export function fieldSettings(
         return {
           target: resolution.recordType(String(settings.target)),
           reverseKey: settings.reverse_key,
+          reverseName: settings.reverse_name,
           onParentDelete: settings.on_parent_delete,
           ...(settings.application_root_required === undefined
             ? {}

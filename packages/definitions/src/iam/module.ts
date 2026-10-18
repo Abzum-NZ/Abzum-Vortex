@@ -263,6 +263,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
           settings: {
             target: "vortex.system_directory:person",
             reverse_key: "beneficiary_references",
+            reverse_name: "Beneficiary references",
             on_parent_delete: "empty_optional",
             application_root_required: false,
           },
@@ -295,6 +296,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
           settings: {
             target: "vortex.system_directory:group",
             reverse_key: "access_requests",
+            reverse_name: "Access requests",
             on_parent_delete: "empty_optional",
             application_root_required: false,
           },
@@ -402,6 +404,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
           settings: {
             target: "vortex.iam.core:access_request",
             reverse_key: "items",
+            reverse_name: "Items",
             on_parent_delete: "soft_delete_dependent",
           },
         },

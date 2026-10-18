@@ -110,6 +110,7 @@
           "settings": {
             "target": "vortex.crm.tags:tag",
             "reverse_key": "assignments",
+            "reverse_name": "Assignments",
             "on_parent_delete": "soft_delete_dependent"
           }
         },
@@ -161,6 +162,7 @@
           "settings": {
             "target": "vortex.system_directory:person",
             "reverse_key": "assigned_by_references",
+            "reverse_name": "Assigned by references",
             "on_parent_delete": "empty_optional",
             "application_root_required": false
           }
