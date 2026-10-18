@@ -33,7 +33,7 @@ A platform-catalogue **connection type** defines:
 
 - Human-readable purpose and provider.
 - Authentication method and secret fields.
-- A reusable catalogue of named input and output shapes. Each shape contains uniquely named, typed fields and may be empty for a no-content operation.
+- A reusable catalogue of named input and output shapes. Each shape contains uniquely named, typed fields and may be empty for a no-content operation. Field types are `text`, `whole_number`, `decimal_number`, `yes_no`, `date`, `date_time`, `record_reference` and `json`; decimals use exact decimal text.
 - Named outgoing operations with address templates, method, resolved input/output shape keys, timeout, retry policy, and allowed response size.
 - Named incoming message types with signature verification, replay window, resolved input shape, and workflow trigger mapping.
 - Allowed destination hosts and redirect policy.

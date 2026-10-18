@@ -12,6 +12,11 @@ import {
   type ModuleField,
 } from "../../schema";
 import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "../platform-compatibility";
+import {
+  applicationRoleReviewBytes,
+  maximumApplicationRoleReviewBytes,
+  maximumAcceptedRoleHistoryBytes,
+} from "../application-role-review-volume";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "../canonical-json-definition";
 import {
   DefinitionCompilationError,
@@ -291,10 +296,7 @@ function compileApplication(
         output.artifact.rootId === expected.rootId &&
         output.artifact.exactVersion === expected.exactVersion,
     );
-    if (
-      release?.kind !== "module" ||
-      release.canonical.content.ownerApplication !== owner
-    )
+    if (release?.kind !== "module" || release.canonical.content.ownerApplication !== owner)
       fail(
         "vortex.definition.application_module_bindings",
         "scope_conflict",
@@ -331,7 +333,12 @@ function compileApplication(
       // Application never changes which release of a shared Module another Application uses.
       moduleBindings: applicationModuleKeysOf(body).map((moduleKey) => {
         const target = resolution.definition(moduleKey, "module");
-        const resolvedVersion = exactVersion(resolution, moduleKey, "module", CURRENT_MODULE_RELEASE);
+        const resolvedVersion = exactVersion(
+          resolution,
+          moduleKey,
+          "module",
+          CURRENT_MODULE_RELEASE,
+        );
         return {
           moduleRootId: target.rootId,
           version: { selection: "exact", version: resolvedVersion },
@@ -709,6 +716,17 @@ export function compileParsedApplicationRequest(
       ),
     );
     const ownDefinition = resolution.definition(source.key, "application");
+    const roleReview = applicationRoleReviewBytes(
+      canonical.content,
+      dependencyOutputs.flatMap((output) =>
+        output.kind === "module" ? [output.canonical.content] : [],
+      ),
+    );
+    if (
+      roleReview.releaseBytes > maximumApplicationRoleReviewBytes ||
+      roleReview.acceptedHistoryBytes > maximumAcceptedRoleHistoryBytes
+    )
+      fail("vortex.definition.application_role_review_volume", "invalid_value");
     const artifact = {
       kind: "application" as const,
       definitionKey: source.key,

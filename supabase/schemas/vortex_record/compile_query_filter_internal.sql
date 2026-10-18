@@ -271,8 +271,8 @@ begin
         operand_type := null;
       else
         operand_type := case pg_catalog.jsonb_typeof(operand_value)
-          when 'number' then 'number'
-          when 'boolean' then 'boolean'
+          when 'number' then 'whole_number'
+          when 'boolean' then 'yes_no'
           when 'string' then 'text'
           when 'array' then 'array'
           else 'opaque_json'
@@ -360,21 +360,21 @@ begin
   elsif left_is_field and right_is_field then
     if left_type = right_type then
       shared_type := left_type;
-    elsif left_type = 'number' and right_type = 'decimal_number' then
+    elsif left_type = 'whole_number' and right_type = 'decimal_number' then
       shared_type := 'decimal_number';
-    elsif left_type = 'decimal_number' and right_type = 'number' then
+    elsif left_type = 'decimal_number' and right_type = 'whole_number' then
       shared_type := 'decimal_number';
     else
       return pg_catalog.jsonb_build_object('predicate', null, 'parameters', parameter_values);
     end if;
   elsif left_is_field then
-    if left_type = 'number' and right_type = 'decimal_number' then
+    if left_type = 'whole_number' and right_type = 'decimal_number' then
       shared_type := 'decimal_number';
     else
       shared_type := left_type;
     end if;
   elsif right_is_field then
-    if right_type = 'number' and left_type = 'decimal_number' then
+    if right_type = 'whole_number' and left_type = 'decimal_number' then
       shared_type := 'decimal_number';
     else
       shared_type := right_type;
@@ -388,7 +388,7 @@ begin
   end if;
 
   if shared_type in (
-    'number', 'decimal_number', 'money', 'date', 'date_time'
+    'whole_number', 'decimal_number', 'money', 'date', 'date_time'
   ) then
     for i in 1..operand_count loop
       if not operand_is_fields[i]
@@ -398,7 +398,7 @@ begin
           for member in
             select item.value from pg_catalog.jsonb_array_elements(operand_values[i]) as item(value)
           loop
-            if shared_type = 'number'
+            if shared_type = 'whole_number'
               and (pg_catalog.jsonb_typeof(member) <> 'number'
                 or not pg_catalog.pg_input_is_valid(member #>> '{}', 'double precision')) then
               value_valid := false;
@@ -423,7 +423,7 @@ begin
               value_valid := false;
             end if;
           end loop;
-        elsif shared_type = 'number'
+        elsif shared_type = 'whole_number'
           and (pg_catalog.jsonb_typeof(operand_values[i]) <> 'number'
             or not pg_catalog.pg_input_is_valid(
               operand_values[i] #>> '{}', 'double precision'
@@ -503,7 +503,7 @@ begin
 
   if operator_value in ('equals', 'not_equals') then
     if shared_type not in (
-      'text', 'number', 'decimal_number', 'money', 'boolean', 'date', 'date_time',
+      'text', 'whole_number', 'decimal_number', 'money', 'yes_no', 'date', 'date_time',
       'text_collection', 'opaque_json', 'record_reference', 'organization_account_reference', 'uuid'
     ) then
       return pg_catalog.jsonb_build_object('predicate', null, 'parameters', parameter_values);
@@ -517,7 +517,7 @@ begin
       );
     else
       equality_sql := case shared_type
-        when 'number' then pg_catalog.format(
+        when 'whole_number' then pg_catalog.format(
           '(%s::double precision is not distinct from %s::double precision)', left_sql, right_sql
         )
         when 'decimal_number' then pg_catalog.format(
@@ -530,7 +530,7 @@ begin
           '(%s::timestamp with time zone is not distinct from %s::timestamp with time zone)',
           left_sql, right_sql
         )
-        when 'boolean' then pg_catalog.format(
+        when 'yes_no' then pg_catalog.format(
           '(%s::boolean is not distinct from %s::boolean)', left_sql, right_sql
         )
         when 'uuid' then pg_catalog.format(
@@ -567,7 +567,7 @@ begin
       );
     else
       element_sql := case shared_type
-        when 'number' then pg_catalog.format(
+        when 'whole_number' then pg_catalog.format(
           '(%s::double precision is not distinct from (item.value #>> ''{}'')::double precision)', left_sql
         )
         when 'decimal_number' then pg_catalog.format(
@@ -580,7 +580,7 @@ begin
           '(%s::timestamp with time zone is not distinct from (item.value #>> ''{}'')::timestamp with time zone)',
           left_sql
         )
-        when 'boolean' then pg_catalog.format(
+        when 'yes_no' then pg_catalog.format(
           '(%s::boolean is not distinct from (item.value #>> ''{}'')::boolean)', left_sql
         )
         when 'uuid' then pg_catalog.format(
@@ -604,7 +604,7 @@ begin
     predicate_sql := case when operator_value = 'in' then in_sql
       else '(not (' || in_sql || '))' end;
   else
-    if shared_type not in ('text', 'number', 'decimal_number', 'date', 'date_time') then
+    if shared_type not in ('text', 'whole_number', 'decimal_number', 'date', 'date_time') then
       return pg_catalog.jsonb_build_object('predicate', null, 'parameters', parameter_values);
     end if;
     operator_sql := case operator_value
@@ -617,7 +617,7 @@ begin
       when 'text' then pg_catalog.format(
         '(%s collate "C" %s %s collate "C")', left_sql, operator_sql, right_sql
       )
-      when 'number' then pg_catalog.format(
+      when 'whole_number' then pg_catalog.format(
         '(%s::double precision %s %s::double precision)', left_sql, operator_sql, right_sql
       )
       when 'decimal_number' then pg_catalog.format(

@@ -122,13 +122,6 @@ export const flowRuntimeValueOf = (type: string, value: unknown): FlowRuntimeVal
       return mapped("whole_number", (candidate) =>
         typeof candidate === "number" && Number.isSafeInteger(candidate) ? candidate : undefined,
       );
-    // An action `number` input is a finite number that the flow declares as a decimal.
-    case "number":
-      return mapped("decimal_number", (candidate) =>
-        typeof candidate === "number" && Number.isFinite(candidate)
-          ? normalizeExactDecimal(String(candidate))
-          : undefined,
-      );
     case "decimal_number":
       return mapped("decimal_number", (candidate) =>
         typeof candidate === "string" && parseExactDecimal(candidate) !== undefined
@@ -144,7 +137,6 @@ export const flowRuntimeValueOf = (type: string, value: unknown): FlowRuntimeVal
           : undefined,
       );
     case "yes_no":
-    case "boolean":
       return mapped("yes_no", (candidate) =>
         typeof candidate === "boolean" ? candidate : undefined,
       );
@@ -183,7 +175,7 @@ export const flowRuntimeValueOf = (type: string, value: unknown): FlowRuntimeVal
       if (typeof value === "number")
         return Number.isSafeInteger(value)
           ? typedValue("whole_number", value)
-          : flowRuntimeValueOf("number", value);
+          : typedValue("json", null);
       if (typeof value === "string")
         return parseExactDecimal(value) === undefined
           ? typedValue("text", value)

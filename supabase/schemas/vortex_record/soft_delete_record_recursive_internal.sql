@@ -19,6 +19,9 @@ declare
   record_fact jsonb;
   identity_value text;
   incoming record;
+  relationship_value jsonb;
+  source_field_id uuid;
+  on_parent_delete text;
   source_catalogue vortex_record.storage_catalogue%rowtype;
   source_meta jsonb;
   source_loaded jsonb;
@@ -74,19 +77,25 @@ begin
   -- Incoming edges are canonicalised before any child lock.  Every affected
   -- child is then reloaded and locked by #401's fixed loader.
   for incoming in
-    select edge.*, mapping.on_parent_delete, mapping.relationship_id,
-      mapping.source_field_id
+    select edge.*
     from vortex_record.relationship_edges as edge
-    join vortex_record.relationship_storage_mappings as mapping
-      on mapping.relationship_id = edge.relationship_id
     where edge.to_organisation_id = (context_value ->> 'organizationId')::uuid
       and edge.to_storage_contract_id = (meta ->> 'storageContractId')::uuid
       and edge.to_record_id = p_record_id
     order by edge.from_storage_contract_id, edge.from_record_id, edge.relationship_id
   loop
-    select catalogue.* into source_catalogue
+    select catalogue.* into strict source_catalogue
     from vortex_record.storage_catalogue as catalogue
     where catalogue.storage_contract_id = incoming.from_storage_contract_id;
+    -- Preview-only relationships have no installed mapping. The edge's exact source
+    -- storage declares the field and deletion policy, just as it declares edge integrity.
+    select relationship.value into strict relationship_value
+    from pg_catalog.jsonb_array_elements(
+      source_catalogue.record_type_definition -> 'relationships'
+    ) as relationship(value)
+    where (relationship.value ->> 'relationshipId')::uuid = incoming.relationship_id;
+    source_field_id := (relationship_value ->> 'fromFieldId')::uuid;
+    on_parent_delete := relationship_value ->> 'onParentDelete';
     source_identity := pg_catalog.lower(incoming.from_storage_contract_id::text) || ':'
       || pg_catalog.lower(incoming.from_record_id::text);
     if source_identity = any (p_visited) then
@@ -97,8 +106,8 @@ begin
     -- under this Application's request context.  It is therefore a safe
     -- blocking relationship, not an authority bypass.
     source_action_kind := case
-      when incoming.on_parent_delete = 'empty_optional' then 'update'
-      when incoming.on_parent_delete = 'soft_delete_dependent' then 'delete'
+      when on_parent_delete = 'empty_optional' then 'update'
+      when on_parent_delete = 'soft_delete_dependent' then 'delete'
       else 'read'
     end;
     begin
@@ -108,11 +117,15 @@ begin
     exception when others then
       raise exception using errcode = '23514', message = 'Parent deletion is blocked';
     end;
+    if (source_meta ->> 'storageContractId')::uuid is distinct from
+      incoming.from_storage_contract_id then
+      raise exception using errcode = '23514', message = 'Parent deletion is blocked';
+    end if;
 
     select field_mapping.physical_column_token into strict source_link_column
     from vortex_record.field_storage_mappings as field_mapping
     where field_mapping.storage_contract_id = incoming.from_storage_contract_id
-      and field_mapping.field_id = incoming.source_field_id
+      and field_mapping.field_id = source_field_id
       and field_mapping.state = 'active'
       and field_mapping.introduced_at_release_revision <=
         (source_meta ->> 'moduleReleaseRevision')::bigint;
@@ -149,7 +162,7 @@ begin
     if record_fact ->> 'lifecycleState' <> 'active' then
       continue;
     end if;
-    if incoming.on_parent_delete = 'refuse' then
+    if on_parent_delete = 'refuse' then
       raise exception using errcode = '23514', message = 'Parent deletion is blocked';
     end if;
     if pg_catalog.jsonb_typeof(source_meta -> 'declaration') <> 'object' then
@@ -165,7 +178,7 @@ begin
       raise exception using errcode = '42501', message = 'Affected record is unavailable';
     end if;
 
-    if incoming.on_parent_delete = 'empty_optional' then
+    if on_parent_delete = 'empty_optional' then
       perform vortex_record.write_relationship_value_internal(
         source_catalogue.record_type_id, incoming.from_record_id,
         incoming.relationship_id, 'null'::jsonb, true
@@ -175,7 +188,7 @@ begin
         source_catalogue.record_type_id, incoming.from_record_id,
         source_concurrency, incoming.relationship_id
       );
-    elsif incoming.on_parent_delete = 'soft_delete_dependent' then
+    elsif on_parent_delete = 'soft_delete_dependent' then
       source_record_type := source_meta -> 'recordType';
       if source_record_type ->> 'ownershipMode' <> 'inherited'
         or not source_record_type ? 'ownershipRelationshipId'

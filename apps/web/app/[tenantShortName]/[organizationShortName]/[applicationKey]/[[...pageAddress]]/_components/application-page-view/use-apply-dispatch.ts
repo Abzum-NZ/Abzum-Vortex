@@ -6,6 +6,7 @@ import type {
   FormFlowFeedback,
 } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
+import { applicationPageAddressPath } from "../../../../../../_lib/address-paths";
 import type { ComponentRequestGeneration } from "@vortex/platform/schema";
 import type { Notice, TableContinuationTarget } from "./types";
 import { unavailableNotice, finishedNotice, refusalNotices, outcomeNotices } from "./notices";
@@ -58,8 +59,7 @@ export function useApplyDispatch({
       afterAccepted?: () => Promise<Notice | undefined>,
       sourceBindingId?: string,
     ) => {
-      const isCurrentNavigation = (): boolean =>
-        placementRequestsRef.current.key === navigationKey;
+      const isCurrentNavigation = (): boolean => placementRequestsRef.current.key === navigationKey;
       setBusy(true);
       setNotice(undefined);
       if (formPlacementId !== undefined)
@@ -74,7 +74,11 @@ export function useApplyDispatch({
         refusalFeedback?: Extract<FormFlowFeedback, { kind: "refusal" }>,
       ): void => {
         // A refusal must remain visible after a flow's form dialog has closed.
-        setNotice(formPlacementId === undefined || resultNotice.tone === "problem" ? resultNotice : undefined);
+        setNotice(
+          formPlacementId === undefined || resultNotice.tone === "problem"
+            ? resultNotice
+            : undefined,
+        );
         if (formPlacementId !== undefined) {
           setFormFeedback((current) => ({
             ...current,
@@ -119,6 +123,16 @@ export function useApplyDispatch({
             server.descriptor.outcome === "partial" || server.descriptor.outcome === "uncertain"
               ? server.descriptor.outcome
               : undefined;
+          // Use the same authored reason for the form feedback and the page notice.
+          const correctionMessages = (diagnostic?.corrections ?? []).flatMap((correction) =>
+            correction.message === undefined ? [] : [correction.message],
+          );
+          const ruleMessages =
+            diagnostic?.ruleRefusal !== undefined
+              ? [diagnostic.ruleRefusal.message]
+              : correctionMessages.length > 0
+                ? [...new Set(correctionMessages)]
+                : undefined;
           const refusalFeedback: Extract<FormFlowFeedback, { kind: "refusal" }> | undefined =
             diagnostic === undefined
               ? undefined
@@ -129,23 +143,14 @@ export function useApplyDispatch({
                   ...(diagnostic.corrections === undefined
                     ? {}
                     : { corrections: diagnostic.corrections }),
-                  ...(diagnostic.ruleRefusal === undefined
-                    ? {}
-                    : { ruleMessage: diagnostic.ruleRefusal.message }),
+                  ...(ruleMessages === undefined ? {} : { ruleMessages }),
                   ...(recovery === undefined ? {} : { recovery }),
                 };
           if (diagnostic !== undefined) {
-            // A rule's authored message is the one reason shown; a refusal that names a field
-            // carries it on the located correction instead of the rule refusal.
-            const correctionMessages = (diagnostic.corrections ?? []).flatMap((correction) =>
-              correction.message === undefined ? [] : [correction.message],
-            );
             const reason: Notice =
-              diagnostic.ruleRefusal !== undefined
-                ? { tone: "problem", text: diagnostic.ruleRefusal.message }
-                : correctionMessages.length > 0
-                  ? { tone: "problem", text: [...new Set(correctionMessages)].join(" ") }
-                  : refusalNotices[diagnostic.code];
+              ruleMessages === undefined
+                ? refusalNotices[diagnostic.code]
+                : { tone: "problem", text: ruleMessages.join(" ") };
             const presentation = diagnostic.presentation;
             resultNotice = {
               ...reason,
@@ -154,7 +159,12 @@ export function useApplyDispatch({
                 : {
                     link: {
                       label: presentation.link_label,
-                      href: `#record-${presentation.record_id}`,
+                      href: applicationPageAddressPath(
+                        model.invocation.tenantShortName,
+                        model.invocation.organizationShortName,
+                        presentation.destination.application_key,
+                        presentation.destination.page_key,
+                      ),
                     },
                   }),
               text:
@@ -165,9 +175,7 @@ export function useApplyDispatch({
           }
           if (
             afterAccepted !== undefined &&
-            ["completed", "committed", "background_pending"].includes(
-              server.descriptor.outcome,
-            )
+            ["completed", "committed", "background_pending"].includes(server.descriptor.outcome)
           ) {
             try {
               resultNotice = (await afterAccepted()) ?? resultNotice;
@@ -186,14 +194,15 @@ export function useApplyDispatch({
               server.descriptor.commit === "partial")
           )
             setCompletedGuidedNavigationKey(navigationKey);
-          // A refusal because the record changed under the person leaves their view stale, so the
-          // bound placements are re-read to show the record as it now is.
+          // A committed run already re-read the bound placements before its closing messages (the
+          // flow runtime's committed hook). A refusal because the record changed under the person
+          // leaves their view stale, so the bound placements are re-read to show it as it now is.
           const changedUnderPerson =
             server.descriptor.outcome === "conflict" || diagnostic?.code === "stale_revision";
           if (
-            (server.descriptor.commit === "confirmed" ||
-              server.descriptor.commit === "partial" ||
-              changedUnderPerson) &&
+            changedUnderPerson &&
+            server.descriptor.commit !== "confirmed" &&
+            server.descriptor.commit !== "partial" &&
             sourceBindingId !== undefined
           )
             void refreshPlacements(refreshTargetsForBinding(sourceBindingId), undefined, {

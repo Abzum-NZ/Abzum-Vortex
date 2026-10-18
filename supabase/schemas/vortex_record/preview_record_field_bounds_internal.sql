@@ -48,8 +48,7 @@ begin
       )
       from pg_catalog.jsonb_array_elements(p_record_type -> 'fields') as field(value)
       where field.value ->> 'type' not in (
-        'calculation', 'total', 'reference_number', 'link',
-        'link_to_one_of_several', 'link_to_person', 'attachment'
+        'calculation', 'total', 'reference_number', 'link_to_person', 'attachment'
       )
     ), '[]'::jsonb)
   );
