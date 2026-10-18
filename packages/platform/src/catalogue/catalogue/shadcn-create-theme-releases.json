@@ -144,7 +144,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -426,7 +426,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.709 0.01 56.259)",
+        "light": "oklch(0.670045 0.01 56.259)",
         "dark": "oklch(0.553 0.013 58.071)"
       },
       "chart_1": {
@@ -708,7 +708,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.705 0.015 286.067)",
+        "light": "oklch(0.670181 0.015 286.067)",
         "dark": "oklch(0.552 0.016 285.938)"
       },
       "chart_1": {
@@ -990,7 +990,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.707 0.022 261.325)",
+        "light": "oklch(0.669373 0.022 261.325)",
         "dark": "oklch(0.551 0.027 264.364)"
       },
       "chart_1": {
@@ -1272,7 +1272,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.711 0.019 323.02)",
+        "light": "oklch(0.671534 0.019 323.02)",
         "dark": "oklch(0.542 0.034 322.5)"
       },
       "chart_1": {
@@ -1554,7 +1554,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.737 0.021 106.9)",
+        "light": "oklch(0.668468 0.021 106.9)",
         "dark": "oklch(0.58 0.031 107.3)"
       },
       "chart_1": {
@@ -1836,7 +1836,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.723 0.014 214.4)",
+        "light": "oklch(0.668078 0.014 214.4)",
         "dark": "oklch(0.56 0.021 213.5)"
       },
       "chart_1": {
@@ -2118,7 +2118,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.714 0.014 41.2)",
+        "light": "oklch(0.670672 0.014 41.2)",
         "dark": "oklch(0.547 0.021 43.1)"
       },
       "chart_1": {
@@ -2400,7 +2400,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -2682,7 +2682,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -2964,7 +2964,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -3246,7 +3246,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -3528,7 +3528,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -3810,7 +3810,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -4092,7 +4092,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -4374,7 +4374,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -4656,7 +4656,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -4938,7 +4938,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -5220,7 +5220,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -5502,7 +5502,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -5784,7 +5784,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -6066,7 +6066,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -6348,7 +6348,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -6630,7 +6630,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -6912,7 +6912,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -7194,7 +7194,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -7476,7 +7476,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -7758,7 +7758,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -8040,7 +8040,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -8322,7 +8322,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -8604,7 +8604,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -8886,7 +8886,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -9168,7 +9168,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -9450,7 +9450,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -9732,7 +9732,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -10014,7 +10014,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -10296,7 +10296,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -10578,7 +10578,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -10860,7 +10860,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -11142,7 +11142,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -11424,7 +11424,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -11706,7 +11706,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -11988,7 +11988,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -12270,7 +12270,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -12552,7 +12552,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -12834,7 +12834,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -13116,7 +13116,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -13398,7 +13398,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -13680,7 +13680,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -13962,7 +13962,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -14244,7 +14244,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -14526,7 +14526,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -14808,7 +14808,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -15090,7 +15090,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -15372,7 +15372,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -15654,7 +15654,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -15936,7 +15936,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -16218,7 +16218,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -16500,7 +16500,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -16782,7 +16782,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -17064,7 +17064,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -17346,7 +17346,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {
@@ -17628,7 +17628,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {

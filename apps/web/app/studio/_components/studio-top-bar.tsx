@@ -1,86 +1,220 @@
 "use client";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { AppearanceToggle, Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import {
-  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator,
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
 } from "@vortex/ui/components/breadcrumb";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@vortex/ui/components/dropdown-menu";
+import { Separator } from "@vortex/ui/components/separator";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@vortex/ui/components/tooltip";
+import { Kbd } from "@vortex/ui/components/kbd";
 
-/** Where the workspace is: organisation, application and the layout or page open on the canvas. */
 export type StudioLocation = Readonly<{
   organizationName: string;
   organizationHref: string;
   applicationName: string;
   onApplication: () => void;
-  /** The layout or page the canvas shows, when one is open. */
+  applications: readonly Readonly<{ name: string; href: string }>[];
   item?: string | undefined;
 }>;
 
-/**
- * Studio's top bar: where you are, the one status chip (whether the draft is saved and the canvas
- * caught up), Undo and Redo, and the commands that act on the whole draft. Edits save themselves.
- */
-export function StudioTopBar({ location, chip, chipAlert, status, problem, canUndo, canRedo, undoDisabled, onUndo, onRedo,
-  backToAppHref, onPreview, previewDisabled, previewPending, onPublish, publishDisabled, statusLink }: Readonly<{
+function ToolbarButton({
+  tip,
+  shortcut,
+  disabled,
+  ...props
+}: ComponentProps<typeof Button> & {
+  tip: string;
+  shortcut?: string;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="inline-flex" tabIndex={disabled ? 0 : undefined} />}>
+        <Button disabled={disabled} {...props} />
+      </TooltipTrigger>
+      <TooltipContent>
+        {tip}
+        {shortcut !== undefined && <Kbd>{shortcut}</Kbd>}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** One compact workspace bar: location, save state and the commands that act on the draft. */
+export function StudioTopBar({
+  location,
+  saveState,
+  canUndo,
+  canRedo,
+  undoDisabled,
+  onUndo,
+  onRedo,
+  backToAppHref,
+  onPreview,
+  previewDisabled,
+  previewPending,
+  onPublish,
+  publishDisabled,
+}: Readonly<{
   location: StudioLocation;
-  /** "Saved", "Saving…" or "Not saved", with "Updating canvas…" while the canvas catches up. */
-  chip: string;
-  /** The chip reports a save that did not go through. */
-  chipAlert: boolean;
-  /** What just happened (a preview starting, a restore). */
-  status: string;
-  /** Why the latest change is not saved and what to do, when it is not. */
-  problem: ReactNode;
-  canUndo: boolean; canRedo: boolean; undoDisabled: boolean;
-  onUndo: () => void; onRedo: () => void;
+  saveState: ReactNode;
+  canUndo: boolean;
+  canRedo: boolean;
+  undoDisabled: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
   backToAppHref: string | undefined;
-  onPreview: () => void; previewDisabled: boolean; previewPending: boolean;
-  onPublish: () => void; publishDisabled: boolean;
-  /** A place the status points at, such as the App Store after a version is published. */
-  statusLink?: Readonly<{ label: string; href: string }> | undefined;
+  onPreview: () => void;
+  previewDisabled: boolean;
+  previewPending: boolean;
+  onPublish: () => void;
+  publishDisabled: boolean;
 }>) {
-  return <header className="shrink-0 border-b border-border bg-background">
-    <div className="flex flex-wrap items-center gap-2 px-3 py-2">
+  return (
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-3">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        nativeButton={false}
+        aria-label="All applications"
+        render={<Link href="/studio" />}
+      >
+        <Icon name="grid" />
+      </Button>
       <Breadcrumb className="min-w-0">
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink render={<Link href={location.organizationHref} />}>{location.organizationName}</BreadcrumbLink>
+        <BreadcrumbList className="flex-nowrap">
+          <BreadcrumbItem className="min-w-0">
+            <BreadcrumbLink className="truncate" render={<Link href={location.organizationHref} />}>
+              {location.organizationName}
+            </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            {location.item === undefined
-              ? <BreadcrumbPage className="font-medium">{location.applicationName}</BreadcrumbPage>
-              : <BreadcrumbLink render={<button type="button" onClick={location.onApplication} />}>{location.applicationName}</BreadcrumbLink>}
+          <BreadcrumbItem className="min-w-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className="flex min-w-0 items-center gap-1 rounded-md border-0 bg-transparent text-sm font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={`Switch application: ${location.applicationName}`}
+              >
+                <span className="truncate">{location.applicationName}</span>
+                <Icon name="chevron-down" className="size-4 shrink-0" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={location.onApplication}>
+                  Application settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {location.applications.map((app) => (
+                  <DropdownMenuItem key={app.href} render={<Link href={app.href} />}>
+                    {app.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </BreadcrumbItem>
-          {location.item === undefined ? null : <>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem><BreadcrumbPage className="font-medium">{location.item}</BreadcrumbPage></BreadcrumbItem>
-          </>}
+          {location.item !== undefined && (
+            <>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem className="min-w-0">
+                <BreadcrumbPage className="truncate font-medium">{location.item}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </>
+          )}
         </BreadcrumbList>
       </Breadcrumb>
-      <span role="status" aria-live="polite" className={chipAlert
-        ? "rounded-full bg-destructive/10 px-2 py-0.5 text-sm text-destructive"
-        : "rounded-full bg-muted px-2 py-0.5 text-sm text-muted-foreground"}>{chip}</span>
-      <div className="ml-auto flex flex-wrap items-center gap-1">
-        <Button type="button" variant="ghost" size="icon-sm" aria-label="Undo" title="Undo"
-          disabled={!canUndo || undoDisabled} onClick={onUndo}><Icon name="undo" /></Button>
-        <Button type="button" variant="ghost" size="icon-sm" aria-label="Redo" title="Redo"
-          disabled={!canRedo || undoDisabled} onClick={onRedo}><Icon name="redo" /></Button>
-        {backToAppHref === undefined ? null
-          : <Button variant="ghost" size="sm" nativeButton={false} render={<Link href={backToAppHref} />}>
-            <Icon name="chevron-left" />Back to app</Button>}
-        <Button type="button" variant="outline" size="sm" aria-busy={previewPending}
-          title="Run the saved draft in a new tab" disabled={previewDisabled || previewPending}
-          onClick={onPreview}><Icon name="eye" />Preview</Button>
-        <Button type="button" size="sm" disabled={publishDisabled} onClick={onPublish}>Publish…</Button>
+      {saveState}
+      <div className="ml-auto flex shrink-0 items-center gap-1">
+        <ToolbarButton
+          tip={
+            undoDisabled
+              ? "Resolve the blocked draft before undoing"
+              : canUndo
+                ? "Undo"
+                : "No changes to undo"
+          }
+          shortcut="Ctrl Z"
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Undo"
+          disabled={!canUndo || undoDisabled}
+          onClick={onUndo}
+        >
+          <Icon name="undo" />
+        </ToolbarButton>
+        <ToolbarButton
+          tip={
+            undoDisabled
+              ? "Resolve the blocked draft before redoing"
+              : canRedo
+                ? "Redo"
+                : "No changes to redo"
+          }
+          shortcut="Ctrl Shift Z"
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Redo"
+          disabled={!canRedo || undoDisabled}
+          onClick={onRedo}
+        >
+          <Icon name="redo" />
+        </ToolbarButton>
+        <Separator orientation="vertical" className="mx-2 h-6" />
+        {backToAppHref !== undefined && (
+          <Button
+            variant="ghost"
+            size="sm"
+            nativeButton={false}
+            render={<Link href={backToAppHref} />}
+          >
+            <Icon name="chevron-left" />
+            Back to app
+          </Button>
+        )}
+        <ToolbarButton
+          tip={
+            previewDisabled
+              ? "Resolve the blocked draft before previewing"
+              : "Run the saved draft in a new tab"
+          }
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-busy={previewPending}
+          disabled={previewDisabled || previewPending}
+          onClick={onPreview}
+        >
+          <Icon name="eye" />
+          {previewPending ? "Starting…" : "Preview"}
+        </ToolbarButton>
+        <ToolbarButton
+          tip={
+            publishDisabled
+              ? "Resolve the blocked draft before publishing"
+              : "Publish a version of this application"
+          }
+          type="button"
+          size="sm"
+          disabled={publishDisabled}
+          onClick={onPublish}
+        >
+          Publish
+        </ToolbarButton>
         <AppearanceToggle />
       </div>
-    </div>
-    {problem}
-    <p role="status" aria-live="polite" className="px-3 pb-2 text-sm text-muted-foreground empty:hidden">{status.trim()}</p>
-    {statusLink === undefined ? null : <div className="px-3 pb-2">
-      <Button variant="link" size="sm" className="h-auto p-0" nativeButton={false} render={<Link href={statusLink.href} />}>
-        {statusLink.label}</Button></div>}
-  </header>;
+    </header>
+  );
 }

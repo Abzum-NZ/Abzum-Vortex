@@ -176,7 +176,9 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
           failure(output, "vortex.definition.application_action_references", "unsupported_choice"),
         );
     }
+    // Subjectless component events carry no record fields, as the Application contract checks.
     for (const event of array(content.events)) {
+      if (event.recordTypeId === undefined) continue;
       const record = records.get(String(event.recordTypeId));
       const fields = new Map(
         record ? array(record.fields).map((field) => [String(field.fieldId), field]) : [],

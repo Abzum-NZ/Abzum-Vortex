@@ -6,6 +6,7 @@ import { Button } from "@vortex/ui/components/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@vortex/ui/components/dialog";
 import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
+import { Spinner } from "@vortex/ui/components/spinner";
 import { PublicationSummary } from "./publication-summary";
 
 export type StudioPublishDialogProps = Readonly<{
@@ -45,6 +46,7 @@ export function StudioPublishDialog(props: StudioPublishDialogProps) {
     onPrepare();
   }, [open, waiting, canPrepare, prepared, preparing, publishing, onPrepare]);
   const noteValid = props.note.trim().length >= 1 && props.note.trim().length <= 2000;
+  const preparingSummary = !waiting && !publishing && prepared === null && props.problem === "";
   return <Dialog open={open} onOpenChange={(next) => { if (!publishing) props.onOpenChange(next); }}>
     <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto" aria-label="Publish this application">
       <DialogHeader>
@@ -84,7 +86,10 @@ export function StudioPublishDialog(props: StudioPublishDialogProps) {
         {!waiting && prepared === null && !preparing && props.problem !== ""
           ? <Button type="button" variant="outline" disabled={!canPrepare} onClick={onPrepare}>Check again</Button> : null}
         <Button type="button" disabled={waiting || prepared === null || !noteValid || publishing}
-          onClick={props.onPublish}>{publishing ? "Publishing…" : "Publish"}</Button>
+          onClick={props.onPublish}>
+          {(saving || preparingSummary || publishing) && <Spinner aria-hidden="true" />}
+          {publishing ? "Publishing…" : saving ? "Saving…" : preparingSummary ? "Preparing…" : "Publish"}
+        </Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>;

@@ -179,6 +179,8 @@ export const resolveInstalledEventDefinitionContext = (
     events: ApplicationRead["content"]["events"] | ModuleRead["content"]["events"],
   ) => {
     for (const event of events) {
+      // Component-only events start their bound flow; they are not record occurrences.
+      if (event.recordTypeId === undefined) continue;
       const record = recordTypes.get(String(event.recordTypeId));
       if (
         record === undefined ||
