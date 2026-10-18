@@ -93,6 +93,8 @@ export type BlockPropertySchemaContract =
   | (BlockPropertySchemaBase & {
       kind: "group";
       properties: BlockPropertySchemaContract[];
+      /** Named list entries get their immutable value from the label when added. */
+      namedEntry?: { label: string; value: string } | undefined;
     })
   | (BlockPropertySchemaBase & {
       kind: "list";
@@ -828,6 +830,7 @@ export const blockPropertySchema: z.ZodType<BlockPropertySchemaContract> = z.laz
           ...propertySchemaBase,
           kind: sourceProvenanceUnchanged(z.literal("group")),
           properties: sourceProvenanceUnchanged(z.array(blockPropertySchema)),
+          namedEntry: sourceProvenanceUnchanged(z.object({ label: builderKeySchema, value: builderKeySchema }).strict().optional()),
         })
         .strict()
         .refine(
@@ -851,6 +854,12 @@ export const blockPropertySchema: z.ZodType<BlockPropertySchemaContract> = z.laz
         }),
     ])
     .superRefine((value, context) => {
+      if (value.kind === "group" && value.namedEntry !== undefined) {
+        const named = value.namedEntry;
+        if (named.label === named.value || ![named.label, named.value].every((key) =>
+          value.properties.some((property) => property.key === key && property.kind === "text" && property.required)))
+          context.addIssue({ code: "custom", path: ["namedEntry"], message: "A named entry needs separate required text properties for its label and value" });
+      }
       if (!defaultMatchesProperty(value))
         context.addIssue({
           code: "custom",

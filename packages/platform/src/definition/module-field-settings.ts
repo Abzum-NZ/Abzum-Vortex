@@ -62,11 +62,11 @@ const fieldChoices = (fields: ModuleFieldSettingsContext["fields"], types?: read
 const deleteRules = [["refuse", "Refuse to delete the linked record"], ["empty_optional", "Clear this link"],
   ["soft_delete_dependent", "Delete this record too"]] as const;
 const currencyModes = [["organization_default", "The organisation's currency"], ["fixed", "One fixed currency"]] as const;
-const optionItem = (): Declaration => group("option", "Option", [
-  text("value", "Stored value", true, 1, 120, "What is stored. It cannot change once records hold it."),
+const optionItem = (): Declaration => ({ ...base("option", "Option", true), kind: "group", properties: [
   text("label", "Label", true, 1, 60),
+  text("value", "Stored value", true, 1, 120, "Made from the label when added. Renaming the option keeps this value."),
   text("required_permission", "Permission needed to choose it", false, 1, 200, "Leave empty so everyone who can edit the field may choose it."),
-]);
+], namedEntry: { label: "label", value: "value" } });
 const tableColumnTypes = [["text", "Text"], ["whole_number", "Whole number"], ["decimal_number", "Decimal number"],
   ["money", "Money"], ["yes_no", "Yes or no"], ["date", "Date"], ["date_time", "Date and time"], ["choice", "Choice"]] as const;
 const timeZones = [["person", "The person's time zone"], ["organization", "The organisation's time zone"], ["utc", "UTC"]] as const;
@@ -253,8 +253,8 @@ export const starterModuleFieldSettings = (
     case "formatted_text": return { allowed_blocks: ["paragraph", "heading", "list", "link"] };
     case "decimal_number": return { digits_before_decimal: 12, decimal_places: 2 };
     case "money": return { currency_mode: "organization_default" };
-    case "choice": return { options: [{ value: "option_1", label: "Option 1" }] };
-    case "several_choices": return { options: [{ value: "option_1", label: "Option 1" }] };
+    case "choice": return { options: [] };
+    case "several_choices": return { options: [] };
     case "reference_number": return { digits: 6 };
     case "table": return { minimum_rows: 0, maximum_rows: 50, columns: [{ key: "item", required: true, type: "text", settings: { max_length: 255 } }] };
     case "link": return { ...(start.recordTypes[0] === undefined ? {} : { target: start.recordTypes[0] }),

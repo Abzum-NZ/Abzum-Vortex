@@ -92,7 +92,7 @@ function TreeEditor({
     };
     return (
       <fieldset>
-        <legend>{condition.kind === "all" ? "All conditions" : "Any condition"}</legend>
+        <legend>{condition.kind === "all" ? "All of these conditions" : "Any of these conditions"}</legend>
         <label>
           Group logic
           <NativeSelect
@@ -132,18 +132,18 @@ function TreeEditor({
             />
           );
         })}
-        <div>
+        <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" disabled={!canAddComparison || condition.conditions.length >= maximumGroupChildren || createInitialStudioCondition(context) === undefined} onClick={() => addChild("comparison")}>
             Add condition
           </Button>
           <Button type="button" variant="outline" size="sm" disabled={!canAddGroup || condition.conditions.length >= maximumGroupChildren || createInitialStudioCondition(context) === undefined} onClick={() => addChild("all")}>
-            Add all group
+            Add group: all must match
           </Button>
           <Button type="button" variant="outline" size="sm" disabled={!canAddGroup || condition.conditions.length >= maximumGroupChildren || createInitialStudioCondition(context) === undefined} onClick={() => addChild("any")}>
-            Add any group
+            Add group: any may match
           </Button>
           <Button type="button" variant="outline" size="sm" disabled={!canAddGroup || condition.conditions.length >= maximumGroupChildren || createInitialStudioCondition(context) === undefined} onClick={() => addChild("not")}>
-            Add not group
+            Add a group to exclude
           </Button>
           {onRemove && (
             <Button type="button" variant="outline" size="sm" onClick={onRemove}>
@@ -158,7 +158,7 @@ function TreeEditor({
   if (condition.kind === "not")
     return (
       <fieldset>
-        <legend>Not</legend>
+        <legend>Exclude matching records</legend>
         <TreeEditor
           condition={condition.condition}
           context={context}
@@ -169,7 +169,7 @@ function TreeEditor({
           onInvalid={onInvalid}
         />
         <Button type="button" variant="outline" size="sm" onClick={() => onReplace(condition.condition, path)}>
-          Remove not
+          Stop excluding matches
         </Button>
         {onRemove && (
           <Button type="button" variant="outline" size="sm" onClick={onRemove}>
@@ -279,13 +279,13 @@ function TreeEditor({
         : initial ?? "";
       return (
         <Button type="button" variant="outline" size="sm" onClick={() => commitLiteral(editableValue)}>
-          Set literal value (currently null)
+          Enter a value (currently empty)
         </Button>
       );
     }
     return (
       <>
-        <Button type="button" variant="outline" size="sm" onClick={() => commitLiteral(null)}>Use null literal</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => commitLiteral(null)}>Use an empty value</Button>
         <LiteralEditor
           operand={operand}
           semanticType={type}
@@ -319,9 +319,9 @@ function TreeEditor({
       : referenceOptions.some((option) => contextOperandToken(option) === operandToken(operand));
     return (
       <fieldset>
-        <legend>{side === "left" ? "Left operand" : "Right operand"}</legend>
+        <legend>{side === "left" ? "Field or value" : "Compare with"}</legend>
         <label>
-          Operand source
+          Choose a field, input or fixed value
         <NativeSelect
           aria-invalid={operandError !== undefined}
           value={operandToken(operand)}
@@ -329,15 +329,15 @@ function TreeEditor({
         >
           {!currentSelectable && (
             <option value={operandToken(operand)} disabled>
-              Current operand (not available)
+              Current selection (not available)
             </option>
           )}
           {referenceOptions.map((option, index) => (
             <option key={`${contextOperandToken(option)}:${index}`} value={contextOperandToken(option)}>
-              {option.label} ({displayRole(option.role)})
+              {option.label}{option.role === "current_field" || option.role === "record_field" ? "" : ` (${displayRole(option.role)})`}
             </option>
           ))}
-          {selectableLiteral && <option value="value">Literal value</option>}
+          {selectableLiteral && <option value="value">Fixed value</option>}
         </NativeSelect>
         </label>
         {operandError && <span role="alert">{operandError}</span>}
@@ -352,10 +352,10 @@ function TreeEditor({
 
   return (
     <fieldset>
-      <legend>Comparison</legend>
+      <legend>Condition</legend>
       {operandSelector("left")}
       <label>
-        Operator
+        Comparison
         <NativeSelect
           aria-invalid={operatorIssue !== undefined || !currentOperatorAvailable}
           value={condition.operator}
@@ -377,7 +377,7 @@ function TreeEditor({
         >
           {!currentOperatorAvailable && (
             <option value={condition.operator} disabled>
-              {operatorOptions.find((option) => option.operator === condition.operator)?.label ?? condition.operator} (not valid for these operands)
+              {operatorOptions.find((option) => option.operator === condition.operator)?.label ?? condition.operator} (not valid for these values)
             </option>
           )}
           {rightOptions.map((option) => (
@@ -406,7 +406,7 @@ function TreeEditor({
           if (replacement) onReplace(replacement, path);
         }}
       >
-        Reset comparison
+        Reset condition
       </Button>
     </fieldset>
   );
@@ -457,7 +457,7 @@ export function StudioConditionControls({
     <section aria-label={label}>
       {validationSummary}
       {contextIsInvalid ? (
-        <p role="alert">Condition controls need a valid host permission context.</p>
+        <p role="alert">These conditions cannot be edited with the available fields and inputs.</p>
       ) : !current ? (
         <div>
           <p>No condition has been configured.</p>
@@ -486,20 +486,20 @@ export function StudioConditionControls({
               onChange(nextValidation.condition, withDraftIssues(nextValidation, issues));
             }}
           />
-          <div>
+          <div className="flex flex-wrap gap-2">
             <Button
               type="button" variant="outline" size="sm"
               disabled={conditionDepth(current) >= conditionMaximumNestingDepth}
               onClick={() => emit({ kind: "all", conditions: [current] })}
             >
-              Wrap in all group
+              Group: all must match
             </Button>
             <Button
               type="button" variant="outline" size="sm"
               disabled={conditionDepth(current) >= conditionMaximumNestingDepth}
               onClick={() => emit({ kind: "any", conditions: [current] })}
             >
-              Wrap in any group
+              Group: any may match
             </Button>
             {current.kind !== "not" && (
               <Button
@@ -507,12 +507,12 @@ export function StudioConditionControls({
                 disabled={conditionDepth(current) >= conditionMaximumNestingDepth}
                 onClick={() => emit({ kind: "not", condition: current })}
               >
-                Negate condition
+                Exclude matching records
               </Button>
             )}
             {current.kind === "not" && (
               <Button type="button" variant="outline" size="sm" onClick={() => emit(current.condition)}>
-                Remove not
+                Stop excluding matches
               </Button>
             )}
             {(current.kind === "all" || current.kind === "any") && current.conditions.length === 1 && (
@@ -533,7 +533,7 @@ export function StudioConditionControls({
         </>
       )}
       {validation.condition && !validation.isValid && (
-        <p role="alert">Resolve the located condition issues before saving.</p>
+        <p role="alert">Finish the conditions marked above before saving.</p>
       )}
     </section>
   );
