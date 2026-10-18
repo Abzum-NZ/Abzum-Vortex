@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -129,6 +130,7 @@ function ConfirmSurface({
   settle: (answer: FlowConfirmAnswer) => void;
 }>): ReactElement {
   const [confirm, dialog] = useConfirm();
+  const choiceId = useId();
   useEffect(() => {
     let mounted = true;
     let choice = false;
@@ -147,16 +149,16 @@ function ConfirmSurface({
             </ul>
           )}
           {confirmation.choice === undefined ? null : (
-            <label className="flex items-start gap-2 text-sm">
+            <div className="flex items-start gap-2 text-sm">
               <Checkbox
-                aria-label={confirmation.choice}
+                id={choiceId}
                 defaultChecked={false}
                 onCheckedChange={(checked) => {
                   choice = checked === true;
                 }}
               />
-              <span>{confirmation.choice}</span>
-            </label>
+              <label htmlFor={choiceId}>{confirmation.choice}</label>
+            </div>
           )}
         </div>
       ),
@@ -169,7 +171,7 @@ function ConfirmSurface({
     return () => {
       mounted = false;
     };
-  }, [confirm, confirmation, settle]);
+  }, [confirm, confirmation, settle, choiceId]);
   return dialog;
 }
 
