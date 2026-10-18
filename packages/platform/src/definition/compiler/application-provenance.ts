@@ -309,7 +309,7 @@ export function applicationProvenance(
       continue;
     }
     // A role's people-name grant is derived from its reads of Person links, never authored: it
-    // follows from the Application's use of the people directory.
+    // follows from the Application's owned or used people directory Module.
     if (
       canonicalPath[0] === "content" &&
       canonicalPath[1] === "roles" &&
@@ -319,14 +319,24 @@ export function applicationProvenance(
       canonicalPath.length === 5 &&
       valueAtPath(canonical, canonicalPath) === peopleDirectory.readPermission
     ) {
+      const directoryModule = source.body.modules.findIndex(
+        (module) => module.key === peopleDirectory.module,
+      );
       const directoryUse = source.body.uses.findIndex(
         (use) => use.module === peopleDirectory.module,
       );
-      if (directoryUse < 0) fail("vortex.definition.invalid_compilation_output", "invalid_value");
+      const directorySourcePath: Path | undefined =
+        directoryModule >= 0
+          ? ["body", "modules", directoryModule, "key"]
+          : directoryUse >= 0
+            ? ["body", "uses", directoryUse, "module"]
+            : undefined;
+      if (directorySourcePath === undefined)
+        fail("vortex.definition.invalid_compilation_output", "invalid_value");
       entries.push({
         canonicalPath,
         origin: "resolved",
-        sourcePath: ["body", "uses", directoryUse, "module"],
+        sourcePath: directorySourcePath,
         ruleCode: RESOLUTION_RULE,
       });
       continue;
