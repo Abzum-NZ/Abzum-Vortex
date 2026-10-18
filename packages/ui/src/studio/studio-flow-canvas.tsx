@@ -441,68 +441,80 @@ export function StudioFlowCanvas({
   onAdd: AddStep;
 }>) {
   const graph = useMemo(() => buildGraph(lists, starts), [lists, starts]);
-  const actions = useMemo(() => ({ types, forms, disabled, onAdd }), [types, forms, disabled, onAdd]);
+  const actions = useMemo(
+    () => ({ types, forms, disabled, onAdd }),
+    [types, forms, disabled, onAdd],
+  );
   const selectedKey = selectedPath === null ? null : pathKey(selectedPath);
   const selectNode = (clicked: Node<FlowNodeData>) => {
     if (clicked.data.kind === "start") onSelect(null);
     else if (clicked.data.kind === "step") onSelect(JSON.parse(clicked.id) as StudioFlowPath);
   };
   return (
-    <div className="h-full min-h-96 w-full bg-background" aria-label={label} role="group">
-      <ActionsContext.Provider value={actions}>
-        <ReactFlow
-          nodes={graph.nodes.map((entry) => ({
-            ...entry,
-            selected: selectedKey === null ? entry.data.kind === "start" : entry.id === selectedKey,
-            domAttributes: {
-              "aria-pressed": entry.selectable
-                ? selectedKey === null
-                  ? entry.data.kind === "start"
-                  : entry.id === selectedKey
-                : undefined,
-            },
-          }))}
-          edges={graph.edges}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          colorMode={appearance}
-          className="bg-background!"
-          fitView
-          fitViewOptions={{ maxZoom: 1 }}
-          nodesDraggable={false}
-          nodesConnectable={false}
-          edgesFocusable={false}
-          deleteKeyCode={null}
-          elementsSelectable
-          proOptions={{ hideAttribution: true }}
-          onNodeClick={(_, clicked) => selectNode(clicked)}
-          onKeyDown={(event) => {
-            const target = event.target;
-            if (!(target instanceof HTMLElement) || !target.classList.contains("react-flow__node"))
-              return;
-            const clicked = graph.nodes.find(
-              (entry) => entry.id === target.getAttribute("data-id"),
-            );
-            if (clicked !== undefined && (event.key === "Enter" || event.key === " ")) {
-              event.preventDefault();
-              selectNode(clicked);
-            } else if (event.key === "Escape") onSelect(null);
-          }}
-          onPaneClick={() => onSelect(null)}
-        >
-          <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="var(--border)" />
-          <Panel position="top-left" className="max-w-64">
-            <Card className="gap-1 rounded-xl border bg-card px-3 py-2 text-card-foreground shadow-xs">
-              <p className="truncate text-sm font-medium">{title}</p>
-              <p className="line-clamp-2 text-xs text-muted-foreground">
-                {starts.join(" · ") || "Started by another flow or not started yet"}
-              </p>
-            </Card>
-          </Panel>
-          <StudioFlowControls />
-        </ReactFlow>
-      </ActionsContext.Provider>
+    <div
+      className="flex h-full min-h-96 w-full flex-col bg-background"
+      aria-label={label}
+      role="group"
+    >
+      <div className="shrink-0 p-3">
+        <Card className="gap-1 rounded-xl border bg-card px-3 py-2 text-card-foreground shadow-xs">
+          <p className="truncate text-sm font-medium">{title}</p>
+          <p className="line-clamp-2 text-sm text-muted-foreground">
+            {starts.join(" · ") || "Started by another flow or not started yet"}
+          </p>
+        </Card>
+      </div>
+      <div className="min-h-0 flex-1">
+        <ActionsContext.Provider value={actions}>
+          <ReactFlow
+            nodes={graph.nodes.map((entry) => ({
+              ...entry,
+              selected:
+                selectedKey === null ? entry.data.kind === "start" : entry.id === selectedKey,
+              domAttributes: {
+                "aria-pressed": entry.selectable
+                  ? selectedKey === null
+                    ? entry.data.kind === "start"
+                    : entry.id === selectedKey
+                  : undefined,
+              },
+            }))}
+            edges={graph.edges}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            colorMode={appearance}
+            className="bg-background!"
+            fitView
+            fitViewOptions={{ maxZoom: 1 }}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            edgesFocusable={false}
+            deleteKeyCode={null}
+            elementsSelectable
+            proOptions={{ hideAttribution: true }}
+            onNodeClick={(_, clicked) => selectNode(clicked)}
+            onKeyDown={(event) => {
+              const target = event.target;
+              if (
+                !(target instanceof HTMLElement) ||
+                !target.classList.contains("react-flow__node")
+              )
+                return;
+              const clicked = graph.nodes.find(
+                (entry) => entry.id === target.getAttribute("data-id"),
+              );
+              if (clicked !== undefined && (event.key === "Enter" || event.key === " ")) {
+                event.preventDefault();
+                selectNode(clicked);
+              } else if (event.key === "Escape") onSelect(null);
+            }}
+            onPaneClick={() => onSelect(null)}
+          >
+            <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="var(--border)" />
+            <StudioFlowControls />
+          </ReactFlow>
+        </ActionsContext.Provider>
+      </div>
     </div>
   );
 }
-
