@@ -12,6 +12,8 @@ import {
   ComboboxTrigger,
 } from "../components/combobox";
 import { InputGroup } from "../components/input-group";
+import type { StudioFlowDraftChoices } from "./application-flow-step-form";
+import { NativeSelect, NativeSelectOption } from "../components/native-select";
 import { Label } from "../components/label";
 
 export type StudioFlowStepChoice = Readonly<{ type: string; title: string; summary: string }>;
@@ -21,6 +23,7 @@ export function StudioFlowStepPicker({
   id,
   label,
   types,
+  forms,
   disabled,
   onAdd,
   action,
@@ -28,11 +31,14 @@ export function StudioFlowStepPicker({
   id: string;
   label: string;
   types: readonly StudioFlowStepChoice[];
+  forms: StudioFlowDraftChoices["forms"];
   disabled: boolean;
-  onAdd: (type: string) => void;
+  onAdd: (type: string, formAlias?: string) => void;
   action: string;
 }>) {
   const [chosen, setChosen] = useState<StudioFlowStepChoice | null>(null);
+  const [formAlias, setFormAlias] = useState("");
+  const needsForm = chosen?.type === "interface.show_form";
   if (types.length === 0)
     return (
       <p className="text-sm text-muted-foreground">
@@ -74,14 +80,22 @@ export function StudioFlowStepPicker({
           {chosen.summary}
         </p>
       )}
+      {needsForm && <div className="space-y-1">
+        <Label htmlFor={`${id}-form`}>Form to show</Label>
+        <NativeSelect id={`${id}-form`} disabled={disabled} value={formAlias} onChange={(event) => setFormAlias(event.target.value)}>
+          <NativeSelectOption value="">Choose a form before adding the step</NativeSelectOption>
+          {forms.map((form) => <NativeSelectOption key={form.alias} value={form.alias}>{form.label}</NativeSelectOption>)}
+        </NativeSelect>
+      </div>}
       <Button
         type="button"
         size="sm"
         variant="secondary"
-        disabled={disabled || chosen === null}
+        disabled={disabled || chosen === null || (needsForm && !forms.some((form) => form.alias === formAlias))}
         onClick={() => {
           if (chosen !== null) {
-            onAdd(chosen.type);
+            onAdd(chosen.type, needsForm ? formAlias : undefined);
+            setFormAlias("");
             setChosen(null);
           }
         }}

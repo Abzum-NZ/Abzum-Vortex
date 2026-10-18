@@ -209,6 +209,9 @@ const rawModuleReleaseSchema = z
     releaseVersion: semanticVersionSchema,
     contentFingerprint: fingerprintSchema,
     resolutionFingerprint: fingerprintSchema,
+    authoredSource: storedDefinitionSourceSchema,
+    authoredSourceFingerprint: fingerprintSchema,
+    sourceContractVersion: semanticVersionSchema,
     compilationOutput: definitionCompilationOutputSchema,
     resolutionSnapshot: definitionResolutionSnapshotSchema,
     identities: z.array(sourceIdentityAssignmentSchema),
@@ -230,7 +233,7 @@ const rawModuleReleasePageSchema = z
         z
           .object({
             previousReleaseRevision: nullableRevisionSchema,
-            release: rawModuleReleaseSchema,
+            releaseRevision: safeRevisionSchema,
           })
           .strict(),
       )
@@ -301,10 +304,7 @@ const parseOneRow = <Value>(rows: readonly DatabaseRow[], schema: z.ZodType<Valu
  * manifest check belongs to consumer reads, which receive the full manifest.
  */
 const dependencyReferencesMatch = (
-  output: Exclude<
-    z.infer<typeof definitionCompilationOutputSchema>,
-    { kind: "connection_type" }
-  >,
+  output: Exclude<z.infer<typeof definitionCompilationOutputSchema>, { kind: "connection_type" }>,
   references: readonly { readonly kind: string }[],
 ): boolean => {
   const dependencies =
@@ -367,10 +367,12 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
    * Module release reads within this transaction. A publication pass resolves the same used
    * Modules for every inline Module and for the Application, and each read is parsed and
    * verified, so one transaction reads each exact release and each release page once. A write
-   * that can move a current release, and the end of a rehearsal (whose releases are undone),
-   * forget them.
+   * that can move a current release forgets only the affected root's current selection.
    */
-  private readonly moduleReleaseReads = new Map<string, Promise<ResolvableModuleRelease | undefined>>();
+  private readonly moduleReleaseReads = new Map<
+    string,
+    Promise<ResolvableModuleRelease | undefined>
+  >();
   private readonly moduleReleasePageReads = new Map<string, Promise<ResolvableModuleReleasePage>>();
 
   constructor(
@@ -378,18 +380,16 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     private readonly context: SessionContext,
   ) {}
 
-  protected forgetModuleReleaseReads(): void {
-    this.moduleReleaseReads.clear();
-    this.moduleReleasePageReads.clear();
-  }
-
   /** A new release of one root moves only that root's current release. */
   protected forgetModuleReleaseReadsOf(rootId: string, key: string): void {
     const root = String(rootId).toLowerCase();
+    for (const memoKey of this.materializedModules.keys())
+      if ((JSON.parse(memoKey) as unknown[])[1] === root) this.materializedModules.delete(memoKey);
     for (const memoKey of [...this.moduleReleaseReads.keys()])
       if ((JSON.parse(memoKey) as unknown[])[1] === root) this.moduleReleaseReads.delete(memoKey);
     for (const memoKey of [...this.moduleReleasePageReads.keys()])
-      if ((JSON.parse(memoKey) as unknown[])[1] === key) this.moduleReleasePageReads.delete(memoKey);
+      if ((JSON.parse(memoKey) as unknown[])[1] === key)
+        this.moduleReleasePageReads.delete(memoKey);
   }
 
   async readOwnedModuleRoots(applicationRootId: string): Promise<readonly OwnedModuleRoot[]> {
@@ -429,11 +429,13 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
 
   async readDraftCandidate(rootId: string): Promise<DefinitionDraftCandidate | undefined> {
     const state = await this.readPublicationState(rootId);
-    return state === undefined ? undefined : {
-      draft: state.draft,
-      identities: state.identities,
-      currentReleaseVersion: state.historyLatestReleaseVersion,
-    };
+    return state === undefined
+      ? undefined
+      : {
+          draft: state.draft,
+          identities: state.identities,
+          currentReleaseVersion: state.historyLatestReleaseVersion,
+        };
   }
 
   async readCandidate(rootId: string): Promise<DefinitionPublicationCandidate | undefined> {
@@ -443,22 +445,35 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     const latest =
       anchor === null
         ? undefined
-        : await this.readLatestRelease(
-            rootId,
-            anchor,
-            state.draft.kind,
-            state.draft.key,
-            String(state.draft.rootId),
-          );
-    if (latest !== undefined &&
-      latest.published.publication.releaseVersion !== state.historyLatestReleaseVersion)
+        : state.draft.kind === "module"
+          ? (
+              await this.readModuleRelease(
+                state.draft.organizationId,
+                moduleRootIdSchema.parse(rootId),
+                anchor,
+              )
+            )?.published
+          : (
+              await this.readLatestRelease(
+                rootId,
+                anchor,
+                state.draft.kind,
+                state.draft.key,
+                String(state.draft.rootId),
+              )
+            ).published;
+    if (
+      (anchor !== null && latest === undefined) ||
+      (latest !== undefined &&
+        latest.publication.releaseVersion !== state.historyLatestReleaseVersion)
+    )
       return invalidStorage("readCandidate found inconsistent stored evidence");
     const historyEvidence = definitionPublicationHistoryEvidenceSchema.safeParse({
       kind: state.draft.kind,
       definitionKey: state.draft.key,
       rootId: String(state.draft.rootId),
       anchorReleaseRevision: anchor,
-      latestRelease: latest?.published ?? null,
+      latestRelease: latest ?? null,
     });
     if (!historyEvidence.success) return invalidStorage(historyEvidence.error);
     return {
@@ -527,6 +542,14 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     return parsed.data;
   }
 
+  private pendingModulePages: {
+    organizationId: SessionContext["organizationId"];
+    key: string;
+    cursor: ModuleReleasePageCursor | undefined;
+    resolve: (page: ResolvableModuleReleasePage) => void;
+    reject: (error: unknown) => void;
+  }[] = [];
+
   readModuleReleasePage(
     organizationId: typeof this.context.organizationId,
     key: string,
@@ -535,69 +558,93 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     const memoKey = JSON.stringify([organizationId, key, cursor ?? null]);
     const known = this.moduleReleasePageReads.get(memoKey);
     if (known !== undefined) return known;
-    const read = this.queryModuleReleasePage(organizationId, key, cursor);
+    const read = new Promise<ResolvableModuleReleasePage>((resolve, reject) => {
+      const first = this.pendingModulePages.length === 0;
+      this.pendingModulePages.push({ organizationId, key, cursor, resolve, reject });
+      if (first)
+        queueMicrotask(() => {
+          void this.readPendingModulePages();
+        });
+    });
     this.moduleReleasePageReads.set(memoKey, read);
     return read;
   }
 
-  private async queryModuleReleasePage(
-    organizationId: typeof this.context.organizationId,
-    key: string,
-    cursor?: ModuleReleasePageCursor,
-  ): Promise<ResolvableModuleReleasePage> {
-    const rows = await this.transaction.query`
-      select vortex_definition.read_module_release_page(
-        ${key},
-        ${cursor?.anchorReleaseRevision ?? null},
-        ${cursor?.afterReleaseRevision ?? null},
-        ${100}
-      ) as module_release_page
-    `;
-    const row = parseOneRow(rows, moduleReleasePageRowSchema);
-    const parsed = rawModuleReleasePageSchema.safeParse(row.module_release_page);
-    if (!parsed.success) return invalidStorage(parsed.error);
-    const page = parsed.data;
-    if (page.rootId === null || page.anchorReleaseRevision === null) {
-      if (
-        page.rootId !== null ||
-        page.anchorReleaseRevision !== null ||
-        page.entries.length !== 0 ||
-        page.nextAfterReleaseRevision !== null ||
-        cursor !== undefined
-      )
-        return invalidStorage("readModuleReleasePage found inconsistent stored evidence");
-      return {
-        rootId: null,
-        anchorReleaseRevision: null,
-        entries: [],
-        nextAfterReleaseRevision: null,
-      };
+  /** Resolve one requested frontier's page locators and exact definitions in two batched queries. */
+  private async readPendingModulePages(): Promise<void> {
+    const requests = this.pendingModulePages;
+    this.pendingModulePages = [];
+    try {
+      if (requests.some((request) => request.organizationId !== this.context.organizationId))
+        return invalidStorage("Module page requested for another organisation");
+      const rows = await this.transaction.query`
+        select vortex_definition.read_module_release_page(
+          requested.value ->> 'key',
+          (requested.value #>> '{cursor,anchorReleaseRevision}')::bigint,
+          (requested.value #>> '{cursor,afterReleaseRevision}')::bigint,
+          ${100}
+        ) as module_release_page
+        from pg_catalog.jsonb_array_elements(${JSON.stringify(requests.map(({ key, cursor }) => ({ key, cursor })))}::text::jsonb)
+          with ordinality as requested(value, ordinality)
+        order by requested.ordinality
+      `;
+      if (rows.length !== requests.length)
+        return invalidStorage("Module page frontier is incomplete");
+      const pages = rows.map((row, index) => {
+        const transport = parseOneRow([row], moduleReleasePageRowSchema);
+        const parsed = rawModuleReleasePageSchema.safeParse(transport.module_release_page);
+        if (!parsed.success) return invalidStorage(parsed.error);
+        const page = parsed.data;
+        const cursor = requests[index]!.cursor;
+        if (page.rootId === null || page.anchorReleaseRevision === null) {
+          if (
+            page.rootId !== null ||
+            page.anchorReleaseRevision !== null ||
+            page.entries.length !== 0 ||
+            page.nextAfterReleaseRevision !== null ||
+            cursor !== undefined
+          )
+            return invalidStorage("readModuleReleasePage found inconsistent stored evidence");
+        } else if (
+          page.entries.length === 0 ||
+          (cursor !== undefined &&
+            (page.rootId !== cursor.rootId ||
+              page.anchorReleaseRevision !== cursor.anchorReleaseRevision))
+        )
+          return invalidStorage("readModuleReleasePage found inconsistent stored evidence");
+        return page;
+      });
+      const releases = await this.readModuleReleases(
+        this.context.organizationId,
+        pages.flatMap((page) =>
+          page.entries.map((entry) => ({
+            rootId: page.rootId!,
+            releaseRevision: entry.releaseRevision,
+          })),
+        ),
+      );
+      let offset = 0;
+      const materialized = pages.map((page, index): ResolvableModuleReleasePage => ({
+        rootId: page.rootId,
+        anchorReleaseRevision: page.anchorReleaseRevision,
+        nextAfterReleaseRevision: page.nextAfterReleaseRevision,
+        entries: page.entries.map((entry) => {
+          const release = releases[offset++];
+          if (
+            release === undefined ||
+            release.organizationId !== this.context.organizationId ||
+            release.key !== requests[index]!.key ||
+            release.rootId !== page.rootId ||
+            release.releaseRevision !== entry.releaseRevision
+          )
+            return invalidStorage("readModuleReleasePage found inconsistent stored evidence");
+          return { previousReleaseRevision: entry.previousReleaseRevision, release };
+        }),
+      }));
+      requests.forEach((request, index) => request.resolve(materialized[index]!));
+    } catch (error) {
+      requests.forEach((request) => request.reject(error));
     }
-    if (
-      (cursor !== undefined &&
-        (page.rootId !== cursor.rootId ||
-          page.anchorReleaseRevision !== cursor.anchorReleaseRevision)) ||
-      page.entries.length === 0
-    )
-      return invalidStorage("readModuleReleasePage found inconsistent stored evidence");
-    const entries: ResolvableModuleReleasePage["entries"] = page.entries.map((entry) => {
-      if (
-        entry.release.organizationId !== organizationId ||
-        entry.release.key !== key ||
-        entry.release.rootId !== page.rootId
-      )
-        return invalidStorage("readModuleReleasePage found inconsistent stored evidence");
-      return {
-        previousReleaseRevision: entry.previousReleaseRevision,
-        release: this.materializeModuleRelease(entry.release),
-      };
-    });
-    return {
-      rootId: page.rootId,
-      anchorReleaseRevision: page.anchorReleaseRevision,
-      entries,
-      nextAfterReleaseRevision: page.nextAfterReleaseRevision,
-    };
   }
 
   readModuleRelease(
@@ -605,41 +652,45 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     rootId: Parameters<DefinitionPublicationReader["readModuleRelease"]>[1],
     releaseRevision: number,
   ): Promise<ResolvableModuleRelease | undefined> {
-    const memoKey = JSON.stringify([organizationId, String(rootId).toLowerCase(), releaseRevision]);
-    const known = this.moduleReleaseReads.get(memoKey);
-    if (known !== undefined) return known;
-    const read = this.queryModuleRelease(organizationId, rootId, releaseRevision);
-    this.moduleReleaseReads.set(memoKey, read);
-    return read;
+    return this.readModuleReleases(organizationId, [{ rootId, releaseRevision }]).then(
+      (releases) => releases[0],
+    );
   }
 
-  private async queryModuleRelease(
-    organizationId: typeof this.context.organizationId,
-    rootId: Parameters<DefinitionPublicationReader["readModuleRelease"]>[1],
-    releaseRevision: number,
-  ): Promise<ResolvableModuleRelease | undefined> {
-    const rows = await this.transaction.query`
-      select vortex_definition.read_module_release(
-        ${rootId},
-        ${releaseRevision}
-      ) as module_release
-    `;
-    const row = parseOneRow(rows, moduleReleaseRowSchema);
-    if (row.module_release === null) return undefined;
-    const parsed = rawModuleReleaseSchema.safeParse(row.module_release);
-    if (!parsed.success) return invalidStorage(parsed.error);
-    const release = this.materializeModuleRelease(parsed.data);
-    if (release !== undefined && release.organizationId !== organizationId)
-      return invalidStorage("readModuleRelease found inconsistent stored evidence");
-    return release;
-  }
-
-  /** One query for several exact releases; the result lines up with the requested locators. */
+  /** One query per missing frontier; single, bulk and page reads share exact objects. */
   async readModuleReleases(
     organizationId: typeof this.context.organizationId,
     locators: Parameters<DefinitionPublicationReader["readModuleReleases"]>[1],
   ): Promise<(ResolvableModuleRelease | undefined)[]> {
-    if (locators.length === 0) return [];
+    const keyOf = (locator: (typeof locators)[number]) =>
+      JSON.stringify([
+        organizationId,
+        String(locator.rootId).toLowerCase(),
+        locator.releaseRevision,
+      ]);
+    const missing = [
+      ...new Map(
+        locators
+          .filter((locator) => !this.moduleReleaseReads.has(keyOf(locator)))
+          .map((locator) => [keyOf(locator), locator]),
+      ).values(),
+    ];
+    if (missing.length > 0) {
+      const batch = this.queryModuleReleases(organizationId, missing);
+      missing.forEach((locator, index) => {
+        this.moduleReleaseReads.set(
+          keyOf(locator),
+          batch.then((releases) => releases[index]),
+        );
+      });
+    }
+    return Promise.all(locators.map((locator) => this.moduleReleaseReads.get(keyOf(locator))!));
+  }
+
+  private async queryModuleReleases(
+    organizationId: typeof this.context.organizationId,
+    locators: Parameters<DefinitionPublicationReader["readModuleReleases"]>[1],
+  ): Promise<(ResolvableModuleRelease | undefined)[]> {
     const rows = await this.transaction.query`
       select vortex_definition.read_module_release(
         (requested.value ->> 'rootId')::uuid,
@@ -651,14 +702,18 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     `;
     if (rows.length !== locators.length)
       return invalidStorage("readModuleReleases found inconsistent stored evidence");
-    return rows.map((raw) => {
+    return rows.map((raw, index) => {
       const row = moduleReleaseRowSchema.safeParse(raw);
       if (!row.success) return invalidStorage(row.error);
       if (row.data.module_release === null) return undefined;
       const parsed = rawModuleReleaseSchema.safeParse(row.data.module_release);
       if (!parsed.success) return invalidStorage(parsed.error);
       const release = this.materializeModuleRelease(parsed.data);
-      if (release !== undefined && release.organizationId !== organizationId)
+      if (
+        release.organizationId !== organizationId ||
+        release.rootId !== locators[index]!.rootId ||
+        release.releaseRevision !== locators[index]!.releaseRevision
+      )
         return invalidStorage("readModuleReleases found inconsistent stored evidence");
       return release;
     });
@@ -704,9 +759,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       return invalidStorage(
         "readApplicationPageAdoptionRelease found inconsistent stored evidence",
       );
-    const storedOutput = definitionCompilationOutputSchema.safeParse(
-      evidence.compilationOutput,
-    );
+    const storedOutput = definitionCompilationOutputSchema.safeParse(evidence.compilationOutput);
     if (!storedOutput.success || storedOutput.data.kind !== "application")
       return invalidStorage(
         "readApplicationPageAdoptionRelease found inconsistent stored evidence",
@@ -853,13 +906,31 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       : ({ kind, definitionKey: key, history } as PublishedDefinitionHistory);
   }
 
+  private readonly materializedModules = new Map<string, ResolvableModuleRelease>();
+
   private materializeModuleRelease(release: RawModuleRelease): ResolvableModuleRelease {
+    const key = JSON.stringify([
+      release.organizationId,
+      String(release.rootId).toLowerCase(),
+      release.releaseRevision,
+    ]);
+    const known = this.materializedModules.get(key);
+    if (known !== undefined) {
+      if (
+        known.key !== release.key ||
+        known.releaseVersion !== release.releaseVersion ||
+        known.contentFingerprint !== release.contentFingerprint ||
+        known.resolutionFingerprint !== release.resolutionFingerprint
+      )
+        return invalidStorage("One snapshot contains substituted release evidence");
+      return known;
+    }
     const output = release.compilationOutput;
     const snapshot = release.resolutionSnapshot;
     if (output.kind !== "module")
       return invalidStorage("materializeModuleRelease found inconsistent stored evidence");
     const validationContractVersion = output.validationContractVersion;
-    const sourceContractVersion = validationContractVersion;
+    const sourceContractVersion = release.sourceContractVersion;
     try {
       assertModuleContractPair(sourceContractVersion, validationContractVersion);
     } catch (error) {
@@ -873,6 +944,10 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         definition.exactVersion === release.releaseVersion,
     );
     if (
+      release.authoredSource.kind !== "module" ||
+      release.authoredSource.key !== release.key ||
+      release.authoredSource.source_contract_version !== sourceContractVersion ||
+      fingerprintCanonicalValue(release.authoredSource) !== release.authoredSourceFingerprint ||
       ownResolution.length !== 1 ||
       release.organizationId !== this.context.organizationId ||
       release.published.publication.rootId !== release.rootId ||
@@ -920,7 +995,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       fingerprintCanonicalValue(published.data.content) !== release.contentFingerprint
     )
       return invalidStorage("materializeModuleRelease found inconsistent stored evidence");
-    return {
+    const materialized: ResolvableModuleRelease = {
       organizationId: release.organizationId,
       key: release.key,
       rootId: release.rootId,
@@ -932,6 +1007,9 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       resolutionSnapshot: snapshot,
       published: published.data,
     };
+    this.materializedModules.set(key, materialized);
+    this.moduleReleaseReads.set(key, Promise.resolve(materialized));
+    return materialized;
   }
 }
 
@@ -975,7 +1053,6 @@ class DatabasePublicationTransaction
     applicationRootId: string,
     source: ModuleSourceDocument,
   ): Promise<OwnedModuleRoot> {
-    this.forgetModuleReleaseReads();
     const rows = await this.transaction.query`
       select root_id, definition_key, draft_revision, published_revision as current_release_revision,
         source_fingerprint
@@ -997,7 +1074,6 @@ class DatabasePublicationTransaction
     root: OwnedModuleRoot,
     source: ModuleSourceDocument,
   ): Promise<OwnedModuleRoot> {
-    this.forgetModuleReleaseReads();
     const rows = await this.transaction.query`
       select root_id, definition_key, draft_revision, current_release_revision, source_fingerprint
       from vortex_definition.stage_owned_module_source(
@@ -1011,40 +1087,6 @@ class DatabasePublicationTransaction
     if (rows.length === 0) throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
     if (rows.length !== 1) return invalidStorage("stageOwnedModuleSource returned several roots");
     return parseOwnedModuleRoot(rows[0]!);
-  }
-
-  async rehearse<Result>(operation: () => Promise<Result>): Promise<Result> {
-    // Nested rehearsals reuse the name: rollback and release address the most recent savepoint.
-    await this.transaction.query`savepoint vortex_publication_rehearsal`;
-    try {
-      // A failure aborts the whole request transaction, so only success needs the rollback.
-      const result = await operation();
-      await this.transaction.query`rollback to savepoint vortex_publication_rehearsal`;
-      await this.transaction.query`release savepoint vortex_publication_rehearsal`;
-      return result;
-    } finally {
-      // The rehearsed releases are undone, and a later pass may release the same revisions.
-      this.forgetModuleReleaseReads();
-    }
-  }
-
-  async readRehearsedReleases(
-    applicationRootId: string,
-    pins: readonly Readonly<{ rootId: string; releaseRevision: number }>[],
-  ): Promise<readonly Readonly<{ release: unknown; dependencies: unknown }>[]> {
-    const rows = await this.transaction.query<DatabaseRow & { readonly releases: unknown }>`
-      select vortex_definition.read_rehearsed_preview_releases(
-        ${applicationRootId}::uuid,
-        ${JSON.stringify(pins)}::text::jsonb
-      ) as releases
-    `;
-    const parsed = z
-      .array(z.object({ release: z.record(z.string(), z.unknown()), dependencies: z.array(z.unknown()) }).strict())
-      .max(201)
-      .safeParse(rows.length === 1 ? rows[0]?.releases : undefined);
-    if (!parsed.success || parsed.data.length !== pins.length)
-      return invalidStorage("readRehearsedReleases returned other releases than the rehearsal wrote");
-    return parsed.data;
   }
 
   appendModuleRelease(release: DefinitionReleaseAppend): Promise<PublishDefinitionResult> {

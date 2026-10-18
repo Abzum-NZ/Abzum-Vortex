@@ -719,46 +719,92 @@ export const assertNoCycle = async (
   candidate: DefinitionCandidateDraft,
   modules: readonly ResolvableModuleRelease[],
 ): Promise<void> => {
-  const visited = new Set<string>();
-  const visiting = new Set<string>();
-  const visit = async (release: ResolvableModuleRelease): Promise<void> => {
-    if (String(release.rootId) === String(candidate.draft.rootId))
-      refuse("DEFINITION_DEPENDENCY_CYCLE");
-    const reference = `${release.rootId}:${release.releaseRevision}`;
-    if (visiting.has(reference)) refuse("DEFINITION_DEPENDENCY_CYCLE");
-    if (visited.has(reference)) return;
-    visiting.add(reference);
-    const moduleDependencies = release.published.dependencyManifest.map((dependency) => {
-      if (dependency.kind !== "module") return refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
-      return dependency as Extract<
-        (typeof release.published.dependencyManifest)[number],
-        { kind: "module" }
-      >;
+  const reference = (release: ResolvableModuleRelease) =>
+    `${String(release.rootId).toLowerCase()}:${release.releaseRevision}`;
+  const graph = new Map<string, ResolvableModuleRelease>();
+  const edges = new Map<string, readonly string[]>();
+  let frontier = [...modules];
+  while (frontier.length > 0) {
+    const unique = [
+      ...new Map(
+        frontier
+          .filter((release) => !graph.has(reference(release)))
+          .map((release) => [reference(release), release]),
+      ).values(),
+    ];
+    if (unique.length === 0) break;
+    const dependencies = unique.flatMap((release) => {
+      if (String(release.rootId).toLowerCase() === String(candidate.draft.rootId).toLowerCase())
+        refuse("DEFINITION_DEPENDENCY_CYCLE");
+      graph.set(reference(release), release);
+      const children = release.published.dependencyManifest.map((dependency) => {
+        if (dependency.kind !== "module") return refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
+        return dependency;
+      });
+      edges.set(
+        reference(release),
+        children.map((child) => `${String(child.rootId).toLowerCase()}:${child.revision}`),
+      );
+      return children;
     });
+    const missing = [
+      ...new Map(
+        dependencies
+          .filter(
+            (dependency) =>
+              !graph.has(`${String(dependency.rootId).toLowerCase()}:${dependency.revision}`),
+          )
+          .map((dependency) => [
+            `${String(dependency.rootId).toLowerCase()}:${dependency.revision}`,
+            dependency,
+          ]),
+      ).values(),
+    ];
     const children = await reader.readModuleReleases(
       candidate.draft.organizationId,
-      moduleDependencies.map((dependency) => ({
+      missing.map((dependency) => ({
         rootId: dependency.rootId,
         releaseRevision: dependency.revision,
       })),
     );
-    for (const [index, moduleDependency] of moduleDependencies.entries()) {
-      const child = children[index];
+    const found = new Map(
+      missing.map((dependency, index) => [
+        `${String(dependency.rootId).toLowerCase()}:${dependency.revision}`,
+        children[index],
+      ]),
+    );
+    for (const dependency of dependencies) {
+      const key = `${String(dependency.rootId).toLowerCase()}:${dependency.revision}`;
+      const child = graph.get(key) ?? found.get(key);
       if (
         child === undefined ||
-        child.releaseVersion !== moduleDependency.releaseVersion ||
-        child.contentFingerprint !== moduleDependency.contentFingerprint
+        child.releaseVersion !== dependency.releaseVersion ||
+        child.contentFingerprint !== dependency.contentFingerprint
       )
-        refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
-      if (child === undefined) refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
-      const resolvedChild = child as ResolvableModuleRelease;
-      verifyModuleRelease(candidate, resolvedChild.key, resolvedChild);
-      await visit(resolvedChild);
+        return refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
+      verifyModuleRelease(candidate, child.key, child);
     }
-    visiting.delete(reference);
-    visited.add(reference);
-  };
-  for (const module of modules) await visit(module);
+    frontier = children.filter((child): child is ResolvableModuleRelease => child !== undefined);
+  }
+  const visited = new Set<string>();
+  const visiting = new Set<string>();
+  for (const module of modules) {
+    const stack = [{ key: reference(module), exiting: false }];
+    while (stack.length > 0) {
+      const entry = stack.pop()!;
+      if (entry.exiting) {
+        visiting.delete(entry.key);
+        visited.add(entry.key);
+        continue;
+      }
+      if (visiting.has(entry.key)) refuse("DEFINITION_DEPENDENCY_CYCLE");
+      if (visited.has(entry.key)) continue;
+      visiting.add(entry.key);
+      stack.push({ key: entry.key, exiting: true });
+      for (const child of [...(edges.get(entry.key) ?? [])].reverse())
+        stack.push({ key: child, exiting: false });
+    }
+  }
 };
 
 /**
