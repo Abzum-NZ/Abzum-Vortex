@@ -329,11 +329,28 @@ begin
   ), granted as materialized (
     -- Every accepted meaning the caller holds through a live path is granted: a caller holding
     -- two roles with different accepted meanings of the permission has both, each with the
-    -- earliest deadline of the paths that carry it.
-    select distinct on (route.accepted_registration_revision)
+    -- earliest deadline of the paths that carry it. Registration revisions are local to each
+    -- registration, so equal revisions under different Application addresses remain distinct.
+    select distinct on (
+      (route.accepted_entry).organization_id,
+      (route.accepted_entry).application_root_id,
+      (route.accepted_entry).owner_kind,
+      (route.accepted_entry).owner_id,
+      (route.accepted_entry).permission_id,
+      (route.accepted_entry).registration_kind,
+      (route.accepted_entry).registration_owner_id,
+      route.accepted_registration_revision
+    )
       route.accepted_entry as permission_entry, route.path_valid_until
     from route_candidates as route
-    order by route.accepted_registration_revision, route.path_valid_until
+    order by (route.accepted_entry).organization_id,
+      (route.accepted_entry).application_root_id,
+      (route.accepted_entry).owner_kind,
+      (route.accepted_entry).owner_id,
+      (route.accepted_entry).permission_id,
+      (route.accepted_entry).registration_kind,
+      (route.accepted_entry).registration_owner_id,
+      route.accepted_registration_revision, route.path_valid_until
   ), administered as materialized (
     -- A super administrator is evaluated with the registered meaning.
     select available.permission_entry, context_expires_value as path_valid_until
