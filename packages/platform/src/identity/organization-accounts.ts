@@ -277,13 +277,6 @@ export const createOrganizationAccountStore = (
       return executeTransferOffboardingOwnedRecords(transaction, command);
     },
 
-    async beginOrganizationAccountClosing(
-      transaction: RequestDatabaseTransaction,
-      command: BeginOrganizationAccountClosingCommand,
-    ): Promise<OrganizationAccountClosingResult> {
-      return executeBeginOrganizationAccountClosing(transaction, command);
-    },
-
     async finalizeOrganizationAccountDeletion(
       transaction: RequestDatabaseTransaction,
       organizationAccountId: string,
@@ -450,26 +443,6 @@ const organizationAccountLifecycleStates = [
   "deleted",
 ] as const;
 
-/**
- * Begins the one-way account-closing fence from 'active', 'suspended' or
- * 'closed'. Like closure it stops the account acting and invalidates the
- * organisation's Access version. From then on no write can assign the account
- * as a record owner, and the account can only proceed to deletion.
- */
-export interface BeginOrganizationAccountClosingCommand {
-  readonly organizationAccountId: string;
-  readonly expectedRevision: number;
-}
-
-export interface OrganizationAccountClosingResult {
-  readonly outcome: "closing";
-  readonly organizationAccountId: string;
-  readonly organizationId: string;
-  readonly state: "closing";
-  readonly revision: number;
-  readonly accessVersion: number;
-}
-
 export type AccountDeletionFenceOutcome = "deleted" | "not_closing" | "records_remain";
 
 const accountDeletionFenceOutcomes = ["deleted", "not_closing", "records_remain"] as const;
@@ -538,11 +511,6 @@ const invalidResult = (): never => {
 
 const commandUuid = (value: unknown): string =>
   isNonNilUuidText(value) ? value : invalidCommand();
-
-const commandRevision = (value: unknown): number =>
-  typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 9007199254740991
-    ? value
-    : invalidCommand();
 
 const commandMember = <Member extends string>(
   value: unknown,
@@ -1070,53 +1038,6 @@ const executeTransferOffboardingOwnedRecords = async (
   }
 };
 
-interface BeginClosingSqlRow extends DatabaseRow {
-  readonly organization_account_id: unknown;
-  readonly organization_id: unknown;
-  readonly state: unknown;
-  readonly closing_at: unknown;
-  readonly revision: unknown;
-  readonly access_version: unknown;
-}
-
-const executeBeginOrganizationAccountClosing = async (
-  transaction: RequestDatabaseTransaction,
-  command: unknown,
-): Promise<OrganizationAccountClosingResult> => {
-  if (typeof command !== "object" || command === null || Array.isArray(command)) {
-    invalidCommand();
-  }
-  const fields = command as Record<string, unknown>;
-  const organizationAccountId = commandUuid(fields.organizationAccountId);
-  const expectedRevision = commandRevision(fields.expectedRevision);
-
-  try {
-    await requireRequestIdentityNotDisabled(transaction);
-    const rows = await transaction.query<BeginClosingSqlRow>`
-      select *
-      from vortex_access.begin_organization_account_closing_for_administration(
-        ${organizationAccountId}::uuid,
-        ${expectedRevision}::bigint
-      )
-    `;
-    const row = requireOne(rows);
-    if (resultMember(row.state, organizationAccountLifecycleStates) !== "closing") {
-      invalidResult();
-    }
-    return {
-      outcome: "closing",
-      organizationAccountId: resultUuid(row.organization_account_id),
-      organizationId: resultUuid(row.organization_id),
-      state: "closing",
-      revision: resultStoredInteger(row.revision),
-      accessVersion: resultStoredInteger(row.access_version),
-    };
-  } catch (error) {
-    if (error instanceof OrganizationAccountError) throw error;
-    throw mapStorageFailure(error);
-  }
-};
-
 interface FinalizeAccountDeletionSqlRow extends DatabaseRow {
   readonly result: unknown;
 }
@@ -1163,5 +1084,4 @@ export const ensureIdentityProjection = defaultStore.ensureIdentityProjection;
 export const readIdentityProjection = defaultStore.readIdentityProjection;
 export const listOffboardingOwnedRecords = defaultStore.listOffboardingOwnedRecords;
 export const transferOffboardingOwnedRecords = defaultStore.transferOffboardingOwnedRecords;
-export const beginOrganizationAccountClosing = defaultStore.beginOrganizationAccountClosing;
 export const finalizeOrganizationAccountDeletion = defaultStore.finalizeOrganizationAccountDeletion;
