@@ -25,6 +25,9 @@ declare
   decision_organization_id uuid;
   decision_account_id uuid;
   audit_projection boolean;
+  person_record_type_id uuid;
+  installation_plan jsonb;
+  installation_record_types jsonb;
   after_occurred_at timestamptz;
   after_record_id uuid;
   keyset_sql text := '';
@@ -90,6 +93,16 @@ begin
     false
   );
 
+  -- Use this request's validated live/preview installation, including its pins.
+  installation_plan := vortex_record.resolve_installation_access_plan_internal(
+    vortex_definition.read_current_active_installation()
+  );
+  select pg_catalog.jsonb_agg(installed.value) into installation_record_types
+  from pg_catalog.jsonb_each(installation_plan -> 'recordTypes') as installed(key, value);
+  person_record_type_id := vortex_access.resolve_installed_account_record_type_internal(
+    installation_record_types
+  );
+
   order_sql := pg_catalog.format(
     ' order by entry.occurred_at %s, entry.activity_id %s limit $8',
     case when p_direction = 'descending' then 'desc' else 'asc' end,
@@ -131,7 +144,7 @@ begin
         when 'public_session' then 'Public visitor'
         else 'Other' end,
       'actor', case when entry.actor_kind = 'organization_account'
-        then pg_catalog.jsonb_build_object('organizationAccountId', entry.actor_id::text)
+        then pg_catalog.jsonb_build_object('recordTypeId', $9, 'recordId', entry.actor_id::text)
         else null end,
       'action', entry.action,
       'subject_count', pg_catalog.cardinality(entry.subject_ids),
@@ -144,7 +157,7 @@ begin
       case when p_direction = 'descending' then 'desc' else 'asc' end);
   return query execute scan_sql using visible_organization_id, p_record_ids,
     audit_projection, actor_account_id, actor_identity_id,
-    after_occurred_at, after_record_id, p_limit;
+    after_occurred_at, after_record_id, p_limit, person_record_type_id;
 end
 $function$;
 

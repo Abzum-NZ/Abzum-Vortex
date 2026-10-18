@@ -465,7 +465,8 @@ begin
     end;
 
     condition_ok := vortex_access.evaluate_permission_saved_condition(
-      candidate_record_scope, saved_condition, reduced_type, projected_values, context_account_id
+      candidate_record_scope, saved_condition, reduced_type, projected_values, context_account_id,
+      p_facts -> 'recordTypes'
     );
 
     if condition_ok is not true then
