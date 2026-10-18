@@ -63,10 +63,12 @@ export function StudioReferencePicker({
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        setQuery("");
+        if (!next) setQuery("");
       }}
       inputValue={open ? query : (selected?.label ?? "")}
-      onInputValueChange={setQuery}
+      onInputValueChange={(text, details) => {
+        if (details.reason === "input-change" || details.reason === "input-clear") setQuery(text);
+      }}
       filter={null}
       disabled={disabled}
       itemToStringLabel={(entry: StudioReferencePickerOption) => entry.label}

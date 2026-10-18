@@ -1,9 +1,56 @@
 "use client";
-import { useId, type ReactNode } from "react";
+import {
+  Fragment,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { Field, FieldDescription, FieldError, FieldLabel } from "../components/field";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Button } from "../components/button";
 import { Info } from "lucide-react";
+
+const FieldProblemsContext = createContext<Readonly<{
+  problems: readonly string[];
+  report: (id: string, error: string | undefined) => void;
+  undo: () => void;
+}> | null>(null);
+
+/** Invalid text stays outside the draft, but still belongs in the workspace's save feedback. */
+export function StudioFieldProblemsProvider({ children }: Readonly<{ children: ReactNode }>) {
+  const [problems, setProblems] = useState<Readonly<Record<string, string>>>({});
+  const [generation, setGeneration] = useState(0);
+  const report = useCallback((id: string, error: string | undefined) => {
+    setProblems((previous) => {
+      if (previous[id] === error) return previous;
+      const next = { ...previous };
+      if (error === undefined) delete next[id];
+      else next[id] = error;
+      return next;
+    });
+  }, []);
+  const undo = useCallback(() => {
+    setProblems({});
+    // Remount the form controls from the unchanged draft, preserving the owning draft history.
+    setGeneration((previous) => previous + 1);
+  }, []);
+  const value = useMemo(
+    () => ({ problems: Object.values(problems), report, undo }),
+    [problems, report, undo],
+  );
+  return (
+    <FieldProblemsContext.Provider value={value}>
+      <Fragment key={generation}>{children}</Fragment>
+    </FieldProblemsContext.Provider>
+  );
+}
+
+export const useStudioFieldProblems = () => useContext(FieldProblemsContext);
 
 /** Long help is available on focus and remains the control's accessible description. */
 export function StudioHelp({ hint, id }: Readonly<{ hint: string; id?: string }>) {
@@ -54,6 +101,11 @@ export function StudioField({
   ) => ReactNode;
 }>) {
   const id = useId();
+  const report = useStudioFieldProblems()?.report;
+  useEffect(() => {
+    report?.(id, error === "" ? undefined : error);
+    return () => report?.(id, undefined);
+  }, [id, error, report]);
   const description = [
     hint === undefined ? undefined : id + "-hint",
     error === undefined ? undefined : id + "-error",

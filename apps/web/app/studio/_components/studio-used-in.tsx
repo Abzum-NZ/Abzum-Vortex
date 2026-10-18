@@ -70,7 +70,7 @@ export function StudioPlaceList({
                 type="button"
                 variant="link"
                 size="sm"
-                className="h-auto whitespace-normal p-0 text-left"
+                className="h-auto whitespace-normal text-left"
                 onClick={() => {
                   onBeforeOpen?.();
                   opener.open(place);

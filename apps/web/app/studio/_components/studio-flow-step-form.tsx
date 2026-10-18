@@ -397,7 +397,7 @@ function PropertyControl({
   disabled: boolean;
   onChange: (value: StudioFlowPropertyDraft | null) => void;
 }>) {
-  const label = `${field.label}${!field.required && <span className="text-xs text-muted-foreground"> Optional</span>}`;
+  const label = field.label;
   const unset = field.required
     ? undefined
     : field.key === "record"
