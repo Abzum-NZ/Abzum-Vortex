@@ -54,7 +54,7 @@ function FixedInput({ id, literal, options, long, disabled, onChange }: Readonly
   const change = (text: string) => {
     setDraft(text);
     const built = studioFixedLiteral(literal.type, text, "value");
-    // A value that does not fit its type is kept as typed; the step is refused with where it is on Apply.
+    // A value that does not fit its type is kept as typed; the step refuses it, saying where it is.
     onChange(built.ok ? built.literal : { type: literal.type, value: text });
   };
   const hint = literal.type === "date" ? "2026-01-31" : literal.type === "date_time" ? "2026-01-31T09:30:00Z"

@@ -325,7 +325,7 @@ export function projectStudioVisibilityEditor(context: StudioCompositionContext,
   const target = resolveStudioVisibilityTarget(context.source, selection);
   if (metadata === undefined || target === undefined) return { kind: "unsupported" };
   if (context.organizationId !== metadata.organizationId || context.rootId !== metadata.rootId ||
-    context.key !== metadata.key || context.draftRevision !== metadata.draftRevision ||
+    context.key !== metadata.key ||
     !Number.isSafeInteger(context.localLifetime) || context.localLifetime < 1 ||
     context.source.key !== context.key || target.pageAlias !== metadata.pageAlias ||
     target.recordReference !== metadata.recordReference ||

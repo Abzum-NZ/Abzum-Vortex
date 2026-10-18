@@ -9,6 +9,7 @@ import { Item, ItemActions, ItemContent, ItemDescription, ItemHeader, ItemTitle 
 import { Label } from "@vortex/ui/components/label";
 import { applyStudioFlowCreate, deleteStudioRecordRule, studioRecordRules } from "@vortex/ui/studio";
 import { useStudioPlaceOpener } from "./studio-used-in";
+import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
 
 /**
  * The before-save rules of a record type, such as "Enter the company name" or "A closed
@@ -18,9 +19,10 @@ import { useStudioPlaceOpener } from "./studio-used-in";
  * save of the record, whichever way it is saved: a form, a board move, a named action or a Save
  * record step.
  */
-export function StudioRecordRules({ source, moduleKey, recordKey, disabled, apply }: Readonly<{
+export function StudioRecordRules({ source, moduleKey, recordKey, disabled, edit }: Readonly<{
   source: ApplicationSourceDocument; moduleKey: string; recordKey: string; disabled: boolean;
-  apply: (next: ApplicationSourceDocument, message: string) => boolean;
+  /** The Data tab's one edit path. */
+  edit: StudioDataEdit;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const opener = useStudioPlaceOpener();
@@ -35,24 +37,29 @@ export function StudioRecordRules({ source, moduleKey, recordKey, disabled, appl
   const open = (flowAlias: string, label: string) => opener.open({ label, open: { kind: "flow", flowAlias, moduleKey } });
   const add = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const result = applyStudioFlowCreate(source, { kind: "before_save", moduleKey, recordTypeKey: recordKey, name,
-      operations: [...(onCreate ? ["create" as const] : []), ...(onUpdate ? ["update" as const] : [])] });
-    if (result.kind === "refused") { setProblem(result.reason); return; }
-    if (!apply(result.source, `Rule ${name.trim()} added. Save to keep it.`)) {
-      setProblem("The draft changed or is busy, so nothing was added. Try again in a moment.");
-      return;
-    }
+    const label = name.trim();
+    const result = edit((current) => {
+      const created = applyStudioFlowCreate(current, { kind: "before_save", moduleKey, recordTypeKey: recordKey, name,
+        operations: [...(onCreate ? ["create" as const] : []), ...(onUpdate ? ["update" as const] : [])] });
+      return created.kind === "refused" ? { kind: "refused" as const, message: created.reason }
+        : { kind: "changed" as const, source: created.source, flowAlias: created.selection.flowAlias };
+    });
+    if (result.kind !== "changed") { setProblem(studioEditProblem(result) ?? ""); return; }
     setAdding(false); setName(""); setProblem("");
-    open(result.selection.flowAlias, name.trim());
+    open(result.flowAlias, label);
   };
   const remove = async (flowAlias: string, label: string) => {
     setProblem("");
-    const result = deleteStudioRecordRule(source, moduleKey, flowAlias);
-    if (result.kind === "refused") { setProblem(result.reason); return; }
+    const check = deleteStudioRecordRule(source, moduleKey, flowAlias);
+    if (check.kind === "refused") { setProblem(check.reason); return; }
     if (!await confirm({ title: `Delete ${label}?`, confirmLabel: "Delete rule",
-      description: `${record.plural_name} are no longer checked by this rule once you publish. You can undo this before you save.` })) return;
-    if (!apply(result.source, `Rule ${label} deleted. Save to keep it.`))
-      setProblem("The draft changed or is busy, so nothing was deleted. Try again in a moment.");
+      description: `${record.plural_name} are no longer checked by this rule once you publish. Undo brings it back.` })) return;
+    const result = edit((current) => {
+      const deleted = deleteStudioRecordRule(current, moduleKey, flowAlias);
+      return deleted.kind === "refused" ? { kind: "refused" as const, message: deleted.reason }
+        : { kind: "changed" as const, source: deleted.source };
+    });
+    if (result.kind !== "changed") setProblem(studioEditProblem(result) ?? "");
   };
   return <section className="space-y-2 border-t border-border pt-3" aria-label={`Rules of ${record.plural_name}`}>
     <div className="flex items-center justify-between gap-2">
