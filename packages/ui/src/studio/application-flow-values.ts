@@ -21,7 +21,7 @@ import {
 /**
  * The values a step setting can take, as Studio offers them: a fixed value of the setting's type,
  * or one of the closed references the flow can read at that step (its inputs, its variables, an
- * earlier step's output, the record that started it, the person running it, the time). A value the
+ * earlier step's output, the record it runs for, the person running it, the time). A value the
  * controls do not build (a formula, a constructed map) is kept as it is until it is replaced.
  */
 
@@ -34,10 +34,12 @@ export type StudioFlowReferenceChoice = Readonly<{
   /** A stable spelling of the reference, for a picker's option value. */
   token: string;
   label: string;
-  group: "Inputs" | "Variables" | "Earlier steps" | "The record that started it" | "The run";
+  group: "Inputs" | "Variables" | "Earlier steps" | "The record" | "The run";
   /** The declared type, when the flow declares one. */
   type: string | undefined;
   reference: FlowReference;
+  /** The options of a choice field, which a value compared with it is picked from. */
+  options?: readonly Readonly<{ value: string; label: string }>[];
 }>;
 
 type LiteralType = FlowLiteral["type"];
@@ -80,6 +82,13 @@ export const studioFieldValueType = (fieldType: string): LiteralType | undefined
     default: return undefined;
   }
 };
+
+/** The options of a choice field, or undefined for any other field. */
+export const studioFieldChoiceOptions = (field: StudioDraftField): readonly Readonly<{ value: string; label: string }>[] | undefined =>
+  field.type === "choice" || field.type === "several_choices"
+    ? ((field.settings as { options?: readonly { value: string; label: string }[] } | undefined)?.options ?? [])
+      .map((option) => ({ value: option.value, label: option.label }))
+    : undefined;
 
 /** The literal types a fixed value can be typed in as; the others are only read from references. */
 const typedFixed: ReadonlySet<LiteralType> = new Set(["text", "whole_number", "decimal_number", "yes_no", "date",
@@ -171,7 +180,7 @@ const taskOutputs = (flow: SourceFlow, siblings: readonly SourceFlow[], task: So
 
 /**
  * Every reference a value at `path` in the flow can read, in the order a person looks for them: the
- * flow's inputs and variables, what earlier steps gave, the record that started it, the run itself.
+ * flow's inputs and variables, what earlier steps gave, the record it runs for, the run itself.
  * `path` null asks for what the whole flow can read before its first step.
  */
 export const studioFlowReferenceChoices = (
@@ -196,15 +205,21 @@ export const studioFlowReferenceChoices = (
       const location = describeStudioFlowLocation(flow, studioFlowTaskPath(flow, task.id) ?? []);
       choices.push(...taskOutputs(flow, siblings, task, location));
     }
+  // The record the flow runs for: the record a trigger saves or announces, or the record an
+  // interactive flow's record input names. Each field offers its type and, for a choice, its options.
   const recordTrigger = (flow.triggers ?? []).find((trigger) => trigger.type === "BeforeSave" || trigger.type === "Event");
-  if (recordTrigger !== undefined && "recordTypeId" in recordTrigger) {
-    const found = studioDraftRecordType(source, recordTrigger.recordTypeId, moduleKey);
+  const recordType = recordTrigger !== undefined && "recordTypeId" in recordTrigger ? recordTrigger.recordTypeId
+    : flow.recordInput === undefined ? undefined : flow.inputs?.[flow.recordInput]?.recordTypeIds?.[0];
+  if (recordType !== undefined) {
+    const found = studioDraftRecordType(source, recordType, moduleKey);
     for (const field of found?.record.fields ?? []) {
-      add({ source: "trigger_record", field: field.key }, `${found!.record.name}: ${field.label}`, "The record that started it",
-        studioFieldValueType(field.type));
-      if (recordTrigger.type === "BeforeSave")
-        add({ source: "trigger_previous", field: field.key }, `${found!.record.name}: ${field.label} before the change`,
-          "The record that started it", studioFieldValueType(field.type));
+      const options = studioFieldChoiceOptions(field);
+      const addField = (reference: FlowReference, label: string) =>
+        choices.push({ token: studioFlowReferenceToken(reference), label, group: "The record", type: studioFieldValueType(field.type),
+          reference, ...(options === undefined ? {} : { options }) });
+      addField({ source: "trigger_record", field: field.key }, `${found!.record.name}: ${field.label}`);
+      if (recordTrigger?.type === "BeforeSave")
+        addField({ source: "trigger_previous", field: field.key }, `${found!.record.name}: ${field.label} before the change`);
     }
   }
   add({ source: "execution_actor" }, "The person running it", "The run", "text");

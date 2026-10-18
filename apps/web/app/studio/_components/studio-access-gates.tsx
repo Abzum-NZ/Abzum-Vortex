@@ -11,6 +11,7 @@ import {
 } from "../_lib/application-access";
 import type { StudioAccessRun } from "./studio-access-role";
 import { StudioField } from "./studio-field";
+import { StudioUsedIn } from "./studio-used-in";
 
 const newChoice = "__new__";
 
@@ -121,7 +122,8 @@ export function StudioAccessPermissionList({ source, disabled, run }: Readonly<{
         const roles = source.body.roles.filter((role) => role.permissions.includes(permission.key)).map((role) => role.name);
         return <TableRow key={permission.key}>
           <TableCell><span className="font-medium">{permission.label}</span>
-            <span className="block text-xs text-muted-foreground">{permission.description}</span></TableCell>
+            <span className="block text-xs text-muted-foreground">{permission.description}</span>
+            <StudioUsedIn source={source} target={{ kind: "permission", permissionKey: permission.key }} name={permission.label} collapsed /></TableCell>
           <TableCell className="text-sm">{owner(permission.moduleKey, permission.recordKey)}</TableCell>
           <TableCell className="text-sm">{roles.length === 0 ? <span className="text-muted-foreground">No role</span> : roles.join(", ")}</TableCell>
           <TableCell className="text-right">{permission.standard

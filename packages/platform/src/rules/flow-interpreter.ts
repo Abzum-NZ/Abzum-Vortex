@@ -154,7 +154,9 @@ export type FlowRunState = Readonly<{
   subject?: FlowSubject;
   /**
    * The record a run acts on, keyed by field key, for `trigger.record.<field>` reads. It is set only
-   * by a host that runs a flow for one record (a named action's subject) and never comes from a flow.
+   * by a host that runs a flow for one record (a named action's subject, or the record an
+   * interactive flow's record input names, read afresh at every start and resume) and never comes
+   * from a flow.
    */
   triggerRecord?: FlowRuntimeValues;
   activations: readonly Activation[];
@@ -462,9 +464,9 @@ const scopeOf = (state: FlowRunState, activation: Activation, flow: FlowDefiniti
       case "execution_now":
         return typed("date_time", state.now);
       // A run started by a person or a system has no trigger record, unless the host supplied the
-      // record it acts on.
+      // record it acts on. That record is the started flow's own: a flow it runs reads none.
       case "trigger_record":
-        return state.triggerRecord?.[reference.field];
+        return activation.prefix === "" ? state.triggerRecord?.[reference.field] : undefined;
       default:
         return undefined;
     }
@@ -1258,7 +1260,11 @@ export const resumeFlowRun = (
   if (resume.kind !== "confirm") return mismatch();
   replaceTop(
     machine,
-    storeTaskOutputs(activation, awaiting.taskId, { confirmed: typed("yes_no", resume.confirmed) }),
+    storeTaskOutputs(activation, awaiting.taskId, {
+      confirmed: typed("yes_no", resume.confirmed),
+      // The opt-in counts only with a yes; a declined confirmation never carries it.
+      choice: typed("yes_no", resume.confirmed && resume.choice === true),
+    }),
   );
   return drive(machine, observer);
 };

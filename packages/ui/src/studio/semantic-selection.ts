@@ -42,7 +42,9 @@ export type StudioSemanticSelection =
   /** A field of a record type, by its permanent key. */
   | Readonly<{ kind: "field"; moduleKey: string; recordKey: string; fieldKey: string }>
   /** A query of an owned or used Module, by its key. */
-  | Readonly<{ kind: "query"; moduleKey: string; queryKey: string }>;
+  | Readonly<{ kind: "query"; moduleKey: string; queryKey: string }>
+  /** A role (access group) of the application, by its key; the Access tab shows it. */
+  | Readonly<{ kind: "role"; roleKey: string }>;
 
 /** The Data tab's kinds of selection: Modules and what they hold. */
 export type StudioDataSelection = Extract<StudioSemanticSelection, { kind: "module" | "record_type" | "field" | "query" }>;
@@ -168,6 +170,7 @@ type SelectionIndex = Readonly<{
   dataKeys: ReadonlySet<string>;
   /** Used Module keys: their owner defines what they hold, so any of their items may be selected. */
   usedModuleKeys: ReadonlySet<string>;
+  roleKeys: ReadonlySet<string>;
 }>;
 
 export type StudioSemanticSelectionListener = (
@@ -439,6 +442,8 @@ const normalizeSelection = (
       return Object.freeze({ kind: "field", moduleKey: selection.moduleKey, recordKey: selection.recordKey, fieldKey: selection.fieldKey });
     case "query":
       return Object.freeze({ kind: "query", moduleKey: selection.moduleKey, queryKey: selection.queryKey });
+    case "role":
+      return typeof selection.roleKey === "string" ? Object.freeze({ kind: "role", roleKey: selection.roleKey }) : undefined;
     default:
       return undefined;
   }
@@ -469,6 +474,8 @@ export const studioSemanticSelectionKey = (selection: StudioSemanticSelection): 
       return `field:${selection.moduleKey}:${selection.recordKey}.${selection.fieldKey}`;
     case "query":
       return `query:${selection.moduleKey}:${selection.queryKey}`;
+    case "role":
+      return `role:${selection.roleKey}`;
   }
 };
 
@@ -508,6 +515,8 @@ const containsSelection = (
     case "field":
     case "query":
       return index.usedModuleKeys.has(selection.moduleKey) || index.dataKeys.has(studioSemanticSelectionKey(selection));
+    case "role":
+      return index.roleKeys.has(selection.roleKey);
   }
 };
 
@@ -557,6 +566,7 @@ const indexDraft = (draft: StudioApplicationSelectionDraft): SelectionIndex => {
   return {
     dataKeys,
     usedModuleKeys: new Set(draft.source.body.uses.map((use) => use.module)),
+    roleKeys: new Set(draft.source.body.roles.map((role) => role.key)),
     applicationRootId: draft.rootId,
     pageAliases,
     shellAliases,

@@ -1,0 +1,262 @@
+{
+  "id": "mod_app_store",
+  "key": "vortex.app_store",
+  "name": "App Store",
+  "description": "The organisation's application catalogue: a read-only system projection of the Applications it owns with a published version. Installing and upgrading are registered platform operations, never record writes.",
+  "record_types": [
+    {
+      "id": "rt_store_application",
+      "key": "store_application",
+      "name": "Store application",
+      "plural_name": "Store applications",
+      "title_field": "name",
+      "storage_contract_id": "srt_app_store_store_application",
+      "storage_scope": "organization_shared",
+      "ownership_mode": "none",
+      "standard_actions": ["read"],
+      "custom_actions": [],
+      "system_projection": {
+        "protected_view": "application_store_entries",
+        "organization_field": "organization_id",
+        "revision_field": "revision",
+        "filterable_fields": [],
+        "sortable_fields": ["key"]
+      },
+      "fields": [
+        {
+          "id": "fld_store_application_organization_id",
+          "key": "organization_id",
+          "label": "Organisation",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 36
+          }
+        },
+        {
+          "id": "fld_store_application_revision",
+          "key": "revision",
+          "label": "Revision",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "whole_number",
+          "settings": {}
+        },
+        {
+          "id": "fld_store_application_key",
+          "key": "key",
+          "label": "Technical name",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": true,
+          "search_priority": "normal",
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        },
+        {
+          "id": "fld_store_application_name",
+          "key": "name",
+          "label": "Application",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "search_priority": "first",
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        },
+        {
+          "id": "fld_store_application_description",
+          "key": "description",
+          "label": "Description",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 1000
+          }
+        },
+        {
+          "id": "fld_store_application_latest_version",
+          "key": "latest_version",
+          "label": "Latest version",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 40
+          }
+        },
+        {
+          "id": "fld_store_application_latest_release_note",
+          "key": "latest_release_note",
+          "label": "What's new",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 2000
+          }
+        },
+        {
+          "id": "fld_store_application_published_at",
+          "key": "published_at",
+          "label": "Published",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "date_time",
+          "settings": {
+            "display_time_zone": "organization"
+          }
+        },
+        {
+          "id": "fld_store_application_installed_version",
+          "key": "installed_version",
+          "label": "Installed version",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 40
+          }
+        },
+        {
+          "id": "fld_store_application_status",
+          "key": "status",
+          "label": "Status",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "choice",
+          "settings": {
+            "options": [
+              {
+                "value": "available",
+                "label": "Not installed"
+              },
+              {
+                "value": "installed",
+                "label": "Installed"
+              },
+              {
+                "value": "update_available",
+                "label": "Update available"
+              }
+            ]
+          }
+        }
+      ],
+      "pipelines": [],
+      "relationships": []
+    }
+  ],
+  "permissions": [
+    {
+      "id": "perm_store_application_read",
+      "key": "vortex.app_store.store_application.read",
+      "label": "Read the application catalogue",
+      "description": "Allows reading the organisation's application catalogue as a system record.",
+      "record_type": "store_application",
+      "action_kind": "read",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "organization_id",
+          "revision",
+          "key",
+          "name",
+          "description",
+          "latest_version",
+          "latest_release_note",
+          "published_at",
+          "installed_version",
+          "status"
+        ],
+        "changeable_fields": []
+      }
+    }
+  ],
+  "actions": [],
+  "events": [],
+  "flows": [],
+  "extension_points": [],
+  "sharing_conditions": [],
+  "queries": [
+    {
+      "id": "qry_store_applications",
+      "key": "store_applications",
+      "record_type": "store_application",
+      "inputs": [],
+      "select": [
+        "revision",
+        "key",
+        "name",
+        "description",
+        "latest_version",
+        "latest_release_note",
+        "published_at",
+        "installed_version",
+        "status"
+      ],
+      "filter": null,
+      "group_by": [],
+      "aggregates": [],
+      "sort": [
+        {
+          "field": "key",
+          "direction": "ascending"
+        }
+      ],
+      "page_size": 50,
+      "relationship_hops": 0
+    }
+  ]
+}

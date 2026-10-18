@@ -871,6 +871,7 @@ export const compareFlow = (
     "execution",
     "runAs",
     "invocationPermissionId",
+    "recordInput",
     "inputs",
     "variables",
     "triggers",

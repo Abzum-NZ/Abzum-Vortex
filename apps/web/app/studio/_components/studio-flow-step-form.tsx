@@ -151,6 +151,7 @@ const pickerOptions = (field: StudioFlowPropertyField, choices: StudioFlowDraftC
     case "operation": return choices.actions.map((entry) => ({ value: entry.key, label: entry.label }));
     case "connection": return choices.connections.map((entry) => ({ value: entry.key, label: entry.label }));
     case "flow": return flows.map((flow) => ({ value: flow.id, label: studioFlowLabel(flow) }));
+    case "field": return field.options;
     default: return undefined;
   }
 };
