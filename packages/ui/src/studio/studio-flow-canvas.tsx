@@ -168,7 +168,7 @@ function StudioFlowEdge(props: EdgeProps<FlowEdge>) {
             <PopoverContent className="w-80" onKeyDown={(event) => event.stopPropagation()}>
               <PopoverTitle>Add a step</PopoverTitle>
               <StudioFlowStepPicker
-                forms={request.forms}
+                forms={request?.forms ?? actions.forms}
                 id={id}
                 label="Kind of step"
                 types={request?.types ?? actions.types}
@@ -505,3 +505,4 @@ export function StudioFlowCanvas({
     </div>
   );
 }
+
