@@ -456,13 +456,11 @@ export function StudioFlowCanvas({
       aria-label={label}
       role="group"
     >
-      <div className="shrink-0 p-3">
-        <Card className="gap-1 rounded-xl border bg-card px-3 py-2 text-card-foreground shadow-xs">
-          <p className="truncate text-sm font-medium">{title}</p>
-          <p className="line-clamp-2 text-sm text-muted-foreground">
-            {starts.join(" · ") || "Started by another flow or not started yet"}
-          </p>
-        </Card>
+      <div className="shrink-0 space-y-1 px-3 py-3">
+        <p className="truncate text-sm font-medium">{title}</p>
+        <p className="line-clamp-2 text-sm text-muted-foreground">
+          {starts.join(" · ") || "Started by another flow or not started yet"}
+        </p>
       </div>
       <div className="min-h-0 flex-1">
         <ActionsContext.Provider value={actions}>
