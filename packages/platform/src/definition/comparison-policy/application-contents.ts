@@ -57,7 +57,7 @@ const placementSubtreeIsOptionalPresentation = (item: RecordValue): boolean => {
     vortex.usePermissionKey === undefined &&
     vortex.visibilityCondition === undefined &&
     vortex.queryId === undefined &&
-    // Flow bindings for interactive entries are compared separately as major changes.
+    // Flow bindings for interactive entries are compared with their owning placements.
     Object.entries(placementSettings(props)).every(([key, value]) => {
       const declaration = declarations.find((property) => property.key === key);
       if (declaration === undefined) throw new Error(`Block release has no setting '${key}'`);
@@ -200,6 +200,21 @@ const comparePlacements = (
 ): void => {
   const previous = collectPlacements(previousContent);
   const candidate = collectPlacements(candidateContent);
+  // A binding on a new control belongs to the new capability. Binding an existing
+  // control changes its behaviour; edits and removals remain breaking changes too.
+  compareKeyed(
+    reasons,
+    previousContent.flowBindings as RecordValue[],
+    candidateContent.flowBindings as RecordValue[],
+    "bindingId",
+    "flow_binding",
+    (before, after) =>
+      compareSimpleComponent(reasons, "flow_binding", after.bindingId, before, after),
+    (binding) => {
+      const controlId = String(binding.controlId);
+      return candidate.has(controlId) && !previous.has(controlId) ? "minor" : "major";
+    },
+  );
   const previousPageIds = new Set(
     (asRecord(previousContent).pages as RecordValue[]).map((page) => String(page.pageId)),
   );
@@ -211,14 +226,13 @@ const comparePlacements = (
   for (const [id, current] of candidate)
     if (!previous.has(id)) {
       if (current.pageId !== undefined && compatibleAddedPageIds.has(current.pageId)) continue;
-      const presentationOnly =
-        !current.publicPage &&
-        !current.guidedStep &&
-        placementSubtreeIsOptionalPresentation(current.item);
+      // Public forms and guided steps have an existing interaction contract. Ordinary
+      // page additions, including data-bound Boards, add a new capability.
+      const breaking = current.publicPage || current.guidedStep;
       reasons.push(
         makeReason(
-          presentationOnly ? "minor" : "major",
-          presentationOnly ? "component_added" : "required_component_added",
+          breaking ? "major" : "minor",
+          breaking ? "required_component_added" : "component_added",
           "block_placement",
           "definition",
           id,
@@ -607,6 +621,8 @@ export const compareApplicationContents = (
   const reasons = compareApplicationSharedContent(previousContent, candidateContent);
   const previous = asRecord(previousContent);
   const candidate = asRecord(candidateContent);
+  // Bringing a released block into use is additive. Its settings affect versioning only when
+  // an existing placement changes; dependency removals still compare as breaking changes.
   compareKeyed(
     reasons,
     previous.platformBlockDependencies as RecordValue[],
@@ -615,7 +631,7 @@ export const compareApplicationContents = (
     "platform_block_dependency",
     (before, after) =>
       compareSimpleComponent(reasons, "platform_block_dependency", after.blockId, before, after),
-    () => "major",
+    () => "minor",
     (item) => item.blockId,
   );
   compareShells(reasons, previous.shells as RecordValue[], candidate.shells as RecordValue[]);
