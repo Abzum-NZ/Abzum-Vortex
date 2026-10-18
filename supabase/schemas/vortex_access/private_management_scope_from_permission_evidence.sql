@@ -19,13 +19,23 @@ begin
     from pg_catalog.jsonb_array_elements(p_permissions) as item(value)
     where (
       pg_catalog.jsonb_typeof(item.value) = 'object'
-      and item.value ?& array['ownerKind', 'ownerId', 'permissionId']
+      and item.value ?& array[
+        'ownerKind', 'ownerId', 'permissionId',
+        'acceptedRegistrationRevision', 'meaningFingerprint'
+      ]
       and pg_catalog.jsonb_typeof(item.value -> 'ownerKind') = 'string'
       and item.value ->> 'ownerKind' in ('platform', 'application', 'module')
       and pg_catalog.jsonb_typeof(item.value -> 'ownerId') = 'string'
       and vortex_platform.is_non_nil_uuid(item.value ->> 'ownerId')
       and pg_catalog.jsonb_typeof(item.value -> 'permissionId') = 'string'
       and vortex_platform.is_non_nil_uuid(item.value ->> 'permissionId')
+      and pg_catalog.jsonb_typeof(item.value -> 'acceptedRegistrationRevision') = 'number'
+      and (item.value ->> 'acceptedRegistrationRevision')::numeric
+        between 1 and 9007199254740991
+      and (item.value ->> 'acceptedRegistrationRevision')::numeric =
+        pg_catalog.trunc((item.value ->> 'acceptedRegistrationRevision')::numeric)
+      and pg_catalog.jsonb_typeof(item.value -> 'meaningFingerprint') = 'string'
+      and item.value ->> 'meaningFingerprint' ~ '^sha256:[a-f0-9]{64}$'
       and (
         (
           item.value ->> 'ownerKind' = 'platform'
@@ -52,7 +62,9 @@ begin
       'applicationRootId', parsed.application_root_id,
       'ownerKind', parsed.owner_kind,
       'ownerId', parsed.owner_id,
-      'permissionId', parsed.permission_id
+      'permissionId', parsed.permission_id,
+      'acceptedRegistrationRevision', parsed.accepted_registration_revision,
+      'meaningFingerprint', parsed.meaning_fingerprint
     )
   ) order by parsed.application_root_id nulls first,
     parsed.owner_kind collate "C", parsed.owner_id, parsed.permission_id)
@@ -63,7 +75,9 @@ begin
         else (item.value ->> 'applicationRootId')::uuid end as application_root_id,
       item.value ->> 'ownerKind' as owner_kind,
       (item.value ->> 'ownerId')::uuid as owner_id,
-      (item.value ->> 'permissionId')::uuid as permission_id
+      (item.value ->> 'permissionId')::uuid as permission_id,
+      (item.value ->> 'acceptedRegistrationRevision')::bigint as accepted_registration_revision,
+      item.value ->> 'meaningFingerprint' as meaning_fingerprint
     from pg_catalog.jsonb_array_elements(p_permissions) as item(value)
   ) as parsed;
 

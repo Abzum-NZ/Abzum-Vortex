@@ -2134,5 +2134,110 @@
         "key": "platform.organization.assignments.manage"
       }
     }
+  },
+  "review_application_removal": {
+    "key": "review_application_removal",
+    "name": "Review application removal",
+    "release": {
+      "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980",
+      "operationId": "3fb6a072-58a4-435e-a3ae-3fbd17374d25",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980"
+        },
+        "operationId": "3fb6a072-58a4-435e-a3ae-3fbd17374d25"
+      },
+      "inputs": {
+        "application_root_id": {
+          "type": "text",
+          "required": true
+        }
+      },
+      "outputs": {
+        "application_name": {
+          "type": "text",
+          "required": true
+        },
+        "installed_version": {
+          "type": "text",
+          "required": true
+        },
+        "expected": {
+          "type": "json",
+          "required": true
+        }
+      },
+      "effect": "read",
+      "expectedRevision": "not_required",
+      "confirmation": "not_required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "completed",
+        "refused",
+        "validation",
+        "failed"
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "7ecd3304-f16c-47d4-94db-0964980091ba",
+        "key": "platform.organization.applications.manage"
+      }
+    }
+  },
+  "remove_application": {
+    "key": "remove_application",
+    "name": "Remove application",
+    "release": {
+      "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980",
+      "operationId": "cf390ffd-70cc-4b4b-9f4a-7d77cc62eec6",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980"
+        },
+        "operationId": "cf390ffd-70cc-4b4b-9f4a-7d77cc62eec6"
+      },
+      "inputs": {
+        "application_root_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected": {
+          "type": "json",
+          "required": true
+        }
+      },
+      "outputs": {
+        "application_name": {
+          "type": "text",
+          "required": true
+        }
+      },
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "conflict",
+        "validation",
+        "failed"
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "7ecd3304-f16c-47d4-94db-0964980091ba",
+        "key": "platform.organization.applications.manage"
+      }
+    }
   }
 }

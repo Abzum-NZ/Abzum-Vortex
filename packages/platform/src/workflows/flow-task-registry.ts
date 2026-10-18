@@ -774,6 +774,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       details: optional("json"),
       choice: optional("message_text"),
       confirm_label: optional("message_text"),
+      destructive: optional("yes_no"),
     },
     outputs: [output("confirmed", "yes_no"), output("choice", "yes_no")],
     kestra: "not_compiled",
