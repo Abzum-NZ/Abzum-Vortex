@@ -325,11 +325,15 @@ export const provisionStudioApplicationPreview = async (
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
   const request = previewRequestSchema.safeParse(candidate);
   if (!organization.success || !request.success) return { kind: "refused", reason: "invalid_request" };
-  // Each caller checks current authority before joining any pending operation.
-  const authorized = await readStudioPreviewState(session, organization.data, request.data.rootId, request.data.draftRevision);
-  if (authorized.kind !== "read") return authorized;
   const key = `${session.identityId}|${organization.data}|${request.data.rootId}`.toLowerCase();
-  const queue = preparations.get(key);
+  let queue = preparations.get(key);
+  if (queue !== undefined) {
+    // Joining work still checks this caller's current authority. A new operation checks it in
+    // prepareCurrentPreview, avoiding a duplicate full saved-source read for the usual case.
+    const authorized = await readStudioPreviewState(session, organization.data, request.data.rootId, request.data.draftRevision);
+    if (authorized.kind !== "read") return authorized;
+    queue = preparations.get(key);
+  }
   const revision = request.data.draftRevision;
   if (queue !== undefined) {
     if (queue.active.revision === revision) return queue.active.promise;

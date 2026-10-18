@@ -1,7 +1,8 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { StudioStoredApplicationDraft } from "@vortex/ui/studio";
-import type { StudioApplicationPreviewResult, StudioPreviewStatus } from "../../_lib/studio-application-preview";
+import { previewStudioApplication } from "../_lib/studio-read-client";
+import type { StudioPreviewStatus } from "../../_lib/studio-application-preview";
 
 type Readiness = Readonly<{ identity: string; status: StudioPreviewStatus }>;
 export type StudioPreviewReadiness = Readiness & Readonly<{ refresh: () => void }>;
@@ -43,14 +44,8 @@ export function useStudioPreview(organizationId: string, saved: StudioStoredAppl
               if (!response.ok) throw new Error(`STUDIO_PREVIEW_STATUS_HTTP_${response.status}`);
               return response.json() as Promise<StudioPreviewStatus>;
             };
-            status = await observe();
-            if (status.kind === "preparing") {
-              const response = await fetch("/studio/preview", { method: "POST", credentials: "same-origin",
-                headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, request }) });
-              if (!response.ok) throw new Error(`STUDIO_PREVIEW_PREPARE_HTTP_${response.status}`);
-              const result = await response.json() as StudioApplicationPreviewResult;
-              status = result.kind === "provisioned" ? await observe() : result;
-            }
+            const result = await previewStudioApplication(organizationId, request);
+            status = result.kind === "provisioned" ? await observe() : result;
             if (status.kind === "ready" && (status.draftRevision !== target.draftRevision ||
               status.sourceFingerprint !== target.sourceFingerprint)) status = { kind: "conflict" };
           } catch (cause) {
