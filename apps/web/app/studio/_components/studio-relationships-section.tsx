@@ -171,10 +171,8 @@ export function StudioRelationshipsSection({
                 </ItemTitle>
                 <ItemDescription>
                   {record.name} links to {link.targets.map(targetLabel).join(" or ")}
-                  {link.reverseKey === undefined
-                    ? ""
-                    : `; back from it as "${link.reverseKey.replaceAll("_", " ")}"`}
-                  . When a linked record is deleted: {deleteWords[link.onParentDelete]}.
+                  {link.reverseName === undefined ? "" : `; back from it as "${link.reverseName}"`}.
+                  When a linked record is deleted: {deleteWords[link.onParentDelete]}.
                 </ItemDescription>
               </ItemContent>
               <ItemActions>
@@ -220,9 +218,9 @@ export function StudioRelationshipsSection({
                 </ItemTitle>
                 <ItemDescription>
                   Each {link.recordName.toLowerCase()} links to a {record.name.toLowerCase()}
-                  {link.reverseKey === undefined
+                  {link.reverseName === undefined
                     ? ""
-                    : `; from ${record.name} it reads as "${link.reverseKey.replaceAll("_", " ")}"`}
+                    : `; from ${record.name} it reads as "${link.reverseName}"`}
                   . It is changed on {link.recordName}.
                 </ItemDescription>
               </ItemContent>

@@ -215,8 +215,6 @@ export function ModuleFieldsEditor({
     });
   const startSettings = (type: ModuleFieldType): Record<string, unknown> => {
     const start = starterModuleFieldSettings(type, {
-      fieldKey: deriveFieldKey(existing?.label ?? "field", new Set()) ?? "field",
-      recordKey,
       recordTypes: recordTypes.map((item) => item.key),
       titleField: record?.title_field ?? "",
       relationships: totalLinks.map((item) => item.reference),
@@ -225,11 +223,8 @@ export function ModuleFieldsEditor({
     if (type === "calculation")
       return settledCalculation(start as CalculationSettings, formulaFieldsByKey);
     // A new link reads back from the linked record by this record type's plural name, for example assets.
-    const back =
-      type === "link" && record !== undefined
-        ? deriveFieldKey(record.plural_name, new Set())
-        : undefined;
-    return back === undefined ? start : { ...start, reverse_key: back };
+    const back = type === "link" ? record?.plural_name : undefined;
+    return back === undefined ? start : { ...start, reverse_name: back };
   };
   /** The stored settings a type keeps: the field's own while it keeps its type, else the new type's starting settings. */
   const plainOf = (type: ModuleFieldType): Plain =>
@@ -597,7 +592,7 @@ export function ModuleFieldsEditor({
 
   const shapeLocked = published;
   const shapeHint = shapeLocked
-    ? "Published fields keep their type and stored settings. Labels, help and defaults can change."
+    ? "Published fields keep their stored shape. Labels, help, defaults and link-back names can change."
     : undefined;
   const flag = (
     key: "required" | "unique" | "filterable" | "sortable",
@@ -756,14 +751,17 @@ export function ModuleFieldsEditor({
         ) : declarations.length === 0 ? (
           <p className="text-sm text-muted-foreground">This type has no settings.</p>
         ) : (
-          <StudioSettingFields
-            idPrefix="module-field-setting"
-            properties={declarations}
-            values={form.settings}
-            choices={choices}
-            disabled={disabled || shapeLocked}
-            onChange={changeSettings}
-          />
+          declarations.map((declaration) => (
+            <StudioSettingFields
+              key={declaration.key}
+              idPrefix="module-field-setting"
+              properties={[declaration]}
+              values={form.settings}
+              choices={choices}
+              disabled={disabled || (shapeLocked && declaration.key !== "reverse_name")}
+              onChange={changeSettings}
+            />
+          ))
         )}
         {settingsValue.problem === "" ? null : (
           <p role="alert" className="text-sm text-destructive">
