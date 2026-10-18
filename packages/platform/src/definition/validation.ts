@@ -245,6 +245,19 @@ export function validateDefinitionSet(
   context: DefinitionSetValidationContext,
   stage: DefinitionValidationStage = "publish",
 ) {
+  return validatePreparedDefinitionSet(
+    {
+      ...context,
+      parsedSources: editSaveSources(context).map((source) => parseEditSaveSource(source)),
+    },
+    stage,
+  );
+}
+
+function validatePreparedDefinitionSet(
+  context: PreparedValidationContext,
+  stage: DefinitionValidationStage,
+) {
   const eligibleRules = definitionSemanticRules
     .filter((rule) => validationStageRank[rule.stage] <= validationStageRank[stage])
     .filter((rule) => hasRequiredContext(context, rule.requiredContext));
@@ -253,7 +266,6 @@ export function validateDefinitionSet(
   let canonicalWalker: ReturnType<typeof createContractValueWalker> | undefined;
   const preparedContext: PreparedValidationContext = {
     ...context,
-    parsedSources: editSaveSources(context).map((source) => parseEditSaveSource(source)),
     walkCanonicalValues: (value, visit) =>
       (canonicalWalker ??= canonicalValueWalker(context))(value, visit),
   };
@@ -264,17 +276,19 @@ export function validateDefinitionSet(
 }
 
 export function validateDefinitionSource(source: unknown, permissions: PlatformPermissionSource) {
-  return validateDefinitionSet(
-    { permissions, requests: [], outputs: [], rawSources: [source] },
+  const parsed = parseEditSaveSource(source);
+  const validation = validatePreparedDefinitionSet(
+    { permissions, requests: [], outputs: [], rawSources: [source], parsedSources: [parsed] },
     "edit_save",
   );
+  // Only this unknown-input boundary produces the detached source used by draft storage.
+  return { ...validation, source: validation.valid && parsed.success ? parsed.data : undefined };
 }
 
 function dependencyKeys(request: PublicationCompilationRequest): string[] {
   const source = request.source as unknown as JsonObject;
   const body = object(source.body);
-  if (source.kind === "module")
-    return moduleDependencies(source).map((entry) => entry.module);
+  if (source.kind === "module") return moduleDependencies(source).map((entry) => entry.module);
   if (source.kind === "application")
     return [
       ...array(body.modules).map((module) => String(module.key)),
@@ -353,7 +367,9 @@ export function compileDefinitionSet(
     permissions: PlatformPermissionSource,
   ) => Output;
   for (const request of ordered)
-    outputs.push(compilePublicationRequest(request, [...dependencyOutputs, ...outputs], permissions));
+    outputs.push(
+      compilePublicationRequest(request, [...dependencyOutputs, ...outputs], permissions),
+    );
   const validation = validateDefinitionSet({
     permissions,
     requests: ordered,
