@@ -1,4 +1,3 @@
-begin;
 set local role vortex_owner;
 
 create or replace function vortex_access.change_application_installation_access(
@@ -180,4 +179,3 @@ alter function vortex_access.change_application_installation_access(p_activity_i
 grant execute on function vortex_access.change_application_installation_access(p_activity_id uuid, p_application_root_id uuid, p_change text, p_prepared_templates jsonb) to postgres;
 
 reset role;
-commit;
