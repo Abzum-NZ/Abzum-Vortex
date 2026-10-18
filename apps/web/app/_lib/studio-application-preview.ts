@@ -111,7 +111,7 @@ const coordinator = () =>
         targetFacts,
         permissions: platformPermissionSource,
       }),
-    draftRehearsal: (transaction, authority) =>
+    draftPlanner: (transaction, authority) =>
       createDatabaseDefinitionPublicationService(installedReleaseCatalogue, transaction, authority),
   });
 
