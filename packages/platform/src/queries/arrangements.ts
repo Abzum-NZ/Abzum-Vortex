@@ -51,7 +51,8 @@ const refusal = (reasonCode: ArrangementRefusalReasonCode): ArrangementRefusal =
 });
 
 const lower = (id: string): string => id.toLowerCase();
-const codeUnitOrder = (left: string, right: string): number => (left < right ? -1 : left > right ? 1 : 0);
+const codeUnitOrder = (left: string, right: string): number =>
+  left < right ? -1 : left > right ? 1 : 0;
 const valuesOf = (row: ArrangementRow): Values => row.values as Values;
 const present = (value: JsonValue | undefined): value is Exclude<JsonValue, null> =>
   value !== undefined && value !== null;
@@ -71,7 +72,6 @@ const groupableTypes: ReadonlySet<FieldType> = new Set([
   "web_address",
   "link",
   "link_to_one_of_several",
-  "link_to_person",
 ]);
 
 // Plan validation
@@ -120,7 +120,8 @@ const validateUse = (
   aggregates: readonly AggregateDescriptor[],
 ): boolean =>
   groupByFieldIds.every(
-    (fieldId) => declared.has(lower(fieldId)) && groupableTypes.has(fieldTypes.get(lower(fieldId))!),
+    (fieldId) =>
+      declared.has(lower(fieldId)) && groupableTypes.has(fieldTypes.get(lower(fieldId))!),
   ) &&
   aggregates.every((aggregate) =>
     aggregate.fieldId === undefined
@@ -137,8 +138,6 @@ const groupKeyPart = (value: JsonValue | undefined, type: FieldType): JsonValue 
     const link = value as Readonly<{ recordTypeId: string; recordId: string }>;
     return [lower(link.recordTypeId), lower(link.recordId)];
   }
-  if (type === "link_to_person")
-    return lower((value as Readonly<{ organizationAccountId: string }>).organizationAccountId);
   return value;
 };
 
@@ -151,25 +150,39 @@ const compareFieldValues = (
   if (!present(left) || !present(right)) return present(left) ? -1 : present(right) ? 1 : 0;
   switch (type) {
     case "whole_number":
-      return (left as number) < (right as number) ? -1 : (left as number) > (right as number) ? 1 : 0;
+      return (left as number) < (right as number)
+        ? -1
+        : (left as number) > (right as number)
+          ? 1
+          : 0;
     case "decimal_number":
       return compareExactDecimals(parseExactDecimal(left)!, parseExactDecimal(right)!);
     case "yes_no":
       return left === right ? 0 : left === false ? -1 : 1;
     case "date_time": {
       const difference = Date.parse(left as string) - Date.parse(right as string);
-      return difference < 0 ? -1 : difference > 0 ? 1 : codeUnitOrder(left as string, right as string);
+      return difference < 0
+        ? -1
+        : difference > 0
+          ? 1
+          : codeUnitOrder(left as string, right as string);
     }
     case "link":
     case "link_to_one_of_several":
-    case "link_to_person":
-      return codeUnitOrder(JSON.stringify(groupKeyPart(left, type)), JSON.stringify(groupKeyPart(right, type)));
+      return codeUnitOrder(
+        JSON.stringify(groupKeyPart(left, type)),
+        JSON.stringify(groupKeyPart(right, type)),
+      );
     default:
       return codeUnitOrder(left as string, right as string);
   }
 };
 
-type RowGroup = { groupKey: string; groupValues: Record<string, JsonValue>; rows: ArrangementRow[] };
+type RowGroup = {
+  groupKey: string;
+  groupValues: Record<string, JsonValue>;
+  rows: ArrangementRow[];
+};
 
 /** Groups rows by the typed values of the grouping fields, in deterministic group order. */
 const groupRows = (
@@ -209,7 +222,8 @@ const projectRow = (row: ArrangementRow, declaredFieldIds: readonly string[]): A
   const values = valuesOf(row);
   const projected: Record<string, JsonValue> = {};
   for (const fieldId of declaredFieldIds)
-    if (Object.prototype.hasOwnProperty.call(values, fieldId)) projected[fieldId] = values[fieldId]!;
+    if (Object.prototype.hasOwnProperty.call(values, fieldId))
+      projected[fieldId] = values[fieldId]!;
   return { recordId: row.recordId, values: projected as ArrangementRow["values"] };
 };
 
@@ -315,9 +329,19 @@ const isoDateTime = (instant: number): string | undefined =>
 /** Offset of the zone's wall clock from UTC at one instant, to the second. */
 const zoneOffset = (zone: Intl.DateTimeFormat, instant: number): number => {
   const second = instant - (((instant % 1000) + 1000) % 1000);
-  const parts = new Map(zone.formatToParts(new Date(second)).map((part) => [part.type, part.value]));
-  const wallClock = utcDay(Number(parts.get("year")), Number(parts.get("month")), Number(parts.get("day")));
-  wallClock.setUTCHours(Number(parts.get("hour")), Number(parts.get("minute")), Number(parts.get("second")));
+  const parts = new Map(
+    zone.formatToParts(new Date(second)).map((part) => [part.type, part.value]),
+  );
+  const wallClock = utcDay(
+    Number(parts.get("year")),
+    Number(parts.get("month")),
+    Number(parts.get("day")),
+  );
+  wallClock.setUTCHours(
+    Number(parts.get("hour")),
+    Number(parts.get("minute")),
+    Number(parts.get("second")),
+  );
   return wallClock.getTime() - second;
 };
 
@@ -452,16 +476,20 @@ const calendarZone = (timeZone: string): Intl.DateTimeFormat | undefined => {
  * neutral refusal and nothing partial.
  */
 export const arrangeDataset = (commandCandidate: unknown): ArrangementResult => {
-  const rowsCandidate = (commandCandidate as { dataset?: { rows?: unknown } } | null)?.dataset?.rows;
+  const rowsCandidate = (commandCandidate as { dataset?: { rows?: unknown } } | null)?.dataset
+    ?.rows;
   if (Array.isArray(rowsCandidate) && rowsCandidate.length > arrangementRowLimit)
     return refusal("dataset_limit_exceeded");
   const command = arrangementCommandSchema.safeParse(commandCandidate);
   if (!command.success) return refusal("request_invalid");
   const { dataset, descriptor } = command.data;
 
-  const fieldTypes: FieldTypes = new Map(dataset.fields.map((field) => [lower(field.fieldId), field.type]));
+  const fieldTypes: FieldTypes = new Map(
+    dataset.fields.map((field) => [lower(field.fieldId), field.type]),
+  );
   const declaredFieldIds = descriptor.declaredFieldIds.map(lower);
-  if (!declaredFieldIds.every((fieldId) => fieldTypes.has(fieldId))) return refusal("descriptor_invalid");
+  if (!declaredFieldIds.every((fieldId) => fieldTypes.has(fieldId)))
+    return refusal("descriptor_invalid");
   const declared = new Set(declaredFieldIds);
   const typeOf = (fieldId: string): FieldType | undefined =>
     declared.has(lower(fieldId)) ? fieldTypes.get(lower(fieldId)) : undefined;
@@ -484,8 +512,10 @@ export const arrangeDataset = (commandCandidate: unknown): ArrangementResult => 
       const startType = typeOf(mapping.startFieldId);
       const valid =
         mapping.kind === "start_end"
-          ? (startType === "date" || startType === "date_time") && typeOf(mapping.endFieldId) === startType
-          : (startType === "date_time" || (startType === "date" && mapping.durationUnit === "days")) &&
+          ? (startType === "date" || startType === "date_time") &&
+            typeOf(mapping.endFieldId) === startType
+          : (startType === "date_time" ||
+              (startType === "date" && mapping.durationUnit === "days")) &&
             (typeOf(mapping.durationFieldId) === "whole_number" ||
               typeOf(mapping.durationFieldId) === "decimal_number");
       if (!valid) return refusal("descriptor_invalid");
@@ -520,8 +550,7 @@ export const arrangeSummary = async (
   commandCandidate: unknown,
 ): Promise<HumanOrganizationRequestResult<ArrangementResult>> => {
   const command = summaryArrangementCommandSchema.safeParse(commandCandidate);
-  if (!command.success)
-    return { kind: "available", value: refusal("request_invalid") };
+  if (!command.success) return { kind: "available", value: refusal("request_invalid") };
 
   const result = await queries.summarise(caller, selection, command.data);
   if (result.kind !== "available") return result;
@@ -662,8 +691,7 @@ export const arrangeProtectedBoard = async (
   HumanOrganizationRequestResult<ProtectedBoardArrangementResult | ArrangementRefusal>
 > => {
   const parsedCommand = protectedBoardArrangementCommandSchema.safeParse(commandCandidate);
-  if (!parsedCommand.success)
-    return { kind: "available", value: refusal("request_invalid") };
+  if (!parsedCommand.success) return { kind: "available", value: refusal("request_invalid") };
   const command = parsedCommand.data;
 
   const producedSummary = await queries.boardSummary(caller, selection, {
@@ -677,8 +705,7 @@ export const arrangeProtectedBoard = async (
   if (producedSummary.kind !== "available") return producedSummary;
 
   const summaryResult = protectedQueryBoardSummaryResultSchema.safeParse(producedSummary.value);
-  if (!summaryResult.success)
-    return { kind: "available", value: refusal("dataset_invalid") };
+  if (!summaryResult.success) return { kind: "available", value: refusal("dataset_invalid") };
   if (summaryResult.data.outcome === "refused")
     return { kind: "available", value: refusal(summaryResult.data.reasonCode) };
 
@@ -783,7 +810,6 @@ export const arrangeProtectedBoard = async (
     unassigned: { ...summary.unassigned, page: unassignedPage },
     aggregates: summary.aggregates,
   });
-  if (!completed.success)
-    return { kind: "available", value: refusal("dataset_invalid") };
+  if (!completed.success) return { kind: "available", value: refusal("dataset_invalid") };
   return { kind: "available", value: completed.data };
 };

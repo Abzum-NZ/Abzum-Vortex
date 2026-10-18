@@ -17,7 +17,6 @@ as $function$
 declare
   field_value jsonb;
   relationship_value jsonb;
-  person_account_id uuid;
   relationship_changes jsonb := '[]'::jsonb;
   value_final_values jsonb := '{}'::jsonb;
   value_submitted_field_ids uuid[] := array[]::uuid[];
@@ -41,33 +40,6 @@ begin
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'unknown_field'
       );
-    end if;
-    if field_value ->> 'type' = 'link_to_person'
-      and pg_catalog.jsonb_typeof(entry_value) <> 'null' then
-      if not vortex_record.canonical_record_value_matches(entry_value, 'link_to_person', 'json') then
-        perform vortex_record.release_command_receipt_internal(receipt_kind, effective_command_id);
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'refused', 'reasonCode', 'person_reference_unavailable', 'fieldId', entry_key
-        );
-      end if;
-      person_account_id := (entry_value ->> 'organizationAccountId')::uuid;
-      if coalesce(field_value #>> '{settings,audience}', '') not in (
-          'organization_accounts', 'application_accounts',
-          'organization_identities_and_external_requesters'
-        )
-        or not vortex_access.lock_active_record_ownership_target_internal(
-          'organization_account', person_account_id
-        )
-        or ((field_value #>> '{settings,audience}' = 'application_accounts'
-            or coalesce((field_value #>> '{settings,applicationRootIdRequired}')::boolean, false))
-          and not vortex_access.organization_account_has_current_application_access_internal(
-            organization_id_value, person_account_id, application_root_id_value
-          )) then
-        perform vortex_record.release_command_receipt_internal(receipt_kind, effective_command_id);
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'refused', 'reasonCode', 'person_reference_unavailable', 'fieldId', entry_key
-        );
-      end if;
     end if;
     if field_value ->> 'type' in ('link', 'link_to_one_of_several') then
       select item.value into relationship_value
@@ -144,4 +116,4 @@ grant execute on function vortex_record.classify_record_change_values_internal(u
   to vortex_record_adapter;
 
 comment on function vortex_record.classify_record_change_values_internal(uuid,jsonb,jsonb,jsonb,uuid,uuid,text,uuid) is
-  'Private field classification step of apply_record_changes: validates installed fields and person targets, separates relationship mutations from fixed values, and preserves refusal receipt release before the subject write.';
+  'Private field classification step of apply_record_changes: validates installed fields, separates relationship mutations from fixed values, and preserves refusal receipt release before the subject write.';

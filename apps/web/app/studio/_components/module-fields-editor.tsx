@@ -120,8 +120,6 @@ type FormState = Readonly<{
 
 const computedTypes: ReadonlySet<ModuleFieldType> = new Set(["calculation", "total"]);
 const linkTypes: ReadonlySet<string> = new Set(["link", "link_to_one_of_several"]);
-/** A person is linked with a Link to a record whose target is the people directory's Person, not this older type. */
-const replacedFieldTypes: ReadonlySet<string> = new Set(["link_to_person"]);
 
 /**
  * The one field editor of the Data tab. Without a field it is the form that adds a field to a
@@ -704,9 +702,10 @@ export function ModuleFieldsEditor({
               id={control.id}
               value={form.type}
               disabled={disabled || shapeLocked}
-              options={fieldTypeKeys
-                .filter((item) => !replacedFieldTypes.has(item))
-                .map((item) => ({ value: item, label: moduleFieldTypeLabels[item] }))}
+              options={fieldTypeKeys.map((item) => ({
+                value: item,
+                label: moduleFieldTypeLabels[item],
+              }))}
               onChange={(next) => changeType(next as ModuleFieldType)}
             />
           )}

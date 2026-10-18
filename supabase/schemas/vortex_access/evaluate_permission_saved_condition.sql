@@ -1,5 +1,5 @@
-CREATE OR REPLACE FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) RETURNS boolean
-    LANGUAGE plpgsql IMMUTABLE
+CREATE OR REPLACE FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid, p_installation_record_types jsonb) RETURNS boolean
+    LANGUAGE plpgsql STABLE
     SET search_path TO ''
     AS $_$
 declare
@@ -10,6 +10,7 @@ declare
   result_kind text;
   semantic_type text;
   field_types jsonb := '{}'::jsonb;
+  account_record_type_id uuid;
   declared_fields jsonb;
   declaration jsonb;
   binding jsonb;
@@ -107,7 +108,6 @@ begin
       when field_kind = 'several_choices' then 'text_collection'
       when field_kind in ('table', 'attachment') then 'opaque_json'
       when field_kind in ('link', 'link_to_one_of_several') then 'record_reference'
-      when field_kind = 'link_to_person' then 'organization_account_reference'
       when field_kind in ('calculation', 'total') then null
       when field_kind in (
         'text', 'long_text', 'formatted_text', 'choice', 'reference_number',
@@ -174,7 +174,7 @@ begin
       or parameter_type is null
       or not (
         parameter_type in (
-          'text', 'whole_number', 'yes_no', 'date', 'date_time', 'organization_account_reference'
+          'text', 'whole_number', 'yes_no', 'date', 'date_time', 'organization_account_reference', 'record_reference'
         )
         or parameter_type in ('decimal_number', 'money')
       )
@@ -196,12 +196,26 @@ begin
       raise exception using errcode = '22023', message = 'Typed record condition is invalid';
     end if;
     if binding ->> 'source' = 'current_organization_account_id' then
-      if key_count <> 2 or parameter_type not in ('text', 'organization_account_reference') then
+      if key_count <> 2 or parameter_type not in ('text', 'organization_account_reference', 'record_reference') then
         raise exception using errcode = '22023', message = 'Typed record condition is invalid';
       end if;
-      parameter_values := parameter_values || pg_catalog.jsonb_build_object(
-        parameter_key, p_current_organization_account_id::text
-      );
+      if parameter_type = 'record_reference' then
+        -- Resolve against the same trusted installation facts as the condition.
+        if account_record_type_id is null then
+          account_record_type_id := vortex_access.resolve_installed_account_record_type_internal(
+            p_installation_record_types
+          );
+        end if;
+        parameter_values := parameter_values || pg_catalog.jsonb_build_object(
+          parameter_key, pg_catalog.jsonb_build_object(
+            'recordTypeId', account_record_type_id, 'recordId', p_current_organization_account_id
+          )
+        );
+      else
+        parameter_values := parameter_values || pg_catalog.jsonb_build_object(
+          parameter_key, p_current_organization_account_id::text
+        );
+      end if;
     elsif binding ->> 'source' = 'literal' then
       if key_count <> 3 or not (binding ? 'value')
         or not vortex_access.typed_condition_value_matches_internal(binding -> 'value', parameter_type, false)
@@ -263,10 +277,10 @@ exception
 end
 $_$;
 
-alter function vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) owner to vortex_owner;
+alter function vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid, p_installation_record_types jsonb) owner to vortex_owner;
 
-COMMENT ON FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) IS 'Owner-only pure predicate for one sealed permission saved condition over trusted versioned record values and a protected current organization account.';
+COMMENT ON FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid, p_installation_record_types jsonb) IS 'Owner-only predicate for one sealed permission saved condition over trusted versioned record values and a protected current organization account.';
 
-REVOKE ALL ON FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid, p_installation_record_types jsonb) FROM PUBLIC;
 
-grant execute on function vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) to postgres;
+grant execute on function vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid, p_installation_record_types jsonb) to postgres;

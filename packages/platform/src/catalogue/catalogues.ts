@@ -19,7 +19,6 @@ export const fieldTypeKeys = [
   "table",
   "link",
   "link_to_one_of_several",
-  "link_to_person",
   "calculation",
   "total",
   "attachment",
@@ -88,6 +87,7 @@ export const actionInputValueTypes = {
 
 /** Sharing-parameter value types accepted by the current condition contract. */
 export const sharingParameterValueTypeKeys = [
+  "record_reference",
   "text",
   "whole_number",
   "yes_no",
