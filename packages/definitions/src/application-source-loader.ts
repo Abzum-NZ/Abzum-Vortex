@@ -53,7 +53,6 @@ export const loadApplicationSource = (
       release_version: DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY.releaseVersion,
     },
     selection,
-    token_overrides: {},
   };
 
   return applicationSourceDocumentSchema.parse({

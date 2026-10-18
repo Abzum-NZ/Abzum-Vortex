@@ -138,10 +138,7 @@ export function fieldSettings(
       };
     case "money":
       return {
-        currencyMode:
-          settings.currency_mode === "organisation_default"
-            ? "organization_default"
-            : settings.currency_mode,
+        currencyMode: settings.currency_mode,
         ...(settings.currency ? { currency: settings.currency } : {}),
         ...(settings.minimum !== undefined ? { minimum: normaliseExact(settings.minimum) } : {}),
         ...(settings.maximum !== undefined ? { maximum: normaliseExact(settings.maximum) } : {}),
@@ -157,12 +154,7 @@ export function fieldSettings(
     case "date_time":
       return {
         ...(settings.display_time_zone
-          ? {
-              displayTimeZone:
-                settings.display_time_zone === "organisation"
-                  ? "organization"
-                  : settings.display_time_zone,
-            }
+          ? { displayTimeZone: settings.display_time_zone }
           : {}),
       };
     case "choice":
@@ -275,7 +267,7 @@ export function fieldSettings(
       };
     case "link_to_person":
       return {
-        audience: String(settings.audience).replace("organisation", "organization"),
+        audience: settings.audience,
         applicationRootIdRequired: settings.application_root_required,
         onPersonDeactivation: settings.on_person_deactivation,
       };

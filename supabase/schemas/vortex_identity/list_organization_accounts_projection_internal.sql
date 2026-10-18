@@ -121,63 +121,6 @@ begin
 end
 $function$;
 
-create or replace function vortex_identity.list_organization_accounts_projection_internal(
-  p_organization_id uuid, p_active_members_only boolean, p_account_ids uuid[]
-)
-returns table (
-  organization_account_id uuid, display_name text, account_state text,
-  language text, time_zone text, revision bigint
-)
-language sql stable security definer set search_path = ''
-as $function$
-  select projected.*
-  from vortex_identity.list_organization_accounts_projection_internal(
-    p_organization_id, p_active_members_only, p_account_ids,
-    'record_id', 'ascending', null, null
-  ) as projected
-$function$;
-
-create or replace function vortex_identity.list_organization_accounts_projection_internal(
-  p_organization_id uuid,
-  p_active_members_only boolean
-)
-returns table (
-  organization_account_id uuid,
-  display_name text,
-  account_state text,
-  language text,
-  time_zone text,
-  revision bigint
-)
-language sql
-stable
-security definer
-set search_path = ''
-as $function$
-  select projected.*
-  from vortex_identity.list_organization_accounts_projection_internal(
-    p_organization_id, p_active_members_only, null
-  ) as projected
-$function$;
-
-revoke all on function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-
-comment on function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean) is
-  'Identity-owned set-returning safe organisation-account projection bounded to the given organisation: every account in administration mode, or only active accounts with their display name and state in member mode; identity, originating invitation and state-change evidence are never exposed, and the already-decided request scope is the only visibility.';
-
-alter function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean) owner to vortex_owner;
-grant execute on function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean) to postgres;
-
-revoke all on function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean, uuid[])
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-
-comment on function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean, uuid[]) is
-  'The organisation-account projection, optionally narrowed to the given account identities inside the scan so a label lookup never materialises the whole directory; visibility is identical to the two-argument form.';
-
-alter function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean, uuid[]) owner to vortex_owner;
-grant execute on function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean, uuid[]) to postgres;
-
 revoke all on function vortex_identity.list_organization_accounts_projection_internal(
   uuid, boolean, uuid[], text, text, jsonb, integer
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

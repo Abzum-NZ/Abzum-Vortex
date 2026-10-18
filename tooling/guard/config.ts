@@ -58,6 +58,13 @@ export const guardRules = {
     reviewBy: "2027-01-15",
     description: "SQL objects named past 63 characters, which Postgres silently truncates",
   },
+  "sql-overload": {
+    tier: "blocking",
+    owner: "lead",
+    reviewBy: "2027-01-15",
+    description:
+      "A canonical function name declared with more than one signature, which forces Postgres to resolve a call by argument types",
+  },
   "migration-version-duplicate": {
     tier: "blocking",
     owner: "lead",
@@ -117,6 +124,13 @@ export const guardRules = {
     description:
       "A shipped definition source that publication would refuse (offline compile and validation)",
   },
+  "contract-version-parity": {
+    tier: "blocking",
+    owner: "lead",
+    reviewBy: "2027-01-15",
+    description:
+      "Each definition kind accepts exactly one contract version: vortex_definition.accepted_contract_version returns a single element per kind and the TypeScript source and validation constants equal it",
+  },
   "derived-id-parity": {
     tier: "blocking",
     owner: "lead",
@@ -146,6 +160,7 @@ export const scannedRuleIds = new Set([
   "migration-version-duplicate",
   "migration-version-order",
   "sql-identifier-length",
+  "sql-overload",
   "function-uuid",
   "migration-owner-role",
   "versioned-export",
@@ -154,4 +169,5 @@ export const scannedRuleIds = new Set([
   "ui-literal-style",
   "definition-validation",
   "derived-id-parity",
+  "contract-version-parity",
 ]);

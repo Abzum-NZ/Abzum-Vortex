@@ -10,7 +10,6 @@ import { peopleDirectory } from "../module-links";
 import { explicitSourceTargets } from "./explicit-source-targets";
 import {
   applicationCompositionProvenance,
-  applicationThemeValueTargets,
   compiledSettingStart,
   isApplicationCompositionSourcePath,
 } from "./application-composition-provenance";
@@ -96,12 +95,6 @@ function applicationSpecialSourceTargets(
             .map((segment) => (typeof segment === "number" ? segment : camelCase(segment))),
         ],
       ];
-    if (sourcePath[2] === "token_overrides" && typeof sourcePath[3] === "string")
-      return applicationThemeValueTargets(
-        sourcePath,
-        ["body", "theme", "token_overrides", sourcePath[3]],
-        ["content", "theme", "tokens", sourcePath[3]],
-      );
   }
   if (sourcePath[1] === "shells" && typeof sourcePath[2] === "number") {
     const shell = source.body.shells[sourcePath[2]];

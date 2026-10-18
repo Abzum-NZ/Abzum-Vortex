@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.read_index_conflict_references_internal(p_record_type_id uuid, p_table_token text, p_scope_columns text, p_column_token text) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.read_index_conflict_references_internal(p_record_type_id uuid, p_table_token text, p_scope_columns text, p_column_token text) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $_$
@@ -62,7 +62,7 @@ begin
 
       begin
         loaded := vortex_record.load_record_access_facts_internal(
-          p_record_type_id, 'read', record_id_value, null
+          p_record_type_id, 'read', record_id_value, null, null::jsonb
         );
         if loaded ->> 'outcome' <> 'loaded'
           or pg_catalog.jsonb_typeof(loaded -> 'declaration') <> 'object'
