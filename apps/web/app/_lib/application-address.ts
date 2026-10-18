@@ -15,6 +15,7 @@ import { loadPermittedApplicationsAtAddress } from "./organization-context";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import type { IdentitySession } from "@vortex/platform/schema";
 import { platformPermissionSource } from "./platform-permission-source";
+import { mapWebError } from "./web-error-mapper";
 
 type ApplicationAddressResult =
   | Readonly<{
@@ -24,6 +25,11 @@ type ApplicationAddressResult =
        * that application. A refused page and a missing page of it both carry the same page.
        */
       experience?: ApplicationExperience;
+      /**
+       * The addressed application, present only when the viewer may open it but not this page (or
+       * the page does not exist), so the refusal can lead back into the application.
+       */
+      application?: PermittedApplication;
     }>
   | Readonly<{ kind: "temporarily_unavailable" }>
   | Readonly<{ kind: "suspended_super_administrator_account" }>
@@ -55,8 +61,13 @@ const loadAddressedApplicationAtAddress = cache(
     let authorityId;
     try {
       authorityId = getIdentityAuthorityConfiguration().authorityId;
-    } catch {
-      return { read: { kind: "temporarily_unavailable" }, experiences: [] };
+    } catch (error) {
+      return mapWebError<AddressedApplicationBundleRead>(error, {
+        route: "application-address",
+        operation: "load_addressed_application",
+        code: "identity_authority_configuration_failed",
+        fallback: { read: { kind: "temporarily_unavailable" }, experiences: [] },
+      });
     }
     return readAddressedApplicationFromInstalledBundleAtAddress(
       platformPermissionSource,
@@ -105,9 +116,12 @@ export const resolveApplicationAddress = cache(
       // Experiences are carried only for an application the viewer may open, so an unknown or
       // refused application falls back to the neutral page and discloses nothing about itself.
       const experience = addressed.experiences.find((entry) => entry.state === "not_found");
-      return experience === undefined
-        ? { kind: "unavailable" }
-        : { kind: "unavailable", experience };
+      const application = read.applications.find((entry) => entry.key === applicationKey);
+      return {
+        kind: "unavailable",
+        ...(experience === undefined ? {} : { experience }),
+        ...(application === undefined ? {} : { application }),
+      };
     }
     if (resolved.application === null) return { kind: "organization_launcher", read };
     return {

@@ -29,6 +29,8 @@ import {
   parseRichTextInputPayload,
   parseTabsPayload,
   parseTextInputPayload,
+  parseTableInputPayload,
+  type TableInputPayload,
   parseTypedFieldValue,
   parseValidationPayload,
   type BooleanInputPayload,
@@ -358,6 +360,10 @@ export const CONTROL_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
       parsePayload: controlPayloadParser<ChoiceInputPayload>(parseDependentChoiceInputPayload),
+    }),
+    Object.freeze({
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_INPUT_BLOCK_RELEASE,
+      parsePayload: controlPayloadParser<TableInputPayload>(parseTableInputPayload),
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.FIELD_INPUT_BLOCK_RELEASE,
