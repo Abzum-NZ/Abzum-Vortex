@@ -454,7 +454,7 @@ export function StudioThemePanel({
             void paste(code, true);
           }}
         >
-          <StudioField label="Paste preset code" hint="Paste a shadcn create code to apply it.">
+          <StudioField label="Paste preset code" hint="Paste a preset code to apply it.">
             {(control) => (
               <InputGroup>
                 <InputGroupInput
