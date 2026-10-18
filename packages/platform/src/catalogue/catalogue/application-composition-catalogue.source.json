@@ -1694,6 +1694,22 @@
     "rendererKey": "platform.renderer.record_detail",
     "properties": [
       {
+        "kind": "choice",
+        "key": "heading_source",
+        "label": "Heading comes from",
+        "help": "Use the Title setting or a readable field of the record",
+        "required": true,
+        "defaultValue": { "kind": "choice", "value": "title" },
+        "options": [{ "key": "title", "label": "Title setting" }, { "key": "field", "label": "A record field" }]
+      },
+      {
+        "kind": "field_reference",
+        "key": "heading_field",
+        "label": "Heading field",
+        "help": "The record field shown as the heading when Heading comes from is A record field",
+        "required": false
+      },
+      {
         "kind": "text",
         "key": "title",
         "presentation": true,

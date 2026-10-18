@@ -110,6 +110,7 @@ export type RecordDetailFieldContract = Readonly<{
 /** The declared list of detail fields a Record detail placement shows. */
 export type RecordDetailContract = Readonly<{
   fields: readonly RecordDetailFieldContract[];
+  headingField?: string;
   messages: RecordsDisplayMessages;
 }>;
 
@@ -283,6 +284,10 @@ export const readRecordDetailContract = (
 ): RecordDetailContract | undefined => {
   const items = settingItems(settings["detail_fields"]);
   if (items === undefined) return undefined;
+  const headingSource = settings["heading_source"];
+  if (headingSource?.kind !== "choice" || !["title", "field"].includes(headingSource.value)) return undefined;
+  const headingField = headingSource.value === "field" ? settingField(settings["heading_field"]) : undefined;
+  if (headingSource.value === "field" && headingField === undefined) return undefined;
   const fields = items.flatMap((item): RecordDetailFieldContract[] => {
     const entry = settingGroup(item);
     const field = entry === undefined ? undefined : settingField(entry["field"]);
@@ -296,5 +301,5 @@ export const readRecordDetailContract = (
       },
     ];
   });
-  return { fields, messages: displayMessages(settings) };
+  return { fields, ...(headingField === undefined ? {} : { headingField }), messages: displayMessages(settings) };
 };

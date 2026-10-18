@@ -22,6 +22,8 @@ export type FormBlockRuntime = Readonly<{
     binding: ComponentFlowBinding,
     values: FormFieldAnswers,
     selectedOwnerGroupId?: string,
+    /** Names included in the whole-record patch; individual answers remain complete. */
+    recordChanges?: readonly string[],
   ) => Promise<FlowDispatchResult | undefined>;
   /** The form's mount event, when the placement binds it. */
   ready: (binding: ComponentFlowBinding) => Promise<FlowDispatchResult | undefined>;
@@ -74,10 +76,11 @@ export function createFormBlockRuntime(
   };
 
   return Object.freeze({
-    submit: (binding, values, selectedOwnerGroupId) => {
+    submit: (binding, values, selectedOwnerGroupId, recordChanges) => {
       if (binding.event !== "form_submit") return Promise.resolve(undefined);
       const callerInputs = {
         values,
+        ...(recordChanges === undefined ? {} : { recordChanges }),
         ...(selectedOwnerGroupId === undefined ? {} : { selectedOwnerGroupId }),
       };
       return dispatchOnce(
