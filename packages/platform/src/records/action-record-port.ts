@@ -387,7 +387,14 @@ const ruleReasonFromIssues = (
         issue.code === "required_field_missing" ||
         issue.code === "stage_move_refused"),
   );
-  if (issue?.requirement === undefined) return undefined;
+  if (issue?.requirement === undefined)
+    return issues.some((issue) => issue.code === "required_field_missing")
+      ? {
+          code: "required_field_missing",
+          message:
+            "A required value is missing from a record this action creates or changes. Ask an application builder to review the action, then try again.",
+        }
+      : undefined;
   if (preparation !== undefined && issue.recordKey !== undefined && issue.recordKey !== "root") {
     const parent = preparation.records.find((record) => record.recordKey === issue.recordKey);
     if (parent === undefined) throw new Error("RELATIONSHIP_TOTAL_PARENT_MISSING");
