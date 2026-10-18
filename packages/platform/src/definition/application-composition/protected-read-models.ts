@@ -20,6 +20,7 @@ export const protectedReadModelKeys = [
   "installed_applications",
   "application_role_templates",
   "activity_entry",
+  "application_store_entries",
 ] as const;
 export const protectedReadModelKeySchema = z.enum(protectedReadModelKeys);
 
@@ -54,4 +55,5 @@ export const boundedProtectedReadModelSortKeys: Partial<
   organization_runtime_settings: ["record_id", "language"],
   application_role_templates: ["record_id", "source_role_id", "key", "label"],
   activity_entry: ["occurred_at"],
+  application_store_entries: ["record_id", "key"],
 };
