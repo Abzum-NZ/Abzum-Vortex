@@ -14,7 +14,7 @@
 -- organisation). A replaced or expired preview's storage is retired with its preview row and
 -- dropped in the background, one storage identity per short transaction with a short lock timeout,
 -- never inside a builder's request.
-set role vortex_owner;
+set local role vortex_owner;
 
 drop function vortex_access.resolve_human_application_change_scope(uuid, uuid, uuid);
 drop function vortex_access.resolve_human_organization_change_scope(uuid, uuid);
@@ -3624,9 +3624,52 @@ security definer
 set search_path = ''
 as $function$
 declare
-  release_row vortex_definition.releases%rowtype;
-  record_types jsonb;
   record_type jsonb;
+  storage_identities jsonb := '[]'::jsonb;
+begin
+  -- A system projection is the platform's own read model, which a preview reads as it is: it
+  -- has no storage of its own to isolate.
+  for record_type in
+    select item.value
+    from pg_catalog.jsonb_array_elements(vortex_record.preview_module_record_types_internal(
+      p_preview_installation_id, p_module_root_id, p_module_release_revision
+    )) as item(value)
+    where not item.value ? 'systemProjection'
+    order by item.value ->> 'storageContractId'
+  loop
+    storage_identities := storage_identities || pg_catalog.jsonb_build_array(
+      vortex_record.provision_preview_record_storage_internal(
+        p_preview_installation_id, p_module_root_id, p_module_release_revision, record_type
+      )
+    );
+  end loop;
+  return storage_identities;
+end
+$function$;
+
+alter function vortex_record.provision_preview_module_storage(uuid,uuid,bigint) owner to vortex_owner;
+
+revoke all on function vortex_record.provision_preview_module_storage(uuid, uuid, bigint)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+grant execute on function vortex_record.provision_preview_module_storage(uuid, uuid, bigint)
+  to vortex_owner;
+comment on function vortex_record.provision_preview_module_storage(uuid, uuid, bigint) is
+  'Creates empty isolated Record storage for every record type of one exact Module release of a preview, its rehearsed release or a stored one, without provisioning its live release identities.';
+
+-- vortex_record/provision_preview_record_storage_internal.sql
+create or replace function vortex_record.provision_preview_record_storage_internal(
+  p_preview_installation_id uuid,
+  p_module_root_id uuid,
+  p_module_release_revision bigint,
+  p_record_type jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
   preview_record_type jsonb;
   field_value jsonb;
   storage_id uuid;
@@ -3643,210 +3686,148 @@ declare
   scope_index_columns text;
   index_token text;
   live_table_token text;
-  storage_identities jsonb := '[]'::jsonb;
+  preview_scope record;
+  live_type jsonb;
 begin
+  begin
+    storage_id := (p_record_type ->> 'storageContractId')::uuid;
+    record_type_id_value := (p_record_type ->> 'recordTypeId')::uuid;
+  exception when invalid_text_representation then
+    raise exception using errcode = '42501', message = 'Module record storage identity is invalid';
+  end;
+  storage_scope_value := p_record_type ->> 'storageScope';
+  ownership_mode_value := p_record_type ->> 'ownershipMode';
   if not vortex_platform.is_non_nil_uuid(p_preview_installation_id::text)
     or not vortex_platform.is_non_nil_uuid(p_module_root_id::text)
-    or p_module_release_revision not between 1 and 9007199254740991 then
-    raise exception using errcode = '22023', message = 'Preview storage selector is invalid';
-  end if;
-  -- The preview's own rehearsed release of an owned Module, or else the stored release.
-  select (pg_catalog.jsonb_populate_record(
-    null::vortex_definition.releases, preview_release.release
-  )).* into release_row
-  from vortex_definition.preview_releases as preview_release
-  join vortex_definition.roots as root on root.root_id = preview_release.root_id
-  where preview_release.preview_installation_id = p_preview_installation_id
-    and preview_release.root_id = p_module_root_id
-    and preview_release.release_revision = p_module_release_revision
-    and root.kind = 'module';
-  if not found then
-    select release.* into strict release_row
-    from vortex_definition.releases as release
-    join vortex_definition.roots as root on root.root_id = release.root_id
-    where release.root_id = p_module_root_id
-      and release.release_revision = p_module_release_revision
-      and root.kind = 'module';
-  end if;
-  if release_row.validation_contract_version <> all (vortex_definition.accepted_contract_version('module'))
-    or release_row.source_contract_version
-      is distinct from release_row.validation_contract_version
-    or release_row.compilation_output #>> '{kind}' is distinct from 'module'
-    or release_row.compilation_output #>> '{canonical,envelope,rootId}'
-      is distinct from p_module_root_id::text
-    or release_row.compilation_output #>> '{validationContractVersion}'
-      is distinct from release_row.validation_contract_version then
-    raise exception using errcode = '23514', message = 'Exact Module release is incompatible';
-  end if;
-  record_types := release_row.compilation_output #> '{canonical,content,recordTypes}';
-  if pg_catalog.jsonb_typeof(record_types) <> 'array' then
-    raise exception using errcode = '23514', message = 'Module record storage definition is incompatible';
-  end if;
-  if exists (
-    select 1
-    from pg_catalog.jsonb_array_elements(record_types) as item(value)
-    where item.value ->> 'storageContractId' is null
-      or item.value ->> 'recordTypeId' is null
-  ) or (
-    select pg_catalog.count(*) <> pg_catalog.count(distinct item.value ->> 'storageContractId')
-      or pg_catalog.count(*) <> pg_catalog.count(distinct item.value ->> 'recordTypeId')
-    from pg_catalog.jsonb_array_elements(record_types) as item(value)
-  ) then
-    raise exception using errcode = '23514', message = 'Module record storage identities are duplicated';
+    or p_module_release_revision not between 1 and 9007199254740991
+    or not vortex_platform.is_non_nil_uuid(storage_id::text)
+    or not vortex_platform.is_non_nil_uuid(record_type_id_value::text)
+    or p_record_type ? 'systemProjection'
+    or storage_scope_value not in ('organization_shared', 'application_contained')
+    or ownership_mode_value not in ('none', 'organization_account', 'group', 'inherited')
+    or pg_catalog.jsonb_typeof(p_record_type -> 'fields') is distinct from 'array'
+    or pg_catalog.jsonb_array_length(p_record_type -> 'fields') < 1
+    or pg_catalog.jsonb_typeof(p_record_type -> 'relationships') is distinct from 'array' then
+    raise exception using errcode = '42501', message = 'Module record storage definition is invalid';
   end if;
 
-  -- A system projection is the platform's own read model, which a preview reads as it is: it
-  -- has no storage of its own to isolate.
-  for record_type in
+  preview_storage_id := pg_catalog.gen_random_uuid();
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('vortex_record.storage:' || preview_storage_id::text, 0)
+  );
+  table_token := 'rt_' || pg_catalog.replace(pg_catalog.lower(preview_storage_id::text), '-', '');
+  preview_record_type := pg_catalog.jsonb_set(
+    p_record_type,
+    '{storageContractId}',
+    pg_catalog.to_jsonb(preview_storage_id::text),
+    true
+  );
+  shape_fingerprint := vortex_record.storage_meaning_fingerprint(preview_record_type);
+
+  select preview.organization_id, preview.application_root_id into strict preview_scope
+  from vortex_definition.preview_installations as preview
+  where preview.preview_installation_id = p_preview_installation_id;
+  live_type := vortex_record.resolve_preview_seed_source_internal(
+    preview_scope.organization_id, preview_scope.application_root_id,
+    p_module_root_id, record_type_id_value, storage_id
+  );
+  live_table_token := live_type ->> 'table';
+  perform vortex_record.create_record_storage_table_internal(
+    preview_storage_id, p_module_root_id, record_type_id_value,
+    storage_scope_value, ownership_mode_value, false
+  );
+  insert into vortex_record.storage_catalogue (
+    storage_contract_id, physical_schema_token, physical_table_token,
+    module_root_id, record_type_id, storage_scope,
+    first_compatible_release_revision, last_compatible_release_revision,
+    state, content_fingerprint, record_type_definition, protected_read_model_key
+  ) values (
+    preview_storage_id, 'record_data', table_token,
+    p_module_root_id, record_type_id_value, storage_scope_value,
+    p_module_release_revision, p_module_release_revision,
+    'active', shape_fingerprint, preview_record_type, null
+  );
+
+  for field_value in
     select item.value
-    from pg_catalog.jsonb_array_elements(record_types) as item(value)
-    where not item.value ? 'systemProjection'
-    order by item.value ->> 'storageContractId'
+    from pg_catalog.jsonb_array_elements(p_record_type -> 'fields') as item(value)
+    order by item.value ->> 'fieldId'
   loop
     begin
-      storage_id := (record_type ->> 'storageContractId')::uuid;
-      record_type_id_value := (record_type ->> 'recordTypeId')::uuid;
+      field_id_value := (field_value ->> 'fieldId')::uuid;
     exception when invalid_text_representation then
-      raise exception using errcode = '42501', message = 'Module record storage identity is invalid';
+      raise exception using errcode = '42501', message = 'Record field storage identity is invalid';
     end;
-    storage_scope_value := record_type ->> 'storageScope';
-    ownership_mode_value := record_type ->> 'ownershipMode';
-    if not vortex_platform.is_non_nil_uuid(storage_id::text)
-      or not vortex_platform.is_non_nil_uuid(record_type_id_value::text)
-      or storage_scope_value not in ('organization_shared', 'application_contained')
-      or ownership_mode_value not in ('none', 'organization_account', 'group', 'inherited')
-      or pg_catalog.jsonb_typeof(record_type -> 'fields') <> 'array'
-      or pg_catalog.jsonb_array_length(record_type -> 'fields') < 1
-      or pg_catalog.jsonb_typeof(record_type -> 'relationships') <> 'array' then
-      raise exception using errcode = '42501', message = 'Module record storage definition is invalid';
+    if not vortex_platform.is_non_nil_uuid(field_id_value::text)
+      or field_value ->> 'type' is null
+      or pg_catalog.jsonb_typeof(field_value -> 'required') <> 'boolean'
+      or pg_catalog.jsonb_typeof(field_value -> 'unique') <> 'boolean'
+      or pg_catalog.jsonb_typeof(field_value -> 'filterable') <> 'boolean'
+      or pg_catalog.jsonb_typeof(field_value -> 'sortable') <> 'boolean'
+      or pg_catalog.jsonb_typeof(field_value -> 'settings') <> 'object' then
+      raise exception using errcode = '42501', message = 'Record field storage definition is invalid';
     end if;
-
-    preview_storage_id := pg_catalog.gen_random_uuid();
-    perform pg_catalog.pg_advisory_xact_lock(
-      pg_catalog.hashtextextended('vortex_record.storage:' || preview_storage_id::text, 0)
+    column_token := 'f_' || pg_catalog.replace(pg_catalog.lower(field_id_value::text), '-', '');
+    database_type := vortex_record.database_value_type(field_value);
+    if database_type is null then
+      raise exception using errcode = '23514', message = 'Record field storage type is unsupported';
+    end if;
+    sql_type := vortex_record.sql_value_type(database_type);
+    execute pg_catalog.format(
+      'alter table record_data.%I add column %I %s%s',
+      table_token, column_token, sql_type,
+      -- Copied live records have no value for a field the draft adds, so only fresh storage
+      -- enforces a required field in the table; the save path enforces it for every record.
+      case when (field_value ->> 'required')::boolean and live_table_token is null
+        then ' not null' else '' end
     );
-    table_token := 'rt_' || pg_catalog.replace(pg_catalog.lower(preview_storage_id::text), '-', '');
-    preview_record_type := pg_catalog.jsonb_set(
-      record_type,
-      '{storageContractId}',
-      pg_catalog.to_jsonb(preview_storage_id::text),
-      true
-    );
-    shape_fingerprint := vortex_record.storage_meaning_fingerprint(preview_record_type);
-
-    -- The live storage of this record type, when it has any: the builder's readable records are
-    -- seeded from it after provisioning, under the builder's own live access.
-    select catalogue.physical_table_token into live_table_token
-    from vortex_record.storage_catalogue as catalogue
-    where catalogue.storage_contract_id = storage_id
-      and catalogue.physical_schema_token = 'record_data'
-      and catalogue.state = 'active';
-    perform vortex_record.create_record_storage_table_internal(
-      preview_storage_id, p_module_root_id, record_type_id_value,
-      storage_scope_value, ownership_mode_value, false
-    );
-    insert into vortex_record.storage_catalogue (
-      storage_contract_id, physical_schema_token, physical_table_token,
-      module_root_id, record_type_id, storage_scope,
-      first_compatible_release_revision, last_compatible_release_revision,
-      state, content_fingerprint, record_type_definition, protected_read_model_key
+    insert into vortex_record.field_storage_mappings (
+      storage_contract_id, field_id, physical_column_token, database_value_type,
+      field_definition, introduced_by_module_root_id, introduced_at_release_revision, state
     ) values (
-      preview_storage_id, 'record_data', table_token,
-      p_module_root_id, record_type_id_value, storage_scope_value,
-      p_module_release_revision, p_module_release_revision,
-      'active', shape_fingerprint, preview_record_type, null
+      preview_storage_id, field_id_value, column_token, database_type, field_value,
+      p_module_root_id, p_module_release_revision, 'active'
     );
-
-    for field_value in
-      select item.value
-      from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
-      order by item.value ->> 'fieldId'
-    loop
-      begin
-        field_id_value := (field_value ->> 'fieldId')::uuid;
-      exception when invalid_text_representation then
-        raise exception using errcode = '42501', message = 'Record field storage identity is invalid';
+    if (field_value ->> 'unique')::boolean then
+      scope_index_columns := case storage_scope_value
+        when 'organization_shared' then 'organisation_id'
+        else 'organisation_id, application_root_id'
       end;
-      if not vortex_platform.is_non_nil_uuid(field_id_value::text)
-        or field_value ->> 'type' is null
-        or pg_catalog.jsonb_typeof(field_value -> 'required') <> 'boolean'
-        or pg_catalog.jsonb_typeof(field_value -> 'unique') <> 'boolean'
-        or pg_catalog.jsonb_typeof(field_value -> 'filterable') <> 'boolean'
-        or pg_catalog.jsonb_typeof(field_value -> 'sortable') <> 'boolean'
-        or pg_catalog.jsonb_typeof(field_value -> 'settings') <> 'object' then
-        raise exception using errcode = '42501', message = 'Record field storage definition is invalid';
-      end if;
-      column_token := 'f_' || pg_catalog.replace(pg_catalog.lower(field_id_value::text), '-', '');
-      database_type := vortex_record.database_value_type(field_value);
-      if database_type is null then
-        raise exception using errcode = '23514', message = 'Record field storage type is unsupported';
-      end if;
-      sql_type := vortex_record.sql_value_type(database_type);
+      index_token := 'pux_' || pg_catalog.md5(
+        preview_storage_id::text || ':' || field_id_value::text
+      );
       execute pg_catalog.format(
-        'alter table record_data.%I add column %I %s%s',
-        table_token, column_token, sql_type,
-        -- Copied live records have no value for a field the draft adds, so only fresh storage
-        -- enforces a required field in the table; the save path enforces it for every record.
-        case when (field_value ->> 'required')::boolean and live_table_token is null
-          then ' not null' else '' end
+        'create unique index %I on record_data.%I (%s, %I) where lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')',
+        index_token, table_token, scope_index_columns, column_token
       );
-      insert into vortex_record.field_storage_mappings (
-        storage_contract_id, field_id, physical_column_token, database_value_type,
-        field_definition, introduced_by_module_root_id, introduced_at_release_revision, state
-      ) values (
-        preview_storage_id, field_id_value, column_token, database_type, field_value,
-        p_module_root_id, p_module_release_revision, 'active'
-      );
-      if not (record_type ? 'systemProjection')
-        and (field_value ->> 'unique')::boolean then
-        scope_index_columns := case storage_scope_value
-          when 'organization_shared' then 'organisation_id'
-          else 'organisation_id, application_root_id'
-        end;
-        index_token := 'pux_' || pg_catalog.md5(
-          preview_storage_id::text || ':' || field_id_value::text
-        );
-        execute pg_catalog.format(
-          'create unique index %I on record_data.%I (%s, %I) where lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')',
-          index_token, table_token, scope_index_columns, column_token
-        );
-      end if;
-    end loop;
-
-    insert into vortex_record.preview_storage_bindings (
-      preview_installation_id, storage_contract_id, module_root_id,
-      module_release_revision, record_type_id, release_storage_contract_id
-    ) values (
-      p_preview_installation_id, preview_storage_id, p_module_root_id,
-      p_module_release_revision, record_type_id_value, storage_id
-    );
-    storage_identities := storage_identities || pg_catalog.jsonb_build_array(
-      pg_catalog.jsonb_build_object(
-        'moduleRootId', p_module_root_id,
-        'moduleReleaseRevision', p_module_release_revision,
-        'recordTypeId', record_type_id_value,
-        'releaseStorageContractId', storage_id,
-        'previewStorageContractId', preview_storage_id
-      )
-    );
+    end if;
   end loop;
-  return storage_identities;
-exception
-  when no_data_found then
-    raise exception using errcode = 'P0002', message = 'Exact Module release is unavailable';
-  when too_many_rows then
-    raise exception using errcode = '55000', message = 'Exact Module release is ambiguous';
+
+  insert into vortex_record.preview_storage_bindings (
+    preview_installation_id, storage_contract_id, module_root_id,
+    module_release_revision, record_type_id, release_storage_contract_id
+  ) values (
+    p_preview_installation_id, preview_storage_id, p_module_root_id,
+    p_module_release_revision, record_type_id_value, storage_id
+  );
+  return pg_catalog.jsonb_build_object(
+    'moduleRootId', p_module_root_id,
+    'moduleReleaseRevision', p_module_release_revision,
+    'recordTypeId', record_type_id_value,
+    'releaseStorageContractId', storage_id,
+    'previewStorageContractId', preview_storage_id
+  );
 end
 $function$;
 
-alter function vortex_record.provision_preview_module_storage(uuid,uuid,bigint) owner to vortex_owner;
+alter function vortex_record.provision_preview_record_storage_internal(uuid, uuid, bigint, jsonb) owner to vortex_owner;
 
-revoke all on function vortex_record.provision_preview_module_storage(uuid, uuid, bigint)
+revoke all on function vortex_record.provision_preview_record_storage_internal(uuid, uuid, bigint, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-grant execute on function vortex_record.provision_preview_module_storage(uuid, uuid, bigint)
+grant execute on function vortex_record.provision_preview_record_storage_internal(uuid, uuid, bigint, jsonb)
   to vortex_owner;
-comment on function vortex_record.provision_preview_module_storage(uuid, uuid, bigint) is
-  'Creates empty isolated Record storage for every record type of one exact Module release of a preview, its rehearsed release or a stored one, without provisioning its live release identities.';
+comment on function vortex_record.provision_preview_record_storage_internal(uuid, uuid, bigint, jsonb) is
+  'Creates empty isolated Record storage for one record type of an exact Module release a preview runs, and returns its storage identity: the release storage it stands for and its own.';
 
 -- vortex_record/provision_exact_module_storage.sql
 create or replace function vortex_record.provision_exact_module_storage(
@@ -4640,7 +4621,8 @@ comment on function vortex_record.drop_retired_preview_storage_internal(uuid) is
 create or replace function vortex_definition.create_preview_installation(
   p_application_root_id uuid,
   p_expected_draft_revision bigint,
-  p_releases jsonb
+  p_releases jsonb,
+  p_shape_fingerprint text
 )
 returns jsonb
 language plpgsql
@@ -4656,33 +4638,16 @@ declare
   identity_id_value uuid;
   preview_installation_id_value uuid;
   draft_revision_value bigint;
-  current_release_revision_value bigint;
   application_release_revision_value bigint;
   created_at_value timestamptz;
   expires_at_value timestamptz;
   previous_preview record;
-  module_pin record;
-  owned_release record;
-  application_content_value jsonb;
-  system_projection_ids_value uuid[] := array[]::uuid[];
-  resolved_modules_value jsonb := '[]'::jsonb;
-  storage_identities_value jsonb := '[]'::jsonb;
 begin
   if not vortex_platform.is_non_nil_uuid(p_application_root_id::text)
     or p_expected_draft_revision is null
     or p_expected_draft_revision not between 1 and 9007199254740991
-    or pg_catalog.jsonb_typeof(p_releases) is distinct from 'array'
-    or pg_catalog.jsonb_array_length(p_releases) > 201
-    or exists (
-      select 1
-      from pg_catalog.jsonb_array_elements(p_releases) as item(value)
-      where pg_catalog.jsonb_typeof(item.value -> 'release') is distinct from 'object'
-        or pg_catalog.jsonb_typeof(item.value -> 'dependencies') is distinct from 'array'
-        or not coalesce(pg_catalog.pg_input_is_valid(item.value #>> '{release,root_id}', 'uuid'), false)
-        or not coalesce(pg_catalog.pg_input_is_valid(
-          item.value #>> '{release,release_revision}', 'bigint'
-        ), false)
-    ) then
+    or p_shape_fingerprint is null
+    or p_shape_fingerprint !~ '^sha256:[a-f0-9]{64}$' then
     raise exception using errcode = '22023', message = 'Preview installation command is invalid';
   end if;
   checked_context := vortex_definition.assert_preview_installation_authority_internal();
@@ -4695,8 +4660,8 @@ begin
     raise exception using errcode = '42501', message = 'Preview installation context is unavailable';
   end if;
 
-  select draft.draft_revision, root.current_release_revision
-  into draft_revision_value, current_release_revision_value
+  select draft.draft_revision
+  into draft_revision_value
   from vortex_definition.roots as root
   join vortex_definition.drafts as draft on draft.root_id = root.root_id
   where root.root_id = p_application_root_id
@@ -4706,51 +4671,12 @@ begin
   if not found or draft_revision_value <> p_expected_draft_revision then
     raise exception using errcode = '40001', message = 'Application draft revision changed';
   end if;
+  application_release_revision_value := vortex_definition.assert_preview_releases_internal(
+    organization_id_value, p_application_root_id, p_releases
+  );
 
-  -- Each rehearsed release is the release a publication of this draft writes: the Application
-  -- at its draft revision, or an owned Module at its staged draft revision, newer than the
-  -- current release of its root and of that root's kind; at most one per root.
-  if exists (
-    select 1
-    from pg_catalog.jsonb_array_elements(p_releases) as item(value)
-    where not exists (
-      select 1
-      from vortex_definition.roots as root
-      join vortex_definition.drafts as draft on draft.root_id = root.root_id
-      where root.root_id = (item.value #>> '{release,root_id}')::uuid
-        and root.organization_id = organization_id_value
-        and (root.root_id = p_application_root_id
-          or (root.kind = 'module' and root.owner_application_root_id = p_application_root_id))
-        and draft.draft_revision = (item.value #>> '{release,release_revision}')::bigint
-        and draft.draft_revision > coalesce(root.current_release_revision, 0)
-        and item.value #>> '{release,compilation_output,kind}' = root.kind
-        and not exists (
-          select 1
-          from pg_catalog.jsonb_array_elements(item.value -> 'dependencies') as dependency(value)
-          where dependency.value ->> 'root_id' is distinct from root.root_id::text
-            or dependency.value ->> 'release_revision' is distinct from draft.draft_revision::text
-        )
-    )
-  ) or (
-    select pg_catalog.count(*) <> pg_catalog.count(distinct item.value #>> '{release,root_id}')
-    from pg_catalog.jsonb_array_elements(p_releases) as item(value)
-  ) then
-    raise exception using errcode = '23514',
-      message = 'Rehearsed preview releases are not this Application draft';
-  end if;
-  application_release_revision_value := coalesce((
-    select (item.value #>> '{release,release_revision}')::bigint
-    from pg_catalog.jsonb_array_elements(p_releases) as item(value)
-    where (item.value #>> '{release,root_id}')::uuid = p_application_root_id
-  ), current_release_revision_value);
-  if application_release_revision_value is null then
-    raise exception using errcode = 'P0002', message = 'Application has no release to preview';
-  end if;
-
-  -- One preview per Application and builder: a new preview replaces this builder's previous one,
-  -- never another builder's. The replaced preview's storage is retired with it: no request reaches
-  -- it once its preview row is gone, and the background drops it
-  -- (`drop_retired_preview_storage_internal`), never this builder's request.
+  -- One preview per Application and builder: a new preview replaces this builder's previous one
+  -- and its storage, never another builder's.
   for previous_preview in
     select preview.preview_installation_id
     from vortex_definition.preview_installations as preview
@@ -4772,12 +4698,12 @@ begin
     preview_installation_id, organization_id, application_root_id,
     draft_revision, application_release_revision, previewer_identity_id,
     previewer_organization_account_id, resolved_modules, storage_identities,
-    created_at, expires_at
+    created_at, expires_at, draft_shape_fingerprint
   ) values (
     preview_installation_id_value, organization_id_value, p_application_root_id,
     p_expected_draft_revision, application_release_revision_value, identity_id_value,
     organization_account_id_value, '[]'::jsonb, '[]'::jsonb,
-    created_at_value, expires_at_value
+    created_at_value, expires_at_value, p_shape_fingerprint
   );
   insert into vortex_definition.preview_releases (
     preview_installation_id, root_id, release_revision, release, dependencies
@@ -4786,249 +4712,7 @@ begin
     (item.value #>> '{release,release_revision}')::bigint,
     item.value -> 'release', item.value -> 'dependencies'
   from pg_catalog.jsonb_array_elements(p_releases) as item(value);
-
-  -- The exact Module pins of the previewed Application release, through every Module dependency,
-  -- each read from this preview's rehearsed releases first and the stored releases otherwise.
-  for module_pin in
-    with recursive edges as (
-      select dependency.root_id, dependency.release_revision,
-        dependency.target_root_id, dependency.target_release_revision
-      from vortex_definition.release_dependencies as dependency
-      where dependency.dependency_kind = 'module'
-        and not exists (
-          select 1 from vortex_definition.preview_releases as preview
-          where preview.preview_installation_id = preview_installation_id_value
-            and preview.root_id = dependency.root_id
-            and preview.release_revision = dependency.release_revision
-        )
-      union all
-      select preview.root_id, preview.release_revision,
-        (dependency.value ->> 'target_root_id')::uuid,
-        (dependency.value ->> 'target_release_revision')::bigint
-      from vortex_definition.preview_releases as preview
-      cross join lateral pg_catalog.jsonb_array_elements(preview.dependencies) as dependency(value)
-      where preview.preview_installation_id = preview_installation_id_value
-        and dependency.value ->> 'dependency_kind' = 'module'
-    ), closure(module_root_id, module_release_revision) as (
-      select edge.target_root_id, edge.target_release_revision
-      from edges as edge
-      where edge.root_id = p_application_root_id
-        and edge.release_revision = application_release_revision_value
-      union
-      select edge.target_root_id, edge.target_release_revision
-      from closure
-      join edges as edge
-        on edge.root_id = closure.module_root_id
-        and edge.release_revision = closure.module_release_revision
-    )
-    select closure.module_root_id, closure.module_release_revision,
-      coalesce(
-        (select preview.release ->> 'release_version'
-          from vortex_definition.preview_releases as preview
-          where preview.preview_installation_id = preview_installation_id_value
-            and preview.root_id = closure.module_root_id
-            and preview.release_revision = closure.module_release_revision),
-        (select release.release_version
-          from vortex_definition.releases as release
-          join vortex_definition.roots as root on root.root_id = release.root_id
-          where release.root_id = closure.module_root_id
-            and release.release_revision = closure.module_release_revision
-            and root.kind = 'module'
-            and root.organization_id = organization_id_value)
-      ) as release_version
-    from closure
-    order by closure.module_root_id, closure.module_release_revision
-  loop
-    if module_pin.module_root_id is null
-      or module_pin.module_release_revision not between 1 and 9007199254740991
-      or module_pin.release_version is null
-      or resolved_modules_value @> pg_catalog.jsonb_build_array(
-        pg_catalog.jsonb_build_object('moduleRootId', module_pin.module_root_id)
-      ) then
-      raise exception using errcode = '23514',
-        message = 'Preview Module pins are unavailable or ambiguous';
-    end if;
-    resolved_modules_value := resolved_modules_value || pg_catalog.jsonb_build_array(
-      pg_catalog.jsonb_build_object(
-        'moduleRootId', module_pin.module_root_id,
-        'moduleReleaseRevision', module_pin.module_release_revision,
-        'releaseVersion', module_pin.release_version
-      )
-    );
-    storage_identities_value := storage_identities_value
-      || vortex_record.provision_preview_module_storage(
-        preview_installation_id_value, module_pin.module_root_id,
-        module_pin.module_release_revision
-      );
-  end loop;
-  if pg_catalog.jsonb_array_length(resolved_modules_value) = 0 then
-    raise exception using errcode = '23514', message = 'Previewed Application binds no Module';
-  end if;
-
-  -- The preview's own permission registration: what the previewed Application and its own
-  -- Modules declare, at the releases the preview runs, and the draft's roles, which only the
-  -- builder who opened the preview holds. A used Module's permissions are not part of it.
-  insert into vortex_access.preview_permission_registrations (
-    preview_installation_id, organization_id, application_root_id, organization_account_id,
-    system_projection_record_type_ids, owned_owner_ids, role_ids
-  )
-  select preview_installation_id_value, organization_id_value, p_application_root_id,
-    organization_account_id_value,
-    array[]::uuid[],
-    pg_catalog.array_append(
-      coalesce(pg_catalog.array_agg(owned.module_root_id order by owned.module_root_id), array[]::uuid[]),
-      p_application_root_id
-    ),
-    array[]::uuid[]
-  from (
-    select (pin.value ->> 'moduleRootId')::uuid as module_root_id
-    from pg_catalog.jsonb_array_elements(resolved_modules_value) as pin(value)
-    join vortex_definition.roots as root
-      on root.root_id = (pin.value ->> 'moduleRootId')::uuid
-    where root.organization_id = organization_id_value
-      and root.kind = 'module'
-      and root.owner_application_root_id = p_application_root_id
-  ) as owned;
-
-  for owned_release in
-    select pinned.root_id, root.key, pinned.owner_kind,
-      coalesce(preview.release, pg_catalog.to_jsonb(stored.*)) as release
-    from (
-      select p_application_root_id as root_id, application_release_revision_value as release_revision,
-        'application'::text as owner_kind
-      union all
-      select (pin.value ->> 'moduleRootId')::uuid, (pin.value ->> 'moduleReleaseRevision')::bigint,
-        'module'
-      from pg_catalog.jsonb_array_elements(resolved_modules_value) as pin(value)
-    ) as pinned
-    join vortex_definition.roots as root
-      on root.root_id = pinned.root_id
-      and root.organization_id = organization_id_value
-      and root.kind = pinned.owner_kind
-      and (root.root_id = p_application_root_id
-        or root.owner_application_root_id = p_application_root_id)
-    left join vortex_definition.preview_releases as preview
-      on preview.preview_installation_id = preview_installation_id_value
-      and preview.root_id = pinned.root_id
-      and preview.release_revision = pinned.release_revision
-    left join vortex_definition.releases as stored
-      on preview.root_id is null
-      and stored.root_id = pinned.root_id
-      and stored.release_revision = pinned.release_revision
-    order by pinned.owner_kind, pinned.root_id
-  loop
-    if owned_release.release is null
-      or pg_catalog.jsonb_typeof(
-        owned_release.release #> '{compilation_output,canonical,content,permissions}'
-      ) is distinct from 'array' then
-      raise exception using errcode = '23514',
-        message = 'Previewed permission declarations are unavailable';
-    end if;
-    if owned_release.owner_kind = 'application' then
-      application_content_value := owned_release.release #> '{compilation_output,canonical,content}';
-    end if;
-    insert into vortex_access.preview_permission_entries (
-      preview_installation_id, entry, held
-    )
-    select preview_installation_id_value,
-      pg_catalog.jsonb_populate_record(
-        null::vortex_access.permission_catalogue_entries,
-        pg_catalog.jsonb_build_object(
-          'organization_id', organization_id_value,
-          'registration_kind', 'application',
-          'registration_owner_id', p_application_root_id,
-          'registration_revision', 1,
-          'application_root_id', p_application_root_id,
-          'owner_kind', owned_release.owner_kind,
-          'owner_id', owned_release.root_id,
-          'permission_id', permission.value ->> 'permissionId',
-          'permission_key', permission.value ->> 'key',
-          'label', permission.value ->> 'label',
-          'description', permission.value ->> 'description',
-          'record_type_id', permission.value ->> 'recordTypeId',
-          'action_kind', permission.value ->> 'actionKind',
-          'named_action', permission.value ->> 'namedAction',
-          'administrative', permission.value -> 'administrative',
-          'source_kind', owned_release.owner_kind,
-          'source_definition_key', owned_release.key,
-          'source_root_id', owned_release.root_id,
-          'source_version', owned_release.release ->> 'release_version',
-          'source_revision', owned_release.release -> 'release_revision',
-          'source_validation_contract_version',
-            owned_release.release ->> 'validation_contract_version',
-          'meaning_fingerprint', owned_release.release ->> 'content_fingerprint',
-          'record_scope', permission.value -> 'recordScope',
-          'field_policy', permission.value -> 'fieldPolicy'
-        )
-      ),
-      false
-    from pg_catalog.jsonb_array_elements(
-      owned_release.release #> '{compilation_output,canonical,content,permissions}'
-    ) as permission(value);
-  end loop;
-  if application_content_value is null
-    or pg_catalog.jsonb_typeof(application_content_value -> 'roles') is distinct from 'array' then
-    raise exception using errcode = '23514',
-      message = 'Previewed permission declarations are unavailable';
-  end if;
-
-  -- A system projection, of an own Module or a used one, is the platform's live read model: every
-  -- permission on it is decided by the builder's own live access, never by a preview role.
-  select coalesce(pg_catalog.array_agg(distinct (record_type.value ->> 'recordTypeId')::uuid), array[]::uuid[])
-  into system_projection_ids_value
-  from pg_catalog.jsonb_array_elements(resolved_modules_value) as pin(value)
-  left join vortex_definition.preview_releases as preview
-    on preview.preview_installation_id = preview_installation_id_value
-    and preview.root_id = (pin.value ->> 'moduleRootId')::uuid
-    and preview.release_revision = (pin.value ->> 'moduleReleaseRevision')::bigint
-  left join vortex_definition.releases as stored
-    on preview.root_id is null
-    and stored.root_id = (pin.value ->> 'moduleRootId')::uuid
-    and stored.release_revision = (pin.value ->> 'moduleReleaseRevision')::bigint
-  cross join lateral pg_catalog.jsonb_array_elements(
-    coalesce(
-      coalesce(preview.release -> 'compilation_output', stored.compilation_output)
-        #> '{canonical,content,recordTypes}',
-      '[]'::jsonb
-    )
-  ) as record_type(value)
-  where record_type.value ? 'systemProjection';
-  update vortex_access.preview_permission_registrations as registration
-  set system_projection_record_type_ids = system_projection_ids_value
-  where registration.preview_installation_id = preview_installation_id_value;
-
-  -- The builder holds every role of the draft: a permission is held when a role selects it, an
-  -- Application-wide selection taking only the Application's ordinary permissions, as it does
-  -- at installation. A permission on a system projection is never held in a preview.
-  update vortex_access.preview_permission_entries as preview_entry
-  set held = true
-  where preview_entry.preview_installation_id = preview_installation_id_value
-    and not coalesce((preview_entry.entry).record_type_id = any(system_projection_ids_value), false)
-    and exists (
-      select 1
-      from pg_catalog.jsonb_array_elements(application_content_value -> 'roles') as role(value)
-      where role.value -> 'permissionKeys' ? (preview_entry.entry).permission_key
-        and (
-          role.value #>> '{permissionSelection,kind}' = 'exact'
-          or (
-            role.value #>> '{permissionSelection,kind}' = 'application_wildcard'
-            and (preview_entry.entry).owner_kind = 'application'
-            and not (preview_entry.entry).administrative
-            and (preview_entry.entry).action_kind <> 'export'
-          )
-        )
-    );
-  update vortex_access.preview_permission_registrations as registration
-  set role_ids = coalesce((
-    select pg_catalog.array_agg(distinct (role.value ->> 'roleId')::uuid)
-    from pg_catalog.jsonb_array_elements(application_content_value -> 'roles') as role(value)
-  ), array[]::uuid[])
-  where registration.preview_installation_id = preview_installation_id_value;
-
-  update vortex_definition.preview_installations as preview
-  set resolved_modules = resolved_modules_value,
-      storage_identities = storage_identities_value
-  where preview.preview_installation_id = preview_installation_id_value;
+  perform vortex_definition.write_preview_shape_internal(preview_installation_id_value, false);
 
   return pg_catalog.jsonb_build_object(
     'previewInstallationId', preview_installation_id_value,
@@ -5051,14 +4735,14 @@ begin
 end
 $function$;
 
-alter function vortex_definition.create_preview_installation(uuid, bigint, jsonb) owner to vortex_owner;
+alter function vortex_definition.create_preview_installation(uuid, bigint, jsonb, text) owner to vortex_owner;
 
-revoke all on function vortex_definition.create_preview_installation(uuid, bigint, jsonb)
+revoke all on function vortex_definition.create_preview_installation(uuid, bigint, jsonb, text)
   from public, anon, authenticated, service_role, vortex_runtime;
-grant execute on function vortex_definition.create_preview_installation(uuid, bigint, jsonb)
+grant execute on function vortex_definition.create_preview_installation(uuid, bigint, jsonb, text)
   to vortex_request;
-comment on function vortex_definition.create_preview_installation(uuid, bigint, jsonb) is
-  'Replaces the builder''s 24-hour preview of one Application with a preview of its current draft: the releases its publication rehearsed, the exact Module pins they and the used Module releases name, the preview''s own permission registration whose draft roles only its builder holds, and empty isolated storage for every bound record type.';
+comment on function vortex_definition.create_preview_installation(uuid, bigint, jsonb, text) is
+  'Replaces the builder''s 24-hour preview of one Application with a preview of its current draft: the releases its publication rehearsed, the exact Module pins they and the used Module releases name, the preview''s own permission registration whose draft roles only its builder holds, empty isolated storage for every bound record type, and the fingerprint of the draft''s data shape.';
 
 -- vortex_definition/expire_preview_installations.sql
 create or replace function vortex_definition.expire_preview_installations(
