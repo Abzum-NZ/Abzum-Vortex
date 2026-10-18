@@ -319,15 +319,6 @@ export function useStudioReleasesTab({
     if (previewPending) return;
     const previewTab = window.open("", "_blank");
     setPreviewPending(true);
-<<<<<<< HEAD
-    const previewToast = toast.loading("Preview is starting…");
-    try {
-      if (!(await latest.current.flush())) {
-||||||| cc0a9252
-    const previewToast = toast.loading("Preview is starting…");
-    try {
-      if (!await latest.current.flush()) {
-=======
     const starting = (async () => {
       let problem = "The preview could not be started. Your changes are kept.";
       try {
@@ -348,70 +339,11 @@ export function useStudioReleasesTab({
         return result.href;
       } catch (error) {
         console.error("[studio] the preview could not be started", describeFailure(error));
->>>>>>> fix/t9-3003
         previewTab?.close();
-<<<<<<< HEAD
-        studioNotice(
-          "Your latest change is not saved. Open the save-state chip to resolve it, then try Preview again.",
-          "error",
-        );
-        return;
-||||||| cc0a9252
-        studioNotice("Your latest change is not saved. Open the save-state chip to resolve it, then try Preview again.", "error");
-        return;
-=======
         throw new Error(problem);
       } finally {
         if (latest.current.isActive()) setPreviewPending(false);
->>>>>>> fix/t9-3003
       }
-<<<<<<< HEAD
-      const state = history.getState();
-      const result = await previewStudioApplication(organizationId, {
-        rootId: state.rootId,
-        draftRevision: state.draftRevision,
-      });
-      if (result.kind !== "provisioned") {
-        previewTab?.close();
-        studioNotice(previewProblem(result), "error");
-        return;
-      }
-      if (previewTab !== null) previewTab.location.href = result.href;
-      toast.success("Preview ready", {
-        action: {
-          label: "Open",
-          onClick: () => {
-            window.open(result.href, "_blank", "noopener");
-          },
-        },
-      });
-    } catch (error) {
-      console.error("[studio] the preview could not be started", describeFailure(error));
-      previewTab?.close();
-      studioNotice("The preview could not be started. Your changes are kept.", "error");
-    } finally {
-      toast.dismiss(previewToast);
-      if (latest.current.isActive()) setPreviewPending(false);
-    }
-||||||| cc0a9252
-      const state = history.getState();
-      const result = await previewStudioApplication(organizationId, { rootId: state.rootId, draftRevision: state.draftRevision });
-      if (result.kind !== "provisioned") {
-        previewTab?.close();
-        studioNotice(previewProblem(result), "error");
-        return;
-      }
-      if (previewTab !== null) previewTab.location.href = result.href;
-      toast.success("Preview ready", { action: { label: "Open", onClick: () => { window.open(result.href, "_blank", "noopener"); } } });
-    } catch (error) {
-      console.error("[studio] the preview could not be started", describeFailure(error));
-      previewTab?.close();
-      studioNotice("The preview could not be started. Your changes are kept.", "error");
-    } finally {
-      toast.dismiss(previewToast);
-      if (latest.current.isActive()) setPreviewPending(false);
-    }
-=======
     })();
     toast.promise(starting, {
       loading: "Preview is starting…",
@@ -431,7 +363,6 @@ export function useStudioReleasesTab({
           error instanceof Error ? error.message : "Your changes are kept. Try Preview again.",
       }),
     });
->>>>>>> fix/t9-3003
   };
 
   /** The saved draft the agent's preview runs; null while edits are being saved or a request holds the draft. */
