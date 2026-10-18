@@ -285,9 +285,21 @@ begin
         select 1
         from pg_catalog.jsonb_object_keys(permission_candidate) as supplied(key)
         where supplied.key <> all (array[
-          'applicationRootId', 'ownerKind', 'ownerId', 'permissionId'
+          'applicationRootId', 'ownerKind', 'ownerId', 'permissionId',
+          'acceptedRegistrationRevision', 'meaningFingerprint'
         ])
       )
+      or (permission_candidate ? 'acceptedRegistrationRevision') <>
+        (permission_candidate ? 'meaningFingerprint')
+      or (permission_candidate ? 'acceptedRegistrationRevision' and (
+        pg_catalog.jsonb_typeof(permission_candidate -> 'acceptedRegistrationRevision') <> 'number'
+        or (permission_candidate ->> 'acceptedRegistrationRevision')::numeric
+          not between 1 and 9007199254740991
+        or (permission_candidate ->> 'acceptedRegistrationRevision')::numeric <>
+          pg_catalog.trunc((permission_candidate ->> 'acceptedRegistrationRevision')::numeric)
+        or pg_catalog.jsonb_typeof(permission_candidate -> 'meaningFingerprint') <> 'string'
+        or permission_candidate ->> 'meaningFingerprint' !~ '^sha256:[a-f0-9]{64}$'
+      ))
       or (
         permission_candidate ->> 'ownerKind' = 'platform'
         and permission_candidate ? 'applicationRootId'
@@ -324,7 +336,9 @@ begin
             pg_catalog.lower(permission.value ->> 'applicationRootId'),
             permission.value ->> 'ownerKind',
             pg_catalog.lower(permission.value ->> 'ownerId'),
-            pg_catalog.lower(permission.value ->> 'permissionId')
+            pg_catalog.lower(permission.value ->> 'permissionId'),
+            permission.value ->> 'acceptedRegistrationRevision',
+            permission.value ->> 'meaningFingerprint'
           ))
           from pg_catalog.jsonb_array_elements(
             scope_candidate -> 'permissions'
@@ -401,9 +415,13 @@ begin
     select declaration_authority -> 'after'
     where authority_kind_value = 'delegated_management'
   ), delegation_requirements as materialized (
+    -- Existing role revisions name the meaning they accepted. New authority requests use the
+    -- current meaning, so an older bounded delegation cannot confer widened permission scope.
     select 'organization_catalogue'::text as requirement_kind,
       null::uuid as application_root_id, null::text as owner_kind,
-      null::uuid as owner_id, null::uuid as permission_id
+      null::uuid as owner_id, null::uuid as permission_id,
+      null::bigint as accepted_registration_revision,
+      null::text as meaning_fingerprint
     where exists (
       select 1 from management_scopes as managed
       where managed.scope ->> 'kind' = 'organization_catalogue'
@@ -416,7 +434,12 @@ begin
       end,
       permission.value ->> 'ownerKind',
       (permission.value ->> 'ownerId')::uuid,
-      (permission.value ->> 'permissionId')::uuid
+      (permission.value ->> 'permissionId')::uuid,
+      coalesce(
+        (permission.value ->> 'acceptedRegistrationRevision')::bigint,
+        current_entry.registration_revision
+      ),
+      coalesce(permission.value ->> 'meaningFingerprint', current_entry.meaning_fingerprint)
     from management_scopes as managed
     cross join lateral pg_catalog.jsonb_array_elements(
       case when managed.scope ->> 'kind' = 'bounded'
@@ -424,6 +447,23 @@ begin
         else '[]'::jsonb
       end
     ) as permission(value)
+    left join lateral (
+      select catalogue.registration_revision, catalogue.meaning_fingerprint
+      from vortex_access.permission_registrations as registration
+      join vortex_access.permission_catalogue_entries as catalogue
+        on catalogue.organization_id = registration.organization_id
+        and catalogue.registration_kind = registration.registration_kind
+        and catalogue.registration_owner_id is not distinct from registration.registration_owner_id
+        and catalogue.registration_revision = registration.revision
+      where registration.organization_id = context_organization_value
+        and registration.state = 'active'
+        and not permission.value ? 'acceptedRegistrationRevision'
+        and catalogue.application_root_id is not distinct from
+          (permission.value ->> 'applicationRootId')::uuid
+        and catalogue.owner_kind = permission.value ->> 'ownerKind'
+        and catalogue.owner_id = (permission.value ->> 'ownerId')::uuid
+        and catalogue.permission_id = (permission.value ->> 'permissionId')::uuid
+    ) as current_entry on true
   ), current_delegation_paths as materialized (
     select 1 as route_rank, delegation.delegation_authority_id,
       null::uuid as membership_id, delegation.scope_kind,
@@ -484,56 +524,38 @@ begin
       end as application_root_id,
       stored.value ->> 'ownerKind' as owner_kind,
       (stored.value ->> 'ownerId')::uuid as owner_id,
-      (stored.value ->> 'permissionId')::uuid as permission_id
+      (stored.value ->> 'permissionId')::uuid as permission_id,
+      accepted.registration_revision as accepted_registration_revision,
+      accepted.meaning_fingerprint as meaning_fingerprint
     from current_delegation_paths as path
     cross join lateral pg_catalog.jsonb_array_elements(
       path.bounded_permissions
     ) as stored(value)
-    join vortex_access.permission_registrations as registration
-      on registration.organization_id = context_organization_value
-      and registration.state = 'active'
-    join vortex_access.permission_catalogue_entries as catalogue
-      on catalogue.organization_id = registration.organization_id
-      and catalogue.registration_kind = registration.registration_kind
-      and catalogue.registration_owner_id is not distinct from
-        registration.registration_owner_id
-      and catalogue.registration_revision = registration.revision
-      and catalogue.application_root_id is not distinct from case
-        when stored.value ? 'applicationRootId'
-          then (stored.value ->> 'applicationRootId')::uuid
-        else null::uuid
-      end
-      and catalogue.owner_kind = stored.value ->> 'ownerKind'
-      and catalogue.owner_id = (stored.value ->> 'ownerId')::uuid
-      and catalogue.permission_id = (stored.value ->> 'permissionId')::uuid
-      and catalogue.meaning_fingerprint =
-        stored.value ->> 'meaningFingerprint'
-    join vortex_access.permission_continuities as continuity
-      on continuity.organization_id = catalogue.organization_id
-      and continuity.application_scope_id = coalesce(catalogue.application_root_id, '00000000-0000-0000-0000-000000000000'::uuid)
-      and continuity.owner_kind = catalogue.owner_kind
-      and continuity.owner_id = catalogue.owner_id
-      and continuity.permission_id = catalogue.permission_id
-      and continuity.registration_kind = catalogue.registration_kind
-      and continuity.registration_owner_id is not distinct from
-        catalogue.registration_owner_id
-      and continuity.last_processed_registration_revision = registration.revision
-      and continuity.state = 'available'
-      and continuity.continuity_revision =
-        (stored.value ->> 'continuityRevision')::numeric::bigint
-      and continuity.meaning_fingerprint =
-        stored.value ->> 'meaningFingerprint'
+    cross join lateral vortex_access.accepted_permission_meaning_internal(
+      context_organization_value,
+      case when stored.value ? 'applicationRootId'
+        then (stored.value ->> 'applicationRootId')::uuid else null::uuid end,
+      stored.value ->> 'ownerKind',
+      (stored.value ->> 'ownerId')::uuid,
+      (stored.value ->> 'permissionId')::uuid,
+      (stored.value ->> 'continuityRevision')::numeric::bigint,
+      (stored.value ->> 'acceptedRegistrationRevision')::numeric::bigint,
+      stored.value ->> 'meaningFingerprint'
+    ) as accepted
     where path.scope_kind = 'bounded'
   ), delegation_path_candidates as (
     select requirement.requirement_kind, requirement.application_root_id,
       requirement.owner_kind, requirement.owner_id,
-      requirement.permission_id, path.route_rank,
+      requirement.permission_id, requirement.accepted_registration_revision,
+      requirement.meaning_fingerprint, path.route_rank,
       path.delegation_authority_id, path.membership_id,
       path.path_valid_until,
       pg_catalog.row_number() over (
         partition by requirement.requirement_kind,
           requirement.application_root_id, requirement.owner_kind,
-          requirement.owner_id, requirement.permission_id
+          requirement.owner_id, requirement.permission_id,
+          requirement.accepted_registration_revision,
+          requirement.meaning_fingerprint
         order by path.route_rank, path.delegation_authority_id,
           path.membership_id nulls first
       ) as path_ordinal
@@ -553,6 +575,8 @@ begin
             and covered.owner_kind = requirement.owner_kind
             and covered.owner_id = requirement.owner_id
             and covered.permission_id = requirement.permission_id
+            and requirement.accepted_registration_revision is not null
+            and covered.meaning_fingerprint = requirement.meaning_fingerprint
         )
       )
     where requirement.requirement_kind <> 'organization_catalogue'
@@ -560,6 +584,7 @@ begin
   ), selected_delegation_paths as materialized (
     select candidate.requirement_kind, candidate.application_root_id,
       candidate.owner_kind, candidate.owner_id, candidate.permission_id,
+      candidate.accepted_registration_revision, candidate.meaning_fingerprint,
       candidate.path_valid_until
     from delegation_path_candidates as candidate
     where candidate.path_ordinal = 1
@@ -575,6 +600,9 @@ begin
       and selected.owner_kind is not distinct from requirement.owner_kind
       and selected.owner_id is not distinct from requirement.owner_id
       and selected.permission_id is not distinct from requirement.permission_id
+      and selected.accepted_registration_revision is not distinct from
+        requirement.accepted_registration_revision
+      and selected.meaning_fingerprint is not distinct from requirement.meaning_fingerprint
   ), decision as (
     select exists(select 1 from permission_eligibility) as permission_available,
       (
