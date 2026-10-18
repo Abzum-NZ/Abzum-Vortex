@@ -252,7 +252,9 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
       result.sourceFingerprint === view.sourceFingerprint && result.pageAlias === pageAlias && result.area === area)
       return { state: "ready" as const, records: result.records, behind: result.behind };
     if (result.kind === "refused") return { state: "refused" as const, records: {} };
-    console.error(`[studio] the canvas records were not read: STUDIO_CANVAS_RECORDS_${result.kind.toUpperCase()}`);
+    // A conflict means a newer save replaced this revision, whose own read follows; anything else is a failure.
+    if (result.kind !== "conflict")
+      console.error(`[studio] the canvas records were not read: STUDIO_CANVAS_RECORDS_${result.kind.toUpperCase()}`);
     // A newer save or the preview moving under this read: the canvas reads again shortly.
     return { state: "unavailable" as const, records: {}, behind: true };
   }, [organizationId, rootId, view.draftRevision, view.sourceFingerprint]);
