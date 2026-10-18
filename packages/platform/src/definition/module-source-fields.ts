@@ -270,7 +270,7 @@ const sourceLinkSettingsSchema = z
   .object({
     target: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["target/**"]),
     reverse_key: sourceProvenanceUnchanged(builderKeySchema),
-    reverse_name: sourceProvenanceTarget(labelSchema, ["reverseName"]),
+    reverse_name: sourceProvenanceUnchanged(labelSchema),
     on_parent_delete: sourceProvenanceUnchanged(
       z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
     ),
