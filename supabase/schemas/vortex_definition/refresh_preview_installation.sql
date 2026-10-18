@@ -21,6 +21,7 @@ begin
   if not vortex_platform.is_non_nil_uuid(p_preview_installation_id::text)
     or p_expected_draft_revision is null
     or p_expected_draft_revision not between 1 and 9007199254740991
+    or p_releases #>> '{application,draftRevision}' is distinct from p_expected_draft_revision::text
     or p_shape_fingerprint is null
     or p_shape_fingerprint !~ '^sha256:[a-f0-9]{64}$' then
     raise exception using errcode = '22023', message = 'Preview installation command is invalid';
@@ -48,7 +49,7 @@ begin
   select draft.draft_revision into draft_revision_value
   from vortex_definition.drafts as draft
   where draft.root_id = preview_row.application_root_id
-  for share;
+;
   -- A preview only moves forward, to the current draft revision.
   if not found or draft_revision_value <> p_expected_draft_revision
     or p_expected_draft_revision < preview_row.draft_revision then
@@ -66,7 +67,7 @@ begin
   select p_preview_installation_id, (item.value #>> '{release,root_id}')::uuid,
     (item.value #>> '{release,release_revision}')::bigint,
     item.value -> 'release', item.value -> 'dependencies'
-  from pg_catalog.jsonb_array_elements(p_releases) as item(value);
+  from pg_catalog.jsonb_array_elements(p_releases -> 'releases') as item(value);
   -- Its registration is written again from the new releases and draft roles.
   delete from vortex_access.preview_permission_entries as entry
   where entry.preview_installation_id = p_preview_installation_id;
@@ -102,4 +103,4 @@ revoke all on function vortex_definition.refresh_preview_installation(uuid, bigi
 grant execute on function vortex_definition.refresh_preview_installation(uuid, bigint, jsonb, text)
   to vortex_request;
 comment on function vortex_definition.refresh_preview_installation(uuid, bigint, jsonb, text) is
-  'Moves the builder''s preview, in its own request, to the current draft revision in place: the releases its publication rehearsed, the Module pins, its permission registration and its Record storage, keeping the records it holds, and another 24 hours. Its release set is written again in the same request. A change the stored records cannot take raises V3201.';
+  'Moves the builder''s preview, in its own request, to the current draft revision in place: the server-compiled release plan, the Module pins, its permission registration and its Record storage, keeping the records it holds, and another 24 hours. Its release set is written again in the same request. A change the stored records cannot take raises V3201.';

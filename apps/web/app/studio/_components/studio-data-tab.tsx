@@ -21,6 +21,7 @@ import { studioUseTargetOf } from "../_lib/studio-places";
 import { StudioNewQueryForm, StudioQueryEditor } from "./studio-query-editor";
 import { StudioRecordTypeSearch, StudioSearchOverview } from "./studio-search-settings";
 import { StudioRelationshipsSection } from "./studio-relationships-section";
+import { StudioModuleEvents } from "./studio-module-events";
 import { StudioModuleActions } from "./studio-module-actions";
 import { StudioRecordPipelines } from "./studio-record-pipelines";
 import { StudioRecordRules } from "./studio-record-rules";
@@ -143,6 +144,7 @@ function RecordTypeInspector({ source, moduleKey, recordKey, disabled, fieldCont
         initialType={adding === "relationship" ? "link" : "text"} disabled={disabled} context={fieldContext} edit={edit}
         onAdded={(fieldKey) => onSelect({ kind: "field", moduleKey, recordKey, fieldKey })} />
     </section>}
+    <StudioModuleEvents source={source} moduleKey={moduleKey} recordKey={recordKey} disabled={disabled} edit={edit} />
     <StudioModuleActions source={source} moduleKey={moduleKey} recordKey={recordKey} disabled={disabled} edit={edit} />
     <StudioRecordPipelines source={source} moduleKey={moduleKey} recordKey={recordKey} publication={fieldContext.publication}
       disabled={disabled} edit={edit} />

@@ -48,25 +48,92 @@ export const findStudioFlowStepById = (lists: readonly StudioFlowTaskListOutline
   return undefined;
 };
 
-function StepTypePicker({ id, label, types, disabled, onAdd, action }: Readonly<{
-  id: string; label: string; types: readonly Readonly<{ type: string; title: string; summary: string }>[];
-  disabled: boolean; onAdd: (type: string) => void; action: string;
+function StepTypePicker({
+  id,
+  label,
+  types,
+  disabled,
+  onAdd,
+  action,
+  forms,
+}: Readonly<{
+  id: string;
+  label: string;
+  types: readonly Readonly<{ type: string; title: string; summary: string }>[];
+  disabled: boolean;
+  onAdd: (type: string, formAlias?: string) => void;
+  action: string;
+  forms: StudioFlowDraftChoices["forms"];
 }>) {
   const [type, setType] = useState("");
+  const [formAlias, setFormAlias] = useState("");
   const chosen = types.find((entry) => entry.type === type);
-  if (types.length === 0) return <p className="text-sm text-muted-foreground">No kind of step can be added to this flow here.</p>;
-  return <div className="space-y-1.5">
-    <Label htmlFor={id}>{label}</Label>
-    <div className="flex gap-2">
-      <NativeSelect id={id} className="w-full" disabled={disabled} value={type} onChange={(event) => setType(event.target.value)}>
-        <NativeSelectOption value="">Choose a kind of step…</NativeSelectOption>
-        {types.map((entry) => <NativeSelectOption key={entry.type} value={entry.type}>{entry.title}</NativeSelectOption>)}
-      </NativeSelect>
-      <Button type="button" size="sm" disabled={disabled || chosen === undefined}
-        onClick={() => { if (chosen !== undefined) { onAdd(chosen.type); setType(""); } }}>{action}</Button>
+  if (types.length === 0)
+    return (
+      <p className="text-sm text-muted-foreground">
+        No kind of step can be added to this flow here.
+      </p>
+    );
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <div className="flex gap-2">
+        <NativeSelect
+          id={id}
+          className="w-full"
+          disabled={disabled}
+          value={type}
+          onChange={(event) => setType(event.target.value)}
+        >
+          <NativeSelectOption value="">Choose a kind of step…</NativeSelectOption>
+          {types.map((entry) => (
+            <NativeSelectOption key={entry.type} value={entry.type}>
+              {entry.title}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+        <Button
+          type="button"
+          size="sm"
+          disabled={
+            disabled ||
+            chosen === undefined ||
+            (type === "interface.show_form" && !forms.some((form) => form.alias === formAlias))
+          }
+          onClick={() => {
+            if (chosen !== undefined) {
+              onAdd(chosen.type, type === "interface.show_form" ? formAlias : undefined);
+              setType("");
+            }
+          }}
+        >
+          {action}
+        </Button>
+      </div>
+      {type === "interface.show_form" && (
+        <div className="space-y-1">
+          <Label htmlFor={`${id}-form`}>Form to show</Label>
+          <NativeSelect
+            id={`${id}-form`}
+            className="w-full"
+            disabled={disabled}
+            value={formAlias}
+            onChange={(event) => setFormAlias(event.target.value)}
+          >
+            <NativeSelectOption value="">Choose a form before adding the step</NativeSelectOption>
+            {forms.map((form) => (
+              <NativeSelectOption key={form.alias} value={form.alias}>
+                {form.label}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </div>
+      )}
+      {chosen === undefined ? null : (
+        <p className="text-xs text-muted-foreground">{chosen.summary}</p>
+      )}
     </div>
-    {chosen === undefined ? null : <p className="text-xs text-muted-foreground">{chosen.summary}</p>}
-  </div>;
+  );
 }
 
 export function StudioFlowInspector({ context, selection, lists, stepPath, ownerNote, choices, start, controlLabel, disabled,
@@ -98,8 +165,8 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
     : projectStudioFlowStepForm(context.source, outline.flow, outline.siblings, selection.moduleKey, task, step.path, choices),
   [context.source, outline, selection.moduleKey, task, step, choices]);
   const references = useMemo(() => outline === null || step === undefined ? []
-    : studioFlowReferenceChoices(context.source, outline.flow, outline.siblings, selection.moduleKey, step.path),
-  [context.source, outline, selection.moduleKey, step]);
+    : studioFlowReferenceChoices(context.source, outline.flow, outline.siblings, selection.moduleKey, step.path, choices.forms),
+  [context.source, outline, selection.moduleKey, step, choices.forms]);
   const condition = useMemo(() => studioFlowConditionContext(references), [references]);
   /**
    * The settings as typed, on the draft snapshot they stand on: what the draft took (which it may
@@ -159,8 +226,8 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
         }} />
       {ownerNote === undefined ? null : <p className="text-sm text-muted-foreground">{ownerNote}</p>}
       <p className="text-sm text-muted-foreground">Select a step on the canvas to change its settings, move it or add a step after it.</p>
-      {main !== undefined && <StepTypePicker id="flow-add-last" label="Add a step at the end" types={actions.stepTypes} disabled={disabled}
-        action="Add" onAdd={(taskType) => add({ kind: "insert_task", taskType, listPath: main.path, index: main.tasks.length }, "Step added at the end.")} />}
+      {main !== undefined && <StepTypePicker forms={choices.forms} id="flow-add-last" label="Add a step at the end" types={actions.stepTypes} disabled={disabled}
+        action="Add" onAdd={(taskType, formAlias) => add({ kind: "insert_task", taskType, ...(formAlias === undefined ? {} : { formAlias }), listPath: main.path, index: main.tasks.length }, "Step added at the end.")} />}
       {messages}
       {confirmDialog}
     </div>;
@@ -215,14 +282,14 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
       </>}
     </section>
     <section className="space-y-3" aria-label="Add steps">
-      <StepTypePicker id="flow-add-after" label="Add a step after this one" types={actions.stepTypes} disabled={disabled}
-        action="Add" onAdd={(taskType) => add({ kind: "insert_task", taskType, listPath, index: index + 1 }, "Step added.")} />
-      {step.children.map((child) => <StepTypePicker key={JSON.stringify(child.path)} id={`flow-add-in-${JSON.stringify(child.path)}`}
+      <StepTypePicker forms={choices.forms} id="flow-add-after" label="Add a step after this one" types={actions.stepTypes} disabled={disabled}
+        action="Add" onAdd={(taskType, formAlias) => add({ kind: "insert_task", taskType, ...(formAlias === undefined ? {} : { formAlias }), listPath, index: index + 1 }, "Step added.")} />
+      {step.children.map((child) => <StepTypePicker forms={choices.forms} key={JSON.stringify(child.path)} id={`flow-add-in-${JSON.stringify(child.path)}`}
         label={`Add a step to ${child.label}`} types={actions.stepTypes} disabled={disabled} action="Add"
-        onAdd={(taskType) => add({ kind: "insert_task", taskType, listPath: child.path, index: child.tasks.length }, `Step added to ${child.label}.`)} />)}
-      {actions.branch !== null && <StepTypePicker id="flow-add-branch" label={`Add the ${actions.branch} branch, starting with`}
+        onAdd={(taskType, formAlias) => add({ kind: "insert_task", taskType, ...(formAlias === undefined ? {} : { formAlias }), listPath: child.path, index: child.tasks.length }, `Step added to ${child.label}.`)} />)}
+      {actions.branch !== null && <StepTypePicker forms={choices.forms} id="flow-add-branch" label={`Add the ${actions.branch} branch, starting with`}
         types={actions.stepTypes} disabled={disabled} action="Add branch"
-        onAdd={(taskType) => add({ kind: "add_branch", taskId: step.id, taskPath: step.path, taskType }, `${actions.branch} branch added.`)} />}
+        onAdd={(taskType, formAlias) => add({ kind: "add_branch", taskId: step.id, taskPath: step.path, taskType, ...(formAlias === undefined ? {} : { formAlias }) }, `${actions.branch} branch added.`)} />}
     </section>
     {messages}
     {confirmDialog}
