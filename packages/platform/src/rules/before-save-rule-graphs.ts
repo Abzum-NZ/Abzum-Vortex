@@ -105,7 +105,7 @@ const semanticTypeForGraphValue = (type: RuleGraphValueType): SemanticType => {
     case "money":
       return "money";
     case "yes_no":
-      return "boolean";
+      return "yes_no";
     case "date":
       return "date";
     case "date_time":

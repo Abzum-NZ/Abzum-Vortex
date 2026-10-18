@@ -240,10 +240,10 @@ export const incomingMessageSchema = z
 
 export const interfaceValueTypeSchema = z.enum([
   "text",
-  "number",
+  "whole_number",
   "decimal_number",
   "money",
-  "boolean",
+  "yes_no",
   "date",
   "date_time",
   "record_reference",
@@ -292,8 +292,8 @@ export const interfaceOutputFieldSchema = z
     if (
       value.targetBinding.kind === "query_page_information" &&
       ((value.targetBinding.value === "continuation_token" && value.type !== "text") ||
-        (value.targetBinding.value === "has_more" && value.type !== "boolean") ||
-        (value.targetBinding.value === "result_count" && value.type !== "number"))
+        (value.targetBinding.value === "has_more" && value.type !== "yes_no") ||
+        (value.targetBinding.value === "result_count" && value.type !== "whole_number"))
     )
       context.addIssue({
         code: "custom",

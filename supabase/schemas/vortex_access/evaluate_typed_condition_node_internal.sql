@@ -114,8 +114,8 @@ begin
       operand_literal[operand_index] := true;
       if operand_values[operand_index] <> 'null'::jsonb then
         case pg_catalog.jsonb_typeof(operand_values[operand_index])
-          when 'number' then candidate_type := 'number';
-          when 'boolean' then candidate_type := 'boolean';
+          when 'number' then candidate_type := 'whole_number';
+          when 'boolean' then candidate_type := 'yes_no';
           when 'string' then
             if vortex_access.typed_condition_temporal_value_internal(
               operand_values[operand_index] #>> '{}', 'date'
@@ -170,8 +170,8 @@ begin
   -- number parameters only when those values are integers, exactly as the
   -- TypeScript V2 evaluator lifts them into exact base ten.
   if shared_type is null
-    and operand_types[1] in ('number', 'decimal_number')
-    and operand_types[2] in ('number', 'decimal_number') then
+    and operand_types[1] in ('whole_number', 'decimal_number')
+    and operand_types[2] in ('whole_number', 'decimal_number') then
     exact_compatible := true;
     for operand_index in 1..2 loop
       if operand_values[operand_index] <> 'null'::jsonb
@@ -205,7 +205,7 @@ begin
             else member_type := expected_type; end if;
           else
             candidate_type := case pg_catalog.jsonb_typeof(member)
-              when 'number' then 'number' when 'boolean' then 'boolean'
+              when 'number' then 'whole_number' when 'boolean' then 'yes_no'
               when 'string' then case
                 when vortex_access.typed_condition_temporal_value_internal(member #>> '{}', 'date') is not null then 'date'
                 when vortex_access.typed_condition_temporal_value_internal(member #>> '{}', 'date_time') is not null then 'date_time'
@@ -242,7 +242,7 @@ begin
             else member_type := expected_type; end if;
           else
             candidate_type := case pg_catalog.jsonb_typeof(member)
-              when 'number' then 'number' when 'boolean' then 'boolean'
+              when 'number' then 'whole_number' when 'boolean' then 'yes_no'
               when 'string' then case
                 when vortex_access.typed_condition_temporal_value_internal(member #>> '{}', 'date') is not null then 'date'
                 when vortex_access.typed_condition_temporal_value_internal(member #>> '{}', 'date_time') is not null then 'date_time'
@@ -268,7 +268,7 @@ begin
       raise exception using errcode = '22023', message = 'Typed record condition is invalid';
     end if;
   elsif shared_type is null
-    or shared_type not in ('text', 'number', 'decimal_number', 'money', 'date', 'date_time') then
+    or shared_type not in ('text', 'whole_number', 'decimal_number', 'money', 'date', 'date_time') then
     raise exception using errcode = '22023', message = 'Typed record condition is invalid';
   end if;
 
@@ -284,7 +284,7 @@ begin
   if operator_value in ('equals', 'not_equals') then
     if operand_values[1] = 'null'::jsonb or operand_values[2] = 'null'::jsonb then
       equal_value := operand_values[1] = operand_values[2];
-    elsif shared_type = 'number' then
+    elsif shared_type = 'whole_number' then
       equal_value := (operand_values[1] #>> '{}')::double precision
         = (operand_values[2] #>> '{}')::double precision;
     elsif shared_type = 'decimal_number' then
@@ -313,7 +313,7 @@ begin
           contains_value := pg_catalog.strpos(operand_values[1] #>> '{}', operand_values[2] #>> '{}') > 0;
         elsif pg_catalog.jsonb_typeof(operand_values[1]) = 'array' then
           for member in select value from pg_catalog.jsonb_array_elements(operand_values[1]) loop
-            if collection_element_type = 'number' then
+            if collection_element_type = 'whole_number' then
               equal_value := (member #>> '{}')::double precision = (operand_values[2] #>> '{}')::double precision;
             elsif collection_element_type = 'decimal_number' then
               equal_value := (member #>> '{}')::numeric = (operand_values[2] #>> '{}')::numeric;
@@ -335,7 +335,7 @@ begin
 
     if operand_values[1] <> 'null'::jsonb and operand_values[2] <> 'null'::jsonb then
       for member in select value from pg_catalog.jsonb_array_elements(operand_values[2]) loop
-        if collection_element_type = 'number' then
+        if collection_element_type = 'whole_number' then
           equal_value := (operand_values[1] #>> '{}')::double precision = (member #>> '{}')::double precision;
         elsif collection_element_type = 'decimal_number' then
           equal_value := (operand_values[1] #>> '{}')::numeric = (member #>> '{}')::numeric;
@@ -355,7 +355,7 @@ begin
   end if;
 
   if operand_values[1] = 'null'::jsonb or operand_values[2] = 'null'::jsonb then return false; end if;
-  if shared_type = 'number' then
+  if shared_type = 'whole_number' then
     left_number := (operand_values[1] #>> '{}')::double precision;
     right_number := (operand_values[2] #>> '{}')::double precision;
     comparison_value := case when left_number < right_number then -1 when left_number > right_number then 1 else 0 end;

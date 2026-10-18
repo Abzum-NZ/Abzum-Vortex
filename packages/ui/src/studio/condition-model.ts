@@ -1,17 +1,17 @@
 import {
+  conditionFieldType as semanticTypeForField,
+  semanticTypeForLiteral,
+  operatorAcceptsOperands,
+  collectionElementType,
+  flowInstantMicros,
+  type ConditionValueType,
+  type OperandInfo,
   builderKeySchema,
   conditionMaximumNestingDepth,
   conditionMaximumOperandCount,
   conditionNodeSchema,
-  dateValueSchema,
-  exactDecimalTextSchema,
   fieldIdSchema,
-  jsonValueSchema,
   moduleFieldSchema,
-  moneyValueSchema,
-  organizationAccountIdSchema,
-  personLinkValueSchema,
-  recordLinkValueSchema,
   type ConditionNode,
   type JsonValue,
   type ModuleField,
@@ -34,19 +34,7 @@ const isFieldOperandPermission = (
 ): permission is FieldOperandPermission => "field" in permission;
 
 /** The semantic types used by the current Rule  field and parameter contracts. */
-export type StudioConditionSemanticType =
-  | "text"
-  | "number"
-  | "whole_number"
-  | "decimal_number"
-  | "money"
-  | "boolean"
-  | "date"
-  | "date_time"
-  | "text_collection"
-  | "opaque_json"
-  | "record_reference"
-  | "organization_account_reference";
+export type StudioConditionSemanticType = ConditionValueType;
 
 /**
  * Parameter types accepted by Rule and query conditions. Host-only values use the same parameter
@@ -54,10 +42,10 @@ export type StudioConditionSemanticType =
  */
 export type StudioConditionParameterType =
   | "text"
-  | "number"
+  | "whole_number"
   | "decimal_number"
   | "money"
-  | "boolean"
+  | "yes_no"
   | "date"
   | "date_time"
   | "record_reference"
@@ -144,24 +132,6 @@ export const operatorOptions: readonly StudioConditionOperatorOption[] = (
   label: operatorLabels[operator],
   arity: unaryOperators.has(operator) ? "unary" : "binary",
 }));
-const orderableTypes = new Set<StudioConditionSemanticType>([
-  "text",
-  "number",
-  "whole_number",
-  "decimal_number",
-  "money",
-  "date",
-  "date_time",
-]);
-const numericTypes = new Set<StudioConditionSemanticType>([
-  "number",
-  "whole_number",
-  "decimal_number",
-]);
-const exactNumericTypes = new Set<StudioConditionSemanticType>([
-  "whole_number",
-  "decimal_number",
-]);
 export const maximumGroupChildren = 50;
 
 export type StudioConditionValidationIssue = Readonly<{
@@ -183,12 +153,6 @@ export type StudioConditionValidation = Readonly<{
   condition: ConditionNode | undefined;
   issues: readonly StudioConditionValidationIssue[];
   isValid: boolean;
-}>;
-
-type OperandInfo = Readonly<{
-  semanticType: StudioConditionSemanticType | undefined;
-  literal?: JsonValue;
-  source: "reference" | "value";
 }>;
 
 export type ConditionPath = readonly (string | number)[];
@@ -243,47 +207,6 @@ const referenceKey = (operand: Exclude<ConditionOperand, { source: "value" }>): 
 const permissionKey = (permission: StudioConditionOperandPermission): string =>
   referenceKey(permission.operand);
 
-const semanticTypeForField = (field: ModuleField): StudioConditionSemanticType => {
-  switch (field.type) {
-    case "whole_number":
-      return "whole_number";
-    case "decimal_number":
-      return "decimal_number";
-    case "money":
-      return "money";
-    case "yes_no":
-      return "boolean";
-    case "date":
-      return "date";
-    case "date_time":
-      return "date_time";
-    case "several_choices":
-      return "text_collection";
-    case "formatted_text":
-    case "table":
-    case "attachment":
-      return "opaque_json";
-    case "link":
-    case "link_to_one_of_several":
-      return "record_reference";
-    case "link_to_person":
-      return "organization_account_reference";
-    case "calculation":
-    case "total": {
-      const resultType = field.settings.resultType;
-      if (resultType === "whole_number") return "whole_number";
-      if (resultType === "decimal_number") return "decimal_number";
-      if (resultType === "money") return "money";
-      if (resultType === "yes_no") return "boolean";
-      if (resultType === "date") return "date";
-      if (resultType === "date_time") return "date_time";
-      return "text";
-    }
-    default:
-      return "text";
-  }
-};
-
 const semanticTypeForParameter = (
   type: StudioConditionParameterType,
 ): StudioConditionSemanticType => type;
@@ -318,10 +241,10 @@ const contextIssues = (
 
   const validTypes = new Set<StudioConditionParameterType>([
     "text",
-    "number",
+    "whole_number",
     "decimal_number",
     "money",
-    "boolean",
+    "yes_no",
     "date",
     "date_time",
     "record_reference",
@@ -421,205 +344,23 @@ export const infoForOperand = (
   return {
     source: "reference",
     semanticType: semanticTypeForField(permission.field),
+    field: permission.field,
   };
 };
 
-const isValidText = (value: unknown): value is string =>
-  typeof value === "string" &&
-  !value.includes("\0") &&
-  [...value].every((character) => {
-    const point = character.codePointAt(0)!;
-    return point < 0xd800 || point > 0xdfff;
-  });
-
-const isValidInstant = (value: unknown): value is string => {
-  if (typeof value !== "string") return false;
-  const match =
-    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:\d{2})$/.exec(
-      value,
-    );
-  if (!match) return false;
-  const hour = Number(match[4]);
-  const minute = Number(match[5]);
-  const second = Number(match[6]);
-  if (hour > 23 || minute > 59 || second > 59) return false;
-  if (!dateValueSchema.safeParse(value.slice(0, 10)).success) return false;
-  const zone = match[8]!;
-  if (zone === "Z") return true;
-  const offsetHours = Number(zone.slice(1, 3));
-  const offsetMinutes = Number(zone.slice(4, 6));
-  return offsetHours <= 23 && offsetMinutes <= 59;
-};
-
-const semanticTypeForLiteral = (value: JsonValue): StudioConditionSemanticType | undefined => {
-  if (value === null) return undefined;
-  if (typeof value === "number") return "number";
-  if (typeof value === "boolean") return "boolean";
-  if (typeof value === "string") {
-    if (dateValueSchema.safeParse(value).success) return "date";
-    if (isValidInstant(value)) return "date_time";
-    return "text";
-  }
-  if (Array.isArray(value) && value.every((entry) => typeof entry === "string"))
-    return "text_collection";
-  return "opaque_json";
-};
-
-export const literalMatchesType = (value: JsonValue, type: StudioConditionSemanticType): boolean => {
-  if (value === null) return true;
-  switch (type) {
-    case "text":
-      return isValidText(value);
-    case "number":
-      return typeof value === "number" && Number.isFinite(value);
-    case "whole_number":
-      return typeof value === "number" && Number.isInteger(value);
-    case "decimal_number":
-      return (
-        exactDecimalTextSchema.safeParse(value).success ||
-        (typeof value === "number" && Number.isInteger(value))
-      );
-    case "money":
-      return moneyValueSchema.safeParse(value).success;
-    case "boolean":
-      return typeof value === "boolean";
-    case "date":
-      return dateValueSchema.safeParse(value).success;
-    case "date_time":
-      return isValidInstant(value);
-    case "text_collection":
-      return Array.isArray(value) && value.every(isValidText);
-    case "opaque_json":
-      return jsonValueSchema.safeParse(value).success;
-    case "record_reference":
-      return recordLinkValueSchema.safeParse(value).success;
-    case "organization_account_reference":
-      return (
-        organizationAccountIdSchema.safeParse(value).success ||
-        personLinkValueSchema.safeParse(value).success
-      );
-  }
-};
-
-const sameComparableType = (
-  left: StudioConditionSemanticType,
-  right: StudioConditionSemanticType,
-): boolean =>
-  left === right || (exactNumericTypes.has(left) && exactNumericTypes.has(right));
-
-const exactNumericLiteral = (value: JsonValue | undefined): boolean =>
-  value === null ||
-  (typeof value === "number" && Number.isInteger(value)) ||
-  (typeof value === "string" && exactDecimalTextSchema.safeParse(value).success);
-
-const exactNumericOperand = (operand: OperandInfo): boolean =>
-  operand.source === "value"
-    ? exactNumericLiteral(operand.literal)
-    : operand.semanticType !== undefined && exactNumericTypes.has(operand.semanticType);
-
-const sharedType = (
-  left: OperandInfo,
-  right: OperandInfo,
-): StudioConditionSemanticType | undefined => {
-  if (left.source === "value" && right.source === "value") {
-    if (left.literal === null && right.literal === null) return "opaque_json";
-    if (left.literal === null && right.literal !== undefined)
-      return semanticTypeForLiteral(right.literal);
-    if (right.literal === null && left.literal !== undefined)
-      return semanticTypeForLiteral(left.literal);
-    return left.semanticType === right.semanticType ? left.semanticType : undefined;
-  }
-
-  if (left.source === "reference" && right.source === "reference") {
-    if (left.semanticType === right.semanticType) return left.semanticType;
-    return left.semanticType && right.semanticType &&
-      sameComparableType(left.semanticType, right.semanticType) &&
-      exactNumericOperand(left) && exactNumericOperand(right)
-      ? "decimal_number"
-      : undefined;
-  }
-
-  const reference = left.source === "reference" ? left : right;
-  const literal = left.source === "value" ? left : right;
-  const referenceType = reference.semanticType;
-  if (!referenceType || literal.literal === undefined) return undefined;
-  if (literalMatchesType(literal.literal, referenceType)) return referenceType;
-  return numericTypes.has(referenceType) && exactNumericOperand(reference) &&
-    exactNumericOperand(literal)
-    ? "decimal_number"
-    : undefined;
-};
-
-const canBeType = (operand: OperandInfo, type: StudioConditionSemanticType): boolean =>
-  operand.source === "reference"
-    ? operand.semanticType === type
-    : operand.literal !== undefined && literalMatchesType(operand.literal, type);
-
-export const isCollectionElementType = (
-  type: StudioConditionSemanticType | undefined,
-): type is Exclude<StudioConditionSemanticType, "text_collection" | "opaque_json"> =>
-  type !== undefined && type !== "text_collection" && type !== "opaque_json";
-
-const collectionElementType = (
-  operand: OperandInfo,
-  expectedType?: StudioConditionSemanticType,
-): Exclude<StudioConditionSemanticType, "text_collection" | "opaque_json"> | undefined => {
-  if (operand.source === "reference")
-    return operand.semanticType === "text_collection" ? "text" : undefined;
-  if (!Array.isArray(operand.literal)) return undefined;
-  if (operand.literal.length === 0)
-    return isCollectionElementType(expectedType) ? expectedType : undefined;
-  if (expectedType && operand.literal.every((value) => literalMatchesType(value, expectedType)))
-    return isCollectionElementType(expectedType) ? expectedType : undefined;
-  const types = operand.literal.map(semanticTypeForLiteral);
-  const firstType = types[0];
-  return types.every((type) => type === firstType) && isCollectionElementType(firstType)
-    ? firstType
-    : undefined;
-};
-
-const knownReferenceType = (operand: OperandInfo): StudioConditionSemanticType | undefined =>
-  operand.source === "reference" ? operand.semanticType : undefined;
-
-export const operatorAcceptsOperands = (
-  operator: ConditionOperator,
-  left: OperandInfo,
-  right: OperandInfo | undefined,
-): boolean => {
-  if (unaryOperators.has(operator)) return right === undefined;
-  if (!right) return false;
-
-  if (operator === "equals" || operator === "not_equals") return sharedType(left, right) !== undefined;
-  if (operator === "contains" || operator === "not_contains") {
-    const textOperands = canBeType(left, "text") && canBeType(right, "text");
-    const elementType = collectionElementType(left, knownReferenceType(right));
-    return textOperands || (elementType !== undefined && canBeType(right, elementType));
-  }
-  if (operator === "in" || operator === "not_in") {
-    const elementType = collectionElementType(right, knownReferenceType(left));
-    return elementType !== undefined && canBeType(left, elementType);
-  }
-  const type = sharedType(left, right);
-  if (type === "money" && left.source === "value" && right.source === "value" &&
-    left.literal !== null && right.literal !== null) {
-    const leftMoney = moneyValueSchema.safeParse(left.literal);
-    const rightMoney = moneyValueSchema.safeParse(right.literal);
-    if (leftMoney.success && rightMoney.success &&
-      leftMoney.data.currency !== rightMoney.data.currency) return false;
-  }
-  return type !== undefined && orderableTypes.has(type);
-};
+export { literalMatchesType, operatorAcceptsOperands, isCollectionElementType } from "@vortex/platform/schema";
+const knownReferenceType = (operand: OperandInfo): ConditionValueType | undefined => operand.source === "reference" ? operand.semanticType : undefined;
+const isValidInstant = (value: unknown): value is string => flowInstantMicros(value) !== undefined;
 
 export const defaultLiteralForType = (type: StudioConditionSemanticType | undefined): JsonValue | undefined => {
   switch (type) {
-    case "number":
     case "whole_number":
       return 0;
     case "decimal_number":
       return "0";
     case "money":
       return null;
-    case "boolean":
+    case "yes_no":
       return false;
     case "date":
       return "1970-01-01";

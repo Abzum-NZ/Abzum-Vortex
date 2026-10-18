@@ -88,12 +88,12 @@ const formattedTextActionInputSchema = z
       .optional(),
   })
   .strict();
-const numberActionInputSchema = z
+const wholeNumberActionInputSchema = z
   .object({
     ...actionInputBase,
-    type: z.literal(actionInputValueTypes.number),
+    type: z.literal(actionInputValueTypes.whole_number),
     validation: z
-      .object({ minimum: z.number().finite().optional(), maximum: z.number().finite().optional() })
+      .object({ minimum: z.number().int().safe().optional(), maximum: z.number().int().safe().optional() })
       .strict()
       .optional(),
   })
@@ -134,8 +134,8 @@ export const applicationActionInputDefinitionSchema = z
   .discriminatedUnion("type", [
     textActionInputSchema,
     formattedTextActionInputSchema,
-    numberActionInputSchema,
-    z.object({ ...actionInputBase, type: z.literal(actionInputValueTypes.boolean) }).strict(),
+    wholeNumberActionInputSchema,
+    z.object({ ...actionInputBase, type: z.literal(actionInputValueTypes.yes_no) }).strict(),
     dateActionInputSchema,
     dateTimeActionInputSchema,
     z
@@ -165,7 +165,7 @@ export const applicationActionInputDefinitionSchema = z
         message: "Maximum length cannot be below minimum length",
       });
     if (
-      value.type === "number" &&
+      value.type === "whole_number" &&
       value.validation?.minimum !== undefined &&
       value.validation.maximum !== undefined &&
       value.validation.minimum > value.validation.maximum

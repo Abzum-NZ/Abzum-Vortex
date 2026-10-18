@@ -1,5 +1,4 @@
 import {
-  canonicalWorkflowValueType,
   compareExactDecimals,
   formatExactDecimal,
   moneyValueSchema,
@@ -40,8 +39,8 @@ export type FlowFormulaScope = Readonly<{
 const maximumDecimalDigits = 100;
 const maximumTextCharacters = 65_536;
 
-const isNumericType = (type: string): boolean => canonicalWorkflowValueType(type) === "number";
-const isTextType = (type: string): boolean => canonicalWorkflowValueType(type) === "text";
+const isNumericType = (type: string): boolean => ["whole_number", "decimal_number", "money"].includes(type);
+const isTextType = (type: string): boolean => ["text", "choice", "formatted_text"].includes(type);
 
 const value = (type: string, content: JsonValue): FlowRuntimeValue => ({ type, value: content });
 const yesNo = (content: boolean) => value("yes_no", content);

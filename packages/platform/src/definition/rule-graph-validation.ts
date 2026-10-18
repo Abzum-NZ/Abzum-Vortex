@@ -75,13 +75,13 @@ const fieldColumns = (field: ModuleField): readonly RuleTableColumn[] | undefine
       }))
     : undefined;
 
-const fieldValueType = (field: ModuleField): ValueDeclaration["type"] => {
+const ruleFieldResultType = (field: ModuleField): ValueDeclaration["type"] => {
   if (field.type === "calculation" || field.type === "total") return field.settings.resultType;
   return field.type;
 };
 
 const declarationForField = (field: ModuleField): ValueDeclaration => ({
-  type: fieldValueType(field),
+  type: ruleFieldResultType(field),
   field,
   ...(fieldRecordTypeIds(field) ? { recordTypeIds: fieldRecordTypeIds(field) } : {}),
   ...(fieldColumns(field) ? { columns: fieldColumns(field) } : {}),
@@ -111,7 +111,7 @@ const textTypes = new Set<ValueDeclaration["type"]>([
 
 const semanticType = (type: ValueDeclaration["type"]): string => {
   if (textTypes.has(type)) return "text";
-  if (type === "yes_no") return "boolean";
+  if (type === "yes_no") return "yes_no";
   if (type === "several_choices") return "text_collection";
   if (type === "link" || type === "link_to_one_of_several") return "record_reference";
   if (type === "link_to_person") return "organization_account_reference";
