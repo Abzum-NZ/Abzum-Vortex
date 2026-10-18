@@ -63,7 +63,7 @@ import { describeStudioCompileFailure } from "../_lib/studio-compile-failure";
 
 type Source = ApplicationSourceDocument;
 
-const peopleDirectoryLabel = "Person (people directory)";
+const peopleDirectoryLabel = "People";
 
 function Problems({ issues }: Readonly<{ issues: readonly string[] }>) {
   return issues.length === 0 ? null : (
@@ -535,7 +535,7 @@ export function useStudioDataTab({
           key,
           label:
             key === directory.recordType
-              ? `${record.name} (people directory)`
+              ? peopleDirectoryLabel
               : `${record.name} (${module.name})`,
           titleLabel: record.fields.find((field) => field.key === record.titleFieldKey)?.label,
         };

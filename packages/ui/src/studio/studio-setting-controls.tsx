@@ -339,9 +339,8 @@ function BorrowableReferenceControl({ id, value, choices, unset, disabled, onCha
   </NativeSelect>;
 }
 
-/** The label a query choice shows: its own, and for a borrowed one where it comes from. */
-export const queryChoiceLabel = (query: StudioQueryChoice): string =>
-  query.borrowedFrom === undefined ? query.label : `${query.label} (from ${query.borrowedFrom}, read-only)`;
+/** Query choices use their authored business names; their group explains ownership. */
+export const queryChoiceLabel = (query: StudioQueryChoice): string => query.label;
 
 function GroupControl({ id, property, value, onChange, choices, disabled }: ControlProps): ReactElement {
   if (property.kind !== "group") throw new TypeError("A group control needs a group setting.");
