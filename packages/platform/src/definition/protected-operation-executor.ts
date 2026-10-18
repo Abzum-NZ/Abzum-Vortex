@@ -26,6 +26,7 @@ import {
   retireOrganizationAdministrationGroupCommandSchema,
   retireOrganizationAdministrationRoleCommandSchema,
   revokeOrganizationAdministrationDelegationAuthorityCommandSchema,
+  grantOrganizationAdministrationDelegationAuthorityCommandSchema,
   revokeOrganizationAdministrationRoleAssignmentCommandSchema,
   revokeOrganizationInvitationForAdministrationCommandSchema,
   reviseOrganizationAdministrationRoleMetadataCommandSchema,
@@ -70,6 +71,7 @@ import type {
 import { verifiedDurableActorContextSchema } from "../access/index";
 import type { DurableActorRequestScope } from "../access/index";
 import type { RequestDatabaseTransaction } from "../db/index";
+import type { ApplicationStoreService } from "./installation-application-store";
 import { z } from "zod";
 
 /**
@@ -222,6 +224,7 @@ type ProtectedOperationServices = Readonly<{
     | "revokeRoleAssignment"
     | "deactivateRoleActivation"
     | "revokeDelegationAuthority"
+    | "grantDelegationAuthority"
     | "suspendOrganizationAccount"
     | "reactivateOrganizationAccount"
     | "closeOrganizationAccount"
@@ -237,6 +240,11 @@ type ProtectedOperationServices = Readonly<{
       operation: (scope: TenantGovernanceRequestScope) => Promise<Result>,
     ): Promise<HumanOrganizationRequestResult<Result>>;
   }>;
+  /**
+   * The application catalogue's install and upgrade journeys. Only a person's interactive request
+   * supplies them; without them those operations are refused like any unavailable one.
+   */
+  applicationStore?: ApplicationStoreService;
 }>;
 
 type ProtectedOperationExecutorDependencies = ProtectedOperationServices & Readonly<{
@@ -357,6 +365,17 @@ const operation =
         return definition.run(services, caller, command.data);
       },
     });
+
+/** One application catalogue journey, run by the installation service under the person's own authority. */
+const applicationStoreOperation = (journey: keyof ApplicationStoreService): Operation =>
+  Object.freeze({
+    authorityKind: "permission",
+    execute: async (services, caller, inputs) => {
+      const store = services.applicationStore;
+      if (store === undefined) return { kind: "unavailable" };
+      return store[journey](caller.session, caller.selection, inputs);
+    },
+  });
 
 /** A blank optional text input, as an empty form field submits it, is the same as an absent one. */
 const optionalText = (value: ProtectedOperationValue | undefined) =>
@@ -847,6 +866,27 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         }),
       ),
   }),
+  grant_delegation_authority: operation({
+    schema: grantOrganizationAdministrationDelegationAuthorityCommandSchema,
+    command: (inputs) => ({
+      holderKind: inputs.holder_kind,
+      holderId: inputs.holder_id,
+      expectedHolderRevision: inputs.expected_holder_revision,
+    }),
+    run: async (services, caller, command) =>
+      mapAvailable(
+        await services.accessAdministration.grantDelegationAuthority(
+          caller.session,
+          caller.selection,
+          command,
+        ),
+        (value) => ({
+          delegation_authority_id: value.delegation.delegationAuthorityId,
+          revision: value.delegation.revision,
+          access_version: value.accessVersion,
+        }),
+      ),
+  }),
   revoke_delegation_authority: operation({
     schema: revokeOrganizationAdministrationDelegationAuthorityCommandSchema,
     command: (inputs) => ({
@@ -1117,12 +1157,16 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
       };
     },
   }),
+  review_application_installation: applicationStoreOperation("review"),
+  install_application: applicationStoreOperation("install"),
+  upgrade_application: applicationStoreOperation("upgrade"),
 } satisfies Record<PlatformServiceOperationKey, Operation>);
 
 /** A value of a declared type the executor does not carry yet is refused, never coerced. */
 const valueMatches = (type: string, value: unknown): value is ProtectedOperationValue => {
   if (type === "text" || type === "choice") return typeof value === "string";
   if (type === "whole_number") return typeof value === "number" && Number.isSafeInteger(value);
+  if (type === "yes_no") return typeof value === "boolean";
   if (type === "json") return jsonValueSchema.safeParse(value).success;
   return false;
 };

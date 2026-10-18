@@ -324,8 +324,7 @@
           "vortex.iam.core.access_request.update_own",
           "vortex.iam.core.access_request.soft_delete_own",
           "vortex.iam.core.access_request_item.create_own",
-          "vortex.iam.core.access_request_item.read_own",
-          "vortex.system_directory.person.reference_read"
+          "vortex.iam.core.access_request_item.read_own"
         ]
       },
       {
@@ -607,6 +606,20 @@
         "id": "event_accept_application_role_revision",
         "key": "vortex.app.iam.accept_application_role_revision",
         "record_type": "vortex.system_directory:role",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_grant_install_authority_person",
+        "key": "vortex.app.iam.grant_install_authority_person",
+        "record_type": "vortex.system_directory:person",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_grant_install_authority_group",
+        "key": "vortex.app.iam.grant_install_authority_group",
+        "record_type": "vortex.system_directory:group",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       }
@@ -1047,6 +1060,10 @@
                       {
                         "event_id": "event_make_steward",
                         "label": "Make steward"
+                      },
+                      {
+                        "event_id": "event_grant_install_authority_person",
+                        "label": "Grant app-installation authority"
                       }
                     ],
                     "columns": [
@@ -1303,6 +1320,10 @@
                       {
                         "event_id": "event_add_group_membership",
                         "label": "Add member"
+                      },
+                      {
+                        "event_id": "event_grant_install_authority_group",
+                        "label": "Grant app-installation authority"
                       }
                     ],
                     "vortex": {
@@ -6466,6 +6487,486 @@
           }
         ],
         "outputs": {}
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_grant_install_authority_person",
+        "key": "grant_install_authority_person",
+        "labels": {
+          "name": "Grant app-installation authority"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "holder_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.system_directory:person"]
+          },
+          "expected_holder_revision": {
+            "type": "whole_number",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "confirm",
+            "type": "interface.confirm",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Grant app-installation authority"
+                }
+              },
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Grant organisation-catalogue delegation to this person? With Manage applications permission, this allows installing and upgrading apps and accepting their roles. This grants no stewardship or Studio permissions. Revoke the delegation in Assignments to remove this authority."
+                }
+              }
+            }
+          },
+          {
+            "id": "confirmation",
+            "type": "switch",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "confirm",
+                "key": "confirmed"
+              }
+            },
+            "cases": [
+              {
+                "key": "confirmed",
+                "when": {
+                  "type": "yes_no",
+                  "value": true
+                },
+                "tasks": [
+                  {
+                    "id": "call",
+                    "type": "operation.call",
+                    "version": "1.0.0",
+                    "properties": {
+                      "operation": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "platform.grant_delegation_authority"
+                        }
+                      },
+                      "inputs": {
+                        "kind": "map",
+                        "entries": {
+                          "holder_kind": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "organization_account"
+                            }
+                          },
+                          "holder_id": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "holder_id"
+                            }
+                          },
+                          "expected_holder_revision": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "expected_holder_revision"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "allowRefusal": true
+                  },
+                  {
+                    "id": "grant_result",
+                    "type": "switch",
+                    "value": {
+                      "kind": "reference",
+                      "reference": {
+                        "source": "task_output",
+                        "task": "call",
+                        "key": "outcome"
+                      }
+                    },
+                    "cases": [
+                      {
+                        "key": "committed",
+                        "when": {
+                          "type": "choice",
+                          "value": "committed"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_committed",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "App-installation authority granted. Manage applications permission is assigned separately through Roles."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "key": "refused",
+                        "when": {
+                          "type": "choice",
+                          "value": "refused"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_refused",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The grant was refused. You need assignment management permission and current organisation-catalogue delegation, and you cannot grant it to yourself."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "key": "conflict",
+                        "when": {
+                          "type": "choice",
+                          "value": "conflict"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_conflict",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The selected holder changed or already has catalogue delegation. Refresh before trying again."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "key": "validation",
+                        "when": {
+                          "type": "choice",
+                          "value": "validation"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_validation",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The grant input was invalid. Refresh before trying again."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "default": [
+                      {
+                        "id": "show_failed",
+                        "type": "interface.show_message",
+                        "version": "1.0.0",
+                        "properties": {
+                          "message": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "The grant could not be confirmed. Refresh Assignments before trying again."
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "default": [
+              {
+                "id": "stop_cancelled",
+                "type": "stop",
+                "outcome": "cancelled"
+              }
+            ]
+          }
+        ],
+        "description": "Grants organisation-catalogue delegation only. Manage applications permission must be assigned separately through Roles. Grants no stewardship or Studio permissions."
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_grant_install_authority_group",
+        "key": "grant_install_authority_group",
+        "labels": {
+          "name": "Grant app-installation authority"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "holder_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.system_directory:group"]
+          },
+          "expected_holder_revision": {
+            "type": "whole_number",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "confirm",
+            "type": "interface.confirm",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Grant app-installation authority"
+                }
+              },
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Grant organisation-catalogue delegation to this Group? With Manage applications permission, this allows installing and upgrading apps and accepting their roles. This grants no stewardship or Studio permissions. Revoke the delegation in Assignments to remove this authority."
+                }
+              }
+            }
+          },
+          {
+            "id": "confirmation",
+            "type": "switch",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "confirm",
+                "key": "confirmed"
+              }
+            },
+            "cases": [
+              {
+                "key": "confirmed",
+                "when": {
+                  "type": "yes_no",
+                  "value": true
+                },
+                "tasks": [
+                  {
+                    "id": "call",
+                    "type": "operation.call",
+                    "version": "1.0.0",
+                    "properties": {
+                      "operation": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "platform.grant_delegation_authority"
+                        }
+                      },
+                      "inputs": {
+                        "kind": "map",
+                        "entries": {
+                          "holder_kind": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "group"
+                            }
+                          },
+                          "holder_id": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "holder_id"
+                            }
+                          },
+                          "expected_holder_revision": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "expected_holder_revision"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "allowRefusal": true
+                  },
+                  {
+                    "id": "grant_result",
+                    "type": "switch",
+                    "value": {
+                      "kind": "reference",
+                      "reference": {
+                        "source": "task_output",
+                        "task": "call",
+                        "key": "outcome"
+                      }
+                    },
+                    "cases": [
+                      {
+                        "key": "committed",
+                        "when": {
+                          "type": "choice",
+                          "value": "committed"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_committed",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "App-installation authority granted. Manage applications permission is assigned separately through Roles."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "key": "refused",
+                        "when": {
+                          "type": "choice",
+                          "value": "refused"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_refused",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The grant was refused. You need assignment management permission and current organisation-catalogue delegation."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "key": "conflict",
+                        "when": {
+                          "type": "choice",
+                          "value": "conflict"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_conflict",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The selected holder changed or already has catalogue delegation. Refresh before trying again."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "key": "validation",
+                        "when": {
+                          "type": "choice",
+                          "value": "validation"
+                        },
+                        "tasks": [
+                          {
+                            "id": "show_validation",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The grant input was invalid. Refresh before trying again."
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "default": [
+                      {
+                        "id": "show_failed",
+                        "type": "interface.show_message",
+                        "version": "1.0.0",
+                        "properties": {
+                          "message": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "The grant could not be confirmed. Refresh Assignments before trying again."
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "default": [
+              {
+                "id": "stop_cancelled",
+                "type": "stop",
+                "outcome": "cancelled"
+              }
+            ]
+          }
+        ],
+        "description": "Grants organisation-catalogue delegation only. Manage applications permission must be assigned separately through Roles. Grants no stewardship or Studio permissions."
       }
     ],
     "flow_bindings": [
@@ -6819,6 +7320,40 @@
           "record_id": {
             "kind": "caller",
             "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_grant_install_authority_person",
+        "control": "iam_people_region",
+        "event_id": "event_grant_install_authority_person",
+        "event": "row_action",
+        "flow": "flow_grant_install_authority_person",
+        "inputs": {
+          "holder_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "expected_holder_revision": {
+            "kind": "caller",
+            "name": "revision"
+          }
+        }
+      },
+      {
+        "id": "binding_grant_install_authority_group",
+        "control": "iam_groups_region",
+        "event_id": "event_grant_install_authority_group",
+        "event": "row_action",
+        "flow": "flow_grant_install_authority_group",
+        "inputs": {
+          "holder_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "expected_holder_revision": {
+            "kind": "caller",
+            "name": "revision"
           }
         }
       }

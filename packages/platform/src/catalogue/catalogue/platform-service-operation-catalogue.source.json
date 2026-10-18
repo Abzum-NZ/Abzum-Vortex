@@ -1847,5 +1847,292 @@
         "key": "platform.organization.assignments.manage"
       }
     }
+  },
+  "review_application_installation": {
+    "key": "review_application_installation",
+    "name": "Review application installation",
+    "release": {
+      "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980",
+      "operationId": "0f387aa2-a2e4-4ca8-80d1-030afb1734cb",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980"
+        },
+        "operationId": "0f387aa2-a2e4-4ca8-80d1-030afb1734cb"
+      },
+      "inputs": {
+        "application_root_id": {
+          "type": "text",
+          "required": true
+        }
+      },
+      "outputs": {
+        "change": {
+          "type": "choice",
+          "required": true
+        },
+        "reason": {
+          "type": "text",
+          "required": true
+        },
+        "application_name": {
+          "type": "text",
+          "required": true
+        },
+        "release_version": {
+          "type": "text",
+          "required": true
+        },
+        "installed_version": {
+          "type": "text",
+          "required": true
+        },
+        "release_note": {
+          "type": "text",
+          "required": true
+        },
+        "member_role_name": {
+          "type": "text",
+          "required": true
+        },
+        "member_role_permissions": {
+          "type": "json",
+          "required": true
+        },
+        "role_changes": {
+          "type": "json",
+          "required": true
+        },
+        "role_change_count": {
+          "type": "whole_number",
+          "required": true
+        },
+        "role_ids": {
+          "type": "json",
+          "required": true
+        },
+        "expected": {
+          "type": "json",
+          "required": true
+        }
+      },
+      "effect": "read",
+      "expectedRevision": "not_required",
+      "confirmation": "not_required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "completed",
+        "refused",
+        "validation",
+        "failed"
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "7ecd3304-f16c-47d4-94db-0964980091ba",
+        "key": "platform.organization.applications.manage"
+      }
+    }
+  },
+  "install_application": {
+    "key": "install_application",
+    "name": "Install application",
+    "release": {
+      "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980",
+      "operationId": "cfd25ff4-ef8f-4321-a0eb-15658631ddf6",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980"
+        },
+        "operationId": "cfd25ff4-ef8f-4321-a0eb-15658631ddf6"
+      },
+      "inputs": {
+        "application_root_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected": {
+          "type": "json",
+          "required": true
+        },
+        "accept_member_role": {
+          "type": "yes_no",
+          "required": true
+        }
+      },
+      "outputs": {
+        "application_name": {
+          "type": "text",
+          "required": true
+        },
+        "release_version": {
+          "type": "text",
+          "required": true
+        },
+        "member_role_granted": {
+          "type": "yes_no",
+          "required": true
+        }
+      },
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "conflict",
+        "validation",
+        "failed"
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "7ecd3304-f16c-47d4-94db-0964980091ba",
+        "key": "platform.organization.applications.manage"
+      }
+    }
+  },
+  "upgrade_application": {
+    "key": "upgrade_application",
+    "name": "Upgrade application",
+    "release": {
+      "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980",
+      "operationId": "df211eb4-713b-4920-81fd-8fb064409b02",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980"
+        },
+        "operationId": "df211eb4-713b-4920-81fd-8fb064409b02"
+      },
+      "inputs": {
+        "application_root_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected": {
+          "type": "json",
+          "required": true
+        },
+        "role_ids": {
+          "type": "json",
+          "required": true
+        },
+        "accept_role_changes": {
+          "type": "yes_no",
+          "required": true
+        }
+      },
+      "outputs": {
+        "application_name": {
+          "type": "text",
+          "required": true
+        },
+        "release_version": {
+          "type": "text",
+          "required": true
+        },
+        "accepted_role_count": {
+          "type": "whole_number",
+          "required": true
+        },
+        "waiting_role_count": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "conflict",
+        "validation",
+        "failed"
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "7ecd3304-f16c-47d4-94db-0964980091ba",
+        "key": "platform.organization.applications.manage"
+      }
+    }
+  },
+  "grant_delegation_authority": {
+    "key": "grant_delegation_authority",
+    "name": "Grant app-installation authority",
+    "release": {
+      "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8",
+      "operationId": "ebcdee37-d3d7-4b10-932a-838cf7ad1cbe",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "e0a47e3c-f7f4-4b9b-870a-193b54ba9aa8"
+        },
+        "operationId": "ebcdee37-d3d7-4b10-932a-838cf7ad1cbe"
+      },
+      "inputs": {
+        "holder_kind": {
+          "type": "text",
+          "required": true
+        },
+        "holder_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected_holder_revision": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "outputs": {
+        "delegation_authority_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "access_version": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": [
+        "committed",
+        "refused",
+        "conflict",
+        "validation",
+        "failed"
+      ],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "156d01f3-8f80-45fb-8fc8-b31c47dbb1df",
+        "key": "platform.organization.assignments.manage"
+      }
+    }
   }
 }

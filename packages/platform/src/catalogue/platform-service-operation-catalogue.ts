@@ -57,7 +57,9 @@ const entry = (definition: {
  * current actor's authority in its owning service transaction. A flow cannot expand access through
  * registration. Authority-changing operations carry prepared role-change evidence. The owning
  * service re-verifies it before the database re-applies the affected-assignment review, explicit
- * acceptance evidence and permanent-steward safeguard.
+ * acceptance evidence and permanent-steward safeguard. The installation service registers the
+ * application catalogue's review, first install and upgrade, the only human path to install or
+ * upgrade an application; they re-prove installation authority in their own transactions.
  */
 export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   create_group: entry(sources.create_group),
@@ -80,6 +82,7 @@ export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   revoke_role_assignment: entry(sources.revoke_role_assignment),
   deactivate_role_activation: entry(sources.deactivate_role_activation),
   revoke_delegation_authority: entry(sources.revoke_delegation_authority),
+  grant_delegation_authority: entry(sources.grant_delegation_authority),
   rename_tenant_organization: entry(sources.rename_tenant_organization),
   reparent_tenant_organization: entry(sources.reparent_tenant_organization),
   suspend_tenant_organization: entry(sources.suspend_tenant_organization),
@@ -92,6 +95,9 @@ export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   create_organization_invitation: entry(sources.create_organization_invitation),
   revoke_organization_invitation: entry(sources.revoke_organization_invitation),
   appoint_organization_steward: entry(sources.appoint_organization_steward),
+  review_application_installation: entry(sources.review_application_installation),
+  install_application: entry(sources.install_application),
+  upgrade_application: entry(sources.upgrade_application),
 });
 
 /** Every registered release, in registration order, for the publication catalogue. */

@@ -21,6 +21,7 @@ export const studioKindLabel = (kind: StudioSemanticSelection["kind"] | "section
     case "record_type": return "Record type";
     case "field": return "Field";
     case "query": return "Query";
+    case "role": return "Role";
   }
 };
 
@@ -75,13 +76,6 @@ export const studioPlacementLabels = (context: StudioCompositionContext): Readon
   return byAlias;
 };
 
-const sentence = (key: string): string => {
-  const words = key.trim().replace(/[-_.]+/g, " ").replace(/\s+/g, " ");
-  return words === "" ? key : words[0]!.toUpperCase() + words.slice(1);
-};
-
-/** A theme setting's key as a name a person reads ("primary_foreground" becomes "Primary foreground"). */
-export const tokenName = sentence;
 
 /** The kind of a theme setting in plain words. */
 export const tokenKindName = (kind: string): string => {
