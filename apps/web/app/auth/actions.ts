@@ -15,11 +15,11 @@ import {
   getLocalDevelopmentSignInConfiguration,
 } from "./_lib/authority-configuration";
 import {
-  applicationHomeAddressPath,
-  parseSingleApplicationHomeContinuation,
-  serializeApplicationHomeContinuation,
-  type ApplicationHomeContinuation,
-} from "./_lib/application-home-continuation";
+  signInContinuationAddressPath,
+  parseSingleSignInContinuation,
+  serializeSignInContinuation,
+  type SignInContinuation,
+} from "./_lib/sign-in-continuation";
 import { bootstrapIdentitySession, endIdentitySession } from "./_lib/session-server";
 
 const formValue = (formData: FormData, name: string, trim = true): string => {
@@ -43,13 +43,10 @@ const configuredAuthority = () => {
   }
 };
 
-const signInStatusPath = (
-  status: string,
-  applicationHome: ApplicationHomeContinuation | undefined,
-): string => {
+const signInStatusPath = (status: string, continuation: SignInContinuation | undefined): string => {
   const query = new URLSearchParams({ status });
-  if (applicationHome !== undefined)
-    query.set("applicationHome", serializeApplicationHomeContinuation(applicationHome));
+  if (continuation !== undefined)
+    query.set("continuation", serializeSignInContinuation(continuation));
   return `/auth/sign-in?${query.toString()}`;
 };
 
@@ -70,11 +67,9 @@ export async function register(formData: FormData): Promise<never> {
 }
 
 export async function signIn(formData: FormData): Promise<never> {
-  const applicationHome = parseSingleApplicationHomeContinuation(
-    formData.getAll("applicationHome"),
-  );
+  const continuation = parseSingleSignInContinuation(formData.getAll("continuation"));
   const configuration = configuredAuthority();
-  if (!configuration) redirect(signInStatusPath("unavailable", applicationHome));
+  if (!configuration) redirect(signInStatusPath("unavailable", continuation));
   const result = await signInWithPassword(
     configuration,
     formValue(formData, "email"),
@@ -84,13 +79,10 @@ export async function signIn(formData: FormData): Promise<never> {
   const session = result.ok ? await bootstrapIdentitySession(result) : undefined;
   redirect(
     result.ok && session?.kind === "active"
-      ? applicationHome === undefined
+      ? continuation === undefined
         ? "/signed-in"
-        : applicationHomeAddressPath(applicationHome)
-      : signInStatusPath(
-          result.ok ? "unavailable" : failureStatus(result.code),
-          applicationHome,
-        ),
+        : signInContinuationAddressPath(continuation)
+      : signInStatusPath(result.ok ? "unavailable" : failureStatus(result.code), continuation),
   );
 }
 
@@ -100,11 +92,9 @@ export async function signOut(): Promise<never> {
 }
 
 export async function signInWithDevelopmentAccount(formData: FormData): Promise<never> {
-  const applicationHome = parseSingleApplicationHomeContinuation(
-    formData.getAll("applicationHome"),
-  );
+  const continuation = parseSingleSignInContinuation(formData.getAll("continuation"));
   const configuration = getLocalDevelopmentSignInConfiguration();
-  if (!configuration) redirect(signInStatusPath("unavailable", applicationHome));
+  if (!configuration) redirect(signInStatusPath("unavailable", continuation));
   const requestHeaders = await headers();
   const site = new URL(configuration.journey.siteUrl);
   const forwardedProtocol = requestHeaders.get("x-forwarded-proto");
@@ -113,16 +103,16 @@ export async function signInWithDevelopmentAccount(formData: FormData): Promise<
     requestHeaders.get("host") !== site.host ||
     (forwardedProtocol !== null && forwardedProtocol !== "http")
   )
-    redirect(signInStatusPath("unavailable", applicationHome));
+    redirect(signInStatusPath("unavailable", continuation));
 
   const result = await signInWithLocalDevelopmentAccount(configuration);
   const session = result.ok ? await bootstrapIdentitySession(result) : undefined;
   redirect(
     result.ok && session?.kind === "active"
-      ? applicationHome === undefined
+      ? continuation === undefined
         ? "/signed-in"
-        : applicationHomeAddressPath(applicationHome)
-      : signInStatusPath("unavailable", applicationHome),
+        : signInContinuationAddressPath(continuation)
+      : signInStatusPath("unavailable", continuation),
   );
 }
 
