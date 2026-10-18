@@ -122,7 +122,7 @@ export const guardRules = {
     owner: "lead",
     reviewBy: "2027-01-15",
     reviewNote:
-      "Edit-save and offline publication share source rules, including explicit Records table row-action declarations and matching flow bindings.",
+      "Edit-save and offline publication share source rules: only table releases with a declared data contract remain registered, and row-action bindings require matching commands.",
     description:
       "A shipped definition source that publication would refuse (offline compile and validation)",
   },

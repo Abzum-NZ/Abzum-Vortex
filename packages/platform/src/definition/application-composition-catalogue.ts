@@ -81,9 +81,6 @@ export const RICH_TEXT_BLOCK_RELEASE: PlatformBlockRelease = release(
 /** Exact immutable metadata release for the list display block. */
 export const LIST_BLOCK_RELEASE: PlatformBlockRelease = release(sources.LIST_BLOCK_RELEASE);
 
-/** Exact immutable metadata release for the table display block. */
-export const TABLE_BLOCK_RELEASE: PlatformBlockRelease = release(sources.TABLE_BLOCK_RELEASE);
-
 /** Exact immutable metadata release for the record detail display block. */
 export const RECORD_DETAIL_BLOCK_RELEASE: PlatformBlockRelease = release(
   sources.RECORD_DETAIL_BLOCK_RELEASE,
@@ -141,10 +138,6 @@ export const LIST_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
   sources.LIST_BLOCK_RELEASE_1_1_0,
 );
 
-export const TABLE_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
-  sources.TABLE_BLOCK_RELEASE_1_1_0,
-);
-
 export const RECORD_DETAIL_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
   sources.RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
 );
@@ -161,7 +154,7 @@ export const SUMMARY_VALUES_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
  * Release 1.2.0 of the table and record detail blocks declares their data contract as settings
  * (decision 5): the Records table maps columns, sorting, filtering, search, saved views, page size,
  * selection, query parameters and its refused and error messages to fields of its bound query; the
- * record detail maps its detail fields. Earlier releases stay published unchanged.
+ * record detail maps its detail fields. Table releases without a declared data contract are retired.
  */
 export const TABLE_BLOCK_RELEASE_1_2_0: PlatformBlockRelease = release(
   sources.TABLE_BLOCK_RELEASE_1_2_0,
@@ -431,7 +424,6 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.fr
   TEXT_BLOCK_RELEASE,
   RICH_TEXT_BLOCK_RELEASE,
   LIST_BLOCK_RELEASE,
-  TABLE_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE,
   GROUPED_DATA_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE,
@@ -442,7 +434,6 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.fr
   TEXT_BLOCK_RELEASE_1_1_0,
   RICH_TEXT_BLOCK_RELEASE_1_1_0,
   LIST_BLOCK_RELEASE_1_1_0,
-  TABLE_BLOCK_RELEASE_1_1_0,
   RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
   GROUPED_DATA_BLOCK_RELEASE_1_1_0,
   SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
