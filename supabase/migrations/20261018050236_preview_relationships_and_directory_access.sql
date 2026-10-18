@@ -394,7 +394,6 @@ alter function vortex_access.evaluate_permission_role_path_internal(p_context js
 
 grant execute on function vortex_access.evaluate_permission_role_path_internal(p_context jsonb, p_checked_at timestamp with time zone, p_permission jsonb, p_action jsonb, p_record_type_id uuid) to postgres;
 
-
 set local role vortex_record_adapter;
 
 create or replace function vortex_record.apply_record_changes(
@@ -2286,7 +2285,6 @@ comment on function vortex_record.apply_record_changes(
 ) is
   'The one protected Record-change operation: claims one command receipt (a preview command carries its own preview-scoped id) and applies an ordered mutation list under one canonical lock order. Live changes keep their access decisions, Activity, Event and background effects; preview changes belong only to the validated preview owner and append no live effects. Named-action and lifecycle commands are refused in previews.';
 
-
 set local role vortex_record_adapter;
 
 create or replace function vortex_record.preview_record_field_bounds_internal(
@@ -2357,7 +2355,6 @@ grant execute on function vortex_record.preview_record_field_bounds_internal(uui
   to vortex_record_adapter;
 comment on function vortex_record.preview_record_field_bounds_internal(uuid, uuid, jsonb) is
   'Field bounds for a record already proven to use the exact owner-only preview storage identity; generated and derived fields remain non-changeable.';
-
 
 set local role vortex_record_adapter;
 
@@ -2659,7 +2656,6 @@ revoke all on function vortex_record.write_relationship_value_internal(uuid, uui
 
 comment on function vortex_record.write_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean) is
   'Private relationship writer: validates the declared relationship and target eligibility, checks current application access for flagged Person links, share-locks the record or protected projection target, then takes the source data version and the shared edge identities before replacing the source link edge and typed value atomically. Owner-only.';
-
 
 set local role vortex_owner;
 
@@ -3092,6 +3088,8 @@ GRANT ALL ON FUNCTION vortex_access.evaluate_organization_record_permission_elig
 grant execute on function vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) to postgres;
 grant execute on function vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) to vortex_record_adapter;
 
+set local role vortex_owner;
+
 CREATE OR REPLACE FUNCTION vortex_record.enforce_relationship_edge_scope() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO ''
@@ -3136,8 +3134,7 @@ alter function vortex_record.enforce_relationship_edge_scope() owner to vortex_o
 
 REVOKE ALL ON FUNCTION vortex_record.enforce_relationship_edge_scope() FROM PUBLIC;
 
-
-set local role vortex_owner;
+set local role vortex_record_adapter;
 
 -- Private Record-adapter routine; migrations install the complete canonical body
 -- under its owner with schema CREATE granted only for that migration transaction.
@@ -3403,7 +3400,6 @@ grant execute on function
 comment on function vortex_record.write_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) is
   'Private named-action edge writer: checks current application access for flagged Person links, uses the ordinary or protected projection target lock and edge flow, and authorises the command subject by re-evaluating the exact installed named action rather than ordinary read.';
 
-
 set local role vortex_owner;
 
 create or replace function vortex_record.mirror_person_links_internal(
@@ -3556,7 +3552,6 @@ revoke all on function vortex_record.mirror_person_links_internal(uuid,uuid,uuid
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.mirror_person_links_internal(uuid,uuid,uuid,jsonb)
   to vortex_owner, vortex_record_adapter;
-
 
 set local role vortex_owner;
 
