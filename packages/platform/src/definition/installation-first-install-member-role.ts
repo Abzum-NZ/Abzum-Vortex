@@ -10,6 +10,7 @@ import {
   organizationAccountIdSchema,
   organizationIdSchema,
   prepareOrganizationAdministrationRoleChangeCommandSchema,
+  prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema,
   revokeOrganizationAdministrationRoleAssignmentCommandSchema,
   roleAssignmentIdSchema,
   roleIdSchema,
@@ -275,8 +276,15 @@ const readMemberRoleState = (
         );
       return state.data;
     }
-    if (state.data.installerAssignment !== null) return state.data;
-    if (state.data.role === null)
+    if (
+      state.data.role !== null &&
+      (!["active", "acceptance_required"].includes(state.data.role.lifecycle) ||
+        state.data.role.assignmentPolicy !== "standing")
+    )
+      refusedFor("first_install_member_role_unavailable_role", "role_unavailable");
+    if (state.data.installerAssignment !== null && state.data.role?.lifecycle === "active")
+      return state.data;
+    if (state.data.role === null || state.data.role.lifecycle === "acceptance_required")
       await requirePermission(
         transaction,
         scope,
@@ -284,18 +292,14 @@ const readMemberRoleState = (
         environment,
         "platform.organization.roles.manage",
       );
-    else if (
-      state.data.role.lifecycle !== "active" ||
-      state.data.role.assignmentPolicy !== "standing"
-    )
-      refusedFor("first_install_member_role_unavailable_role", "role_unavailable");
-    await requirePermission(
-      transaction,
-      scope,
-      context,
-      environment,
-      "platform.organization.assignments.manage",
-    );
+    if (state.data.installerAssignment === null)
+      await requirePermission(
+        transaction,
+        scope,
+        context,
+        environment,
+        "platform.organization.assignments.manage",
+      );
     return state.data;
   });
 
@@ -364,9 +368,11 @@ export const requireRoleAcceptanceAuthority = (
  * a fresh one. A refusal here leaves nothing installed. If the switch then fails, the installer
  * holds a role of an application that is not active, which opens nothing: retrying with the role
  * accepted finds the role and the assignment and does not repeat them, and retrying with the role
- * declined revokes the assignment the installer gave themselves. A role that was retired (for
- * example before an uninstall) or awaits acceptance is refused by name, never accepted twice.
- * Upgrades never reach this step.
+ * declined revokes the assignment the installer gave themselves. Retired or unavailable roles
+ * are refused by name.
+ * A reinstall explicitly accepts the pending revision of the same role; withdrawal revoked its
+ * previous assignments, so accepting it never restores another person's access. Upgrades never
+ * reach this step.
  */
 const applyFirstInstallMemberRoleChoice = async (
   environment: FirstInstallFlowEnvironment,
@@ -414,23 +420,35 @@ const applyFirstInstallMemberRoleChoice = async (
     return;
   }
 
-  if (state.installerAssignment !== null) return;
+  if (state.installerAssignment !== null && state.role?.lifecycle === "active") return;
   let role: Readonly<{ roleId: string; liveRevision: number }>;
-  if (state.role === null) {
-    const prepareResult = await administration.prepareRoleChange(
-      session,
-      selection,
-      prepareOrganizationAdministrationRoleChangeCommandSchema.parse({
-        operation: "accept_new_application_role",
-        roleKey: acceptedApplicationRoleKey(rootId, memberRole.sourceRoleId, memberRole.key),
-        label: memberRole.name,
-        description: `Accepted from the ${memberRole.key} role template when the application was first installed.`,
-        privilegeClassification: memberRole.privileged ? "privileged" : "standard",
-        templateApplicationRootId: rootId,
-        sourceRoleId: memberRole.sourceRoleId,
-        acceptBroadenedAuthority: "accept",
-      }),
-    );
+  if (state.role === null || state.role.lifecycle === "acceptance_required") {
+    const prepareResult =
+      state.role === null
+        ? await administration.prepareRoleChange(
+            session,
+            selection,
+            prepareOrganizationAdministrationRoleChangeCommandSchema.parse({
+              operation: "accept_new_application_role",
+              roleKey: acceptedApplicationRoleKey(rootId, memberRole.sourceRoleId, memberRole.key),
+              label: memberRole.name,
+              description: `Accepted from the ${memberRole.key} role template when the application was first installed.`,
+              privilegeClassification: memberRole.privileged ? "privileged" : "standard",
+              templateApplicationRootId: rootId,
+              sourceRoleId: memberRole.sourceRoleId,
+              acceptBroadenedAuthority: "accept",
+            }),
+          )
+        : await administration.prepareApplicationRoleRevisionAcceptance(
+            session,
+            selection,
+            prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema.parse({
+              operation: "accept_application_role_revision",
+              roleId: state.role.roleId,
+              expectedRoleRevision: state.role.liveRevision,
+              acceptBroadenedAuthority: "accept",
+            }),
+          );
     if (prepareResult.kind !== "available")
       return declined(
         environment,
@@ -441,7 +459,10 @@ const applyFirstInstallMemberRoleChoice = async (
       );
     const prepared = prepareResult.value;
     const candidate = prepared.candidate;
-    if (candidate.operation !== "accept_new_application_role")
+    if (
+      candidate.operation !==
+      (state.role === null ? "accept_new_application_role" : "accept_application_role_revision")
+    )
       installationProblem("first_install_member_role_preparation_invalid", "failed");
     await requireRoleAcceptanceAuthority(
       environment,
@@ -455,11 +476,13 @@ const applyFirstInstallMemberRoleChoice = async (
         permissionId: String(permission.permissionId),
       })),
     );
-    const acceptResult = await administration.acceptApplicationRoleTemplate(
-      session,
-      selection,
-      changeOrganizationAdministrationRoleAuthorityCommandSchema.parse({ evidence: prepared }),
-    );
+    const command = changeOrganizationAdministrationRoleAuthorityCommandSchema.parse({
+      evidence: prepared,
+    });
+    const acceptResult =
+      candidate.operation === "accept_new_application_role"
+        ? await administration.acceptApplicationRoleTemplate(session, selection, command)
+        : await administration.acceptApplicationRoleRevision(session, selection, command);
     if (acceptResult.kind !== "available")
       return declined(
         environment,
@@ -482,6 +505,7 @@ const applyFirstInstallMemberRoleChoice = async (
     role = { roleId: state.role.roleId, liveRevision: state.role.liveRevision };
   }
 
+  if (state.installerAssignment !== null) return;
   const organizationAccountId = state.organizationAccountId;
   const assignResult = await administration.assignRoleAssignment(
     session,

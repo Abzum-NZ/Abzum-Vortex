@@ -17,6 +17,7 @@ declare
   coordinated_operation text;
   expected_revision bigint;
   changed record;
+  assignment_to_revoke record;
   append_result text;
 begin
   if p_activity_id is null
@@ -95,6 +96,33 @@ begin
   end if;
 
   if changed.outcome = 'changed' then
+    if p_change = 'withdraw' then
+      -- Withdrawal ends every assignment of this application's roles. Keeping a
+      -- live assignment would restore its access when a reinstall accepts the
+      -- role again. Use the one assignment writer, retaining its revision and
+      -- revocation history inside this same installation transaction.
+      for assignment_to_revoke in
+        select assignment.role_assignment_id, assignment.revision
+        from vortex_access.organization_role_assignments as assignment
+        join vortex_access.organization_roles as role
+          on role.organization_id = assignment.organization_id
+          and role.role_id = assignment.role_id
+        where assignment.organization_id = authority.organization_id
+          and role.application_root_id = p_application_root_id
+          and role.role_kind = 'application'
+          and assignment.state = 'live'
+        order by assignment.role_assignment_id
+        for update of assignment
+      loop
+        perform vortex_access.coordinate_organization_role_assignment_change(
+          'revoke', authority.organization_id,
+          assignment_to_revoke.role_assignment_id, assignment_to_revoke.revision,
+          null, null, null, null, null, null, null, null,
+          authority.organization_account_id, authority.correlation_id
+        );
+      end loop;
+    end if;
+
     append_result := vortex_record.append_organization_activity_entry(
       authority.organization_id,
       p_activity_id,
