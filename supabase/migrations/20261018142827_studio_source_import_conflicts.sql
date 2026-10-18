@@ -1,4 +1,3 @@
-begin;
 set local role vortex_owner;
 
 create or replace function vortex_definition.read_source_import_conflicts(
@@ -41,4 +40,3 @@ revoke all on function vortex_definition.read_source_import_conflicts(uuid, json
 grant execute on function vortex_definition.read_source_import_conflicts(uuid, jsonb) to vortex_request, postgres;
 
 reset role;
-commit;
