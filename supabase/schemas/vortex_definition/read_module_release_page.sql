@@ -88,45 +88,7 @@ begin
       order by previous.release_revision desc
       limit 1
     ),
-    'release', pg_catalog.jsonb_build_object(
-      'organizationId', root_row.organization_id,
-      'key', root_row.key,
-      'rootId', release.root_id,
-      'releaseRevision', release.release_revision,
-      'releaseVersion', release.release_version,
-      'contentFingerprint', release.content_fingerprint,
-      'resolutionFingerprint', release.resolution_fingerprint,
-      'compilationOutput', release.compilation_output,
-      'resolutionSnapshot', release.resolution_snapshot,
-      'identities', coalesce(release.resolution_snapshot -> 'identities', '[]'::jsonb),
-      'published', pg_catalog.jsonb_build_object(
-        'publication', pg_catalog.jsonb_build_object(
-          'kind', 'module', 'rootId', release.root_id,
-          'revision', release.release_revision, 'releaseVersion', release.release_version,
-          'contentFingerprint', release.content_fingerprint,
-          'publishedAt', release.published_at, 'publishedBy', release.published_by,
-          'validationContractVersion', release.validation_contract_version
-        ),
-        'content', release.compilation_output -> 'canonical' -> 'content',
-        'dependencyManifest', coalesce((
-          select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
-            'kind', 'module', 'rootId', target.root_id,
-            'revision', target.release_revision, 'releaseVersion', target.release_version,
-            'contentFingerprint', target.content_fingerprint,
-            'publishedAt', target.published_at, 'publishedBy', target.published_by,
-            'validationContractVersion', target.validation_contract_version
-          ) order by target.root_id, target.release_revision)
-          from vortex_definition.release_dependencies as dependency
-          join vortex_definition.releases as target
-            on target.root_id = dependency.target_root_id
-            and target.release_revision = dependency.target_release_revision
-          where dependency.root_id = release.root_id
-            and dependency.release_revision = release.release_revision
-            and dependency.dependency_kind = 'module'
-        ), '[]'::jsonb),
-        'releaseNote', release.release_note
-      )
-    )
+    'releaseRevision', release.release_revision
   ) order by release.release_revision asc), '[]'::jsonb), max(release.release_revision)
   into entries, next_after
   from page as release;
@@ -145,7 +107,7 @@ revoke all on function vortex_definition.read_module_release_page(text, bigint, 
 grant execute on function vortex_definition.read_module_release_page(text, bigint, bigint, integer) to vortex_request;
 
 comment on function vortex_definition.read_module_release_page(text, bigint, bigint, integer) is
-  'Returns one anchored bounded oldest-first page of same-organisation immutable Module release evidence.';
+  'Returns one anchored bounded oldest-first page of same-organisation immutable Module release locators; exact definitions are read once per snapshot in batches.';
 
 alter function vortex_definition.read_module_release_page(p_key text, p_anchor_release_revision bigint, p_after_release_revision bigint, p_page_size integer) owner to vortex_owner;
 
