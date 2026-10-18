@@ -1238,7 +1238,10 @@ export const createProtectedOperationExecutor = (
       if (result.kind === "confirmed_failure")
         return { outcome: result.outcome, diagnostic: result.diagnostic };
       if (result.kind === "unavailable") {
-        if (result.code === "recent_authentication_required")
+        if (
+          result.code === "recent_authentication_required" ||
+          result.code === "role_settings_change_required"
+        )
           return {
             outcome: "refused",
             diagnostic: flowRefusalFeedbackSchema.parse({ code: result.code }),

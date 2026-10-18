@@ -2181,7 +2181,7 @@
                   "props": {
                     "id": "iam_manage_roles_groups_heading",
                     "title": "Manage roles and Groups",
-                    "text": "Create an empty Group, create a custom role or accept a role template. Revising a role, renaming a Group, changing Group memberships and ending a role, Group or membership start from the row actions on Roles and Groups. Each change runs under your own authority in protected Access, is checked against the revision you read, and is refused if you lack the authority or if it exceeds your delegated scope.",
+                    "text": "Create an empty Group or a custom role. Install or upgrade applications in App Store to accept their roles. Revising a role, renaming a Group, changing Group memberships and ending a role, Group or membership start from the row actions on Roles and Groups. Each change runs under your own authority in protected Access, is checked against the revision you read, and is refused if you lack the authority or if it exceeds your delegated scope.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
@@ -4861,21 +4861,33 @@
                             "kind": "literal",
                             "literal": {
                               "type": "text",
-                              "value": "This role changed in the latest release and needs accepting in IAM before it can be assigned."
+                              "value": "This role changed in the latest release. Open App Store and choose Install or upgrade for its application to review and accept the changes before assigning it."
                             }
                           },
                           "link_label": {
                             "kind": "literal",
                             "literal": {
                               "type": "text",
-                              "value": "Review and accept this role in IAM"
+                              "value": "Review application role changes in App Store"
                             }
                           },
-                          "record_id": {
-                            "kind": "reference",
-                            "reference": {
-                              "source": "input",
-                              "name": "role_id"
+                          "destination": {
+                            "kind": "map",
+                            "entries": {
+                              "application_key": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "vortex.app.app_store"
+                                }
+                              },
+                              "page_key": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "app_store_catalogue"
+                                }
+                              }
                             }
                           }
                         }
@@ -5097,21 +5109,33 @@
                             "kind": "literal",
                             "literal": {
                               "type": "text",
-                              "value": "This role changed in the latest release and needs accepting in IAM before it can be assigned."
+                              "value": "This role changed in the latest release. Open App Store and choose Install or upgrade for its application to review and accept the changes before assigning it."
                             }
                           },
                           "link_label": {
                             "kind": "literal",
                             "literal": {
                               "type": "text",
-                              "value": "Review and accept this role in IAM"
+                              "value": "Review application role changes in App Store"
                             }
                           },
-                          "record_id": {
-                            "kind": "reference",
-                            "reference": {
-                              "source": "input",
-                              "name": "role_id"
+                          "destination": {
+                            "kind": "map",
+                            "entries": {
+                              "application_key": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "vortex.app.app_store"
+                                }
+                              },
+                              "page_key": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "app_store_catalogue"
+                                }
+                              }
                             }
                           }
                         }

@@ -137,6 +137,33 @@ begin
     );
   end if;
 
+  -- Installation acceptance changes the supplied permissions, never the organization's local
+  -- role settings. Compare the complete policy choice, including the immutable activation-policy
+  -- revision, under the same Access lock as the write. Changing settings uses role management.
+  if operation_name = 'accept_application_role_revision' and (
+    candidate -> 'key' is distinct from pg_catalog.to_jsonb(current_revision.role_key)
+    or candidate -> 'label' is distinct from pg_catalog.to_jsonb(current_revision.label)
+    or candidate -> 'description' is distinct from pg_catalog.to_jsonb(current_revision.description)
+    or candidate -> 'privilegeClassification' is distinct from
+      pg_catalog.to_jsonb(current_revision.privilege_classification)
+    or candidate -> 'assignmentPolicy' is distinct from case current_revision.assignment_policy
+      when 'standing' then pg_catalog.jsonb_build_object('kind', 'standing')
+      else pg_catalog.jsonb_build_object(
+        'kind', 'activation_required',
+        'activationPolicy', pg_catalog.jsonb_build_object(
+          'selection', 'existing',
+          'reference', pg_catalog.jsonb_build_object(
+            'activationPolicyId', current_revision.activation_policy_id,
+            'revision', current_revision.activation_policy_revision
+          )
+        )
+      )
+    end
+  ) then
+    raise exception using errcode = 'V3151',
+      message = 'Accepting application role changes must keep the role settings. Use Manage roles to change its name, description, classification or assignment and activation settings.';
+  end if;
+
   if operation_name = 'revise_metadata_policy' then
     policy_choice := candidate -> 'assignmentPolicy';
     if pg_catalog.jsonb_typeof(policy_choice) is distinct from 'object'

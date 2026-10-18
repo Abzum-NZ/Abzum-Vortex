@@ -32,7 +32,10 @@ export const outcomeNotices: Readonly<Record<string, Notice>> = {
 /** A board move the person backed out of at its form: nothing was saved. */
 export const cancelledMoveNotice: Notice = { tone: "info", text: "Move cancelled." };
 
-export const unavailableNotice: Notice = { tone: "problem", text: "That is not available right now." };
+export const unavailableNotice: Notice = {
+  tone: "problem",
+  text: "That is not available right now.",
+};
 
 /**
  * A run that reached a task the platform cannot run yet. It is not a refusal, so the person is
@@ -60,5 +63,9 @@ export const refusalNotices: Readonly<
   role_acceptance_required: {
     tone: "problem",
     text: "This role revision needs accepting before it can be assigned.",
+  },
+  role_settings_change_required: {
+    tone: "problem",
+    text: "Accepting application role changes keeps the role settings. Use Manage roles to change its name, description, classification or assignment and activation settings.",
   },
 };

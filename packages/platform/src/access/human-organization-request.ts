@@ -42,7 +42,11 @@ type ChangePreparation = (
 
 export type HumanOrganizationRequestResult<Result> =
   | Readonly<{ kind: "available"; value: Result }>
-  | Readonly<{ kind: "unavailable"; code?: "recent_authentication_required"; cause?: string }>
+  | Readonly<{
+      kind: "unavailable";
+      code?: "recent_authentication_required" | "role_settings_change_required";
+      cause?: string;
+    }>
   | Readonly<{ kind: "temporarily_unavailable"; cause?: string }>;
 
 type OrganizationScopeResolutionResult =
@@ -282,7 +286,9 @@ export const createHumanOrganizationRequestService = (
         return suspendedAccountResult();
       }
       const recentAuthenticationRequired = code === "V3150";
-      const refused = code === "42501" || recentAuthenticationRequired;
+      const roleSettingsChangeRequired = code === "V3151";
+      const refused =
+        code === "42501" || recentAuthenticationRequired || roleSettingsChangeRequired;
       const cause = describeFailure(error);
       // A request its caller abandoned (the browser left the page) is stopped on purpose; that is
       // not a failure of the platform. Every other cause is logged in full.
@@ -296,9 +302,11 @@ export const createHumanOrganizationRequestService = (
       appendTelemetry(correlationId, refused ? "refused" : "temporarily_unavailable", startedAtMs);
       return recentAuthenticationRequired
         ? { kind: "unavailable", code: "recent_authentication_required", cause }
-        : refused
-          ? { kind: "unavailable" }
-          : { kind: "temporarily_unavailable", cause };
+        : roleSettingsChangeRequired
+          ? { kind: "unavailable", code: "role_settings_change_required", cause }
+          : refused
+            ? { kind: "unavailable" }
+            : { kind: "temporarily_unavailable", cause };
     }
   };
 

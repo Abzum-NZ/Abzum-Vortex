@@ -13,6 +13,7 @@ import {
   type OrganizationSelectionCandidate,
 } from "../schema";
 import type { InstallationProblemShape } from "./installation-authority";
+import { maximumApplicationRoles } from "./application-contracts";
 import { classifyInstallationFailure } from "./installation-failure";
 import { FirstInstallUnavailable } from "./installation-first-install";
 import {
@@ -64,9 +65,6 @@ type UnavailableReason =
   | "installation_incomplete"
   | "registration_misaligned"
   | "unsupported";
-
-const maximumRoleChangeLines = 100;
-const maximumRoleTemplates = 500;
 
 const applicationRootInput = (candidate: unknown) => applicationRootIdSchema.safeParse(candidate);
 
@@ -175,12 +173,10 @@ const installReview = async (
     application_name: candidate.releaseSet.application.content.name,
     release_version: candidate.snapshot.selected.releaseVersion,
     release_note: candidate.snapshot.latest.releaseNote,
-    roles: roles
-      .slice(0, maximumRoleChangeLines)
-      .map(
-        (role) =>
-          `${role.name}: ${role.permissions.map((permission) => permission.label).join(", ")}`,
-      ),
+    roles: roles.map(
+      (role) =>
+        `${role.name}: ${role.permissions.map((permission) => permission.label).join(", ")}`,
+    ),
     member_role_name: releaseMemberRole(roles).name,
     member_role_assignable: await readMemberRoleAssignable(
       environment,
@@ -240,7 +236,7 @@ const review = async (
         release_version: authorized.snapshot.selected.releaseVersion,
         installed_version: authorized.snapshot.active.releaseVersion,
         release_note: latest.releaseNote,
-        role_changes: changes.slice(0, maximumRoleChangeLines).map(roleChangeLine),
+        role_changes: changes.map(roleChangeLine),
         role_change_count: changes.length,
         role_template_ids: changes.map((change) => change.sourceRoleId),
         expected: expectedOf(authorized.snapshot),
@@ -351,7 +347,7 @@ const upgrade = async (
   const expected = upgradeExpectedSchema.safeParse(inputs.expected);
   const roleTemplateIds = z
     .array(roleIdSchema)
-    .max(maximumRoleTemplates)
+    .max(maximumApplicationRoles)
     .safeParse(inputs.role_template_ids);
   if (!rootId.success || !expected.success || !roleTemplateIds.success)
     return { kind: "unavailable" };

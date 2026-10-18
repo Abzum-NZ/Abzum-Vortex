@@ -817,9 +817,12 @@ export const applicationRoleSchema = z
  * An application's roles. Exactly one is its default member role: a first install offers that
  * role to the installer, and the installer's explicit acceptance makes it theirs.
  */
+export const maximumApplicationRoles = 500;
+
 export const applicationRolesSchema = z
   .array(applicationRoleSchema)
   .min(1)
+  .max(maximumApplicationRoles)
   .refine((roles) => roles.filter((role) => role.defaultMember === true).length === 1, {
     message: "Exactly one role must be the application's default member role",
   });
