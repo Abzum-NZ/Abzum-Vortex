@@ -24,6 +24,7 @@ import {
 import { toast } from "@vortex/ui/components/sonner";
 import { cn } from "@vortex/ui/lib/utils";
 import type { StudioDraft } from "./use-studio-draft";
+import { isStudioSessionRefusal } from "./use-studio-session";
 
 /** Non-blocking workspace feedback has one destination: the Studio toast region. */
 export function studioNotice(
@@ -54,12 +55,7 @@ export function studioNotice(
 export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
   const { status } = draft;
   const [loadFailed, setLoadFailed] = useState(false);
-  const sessionEnded =
-    draft.session.needsSignIn ||
-    (status.kind === "refused" &&
-      ["session_ended", "context_changed", "recent_authentication_required"].includes(
-        status.reason ?? "",
-      ));
+  const sessionEnded = draft.session.needsSignIn || isStudioSessionRefusal(status);
   const notSaved =
     sessionEnded ||
     status.kind === "refused" ||

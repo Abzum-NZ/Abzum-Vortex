@@ -5,6 +5,12 @@ import { z } from "zod";
 
 const sessionResultSchema = z.object({ kind: z.string() }).strict();
 
+export const isStudioSessionRefusal = (result: { kind: string; reason?: string | undefined }) =>
+  result.kind === "refused" &&
+  ["session_ended", "context_changed", "recent_authentication_required"].includes(
+    result.reason ?? "",
+  );
+
 export function useStudioSession() {
   const [needsSignIn, setNeedsSignIn] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
@@ -59,16 +65,12 @@ export function useStudioSession() {
       saving.current = true;
       try {
         if (request.current !== null) await request.current;
-        const result = await submit();
-        if (
-          result.kind !== "refused" ||
-          !["session_ended", "context_changed", "recent_authentication_required"].includes(
-            result.reason ?? "",
-          ) ||
-          !mounted.current
-        )
-          return result;
-        if ((await readSession("POST")) === "active") return await submit();
+        let result = await submit();
+        if (!isStudioSessionRefusal(result) || !mounted.current) return result;
+        if ((await readSession("POST")) === "active") {
+          result = await submit();
+          if (!isStudioSessionRefusal(result) || !mounted.current) return result;
+        }
         if (!mounted.current) return result;
         setNeedsSignIn(true);
         setMessage("");
