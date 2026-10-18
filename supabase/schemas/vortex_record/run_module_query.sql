@@ -767,9 +767,6 @@ begin
     when record_id_direction = 'ascending' then 'descending' else 'ascending' end;
   scan_source_sql := pg_catalog.format('record_data.%I as stored', physical_table_token);
   projection_page_scan := not preview_mode and record_type_item ? 'systemProjection'
-    and coalesce(p_user_inputs -> 'filter', 'null'::jsonb) = 'null'::jsonb
-    and coalesce(query_item -> 'filter', 'null'::jsonb) = 'null'::jsonb
-    and user_search is null
     and not board_member_mode and not group_member_mode
     and pg_catalog.cardinality(sort_ids) = 1
     and pg_catalog.cardinality(declared_sort_ids) = 1
