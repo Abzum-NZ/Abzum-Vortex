@@ -8,7 +8,7 @@ import {
   type ImmutablePlatformBlockCatalogue,
   type SourceItem,
 } from "@vortex/platform/schema";
-import { StoredCompositionRefusal, removeFlowBindingsOf, validateStoredShell } from "./stored-composition";
+import { StoredCompositionRefusal, removeFlowBindingsOf, validateStoredShell, validateStoredZone } from "./stored-composition";
 import { studioPlacementRemovalReference, type StudioCompositionRemovalReason } from "./application-composition-commands";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import { applyStudioItemLabels } from "./application-item-labels";
@@ -182,16 +182,14 @@ const movePage = (context: StudioStructureContext, candidate: Source,
 };
 
 /**
- * A new layout: a frame with the application menu beside one optional content area, so any page,
- * a new empty one included, can use it.
+ * A layout: a frame with the application menu beside one optional content area, so any page, a new
+ * empty one included, can use it. It is added to the candidate.
  */
-const addShell = (context: StudioStructureContext, candidate: Source,
-  command: Extract<StudioStructureCommand, { kind: "add_shell" }>): StudioStructureResult => {
-  const name = cleanName(command.name, "layout");
+const placeMenuShell = (catalogue: ImmutablePlatformBlockCatalogue, candidate: Source, name: string): Shell => {
   const body = candidate.body;
   if (body.shells.length >= 100) refuse("An application can have at most 100 layouts.");
-  const container = newestRelease(context.catalogue, PLATFORM_BLOCK_RELEASE_IDENTITIES.CONTAINER_BLOCK_RELEASE_1_3_0);
-  const menu = newestRelease(context.catalogue, PLATFORM_BLOCK_RELEASE_IDENTITIES.APPLICATION_NAVIGATION_BLOCK_RELEASE);
+  const container = newestRelease(catalogue, PLATFORM_BLOCK_RELEASE_IDENTITIES.CONTAINER_BLOCK_RELEASE_1_3_0);
+  const menu = newestRelease(catalogue, PLATFORM_BLOCK_RELEASE_IDENTITIES.APPLICATION_NAVIGATION_BLOCK_RELEASE);
   if (container === undefined || !container.slots.some((slot) => slot.key === "content") ||
     !container.slots.some((slot) => slot.key === "menu") || menu === undefined)
     refuse("The block catalogue has no frame block for a new layout, so none was added.");
@@ -219,15 +217,58 @@ const addShell = (context: StudioStructureContext, candidate: Source,
       allowed_child_categories: [...content.allowedChildCategories], parent_placement: frameId, parent_slot: "content",
     }],
   } as unknown as Shell;
-  try { validateStoredShell(context.catalogue, shell); }
+  try { validateStoredShell(catalogue, shell); }
   catch (error) {
     if (!(error instanceof StoredCompositionRefusal)) throw error;
     console.error("[studio] new layout refused", error.message);
     refuse("The new layout could not be built from the block catalogue, so none was added.");
   }
   body.shells.push(shell);
-  return { kind: "applied", source: judged(candidate), select: { kind: "shell", shellAlias: id }, details: [],
+  return shell;
+};
+
+const addShell = (context: StudioStructureContext, candidate: Source,
+  command: Extract<StudioStructureCommand, { kind: "add_shell" }>): StudioStructureResult => {
+  const name = cleanName(command.name, "layout");
+  const shell = placeMenuShell(context.catalogue, candidate, name);
+  return { kind: "applied", source: judged(candidate), select: { kind: "shell", shellAlias: shell.id }, details: [],
     message: `Layout ${quoted(name)} added.` };
+};
+
+/**
+ * A new application's starting frame, written into its definition: one layout with the
+ * application menu (list pages added later go in it, and leave it when removed), and the home page
+ * in that layout with a text saying what to do next. New pages start in the home page's layout.
+ */
+export const studioStarterFrame = (catalogue: ImmutablePlatformBlockCatalogue, source: Source):
+  Readonly<{ kind: "applied"; source: Source }> | Readonly<{ kind: "refused"; message: string }> => {
+  try {
+    const candidate = applicationSourceDocumentSchema.parse(structuredClone(source));
+    const shell = placeMenuShell(catalogue, candidate, "Main layout");
+    const home = candidate.body.pages.find((page) => page.key === candidate.body.home_page);
+    if (home === undefined) return refuse("The application's home page is missing, so it has no frame to start in.");
+    const text = newestRelease(catalogue, PLATFORM_BLOCK_RELEASE_IDENTITIES.TEXT_BLOCK_RELEASE);
+    if (text === undefined) return refuse("The block catalogue has no text block for the home page.");
+    const items = [blockItem(text, "home_next_steps", {
+      title: `Welcome to ${candidate.body.name}`.slice(0, 120),
+      text: "This application has nothing to show yet. To build it, open it in Studio: add a record type in Data, " +
+        "then add a List page for it in Structure. Each list page gets an entry in the menu. " +
+        "Replace this text with your own home page when you are ready.",
+    }, {})];
+    try { validateStoredZone(catalogue, { items }); }
+    catch (error) {
+      if (!(error instanceof StoredCompositionRefusal)) throw error;
+      console.error("[studio] starter home page refused", error.message);
+      refuse("The home page could not be built from the block catalogue.");
+    }
+    const composition = emptyPageData(candidate, shell.id);
+    (composition.root.props as Record<string, unknown>)[shell.content_slots[0]!.id] = items;
+    home.composition = composition as unknown as Page["composition"];
+    return { kind: "applied", source: judged(candidate) };
+  } catch (error) {
+    if (error instanceof StructureRefusal) return { kind: "refused", message: error.message };
+    throw error;
+  }
 };
 
 const removePage = (context: StudioStructureContext, candidate: Source, pageAlias: string): StudioStructureResult => {
