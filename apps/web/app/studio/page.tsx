@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { namespacedKeySchema } from "@vortex/platform/schema";
 import { StudioHome } from "./_components/studio-home";
-import { resolveIdentitySession } from "../auth/_lib/session-server";
+import { continueStudioSession } from "./_lib/studio-session";
+import { StudioUnavailable } from "./_components/studio-unavailable";
 import { loadOrganizationLauncher } from "../_lib/organization-context";
 import { loadStudioOrganizationHome } from "../_lib/studio-organization-home";
 
@@ -13,8 +14,9 @@ export default async function StudioLandingPage({
   const paging = await searchParams;
   if (paging.after !== undefined && !namespacedKeySchema.safeParse(paging.after).success)
     notFound();
-  const resolved = await resolveIdentitySession();
-  if (resolved.kind !== "active") notFound();
+  const resolved = await continueStudioSession();
+  if (resolved.kind === "temporarily_unavailable")
+    return <StudioUnavailable subject="Studio" result={resolved} reloadHref="/studio" />;
   const launcher = await loadOrganizationLauncher(resolved.session);
   if (launcher.kind !== "available") {
     console.error(`[studio] landing could not list organizations: ${launcher.kind}`);

@@ -209,9 +209,7 @@ export const loadApplicationPage = (
     undefined,
     undefined,
     options,
-  ).then((result) =>
-    result.kind === "reload" ? { kind: "unavailable" } : result,
-  );
+  ).then((result) => (result.kind === "reload" ? { kind: "unavailable" } : result));
 
 /** Loads only the requested placements through the same protected page, Query and Record reads. */
 export const loadApplicationPagePlacements = async (
@@ -265,7 +263,7 @@ export const loadApplicationPagePlacements = async (
     // The same projection the page load decided, so a control's availability is never decided twice.
     ...(includeContent === true
       ? {
-          content: splitProjectedPage(loaded.model.page, loaded.model.applicationShell).content,
+          content: splitProjectedPage(loaded.model.page, loaded.applicationShell).content,
         }
       : {}),
   };

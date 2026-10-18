@@ -271,9 +271,16 @@ const loadApplicationPageJoined = async (
   if (projectedPage.kind !== "available") return projectedPage;
   // An undefined projection is the page refused for this viewer: never an empty page.
   if (projectedPage.value === undefined) return { kind: "unavailable" };
-  // The page capability projection is authoritative, but its derived choice settings still
-  // contain every declared option. Work on a copy so gated options never reach the browser.
-  const page = structuredClone(projectedPage.value);
+  // Field policy and gated choices edit the projection. Pages without field inputs keep the
+  // authoritative objects shared with the frame, so RSC can reference them instead of repeating
+  // their settings. A field-bearing page gets its own copy before any policy edits.
+  const projectedPlacements = collectPlacements(projectedPage.value);
+  const editsProjection =
+    pageDefinition.type === "form" ||
+    projectedPlacements.some(
+      (placement) => isEditFieldPlacement(placement) || fieldControl(placement) !== undefined,
+    );
+  const page = editsProjection ? structuredClone(projectedPage.value) : projectedPage.value;
   const bodyContentAvailable =
     pageDefinition.type === "guided_form"
       ? undefined
@@ -287,7 +294,7 @@ const loadApplicationPageJoined = async (
     context.releaseSet.modules.every((module) => module.content.recordTypes.length === 0)
       ? `/studio/${encodeURIComponent(context.organizationId)}/${encodeURIComponent(context.applicationRootId)}?tab=data`
       : undefined;
-  let allPlacements = collectPlacements(page);
+  let allPlacements = editsProjection ? collectPlacements(page) : projectedPlacements;
   if (boardContinuation !== undefined) {
     const targets = allPlacements.filter(({ placementId }) =>
       sameId(placementId, boardContinuation.placementId),
@@ -1031,16 +1038,6 @@ const loadApplicationPageJoined = async (
     page,
     pageId: pageDefinition.pageId,
     pageName: pageDefinition.name,
-    shells: application.content.shells,
-    ...(applicationShell === undefined ? {} : { applicationShell }),
-    applicationName: address.application.name,
-    applicationHomePageKey: address.application.homePageKey,
-    searchEnabled: application.content.search?.enabled === true,
-    availableApplications: address.read.applications.map((candidate) => ({
-      key: candidate.key,
-      name: candidate.name,
-      homePageKey: candidate.homePageKey,
-    })),
     theme: application.content.theme,
     navigation: navigation.value,
     ...(bodyContentAvailable === undefined ? {} : { bodyContentAvailable }),
@@ -1100,5 +1097,10 @@ const loadApplicationPageJoined = async (
       ].join(":"),
     },
   };
-  return { kind: "available", model };
+  return {
+    kind: "available",
+    model,
+    shells: application.content.shells,
+    ...(applicationShell === undefined ? {} : { applicationShell }),
+  };
 };
