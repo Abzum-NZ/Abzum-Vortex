@@ -75,7 +75,7 @@ const safeCause = (error: unknown): readonly Readonly<Record<string, unknown>>[]
       : typeof current;
     const rawCode = safeText(readDataProperty(current, "code"));
     const code =
-      typeof rawCode === "string" && /^[A-Z0-9_]{3,64}$/.test(rawCode) ? rawCode : undefined;
+      typeof rawCode === "string" && /^[A-Za-z0-9_]{3,64}$/.test(rawCode) ? rawCode : undefined;
     const message = safeText(readDataProperty(current, "message"));
     let issues: readonly SafeZodIssue[] | undefined = undefined;
     try {

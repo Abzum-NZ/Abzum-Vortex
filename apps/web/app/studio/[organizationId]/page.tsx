@@ -16,6 +16,8 @@ import {
 } from "@vortex/ui/components/table";
 import { loadStudioOrganizationHome } from "../../_lib/studio-organization-home";
 import type { OrganizationBuilderRoot } from "@vortex/platform/server";
+import { continueStudioSession } from "../_lib/studio-session";
+import { StudioUnavailable } from "../_components/studio-unavailable";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +78,9 @@ export default async function StudioOrganizationPage({
   params: Promise<{ organizationId: string }>;
 }>) {
   const { organizationId } = await params;
+  const session = await continueStudioSession();
+  if (session.kind === "temporarily_unavailable")
+    return <StudioUnavailable subject="Studio" result={session} />;
   const result = await loadStudioOrganizationHome(organizationId);
   if (result.kind !== "available")
     return (
