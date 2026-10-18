@@ -39,13 +39,6 @@ export type ApplicationPageModel = Readonly<{
   page: Readonly<Record<string, unknown>>;
   pageId: string;
   pageName: string;
-  shells: readonly ApplicationShell[];
-  applicationShell?: ApplicationShell;
-  applicationName: string;
-  applicationHomePageKey: string;
-  /** Whether the installed release configures search, so a page without a search request needs no search read. */
-  searchEnabled: boolean;
-  availableApplications: readonly Readonly<{ key: string; name: string; homePageKey: string }>[];
   theme: InstalledRuntimeContext["releaseSet"]["application"]["content"]["theme"];
   navigation: ProjectedNavigation;
   /** Structural body visibility only; absence on guided pages preserves their active-step UI. */
@@ -130,7 +123,13 @@ export type PageLoadOptions = Readonly<{
 }>;
 
 export type ApplicationPageResult =
-  | Readonly<{ kind: "available"; model: ApplicationPageModel }>
+  | Readonly<{
+      kind: "available";
+      model: ApplicationPageModel;
+      /** Server-only definitions used to split the projection and resolve guided-form steps. */
+      shells: readonly ApplicationShell[];
+      applicationShell?: ApplicationShell;
+    }>
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 

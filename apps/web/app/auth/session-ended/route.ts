@@ -1,9 +1,9 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import { getIdentityJourneyConfiguration } from "../_lib/authority-configuration";
 import {
-  parseSingleApplicationHomeContinuation,
-  serializeApplicationHomeContinuation,
-} from "../_lib/application-home-continuation";
+  parseSingleSignInContinuation,
+  serializeSignInContinuation,
+} from "../_lib/sign-in-continuation";
 import { verifiesSessionCleanupProof } from "../_lib/session-cleanup-proof";
 import {
   identitySessionCookieDeletions,
@@ -36,14 +36,11 @@ export function GET(request: NextRequest): NextResponse {
   try {
     siteUrl = getIdentityJourneyConfiguration().siteUrl;
     destination = new URL(destinationPath, siteUrl);
-    const applicationHome = parseSingleApplicationHomeContinuation(
-      request.nextUrl.searchParams.getAll("applicationHome"),
+    const continuation = parseSingleSignInContinuation(
+      request.nextUrl.searchParams.getAll("continuation"),
     );
-    if (applicationHome !== undefined)
-      destination.searchParams.set(
-        "applicationHome",
-        serializeApplicationHomeContinuation(applicationHome),
-      );
+    if (continuation !== undefined)
+      destination.searchParams.set("continuation", serializeSignInContinuation(continuation));
   } catch (error) {
     siteUrl = undefined;
     destination = new URL(destinationPath, request.url);
@@ -66,7 +63,11 @@ export function GET(request: NextRequest): NextResponse {
     const sessionCookies = request.cookies.getAll().map(({ name, value }) => ({ name, value }));
     if (
       !allowsSessionEnd(request, siteUrl) &&
-      !verifiesSessionCleanupProof(request.nextUrl.searchParams.get("proof"), sessionCookies, siteUrl)
+      !verifiesSessionCleanupProof(
+        request.nextUrl.searchParams.get("proof"),
+        sessionCookies,
+        siteUrl,
+      )
     )
       return new NextResponse(null, { status: 403, headers: { "Cache-Control": "no-store" } });
     if (!requestMatchesConfiguredSite(request.headers, request.nextUrl, siteUrl)) return response;
