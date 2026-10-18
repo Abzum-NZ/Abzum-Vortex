@@ -2603,8 +2603,7 @@ begin
         and edge.to_organisation_id = (source_context ->> 'organizationId')::uuid
         and edge.to_storage_contract_id = (target_meta ->> 'storageContractId')::uuid
         and edge.to_record_id = target_record_id
-        and (not (source_meta ? 'previewInstallationId')
-          or edge.from_storage_contract_id = (source_meta ->> 'storageContractId')::uuid)
+        and edge.from_storage_contract_id = (source_meta ->> 'storageContractId')::uuid
         and edge.from_record_id <> p_source_record_id
     ) into existing_other;
     if existing_other then
@@ -3136,5 +3135,589 @@ alter function vortex_record.enforce_relationship_edge_scope() owner to vortex_o
 
 
 REVOKE ALL ON FUNCTION vortex_record.enforce_relationship_edge_scope() FROM PUBLIC;
+
+
+set local role vortex_owner;
+
+-- Private Record-adapter routine; migrations install the complete canonical body
+-- under its owner with schema CREATE granted only for that migration transaction.
+create or replace function vortex_record.write_named_action_relationship_value_internal(
+  p_source_record_type_id uuid,
+  p_source_record_id uuid,
+  p_relationship_id uuid,
+  p_target_value jsonb,
+  p_action_owner_kind text,
+  p_action_owner_id uuid,
+  p_action_release_revision bigint,
+  p_action_id uuid,
+  p_subject_record_type_id uuid,
+  p_subject_record_id uuid
+)
+returns void
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  source_meta jsonb;
+  source_context jsonb;
+  source_type jsonb;
+  relationship_value jsonb;
+  field_value jsonb;
+  field_column jsonb;
+  target_type_id uuid;
+  target_record_id uuid;
+  target_meta jsonb;
+  target_loaded jsonb;
+  target_decision jsonb;
+  target_record jsonb;
+  target_scope jsonb;
+  source_application_root_id uuid;
+  target_application_root_id uuid;
+  mapping_row vortex_record.relationship_storage_mappings%rowtype;
+  application_root_required boolean;
+  existing_other boolean;
+  update_sql text;
+  changed_rows integer;
+begin
+  if p_source_record_type_id is null or p_source_record_id is null
+    or p_relationship_id is null
+    or p_action_owner_kind not in ('application', 'module')
+    or p_action_owner_id is null or p_action_id is null
+    or p_action_release_revision not between 1 and 9007199254740991
+    or p_subject_record_type_id is null or p_subject_record_id is null then
+    raise exception using errcode = '22023', message = 'Relationship change is invalid';
+  end if;
+  source_meta := vortex_record.resolve_record_action_context_internal(
+    p_source_record_type_id, 'read'
+  );
+  source_context := source_meta -> 'context';
+  source_type := source_meta -> 'recordType';
+  select item.value into relationship_value
+  from pg_catalog.jsonb_array_elements(source_type -> 'relationships') as item(value)
+  where (item.value ->> 'relationshipId')::uuid = p_relationship_id;
+  if not found then
+    raise exception using errcode = '23514',
+      message = 'Relationship is not declared by the active record type';
+  end if;
+  select item.value into field_value
+  from pg_catalog.jsonb_array_elements(source_type -> 'fields') as item(value)
+  where (item.value ->> 'fieldId')::uuid = (relationship_value ->> 'fromFieldId')::uuid;
+  if not found or field_value ->> 'type' not in ('link', 'link_to_one_of_several') then
+    raise exception using errcode = '55000',
+      message = 'Relationship field definition is unavailable';
+  end if;
+  field_column := source_meta -> 'columns' -> pg_catalog.lower(field_value ->> 'fieldId');
+
+  select mapping.* into mapping_row
+  from vortex_record.relationship_storage_mappings as mapping
+  where mapping.relationship_id = p_relationship_id
+    and mapping.source_storage_contract_id = (source_meta ->> 'storageContractId')::uuid
+    and mapping.source_field_id = (field_value ->> 'fieldId')::uuid
+    and mapping.release_revision <= (source_meta ->> 'moduleReleaseRevision')::bigint;
+  if not found
+    or mapping_row.cardinality is distinct from (relationship_value ->> 'cardinality')
+    or mapping_row.on_parent_delete is distinct from (relationship_value ->> 'onParentDelete') then
+    raise exception using errcode = '55000',
+      message = 'Relationship storage disagrees with the active definition';
+  end if;
+
+  if pg_catalog.jsonb_typeof(p_target_value) = 'null' then
+    if (field_value ->> 'required')::boolean then
+      raise exception using errcode = '23514', message = 'Required relationship cannot be empty';
+    end if;
+    perform vortex_record.acquire_relationship_edge_locks_internal(
+      vortex_record.relationship_edge_lock_identities_internal(
+        p_relationship_id, (source_meta ->> 'storageContractId')::uuid,
+        p_source_record_id, null, null
+      )
+    );
+    delete from vortex_record.relationship_edges as edge
+    where edge.relationship_id = p_relationship_id
+      and edge.from_organisation_id = (source_context ->> 'organizationId')::uuid
+      and edge.from_storage_contract_id = (source_meta ->> 'storageContractId')::uuid
+      and edge.from_record_id = p_source_record_id;
+    update_sql := pg_catalog.format(
+      'update record_data.%I as stored set %I = null
+       where stored.organisation_id = $1 and stored.record_id = $2',
+      source_meta ->> 'table', field_column ->> 'token'
+    );
+    execute update_sql using (source_context ->> 'organizationId')::uuid, p_source_record_id;
+    get diagnostics changed_rows = row_count;
+    if changed_rows <> 1 then
+      raise exception using errcode = '40001', message = 'Relationship source record changed';
+    end if;
+    return;
+  end if;
+
+  if pg_catalog.jsonb_typeof(p_target_value) <> 'object'
+    or not (p_target_value ?& array['recordTypeId', 'recordId'])
+    or p_target_value - array['recordTypeId', 'recordId'] <> '{}'::jsonb then
+    raise exception using errcode = '22023', message = 'Relationship target is invalid';
+  end if;
+  begin
+    target_type_id := (p_target_value ->> 'recordTypeId')::uuid;
+    target_record_id := (p_target_value ->> 'recordId')::uuid;
+  exception when invalid_text_representation then
+    raise exception using errcode = '22023', message = 'Relationship target is invalid';
+  end;
+  if target_type_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or target_record_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or target_type_id <> all (mapping_row.target_record_type_ids) then
+    raise exception using errcode = '23514', message = 'Relationship target is unavailable';
+  end if;
+
+  target_meta := vortex_record.resolve_record_action_context_internal(target_type_id, 'read');
+  source_application_root_id := case when source_meta ->> 'storageScope' = 'application_contained'
+    then (source_context ->> 'applicationRootId')::uuid else null end;
+  application_root_required := coalesce(
+    (field_value #>> '{settings,applicationRootIdRequired}')::boolean, false
+  );
+  if application_root_required
+    and (target_meta #>> '{recordType,systemProjection,protectedView}')
+      is distinct from 'organization_accounts' then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
+
+  perform vortex_record.lock_relationship_target_row_internal(
+    target_type_id, target_record_id,
+    (source_context ->> 'organizationId')::uuid
+  );
+
+  -- The one substitution. Executing a permitted named action must not require
+  -- ordinary read authority on its own subject (#50 section 4), so when the
+  -- selected target is exactly this command's subject the decision is taken on
+  -- the installed named declaration instead. The loader re-resolves the active
+  -- installation, the owner kind/id/release revision, the action id and the
+  -- action's declared subject record type, and the Access evaluation binds the
+  -- organization, application, record type, record and the actor's current
+  -- authority. Every other target keeps the ordinary read check unchanged.
+  if target_type_id = p_subject_record_type_id and target_record_id = p_subject_record_id then
+    target_loaded := vortex_record.load_named_action_facts_internal(
+      p_action_owner_kind, p_action_owner_id, p_action_release_revision,
+      p_action_id, target_type_id, target_record_id, null
+    );
+  else
+    target_loaded := vortex_record.load_record_access_facts_internal(
+      target_type_id, 'read', target_record_id, null, null::jsonb
+    );
+  end if;
+  if target_loaded ->> 'outcome' <> 'loaded'
+    or pg_catalog.jsonb_typeof(target_loaded -> 'declaration') <> 'object' then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
+  target_decision := vortex_access.evaluate_organization_record_access_internal(
+    target_loaded -> 'declaration', target_record_id, target_loaded -> 'facts'
+  );
+  if target_decision ->> 'outcome' <> 'allowed' then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
+  select item.value into target_record
+  from pg_catalog.jsonb_array_elements(target_loaded -> 'facts' -> 'records') as item(value)
+  where (item.value -> 'recordScope' ->> 'recordId')::uuid = target_record_id;
+  target_scope := target_record -> 'recordScope';
+  target_application_root_id := case when target_meta ->> 'storageScope' = 'application_contained'
+    then (target_scope ->> 'applicationRootId')::uuid else null end;
+  if target_record is null or target_record ->> 'lifecycleState' <> 'active'
+    or (target_scope ->> 'organizationId')::uuid <>
+      (source_context ->> 'organizationId')::uuid
+    or (source_application_root_id is not null and target_application_root_id is not null
+      and source_application_root_id <> target_application_root_id) then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
+  if application_root_required
+    and not vortex_access.organization_account_has_current_application_access_internal(
+      (source_context ->> 'organizationId')::uuid,
+      target_record_id,
+      (source_context ->> 'applicationRootId')::uuid
+    ) then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
+
+  -- The target row is share-locked (the command preflight already holds every
+  -- link target) and eligible; the shared edge identities are taken last,
+  -- exactly as `write_relationship_value_internal` takes them.
+  perform vortex_record.acquire_relationship_edge_locks_internal(
+    vortex_record.relationship_edge_lock_identities_internal(
+      p_relationship_id, (source_meta ->> 'storageContractId')::uuid,
+      p_source_record_id, (target_meta ->> 'storageContractId')::uuid,
+      target_record_id
+    )
+  );
+  if mapping_row.cardinality = 'one_to_one' then
+    select exists (
+      select 1 from vortex_record.relationship_edges as edge
+      where edge.relationship_id = p_relationship_id
+        and edge.to_organisation_id = (source_context ->> 'organizationId')::uuid
+        and edge.to_storage_contract_id = (target_meta ->> 'storageContractId')::uuid
+        and edge.to_record_id = target_record_id
+        and edge.from_storage_contract_id = (source_meta ->> 'storageContractId')::uuid
+        and edge.from_record_id <> p_source_record_id
+    ) into existing_other;
+    if existing_other then
+      raise exception using errcode = '23514', message = 'Relationship cardinality is exceeded';
+    end if;
+  end if;
+
+  delete from vortex_record.relationship_edges as edge
+  where edge.relationship_id = p_relationship_id
+    and edge.from_organisation_id = (source_context ->> 'organizationId')::uuid
+    and edge.from_storage_contract_id = (source_meta ->> 'storageContractId')::uuid
+    and edge.from_record_id = p_source_record_id;
+  insert into vortex_record.relationship_edges (
+    relationship_id, from_organisation_id, to_organisation_id,
+    from_application_root_id, to_application_root_id,
+    from_storage_contract_id, from_record_id, to_storage_contract_id, to_record_id
+  ) values (
+    p_relationship_id,
+    (source_context ->> 'organizationId')::uuid,
+    (source_context ->> 'organizationId')::uuid,
+    source_application_root_id, target_application_root_id,
+    (source_meta ->> 'storageContractId')::uuid, p_source_record_id,
+    (target_meta ->> 'storageContractId')::uuid, target_record_id
+  );
+
+  update_sql := pg_catalog.format(
+    'update record_data.%I as stored set %I = $3::jsonb
+     where stored.organisation_id = $1 and stored.record_id = $2',
+    source_meta ->> 'table', field_column ->> 'token'
+  );
+  execute update_sql using (source_context ->> 'organizationId')::uuid,
+    p_source_record_id, p_target_value;
+  get diagnostics changed_rows = row_count;
+  if changed_rows <> 1 then
+    raise exception using errcode = '40001', message = 'Relationship source record changed';
+  end if;
+end
+$function$;
+
+alter function vortex_record.write_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) owner to vortex_record_adapter;
+
+revoke all on function
+  vortex_record.write_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+grant execute on function
+  vortex_record.write_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) to vortex_record_adapter;
+
+comment on function vortex_record.write_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) is
+  'Private named-action edge writer: checks current application access for flagged Person links, uses the ordinary or protected projection target lock and edge flow, and authorises the command subject by re-evaluating the exact installed named action rather than ordinary read.';
+
+
+set local role vortex_owner;
+
+create or replace function vortex_record.mirror_person_links_internal(
+  p_storage_contract_id uuid,
+  p_organization_id uuid,
+  p_record_id uuid,
+  p_values jsonb
+)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  pair record;
+  old_value jsonb;
+  new_value jsonb;
+  account_id uuid;
+  mirror_to_link boolean;
+  table_token text;
+  target_storage_id uuid;
+  source_application_id uuid;
+  source_exists boolean;
+begin
+  if pg_catalog.jsonb_typeof(p_values) <> 'object' then
+    raise exception using errcode = '22023', message = 'Person link mirror values are invalid';
+  end if;
+  select catalogue.physical_table_token into table_token
+  from vortex_record.storage_catalogue as catalogue
+  where catalogue.storage_contract_id = p_storage_contract_id
+    and catalogue.physical_schema_token = 'record_data';
+  if table_token is null then
+    raise exception using errcode = '55000', message = 'Person link mirror storage is unavailable';
+  end if;
+
+  for pair in
+    select newer.field_id as new_field_id,
+      (newer.field_definition #>> '{settings,legacyPersonFieldId}')::uuid as old_field_id,
+      relationship.relationship_id,
+      relationship.target_record_type_ids[1] as target_type_id
+    from vortex_record.field_storage_mappings as newer
+    join vortex_record.relationship_storage_mappings as relationship
+      on relationship.source_storage_contract_id = newer.storage_contract_id
+      and relationship.source_field_id = newer.field_id
+    where newer.storage_contract_id = p_storage_contract_id
+      and newer.state = 'active'
+      and newer.field_definition #>> '{settings,legacyPersonFieldId}' is not null
+      and pg_catalog.cardinality(relationship.target_record_type_ids) = 1
+    order by newer.field_id
+  loop
+    if not (p_values ? pair.old_field_id::text or p_values ? pair.new_field_id::text) then
+      continue;
+    end if;
+    if not exists (
+      select 1 from vortex_record.field_storage_mappings as older
+      where older.storage_contract_id = p_storage_contract_id
+        and older.field_id = pair.old_field_id
+        and older.field_definition ->> 'type' = 'link_to_person'
+    ) then
+      raise exception using errcode = '55000', message = 'Person link mirror declaration is incompatible';
+    end if;
+    mirror_to_link := p_values ? pair.old_field_id::text;
+    if mirror_to_link then
+      old_value := p_values -> pair.old_field_id::text;
+      if pg_catalog.jsonb_typeof(old_value) <> 'null'
+        and not vortex_record.canonical_record_value_matches(old_value, 'link_to_person', 'json') then
+        raise exception using errcode = '22023', message = 'Person link mirror source is invalid';
+      end if;
+      account_id := case when pg_catalog.jsonb_typeof(old_value) = 'null'
+        then null else (old_value ->> 'organizationAccountId')::uuid end;
+      new_value := case when account_id is null then 'null'::jsonb else
+        pg_catalog.jsonb_build_object('recordTypeId', pair.target_type_id, 'recordId', account_id)
+      end;
+      if p_values ? pair.new_field_id::text
+        and p_values -> pair.new_field_id::text is distinct from new_value then
+        raise exception using errcode = '23514', message = 'Person link mirror values disagree';
+      end if;
+    else
+      new_value := p_values -> pair.new_field_id::text;
+      if pg_catalog.jsonb_typeof(new_value) <> 'null'
+        and (pg_catalog.jsonb_typeof(new_value) <> 'object'
+          or new_value ->> 'recordTypeId' is distinct from pair.target_type_id::text
+          or not pg_catalog.pg_input_is_valid(new_value ->> 'recordId', 'uuid')) then
+        raise exception using errcode = '22023', message = 'Person link mirror target is invalid';
+      end if;
+      account_id := case when pg_catalog.jsonb_typeof(new_value) = 'null'
+        then null else (new_value ->> 'recordId')::uuid end;
+      old_value := case when account_id is null then 'null'::jsonb else
+        pg_catalog.jsonb_build_object('organizationAccountId', account_id) end;
+    end if;
+
+    if account_id is not null and not exists (
+      select 1 from vortex_identity.organization_accounts as account
+      where account.organization_id = p_organization_id
+        and account.organization_account_id = account_id
+    ) then
+      raise exception using errcode = 'P0002', message = 'Person link mirror account is unavailable';
+    end if;
+    select catalogue.storage_contract_id into target_storage_id
+    from vortex_record.storage_catalogue as catalogue
+    where catalogue.record_type_id = pair.target_type_id
+      and catalogue.physical_schema_token = 'system_projection';
+    if target_storage_id is null then
+      raise exception using errcode = '55000', message = 'Person link mirror target storage is unavailable';
+    end if;
+    execute pg_catalog.format(
+      'select stored.application_root_id from record_data.%I as stored
+       where stored.organisation_id = $1 and stored.record_id = $2', table_token
+    ) into source_application_id using p_organization_id, p_record_id;
+    source_exists := found;
+    if not source_exists then
+      raise exception using errcode = '40001', message = 'Person link mirror source changed';
+    end if;
+    if mirror_to_link then
+      execute pg_catalog.format(
+        'update record_data.%I as stored set %I = $3
+         where stored.organisation_id = $1 and stored.record_id = $2',
+        table_token, 'f_' || pg_catalog.replace(pair.new_field_id::text, '-', '')
+      ) using p_organization_id, p_record_id, new_value;
+      delete from vortex_record.relationship_edges as edge
+      where edge.relationship_id = pair.relationship_id
+        and edge.from_organisation_id = p_organization_id
+        and edge.from_storage_contract_id = p_storage_contract_id
+        and edge.from_record_id = p_record_id;
+      if account_id is not null then
+        insert into vortex_record.relationship_edges (
+          relationship_id, from_organisation_id, to_organisation_id,
+          from_application_root_id, to_application_root_id,
+          from_storage_contract_id, from_record_id, to_storage_contract_id, to_record_id
+        ) values (
+          pair.relationship_id, p_organization_id, p_organization_id,
+          source_application_id, null, p_storage_contract_id, p_record_id,
+          target_storage_id, account_id
+        );
+      end if;
+    else
+      execute pg_catalog.format(
+        'update record_data.%I as stored set %I = $3
+         where stored.organisation_id = $1 and stored.record_id = $2',
+        table_token, 'f_' || pg_catalog.replace(pair.old_field_id::text, '-', '')
+      ) using p_organization_id, p_record_id, old_value;
+    end if;
+  end loop;
+end
+$function$;
+
+alter function vortex_record.mirror_person_links_internal(uuid,uuid,uuid,jsonb) owner to vortex_owner;
+revoke all on function vortex_record.mirror_person_links_internal(uuid,uuid,uuid,jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.mirror_person_links_internal(uuid,uuid,uuid,jsonb)
+  to vortex_owner, vortex_record_adapter;
+
+
+set local role vortex_owner;
+
+create or replace function vortex_record.backfill_person_links_internal(
+  p_module_root_id uuid,
+  p_module_release_revision bigint
+)
+returns integer
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  pair record;
+  source_row record;
+  table_token text;
+  old_column text;
+  new_column text;
+  account_id uuid;
+  target_storage_id uuid;
+  expected_link jsonb;
+  has_legacy_values boolean;
+  changed_count integer := 0;
+  changed_rows integer;
+begin
+  for pair in
+    select (record_type.value ->> 'storageContractId')::uuid as storage_id,
+      (field.value ->> 'fieldId')::uuid as new_field_id,
+      (field.value #>> '{settings,legacyPersonFieldId}')::uuid as old_field_id,
+      relationship.relationship_id,
+      relationship.target_record_type_ids[1] as target_type_id
+    from vortex_definition.releases as release
+    cross join lateral pg_catalog.jsonb_array_elements(
+      release.compilation_output #> '{canonical,content,recordTypes}'
+    ) as record_type(value)
+    cross join lateral pg_catalog.jsonb_array_elements(record_type.value -> 'fields') as field(value)
+    join vortex_record.relationship_storage_mappings as relationship
+      on relationship.source_storage_contract_id = (record_type.value ->> 'storageContractId')::uuid
+      and relationship.source_field_id = (field.value ->> 'fieldId')::uuid
+    where release.root_id = p_module_root_id
+      and release.release_revision = p_module_release_revision
+      and field.value ->> 'type' = 'link'
+      and field.value #>> '{settings,legacyPersonFieldId}' is not null
+      and pg_catalog.cardinality(relationship.target_record_type_ids) = 1
+    order by (record_type.value ->> 'storageContractId')::uuid,
+      (field.value ->> 'fieldId')::uuid
+  loop
+    select catalogue.physical_table_token into table_token
+    from vortex_record.storage_catalogue as catalogue
+    where catalogue.storage_contract_id = pair.storage_id
+      and catalogue.physical_schema_token = 'record_data';
+    if table_token is null or not exists (
+      select 1 from vortex_record.field_storage_mappings as old_mapping
+      join vortex_record.field_storage_mappings as new_mapping
+        on new_mapping.storage_contract_id = old_mapping.storage_contract_id
+      where old_mapping.storage_contract_id = pair.storage_id
+        and old_mapping.field_id = pair.old_field_id
+        and old_mapping.field_definition ->> 'type' = 'link_to_person'
+        and new_mapping.field_id = pair.new_field_id
+        and new_mapping.field_definition #>> '{settings,legacyPersonFieldId}' = pair.old_field_id::text
+    ) then
+      raise exception using errcode = '55000', message = 'Person link backfill storage is incompatible';
+    end if;
+    old_column := 'f_' || pg_catalog.replace(pair.old_field_id::text, '-', '');
+    new_column := 'f_' || pg_catalog.replace(pair.new_field_id::text, '-', '');
+    select catalogue.storage_contract_id into target_storage_id
+    from vortex_record.storage_catalogue as catalogue
+    where catalogue.record_type_id = pair.target_type_id
+      and catalogue.physical_schema_token = 'system_projection';
+    if target_storage_id is null then
+      -- A new installation can provision the source before its projection dependency.
+      -- There is nothing to backfill until a legacy value exists.
+      execute pg_catalog.format(
+        'select exists (select 1 from record_data.%I where %I is not null)',
+        table_token, old_column
+      ) into has_legacy_values;
+      if has_legacy_values then
+        raise exception using errcode = '55000',
+          message = 'Person link backfill target storage is unavailable';
+      end if;
+      continue;
+    end if;
+    for source_row in execute pg_catalog.format(
+      'select stored.organisation_id, stored.application_root_id, stored.record_id,
+         stored.%I as old_value, stored.%I as new_value
+       from record_data.%I as stored where stored.%I is not null
+       order by stored.organisation_id, stored.record_id',
+      old_column, new_column, table_token, old_column
+    ) loop
+      if not vortex_record.canonical_record_value_matches(
+        source_row.old_value, 'link_to_person', 'json'
+      ) then
+        raise exception using errcode = '55000', message = 'Stored person reference is invalid';
+      end if;
+      account_id := (source_row.old_value ->> 'organizationAccountId')::uuid;
+      if not exists (
+        select 1 from vortex_identity.organization_accounts as account
+        where account.organization_id = source_row.organisation_id
+          and account.organization_account_id = account_id
+      ) then
+        raise log 'Person link backfill skipped vanished account for storage %, field %',
+          pair.storage_id, pair.old_field_id;
+        continue;
+      end if;
+      expected_link := pg_catalog.jsonb_build_object(
+        'recordTypeId', pair.target_type_id, 'recordId', account_id
+      );
+      if source_row.new_value is not null and source_row.new_value <> expected_link then
+        raise exception using errcode = '55000', message = 'Stored person link disagrees with legacy value';
+      end if;
+      if source_row.new_value is null then
+        execute pg_catalog.format(
+          'update record_data.%I as stored set %I = $3
+           where stored.organisation_id = $1 and stored.record_id = $2 and stored.%I is null',
+          table_token, new_column, new_column
+        ) using source_row.organisation_id, source_row.record_id, expected_link;
+        get diagnostics changed_rows = row_count;
+        changed_count := changed_count + changed_rows;
+      end if;
+      if not exists (
+        select 1 from vortex_record.relationship_edges as edge
+        where edge.relationship_id = pair.relationship_id
+          and edge.from_organisation_id = source_row.organisation_id
+          and edge.from_storage_contract_id = p_storage_contract_id
+          and edge.from_record_id = source_row.record_id
+          and edge.to_storage_contract_id = target_storage_id
+          and edge.to_record_id = account_id
+      ) then
+        if exists (
+          select 1 from vortex_record.relationship_edges as edge
+          where edge.relationship_id = pair.relationship_id
+            and edge.from_organisation_id = source_row.organisation_id
+            and edge.from_storage_contract_id = p_storage_contract_id
+            and edge.from_record_id = source_row.record_id
+        ) then
+          raise exception using errcode = '55000', message = 'Stored person link edge disagrees with legacy value';
+        end if;
+        insert into vortex_record.relationship_edges (
+          relationship_id, from_organisation_id, to_organisation_id,
+          from_application_root_id, to_application_root_id,
+          from_storage_contract_id, from_record_id, to_storage_contract_id, to_record_id
+        ) values (
+          pair.relationship_id, source_row.organisation_id, source_row.organisation_id,
+          source_row.application_root_id, null, pair.storage_id, source_row.record_id,
+          target_storage_id, account_id
+        );
+        changed_count := changed_count + 1;
+      end if;
+    end loop;
+  end loop;
+  return changed_count;
+end
+$function$;
+
+alter function vortex_record.backfill_person_links_internal(uuid,bigint) owner to vortex_owner;
+revoke all on function vortex_record.backfill_person_links_internal(uuid,bigint)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+    vortex_record_adapter;
+grant execute on function vortex_record.backfill_person_links_internal(uuid,bigint)
+  to vortex_owner;
+
 
 reset role;

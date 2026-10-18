@@ -240,8 +240,7 @@ begin
         and edge.to_organisation_id = (source_context ->> 'organizationId')::uuid
         and edge.to_storage_contract_id = (target_meta ->> 'storageContractId')::uuid
         and edge.to_record_id = target_record_id
-        and (not (source_meta ? 'previewInstallationId')
-          or edge.from_storage_contract_id = (source_meta ->> 'storageContractId')::uuid)
+        and edge.from_storage_contract_id = (source_meta ->> 'storageContractId')::uuid
         and edge.from_record_id <> p_source_record_id
     ) into existing_other;
     if existing_other then
