@@ -182,7 +182,7 @@ function StudioRail<Key extends string>({
       aria-orientation="vertical"
       aria-label={label}
       onKeyDown={move}
-      className="flex w-18 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-sidebar-border bg-sidebar px-2 py-2 text-sidebar-foreground"
+      className="flex w-18 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-sidebar-border bg-sidebar px-1 py-2 text-sidebar-foreground"
     >
       {tabs.map((tab, index) => {
         const selected = tab.key === active;
@@ -207,10 +207,10 @@ function StudioRail<Key extends string>({
               onFocus={() => setFocusKey(tab.key)}
               onClick={() => onChoose(tab.key)}
               className={cn(
-                "relative flex h-13 w-full flex-col items-center justify-center gap-1 rounded-lg border-0 px-0 py-0 text-xs font-medium outline-none transition-colors",
+                "relative flex h-13 w-full flex-col items-center justify-center gap-1 rounded-lg border-0 px-1 py-0 text-xs font-medium outline-none transition-colors",
                 "hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
                 selected
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground before:absolute before:inset-y-3 before:left-0 before:w-0.75 before:rounded-full before:bg-primary"
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground before:absolute before:inset-y-3 before:-left-1 before:w-0.75 before:rounded-full before:bg-primary"
                   : "bg-transparent text-muted-foreground",
               )}
             >
@@ -353,6 +353,7 @@ export function StudioFrame<Key extends string>({
   }, [dockInspector]);
   useEffect(() => {
     const shortcut = (event: globalThis.KeyboardEvent) => {
+      if (event.target instanceof Element && event.target.closest('[role="dialog"], [role="alertdialog"]')) return;
       if ((!event.ctrlKey && !event.metaKey) || event.altKey || event.shiftKey) return;
       if (event.key === ".") {
         event.preventDefault();

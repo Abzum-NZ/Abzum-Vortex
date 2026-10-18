@@ -147,6 +147,8 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
       const target = event.target;
+      // A modal owns its history and actions, including cancellation of a suspended save.
+      if (target instanceof Element && target.closest('[role="dialog"], [role="alertdialog"]')) return;
       if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
       if ((!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== "z") return;
       event.preventDefault();
