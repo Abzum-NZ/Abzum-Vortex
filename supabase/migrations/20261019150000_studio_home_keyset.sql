@@ -1,7 +1,7 @@
 set role vortex_owner;
 drop function vortex_definition.list_organization_builder_roots();
 
-create or replace function vortex_definition.list_organization_builder_roots(p_after_key text default null)
+create or replace function vortex_definition.list_organization_builder_roots(p_after_key text)
 returns table (
   root_id uuid,
   kind text,
@@ -42,8 +42,8 @@ begin
     draft.draft_revision,
     root.current_release_revision,
     root.application_origin_kind,
-    coalesce(draft.draft_source -> 'body' ->> 'description', release.authored_source -> 'body' ->> 'description'),
-    coalesce(draft.draft_source -> 'body' ->> 'icon', release.authored_source -> 'body' ->> 'icon'),
+    coalesce(draft.draft_source, release.authored_source) -> 'body' ->> 'description',
+    coalesce(draft.draft_source, release.authored_source) -> 'body' ->> 'icon',
     coalesce(draft.updated_at, root.created_at),
     coalesce(draft.updated_by, root.created_by)
   from vortex_definition.roots as root
