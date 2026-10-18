@@ -124,7 +124,12 @@ export function ApplicationPageViewContent({
   // A confirmation is a transient toast; a problem stays on the page as an alert until dismissed
   // by the next action, so it is never missed.
   useEffect(() => {
-    if (notice?.tone === "info") toast.success(notice.text);
+    if (notice?.tone !== "info") return;
+    const toastId = toast.success(notice.text);
+    // A previous gesture's confirmation must not outlive the notice it describes.
+    return () => {
+      toast.dismiss(toastId);
+    };
   }, [notice]);
   const [formFeedback, setFormFeedback] = useState<Readonly<Record<string, FormFlowFeedback>>>({});
   const [webMcpShellState, setWebMcpShellState] = useState<ApplicationWebMcpRuntime>();
@@ -592,10 +597,14 @@ export function ApplicationPageViewContent({
             model.bodyContentAvailable !== false ? undefined : (
               <>
                 {pageFeedback}
-                {model.bodyContentAvailable !== false ? null : model.firstRecordTypeHref !== undefined ? (
+                {model.bodyContentAvailable !== false ? null : model.firstRecordTypeHref !==
+                  undefined ? (
                   <FirstRecordTypeEmptyState
                     action={
-                      <Button nativeButton={false} render={<Link href={model.firstRecordTypeHref} />}>
+                      <Button
+                        nativeButton={false}
+                        render={<Link href={model.firstRecordTypeHref} />}
+                      >
                         Open the Data tab in Studio
                       </Button>
                     }

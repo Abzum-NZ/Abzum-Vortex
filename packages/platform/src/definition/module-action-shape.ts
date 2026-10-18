@@ -18,7 +18,7 @@ type ActionTask = ModuleAction["tasks"][number];
 export type InlineModuleActionPrecondition = NonNullable<ModuleAction["precondition"]>;
 
 /** One field the action sets, and the value it sets it to (a fixed value, an input, the person or the time). */
-export type InlineModuleActionEffect = Readonly<{ field: string; value: FlowValue }>;
+type InlineModuleActionEffect = Readonly<{ field: string; value: FlowValue }>;
 
 /**
  * A named action of an owned Module's record type as Studio edits it: its label, when it may run,
@@ -32,7 +32,8 @@ export type InlineModuleActionChange = Readonly<{
   actionKey?: string;
   label: string;
   precondition: InlineModuleActionPrecondition | undefined;
-  effects: readonly InlineModuleActionEffect[];
+  tasks: readonly ActionTask[];
+  inputs: ModuleAction["inputs"];
   /** The action's own permission (created with it), or another named permission of its record type. */
   permission: Readonly<{ kind: "own" }> | Readonly<{ kind: "existing"; key: string }>;
   ownsChoice: boolean;
@@ -44,10 +45,11 @@ export type InlineModuleActionResult =
   /** A permission the change would leave behind is still used elsewhere; nothing was changed. */
   | Readonly<{ kind: "referenced"; issue: string; references: readonly ApplicationUsePlace[] }>;
 
-const effectTaskId = "set_fields";
-
 const nameFrom = (label: string): string => {
-  const words = label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const words = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
   return (/^[a-z]/.test(words) ? words : `action_${words}`).slice(0, 40).replace(/_+$/, "");
 };
 
@@ -59,15 +61,20 @@ const uniqueAlias = (base: string, taken: ReadonlySet<string>): string => {
   }
 };
 
-const moduleAliases = (module: InlineModule): Set<string> => new Set([
-  module.id,
-  ...module.record_types.flatMap((record) => [record.id, record.storage_contract_id,
-    ...record.fields.map((field) => field.id), ...record.relationships.map((relationship) => relationship.id)]),
-  ...module.permissions.map((permission) => permission.id),
-  ...module.actions.map((action) => action.id),
-  ...module.events.map((event) => event.id),
-  ...module.queries.map((query) => query.id),
-]);
+const moduleAliases = (module: InlineModule): Set<string> =>
+  new Set([
+    module.id,
+    ...module.record_types.flatMap((record) => [
+      record.id,
+      record.storage_contract_id,
+      ...record.fields.map((field) => field.id),
+      ...record.relationships.map((relationship) => relationship.id),
+    ]),
+    ...module.permissions.map((permission) => permission.id),
+    ...module.actions.map((action) => action.id),
+    ...module.events.map((event) => event.id),
+    ...module.queries.map((query) => query.id),
+  ]);
 
 /** The fields an authored condition reads, by key. */
 const conditionFields = (condition: unknown): string[] => {
@@ -76,53 +83,79 @@ const conditionFields = (condition: unknown): string[] => {
   if (Array.isArray(node.all)) return node.all.flatMap(conditionFields);
   if (Array.isArray(node.any)) return node.any.flatMap(conditionFields);
   if (node.not !== undefined) return conditionFields(node.not);
-  const operands = [node.left, node.right].flatMap((operand) => operand !== null && typeof operand === "object" &&
-    (operand as Record<string, unknown>).source === "field" ? [String((operand as Record<string, unknown>).field)] : []);
+  const operands = [node.left, node.right].flatMap((operand) =>
+    operand !== null &&
+    typeof operand === "object" &&
+    (operand as Record<string, unknown>).source === "field"
+      ? [String((operand as Record<string, unknown>).field)]
+      : [],
+  );
   return [...(typeof node.field === "string" ? [node.field] : []), ...operands];
 };
 
 /** The text of a fixed value, when an effect sets one. */
 const fixedText = (value: FlowValue): string | undefined =>
-  value.kind === "literal" && typeof value.literal.value === "string" ? value.literal.value : undefined;
+  value.kind === "literal" && typeof value.literal.value === "string"
+    ? value.literal.value
+    : undefined;
 
-const effectProblems = (record: RecordType, effects: readonly InlineModuleActionEffect[]): string[] => {
+const effectProblems = (
+  record: RecordType,
+  effects: readonly InlineModuleActionEffect[],
+): string[] => {
   const issues: string[] = [];
   const seen = new Set<string>();
   for (const effect of effects) {
     const field = record.fields.find((candidate) => candidate.key === effect.field);
-    if (field === undefined) { issues.push(`Sets: ${record.name} has no field ${effect.field}.`); continue; }
+    if (field === undefined) {
+      issues.push(`Sets: ${record.name} has no field ${effect.field}.`);
+      continue;
+    }
     if (seen.has(field.key)) issues.push(`Sets: ${field.label} is set twice. Set each field once.`);
     seen.add(field.key);
-    if (!changeableByPeople(field)) issues.push(`Sets: ${field.label} is worked out by the platform, so an action cannot set it.`);
+    if (!changeableByPeople(field))
+      issues.push(
+        `Sets: ${field.label} is worked out by the platform, so an action cannot set it.`,
+      );
     if (field.type === "choice") {
-      const options = (field.settings as { options?: readonly { value: string; label: string }[] }).options ?? [];
+      const options =
+        (field.settings as { options?: readonly { value: string; label: string }[] }).options ?? [];
       const chosen = fixedText(effect.value);
       if (effect.value.kind === "literal" && !options.some((option) => option.value === chosen))
-        issues.push(`Sets: ${chosen ?? "this value"} is not an option of ${field.label}. Choose one of ${options.map((option) => option.label).join(", ")}.`);
+        issues.push(
+          `Sets: ${chosen ?? "this value"} is not an option of ${field.label}. Choose one of ${options.map((option) => option.label).join(", ")}.`,
+        );
     }
   }
   return issues;
 };
 
 /** The one choice field and option the effects set, when the action can own that option. */
-const ownedOption = (record: RecordType, effects: readonly InlineModuleActionEffect[]):
-  Readonly<{ field: string; option: string }> | undefined => {
-  const choices = effects.filter((effect) => record.fields.find((field) => field.key === effect.field)?.type === "choice");
+const ownedOption = (
+  record: RecordType,
+  effects: readonly InlineModuleActionEffect[],
+): Readonly<{ field: string; option: string }> | undefined => {
+  const choices = effects.filter(
+    (effect) => record.fields.find((field) => field.key === effect.field)?.type === "choice",
+  );
   const option = choices.length === 1 ? fixedText(choices[0]!.value) : undefined;
   return option === undefined ? undefined : { field: choices[0]!.field, option };
 };
 
 const parsed = (source: ApplicationSourceDocument, actionKey: string): InlineModuleActionResult => {
   const result = applicationSourceDocumentSchema.safeParse(source);
-  return result.success ? { kind: "changed", source: result.data, actionKey }
-    : { kind: "invalid", issues: result.error.issues.map((issue) => `${issue.message} (${issue.path.join(" / ")})`) };
+  return result.success
+    ? { kind: "changed", source: result.data, actionKey }
+    : {
+        kind: "invalid",
+        issues: result.error.issues.map((issue) => `${issue.message} (${issue.path.join(" / ")})`),
+      };
 };
 
 /**
  * Creates or changes one named action of an owned Module's record type. A new action gets its own
  * named permission, granted only to roles holding every existing record permission across the
- * Application's owned Modules; its permission follows the fields the action reads and sets. Tasks besides
- * setting fields (announcing events, linking records) are kept as they are.
+ * Application's owned Modules; its permission follows the fields the action reads and sets. The ordered tasks and typed inputs are edited in their existing source contract.
  */
 export const saveInlineModuleAction = (
   current: ApplicationSourceDocument,
@@ -132,110 +165,282 @@ export const saveInlineModuleAction = (
   const module = source.body.modules.find((item) => item.key === change.moduleKey);
   const record = module?.record_types.find((item) => item.key === change.recordKey);
   if (module === undefined || record === undefined)
-    return { kind: "invalid", issues: ["The record type is not in this application's modules any more."] };
+    return {
+      kind: "invalid",
+      issues: ["The record type is not in this application's modules any more."],
+    };
   const label = change.label.trim();
   const issues: string[] = [];
-  if (label.length < 1 || label.length > 60) issues.push("Name: give the action a name of at most 60 characters, such as Mark won.");
-  const existing = change.actionKey === undefined ? undefined : module.actions.find((action) => action.key === change.actionKey);
+  if (label.length < 1 || label.length > 60)
+    issues.push("Name: give the action a name of at most 60 characters, such as Mark won.");
+  const existing =
+    change.actionKey === undefined
+      ? undefined
+      : module.actions.find((action) => action.key === change.actionKey);
   if (change.actionKey !== undefined && existing === undefined)
     return { kind: "invalid", issues: ["This action is not in the module any more."] };
   if (existing !== undefined && existing.record_type !== record.key)
     return { kind: "invalid", issues: ["This action belongs to another record type."] };
   if (existing?.protected_operation !== undefined)
-    return { kind: "invalid", issues: ["This action runs a registered operation of the platform, so what it sets is not changed here."] };
-  issues.push(...effectProblems(record, change.effects));
-  const otherTasks = (existing?.tasks ?? []).filter((task) => task.type !== "record.set_fields");
-  if (change.effects.length === 0 && otherTasks.length === 0) issues.push("Sets: choose at least one field the action sets.");
+    return {
+      kind: "invalid",
+      issues: [
+        "This action runs a registered operation of the platform, so what it sets is not changed here.",
+      ],
+    };
+  const effects = change.tasks.flatMap((task) =>
+    task.type === "record.set_fields"
+      ? Object.entries(task.properties.values).map(([field, value]) => ({ field, value }))
+      : [],
+  );
+  const checkValue = (value: FlowValue): void => {
+    const reference = value.kind === "reference" ? value.reference : undefined;
+    if (
+      reference?.source === "input" &&
+      reference.name !== "record" &&
+      !change.inputs.some((input) => input.key === reference.name)
+    )
+      issues.push("Task value: choose an input declared by this action.");
+    if (
+      reference?.source === "trigger_record" &&
+      !record.fields.some((field) => field.key === reference.field)
+    )
+      issues.push("Task value: choose a field of this action's record type.");
+    if (value.kind === "map") Object.values(value.entries).forEach(checkValue);
+    if (value.kind === "array") value.items.forEach(checkValue);
+  };
+  for (const input of change.inputs)
+    if (input.type === "record_reference")
+      for (const reference of input.record_types) {
+        const [owner, key] = reference.split(":");
+        if (
+          !source.body.modules.some(
+            (module) =>
+              module.key === owner && module.record_types.some((record) => record.key === key),
+          ) &&
+          !source.body.uses.some((used) => used.module === owner)
+        )
+          issues.push(`Input ${input.label}: choose a record type in this application.`);
+      }
+  for (const task of change.tasks) {
+    if (task.type === "record.create" || task.type === "record.set_fields")
+      Object.values(task.properties.values).forEach(checkValue);
+    if (task.type === "record.create") {
+      const [owner, key] = task.properties.record_type.split(":");
+      const target = source.body.modules
+        .find((entry) => entry.key === owner)
+        ?.record_types.find((entry) => entry.key === key);
+      if (target === undefined)
+        issues.push("Create record: choose a record type in this application.");
+      else
+        issues.push(
+          ...effectProblems(
+            target,
+            Object.entries(task.properties.values).map(([field, value]) => ({ field, value })),
+          ),
+        );
+    }
+    if (task.type === "record.set_fields")
+      issues.push(
+        ...effectProblems(
+          record,
+          Object.entries(task.properties.values).map(([field, value]) => ({ field, value })),
+        ),
+      );
+    if (
+      task.type === "event.announce" &&
+      !module.events.some(
+        (event) => event.key === task.properties.event && event.record_type === record.key,
+      )
+    )
+      issues.push("Announce event: choose a declared event of this record type.");
+    if (task.type === "record.changes")
+      for (const entry of task.properties.changes) {
+        const target = change.inputs.find((input) => input.key === entry.target_input);
+        if (
+          target?.type !== "record_reference" ||
+          !target.record_types.includes(`${module.key}:${record.key}`)
+        )
+          issues.push("Copy relationships: choose a record input that admits this record type.");
+        if (
+          entry.relationships.some(
+            (key) => !record.relationships.some((relationship) => relationship.key === key),
+          )
+        )
+          issues.push("Copy relationships: choose relationships of this record type.");
+      }
+  }
+  if (new Set(change.inputs.map((input) => input.key)).size !== change.inputs.length)
+    issues.push("Inputs: give each input a unique key.");
+  if (change.tasks.length === 0) issues.push("Tasks: add at least one task.");
   const precondition = change.precondition;
   for (const field of conditionFields(precondition))
-    if (!record.fields.some((candidate) => candidate.key === field)) issues.push(`Runs only when: ${record.name} has no field ${field}.`);
-  const owned = change.ownsChoice ? ownedOption(record, change.effects) : undefined;
+    if (!record.fields.some((candidate) => candidate.key === field))
+      issues.push(`Runs only when: ${record.name} has no field ${field}.`);
+  const owned = change.ownsChoice ? ownedOption(record, effects) : undefined;
   if (change.ownsChoice && owned === undefined)
-    issues.push("Owns the choice: the action must set exactly one choice field to one fixed option to own it.");
+    issues.push(
+      "Owns the choice: the action must set exactly one choice field to one fixed option to own it.",
+    );
   if (owned !== undefined) {
-    const rival = module.actions.find((action) => action !== existing && action.record_type === record.key &&
-      action.sets_choice_field === owned.field && action.sets_choice_option === owned.option);
-    if (rival !== undefined) issues.push(`Owns the choice: ${rival.label} already owns this option. Only one action can own it.`);
+    const rival = module.actions.find(
+      (action) =>
+        action !== existing &&
+        action.record_type === record.key &&
+        action.sets_choice_field === owned.field &&
+        action.sets_choice_option === owned.option,
+    );
+    if (rival !== undefined)
+      issues.push(
+        `Owns the choice: ${rival.label} already owns this option. Only one action can own it.`,
+      );
   }
-  const name = existing === undefined ? undefined : existing.key.slice(existing.key.lastIndexOf(".") + 1);
+  const name =
+    existing === undefined ? undefined : existing.key.slice(existing.key.lastIndexOf(".") + 1);
   const taken = moduleAliases(module);
-  const keys = new Set([...module.actions.map((action) => action.key), ...module.permissions.map((permission) => permission.key)]);
-  const newName = name ?? (() => {
-    const base = nameFrom(label);
-    for (let n = 1; n < 1_000; n += 1) {
-      const candidate = n === 1 ? base : `${base.slice(0, 36)}_${n}`;
-      if (!keys.has(`${module.key}.${record.key}.${candidate}`)) return candidate;
-    }
-    return base;
-  })();
-  if (!builderKeySchema.safeParse(newName).success) issues.push("Name: start the name with a letter, such as Mark won.");
+  const keys = new Set([
+    ...module.actions.map((action) => action.key),
+    ...module.permissions.map((permission) => permission.key),
+  ]);
+  const newName =
+    name ??
+    (() => {
+      const base = nameFrom(label);
+      for (let n = 1; n < 1_000; n += 1) {
+        const candidate = n === 1 ? base : `${base.slice(0, 36)}_${n}`;
+        if (!keys.has(`${module.key}.${record.key}.${candidate}`)) return candidate;
+      }
+      return base;
+    })();
+  if (!builderKeySchema.safeParse(newName).success)
+    issues.push("Name: start the name with a letter, such as Mark won.");
   let permissionKey: string;
   if (change.permission.kind === "existing") {
-    const chosen = module.permissions.find((permission) => permission.key === (change.permission as { key: string }).key);
+    const chosen = module.permissions.find(
+      (permission) => permission.key === (change.permission as { key: string }).key,
+    );
     if (chosen === undefined || chosen.action_kind !== "named" || chosen.record_type !== record.key)
       issues.push(`Permission: choose a named permission of ${record.plural_name}.`);
     permissionKey = chosen?.key ?? "";
-  } else permissionKey = existing?.permission !== undefined && existing.permission === existing.key ? existing.permission
-    : `${module.key}.${record.key}.${newName}`;
+  } else
+    permissionKey =
+      existing?.permission !== undefined && existing.permission === existing.key
+        ? existing.permission
+        : `${module.key}.${record.key}.${newName}`;
   if (issues.length > 0) return { kind: "invalid", issues };
 
   const actionKey = existing?.key ?? `${module.key}.${record.key}.${newName}`;
   // No orphan permissions: an action that moves off its own permission takes it away, unless
   // something else still uses it, which refuses the change with where.
   const ownBefore = module.permissions.find((permission) => permission.key === actionKey);
-  if (change.permission.kind === "existing" && existing !== undefined && existing.permission === actionKey && ownBefore !== undefined) {
+  if (
+    change.permission.kind === "existing" &&
+    existing !== undefined &&
+    existing.permission === actionKey &&
+    ownBefore !== undefined
+  ) {
     const references = permissionReferences(source, module, actionKey, existing);
     if (references.length > 0)
-      return { kind: "referenced", references,
-        issue: `Permission: the action's own permission is still used in ${references.length === 1 ? "one place" : `${references.length} places`}, so it cannot be left behind. Remove those uses first.` };
+      return {
+        kind: "referenced",
+        references,
+        issue: `Permission: the action's own permission is still used in ${references.length === 1 ? "one place" : `${references.length} places`}, so it cannot be left behind. Remove those uses first.`,
+      };
     module.permissions = module.permissions.filter((permission) => permission !== ownBefore);
     for (const role of source.body.roles)
-      (role as { permissions: string[] }).permissions = (role.permissions as string[]).filter((entry) => entry !== actionKey);
+      (role as { permissions: string[] }).permissions = (role.permissions as string[]).filter(
+        (entry) => entry !== actionKey,
+      );
   }
-  const values = Object.fromEntries(change.effects.map((effect) => [effect.field, structuredClone(effect.value)]));
-  const effectTask = { id: uniqueAlias(effectTaskId, new Set(otherTasks.map((task) => task.id))), type: "record.set_fields",
-    properties: { values } } as unknown as ActionTask;
-  const firstEffect = (existing?.tasks ?? []).findIndex((task) => task.type === "record.set_fields");
-  const tasks = change.effects.length === 0 ? otherTasks
-    : firstEffect < 0 ? [effectTask, ...otherTasks]
-      : [...otherTasks.slice(0, firstEffect), effectTask, ...otherTasks.slice(firstEffect)];
   const action = {
+    ...existing,
     id: existing?.id ?? uniqueAlias(`act_${record.key}_${newName}`, taken),
     key: actionKey,
     label,
     record_type: record.key,
     permission: permissionKey,
     shareable: existing?.shareable ?? false,
-    inputs: existing?.inputs ?? [],
+    inputs: structuredClone(change.inputs),
     ...(precondition === undefined ? {} : { precondition: structuredClone(precondition) }),
-    tasks,
-    ...(owned === undefined ? {} : { sets_choice_field: owned.field, sets_choice_option: owned.option }),
+    tasks: structuredClone(change.tasks),
+    ...(owned === undefined
+      ? {}
+      : { sets_choice_field: owned.field, sets_choice_option: owned.option }),
   } as unknown as ModuleAction;
+  if (precondition === undefined) delete action.precondition;
+  if (owned === undefined) {
+    delete action.sets_choice_field;
+    delete action.sets_choice_option;
+  }
   if (existing === undefined) {
     module.actions.push(action);
     (record.custom_actions as string[]).push(action.id);
   } else module.actions[module.actions.indexOf(existing)] = action;
 
   // The action's own permission reads what its condition reads and changes what it sets.
-  const readable = [...new Set([...conditionFields(precondition), ...change.effects.map((effect) => effect.field)])];
-  const changeable = [...new Set(change.effects.map((effect) => effect.field))];
+  const readFields = new Set([
+    ...conditionFields(precondition),
+    ...effects.map((effect) => effect.field),
+  ]);
+  const collectReads = (value: unknown): void => {
+    if (value === null || typeof value !== "object") return;
+    if (
+      "source" in value &&
+      value.source === "trigger_record" &&
+      "field" in value &&
+      typeof value.field === "string"
+    )
+      readFields.add(value.field);
+    for (const entry of Object.values(value)) collectReads(entry);
+  };
+  collectReads(change.tasks);
+  for (const task of change.tasks) {
+    if (task.type === "event.announce")
+      for (const key of module.events.find((event) => event.key === task.properties.event)
+        ?.carries ?? [])
+        readFields.add(key);
+    if (task.type === "record.changes")
+      for (const item of task.properties.changes)
+        for (const key of item.relationships) {
+          const field = record.relationships.find(
+            (relationship) => relationship.key === key,
+          )?.from_field;
+          if (field !== undefined) readFields.add(field);
+        }
+  }
+  const readable = [...readFields];
+  const changeable = [...new Set(effects.map((effect) => effect.field))];
   const own = module.permissions.find((permission) => permission.key === actionKey);
   if (change.permission.kind === "own") {
     const policy = { readable_fields: readable, changeable_fields: changeable };
     if (own === undefined) {
       const fullAccessRoles = fullRecordAccessRoleKeys(current);
       module.permissions.push({
-        id: uniqueAlias(`perm_${record.key}_${newName}`, taken), key: actionKey,
+        id: uniqueAlias(`perm_${record.key}_${newName}`, taken),
+        key: actionKey,
         label: `${label} (${record.name})`.slice(0, 60),
-        description: `Allows the ${label} action on ${record.plural_name.toLowerCase()}.`.slice(0, 1_000),
-        record_type: record.key, action_kind: "named", named_action: newName, administrative: false,
-        record_scope: { routes: [{ kind: "all_records" }] }, field_policy: policy,
+        description: `Allows the ${label} action on ${record.plural_name.toLowerCase()}.`.slice(
+          0,
+          1_000,
+        ),
+        record_type: record.key,
+        action_kind: "named",
+        named_action: newName,
+        administrative: false,
+        record_scope: { routes: [{ kind: "all_records" }] },
+        field_policy: policy,
       } as unknown as ModulePermission);
       for (const role of source.body.roles) {
         const entries = role.permissions as string[];
-        if (fullAccessRoles.has(role.key) && !entries.includes("*") && !entries.includes(actionKey)) entries.push(actionKey);
+        if (fullAccessRoles.has(role.key) && !entries.includes("*") && !entries.includes(actionKey))
+          entries.push(actionKey);
       }
-    } else (own as { field_policy?: unknown }).field_policy = policy;
+    } else if (
+      existing === undefined ||
+      JSON.stringify(existing.tasks) !== JSON.stringify(change.tasks) ||
+      JSON.stringify(existing.precondition) !== JSON.stringify(precondition)
+    )
+      (own as { field_policy?: unknown }).field_policy = policy;
   }
   return parsed(source, actionKey);
 };
@@ -244,12 +449,23 @@ export const saveInlineModuleAction = (
  * Every place that uses an action's own permission besides the access groups that hold it, the
  * module's permissions and the action itself, which all let it go with the permission.
  */
-const permissionReferences = (source: ApplicationSourceDocument, module: InlineModule, key: string,
-  action: ModuleAction): readonly ApplicationUsePlace[] => {
+const permissionReferences = (
+  source: ApplicationSourceDocument,
+  module: InlineModule,
+  key: string,
+  action: ModuleAction,
+): readonly ApplicationUsePlace[] => {
   const moduleIndex = source.body.modules.indexOf(module);
   const actionIndex = module.actions.indexOf(action);
-  return applicationUses(source, { kind: "permission", permissionKey: key }, (path) => path[1] === "roles" ||
-    (path[1] === "modules" && path[2] === moduleIndex && (path[3] === "permissions" || (path[3] === "actions" && path[4] === actionIndex))));
+  return applicationUses(
+    source,
+    { kind: "permission", permissionKey: key },
+    (path) =>
+      path[1] === "roles" ||
+      (path[1] === "modules" &&
+        path[2] === moduleIndex &&
+        (path[3] === "permissions" || (path[3] === "actions" && path[4] === actionIndex))),
+  );
 };
 
 /**
@@ -257,22 +473,31 @@ const permissionReferences = (source: ApplicationSourceDocument, module: InlineM
  * runs it. Its own permission goes with it, from the module and from every access group.
  */
 export const deleteInlineModuleAction = (
-  current: ApplicationSourceDocument, moduleKey: string, actionKey: string,
-): InlineModuleActionResult | Readonly<{ kind: "referenced"; references: readonly ApplicationUsePlace[] }> => {
+  current: ApplicationSourceDocument,
+  moduleKey: string,
+  actionKey: string,
+):
+  | InlineModuleActionResult
+  | Readonly<{ kind: "referenced"; references: readonly ApplicationUsePlace[] }> => {
   const references = applicationUses(current, { kind: "action", moduleKey, actionKey });
   if (references.length > 0) return { kind: "referenced", references };
   const source = structuredClone(current);
   const module = source.body.modules.find((item) => item.key === moduleKey);
   const action = module?.actions.find((item) => item.key === actionKey);
-  if (module === undefined || action === undefined) return { kind: "invalid", issues: ["This action is not in the module any more."] };
+  if (module === undefined || action === undefined)
+    return { kind: "invalid", issues: ["This action is not in the module any more."] };
   module.actions = module.actions.filter((item) => item !== action);
   for (const record of module.record_types)
-    (record as { custom_actions: string[] }).custom_actions = (record.custom_actions as string[]).filter((id) => id !== action.id);
+    (record as { custom_actions: string[] }).custom_actions = (
+      record.custom_actions as string[]
+    ).filter((id) => id !== action.id);
   const ownPermission = action.permission === actionKey;
   if (ownPermission) {
     module.permissions = module.permissions.filter((permission) => permission.key !== actionKey);
     for (const role of source.body.roles)
-      (role as { permissions: string[] }).permissions = (role.permissions as string[]).filter((entry) => entry !== actionKey);
+      (role as { permissions: string[] }).permissions = (role.permissions as string[]).filter(
+        (entry) => entry !== actionKey,
+      );
   }
   return parsed(source, actionKey);
 };

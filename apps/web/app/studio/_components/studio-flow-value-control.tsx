@@ -5,7 +5,7 @@ import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
 import { NativeSelect, NativeSelectOptGroup, NativeSelectOption } from "@vortex/ui/components/native-select";
 import { Textarea } from "@vortex/ui/components/textarea";
-import type { FlowLiteral } from "@vortex/platform/schema";
+import type { FlowLiteral, FlowReference } from "@vortex/platform/schema";
 import {
   describeStudioFlowValue, studioFixedLiteral, studioFixedLiteralType, studioFlowReferenceToken,
   type StudioFlowReferenceChoice, type StudioFlowValueSource,
@@ -33,8 +33,8 @@ const literalText = (literal: FlowLiteral): string =>
   Array.isArray(literal.value) ? literal.value.join(", ") : typeof literal.value === "string" ? literal.value
     : literal.value === null ? "" : String(literal.value);
 
-function FixedInput({ id, literal, options, long, disabled, onChange }: Readonly<{
-  id: string; literal: FlowLiteral; options: readonly Readonly<{ value: string; label: string }>[]; long: boolean;
+function FixedInput({ id, label, literal, options, long, disabled, onChange }: Readonly<{
+  id: string; label: string; literal: FlowLiteral; options: readonly Readonly<{ value: string; label: string }>[]; long: boolean;
   disabled: boolean; onChange: (literal: FlowLiteral) => void;
 }>) {
   const current = literalText(literal);
@@ -45,7 +45,7 @@ function FixedInput({ id, literal, options, long, disabled, onChange }: Readonly
     return <div className="flex items-center gap-2"><Checkbox id={id} disabled={disabled} checked={literal.value === true}
       onCheckedChange={(checked) => onChange({ type: "yes_no", value: checked === true })} /><Label htmlFor={id}>Yes</Label></div>;
   if (literal.type === "choice" && options.length > 0)
-    return <NativeSelect id={id} className="w-full" disabled={disabled} value={current}
+    return <NativeSelect id={id} aria-label={`${label} value`} className="w-full" disabled={disabled} value={current}
       aria-invalid={!options.some((option) => option.value === current)}
       onChange={(event) => onChange({ type: "choice", value: event.target.value })}>
       {options.some((option) => option.value === current) ? null : <NativeSelectOption value={current}>{`${current} (not an option)`}</NativeSelectOption>}
@@ -60,13 +60,13 @@ function FixedInput({ id, literal, options, long, disabled, onChange }: Readonly
   const hint = literal.type === "date" ? "2026-01-31" : literal.type === "date_time" ? "2026-01-31T09:30:00Z"
     : literal.type === "several_choices" ? "first, second" : undefined;
   return long
-    ? <Textarea id={id} disabled={disabled} maxLength={2_000} value={draft} onChange={(event) => change(event.target.value)} />
-    : <Input id={id} disabled={disabled} value={draft} placeholder={hint}
+    ? <Textarea id={id} aria-label={`${label} value`} disabled={disabled} maxLength={2_000} value={draft} onChange={(event) => change(event.target.value)} />
+    : <Input id={id} aria-label={`${label} value`} disabled={disabled} value={draft} placeholder={hint}
         inputMode={literal.type === "whole_number" || literal.type === "decimal_number" ? "decimal" : undefined}
         onChange={(event) => change(event.target.value)} />;
 }
 
-export function StudioFlowValueControl({ id, label, value, valueType, options = [], references, unset, long = false,
+export function StudioFlowValueControl({ id, label, value, valueType, options = [], references, referenceCompatible, unset, long = false,
   disabled, onChange }: Readonly<{
   id: string;
   label: string;
@@ -76,6 +76,8 @@ export function StudioFlowValueControl({ id, label, value, valueType, options = 
   /** The options of a choice, when the value sets one. */
   options?: readonly Readonly<{ value: string; label: string }>[];
   references: readonly StudioFlowReferenceChoice[];
+  /** Field-aware compatibility, when the owning contract supplies it. */
+  referenceCompatible?: (reference: FlowReference) => boolean;
   /** The words for leaving it unset, when it may be left unset. */
   unset?: string;
   long?: boolean;
@@ -83,7 +85,7 @@ export function StudioFlowValueControl({ id, label, value, valueType, options = 
   onChange: (value: StudioFlowValueSource | null) => void;
 }>) {
   const fixedType = options.length > 0 ? "choice" : studioFixedLiteralType(valueType);
-  const offered = references.filter((choice) => valueType === undefined || choice.type === undefined || choice.type === "json" ||
+  const offered = references.filter((choice) => referenceCompatible !== undefined ? referenceCompatible(choice.reference) : valueType === undefined || choice.type === undefined || choice.type === "json" ||
     choice.type === valueType || (valueType === "text" && (choice.type === "choice" || choice.type === "formatted_text")) ||
     (valueType === "choice" && choice.type === "text") || valueType === "json");
   const token = value === null ? "" : value.kind === "fixed" ? "fixed" : value.kind === "kept" ? "kept" : studioFlowReferenceToken(value.reference);
@@ -111,7 +113,7 @@ export function StudioFlowValueControl({ id, label, value, valueType, options = 
         </NativeSelectOptGroup>;
       })}
     </NativeSelect>
-    {value?.kind === "fixed" && <FixedInput id={id} literal={value.literal} options={options} long={long} disabled={disabled}
+    {value?.kind === "fixed" && <FixedInput id={id} label={label} literal={value.literal} options={options} long={long} disabled={disabled}
       onChange={(literal) => onChange({ kind: "fixed", literal })} />}
     {!known && <p role="alert" className="text-xs text-destructive">This step cannot read that value here any more. Choose another.</p>}
   </div>;
