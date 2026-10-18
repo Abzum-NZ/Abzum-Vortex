@@ -237,6 +237,7 @@ const propertyLabels: Readonly<Record<string, string>> = {
   action_inputs: "Inputs of the action it runs", page: "Page", parameters: "Page parameters", operation: "Operation",
   inputs: "Inputs", form: "Form", message: "Message", tone: "Tone", title: "Title", component: "Component",
   query: "Query", flow: "Flow", formula: "Calculation", variable: "Variable", value: "Value", field: "Field",
+  details: "What it covers (list of lines)", choice: "Opt-in that goes with a yes", confirm_label: "Confirm button",
 };
 
 const controlFor = (type: FlowTaskPropertyType): StudioFlowPropertyControl | undefined => {
