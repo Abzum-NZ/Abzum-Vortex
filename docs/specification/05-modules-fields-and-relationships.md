@@ -182,11 +182,9 @@ claim that Record execution is already delivered.
   neither existence nor access.
 - A whole-number step is measured from the declared minimum, otherwise zero.
   Neither the field default nor an edited value changes that origin.
-- Text format keys initially are `email_address`, `web_address` and `uuid`. They
-  select the same email-address or HTTPS-address validation used by those field
-  types (HTTPS scheme, no embedded credentials, at most 2,048 characters), or
-  UUID syntax. Omission means ordinary
-  text. Unknown keys are not executable patterns or guessed validation rules.
+- Text has one optional format, `uuid`, for UUID syntax. Email addresses and web
+  addresses use their dedicated field types. Omission means ordinary text.
+  Unknown keys are not executable patterns or guessed validation rules.
 
 Every table column has settings for its declared scalar type, using the same
 meaning as an ordinary field. Choice columns therefore declare their options,
