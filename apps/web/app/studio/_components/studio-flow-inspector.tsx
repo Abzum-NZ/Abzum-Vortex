@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@vortex/ui";
-import { Button } from "@vortex/ui/components/button";
 
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { describeFailure, type SourceFlow } from "@vortex/platform/schema";
