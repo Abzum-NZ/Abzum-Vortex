@@ -136,8 +136,6 @@ const formulaTypeOf = (field: ModuleField): string => {
     case "link":
     case "link_to_one_of_several":
       return "record_reference";
-    case "link_to_person":
-      return "organization_account_reference";
     case "table":
     case "attachment":
       return "json";

@@ -4,10 +4,7 @@ import type { IdentitySessionResolution } from "@vortex/platform/schema";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getIdentityJourneyConfiguration } from "./authority-configuration";
-import {
-  serializeApplicationHomeContinuation,
-  type ApplicationHomeContinuation,
-} from "./application-home-continuation";
+import { serializeSignInContinuation, type SignInContinuation } from "./sign-in-continuation";
 import { issueSessionCleanupProof } from "./session-cleanup-proof";
 import { identitySessionProxyHeader } from "./session-request-state";
 
@@ -15,20 +12,18 @@ import { identitySessionProxyHeader } from "./session-request-state";
 const SESSION_ENDED_PATH = "/auth/session-ended";
 const sessionEndedDestination = "/auth/sign-in?status=session-ended";
 
-const directSignInDestination = (applicationHome?: ApplicationHomeContinuation): string => {
-  if (applicationHome === undefined) return sessionEndedDestination;
+const directSignInDestination = (continuation?: SignInContinuation): string => {
+  if (continuation === undefined) return sessionEndedDestination;
   const query = new URLSearchParams({ status: "session-ended" });
-  query.set("applicationHome", serializeApplicationHomeContinuation(applicationHome));
+  query.set("continuation", serializeSignInContinuation(continuation));
   return `/auth/sign-in?${query.toString()}`;
 };
 
 /** Carry first-party evidence across redirects, including a cross-site initiated redirect chain. */
-export const redirectToSessionEnd = async (
-  applicationHome?: ApplicationHomeContinuation,
-): Promise<never> => {
+export const redirectToSessionEnd = async (continuation?: SignInContinuation): Promise<never> => {
   // The proxy has already cleared an invalid cookie family on its response.
   if ((await headers()).get(identitySessionProxyHeader) === "invalid")
-    redirect(directSignInDestination(applicationHome));
+    redirect(directSignInDestination(continuation));
   let proof: string | undefined;
   try {
     const siteUrl = getIdentityJourneyConfiguration().siteUrl;
@@ -39,12 +34,12 @@ export const redirectToSessionEnd = async (
   }
   if (proof !== undefined) {
     const query = new URLSearchParams({ proof });
-    if (applicationHome !== undefined)
-      query.set("applicationHome", serializeApplicationHomeContinuation(applicationHome));
+    if (continuation !== undefined)
+      query.set("continuation", serializeSignInContinuation(continuation));
     redirect(`${SESSION_ENDED_PATH}?${query.toString()}`);
   }
   // No session cookie remains to clear, or configuration is unavailable.
-  redirect(directSignInDestination(applicationHome));
+  redirect(directSignInDestination(continuation));
 };
 
 /** The identity-session results a signed-in surface continues with. */
@@ -63,8 +58,8 @@ type ContinuingIdentitySession = Extract<
  */
 export const continueSessionOrEnd = async (
   result: IdentitySessionResolution,
-  applicationHome?: ApplicationHomeContinuation,
+  continuation?: SignInContinuation,
 ): Promise<ContinuingIdentitySession> => {
   if (result.kind === "active" || result.kind === "temporarily_unavailable") return result;
-  return redirectToSessionEnd(applicationHome);
+  return redirectToSessionEnd(continuation);
 };

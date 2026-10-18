@@ -62,7 +62,6 @@ const directSourceKeyMap: Readonly<Record<string, string>> = Object.freeze({
   connection_type: "connectionTypeId",
   activity: "activityKey",
   application_root_required: "applicationRootIdRequired",
-  legacy_person_field: "legacyPersonFieldId",
   permission: "permissionKey",
   permission_alternatives: "permissionKeys",
   required_permission: "requiredPermissionId",

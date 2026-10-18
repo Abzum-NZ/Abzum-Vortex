@@ -127,6 +127,7 @@ const loadActionPage = async (addressCandidate: unknown) => {
     session: identity.session,
     selection,
     model: loaded.model,
+    shells: loaded.shells,
   };
 };
 
@@ -149,7 +150,7 @@ const requestMetadata = async (loaded: Awaited<ReturnType<typeof loadActionPage>
   if (authority.value === undefined) return { kind: "unavailable" as const };
   const visiblePlacementIds = getGuidedFormVisiblePlacementIds(
     loaded.model.page,
-    loaded.model.shells,
+    loaded.shells,
   );
   if (visiblePlacementIds === undefined) return { kind: "unavailable" as const };
   const steps = authority.value.steps.map((step) => ({
