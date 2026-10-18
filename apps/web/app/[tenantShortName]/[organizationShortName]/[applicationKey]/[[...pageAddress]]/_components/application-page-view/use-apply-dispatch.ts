@@ -73,10 +73,9 @@ export function useApplyDispatch({
         resultNotice: Notice,
         refusalFeedback?: Extract<FormFlowFeedback, { kind: "refusal" }>,
       ): void => {
-        if (formPlacementId === undefined) {
-          setNotice(resultNotice);
-        } else {
-          setNotice(undefined);
+        // A refusal must remain visible after a flow's form dialog has closed.
+        setNotice(formPlacementId === undefined || resultNotice.tone === "problem" ? resultNotice : undefined);
+        if (formPlacementId !== undefined) {
           setFormFeedback((current) => ({
             ...current,
             [formPlacementId]: refusalFeedback ?? {
