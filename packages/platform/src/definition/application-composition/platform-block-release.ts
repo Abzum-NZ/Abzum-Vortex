@@ -14,6 +14,7 @@ import { deterministicDependencyList, iconKeySchema } from "./shared";
 import {
   type BlockPropertySchemaContract,
   type ComponentSettingValue,
+  blockPropertyVisibilityIssues,
   blockPropertySchema,
 } from "./block-property-schema";
 import { customComponentReleaseSchema } from "./custom-components";
@@ -236,6 +237,18 @@ export const platformBlockReleaseSchema = z
         path: ["derivedProperties"],
         message: "A derived property key cannot repeat another property key",
       });
+    for (const issue of blockPropertyVisibilityIssues(releaseSettingDeclarations(value))) {
+      const [index, ...propertyPath] = issue.path;
+      const declarationPath =
+        typeof index === "number" && index >= value.properties.length
+          ? ["derivedProperties", index - value.properties.length]
+          : ["properties", index];
+      context.addIssue({
+        code: "custom",
+        path: [...declarationPath, ...propertyPath],
+        message: issue.message,
+      });
+    }
     if (new Set(value.slots.map((slot) => slot.key)).size !== value.slots.length)
       context.addIssue({ code: "custom", path: ["slots"], message: "Slot keys must be unique" });
     // An authored item carries its settings directly on its props, beside its identity (`id`),
