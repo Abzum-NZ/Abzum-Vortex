@@ -573,6 +573,8 @@ export function useStudioDataTab({
   const [creating, setCreating] = useState(false);
   const selection = isStudioDataSelection(draft.selected) ? draft.selected : null;
   const current = selection !== null && selectionExists(modules, selection) ? selection : null;
+  // Reference links select through the workspace, outside this tab's navigator.
+  const showingSearch = searchOpen && current === null;
 
   const recordTypes = useMemo(
     () => [
@@ -624,7 +626,7 @@ export function useStudioDataTab({
       onSelect={select}
       onCreate={() => setCreating(true)}
       disabled={disabled}
-      searchSelected={searchOpen}
+      searchSelected={showingSearch}
       onSearch={() => {
         setSearchOpen(true);
         setAdding(null);
@@ -632,7 +634,7 @@ export function useStudioDataTab({
       }}
     />
   );
-  const centre = searchOpen ? (
+  const centre = showingSearch ? (
     <div className="mx-auto w-full max-w-4xl space-y-6 px-8 py-6">
       <h2 className="text-xl font-semibold tracking-tight">Search settings</h2>
       <StudioSearchOverview
@@ -867,6 +869,6 @@ export function useStudioDataTab({
     centre,
     inspector,
     dialog,
-    title: searchOpen ? "Search settings" : describeSelection(modules, current),
+    title: showingSearch ? "Search settings" : describeSelection(modules, current),
   };
 }
