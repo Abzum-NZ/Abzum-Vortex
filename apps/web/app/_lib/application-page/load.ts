@@ -81,6 +81,7 @@ import {
   isLinkInputPlacement,
 } from "./placement-helpers";
 import { isApplicationLauncherPlacement, logPlacementFailure } from "./query-helpers";
+import { projectAttachmentInputs } from "./attachment-inputs";
 import { projectEditField } from "./reference-choice";
 import { projectInitialLinkInputs, titleLinkInputs } from "./link-input";
 import { projectPlacementRecordTypes, projectFlowBindingTargets } from "./flow-bindings";
@@ -958,6 +959,17 @@ const loadApplicationPageJoined = async (
     if (reason !== undefined) data[placementId] = { status: "disabled", reason };
   }
 
+  await projectAttachmentInputs({
+    placements,
+    context,
+    address,
+    session,
+    data,
+    ...((subjectRecordType ?? formRecordType) === undefined
+      ? {}
+      : { recordTypeId: String((subjectRecordType ?? formRecordType)!.recordTypeId) }),
+    ...(subject === undefined ? {} : { recordId: subject.recordId }),
+  });
   if (subjectUnreadable) return { kind: "unavailable" };
   if (typeof page.accessVersion !== "number" || !Number.isSafeInteger(page.accessVersion))
     throw new Error("APPLICATION_PAGE_ACCESS_VERSION_UNAVAILABLE");

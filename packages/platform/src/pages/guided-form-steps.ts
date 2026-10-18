@@ -951,31 +951,37 @@ export const guidedFormInputData = (
                 sameId(release.blockId, blockId),
               )?.[0];
           const kind =
-            control === "table"
-              ? "table_input"
-              : control === "text"
-                ? "text_input"
-                : control === "rich_text"
-                  ? "rich_text_input"
-                  : control === "number"
-                    ? "number_input"
-                    : control === "boolean"
-                      ? "boolean_input"
-                      : control === "date"
-                        ? "date_input"
-                        : control === "date_time"
-                          ? "date_time_input"
-                          : control === "choice"
-                            ? "choice_input"
-                            : control === "several_choices"
-                              ? "several_choices_input"
-                              : control === "link"
-                                ? "link_input"
-                                : undefined;
+            control === "attachment"
+              ? "attachment_input"
+              : control === "table"
+                ? "table_input"
+                : control === "text"
+                  ? "text_input"
+                  : control === "rich_text"
+                    ? "rich_text_input"
+                    : control === "number"
+                      ? "number_input"
+                      : control === "boolean"
+                        ? "boolean_input"
+                        : control === "date"
+                          ? "date_input"
+                          : control === "date_time"
+                            ? "date_time_input"
+                            : control === "choice"
+                              ? "choice_input"
+                              : control === "several_choices"
+                                ? "several_choices_input"
+                                : control === "link"
+                                  ? "link_input"
+                                  : undefined;
           if (kind !== undefined) {
             let displayed: JsonValue = value;
             let usable = true;
-            if (control === "table") {
+            if (control === "attachment") {
+              usable =
+                value === null || moduleFieldValueSchemas.attachment.safeParse(value).success;
+              if (usable) displayed = value ?? [];
+            } else if (control === "table") {
               usable = value === null || moduleFieldValueSchemas.table.safeParse(value).success;
               if (usable) displayed = value ?? [];
             } else if (control === "text") {
@@ -1061,6 +1067,9 @@ export const guidedFormInputData = (
                 values: {
                   kind,
                   value: displayed,
+                  ...(kind === "attachment_input"
+                    ? { files: [], uploadUrl: "/api/files/upload?" }
+                    : {}),
                   ...(kind === "date_time_input" ? dateTimeZones : {}),
                 },
               };
