@@ -37,6 +37,7 @@ import {
   permissionRecordScopeSchema,
 } from "../access/permissions";
 import { moduleSourceFieldSchema } from "./module-source-fields";
+import { recordTitleFieldEligible } from "./record-title-field";
 import { moduleSourceActionInputSchema } from "./module-source-action-inputs";
 import {
   maximumPipelineStages,
@@ -462,6 +463,10 @@ const moduleSourceRecordTypeSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    const title = value.fields.find((field) => field.key === value.title_field);
+    if (title === undefined || !recordTitleFieldEligible(title))
+      context.addIssue({ code: "custom", path: ["title_field"],
+        message: "Title field must be an existing text, number, choice or date field, or a stored calculation with one of those results" });
     const pipelineKeys = new Set<string>();
     const stageFields = new Set<string>();
     for (const [index, pipeline] of value.pipelines.entries()) {

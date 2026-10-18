@@ -2407,6 +2407,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "detail_crm_company",
+                    "heading_source": "title",
                     "detail_fields": [
                       {
                         "field": "vortex.crm.organisations:company.company_number",
@@ -2740,6 +2741,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "detail_crm_contact",
+                    "heading_source": "title",
                     "detail_fields": [
                       {
                         "field": "vortex.crm.people:contact.contact_number",
@@ -2854,6 +2856,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "detail_crm_lead",
+                    "heading_source": "title",
                     "detail_fields": [
                       {
                         "field": "vortex.crm.people:lead.lead_number",
@@ -2995,6 +2998,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "detail_crm_opportunity",
+                    "heading_source": "title",
                     "detail_fields": [
                       {
                         "field": "vortex.crm.opportunities:opportunity.opportunity_number",
@@ -3164,6 +3168,7 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "detail_crm_activity",
+                    "heading_source": "title",
                     "detail_fields": [
                       {
                         "field": "vortex.crm.activities:activity.subject",

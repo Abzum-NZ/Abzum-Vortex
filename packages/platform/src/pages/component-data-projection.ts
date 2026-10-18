@@ -126,6 +126,7 @@ export type ProjectedRecordDetailValues = Readonly<{
   kind: "record_detail";
   recordId: string;
   fields: readonly Readonly<{ key: string; label: string; value: ProjectedCellValue }>[];
+  heading?: ProjectedCellValue;
 }>;
 
 /**
@@ -450,7 +451,14 @@ export const projectRecordDetailData = (
             ),
     });
   }
+  const headingValue = contract.headingField === undefined || !isReadable(contract.headingField, input)
+    ? undefined : valueOf(row, contract.headingField);
+  const heading = contract.headingField === undefined ? undefined : headingValue === undefined ? RESTRICTED_CELL
+    : projectCell(headingValue.value, "automatic", input.fieldChoiceLabels?.[contract.headingField.toLowerCase()],
+      input.fieldDateTypes?.[contract.headingField.toLowerCase()], input.recordLinks,
+      input.fieldLinkTypes?.[contract.headingField.toLowerCase()]);
   return fields.length === 0
     ? { status: "empty" }
-    : { status: "ready", values: { kind: "record_detail", recordId: row.recordId, fields } };
+    : { status: "ready", values: { kind: "record_detail", recordId: row.recordId, fields,
+      ...(heading === undefined ? {} : { heading }) } };
 };

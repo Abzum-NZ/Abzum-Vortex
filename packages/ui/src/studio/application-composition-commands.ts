@@ -32,6 +32,7 @@ import {
   type SourceSlotOrder,
 } from "@vortex/platform/schema";
 import { createStudioBoardQuery, studioBoardSourceProblem } from "./board-source";
+import { studioStarterSlots } from "./composition-starters";
 import { applyStudioFlowCreate } from "./application-flow-create";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
 import { studioPaletteChoices, studioQueryOffered, studioReleaseReadsQuery, type StudioPaletteChoice } from "./contextual-palette";
@@ -40,6 +41,7 @@ import {
   freshBlockName,
   StoredCompositionRefusal,
   storedItemRelease,
+  syncStoredBlockDependencies,
   validateStoredShell,
   validateStoredZone,
 } from "./stored-composition";
@@ -660,7 +662,9 @@ const applyAdd = (current: StudioCompositionContext, command: unknown): StudioCo
     : studioBoardSourceProblem(source, settings, query, pipelineSetup);
   if (boardProblem !== undefined) return { kind: "refused", reason: `${choice.name} can't be added. ${boardProblem}.` };
 
-  const alias = freshBlockName(release.key.split(".").at(-1) ?? "block", sourceNames(source));
+  const taken = sourceNames(source);
+  const alias = freshBlockName(release.key.split(".").at(-1) ?? "block", taken);
+  taken.add(alias);
   const item = { type: release.rendererKey, props: {
     id: alias,
     ...plainSettings(settings),
@@ -668,6 +672,7 @@ const applyAdd = (current: StudioCompositionContext, command: unknown): StudioCo
     ...Object.fromEntries(release.slots.flatMap((slot) => repeatableSlotItemIdentities(slot, settings)
       .filter((identity) => isRepeatableSlotIdentity(slot.key, identity))
       .map((identity) => [repeatableSlotKey(slot.key, identity), []]))),
+    ...studioStarterSlots(catalogue, release, taken),
     vortex: {
       block: { block_id: release.blockId, release_version: release.releaseVersion },
       ...(query === null ? {} : { query }),
@@ -693,20 +698,13 @@ const applyAdd = (current: StudioCompositionContext, command: unknown): StudioCo
       return { kind: "refused", reason: `${choice.name} can't go into ${place.target.label}. ${error.message}.` };
     throw error;
   }
-  const dependencies = source.body.platform_block_dependencies;
-  if (!dependencies.some((dependency) => dependency.block_id === release.blockId &&
-    dependency.release_version === release.releaseVersion)) {
-    // The authoring source pins the release identity; publication records its content hash.
-    dependencies.push({ kind: "platform_block", block_id: release.blockId, release_version: release.releaseVersion });
-    dependencies.sort((left, right) => left.block_id < right.block_id ? -1 : left.block_id > right.block_id ? 1
-      : left.release_version < right.release_version ? -1 : left.release_version > right.release_version ? 1 : 0);
-  }
+  syncStoredBlockDependencies(source);
   if (release.supportedEvents.includes("card_moved")) {
     if (pipelineSetup === undefined) return { kind: "invalid" };
     const stage = settings[pipelineSetup.fieldProperty];
     if (stage?.kind !== "field_reference") return { kind: "invalid" };
     const moved = applyStudioFlowCreate(source, { kind: "action", controlAlias: alias,
-      name: pipelineSetup.moveFlowName, recordType: stage.field.slice(0, stage.field.lastIndexOf(".")), event: "card_moved" });
+      name: pipelineSetup.moveFlowName, recordType: stage.field.slice(0, stage.field.lastIndexOf(".")), event: "card_moved" }, null);
     if (moved.kind !== "applied") return moved;
     return { kind: "applied", source: moved.source, placementAlias: alias };
   }
