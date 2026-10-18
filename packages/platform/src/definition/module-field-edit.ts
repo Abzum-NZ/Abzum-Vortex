@@ -1,3 +1,4 @@
+import { canonicalJson } from "./canonical-json";
 import { fieldTypeKeys } from "../catalogue/catalogues";
 import {
   applicationSourceDocumentSchema,
@@ -236,7 +237,7 @@ export const changeInlineModuleField = (
         Object.fromEntries(Object.entries(value).filter(([key]) => change.type !== "link" || key !== "reverse_name"));
       const fixed = [
         ...(field.type === change.type ? [] : ["type"]),
-        ...(JSON.stringify(storedSettings(field.settings as Readonly<Record<string, unknown>>)) === JSON.stringify(storedSettings(settings)) || field.type !== change.type ? [] : ["settings"]),
+        ...(canonicalJson(storedSettings(field.settings as Readonly<Record<string, unknown>>)) === canonicalJson(storedSettings(settings)) || field.type !== change.type ? [] : ["settings"]),
         ...(["required", "unique", "filterable", "sortable"] as const).filter((key) => field[key] !== change[key]),
         ...(field.type === change.type && record.relationships.some((relationship) =>
           relationship.from_field === field.key && relationship.cardinality !== change.cardinality) ? ["number of links"] : []),

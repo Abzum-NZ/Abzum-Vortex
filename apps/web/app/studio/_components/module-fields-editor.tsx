@@ -121,7 +121,6 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
   });
   const startSettings = (type: ModuleFieldType): Record<string, unknown> => {
     const start = starterModuleFieldSettings(type, {
-      fieldKey: deriveFieldKey(existing?.label ?? "field", new Set()) ?? "field", recordKey,
       recordTypes: recordTypes.map((item) => item.key), titleField: record?.title_field ?? "",
       relationships: totalLinks.map((item) => item.reference),
     });
@@ -315,7 +314,8 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
 
   const shapeLocked = published;
   const shapeHint = shapeLocked
-    ? "This field is in a published version, so its stored shape is fixed: type, settings, and the required, unique, filter and sort choices. Its label, help text and default can still change."
+    ? "This field is in a published version, so its stored shape is fixed: type, settings, and the required, unique, filter and sort choices. Its label, help text and default can still change." +
+      (form.type === "link" ? " The name of the link back can also change." : "")
     : undefined;
   const flag = (key: "required" | "unique" | "filterable" | "sortable", text: string, extraDisabled = false) =>
     <div className="flex items-center gap-2">

@@ -249,7 +249,7 @@ export const writeModuleFieldSettings = (
 /** The settings a field of a type starts with when it is added or its type changes. */
 export const starterModuleFieldSettings = (
   type: ModuleFieldType,
-  start: Readonly<{ fieldKey: string; recordKey: string; recordTypes: readonly string[]; titleField: string;
+  start: Readonly<{ recordTypes: readonly string[]; titleField: string;
     relationships: readonly string[] }>,
 ): Record<string, unknown> => {
   switch (type) {
