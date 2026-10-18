@@ -788,15 +788,23 @@ export const assertNoCycle = async (
   }
   const visited = new Set<string>();
   const visiting = new Set<string>();
-  const visit = (key: string): void => {
-    if (visiting.has(key)) refuse("DEFINITION_DEPENDENCY_CYCLE");
-    if (visited.has(key)) return;
-    visiting.add(key);
-    for (const child of edges.get(key) ?? []) visit(child);
-    visiting.delete(key);
-    visited.add(key);
-  };
-  for (const module of modules) visit(reference(module));
+  for (const module of modules) {
+    const stack = [{ key: reference(module), exiting: false }];
+    while (stack.length > 0) {
+      const entry = stack.pop()!;
+      if (entry.exiting) {
+        visiting.delete(entry.key);
+        visited.add(entry.key);
+        continue;
+      }
+      if (visiting.has(entry.key)) refuse("DEFINITION_DEPENDENCY_CYCLE");
+      if (visited.has(entry.key)) continue;
+      visiting.add(entry.key);
+      stack.push({ key: entry.key, exiting: true });
+      for (const child of [...(edges.get(entry.key) ?? [])].reverse())
+        stack.push({ key: child, exiting: false });
+    }
+  }
 };
 
 /**
