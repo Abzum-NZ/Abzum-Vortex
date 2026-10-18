@@ -16,11 +16,11 @@ import {
   changeInlineModuleField, deleteInlineModuleField, deriveFieldKey, fieldTypeKeys, moduleFieldDefaultDeclaration,
   moduleFieldKeptSettings, moduleFieldSettingDeclarations, moduleFieldTypeLabels, moveInlineModuleField,
   peopleDirectory, readModuleFieldDefault, readModuleFieldSettings, starterModuleFieldSettings, writeModuleFieldDefault,
-  writeModuleFieldSettings, type ApplicationSourceDocument, type InlineRecordTypeReference, type LinkCardinality,
+  writeModuleFieldSettings, type ApplicationSourceDocument, type ApplicationUsePlace, type LinkCardinality,
   type ModuleFieldPublication, type ModuleFieldType, type PeopleDirectoryOwner,
 } from "@vortex/platform/schema";
 import { StudioField } from "./studio-field";
-import { StudioReferencesAlert } from "./studio-references-alert";
+import { StudioReferencesAlert } from "./studio-used-in";
 import { StudioLinkSection } from "./studio-link-section";
 
 /** An application in this organisation, for the link to the owner of a used module. */
@@ -67,7 +67,7 @@ const replacedFieldTypes: ReadonlySet<string> = new Set(["link_to_person"]);
  * one edit of the application draft. A field in a published version keeps its stored shape.
  */
 export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, initialType = "text", disabled, context,
-  onPendingChange, onApply, onApplied, onRemoved, onShow }: Readonly<{
+  onPendingChange, onApply, onApplied, onRemoved }: Readonly<{
   source: Source;
   moduleKey: string;
   recordKey: string;
@@ -85,8 +85,6 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
   onApplied?: (fieldKey: string) => void;
   /** Called after the field is removed from the draft. */
   onRemoved?: () => void;
-  /** Opens a place that uses the field, for "Show me where". */
-  onShow?: (reference: InlineRecordTypeReference) => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const module = source.body.modules.find((item) => item.key === moduleKey);
@@ -151,7 +149,7 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
   const [placements, setPlacements] = useState<ReadonlySet<string>>(new Set());
   const [message, setMessage] = useState("");
   const [issues, setIssues] = useState<readonly string[]>([]);
-  const [references, setReferences] = useState<readonly InlineRecordTypeReference[]>([]);
+  const [references, setReferences] = useState<readonly ApplicationUsePlace[]>([]);
 
   const declarations = declarationsFor(form.type, form.settings, plainBase);
   const defaultModel = moduleFieldDefaultDeclaration(form.type, writeModuleFieldSettings(form.type, form.settings, declarations, plainBase));
@@ -341,7 +339,7 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
         <Button type="button" size="sm" variant="destructive" disabled={disabled || pending}
           onClick={() => { void remove(); }}>Remove field</Button>
       </div>
-      <StudioReferencesAlert name={existing.label} action="removed" references={references} onShow={onShow} />
+      <StudioReferencesAlert name={existing.label} action="removed" references={references} />
     </section>}
     {confirmDialog}
   </form>;

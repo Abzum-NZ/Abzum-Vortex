@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { sourcePageShell, type ApplicationSourceDocument } from "@vortex/platform/schema";
+import { sourcePageShell, type ApplicationSourceDocument, type ApplicationUsePlace } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
@@ -14,8 +14,9 @@ import {
 import { studioAccessGateChoices } from "../_lib/application-access";
 import { StudioField } from "./studio-field";
 import { StudioRecordPageForm } from "./studio-record-page-form";
+import { StudioReferencesAlert } from "./studio-used-in";
 
-type Feedback = Readonly<{ kind: "applied" | "refused"; message: string }>;
+type Feedback = Readonly<{ kind: "applied" | "refused"; message: string; where?: readonly ApplicationUsePlace[] | undefined }>;
 type Form = "none" | "page" | "record" | "shell";
 
 /**
@@ -54,7 +55,8 @@ export function StudioStructureEditor({ source, selected, disabled, onCommand, o
 
   const run = (command: StudioStructureCommand): boolean => {
     const result = onCommand(command);
-    setFeedback({ kind: result.kind, message: result.message });
+    setFeedback(result.kind === "refused" ? { kind: "refused", message: result.message, where: result.where }
+      : { kind: "applied", message: result.message });
     return result.kind === "applied";
   };
   const openForm = (next: Form) => {
@@ -159,7 +161,9 @@ export function StudioStructureEditor({ source, selected, disabled, onCommand, o
         <Button type="button" size="sm" variant="outline" onClick={onOpenAccess}><Icon name="shield" />Change in Access</Button>
       </div>}
     </form>}
-    {feedback !== null && <p role={feedback.kind === "refused" ? "alert" : "status"}
+    {feedback?.where !== undefined && feedback.where.length > 0
+      ? <StudioReferencesAlert name="it" title="Nothing was changed" issue={feedback.message} references={feedback.where} />
+      : feedback !== null && <p role={feedback.kind === "refused" ? "alert" : "status"}
       className={feedback.kind === "refused" ? "text-sm text-destructive" : "text-sm text-muted-foreground"}>
       {feedback.message}</p>}
     {confirmDialog}

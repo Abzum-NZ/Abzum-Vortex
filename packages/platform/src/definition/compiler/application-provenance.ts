@@ -6,6 +6,7 @@ import type {
   PlatformBlockRelease,
 } from "../../schema";
 import { canonicalJson } from "../canonical-json-definition";
+import { peopleDirectory } from "../module-links";
 import { explicitSourceTargets } from "./explicit-source-targets";
 import {
   applicationCompositionProvenance,
@@ -303,6 +304,29 @@ export function applicationProvenance(
         canonicalPath,
         origin: "resolved",
         sourcePath: ["body", "platform_block_dependencies", dependencyIndex, "release_version"],
+        ruleCode: RESOLUTION_RULE,
+      });
+      continue;
+    }
+    // A role's people-name grant is derived from its reads of Person links, never authored: it
+    // follows from the Application's use of the people directory.
+    if (
+      canonicalPath[0] === "content" &&
+      canonicalPath[1] === "roles" &&
+      typeof canonicalPath[2] === "number" &&
+      canonicalPath[3] === "permissionKeys" &&
+      typeof canonicalPath[4] === "number" &&
+      canonicalPath.length === 5 &&
+      valueAtPath(canonical, canonicalPath) === peopleDirectory.readPermission
+    ) {
+      const directoryUse = source.body.uses.findIndex(
+        (use) => use.module === peopleDirectory.module,
+      );
+      if (directoryUse < 0) fail("vortex.definition.invalid_compilation_output", "invalid_value");
+      entries.push({
+        canonicalPath,
+        origin: "resolved",
+        sourcePath: ["body", "uses", directoryUse, "module"],
         ruleCode: RESOLUTION_RULE,
       });
       continue;

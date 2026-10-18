@@ -33,6 +33,7 @@ import { applicationProvenance } from "./application-provenance";
 import { compileApplicationToolBundle } from "./application-tools";
 import { dependencyOrder, resolvedDependencies } from "./dependencies";
 import { compileCheckedFlowSources } from "./flow-sources";
+import { derivePersonGrants } from "./person-grants";
 import {
   applicationPermissionSharingConditions,
   compilePermissionFieldPolicy,
@@ -304,6 +305,10 @@ function compileApplication(
     .filter((permission) => permission.administrative === false)
     .sort((left, right) => compareCanonicalStrings(String(left.key), String(right.key)));
   const wildcardPermissionKeys = wildcardPermissions.map((permission) => permission.key);
+  const withPersonGrant = derivePersonGrants(
+    dependencyOutputs,
+    expectedOwners.map(([moduleKey]) => moduleKey),
+  );
   const wildcardCatalogueFingerprint = fingerprintCanonicalValue(wildcardPermissions);
   const canonical = applicationDraftSchema.parse({
     envelope: {
@@ -378,7 +383,9 @@ function compileApplication(
           key: role.key,
           name: role.name,
           homePageId: pageId(String(role.home_page)),
-          permissionKeys: usesApplicationWildcard ? wildcardPermissionKeys : authoredPermissionKeys,
+          permissionKeys: usesApplicationWildcard
+            ? wildcardPermissionKeys
+            : withPersonGrant(authoredPermissionKeys),
           permissionSelection: usesApplicationWildcard
             ? {
                 kind: "application_wildcard",

@@ -11,6 +11,7 @@ import {
 import { flowRunsOnlyInBrowser } from "./browser-eligibility";
 import {
   performPresentationIntent,
+  confirmAnswer,
   readConfirmIntent,
   readFormIntent,
   type FlowIntent,
@@ -102,9 +103,9 @@ export async function runBrowserFlow(
         if (confirmation === undefined)
           return { kind: "failed", failure: { outcome: "failed", code: "value_unresolved" } };
         awaitingSurface = true;
-        const confirmed = await host.confirm(confirmation);
+        const answer = await host.confirm(confirmation);
         awaitingSurface = false;
-        step = resumeFlowRun(step.state, { kind: "confirm", confirmed }, library);
+        step = resumeFlowRun(step.state, confirmAnswer(confirmation, answer), library);
       }
     }
     return { kind: "failed", failure: { outcome: "failed", code: "step_limit" } };
