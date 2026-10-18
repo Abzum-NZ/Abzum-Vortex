@@ -8,6 +8,7 @@ import {
   standardPermissionKeys, standardRecordActions as standardActions,
 } from "./module-field-shape";
 import { applicationUses, type ApplicationUsePlace } from "./application-uses";
+import { fullRecordAccessRoleKeys } from "./module-permission-shape";
 
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
@@ -166,16 +167,7 @@ export const createInlineRecordType = (
   if (issues.length > 0 || module === undefined) return { kind: "invalid", issues };
 
   // Determine full access before adding the new type's permissions, across all owned Modules.
-  const ownedRecordTypes = new Set(current.body.modules.flatMap((owned) =>
-    owned.record_types.map((record) => `${owned.key}:${record.key}`)));
-  const existingRecordPermissions = [
-    ...current.body.modules.flatMap((owned) => owned.permissions
-      .filter((permission) => permission.record_type !== undefined)
-      .map((permission) => permission.key)),
-    ...current.body.permissions
-      .filter((permission) => permission.record_type !== undefined && ownedRecordTypes.has(permission.record_type))
-      .map((permission) => permission.key),
-  ];
+  const fullAccessRoles = fullRecordAccessRoleKeys(current);
   const taken = moduleAliases(module);
   const numberKey = key.length <= 33 ? `${key}_number` : "number";
   const titleKey = deriveFieldKey(titleLabel, new Set([numberKey])) ?? "name";
@@ -219,7 +211,7 @@ export const createInlineRecordType = (
   for (const role of source.body.roles) {
     const entries = role.permissions as string[];
     if (entries.includes("*")) continue;
-    if (!existingRecordPermissions.every((permission) => entries.includes(permission))) continue;
+    if (!fullAccessRoles.has(role.key)) continue;
     for (const permission of granted) if (!entries.includes(permission)) entries.push(permission);
   }
   return parsedResult(source, module.key, key);

@@ -186,21 +186,26 @@ export type StudioFieldAccess =
 const recordOf = (body: Body, moduleKey: string, recordKey: string): RecordType | undefined =>
   body.modules.find((module) => module.key === moduleKey)?.record_types.find((record) => record.key === recordKey);
 
-/** Which fields a role reads and changes on one record type, from the read and update permissions it holds. */
+/**
+ * Which fields a role reads and changes on one record type, from the read, create and update
+ * permissions it holds. A field the role changes it may set when it creates a record and change
+ * when it updates one; pages show each person exactly these fields.
+ */
 export const studioRoleFieldAccess = (source: Source, roleKey: string, moduleKey: string, recordKey: string): StudioFieldAccess => {
   const role = source.body.roles.find((candidate) => candidate.key === roleKey);
   const record = recordOf(source.body, moduleKey, recordKey);
   if (role === undefined || record === undefined) return { kind: "unavailable", message: "This role or record type is no longer in the draft." };
   if (role.permissions.includes("*")) return { kind: "unavailable", message: "This role holds every permission. List them one by one first." };
   const reads = heldOn(source.body, role, moduleKey, recordKey, "read");
+  const creates = heldOn(source.body, role, moduleKey, recordKey, "create");
   const updates = heldOn(source.body, role, moduleKey, recordKey, "update");
   if (reads.length === 0) return { kind: "unavailable", message: `Give ${quoted(role.name)} Read on ${record.plural_name} to choose its fields.` };
-  if (reads.length > 1 || updates.length > 1)
-    return { kind: "unavailable", message: `${quoted(role.name)} holds more than one read or update permission on ${record.plural_name}. Keep one of each to choose fields here.` };
+  if (reads.length > 1 || creates.length > 1 || updates.length > 1)
+    return { kind: "unavailable", message: `${quoted(role.name)} holds more than one read, create or update permission on ${record.plural_name}. Keep one of each to choose fields here.` };
   const readable = reads[0]!.permission.field_policy?.readable_fields;
-  const update = updates[0]?.permission;
-  const changeable = update === undefined ? [] : update.field_policy?.changeable_fields;
-  return { kind: "available", canChange: update !== undefined, fields: record.fields.map((field) => ({
+  const changer = (updates[0] ?? creates[0])?.permission;
+  const changeable = changer === undefined ? [] : changer.field_policy?.changeable_fields;
+  return { kind: "available", canChange: changer !== undefined, fields: record.fields.map((field) => ({
     key: field.key, label: field.label, producedByPlatform: !changeableByPeople(field),
     readable: readable === undefined || readable.includes(field.key),
     changeable: changeableByPeople(field) && (changeable === undefined || changeable.includes(field.key)),
@@ -234,7 +239,7 @@ const setFieldAccess = (candidate: Source, command: Extract<StudioAccessCommand,
   const field = access.fields.find((entry) => entry.key === command.fieldKey);
   if (field === undefined) return refuse("That field is no longer in the record type.");
   if (command.changeable && field.producedByPlatform) refuse(`The platform fills ${quoted(field.label)}, so nobody changes it.`);
-  if (command.changeable && !access.canChange) refuse(`Give ${quoted(role.name)} Update on ${record.plural_name} first.`);
+  if (command.changeable && !access.canChange) refuse(`Give ${quoted(role.name)} Create or Update on ${record.plural_name} first.`);
   const readable = new Set(access.fields.filter((entry) => entry.readable).map((entry) => entry.key));
   const changeable = new Set(access.fields.filter((entry) => entry.changeable).map((entry) => entry.key));
   // A field that is changed is read too; one that is not read is not changed.
@@ -251,12 +256,15 @@ const setFieldAccess = (candidate: Source, command: Extract<StudioAccessCommand,
     const read = ownedBy(body, role, heldOn(body, role, command.moduleKey, command.recordKey, "read")[0]!, taken, notes);
     (read as { field_policy?: unknown }).field_policy = { readable_fields: order(readable), changeable_fields: [] };
   } else if (field.changeable === command.changeable) refuse(`Nothing changes for ${quoted(field.label)}.`);
-  const update = heldOn(body, role, command.moduleKey, command.recordKey, "update")[0];
-  if (update !== undefined && (readChanged || field.changeable !== command.changeable)) {
-    const owned = ownedBy(body, role, update, taken, notes);
-    (owned as { field_policy?: unknown }).field_policy = { readable_fields: order(readable),
-      changeable_fields: order(new Set([...changeable].filter((key) => readable.has(key)))) };
-  }
+  // Create and update carry the same fields: what the role changes it may also set at creation.
+  if (readChanged || field.changeable !== command.changeable)
+    for (const kind of ["create", "update"] as const) {
+      const held = heldOn(body, role, command.moduleKey, command.recordKey, kind)[0];
+      if (held === undefined) continue;
+      const owned = ownedBy(body, role, held, taken, notes);
+      (owned as { field_policy?: unknown }).field_policy = { readable_fields: order(readable),
+        changeable_fields: order(new Set([...changeable].filter((key) => readable.has(key)))) };
+    }
   const what = !reads ? "does not read" : command.changeable ? "reads and changes" : "reads but does not change";
   return applied(candidate, [`${quoted(role.name)} now ${what} ${quoted(field.label)} on ${record.plural_name}.`, ...notes].join(" "), role.key);
 };

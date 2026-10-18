@@ -19,6 +19,7 @@ import {
 import { requestDependencies, loadInstalledContext } from "./load";
 import type { DateTimeZones, PageDataState } from "./types";
 import { platformPermissionSource } from "../platform-permission-source";
+import { formFieldOf } from "./form-field-access";
 
 export type ReferenceChoicePageResult =
   | Readonly<{ kind: "completed"; values: ReferenceChoiceInputValues }>
@@ -30,6 +31,8 @@ export type ReferenceChoiceAddress = Readonly<{
   read: Extract<PermittedApplicationsRead, { kind: "available" }>;
   application: PermittedApplication;
   pageKey: string;
+  /** The installed context this same request's own HUMAN address read authorized. */
+  installedContext?: InstalledRuntimeContext;
 }>;
 
 /** Reprojects the current addressed page under the actor and the exact installed release. */
@@ -51,9 +54,19 @@ export const projectReferenceChoicePage = async (
   const selection: OrganizationSelectionCandidate = {
     organizationId: address.read.organizationId,
     applicationRootId: address.application.applicationRootId,
-    ...(address.application.previewInstallationId === undefined ? {} : { previewInstallationId: address.application.previewInstallationId }),
+    ...(address.application.previewInstallationId === undefined
+      ? {}
+      : { previewInstallationId: address.application.previewInstallationId }),
   };
-  const loaded = await loadInstalledContext(session, dependencies, selection);
+  // The address resolution of this same request already read the installed context under the
+  // person's own verified scope for exactly this organisation and application; it is reused.
+  const carried = address.installedContext;
+  const loaded =
+    carried !== undefined &&
+    sameId(carried.organizationId, selection.organizationId) &&
+    sameId(carried.applicationRootId, address.application.applicationRootId)
+      ? ({ kind: "available", value: carried } as const)
+      : await loadInstalledContext(session, dependencies, selection);
   if (loaded.kind !== "available")
     return loaded.kind === "temporarily_unavailable"
       ? { kind: "temporarily_unavailable" }
@@ -101,18 +114,7 @@ export const projectEditField = (
   const block = placement.vortex.block;
   if (!isRecord(block) || typeof block.blockId !== "string") return undefined;
   const blockId = block.blockId;
-  const fieldSetting = settings.field;
-  const nameSetting = settings.name;
-  const field = recordType.fields.find((candidate) =>
-    isRecord(fieldSetting) &&
-    fieldSetting.kind === "field_reference" &&
-    typeof fieldSetting.fieldId === "string"
-      ? sameId(String(candidate.fieldId), fieldSetting.fieldId)
-      : isRecord(nameSetting) &&
-        nameSetting.kind === "text" &&
-        typeof nameSetting.value === "string" &&
-        candidate.key === nameSetting.value,
-  );
+  const field = formFieldOf(placement, recordType);
   if (field === undefined) return undefined;
   const fieldId = String(field.fieldId);
   const valueKey = Object.keys(values).find((key) => sameId(key, fieldId));

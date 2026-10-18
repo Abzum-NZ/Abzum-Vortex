@@ -313,7 +313,10 @@ export const createAccessAdministrationRoleOperations = ({
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
       commandCandidate: PrepareOrganizationAdministrationRoleChangeCommand,
-    ): Promise<HumanOrganizationRequestResult<PreparedOrganizationRoleChange>> => {
+    ): Promise<
+      | HumanOrganizationRequestResult<PreparedOrganizationRoleChange>
+      | Readonly<{ kind: "invalid_privilege_classification" }>
+    > => {
       const command =
         prepareOrganizationAdministrationRoleChangeCommandSchema.safeParse(commandCandidate);
       if (!command.success)
@@ -340,7 +343,7 @@ export const createAccessAdministrationRoleOperations = ({
           error,
         );
       }
-      return requests.run(session, candidate, async (transaction, scope) => {
+      const result = await requests.run(session, candidate, async (transaction, scope) => {
         const preparation = {
           operation: command.data.operation,
           roleKey: command.data.roleKey,
@@ -374,6 +377,12 @@ export const createAccessAdministrationRoleOperations = ({
               templateSource?: unknown;
             }>
           | undefined;
+        if (
+          read?.outcome === "invalid_privilege_classification" &&
+          typeof read.organizationId === "string" &&
+          sameId(read.organizationId, scope.organizationId)
+        )
+          return { kind: "invalid_privilege_classification" } as const;
         if (
           read === undefined ||
           read.outcome !== "available" ||
@@ -420,6 +429,14 @@ export const createAccessAdministrationRoleOperations = ({
         };
         return sealPreparedRoleChange(templateCandidate);
       });
+      if (result.kind !== "available") return result;
+      if ("kind" in result.value)
+        return refuseAdministration(
+          "prepareRoleChange",
+          "ACCESS_ADMIN_PRIVILEGE_CLASSIFICATION_REQUIRES_PRIVILEGED",
+          result.value,
+        );
+      return { kind: "available", value: result.value };
     },
 
     prepareApplicationRoleRevisionAcceptance: async (

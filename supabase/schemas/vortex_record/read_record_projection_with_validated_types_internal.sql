@@ -146,20 +146,7 @@ begin
       return;
     end if;
     bounds := coalesce(case when batched then p_bounds end,
-      vortex_access.resolve_record_field_bounds_internal(decision));
-  end if;
-  if batched and bounds ? 'projectedReadableFieldIds' then
-    -- The page pass derived these once for the record type and these bounds.
-    bounds := (bounds - 'projectedReadableFieldIds')
-      || pg_catalog.jsonb_build_object('readableFieldIds', bounds -> 'projectedReadableFieldIds');
-  else
-    loaded := coalesce(loaded, vortex_record.read_record_page_row_facts_internal(shared, p_loaded));
-    bounds := bounds || pg_catalog.jsonb_build_object('readableFieldIds',
-      vortex_record.project_derived_readable_field_ids_internal(
-        loaded, p_record_type_id, p_record_id, bounds -> 'readableFieldIds',
-        bounds -> 'readableFieldIds', '[]'::jsonb
-      )
-    );
+      vortex_record.decide_record_field_bounds_internal(decision));
   end if;
   field_values := case when compact then p_loaded -> 'record' -> 'fieldValues'
     else loaded -> 'fieldValues' end;

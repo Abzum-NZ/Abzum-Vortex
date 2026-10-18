@@ -105,7 +105,9 @@ begin
       'applicationRootId', permission.application_root_id,
       'ownerKind', permission.owner_kind,
       'ownerId', permission.owner_id,
-      'permissionId', permission.permission_id
+      'permissionId', permission.permission_id,
+      'acceptedRegistrationRevision', permission.accepted_registration_revision,
+      'meaningFingerprint', permission.meaning_fingerprint
     )) order by permission.application_root_id nulls first,
       permission.owner_kind collate "C", permission.owner_id,
       permission.permission_id

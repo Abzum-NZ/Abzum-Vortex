@@ -153,16 +153,7 @@ begin
         decision_item -> 'organizationId', decision_item -> 'matchedContributions')::text;
       bounds := bounds_by_route -> bounds_key;
       if bounds is null then
-        bounds := vortex_access.resolve_record_field_bounds_internal(decision_item);
-        if p_narrowed then
-          -- Without a total field the derived readable set depends only on the
-          -- record type and these bounds, not on the record.
-          bounds := bounds || pg_catalog.jsonb_build_object('projectedReadableFieldIds',
-            vortex_record.project_derived_readable_field_ids_internal(
-              vortex_record.read_record_page_row_facts_internal(p_envelope, loaded),
-              p_record_type_id, record_id, bounds -> 'readableFieldIds',
-              bounds -> 'readableFieldIds', '[]'::jsonb));
-        end if;
+        bounds := vortex_record.decide_record_field_bounds_internal(decision_item);
         bounds_by_route := bounds_by_route || pg_catalog.jsonb_build_object(bounds_key, bounds);
       end if;
     end if;

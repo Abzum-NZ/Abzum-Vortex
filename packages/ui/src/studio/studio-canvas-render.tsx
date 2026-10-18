@@ -40,15 +40,14 @@ export function StudioCanvasCompiledSettings({
 }
 
 /**
- * The records the canvas's data blocks show: read for one saved draft revision with the builder's
- * own access, by block name, with what each block looked like in that saved revision. A block is
- * given its records only while it is still exactly as it was saved; a block edited since shows
- * that it needs a save, never the records of its old settings.
+ * The records the canvas's data blocks show: read from the builder's preview of one saved draft
+ * revision with their preview access, by block name, with what each block looked like in that
+ * saved revision. A block is given its records only while it is still exactly as it was saved; a
+ * block edited since shows that it needs a save, never the records of its old settings.
+ * `refused` means the builder may not preview this application, so no records are read.
  */
 export type StudioCanvasRecords = Readonly<{
-  state: "loading" | "ready" | "not_installed" | "unavailable";
-  /** Blocks whose query the installed application does not have yet. */
-  notInstalled: readonly string[];
+  state: "loading" | "ready" | "refused" | "unavailable";
   /** The records of each data block of the saved revision, by block name. */
   records: Readonly<Record<string, unknown>>;
   /** Each block's release, settings and query in the saved revision the records were read for. */
@@ -60,7 +59,7 @@ export type StudioCanvasRecords = Readonly<{
 }>;
 
 const NO_RECORDS: StudioCanvasRecords = Object.freeze({
-  state: "loading", records: {}, notInstalled: [], saved: new Map<string, string>(), current: new Map<string, string>(),
+  state: "loading", records: {}, saved: new Map<string, string>(), current: new Map<string, string>(),
   updating: false,
 });
 const CanvasRecordsContext = createContext<StudioCanvasRecords>(NO_RECORDS);
@@ -92,9 +91,8 @@ export function StudioCanvasViewerProvider({
 /** What the canvas says in place of a current data block's records, or nothing when it has them. */
 const recordsNote = (records: StudioCanvasRecords, id: string): string | undefined => {
   if (records.state === "loading") return "Reading records…";
-  if (records.state === "not_installed") return "Install this application to show its records here.";
+  if (records.state === "refused") return "Showing records here needs permission to preview this application.";
   if (records.state === "unavailable") return "Records could not be read just now.";
-  if (records.notInstalled.includes(id)) return "This query is not installed yet. Publish and upgrade to show its records here.";
   return Object.hasOwn(records.records, id) ? undefined : "This block shows its records in the running application.";
 };
 

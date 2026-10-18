@@ -189,6 +189,37 @@ const sumFormula = (operands: readonly FlowFormula[], scale: number): FlowFormul
   return sumFormula(groups, scale);
 };
 
+/**
+ * A total over no related records: a count and a sum are zero (a sum of money only in its own
+ * currency), and the other operations have no value.
+ */
+const emptyTotal = (field: TotalField): JsonValue | undefined => {
+  const { operation, resultType } = field.settings;
+  if (operation === "count") return 0;
+  if (operation !== "sum") return undefined;
+  if (resultType === "whole_number") return 0;
+  if (resultType === "decimal_number") return "0";
+  return field.settings.currency === undefined
+    ? undefined
+    : { amount: "0", currency: field.settings.currency };
+};
+
+/**
+ * The totals of a record no related record links to yet, such as a record being created: the
+ * values its total fields start with.
+ */
+export const emptyRecordTotals = (
+  recordType: RecordTypeDefinition,
+): Readonly<Record<string, JsonValue>> => {
+  const values: Record<string, JsonValue> = {};
+  for (const field of recordType.fields) {
+    if (field.type !== "total") continue;
+    const value = emptyTotal(field);
+    if (value !== undefined) values[field.fieldId] = value;
+  }
+  return values;
+};
+
 const totalResult = (
   field: TotalField,
   sourceField: ModuleField | undefined,
@@ -198,12 +229,8 @@ const totalResult = (
   if (operation === "count") return { value: values.length };
   if (!sourceField) return { issue: issue("execution_ineligible", field.fieldId) };
   if (values.length === 0) {
-    if (operation !== "sum") return {};
-    if (resultType === "whole_number") return { value: 0 };
-    if (resultType === "decimal_number") return { value: "0" };
-    return field.settings.currency === undefined
-      ? {}
-      : { value: { amount: "0", currency: field.settings.currency } };
+    const value = emptyTotal(field);
+    return value === undefined ? {} : { value };
   }
 
   const currencies = currenciesOf(sourceField, values);

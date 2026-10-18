@@ -121,7 +121,7 @@ export function typedFieldValueType(field: JsonObject | undefined): string | und
   return field ? typedSemanticFieldType(fieldDeclaredResultType(field)) : undefined;
 }
 
-type NumericDimension = "dimensionless" | "money";
+export type NumericDimension = "dimensionless" | "money";
 
 const numericDimension = (field: JsonObject | undefined): NumericDimension | undefined => {
   const type = typedFieldValueType(field);
@@ -182,7 +182,7 @@ export const calculationDependencyFieldIds = (expression: JsonObject): string[] 
  * dimension is unknown or the operation's dimensions are not allowed. Money divided by money is
  * refused: only a dimensionless divisor keeps the dividend's currency.
  */
-const numericOperationDimension = (
+export const numericOperationDimension = (
   operation: string,
   dimensions: readonly (NumericDimension | undefined)[],
 ): NumericDimension | undefined => {
