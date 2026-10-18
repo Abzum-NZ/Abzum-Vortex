@@ -120,7 +120,7 @@ const createAndAssignPlatformRole = async (
       startsAt: new Date(Date.now() - 1_000).toISOString(),
     }),
   );
-  if (assigned.kind !== "available")
+  if (assigned.kind !== "available" || !("assignment" in assigned.value))
     throw new Error(`The ${role.roleKey} role could not be assigned (${assigned.kind})`);
 };
 

@@ -2,8 +2,12 @@ import "server-only";
 
 import {
   databaseRevision,
+  type AssignOrganizationAdministrationRoleAssignmentResult,
   sameId,
   activityIdSchema,
+  delegationAuthorityIdSchema,
+  grantOrganizationAdministrationDelegationAuthorityCommandSchema,
+  type GrantOrganizationAdministrationDelegationAuthorityCommand,
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
   changeOrganizationAdministrationDelegationAuthorityResultSchema,
   changeOrganizationAdministrationRoleAssignmentResultSchema,
@@ -79,6 +83,7 @@ import type {
 export const createAccessAdministrationAssignmentOperations = ({
   requests,
   newRoleAssignmentId,
+  newDelegationAuthorityId,
   newActivityId,
 }: AccessAdministrationContext) => {
   return {
@@ -87,7 +92,7 @@ export const createAccessAdministrationAssignmentOperations = ({
       candidate: OrganizationSelectionCandidate,
       commandCandidate: AssignOrganizationAdministrationRoleAssignmentCommand,
     ): Promise<
-      HumanOrganizationRequestResult<ChangeOrganizationAdministrationRoleAssignmentResult>
+      HumanOrganizationRequestResult<AssignOrganizationAdministrationRoleAssignmentResult>
     > => {
       const command =
         assignOrganizationAdministrationRoleAssignmentCommandSchema.safeParse(commandCandidate);
@@ -113,9 +118,14 @@ export const createAccessAdministrationAssignmentOperations = ({
       }
       return mapRecordedRefusal(
         "assignRoleAssignment",
-        requests.runChange(session, candidate, async (transaction, scope) => {
-          const row = requireOne(
-            await transaction.query<RoleAssignmentChangeRow>`
+        requests.runChangeWithRefusal<
+          AssignOrganizationAdministrationRoleAssignmentResult | typeof recordedRefusal
+        >(
+          session,
+          candidate,
+          async (transaction, scope) => {
+            const row = requireOne(
+              await transaction.query<RoleAssignmentChangeRow>`
           select outcome, organization_id, assignment_summary, access_version
           from vortex_access.assign_organization_role_assignment_for_administration(
             ${roleAssignmentId}::uuid,
@@ -130,36 +140,50 @@ export const createAccessAdministrationAssignmentOperations = ({
             ${activityId}::uuid
           )
         `,
-          );
-          if (
-            isRecordedRefusal(
-              row,
-              row.assignment_summary,
-              scope.organizationId,
-              scope.accessVersion,
+            );
+            if (
+              isRecordedRefusal(
+                row,
+                row.assignment_summary,
+                scope.organizationId,
+                scope.accessVersion,
+              )
             )
-          )
-            return recordedRefusal;
-          const parsed = changeOrganizationAdministrationRoleAssignmentResultSchema.safeParse({
-            assignment: normalizeAssignmentLedgerFact(row.assignment_summary),
-            accessVersion: databaseRevision(row.access_version),
-          });
-          if (
-            typeof row.organization_id !== "string" ||
-            !sameId(row.organization_id, scope.organizationId) ||
-            row.outcome !== "completed" ||
-            !parsed.success ||
-            parsed.data.accessVersion !== scope.accessVersion + 1 ||
-            !sameId(parsed.data.assignment.roleAssignmentId, roleAssignmentId) ||
-            !sameId(parsed.data.assignment.role.roleId, command.data.roleId) ||
-            !sameAssignee(parsed.data.assignment.assignee, command.data) ||
-            parsed.data.assignment.assignmentKind !== command.data.assignmentKind ||
-            parsed.data.assignment.revision !== 1 ||
-            parsed.data.assignment.state !== "live"
-          )
-            throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
-          return parsed.data;
-        }),
+              return recordedRefusal;
+            const parsed = changeOrganizationAdministrationRoleAssignmentResultSchema.safeParse({
+              assignment: normalizeAssignmentLedgerFact(row.assignment_summary),
+              accessVersion: databaseRevision(row.access_version),
+            });
+            if (
+              typeof row.organization_id !== "string" ||
+              !sameId(row.organization_id, scope.organizationId) ||
+              row.outcome !== "completed" ||
+              !parsed.success ||
+              parsed.data.accessVersion !== scope.accessVersion + 1 ||
+              !sameId(parsed.data.assignment.roleAssignmentId, roleAssignmentId) ||
+              !sameId(parsed.data.assignment.role.roleId, command.data.roleId) ||
+              !sameAssignee(parsed.data.assignment.assignee, command.data) ||
+              parsed.data.assignment.assignmentKind !== command.data.assignmentKind ||
+              parsed.data.assignment.revision !== 1 ||
+              parsed.data.assignment.state !== "live"
+            )
+              throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+            return parsed.data;
+          },
+          (code, error) =>
+            code === "V3144"
+              ? refuseAdministration(
+                  "assignRoleAssignment",
+                  "ROLE_ACCEPTANCE_REQUIRED",
+                  {
+                    outcome: "refused" as const,
+                    code: "role_acceptance_required" as const,
+                    roleId: command.data.roleId,
+                  },
+                  error,
+                )
+              : undefined,
+        ),
       );
     },
 
@@ -370,6 +394,88 @@ export const createAccessAdministrationAssignmentOperations = ({
             parsed.data.activation.revision !== command.data.expectedActivationRevision + 1 ||
             parsed.data.activation.state !== "revoked" ||
             parsed.data.activation.temporalState !== "revoked"
+          )
+            throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+          return parsed.data;
+        }),
+      );
+    },
+
+    grantDelegationAuthority: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: GrantOrganizationAdministrationDelegationAuthorityCommand,
+    ): Promise<
+      HumanOrganizationRequestResult<ChangeOrganizationAdministrationDelegationAuthorityResult>
+    > => {
+      const command =
+        grantOrganizationAdministrationDelegationAuthorityCommandSchema.safeParse(commandCandidate);
+      if (!command.success)
+        return refuseAdministration(
+          "grantDelegationAuthority",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
+      let activityId: string;
+      let delegationAuthorityId: string;
+      try {
+        activityId = activityIdSchema.parse(newActivityId());
+        delegationAuthorityId = delegationAuthorityIdSchema.parse(newDelegationAuthorityId());
+      } catch (error) {
+        return refuseAdministration(
+          "grantDelegationAuthority",
+          "ACCESS_ADMIN_IDENTITY_GENERATION_FAILED",
+          { kind: "temporarily_unavailable" } as const,
+          error,
+        );
+      }
+      return mapRecordedRefusal(
+        "grantDelegationAuthority",
+        requests.runChange(session, candidate, async (transaction, scope) => {
+          const row = requireOne(
+            await transaction.query<DelegationAuthorityChangeRow>`
+          select outcome, organization_id, delegation_summary, access_version
+          from vortex_access.grant_organization_delegation_authority_for_administration(
+            ${delegationAuthorityId}::uuid,
+            ${command.data.holderKind}::text,
+            ${command.data.holderId}::uuid,
+            ${command.data.expectedHolderRevision}::bigint,
+            ${activityId}::uuid
+          )`,
+          );
+          if (
+            isRecordedRefusal(
+              row,
+              row.delegation_summary,
+              scope.organizationId,
+              scope.accessVersion,
+            )
+          )
+            return recordedRefusal;
+          const parsed = changeOrganizationAdministrationDelegationAuthorityResultSchema.safeParse({
+            delegation: normalizeAssignmentLedgerFact(row.delegation_summary),
+            accessVersion: databaseRevision(row.access_version),
+          });
+          if (
+            typeof row.organization_id !== "string" ||
+            !sameId(row.organization_id, scope.organizationId) ||
+            row.outcome !== "completed" ||
+            !parsed.success ||
+            parsed.data.accessVersion !== scope.accessVersion + 1 ||
+            !sameId(parsed.data.delegation.delegationAuthorityId, delegationAuthorityId) ||
+            parsed.data.delegation.revision !== 1 ||
+            parsed.data.delegation.state !== "live" ||
+            parsed.data.delegation.temporalState !== "active" ||
+            parsed.data.delegation.scope.kind !== "organization_catalogue" ||
+            !sameAssignee(parsed.data.delegation.holder, {
+              assigneeKind: command.data.holderKind,
+              organizationAccountId:
+                command.data.holderKind === "organization_account"
+                  ? command.data.holderId
+                  : undefined,
+              groupId: command.data.holderKind === "group" ? command.data.holderId : undefined,
+            })
           )
             throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
           return parsed.data;
