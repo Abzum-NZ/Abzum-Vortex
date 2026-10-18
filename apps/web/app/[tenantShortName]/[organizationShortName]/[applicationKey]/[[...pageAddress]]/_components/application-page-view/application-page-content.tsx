@@ -612,11 +612,14 @@ export function ApplicationPageViewContent({
                   >
                     <AlertDescription>
                       {notice.text}
-                      {notice.recovery === "sign_in" ? (
-                        <a className="mt-2 block font-medium underline underline-offset-4" href="/auth/session-ended">
-                          Sign in again
-                        </a>
-                      ) : null}
+                      {notice.link === undefined ? null : (
+                        <>
+                          {" "}
+                          <a className="underline" href={notice.link.href}>
+                            {notice.link.label}
+                          </a>
+                        </>
+                      )}
                     </AlertDescription>
                   </Alert>
                 )}

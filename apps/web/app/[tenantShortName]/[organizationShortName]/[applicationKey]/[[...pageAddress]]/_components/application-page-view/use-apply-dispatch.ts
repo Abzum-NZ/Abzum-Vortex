@@ -24,7 +24,11 @@ export function useApplyDispatch({
   refreshPlacements,
   refreshTargetsForBinding,
 }: Readonly<{
-  placementRequestsRef: RefObject<{ base: string; key: string; generations: Map<string, ComponentRequestGeneration> }>;
+  placementRequestsRef: RefObject<{
+    base: string;
+    key: string;
+    generations: Map<string, ComponentRequestGeneration>;
+  }>;
   navigationKey: string;
   setBusy: Dispatch<SetStateAction<boolean>>;
   setNotice: Dispatch<SetStateAction<Notice | undefined>>;
@@ -142,9 +146,21 @@ export function useApplyDispatch({
                 : correctionMessages.length > 0
                   ? { tone: "problem", text: [...new Set(correctionMessages)].join(" ") }
                   : refusalNotices[diagnostic.code];
+            const presentation = diagnostic.presentation;
             resultNotice = {
               ...reason,
-              text: recovery === undefined ? reason.text : `${reason.text} ${resultNotice.text}`,
+              ...(presentation === undefined
+                ? {}
+                : {
+                    link: {
+                      label: presentation.link_label,
+                      href: `#record-${presentation.record_id}`,
+                    },
+                  }),
+              text:
+                recovery === undefined
+                  ? (presentation?.message ?? reason.text)
+                  : `${presentation?.message ?? reason.text} ${resultNotice.text}`,
             };
           }
           if (

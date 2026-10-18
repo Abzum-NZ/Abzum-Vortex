@@ -2407,7 +2407,7 @@
                           "id": "input_create_custom_role_privilege_classification",
                           "name": "privilege_classification",
                           "label": "Privilege classification",
-                          "help_text": "standard or privileged",
+                          "help_text": "standard or privileged. Administrative permissions require privileged.",
                           "required": true,
                           "vortex": {
                             "block": {
@@ -2461,7 +2461,7 @@
                         "props": {
                           "id": "button_create_custom_role",
                           "label": "Create custom role",
-                          "action_kind": "action",
+                          "action_kind": "submit",
                           "variant": "primary",
                           "vortex": {
                             "block": {
@@ -5080,6 +5080,39 @@
                           "value": "platform.assign_role_assignment"
                         }
                       },
+                      "refusal_feedback": {
+                        "kind": "map",
+                        "entries": {
+                          "code": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "role_acceptance_required"
+                            }
+                          },
+                          "message": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "This role changed in the latest release and needs accepting in IAM before it can be assigned."
+                            }
+                          },
+                          "link_label": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Review and accept this role in IAM"
+                            }
+                          },
+                          "record_id": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "role_id"
+                            }
+                          }
+                        }
+                      },
                       "inputs": {
                         "kind": "map",
                         "entries": {
@@ -5281,6 +5314,39 @@
                         "literal": {
                           "type": "text",
                           "value": "platform.assign_role_assignment"
+                        }
+                      },
+                      "refusal_feedback": {
+                        "kind": "map",
+                        "entries": {
+                          "code": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "role_acceptance_required"
+                            }
+                          },
+                          "message": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "This role changed in the latest release and needs accepting in IAM before it can be assigned."
+                            }
+                          },
+                          "link_label": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Review and accept this role in IAM"
+                            }
+                          },
+                          "record_id": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "role_id"
+                            }
+                          }
                         }
                       },
                       "inputs": {
@@ -5560,6 +5626,20 @@
         },
         "tasks": [
           {
+            "id": "prepare",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.prepare_role_change_evidence"
+                }
+              }
+            }
+          },
+          {
             "id": "confirm",
             "type": "interface.confirm",
             "version": "1.0.0",
@@ -5643,20 +5723,6 @@
                 "outcome": "declined"
               }
             ]
-          },
-          {
-            "id": "prepare",
-            "type": "operation.call",
-            "version": "1.0.0",
-            "properties": {
-              "operation": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "platform.prepare_role_change_evidence"
-                }
-              }
-            }
           },
           {
             "id": "commit",
@@ -7091,9 +7157,9 @@
       },
       {
         "id": "binding_create_custom_role",
-        "control": "button_create_custom_role",
+        "control": "form_create_custom_role",
         "event_id": "event_iam_administration_action",
-        "event": "action",
+        "event": "form_submit",
         "flow": "flow_create_custom_role",
         "inputs": {
           "operation": {
