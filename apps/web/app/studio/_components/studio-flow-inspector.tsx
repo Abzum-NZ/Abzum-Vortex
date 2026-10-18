@@ -2,7 +2,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
-import { Label } from "@vortex/ui/components/label";
 
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { describeFailure, type SourceFlow } from "@vortex/platform/schema";
@@ -12,6 +11,7 @@ import {
   StudioHelp,
   StudioInspectorGroup,
   StudioInspectorActions,
+  StudioFlowStepPicker,
   projectStudioFlowStepActions,
   projectStudioFlowStepForm,
   refreshStudioFlowStepFields,
@@ -94,82 +94,6 @@ const stepChoices = (
       ...stepChoices(task.children),
     ]),
   );
-
-function StepTypePicker({
-  id,
-  label,
-  types,
-  disabled,
-  onAdd,
-  action,
-  forms,
-}: Readonly<{
-  id: string;
-  label: string;
-  types: readonly Readonly<{ type: string; title: string; summary: string }>[];
-  disabled: boolean;
-  onAdd: (type: string, formAlias?: string) => void;
-  action: string;
-  forms: StudioFlowDraftChoices["forms"];
-}>) {
-  const [type, setType] = useState("");
-  const [formAlias, setFormAlias] = useState("");
-  const chosen = types.find((entry) => entry.type === type);
-  if (types.length === 0)
-    return <StudioHelp hint="No kind of step can be added to this flow here." />;
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <div className="flex gap-2">
-        <StudioReferencePicker
-          id={id}
-          disabled={disabled}
-          value={type}
-          unset="Choose a step type"
-          options={types.map((entry) => ({
-            value: entry.type,
-            label: entry.title,
-            description: entry.summary,
-          }))}
-          onChange={setType}
-        />
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          disabled={
-            disabled ||
-            chosen === undefined ||
-            (type === "interface.show_form" && !forms.some((form) => form.alias === formAlias))
-          }
-          onClick={() => {
-            if (chosen !== undefined) {
-              onAdd(chosen.type, type === "interface.show_form" ? formAlias : undefined);
-              setType("");
-            }
-          }}
-        >
-          <Icon name="plus" />
-          {action}
-        </Button>
-      </div>
-      {type === "interface.show_form" && (
-        <div className="space-y-1">
-          <Label htmlFor={`${id}-form`}>Form to show</Label>
-          <StudioReferencePicker
-            id={`${id}-form`}
-            disabled={disabled}
-            value={formAlias}
-            unset="Choose a form before adding the step"
-            options={forms.map((form) => ({ value: form.alias, label: form.label }))}
-            onChange={setFormAlias}
-          />
-        </div>
-      )}
-      {chosen === undefined ? null : <StudioHelp hint={chosen.summary} />}
-    </div>
-  );
-}
 
 export function StudioFlowInspector({
   context,
@@ -380,7 +304,7 @@ export function StudioFlowInspector({
         {ownerNote === undefined ? null : <StudioHelp hint={ownerNote} />}
         <StudioHelp hint="Select a step on the canvas to change its settings, move it or add a step after it." />
         {main !== undefined && (
-          <StepTypePicker
+          <StudioFlowStepPicker
             forms={choices.forms}
             id="flow-add-last"
             label="Add a step at the end"
@@ -542,7 +466,7 @@ export function StudioFlowInspector({
         )}
       </StudioInspectorGroup>
       <StudioInspectorGroup title="Add steps">
-        <StepTypePicker
+        <StudioFlowStepPicker
           forms={choices.forms}
           id="flow-add-after"
           label="Add a step after this one"
@@ -563,7 +487,7 @@ export function StudioFlowInspector({
           }
         />
         {step.children.map((child) => (
-          <StepTypePicker
+          <StudioFlowStepPicker
             forms={choices.forms}
             key={JSON.stringify(child.path)}
             id={`flow-add-in-${JSON.stringify(child.path)}`}
@@ -586,7 +510,7 @@ export function StudioFlowInspector({
           />
         ))}
         {actions.branch !== null && (
-          <StepTypePicker
+          <StudioFlowStepPicker
             forms={choices.forms}
             id="flow-add-branch"
             label={`Add the ${actions.branch} branch, starting with`}

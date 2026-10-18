@@ -26,6 +26,7 @@ export * from "./application-composition-commands";
 export * from "./field-placement";
 export * from "./application-flow-model";
 export * from "./application-flow-commands";
+export * from "./studio-flow-step-picker";
 export * from "./application-flow-create";
 export * from "./application-flow-values";
 export * from "./application-flow-step-form";
@@ -46,6 +47,7 @@ export {
   validateStoredZone,
 } from "./stored-composition";
 export * from "./application-structure-commands";
+export { studioPageLayoutPlan, type StudioPageLayoutPlan } from "./application-page-layout";
 export * from "./application-menu-commands";
 export * from "./application-access-commands";
 export {
