@@ -95,8 +95,8 @@ export const choiceScopeKey = (placementId: string, formId?: string): string =>
   formId === undefined ? placementId : `${formId}\u0000${placementId}`;
 
 /**
- * Finds the binding an event identity names. A legacy row action that names no control matches only
- * when the placement declares exactly one row-action binding, so it never guesses between several.
+ * Finds the binding an event identity names. A placement-level event matches only when the
+ * placement declares exactly one binding of its kind, so it never guesses between several.
  */
 export const bindingFor = (
   bindings: readonly PlacementFlowBinding[],

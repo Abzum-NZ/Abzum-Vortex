@@ -255,9 +255,7 @@ export function RowActionControl({
 /**
  * Every row command the row shows, as one Dropdown Menu bound to the declared `row_action` event.
  * Each declared action carries the stable identity of its own binding, so several named commands on
- * one table reach different flows. `actions` is undefined only for a release that declares no named
- * action: that release keeps the one legacy control, identified by the placement itself, as the
- * menu's single command. Declared actions the row does not show leave no command at all. Every
+ * one table reach different flows. An empty action list shows no command. Every
  * command carries the row's current revision, so the bound flow acts on the record as it was read.
  */
 export function RowActionsMenu({
@@ -270,28 +268,15 @@ export function RowActionsMenu({
   recordId: string;
   revision?: number;
   name: string;
-  actions: readonly RecordsTableActionContract[] | undefined;
+  actions: readonly RecordsTableActionContract[];
   events: DisplayEventHandlers | undefined;
 }>): ReactElement | null {
   // The chosen command's flow keeps the menu's button busy until it settles.
   const gesture = usePendingGesture();
   const onRowAction = events?.row_action;
   if (onRowAction === undefined) return null;
-  const commands: readonly {
-    key: string;
-    label: string;
-    eventId: string | undefined;
-  }[] =
-    actions === undefined
-      ? [{ key: "row_action", label: "Open", eventId: undefined }]
-      : actions.map((action) => ({
-          key: action.eventId,
-          label: action.label,
-          eventId: action.eventId,
-        }));
   const identity = { recordId, ...(revision === undefined ? {} : { revision }) };
-  // A row that shows no command keeps an empty actions cell, as before.
-  if (commands.length === 0) return null;
+  if (actions.length === 0) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -312,17 +297,13 @@ export function RowActionsMenu({
       {/* The menu is portalled, but React still bubbles its clicks through the row; choosing a
           command is not a request to open the row itself. */}
       <DropdownMenuContent onClick={(event) => event.stopPropagation()}>
-        {commands.map((command) => (
+        {actions.map((command) => (
           <DropdownMenuItem
-            key={command.key}
+            key={command.eventId}
             onClick={() => {
               if (gesture.running()) return;
               gesture.track(
-                onRowAction(
-                  command.eventId === undefined
-                    ? { event: "row_action", ...identity }
-                    : { event: "row_action", eventId: command.eventId, ...identity },
-                ),
+                onRowAction({ event: "row_action", eventId: command.eventId, ...identity }),
               );
             }}
           >
