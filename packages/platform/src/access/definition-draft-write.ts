@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import {
   describeFailure,
+  applicationSourceDocumentSchema,
   applicationRootIdSchema,
   canonicalJson,
   fingerprintSchema,
@@ -33,6 +34,7 @@ import {
   createDefinitionStore,
   readApplicationDefinitionDraft,
   requireBuilderAuthority,
+  extractApplicationSourceIdentityRequirements,
   type StoredApplicationDefinitionDraft,
 } from "../definition/definition-index";
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
@@ -469,6 +471,31 @@ export const createHumanApplicationDraftWriter = (
     return unresolved;
   };
   return Object.freeze({
+    reviewSource: async (session: IdentitySession, organizationId: string, candidate: unknown) => {
+      const organization = organizationIdSchema.parse(organizationId);
+      const command = saveDefinitionDraftCommandSchema.parse(candidate);
+      const source = applicationSourceDocumentSchema.parse(command.source);
+      const result = await dependencies.requests.run(session, { organizationId: organization }, async (transaction, scope) => {
+        const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: dependencies.permissions });
+        await requireBuilderAuthority(authority, { kind: "draft_change", rootId: command.rootId });
+        const draft = await readApplicationDefinitionDraft(transaction, scope, {
+          rootId: applicationRootIdSchema.parse(command.rootId), expectedDraftRevision: command.expectedDraftRevision,
+        });
+        if (draft.key !== source.key || draft.source.root_alias !== source.root_alias)
+          throw new DefinitionError("INVALID_DEFINITION_COMMAND");
+        const requirements = extractApplicationSourceIdentityRequirements(source);
+        const rows = await transaction.query<DatabaseRow & { component_kind: unknown; component_name: unknown }>`
+          select component_kind, component_name from vortex_definition.read_source_import_conflicts(
+            ${command.rootId}::uuid, ${JSON.stringify(requirements)}::text::jsonb
+          )
+        `;
+        const conflicts = z.array(z.object({ component_kind: z.string(), component_name: z.string() }).strict()).parse(rows);
+        await requireBuilderAuthority(authority, { kind: "draft_change", rootId: command.rootId });
+        return conflicts.map((row) => ({ kind: row.component_kind, name: row.component_name }));
+      });
+      return result.kind === "available" ? { kind: "available", conflicts: result.value } as const
+        : { kind: "temporarily_unavailable" } as const;
+    },
     createRoot: (session: IdentitySession, organizationId: string, candidate: unknown) =>
       write(session, organizationId, candidate, "create"),
     saveDraft: (session: IdentitySession, organizationId: string, candidate: unknown) =>
