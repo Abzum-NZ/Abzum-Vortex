@@ -5,7 +5,9 @@ import {
   DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   type ApplicationSourceDocument,
+  type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
+import { studioStarterFrame } from "@vortex/ui/studio";
 
 /** What a builder enters for a new application; everything else is made from it. */
 export type MinimumApplicationInputs = Readonly<{
@@ -53,10 +55,12 @@ const invalid = (
  * A new application from its name and description: its key (made from the name unless set), a
  * home page, the permission to view it, a Members access group that holds it, and the one Module
  * the application owns, empty until its first record type. It uses no other application's Module.
+ * It starts in a layout with the application menu, its home page saying what to do next.
  * Authored aliases are local identities; permanent root identities come only from Definition.
  */
 export const minimumApplicationSource = (
   inputs: MinimumApplicationInputs,
+  catalogue: ImmutablePlatformBlockCatalogue,
 ): MinimumApplicationSourceResult => {
   const name = inputs.name.trim();
   const description = inputs.description.trim();
@@ -147,5 +151,10 @@ export const minimumApplicationSource = (
     }
     return invalid(fieldErrors);
   }
-  return { kind: "valid", source: parsed.data };
+  const framed = studioStarterFrame(catalogue, parsed.data);
+  if (framed.kind === "refused") {
+    console.error("[studio] new application starter frame refused", framed.message);
+    return { kind: "invalid", message: `The application could not be built: ${framed.message}`, fieldErrors: {} };
+  }
+  return { kind: "valid", source: framed.source };
 };
