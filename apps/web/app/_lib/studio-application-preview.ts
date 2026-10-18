@@ -166,7 +166,6 @@ export const readStudioPreviewState = async (
     return read.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" }
       : { kind: "refused", reason: "permission_refused" };
   } catch (error) {
-    if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING") return { kind: "conflict" };
     console.error(`[studio] preview state unavailable: STUDIO_PREVIEW_STATE_FAILED cause=${describeFailure(error)}`);
     return { kind: "temporarily_unavailable" };
   }
@@ -189,8 +188,17 @@ const readPreviewStateIn = (
           if (error instanceof BuilderAuthorityError) return { kind: "refused", reason: "permission_refused" } as const;
           throw error;
         }
-        const draft = await readApplicationDefinitionDraft(transaction, scope,
-          { rootId, expectedDraftRevision: draftRevision });
+        let draft: StoredApplicationDefinitionDraft;
+        try {
+          draft = await readApplicationDefinitionDraft(transaction, scope,
+            { rootId, expectedDraftRevision: draftRevision });
+        } catch (error) {
+          // A newer saved head supersedes this read. Classify it before the protected request
+          // maps unexpected failures to temporary unavailability.
+          if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING")
+            return { kind: "conflict" } as const;
+          throw error;
+        }
         const preview = await createPreviewInstallationRepository(transaction).readBuilderPreview(rootId);
         if (preview !== undefined && (!sameId(preview.applicationRootId, rootId) || !sameId(preview.organizationId, organizationId)))
           throw new Error("STUDIO_PREVIEW_LOOKUP_MISMATCH");
