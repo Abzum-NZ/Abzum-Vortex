@@ -5539,6 +5539,20 @@
         },
         "tasks": [
           {
+            "id": "prepare",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.prepare_role_change_evidence"
+                }
+              }
+            }
+          },
+          {
             "id": "confirm",
             "type": "interface.confirm",
             "version": "1.0.0",
@@ -5622,20 +5636,6 @@
                 "outcome": "declined"
               }
             ]
-          },
-          {
-            "id": "prepare",
-            "type": "operation.call",
-            "version": "1.0.0",
-            "properties": {
-              "operation": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "platform.prepare_role_change_evidence"
-                }
-              }
-            }
           },
           {
             "id": "commit",
