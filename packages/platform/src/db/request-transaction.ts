@@ -155,12 +155,23 @@ const validateContext = (candidate: SessionContext): SessionContext => {
   return parsed.data;
 };
 
+// Bound lock queues, running statements and abandoned transactions on every request path.
+// LOCAL settings disappear at commit/rollback before the pooled connection is reused.
+const setRequestTimeouts = async (transaction: TransactionDriver): Promise<void> => {
+  await transaction.query`
+    select pg_catalog.set_config('lock_timeout', '5s', true),
+      pg_catalog.set_config('statement_timeout', '60s', true),
+      pg_catalog.set_config('idle_in_transaction_session_timeout', '15s', true)
+  `;
+};
+
 const createRuntimeTransactionRunner =
   (driver: DatabaseDriver) =>
   async <Result>(operation: RuntimeOperation<Result>): Promise<Result> =>
-    driver.transaction(async (transaction) =>
-      invokeRequestDatabaseCallback(() => operation(transaction)),
-    );
+    driver.transaction(async (transaction) => {
+      await setRequestTimeouts(transaction);
+      return invokeRequestDatabaseCallback(() => operation(transaction));
+    });
 
 const createResolvedRequestTransactionRunner =
   (driver: DatabaseDriver) =>
@@ -169,6 +180,7 @@ const createResolvedRequestTransactionRunner =
     operation: ResolvedRequestOperation<Scope, Result>,
   ): Promise<Result> =>
     driver.transaction(async (transaction) => {
+      await setRequestTimeouts(transaction);
       const resolved = await invokeRequestDatabaseCallback(() => resolve(transaction));
       const validated = validateContext(resolved.context);
       const parsedChannel =
@@ -250,7 +262,8 @@ const createPostgresDriver = (client: Sql): DatabaseDriver => ({
     if (lifetime !== undefined && (lifetime.signal.aborted || Date.now() >= lifetime.deadline))
       throw requestDatabaseError("DATABASE_REQUEST_STOPPED");
     return (await client.begin(async (sql) =>
-      operation(createTransactionDriver(sql, lifetime)))) as Result;
+      operation(createTransactionDriver(sql, lifetime)),
+    )) as Result;
   },
 });
 

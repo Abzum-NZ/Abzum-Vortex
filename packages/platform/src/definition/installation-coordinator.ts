@@ -142,18 +142,22 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         });
 
   /**
-   * Runs one installer change transaction. The request runner reports only a coarse outcome, so
+   * Only registration changes hold Access exclusively. Storage and runtime reads hold it shared.
+   * The request runner reports only a coarse outcome, so
    * the typed failure is captured before the transaction rolls back.
    */
   const inInstallerTransaction = async <Result>(
+    mode: "runAccessChange" | "runChange",
     session: IdentitySession,
     organizationId: OrganizationId,
     builderOperation: BuilderOperation,
     operation: (transaction: InstallerTransaction, authority: BuilderAuthority) => Promise<Result>,
   ): Promise<Result> => {
     const captured: { failure?: DefinitionError<ApplicationInstallationCoordinatorErrorCode> } = {};
-    const outcome = await dependencies.installerRequests
-      .runAccessChange(session, { organizationId }, async (transaction, scope) => {
+    const outcome = await dependencies.installerRequests[mode](
+      session,
+      { organizationId },
+      async (transaction, scope) => {
         try {
           // The builder authority is decided first, from the installer's own request scope, before
           // anything is read or written in this transaction.
@@ -166,10 +170,10 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           captured.failure = toCoordinatorError(error);
           throw error;
         }
-      })
-      .catch((error: unknown) => {
-        throw captured.failure ?? toCoordinatorError(error);
-      });
+      },
+    ).catch((error: unknown) => {
+      throw captured.failure ?? toCoordinatorError(error);
+    });
     if (outcome.kind === "available") return outcome.value;
     if (captured.failure !== undefined) throw captured.failure;
     throw fail(
@@ -593,6 +597,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       applicationReleaseRevision: activeReleaseRevision,
     });
     await inInstallerTransaction(
+      "runAccessChange",
       session,
       request.organizationId,
       installOperation(request.applicationRootId, prior, false),
@@ -685,6 +690,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
 
       // 1. Access must name the release before its provisioned setup can be administered.
       const accessChanged = await inInstallerTransaction(
+        "runAccessChange",
         verifiedSession.data,
         request.organizationId,
         installOperation(request.applicationRootId, exact, false),
@@ -710,6 +716,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
 
       // 2. Commit inactive storage for the complete pin set.
       return inInstallerTransaction(
+        "runChange",
         verifiedSession.data,
         request.organizationId,
         installOperation(request.applicationRootId, exact, false),
@@ -816,6 +823,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       //    advances the Access version that the fixed lifecycle operations pin to. An already
       //    active target is only realigned, which repairs a registration left by a failed upgrade.
       const alreadyActive = await inInstallerTransaction(
+        "runAccessChange",
         verifiedSession.data,
         request.organizationId,
         installOperation(request.applicationRootId, exact, false),
@@ -851,6 +859,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         // Access realignment may advance its version. A fresh human transaction repairs storage
         // after that commit, without a lifecycle transition or binding revision advance.
         const repaired = await inInstallerTransaction(
+          "runChange",
           verifiedSession.data,
           request.organizationId,
           installOperation(request.applicationRootId, exact, false),
@@ -891,6 +900,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           ? null
           : exactStorageRelease(oldTarget, await readReleaseSet(verifiedSession.data, oldTarget));
         switched = await inInstallerTransaction(
+          "runChange",
           verifiedSession.data,
           request.organizationId,
           installOperation(request.applicationRootId, exact, false),
@@ -1031,6 +1041,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       const exact = exactStorageRelease(request, packageFacts);
 
       return inInstallerTransaction(
+        "runAccessChange",
         verifiedSession.data,
         request.organizationId,
         {
@@ -1152,6 +1163,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       const packageFacts = await readReleaseSet(verifiedSession.data, request);
 
       return inInstallerTransaction(
+        "runChange",
         verifiedSession.data,
         request.organizationId,
         {
