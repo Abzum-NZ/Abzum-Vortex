@@ -119,6 +119,15 @@ export function useApplyDispatch({
             server.descriptor.outcome === "partial" || server.descriptor.outcome === "uncertain"
               ? server.descriptor.outcome
               : undefined;
+          // Use the same authored reason for the form feedback and the page notice.
+          const correctionMessages = (diagnostic?.corrections ?? []).flatMap((correction) =>
+            correction.message === undefined ? [] : [correction.message],
+          );
+          const ruleMessage =
+            diagnostic?.ruleRefusal?.message ??
+            (correctionMessages.length > 0
+              ? [...new Set(correctionMessages)].join(" ")
+              : undefined);
           const refusalFeedback: Extract<FormFlowFeedback, { kind: "refusal" }> | undefined =
             diagnostic === undefined
               ? undefined
@@ -129,23 +138,14 @@ export function useApplyDispatch({
                   ...(diagnostic.corrections === undefined
                     ? {}
                     : { corrections: diagnostic.corrections }),
-                  ...(diagnostic.ruleRefusal === undefined
-                    ? {}
-                    : { ruleMessage: diagnostic.ruleRefusal.message }),
+                  ...(ruleMessage === undefined ? {} : { ruleMessage }),
                   ...(recovery === undefined ? {} : { recovery }),
                 };
           if (diagnostic !== undefined) {
-            // A rule's authored message is the one reason shown; a refusal that names a field
-            // carries it on the located correction instead of the rule refusal.
-            const correctionMessages = (diagnostic.corrections ?? []).flatMap((correction) =>
-              correction.message === undefined ? [] : [correction.message],
-            );
             const reason: Notice =
-              diagnostic.ruleRefusal !== undefined
-                ? { tone: "problem", text: diagnostic.ruleRefusal.message }
-                : correctionMessages.length > 0
-                  ? { tone: "problem", text: [...new Set(correctionMessages)].join(" ") }
-                  : refusalNotices[diagnostic.code];
+              ruleMessage === undefined
+                ? refusalNotices[diagnostic.code]
+                : { tone: "problem", text: ruleMessage };
             const presentation = diagnostic.presentation;
             resultNotice = {
               ...reason,
