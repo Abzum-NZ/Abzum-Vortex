@@ -263,7 +263,7 @@ export function useStudioDataTab({ draft, applications, initialModule, hidden, c
     return targets;
   }, [used, view.peopleDirectory]);
   const fieldContext: ModuleFieldEditorContext = { publication, composition: compositionContext, usedRecordTypes,
-    peopleDirectory: view.peopleDirectory, readRecords };
+    peopleDirectory: view.peopleDirectory, readRecords, compiledFields: view.compiledFields };
   const targetLabel = (key: string): string => {
     const [owner, local] = key.split(":");
     return recordIn(source, owner ?? "", local ?? "")?.name ?? usedRecordTypes.find((target) => target.key === key)?.label ?? key;

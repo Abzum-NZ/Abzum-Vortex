@@ -23,6 +23,7 @@ import {
 } from "./installation-first-install-app";
 import { createFirstInstallCoordinator } from "./installation-first-install-coordinator";
 import { activateFirstInstall } from "./installation-first-install-member-role";
+import { readApplicationRemoval, removeApplication } from "./installation-removal";
 import {
   readUpgradeAuthorizedState,
   sameUpgradeSnapshotState,
@@ -36,9 +37,9 @@ import {
 } from "./installation-upgrade-role-revisions";
 
 /**
- * The installation journeys of the organisation's application catalogue, as three registered
+ * The installation journeys of the organisation's application catalogue, as registered
  * platform operations a flow calls: a review that says whether the selected application's latest
- * published version would be a first install, an upgrade or nothing, and the install and the upgrade
+ * published version would be a first install, an upgrade or nothing, and the install, upgrade and removal
  * themselves. They are the one human path to install and upgrade; each runs the shared installation
  * functions under the person's own authority: the installation authority alone (managing
  * applications, with the delegated scope and recent sign-in a role acceptance needs), never a right on
@@ -392,8 +393,57 @@ const upgrade = async (
   }
 };
 
-/** The application catalogue's three journeys, bound to the application's installation environment. */
+/** The application catalogue's journeys, bound to the application's installation environment. */
 export const createApplicationStoreService = (environment: ApplicationStoreEnvironment) => ({
+  reviewRemoval: async (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    inputs: Readonly<Record<string, unknown>>,
+  ): Promise<ApplicationStoreResult> => {
+    const rootId = applicationRootInput(inputs.application_root_id);
+    if (!rootId.success) return { kind: "unavailable" };
+    try {
+      const current = await readApplicationRemoval(
+        environment,
+        session,
+        organizationOf(selection),
+        rootId.data,
+      );
+      return {
+        kind: "available",
+        value: {
+          application_name: current.releaseSet.application.content.name,
+          installed_version: current.releaseSet.application.releaseVersion,
+          expected: JSON.parse(canonicalJson(current.expected)) as JsonValue,
+        },
+      };
+    } catch (error) {
+      const result = commandFailureOf(error);
+      return result === "conflict" ? { kind: "unavailable" } : result;
+    }
+  },
+  remove: async (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    inputs: Readonly<Record<string, unknown>>,
+  ): Promise<ApplicationStoreResult> => {
+    const rootId = applicationRootInput(inputs.application_root_id);
+    if (!rootId.success) return { kind: "unavailable" };
+    try {
+      return {
+        kind: "available",
+        value: await removeApplication(
+          environment,
+          session,
+          organizationOf(selection),
+          rootId.data,
+          inputs.expected,
+        ),
+      };
+    } catch (error) {
+      return commandFailureOf(error);
+    }
+  },
   review: (
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,

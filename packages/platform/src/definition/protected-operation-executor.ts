@@ -1178,6 +1178,8 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
   review_application_installation: applicationStoreOperation("review"),
   install_application: applicationStoreOperation("install"),
   upgrade_application: applicationStoreOperation("upgrade"),
+  review_application_removal: applicationStoreOperation("reviewRemoval"),
+  remove_application: applicationStoreOperation("remove"),
 } satisfies Record<PlatformServiceOperationKey, Operation>);
 
 /** A value of a declared type the executor does not carry yet is refused, never coerced. */

@@ -296,6 +296,7 @@ export const logPlacementFailure = (
     | "link_initial_value_invalid"
     | "link_initial_value_unavailable"
     | "link_titles_unavailable"
+    | "edit_field_unprojected"
     | BoardPlacementFailureCause
     | "board_payload_invalid",
   detail?: string,

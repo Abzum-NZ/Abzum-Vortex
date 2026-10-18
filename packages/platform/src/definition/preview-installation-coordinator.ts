@@ -23,6 +23,7 @@ import { readLiveHumanContext } from "../access/live-context";
 import { createPreviewInstallationRepository } from "./module-index";
 import type { RehearsedPreviewRelease } from "./application-publication";
 import { writePreviewRuntimeReleaseSet } from "./preview-runtime-context";
+import { backfillDerivedFields } from "../records/derived-field-backfill";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
 import type { RequestDatabaseTransaction } from "../db/index";
 import {
@@ -239,6 +240,9 @@ export const createPreviewInstallationCoordinator = (
             dependencies.releaseCatalogue,
             previewInstallationId,
           );
+          // The copied records hold the live values only: their totals and stored calculations
+          // are worked out afresh for the draft's definitions.
+          if (created.seedable) await backfillDerivedFields(transaction, new Date().toISOString());
           return created.installation;
         },
       );
