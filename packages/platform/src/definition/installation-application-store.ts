@@ -14,6 +14,7 @@ import {
 } from "../schema";
 import type { InstallationProblemShape } from "./installation-authority";
 import { maximumApplicationRoles } from "./application-contracts";
+import { maximumInstallationReviewBytes, reviewJsonbBytes } from "./application-role-review-volume";
 import { classifyInstallationFailure } from "./installation-failure";
 import { FirstInstallUnavailable } from "./installation-first-install";
 import {
@@ -64,6 +65,7 @@ type UnavailableReason =
   | "module_set_changed"
   | "installation_incomplete"
   | "registration_misaligned"
+  | "review_too_large"
   | "unsupported";
 
 const applicationRootInput = (candidate: unknown) => applicationRootIdSchema.safeParse(candidate);
@@ -95,6 +97,14 @@ const unavailable = (reason: UnavailableReason): ApplicationStoreResult => ({
   kind: "available",
   value: reviewOutputs({ change: "unavailable", reason }),
 });
+
+/** Refuse oversized stored releases before the flow attempts to persist its confirmation. */
+const reviewed = (value: Outputs): ApplicationStoreResult => {
+  if (reviewJsonbBytes(value) <= maximumInstallationReviewBytes)
+    return { kind: "available", value };
+  console.error("[installation] application review exceeds its continuation allowance");
+  return unavailable("review_too_large");
+};
 
 /** The review's answer to a failure: a named unavailability the flow explains, or the failure itself. */
 const reviewFailure = (error: unknown): ApplicationStoreResult => {
@@ -217,7 +227,7 @@ const review = async (
     try {
       const candidate = await readCurrentFirstInstallCandidate(environment, session, selector);
       if (candidate.snapshot.registrationState !== "active_exact")
-        return { kind: "available", value: await installReview(environment, session, candidate) };
+        return reviewed(await installReview(environment, session, candidate));
     } catch (error) {
       // Installed at an earlier version: the latest one is an upgrade.
       if (!(error instanceof FirstInstallUnavailable) || error.reason !== "already_installed")
@@ -228,9 +238,8 @@ const review = async (
     const changes = await readUpgradeRoleChanges(environment, session, selector, authorized.state);
     const installed =
       authorized.snapshot.selected.releaseRevision === authorized.snapshot.active.releaseRevision;
-    return {
-      kind: "available",
-      value: reviewOutputs({
+    return reviewed(
+      reviewOutputs({
         change: !installed ? "upgrade" : changes.length > 0 ? "roles" : "current",
         application_name: application.content.name,
         release_version: authorized.snapshot.selected.releaseVersion,
@@ -241,7 +250,7 @@ const review = async (
         role_template_ids: changes.map((change) => change.sourceRoleId),
         expected: expectedOf(authorized.snapshot),
       }),
-    };
+    );
   } catch (error) {
     return reviewFailure(error);
   }

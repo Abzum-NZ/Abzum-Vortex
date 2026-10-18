@@ -918,4 +918,302 @@ alter function vortex_access.coordinate_private_organization_role_authority_chan
 
 grant execute on function vortex_access.coordinate_private_organization_role_authority_change(p_prepared_evidence jsonb, p_activity_id uuid) to postgres;
 
+﻿create or replace function vortex_access.list_application_role_templates_projection(
+  p_record_ids uuid[], p_sort_key text, p_direction text,
+  p_after jsonb, p_limit integer
+)
+returns table (
+  organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
+)
+language plpgsql volatile security definer
+set search_path = ''
+set enable_sort = off
+set max_parallel_workers_per_gather = 0
+as $function$
+declare
+  scope_row record;
+  candidate record;
+  template_value jsonb;
+  selected_template jsonb;
+  source_role_id_value uuid;
+  seen_role_ids uuid[];
+  valid_roles boolean;
+  after_record_id uuid;
+  after_text text;
+  emitted integer := 0;
+  scan_sql text;
+  comparison text;
+  sort_column text;
+begin
+  if p_sort_key not in ('record_id', 'source_role_id', 'application_root_id', 'key', 'label')
+    or p_direction not in ('ascending', 'descending')
+    or p_sort_key is null or p_direction is null
+    or (p_limit is not null and p_limit < 1) then
+    raise exception using errcode = '22023',
+      message = 'Application role template projection bounds are invalid';
+  end if;
+  if p_after is not null then
+    if pg_catalog.jsonb_typeof(p_after) is distinct from 'object'
+      or pg_catalog.jsonb_typeof(p_after -> 'recordId') is distinct from 'string'
+      or (p_sort_key in ('source_role_id', 'key', 'label') and (
+        pg_catalog.jsonb_typeof(p_after -> 'sortKey') is distinct from 'array'
+        or pg_catalog.jsonb_array_length(p_after -> 'sortKey') is distinct from 1
+        or pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0)
+          not in ('string', 'null')
+      )) then
+      raise exception using errcode = '22023',
+        message = 'Application role template projection cursor is invalid';
+    end if;
+    begin
+      after_record_id := (p_after ->> 'recordId')::uuid;
+    exception when invalid_text_representation then
+      raise exception using errcode = '22023',
+        message = 'Application role template projection cursor is invalid';
+    end;
+    after_text := p_after -> 'sortKey' ->> 0;
+    if p_sort_key = 'source_role_id'
+      and after_text is distinct from after_record_id::text then
+      raise exception using errcode = '22023',
+        message = 'Application role template projection cursor is invalid';
+    end if;
+  end if;
+
+  begin
+    select authorized.* into strict scope_row
+    from vortex_access.organization_roles_administration_scope() as authorized;
+  exception when insufficient_privilege then
+    return;
+  end;
+
+  comparison := case when p_direction = 'ascending' then '>' else '<' end;
+  sort_column := case p_sort_key
+    when 'key' then 'continuity.key collate "C"'
+    when 'label' then 'continuity.label collate "C"'
+    else null end;
+  scan_sql := $scan$
+    select continuity.application_root_id, continuity.source_role_id,
+      continuity.key, continuity.label, continuity.continuity_revision,
+      registration.revision as registration_revision,
+      release.compilation_output #> '{canonical,content,roles}' as roles
+    from vortex_access.application_role_template_continuities as continuity
+    join vortex_access.permission_registrations as registration
+      on registration.organization_id = continuity.organization_id
+      and registration.registration_owner_id = continuity.application_root_id
+      and registration.registration_kind = 'application'
+      and registration.state = 'active'
+      and registration.revision = continuity.last_processed_registration_revision
+    join vortex_definition.roots as root
+      on root.root_id = registration.registration_owner_id
+      and root.organization_id = registration.organization_id
+      and root.kind = 'application'
+      and root.key = registration.source_definition_key
+    join vortex_definition.releases as release
+      on release.root_id = root.root_id
+      and release.release_revision = registration.source_revision
+      and release.release_version = registration.source_version
+      and release.validation_contract_version = registration.validation_contract_version
+    where continuity.organization_id = $1
+      and continuity.state = 'available'
+      and ($2 is null or continuity.source_role_id = any($2))
+      and release.application_address ->> 'kind' = 'application'
+      and release.compilation_output ->> 'kind' = 'application'
+      and exists (
+        select 1 from vortex_definition.installation_bindings as binding
+        where binding.organization_id = $1
+          and binding.application_root_id = root.root_id
+          and binding.application_release_revision = registration.source_revision
+          and binding.state = 'active'
+      )
+  $scan$;
+  if p_after is not null and p_sort_key in ('record_id', 'source_role_id') then
+    scan_sql := scan_sql || pg_catalog.format(
+      ' and continuity.source_role_id %s $3', comparison
+    );
+  elsif p_after is not null and sort_column is not null then
+    if after_text is null then
+      scan_sql := scan_sql || pg_catalog.format(
+        ' and ((%1$s is null and continuity.source_role_id %2$s $3)%3$s)',
+        sort_column, comparison,
+        case when p_direction = 'ascending'
+          then pg_catalog.format(' or %s is not null', sort_column)
+          else '' end
+      );
+    else
+      scan_sql := scan_sql || pg_catalog.format(
+        ' and ((%1$s, continuity.source_role_id) %2$s ($4 collate "C", $3)%3$s)',
+        sort_column, comparison,
+        case when p_direction = 'descending'
+          then pg_catalog.format(' or %s is null', sort_column)
+          else '' end
+      );
+    end if;
+  elsif p_after is not null then
+    -- Only the delegating old signature uses this order without a cursor.
+    raise exception using errcode = '22023',
+      message = 'Application role template projection cursor is invalid';
+  end if;
+  scan_sql := scan_sql || case when p_sort_key in ('record_id', 'source_role_id')
+    then pg_catalog.format(' order by continuity.source_role_id %s',
+      case when p_direction = 'ascending' then 'asc' else 'desc' end)
+    when sort_column is not null then pg_catalog.format(
+      ' order by %s %s nulls %s, continuity.source_role_id %s',
+      sort_column,
+      case when p_direction = 'ascending' then 'asc' else 'desc' end,
+      case when p_direction = 'ascending' then 'first' else 'last' end,
+      case when p_direction = 'ascending' then 'asc' else 'desc' end)
+    else pg_catalog.format(
+      ' order by continuity.application_root_id %s, continuity.source_role_id %s',
+      case when p_direction = 'ascending' then 'asc' else 'desc' end,
+      case when p_direction = 'ascending' then 'asc' else 'desc' end)
+    end;
+  -- No limit in the scan: a candidate whose release roles fail validation is skipped, as the
+  -- legacy reader skipped it, so the loop reads on until the page is full (the scan is an
+  -- ordered index walk, so only the rows consumed are read).
+
+  for candidate in execute scan_sql using scope_row.organization_id, p_record_ids,
+    after_record_id, after_text, p_limit
+  loop
+    if pg_catalog.jsonb_typeof(candidate.roles) is distinct from 'array' then
+      continue;
+    end if;
+    -- Keep in step with maximumApplicationRoles; p_limit remains the independent page bound.
+    if pg_catalog.jsonb_array_length(candidate.roles) not between 1 and 500 then
+      continue;
+    end if;
+    seen_role_ids := array[]::uuid[];
+    valid_roles := true;
+    selected_template := null;
+    -- The entire registered array must be valid even when only one role is read.
+    for template_value in
+      select template.value
+      from pg_catalog.jsonb_array_elements(candidate.roles) as template(value)
+    loop
+      if pg_catalog.jsonb_typeof(template_value) is distinct from 'object'
+        or pg_catalog.jsonb_typeof(template_value -> 'roleId') is distinct from 'string'
+        or not vortex_platform.is_non_nil_uuid(template_value ->> 'roleId')
+        or pg_catalog.jsonb_typeof(template_value -> 'key') is distinct from 'string'
+        or pg_catalog.char_length(template_value ->> 'key') not between 1 and 40
+        or (template_value ->> 'key') !~ '^[a-z][a-z0-9]*(_[a-z0-9]+)*$'
+        or pg_catalog.jsonb_typeof(template_value -> 'name') is distinct from 'string'
+        or pg_catalog.char_length(template_value ->> 'name') not between 1 and 60 then
+        valid_roles := false;
+        exit;
+      end if;
+      source_role_id_value := (template_value ->> 'roleId')::uuid;
+      if source_role_id_value = any(seen_role_ids)
+        or not vortex_definition.application_role_identity_is_exact_for_human_request_internal(
+          candidate.application_root_id, source_role_id_value
+        ) then
+        valid_roles := false;
+        exit;
+      end if;
+      seen_role_ids := pg_catalog.array_append(seen_role_ids, source_role_id_value);
+      if source_role_id_value = candidate.source_role_id then
+        selected_template := template_value;
+      end if;
+    end loop;
+    if not valid_roles or selected_template is null then
+      continue;
+    end if;
+    return query select scope_row.organization_id,
+      candidate.source_role_id, candidate.registration_revision,
+      pg_catalog.jsonb_build_object(
+        'application_root_id', candidate.application_root_id,
+        'source_role_id', candidate.source_role_id,
+        'key', candidate.key,
+        'label', candidate.label,
+        'continuity_revision', candidate.continuity_revision
+      );
+    emitted := emitted + 1;
+    exit when p_limit is not null and emitted >= p_limit;
+  end loop;
+end
+$function$;
+
+revoke all on function vortex_access.list_application_role_templates_projection(
+  uuid[], text, text, jsonb, integer
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_access.list_application_role_templates_projection(
+  uuid[], text, text, jsonb, integer
+) to vortex_owner, vortex_record_adapter, postgres;
+alter function vortex_access.list_application_role_templates_projection(
+  uuid[], text, text, jsonb, integer
+) owner to vortex_owner;
+
+create or replace function vortex_platform.issue_flow_continuation(
+  p_token_hash text,
+  p_run_id uuid,
+  p_organization_id uuid,
+  p_identity_id uuid,
+  p_flow_id uuid,
+  p_release_key text,
+  p_state jsonb,
+  p_elapsed_milliseconds integer,
+  p_lifetime_seconds integer
+)
+returns timestamptz
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  expiry timestamptz;
+begin
+  if p_token_hash is null or p_token_hash !~ '^[a-f0-9]{64}$'
+    or not vortex_platform.is_non_nil_uuid(p_run_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_identity_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_flow_id::text)
+    or p_release_key is null
+    or pg_catalog.length(p_release_key) not between 1 and 200
+    or p_state is null
+    or pg_catalog.jsonb_typeof(p_state) <> 'object'
+    -- Two 896 KiB publication review allowances plus 256 KiB for the surrounding flow state.
+    or pg_catalog.pg_column_size(p_state) > 2097152
+    or p_elapsed_milliseconds is null
+    or p_elapsed_milliseconds not between 0 and 3600000
+    or p_lifetime_seconds is null
+    or p_lifetime_seconds not between 60 and 3600 then
+    raise exception using errcode = '22023', message = 'Flow continuation is invalid';
+  end if;
+
+  -- Expired continuations are useless; remove a bounded few on every issue so the table never
+  -- needs a separate sweeper.
+  delete from vortex_platform.flow_continuations as stale
+  where stale.ctid in (
+    select candidate.ctid
+    from vortex_platform.flow_continuations as candidate
+    where candidate.expires_at < pg_catalog.statement_timestamp() - interval '1 day'
+    limit 100
+  );
+
+  expiry := pg_catalog.statement_timestamp() + pg_catalog.make_interval(secs => p_lifetime_seconds);
+
+  insert into vortex_platform.flow_continuations (
+    token_hash, run_id, organization_id, identity_id, flow_id, release_key, state,
+    elapsed_milliseconds, created_at, expires_at
+  ) values (
+    p_token_hash, p_run_id, p_organization_id, p_identity_id, p_flow_id, p_release_key, p_state,
+    p_elapsed_milliseconds, pg_catalog.statement_timestamp(), expiry
+  );
+
+  return expiry;
+end
+$function$;
+
+alter function vortex_platform.issue_flow_continuation(text,uuid,uuid,uuid,uuid,text,jsonb,integer,integer) owner to vortex_owner;
+
+revoke all on function vortex_platform.issue_flow_continuation(
+  text, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_platform.issue_flow_continuation(
+  text, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
+) to vortex_runtime;
+
+comment on function vortex_platform.issue_flow_continuation(
+  text, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
+) is
+  'Private flow-continuation issue: stores the suspended state of one server-driven flow run bound to its run, initiator, organisation and exact flow release, expiring, under the hash of a server-generated token.';
+
 reset role;

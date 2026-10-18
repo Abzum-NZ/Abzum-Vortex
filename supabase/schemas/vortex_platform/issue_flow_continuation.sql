@@ -27,7 +27,8 @@ begin
     or pg_catalog.length(p_release_key) not between 1 and 200
     or p_state is null
     or pg_catalog.jsonb_typeof(p_state) <> 'object'
-    or pg_catalog.pg_column_size(p_state) > 262144
+    -- Two 896 KiB publication review allowances plus 256 KiB for the surrounding flow state.
+    or pg_catalog.pg_column_size(p_state) > 2097152
     or p_elapsed_milliseconds is null
     or p_elapsed_milliseconds not between 0 and 3600000
     or p_lifetime_seconds is null
