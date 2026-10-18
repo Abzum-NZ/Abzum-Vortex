@@ -1,18 +1,17 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import type { RequestDatabaseTransaction } from "../db/index";
+import { z } from "zod";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   canonicalJson,
   sameId,
   systemApplicationBoundReleaseSetResultSchema,
   type ApplicationRootId,
   type OrganizationId,
-  type SelectedOrganizationScope,
   type SystemApplicationBoundReleaseSetResult,
 } from "../schema";
 import { DefinitionError } from "./definition-error";
-import { readApplicationDefinitionDraft } from "./definition-draft-read";
 import { createDatabaseFirstInstallApplicationReleaseSetService } from "./application-bound-release-set";
 import { installationProblem, type InstallationHumanContext } from "./installation-authority";
 import { releaseSetModuleTuples, type InstallationBindings } from "./installation-binding-reader";
@@ -45,10 +44,15 @@ export type FirstInstallSelector = Readonly<{
   releaseRevision: number;
 }>;
 
-export type FirstInstallHistory = Readonly<{
-  draftRevision: number;
-  sourceFingerprint: string;
-  anchorReleaseRevision: number | null;
+/**
+ * The application's latest published version, which an install is anchored to. It is read under
+ * the installation authority alone: installing never needs a right on the application's draft.
+ */
+export type ApplicationLatestRelease = Readonly<{
+  definitionKey: string;
+  releaseRevision: number;
+  releaseVersion: string;
+  releaseNote: string;
 }>;
 
 export type FirstInstallRegistrationState =
@@ -56,13 +60,6 @@ export type FirstInstallRegistrationState =
   | "registration_aligned_partial"
   | "provisioned_inactive"
   | "active_exact";
-
-/** The history identity of a draft snapshot: what the first install is anchored to. */
-export const firstInstallHistory = (snapshot: FirstInstallHistory): FirstInstallHistory => ({
-  draftRevision: snapshot.draftRevision,
-  sourceFingerprint: snapshot.sourceFingerprint,
-  anchorReleaseRevision: snapshot.anchorReleaseRevision,
-});
 
 const sameContent = (left: unknown, right: unknown): boolean =>
   canonicalJson(left) === canonicalJson(right);
@@ -162,27 +159,50 @@ export const firstInstallState = (
   return "registration_aligned_partial";
 };
 
-/** Proves the application's draft is still the one the first install was anchored to. */
-export const firstInstallHistoryMatchesDraft = async (
+const latestReleaseSchema = z
+  .object({
+    definitionKey: z.string().min(1),
+    releaseRevision: z.number().int().positive(),
+    releaseVersion: z.string().min(1),
+    releaseNote: z.string(),
+  })
+  .strict();
+
+/**
+ * The latest published version of the application, as a person who may manage the organisation's
+ * installations reads it. An application with no published version cannot be installed.
+ */
+export const readApplicationLatestRelease = async (
   transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
+  rootId: ApplicationRootId,
+): Promise<ApplicationLatestRelease> => {
+  let rows: readonly DatabaseRow[];
+  try {
+    rows = await transaction.query<DatabaseRow>`
+      select vortex_definition.read_application_latest_release(${rootId}::uuid) as latest
+    `;
+  } catch (error) {
+    return installationProblem("latest_release_unreadable", "refused", undefined, { cause: error });
+  }
+  if (rows.length !== 1) return installationProblem("latest_release_unreadable", "temporarily_unavailable");
+  if (rows[0]?.latest === null) return firstInstallUnavailable("release_not_published");
+  const parsed = latestReleaseSchema.safeParse(rows[0]?.latest);
+  if (!parsed.success)
+    return installationProblem("latest_release_invalid", "temporarily_unavailable", undefined, {
+      cause: parsed.error,
+    });
+  return parsed.data;
+};
+
+/** Proves the latest published version is still the one the first install was anchored to. */
+export const firstInstallLatestReleaseMatches = async (
+  transaction: RequestDatabaseTransaction,
   selector: FirstInstallSelector,
-  history: FirstInstallHistory,
-  definitionKey: string,
+  anchored: ApplicationLatestRelease,
 ): Promise<void> => {
-  const draft = await readApplicationDefinitionDraft(transaction, scope, {
-    rootId: selector.rootId,
-    expectedDraftRevision: history.draftRevision,
-  });
-  if (
-    !sameId(draft.rootId, selector.rootId) ||
-    draft.key !== definitionKey ||
-    draft.sourceFingerprint !== history.sourceFingerprint ||
-    draft.publishedRevision !== history.anchorReleaseRevision ||
-    history.anchorReleaseRevision === null ||
-    selector.releaseRevision > history.anchorReleaseRevision
-  )
-    installationProblem("first_install_history_draft_mismatch", "conflict");
+  const current = await readApplicationLatestRelease(transaction, selector.rootId);
+  if (!sameContent(current, anchored) || selector.releaseRevision > current.releaseRevision)
+    installationProblem("first_install_latest_release_moved", "conflict");
 };
 
 /**
@@ -245,13 +265,14 @@ export const readFirstInstallReleaseSet = async (
   return parsed.data;
 };
 
-/** Whether the bound release set is the release the history inspection reported for this selector. */
-export const firstInstallSetMatchesHistory = (
+/** Whether the bound release set is the selected release of the application the install is anchored to. */
+export const firstInstallSetMatchesLatest = (
   releaseSet: SystemApplicationBoundReleaseSetResult,
-  metadata: Readonly<{ releaseRevision: number; releaseVersion: string }>,
+  latest: ApplicationLatestRelease,
   selector: FirstInstallSelector,
 ): boolean =>
-  releaseSet.application.releaseRevision === metadata.releaseRevision &&
-  releaseSet.application.releaseVersion === metadata.releaseVersion &&
   sameId(releaseSet.application.rootId, selector.rootId) &&
-  releaseSet.application.releaseRevision === selector.releaseRevision;
+  releaseSet.application.releaseRevision === selector.releaseRevision &&
+  releaseSet.application.definitionKey === latest.definitionKey &&
+  (selector.releaseRevision !== latest.releaseRevision ||
+    releaseSet.application.releaseVersion === latest.releaseVersion);

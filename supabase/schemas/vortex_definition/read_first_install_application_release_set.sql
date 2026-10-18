@@ -54,13 +54,15 @@ begin
     select evaluated.* into strict permission_decision
     from vortex_access.evaluate_organization_permission_eligibility(
       pg_catalog.jsonb_build_object(
-        'operationKey', 'platform.organization.definition_drafts.manage',
+        'operationKey', 'platform.organization.applications.manage',
         'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
         'target', pg_catalog.jsonb_build_object('kind', 'organization'),
         'requiredPermission', pg_catalog.jsonb_build_object(
           'ownerKind', 'platform',
+          -- guard-allow: function-uuid fixed platform permission identity; the owner role has no read access to the declarations table
           'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-          'permissionId', '0548c061-b1a9-48e5-a04a-eb1d0dae0644'
+          -- guard-allow: function-uuid fixed platform permission identity; the owner role has no read access to the declarations table
+          'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
         ),
         'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
         'authority', pg_catalog.jsonb_build_object('kind', 'permission')
@@ -71,7 +73,7 @@ begin
     if checked_context is distinct from initial_context
       or permission_decision.outcome is distinct from 'eligible'
       or permission_decision.operation_key
-        is distinct from 'platform.organization.definition_drafts.manage'
+        is distinct from 'platform.organization.applications.manage'
       or permission_decision.target_kind is distinct from 'organization'
       or permission_decision.target_application_root_id is not null
       or permission_decision.organization_id
@@ -152,13 +154,11 @@ begin
 end
 $function$;
 
-alter function vortex_definition.read_first_install_application_release_set(uuid, bigint)
-  owner to postgres;
 revoke all on function vortex_definition.read_first_install_application_release_set(uuid, bigint)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_definition.read_first_install_application_release_set(uuid, bigint)
   to vortex_request;
 comment on function vortex_definition.read_first_install_application_release_set(uuid, bigint) is
-  'Returns the exact same-organization ordinary published Application and complete immutable Module pin closure to an org-only HUMAN draft manager before Application permission registration; grants no installation or mutation authority.';
+  'Returns the exact same-organization ordinary published Application and complete immutable Module pin closure to an org-only HUMAN who may manage application installations, before Application permission registration; grants no installation or mutation authority.';
 
 alter function vortex_definition.read_first_install_application_release_set(p_application_root_id uuid, p_application_release_revision bigint) owner to vortex_owner;
