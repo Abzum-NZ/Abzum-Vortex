@@ -19,7 +19,7 @@ const platformTheme = createThemeRootProps(undefined, DEFAULT_PLATFORM_THEME_REL
 const platformStyle = createVortexStyleRootProps(resolveVortexStyleSelection());
 
 /** The same Studio root props serve the document's first paint and client-side route transitions. */
-const studioTheme = createThemeRootProps(undefined, STUDIO_THEME_ROOT.tokens);
+const studioTheme = createThemeRootProps(STUDIO_THEME_ROOT, DEFAULT_PLATFORM_THEME_RELEASE.tokens);
 const studioStyle = createVortexStyleRootProps(resolveVortexStyleSelection(STUDIO_THEME_ROOT.selection));
 export const STUDIO_DOCUMENT_THEME = {
   ...studioTheme,

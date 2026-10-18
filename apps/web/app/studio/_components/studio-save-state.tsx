@@ -93,7 +93,7 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
     <Badge
       variant="ghost"
       className={cn(
-        "h-6 gap-1.5 rounded-full px-2 text-xs font-medium",
+        "h-6 gap-1.5 px-2 text-xs font-medium",
         status.kind === "failed"
           ? "bg-warning/10 text-warning"
           : notSaved
