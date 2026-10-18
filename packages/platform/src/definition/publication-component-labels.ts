@@ -7,6 +7,12 @@ const identityKeys: Readonly<Record<string, string>> = {
   dependencies: "moduleRootId",
   sharingConditions: "conditionId",
   publicAddresses: "addressId",
+  flows: "id",
+  nodes: "id",
+  edges: "id",
+  navigation: "id",
+  children: "id",
+  steps: "id",
 };
 
 const singular = (word: string): string =>
@@ -24,7 +30,6 @@ const ownedIdentity = (
   container: string | undefined,
 ): string | undefined => {
   if (container === undefined) return undefined;
-  if (typeof record.id === "string") return record.id;
   const identityKey = identityKeys[container];
   if (identityKey !== undefined && typeof record[identityKey] === "string")
     return record[identityKey];
@@ -136,9 +141,13 @@ export const componentLabelsOf = async (
   );
 
   const labels = new Map<string, string>();
-  const visit = (value: unknown, container: string | undefined): void => {
+  const visit = (
+    value: unknown,
+    container: string | undefined,
+    entryOfCollection = false,
+  ): void => {
     if (Array.isArray(value)) {
-      for (const entry of value) visit(entry, container);
+      for (const entry of value) visit(entry, container, true);
       return;
     }
     const record = asRecord(value);
@@ -167,12 +176,11 @@ export const componentLabelsOf = async (
       labels.set(block.id.toLowerCase(), blockLabel(release, block.props));
     }
     const textKey = textKeys.find((key) => text(record[key]) !== undefined);
-    const identity = ownedIdentity(record, container);
+    const identity = entryOfCollection ? ownedIdentity(record, container) : undefined;
     const label =
       (textKey === undefined ? undefined : text(record[textKey])) ??
       text(asRecord(record.labels)?.name) ??
-      readableKey(record.key) ??
-      text(record.path);
+      readableKey(record.key);
     if (label !== undefined && identity !== undefined && !labels.has(identity.toLowerCase()))
       labels.set(identity.toLowerCase(), label);
     for (const [key, entry] of Object.entries(record)) visit(entry, key);
