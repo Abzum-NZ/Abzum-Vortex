@@ -87,15 +87,24 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'unavailable');
   end if;
 
-  -- The verified request context and the caller's own current role-management authority decide the
-  -- organisation; the caller never names it.
+  -- The verified request context and the caller's own current authority decide the organisation;
+  -- the caller never names it. A custom role needs role management. Accepting an application's
+  -- role template or role revision is part of installing or upgrading that application, so it
+  -- needs the installation permission instead; the writer keeps the delegated-scope and recent
+  -- sign-in checks for both.
   select evaluated.* into strict decision
   from vortex_access.evaluate_organization_permission_eligibility(
     pg_catalog.jsonb_build_object(
-      'operationKey', 'platform.organization.roles.manage',
+      'operationKey', case when operation_name = 'create_custom'
+        then 'platform.organization.roles.manage'
+        else 'platform.organization.applications.manage' end,
       'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
-      'requiredPermission', vortex_access.required_platform_permission('platform.organization.roles.manage'),
+      'requiredPermission', vortex_access.required_platform_permission(
+        case when operation_name = 'create_custom'
+          then 'platform.organization.roles.manage'
+          else 'platform.organization.applications.manage' end
+      ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object('kind', 'permission')
     )

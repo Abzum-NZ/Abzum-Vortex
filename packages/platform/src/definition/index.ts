@@ -37,11 +37,10 @@ export {
   type FirstInstallCoordinatorEnvironment,
 } from "./installation-first-install-coordinator";
 export {
-  acceptedApplicationRoleKey,
   activateFirstInstall,
-  type FirstInstallMemberRole,
   type FirstInstallMemberRoleChoice,
-} from "./installation-first-install-member-role";
+} from "./installation-first-install-roles";
+export { acceptedApplicationRoleKey } from "./installation-role-templates";
 export { classifyInstallationFailure } from "./installation-failure";
 export {
   createApplicationStoreService,
@@ -62,12 +61,10 @@ export {
   type UpgradeState,
 } from "./installation-upgrade";
 export {
-  acceptUpgradeRoleRevisions,
-  readUpgradeRoleRevisions,
-  upgradeWithRoleRevisions,
+  readUpgradeRoleChanges,
+  upgradeWithRoleChanges,
   type UpgradeRoleEnvironment,
-  type UpgradeRoleRevision,
-} from "./installation-upgrade-role-revisions";
+} from "./installation-upgrade-roles";
 export type { OfflineSourceFailure } from "./offline-source-validation";
 export { applicationModuleSources } from "./application-module-lowering";
 export { validateApplicationsOffline } from "./offline-application-validation";

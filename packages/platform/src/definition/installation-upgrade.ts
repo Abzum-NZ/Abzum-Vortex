@@ -607,6 +607,10 @@ const coordinatorFor = (
   environment: UpgradeEnvironment,
   selector: UpgradeSelector,
   baseline: UpgradeState,
+  beforeRegistration?: (
+    transaction: RequestDatabaseTransaction,
+    scope: SelectedOrganizationScope,
+  ) => Promise<void>,
 ) => {
   let step = 0;
   const installerRequests: Pick<HumanOrganizationRequests, "runAccessChange"> = {
@@ -647,6 +651,8 @@ const coordinatorFor = (
               thisStep,
               context,
             );
+            if (thisStep === 0 && beforeRegistration !== undefined)
+              await beforeRegistration(transaction, scope);
             return await operation(transaction, scope, issuedAt);
           } catch (error) {
             callbackFailure = error;
@@ -728,9 +734,13 @@ export const activateUpgradeRelease = async (
   selector: UpgradeSelector,
   state: UpgradeState,
   session: IdentitySession,
+  beforeRegistration?: (
+    transaction: RequestDatabaseTransaction,
+    scope: SelectedOrganizationScope,
+  ) => Promise<void>,
 ): Promise<UpgradeActivation> => {
   const priorRevision = state.active.applicationReleaseRevision;
-  const result = await coordinatorFor(environment, selector, state).activate(session, {
+  const result = await coordinatorFor(environment, selector, state, beforeRegistration).activate(session, {
     organizationId: state.active.organizationId,
     applicationRootId: selector.rootId,
     applicationReleaseRevision: selector.releaseRevision,
