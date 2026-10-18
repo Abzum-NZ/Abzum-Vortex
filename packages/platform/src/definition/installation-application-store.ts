@@ -59,7 +59,6 @@ export type ApplicationStoreResult = HumanOrganizationRequestResult<Outputs> | "
 
 /** Why the latest version can be neither installed nor upgraded to here, as the review names it. */
 type UnavailableReason =
-  | "recent_sign_in_required"
   | "not_published"
   | "module_set_changed"
   | "installation_incomplete"
@@ -113,7 +112,6 @@ const reviewFailure = (error: unknown): ApplicationStoreResult => {
     }
   }
   const problem: InstallationProblemShape = classifyInstallationFailure(error);
-  if (problem.kind === "authentication_required") return unavailable("recent_sign_in_required");
   switch (problem.unavailableReason) {
     case "module_set_changed":
       return unavailable("module_set_changed");
@@ -136,8 +134,9 @@ const reviewFailure = (error: unknown): ApplicationStoreResult => {
 /** A command's failure: a conflict, a refusal (permission or eligibility) or a temporary failure. */
 const commandFailure = (problem: InstallationProblemShape): ApplicationStoreResult => {
   if (problem.kind === "conflict") return "conflict";
-  if (problem.kind === "refused" || problem.kind === "authentication_required")
-    return { kind: "unavailable" };
+  if (problem.kind === "authentication_required")
+    return { kind: "unavailable", code: "recent_authentication_required" };
+  if (problem.kind === "refused") return { kind: "unavailable" };
   return { kind: "temporarily_unavailable" };
 };
 
