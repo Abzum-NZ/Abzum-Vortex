@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ImmutablePlatformBlockCatalogue, PeopleDirectoryOwner } from "@vortex/platform/schema";
 import {
   projectStudioSemanticOutline, studioSemanticSelectionKey,
@@ -20,8 +20,7 @@ import { StudioFrame } from "./studio-frame";
 import {
   isStudioRailKey, isStudioReleasesSection, railShowsCanvas, studioRailTabs, type StudioRailKey, type StudioReleasesSection,
 } from "./studio-rail-tabs";
-import { StudioSaveProblem } from "./studio-save-problem";
-import { StudioSessionDialog } from "./studio-session-dialog";
+import { StudioSaveState } from "./studio-save-state";
 import { StudioTopBar } from "./studio-top-bar";
 import { StudioPlaceOpenerProvider, type StudioPlaceOpener } from "./studio-used-in";
 import { useStudioCanvasTab } from "./use-studio-canvas-tab";
@@ -145,23 +144,32 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
 
   const centreTitle = tab === "data" ? data.title : tab === "access" ? access.title : tab === "releases" ? releases.title : canvas.title;
   const canvasShown = railShowsCanvas(tab);
-  const conflictLoading = draft.isHeld("reopening");
-  const [loadFailed, setLoadFailed] = useState(false);
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      if ((!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== "z") return;
+      event.preventDefault();
+      // A modal owns its actions. Also prevent native Undo reaching the previously focused input.
+      if (target instanceof Element && target.closest('[role="dialog"], [role="alertdialog"]')) return;
+      if (event.shiftKey) draft.redo(); else draft.undo();
+    };
+    window.addEventListener("keydown", shortcut, true);
+    return () => window.removeEventListener("keydown", shortcut, true);
+  }, [draft]);
 
   return <StudioPlaceOpenerProvider opener={placeOpener}>
-  <StudioSessionDialog session={draft.session} />
   <div aria-busy={draft.isHeld("publication") || draft.isHeld("reopening")}>
     <ApplicationDraftAgentTools draft={draft} catalogue={catalogue} command={canvas.commandComposition}
       readQueries={canvas.readQueries} {...releases.agent} />
     <StudioFrame tabs={studioRailTabs} activeTab={tab} onTabChange={setTab}
+      selectionKey={draft.selected === null ? "" : studioSemanticSelectionKey(draft.selected)}
       topBar={<StudioTopBar
         location={{ organizationName: place.organizationName, organizationHref: `/studio/${encodeURIComponent(organizationId)}`,
           applicationName: source.body.name, item: canvas.breadcrumbItem,
+          applications: applications.map((app) => ({ name: app.name, href: `/studio/${encodeURIComponent(organizationId)}/${encodeURIComponent(app.rootId)}` })),
           onApplication: () => { draft.select({ kind: "application", applicationRootId: state.rootId }); } }}
-        chip={draft.chip} chipAlert={draft.status.kind === "conflict" || draft.status.kind === "refused"}
-        status={releases.notice} statusLink={releases.noticeLink}
-        problem={<StudioSaveProblem status={draft.status} loading={conflictLoading} loadFailed={loadFailed}
-          onLoadLatest={() => { setLoadFailed(false); void draft.reload().then((loaded) => setLoadFailed(!loaded)); }} />}
+        saveState={<StudioSaveState draft={draft} />}
         canUndo={state.canUndo} canRedo={state.canRedo} undoDisabled={draft.locked}
         onUndo={draft.undo} onRedo={draft.redo}
         backToAppHref={place.applicationHref}
@@ -178,8 +186,8 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
         {releases.panel}
       </>}
       inspector={tab === "data" ? data.inspector : canvas.inspector}
-      canvas={({ inspectorOpen, toggleInspector }) => <>
-        {canvas.toolbar(inspectorOpen, toggleInspector, centreTitle, canvasShown)}
+      canvas={({ inspectorOpen, toggleInspector, focused, focusCanvas }) => <>
+        {canvas.toolbar(inspectorOpen, toggleInspector, centreTitle, canvasShown, focused, focusCanvas)}
         <div className="min-h-0 flex-1 overflow-auto p-4">
           {canvasShown && canvas.centre}
           {tab === "flows" && flows.centre}

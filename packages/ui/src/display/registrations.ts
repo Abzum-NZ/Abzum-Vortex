@@ -1,6 +1,4 @@
-import {
-  PLATFORM_BLOCK_RELEASE_IDENTITIES,
-} from "@vortex/platform/schema";
+import { PLATFORM_BLOCK_RELEASE_IDENTITIES } from "@vortex/platform/schema";
 import {
   createPayloadParser,
   noRuntimeInputs,
@@ -72,10 +70,6 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       parsePayload: LIST_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE,
-      parsePayload: TABLE_PAYLOAD_PARSER,
-    }),
-    Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE,
       parsePayload: RECORD_DETAIL_PAYLOAD_PARSER,
     }),
@@ -112,10 +106,6 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.LIST_BLOCK_RELEASE_1_1_0,
       parsePayload: LIST_PAYLOAD_PARSER,
-    }),
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE_1_1_0,
-      parsePayload: TABLE_PAYLOAD_PARSER,
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE_1_1_0,

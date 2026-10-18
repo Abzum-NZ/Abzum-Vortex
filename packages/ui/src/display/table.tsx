@@ -213,7 +213,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
       value.kind === "link" ||
       value.kind === "number" ||
       value.kind === "boolean");
-  const showActionsColumn = events?.row_action !== undefined;
+  const showActionsColumn = declaredRowActions.length > 0 && events?.row_action !== undefined;
   const selectedRecordIds = values?.selectedRecordIds ?? [];
   const pageRecordIds = rows.map((row) => row.recordId);
   const allSelected =
@@ -380,11 +380,9 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
               {values.rows.map((row) => {
                 const name = rowName(row, columns[0]?.key);
                 const selected = selectedRecordIds.includes(row.recordId);
-                // A release that declares no named action keeps the legacy command (undefined).
-                const shownActions =
-                  declaredRowActions.length === 0
-                    ? undefined
-                    : declaredRowActions.filter((action) => rowShowsAction(row, action));
+                const shownActions = declaredRowActions.filter((action) =>
+                  rowShowsAction(row, action),
+                );
                 const activate = activateRow;
                 // A row with no declared click command opens the record its first column links to,
                 // through that column's own address, so the whole row acts as the link.

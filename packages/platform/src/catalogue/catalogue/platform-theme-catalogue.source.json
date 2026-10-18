@@ -144,7 +144,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
+        "light": "oklch(0.669432 0 0)",
         "dark": "oklch(0.556 0 0)"
       },
       "chart_1": {

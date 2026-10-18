@@ -2,7 +2,7 @@ import "server-only";
 
 import { headers } from "next/headers";
 import type { CSSProperties } from "react";
-import { DEFAULT_PLATFORM_THEME_RELEASE } from "@vortex/platform/server";
+import { DEFAULT_PLATFORM_THEME_RELEASE, STUDIO_THEME_ROOT } from "@vortex/platform/server";
 import {
   createThemeRootProps,
   createVortexStyleRootProps,
@@ -13,10 +13,19 @@ import { loadApplicationStartTheme } from "./application-frame";
 import { requestAddressHeader } from "./request-address";
 
 /** The first path segments that are platform routes, never a tenant. */
-const PLATFORM_SEGMENTS = new Set(["api", "auth", "health", "signed-in", "studio"]);
+const PLATFORM_SEGMENTS = new Set(["api", "auth", "health", "signed-in"]);
 
 const platformTheme = createThemeRootProps(undefined, DEFAULT_PLATFORM_THEME_RELEASE.tokens);
 const platformStyle = createVortexStyleRootProps(resolveVortexStyleSelection());
+
+/** The same Studio root props serve the document's first paint and client-side route transitions. */
+const studioTheme = createThemeRootProps(STUDIO_THEME_ROOT, DEFAULT_PLATFORM_THEME_RELEASE.tokens);
+const studioStyle = createVortexStyleRootProps(resolveVortexStyleSelection(STUDIO_THEME_ROOT.selection));
+export const STUDIO_DOCUMENT_THEME = {
+  ...studioTheme,
+  ...studioStyle,
+  style: { ...studioTheme.style, ...studioStyle.style },
+};
 
 /**
  * The platform default theme as one `:root` rule. It is the document's theme wherever no
@@ -56,6 +65,10 @@ export async function loadDocumentTheme(): Promise<DocumentTheme> {
     .filter((segment) => segment !== "")
     .map((segment) => decodeURIComponent(segment));
   const [tenant, organization, application] = segments;
+  if (tenant === "studio") {
+    const { style, ...attributes } = STUDIO_DOCUMENT_THEME;
+    return { attributes, style };
+  }
   if (
     segments.length !== 4 ||
     tenant === undefined ||

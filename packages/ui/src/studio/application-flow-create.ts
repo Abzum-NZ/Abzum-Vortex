@@ -28,8 +28,8 @@ import { traverseStudioSemanticSelectionDraft, type StudioSemanticSelection } fr
  * - for a record event: a transaction flow an owned Module runs before one of its record types is
  *   saved, with one Warn step (the trigger is the flow's own `triggers`): a before-save rule, added
  *   on its record type in the Data tab.
- * A binding declares its event for the board's record type or the record type of its page, as
- * publication requires of every bound record event.
+ * Every binding declares its event. It names the board's or page's record type when there is one;
+ * an ordinary page's component event has no record subject or carried fields.
  */
 
 type SourceBinding = ApplicationSourceDocument["body"]["flow_bindings"][number];
@@ -121,8 +121,8 @@ class FlowCreateRefusal extends Error {}
 const refuse = (reason: string): never => { throw new FlowCreateRefusal(reason); };
 
 /**
- * Binds one control event to a flow: a fresh binding alias and event alias, and, for a control on
- * a page of a record type, the event's declaration for that record type.
+ * Binds one control event to a flow: a fresh binding alias, an event alias and its declaration,
+ * with the record subject when the control has one.
  */
 const bindControl = (source: ApplicationSourceDocument, controlAlias: string, event: StudioFlowControlEvent,
   flowKey: string, inputs: SourceBinding["inputs"]): Readonly<{ id: string; eventId: string }> => {
@@ -156,9 +156,10 @@ const bindControl = (source: ApplicationSourceDocument, controlAlias: string, ev
   const eventId = shared ?? keyFrom(recordType === undefined ? `event_${flowKey}`
     : `event_${recordType.slice(recordType.lastIndexOf(":") + 1)}_${event}`, aliases);
   if (eventId === undefined) return refuse("No free name could be made for the binding's event. Choose another name.");
-  if (recordType !== undefined && shared === undefined) {
+  if (shared === undefined) {
     if (body.events.length >= 100) refuse("An application can declare at most 100 events, so no more controls can be bound.");
-    body.events.push({ id: eventId, key: `vortex.app.events.${eventId}`, record_type: recordType, carries: [],
+    body.events.push({ id: eventId, key: `vortex.app.events.${eventId}`,
+      ...(recordType === undefined ? {} : { record_type: recordType }), carries: [],
       personal_or_sensitive_values_allowed: false });
   }
   body.flow_bindings.push({ id, control: controlAlias, event_id: eventId, event, flow: flowKey, inputs });

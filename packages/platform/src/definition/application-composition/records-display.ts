@@ -204,8 +204,8 @@ const readRowBehaviours = (settings: SettingsRecord): RecordsTableRowBehaviourCo
 
 /**
  * Reads a Records table placement's declared data contract from its settings, applying the
- * declared defaults. Returns undefined for a release that declares no `columns` setting, so the
- * earlier table releases keep their exact behaviour. It reads settings that already passed the
+ * declared defaults. Returns undefined when the settings do not declare a table's `columns`.
+ * It reads settings that already passed the
  * shared setting validator and never widens what a release declares; the same reader serves the
  * publication rule, the server query request and the renderer.
  */

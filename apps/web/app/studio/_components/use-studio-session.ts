@@ -5,6 +5,12 @@ import { z } from "zod";
 
 const sessionResultSchema = z.object({ kind: z.string() }).strict();
 
+export const isStudioSessionRefusal = (result: { kind: string; reason?: string | undefined }) =>
+  result.kind === "refused" &&
+  ["session_ended", "context_changed", "recent_authentication_required"].includes(
+    result.reason ?? "",
+  );
+
 export function useStudioSession() {
   const [needsSignIn, setNeedsSignIn] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
@@ -59,10 +65,12 @@ export function useStudioSession() {
       saving.current = true;
       try {
         if (request.current !== null) await request.current;
-        const result = await submit();
-        if (result.kind !== "refused" || result.reason !== "session_ended" || !mounted.current)
-          return result;
-        if ((await readSession("POST")) === "active") return await submit();
+        let result = await submit();
+        if (!isStudioSessionRefusal(result) || !mounted.current) return result;
+        if ((await readSession("POST")) === "active") {
+          result = await submit();
+          if (!isStudioSessionRefusal(result) || !mounted.current) return result;
+        }
         if (!mounted.current) return result;
         setNeedsSignIn(true);
         setMessage("");
@@ -77,38 +85,34 @@ export function useStudioSession() {
     [readSession],
   );
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    if (pending.current === null) return;
-    setSigningIn(true);
-    setMessage("");
-    try {
-      const response = await fetch("/auth/session", {
-        method: "PUT",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const result = sessionResultSchema.parse(await response.json());
-      if (!mounted.current) return;
-      if (result.kind !== "active") {
-        setMessage(
-          result.kind === "invalid_credentials"
-            ? "The email or password was not accepted. Try again."
-            : "Sign-in is temporarily unavailable. Your edit is kept here; try again.",
-        );
-        return;
+  const returning = useRef(false);
+  useEffect(() => {
+    const resume = async () => {
+      if (!returning.current || document.hidden) return;
+      returning.current = false;
+      setSigningIn(true);
+      try {
+        if ((await readSession("POST")) === "active") {
+          setNeedsSignIn(false);
+          pending.current?.(true);
+          pending.current = null;
+        } else setMessage("Sign-in has not finished. Your change is kept here; sign in again.");
+      } finally {
+        if (mounted.current) setSigningIn(false);
       }
-      setNeedsSignIn(false);
-      pending.current?.(true);
-      pending.current = null;
-    } catch (error) {
-      console.error("[studio] sign-in failed", describeFailure(error));
-      if (mounted.current)
-        setMessage("Sign-in could not finish. Your edit is kept here; try again.");
-    } finally {
-      if (mounted.current) setSigningIn(false);
-    }
+    };
+    window.addEventListener("focus", resume);
+    return () => window.removeEventListener("focus", resume);
+  }, [readSession]);
+  const openSignIn = useCallback(() => {
+    returning.current = true;
+    window.open("/auth/sign-in", "_blank", "noopener");
   }, []);
-
-  return { save, needsSignIn, signingIn, message, signIn };
+  const cancel = useCallback(() => {
+    returning.current = false;
+    setNeedsSignIn(false);
+    pending.current?.(false);
+    pending.current = null;
+  }, []);
+  return { save, needsSignIn, signingIn, message, openSignIn, cancel };
 }

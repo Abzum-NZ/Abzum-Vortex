@@ -25,7 +25,7 @@ export interface StudioApplicationDefinitionDraftPort {
 }
 
 /** What the person can act on when a save is refused; absent when the writer gave no reason. */
-export type StudioApplicationDraftRefusalReason = "permission_missing" | "source_invalid" | "context_changed" | "session_ended";
+export type StudioApplicationDraftRefusalReason = "permission_missing" | "source_invalid" | "context_changed" | "session_ended" | "recent_authentication_required";
 export type StudioApplicationDraftConflictReason =
   | "draft_changed"
   | "key_exists"
@@ -148,7 +148,7 @@ const saveFailureOutcome = (error: unknown): StudioApplicationDraftSaveOutcome =
     return Object.freeze({
       kind: "refused",
       ...(reason === "permission_missing" || reason === "source_invalid" || reason === "context_changed" ||
-        reason === "session_ended"
+        reason === "session_ended" || reason === "recent_authentication_required"
         ? { reason }
         : {}),
     });

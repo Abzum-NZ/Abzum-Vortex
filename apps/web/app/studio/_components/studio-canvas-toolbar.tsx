@@ -2,6 +2,8 @@
 import { Icon, type VortexIconName } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@vortex/ui/components/tooltip";
+import { Kbd } from "@vortex/ui/components/kbd";
 import type { StudioCanvasBreakpoint } from "@vortex/ui/studio/page-puck-editor";
 
 const devices: readonly Readonly<{ value: StudioCanvasBreakpoint; label: string; icon: VortexIconName }>[] = [
@@ -19,7 +21,7 @@ export type StudioCanvasZoom = (typeof studioCanvasZooms)[number];
  * at, and the inspector toggle.
  */
 export function StudioCanvasToolbar({ title, breakpoint, onBreakpoint, zoom, onZoom, showsCanvas,
-  inspectorOpen, onToggleInspector, appearance, onAppearance, viewAs }: Readonly<{
+  inspectorOpen, onToggleInspector, focused, onFocusCanvas, appearance, onAppearance, viewAs }: Readonly<{
   title: string;
   /** "Who can see this": the roles the canvas and its menu can be previewed as, and the one shown (`null` is the design view). */
   viewAs: Readonly<{ roles: readonly Readonly<{ key: string; name: string }>[]; value: string | null;
@@ -35,15 +37,17 @@ export function StudioCanvasToolbar({ title, breakpoint, onBreakpoint, zoom, onZ
   showsCanvas: boolean;
   inspectorOpen: boolean;
   onToggleInspector: () => void;
+  focused: boolean;
+  onFocusCanvas: () => void;
 }>) {
-  const step = studioCanvasZooms.indexOf(zoom);
-  return <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-background px-3 py-1">
-    <h2 className="min-w-0 truncate text-sm font-medium">{title}</h2>
-    <div className="ml-auto flex flex-wrap items-center gap-2">
+  return <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-3">
+    <h2 className="min-w-0 flex-1 truncate text-sm font-medium" title={title}>{title}</h2>
+    <div className="ml-auto flex shrink-0 items-center gap-1">
       {showsCanvas && <>
         <label className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">View as</span>
+          <span className="sr-only">View as</span>
           <NativeSelect size="sm" value={viewAs.value ?? ""} aria-label="Who can see this: view the canvas as a role"
+            className="w-32 [&>select]:w-full [&>select]:truncate"
             onChange={(event) => viewAs.onChange(event.target.value === "" ? null : event.target.value)}>
             <NativeSelectOption value="">Builder (everything)</NativeSelectOption>
             {viewAs.roles.map((role) => <NativeSelectOption key={role.key} value={role.key}>{role.name}</NativeSelectOption>)}
@@ -60,18 +64,23 @@ export function StudioCanvasToolbar({ title, breakpoint, onBreakpoint, zoom, onZ
             variant={appearance === mode ? "secondary" : "ghost"} aria-pressed={appearance === mode}
             onClick={() => onAppearance(mode)}>{mode === "light" ? "Light" : "Dark"}</Button>)}
         </div>
-        <div role="group" aria-label="Zoom" className="flex items-center gap-1">
-          <Button type="button" size="icon-sm" variant="ghost" aria-label="Zoom out" title="Zoom out" disabled={step <= 0}
-            onClick={() => onZoom(studioCanvasZooms[step - 1]!)}><Icon name="minus" /></Button>
-          <Button type="button" size="sm" variant="ghost" aria-label={`Zoom ${zoom}%, reset to 100%`} title="Reset zoom"
-            onClick={() => onZoom(100)}><span className="tabular-nums">{zoom}%</span></Button>
-          <Button type="button" size="icon-sm" variant="ghost" aria-label="Zoom in" title="Zoom in"
-            disabled={step >= studioCanvasZooms.length - 1}
-            onClick={() => onZoom(studioCanvasZooms[step + 1]!)}><Icon name="plus" /></Button>
-        </div>
+        <NativeSelect size="sm" aria-label="Canvas zoom" value={zoom}
+          onChange={(event) => onZoom(Number(event.target.value) as StudioCanvasZoom)}>
+          {studioCanvasZooms.map((value) => <NativeSelectOption key={value} value={value}>{value}%</NativeSelectOption>)}
+        </NativeSelect>
       </>}
-      <Button type="button" size="sm" variant={inspectorOpen ? "secondary" : "ghost"} aria-pressed={inspectorOpen}
-        onClick={onToggleInspector}><Icon name="panel-left" className="rotate-180" />Inspector</Button>
+      <Tooltip>
+        <TooltipTrigger render={<Button type="button" size="icon-sm" variant={focused ? "secondary" : "ghost"}
+          aria-label="Focus canvas" aria-pressed={focused} onClick={onFocusCanvas} />}><Icon name="monitor" /></TooltipTrigger>
+        <TooltipContent>Focus canvas <Kbd>Ctrl \\</Kbd></TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger render={<Button type="button" size="icon-sm" variant={inspectorOpen ? "secondary" : "ghost"}
+          aria-label="Inspector" aria-pressed={inspectorOpen} onClick={onToggleInspector} />}>
+          <Icon name="panel-left" className="rotate-180" />
+        </TooltipTrigger>
+        <TooltipContent>Inspector <Kbd>Ctrl .</Kbd></TooltipContent>
+      </Tooltip>
     </div>
   </div>;
 }

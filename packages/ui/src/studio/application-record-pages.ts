@@ -645,7 +645,7 @@ const addList = (
   const columns = wanted.filter((entry) => query.select.includes(entry.key));
   const tableAlias = freshAlias(plan, `table_${record.key}`);
   const table = blockItem(
-    release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE, "records table"),
+    release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE_1_4_0, "records table"),
     tableAlias,
     {
       title: record.plural_name,
@@ -824,7 +824,7 @@ const relatedTables = (
             blockItem(
               release(
                 context,
-                PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE,
+                PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE_1_4_0,
                 "records table",
               ),
               freshAlias(plan, `table_${child.key}_of_${resolved.record.key}`),
