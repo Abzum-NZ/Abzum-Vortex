@@ -10,6 +10,7 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
     "stale_revision",
   ]).options,
   "role_acceptance_required",
+  "recent_authentication_required",
 ]);
 
 /** Definition-authored guidance and a link to the affected row on the current page. */

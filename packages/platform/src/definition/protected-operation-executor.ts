@@ -1307,7 +1307,14 @@ export const createProtectedOperationExecutor = (
       if (result === "conflict") return { outcome: "conflict" };
       if (result.kind === "confirmed_failure")
         return { outcome: result.outcome, diagnostic: result.diagnostic };
-      if (result.kind === "unavailable") return refuse("operation_unavailable");
+      if (result.kind === "unavailable") {
+        if (result.code === "recent_authentication_required")
+          return {
+            outcome: "refused",
+            diagnostic: flowRefusalFeedbackSchema.parse({ code: result.code }),
+          };
+        return refuse("operation_unavailable");
+      }
       if (result.kind === "temporarily_unavailable") {
         logRefusal("protected-operation", operationName(), "operation_temporarily_unavailable");
         return { outcome: "failed" };
