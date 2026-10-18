@@ -30,10 +30,12 @@ export const moduleFieldTypeLabels: Readonly<Record<ModuleFieldType, string>> = 
   attachment: "Attachment",
 };
 
-/** What a field's settings can refer to: the other fields of its record type. */
+/** What a field's settings can refer to in its module. */
 export type ModuleFieldSettingsContext = Readonly<{
   /** The other fields of the field's own record type, by local key. */
   fields: readonly Readonly<{ key: string; label: string; type: string }>[];
+  /** The module's permissions, which may control who can choose a choice option. */
+  permissions: readonly Readonly<{ key: string; label: string }>[];
 }>;
 
 const base = (key: string, label: string, required: boolean, help?: string) =>
@@ -59,13 +61,16 @@ const decimalText = (key: string, label: string) =>
 const isoDate = (key: string, label: string) => text(key, label, false, 10, 10, "A date written as YYYY-MM-DD.");
 const fieldChoices = (fields: ModuleFieldSettingsContext["fields"], types?: readonly string[]) =>
   fields.filter((field) => types === undefined || types.includes(field.type)).map((field) => [field.key, field.label] as const);
+const permissionChoices = (permissions: ModuleFieldSettingsContext["permissions"]) =>
+  permissions.map(({ key, label }) => [key, label] as const);
 const deleteRules = [["refuse", "Refuse to delete the linked record"], ["empty_optional", "Clear this link"],
   ["soft_delete_dependent", "Delete this record too"]] as const;
 const currencyModes = [["organization_default", "The organisation's currency"], ["fixed", "One fixed currency"]] as const;
-const optionItem = (): Declaration => ({ ...base("option", "Option", true), kind: "group", properties: [
+const optionItem = (permissions: ModuleFieldSettingsContext["permissions"]): Declaration => ({ ...base("option", "Option", true), kind: "group", properties: [
   text("label", "Label", true, 1, 60),
   text("value", "Stored value", true, 1, 120, "Made from the label when added. Renaming the option keeps this value."),
-  text("required_permission", "Permission needed to choose it", false, 1, 200, "Leave empty so everyone who can edit the field may choose it."),
+  choice("required_permission", "Permission needed to choose it", false, permissionChoices(permissions),
+    "Leave empty so everyone who can edit the field may choose it."),
 ], namedEntry: { label: "label", value: "value" } });
 const tableColumnTypes = [["text", "Text"], ["whole_number", "Whole number"], ["decimal_number", "Decimal number"],
   ["money", "Money"], ["yes_no", "Yes or no"], ["date", "Date"], ["date_time", "Date and time"], ["choice", "Choice"]] as const;
@@ -73,7 +78,7 @@ const timeZones = [["person", "The person's time zone"], ["organization", "The o
 const textFormats = [["uuid", "Identifier (UUID)"]] as const;
 
 /** One table column: its declared type selects both the controls and the settings it stores. */
-const tableColumnItem = (): Declaration => group("column", "Column", [
+const tableColumnItem = (permissions: ModuleFieldSettingsContext["permissions"]): Declaration => group("column", "Column", [
   text("key", "Key", true, 1, 40, "Lowercase words separated by underscores."),
   boolean("required", "A value is required", false),
   choice("type", "Type", true, tableColumnTypes),
@@ -91,7 +96,7 @@ const tableColumnItem = (): Declaration => group("column", "Column", [
   isoDate("earliest", "Earliest date (date)"),
   isoDate("latest", "Latest date (date)"),
   choice("display_time_zone", "Time zone shown (date and time)", false, timeZones),
-  list("options", "Options (choice)", false, 0, 200, optionItem()),
+  list("options", "Options (choice)", false, 0, 200, optionItem(permissions)),
 ].map((property): Declaration => {
   if (["key", "required", "type"].includes(property.key)) return property;
   return { ...property, showWhen: property.key === "currency"
@@ -133,9 +138,9 @@ export const moduleFieldSettingDeclarations = (
     case "date_time":
       return [choice("display_time_zone", "Time zone shown", false, timeZones, "Leave empty for the person's own time zone.")];
     case "choice":
-      return [list("options", "Options", true, 1, 200, optionItem(), "Add, rename and reorder the options people choose from.")];
+      return [list("options", "Options", true, 1, 200, optionItem(context.permissions), "Add, rename and reorder the options people choose from.")];
     case "several_choices":
-      return [list("options", "Options", true, 1, 200, optionItem(), "Add, rename and reorder the options people choose from."),
+      return [list("options", "Options", true, 1, 200, optionItem(context.permissions), "Add, rename and reorder the options people choose from."),
         number("maximum_selections", "Most options a person may choose", false, { minimum: 1, maximum: 200 })];
     case "reference_number":
       return [text("prefix", "Text before the number", false, 0, 20), text("suffix", "Text after the number", false, 0, 20),
@@ -147,7 +152,7 @@ export const moduleFieldSettingDeclarations = (
       return [list("allowed_schemes", "Allowed kinds of address", false, 1, 1, choice("scheme", "Kind", true, [["https", "Secure (https)"]]))];
     case "table":
       return [number("minimum_rows", "Fewest rows", true, { minimum: 0 }), number("maximum_rows", "Most rows", true, { minimum: 1, maximum: 1_000 }),
-        list("columns", "Columns", true, 1, 40, tableColumnItem())];
+        list("columns", "Columns", true, 1, 40, tableColumnItem(context.permissions))];
     case "link":
       return [{ ...base("target", "Linked record type", true), kind: "record_type_reference" },
         text("reverse_key", "Name of the link back", true, 1, 40, "Lowercase words separated by underscores, for example contacts."),

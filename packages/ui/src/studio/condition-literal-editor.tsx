@@ -31,6 +31,20 @@ type LiteralEditorProps = Readonly<{
   onInvalid: (message: string) => void;
 }>;
 
+const collectionTypeLabel = (type: Exclude<StudioConditionSemanticType, "text_collection" | "opaque_json">): string => {
+  switch (type) {
+    case "whole_number": return "whole numbers";
+    case "decimal_number": return "decimal numbers";
+    case "money": return "amounts of money";
+    case "yes_no": return "yes or no answers";
+    case "date": return "dates";
+    case "date_time": return "dates and times";
+    case "record_reference": return "records";
+    case "organization_account_reference": return "people";
+    default: return type;
+  }
+};
+
 export function LiteralEditor({
   operand,
   semanticType,
@@ -45,8 +59,11 @@ export function LiteralEditor({
   const inputTimeZone = timeZone ?? "UTC";
   const error = errorForPath(validation, path);
   const label = collectionElementType && collectionElementType !== "text"
-    ? `Value (${collectionElementType.replaceAll("_", " ")} list, JSON array)`
+    ? `Values (list of ${collectionTypeLabel(collectionElementType)})`
     : `Value${semanticType ? ` (${semanticType.replaceAll("_", " ")})` : ""}`;
+  const collectionMessage = collectionElementType === undefined
+    ? "Enter a list with values of the selected type"
+    : `Enter a list of ${collectionTypeLabel(collectionElementType)} values`;
 
   if (collectionElementType && collectionElementType !== "text")
     return (
@@ -64,11 +81,11 @@ export function LiteralEditor({
                 !Array.isArray(parsed.data) ||
                 !parsed.data.every((value) => literalMatchesType(value, collectionElementType))
               )
-                throw new Error("Enter a JSON array with items of the selected type");
+                throw new Error(collectionMessage);
               event.currentTarget.setCustomValidity("");
               onCommit(parsed.data);
             } catch {
-              const message = "Enter a JSON array with items of the selected type";
+              const message = collectionMessage;
               event.currentTarget.setCustomValidity(message);
               event.currentTarget.reportValidity();
               onInvalid(message);

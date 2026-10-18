@@ -115,7 +115,10 @@ export function ModuleFieldsEditor({ source, moduleKey, recordKey, fieldKey, ini
     .map((item) => ({ key: item.key, label: item.label, type: item.type, settings: item.settings })), [record, existing]);
   const formulaFieldsByKey = useMemo(() => new Map(formulaFields.map((item) => [item.key, item])), [formulaFields]);
   const otherFields = formulaFields.map(({ key, label, type }) => ({ key, label, type }));
-  const declarationsFor = (type: ModuleFieldType) => moduleFieldSettingDeclarations(type, { fields: otherFields });
+  const declarationsFor = (type: ModuleFieldType) => moduleFieldSettingDeclarations(type, {
+    fields: otherFields,
+    permissions: (module?.permissions ?? []).map(({ key, label }) => ({ key, label })),
+  });
   const startSettings = (type: ModuleFieldType): Record<string, unknown> => {
     const start = starterModuleFieldSettings(type, {
       fieldKey: deriveFieldKey(existing?.label ?? "field", new Set()) ?? "field", recordKey,
