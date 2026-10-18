@@ -95,12 +95,12 @@ export const moduleSourceActionInputSchema = z
     z
       .object({
         ...moduleSourceActionInputBase,
-        type: sourceProvenanceTarget(z.literal("number"), ["type"]),
+        type: sourceProvenanceTarget(z.literal("whole_number"), ["type"]),
         validation: sourceProvenanceUnchanged(
           z
             .object({
-              minimum: sourceProvenanceTarget(z.number().finite().optional(), ["minimum"]),
-              maximum: sourceProvenanceTarget(z.number().finite().optional(), ["maximum"]),
+              minimum: sourceProvenanceTarget(z.number().int().safe().optional(), ["minimum"]),
+              maximum: sourceProvenanceTarget(z.number().int().safe().optional(), ["maximum"]),
             })
             .strict()
             .optional(),
@@ -128,7 +128,7 @@ export const moduleSourceActionInputSchema = z
     z
       .object({
         ...moduleSourceActionInputBase,
-        type: sourceProvenanceTarget(z.literal("boolean"), ["type"]),
+        type: sourceProvenanceTarget(z.literal("yes_no"), ["type"]),
       })
       .strict(),
     z
@@ -194,7 +194,7 @@ export const moduleSourceActionInputSchema = z
       });
     if (value.type === "text") refineTextInputPattern(value.validation, context);
     if (
-      value.type === "number" &&
+      value.type === "whole_number" &&
       value.validation?.minimum !== undefined &&
       value.validation.maximum !== undefined &&
       value.validation.minimum > value.validation.maximum

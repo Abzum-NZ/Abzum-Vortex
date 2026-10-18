@@ -202,12 +202,12 @@ const sourceComparisonSchema = z.union([
   z
     .object({
       field: sourceProvenanceTarget(builderKeySchema, ["kind", "left/source", "left/fieldId"]),
-      operator: sourceProvenanceTarget(sourceBinaryConditionOperatorSchema, ["kind", "operator"]),
-      value: sourceProvenanceTarget(
-        jsonValueSchema,
-        ["kind", "right/source", "right/value/**"],
-        true,
-      ),
+      operator: sourceProvenanceTarget(sourceBinaryConditionOperatorSchema, [
+        "kind",
+        "operator",
+        "right/source",
+      ]),
+      value: sourceProvenanceTarget(jsonValueSchema, ["kind", "right/value/**"], true),
     })
     .strict(),
   z
@@ -299,12 +299,12 @@ const sourceQualifiedComparisonSchema = z.union([
         "left/source",
         "left/fieldId",
       ]),
-      operator: sourceProvenanceTarget(sourceBinaryConditionOperatorSchema, ["kind", "operator"]),
-      value: sourceProvenanceTarget(
-        jsonValueSchema,
-        ["kind", "right/source", "right/value/**"],
-        true,
-      ),
+      operator: sourceProvenanceTarget(sourceBinaryConditionOperatorSchema, [
+        "kind",
+        "operator",
+        "right/source",
+      ]),
+      value: sourceProvenanceTarget(jsonValueSchema, ["kind", "right/value/**"], true),
     })
     .strict(),
   z

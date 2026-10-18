@@ -32,6 +32,11 @@ export type StudioStructureContext = Readonly<{
   source: Source;
   catalogue: ImmutablePlatformBlockCatalogue;
   describePlacement: StudioPlacementDescriber;
+  /**
+   * The fields of the application's own modules whose stored shape a published version fixed, as
+   * `module.key:record_key.field_key`: their filter and sort choices can't change any more.
+   */
+  publishedFields: ReadonlySet<string>;
 }>;
 
 export class StructureRefusal extends Error {

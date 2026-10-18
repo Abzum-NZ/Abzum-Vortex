@@ -250,7 +250,8 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
       draftRevision: view.draftRevision, sourceFingerprint: view.sourceFingerprint, pageAlias, area });
     if (result.kind === "available" && result.draftRevision === view.draftRevision &&
       result.sourceFingerprint === view.sourceFingerprint && result.pageAlias === pageAlias && result.area === area)
-      return { state: "ready" as const, records: result.records, behind: result.behind };
+      return { state: "ready" as const, records: result.records, behind: result.behind,
+        ...(result.sample === undefined ? {} : { sample: result.sample }) };
     if (result.kind === "refused") return { state: "refused" as const, records: {} };
     // A conflict means a newer save replaced this revision, whose own read follows; anything else is a failure.
     if (result.kind !== "conflict")

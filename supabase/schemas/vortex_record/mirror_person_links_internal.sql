@@ -119,6 +119,7 @@ begin
       delete from vortex_record.relationship_edges as edge
       where edge.relationship_id = pair.relationship_id
         and edge.from_organisation_id = p_organization_id
+        and edge.from_storage_contract_id = p_storage_contract_id
         and edge.from_record_id = p_record_id;
       if account_id is not null then
         insert into vortex_record.relationship_edges (
