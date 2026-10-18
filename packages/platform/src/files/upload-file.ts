@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   fieldIdSchema,
   sessionContextSchema,
+  sameId,
   applicationRootIdSchema,
   type RecordTypeId,
   type RecordId,
@@ -147,7 +148,13 @@ export const completeAttachmentUpload = async (
   if (resolved === undefined) return refusal;
   const { authority, repository, bridge, current } = resolved;
   const pending = await repository.readPendingUpload(input.fileId);
-  if (pending === null) return refusal;
+  if (
+    pending === null ||
+    !sameId(pending.fileRecord.ownerRecordTypeId, input.recordTypeId) ||
+    !sameId(pending.fileRecord.ownerRecordId, input.recordId) ||
+    !sameId(pending.fileRecord.ownerFieldId, input.fieldId)
+  )
+    return refusal;
   const coordinator = createFileUploadCoordinator({
     repository,
     bridge,
