@@ -85,7 +85,7 @@ export function StudioRelationshipsSection({ source, moduleKey, recordKey, publi
             {publication.fields.has(`${moduleKey}:${recordKey}.${link.fieldKey}`) && <Badge variant="outline">Published</Badge>}
           </ItemTitle>
           <ItemDescription>{record.name} links to {link.targets.map(targetLabel).join(" or ")}
-            {link.reverseKey === undefined ? "" : `; back from it as "${link.reverseKey.replaceAll("_", " ")}"`}.
+            {link.reverseName === undefined ? "" : `; back from it as "${link.reverseName}"`}.
             When a linked record is deleted: {deleteWords[link.onParentDelete]}.</ItemDescription>
         </ItemContent>
         <ItemActions>
@@ -105,7 +105,7 @@ export function StudioRelationshipsSection({ source, moduleKey, recordKey, publi
             <Badge variant="secondary">{cardinalityWords(link, link.recordPluralName)}</Badge>
           </ItemTitle>
           <ItemDescription>Each {link.recordName.toLowerCase()} links to a {record.name.toLowerCase()}
-            {link.reverseKey === undefined ? "" : `; from ${record.name} it reads as "${link.reverseKey.replaceAll("_", " ")}"`}.
+            {link.reverseName === undefined ? "" : `; from ${record.name} it reads as "${link.reverseName}"`}.
             It is changed on {link.recordName}.</ItemDescription>
         </ItemContent>
         <ItemActions>

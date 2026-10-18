@@ -174,6 +174,7 @@
           "settings": {
             "target": "vortex.system_directory:person",
             "reverse_key": "author_person_references",
+            "reverse_name": "Author person references",
             "on_parent_delete": "empty_optional",
             "application_root_required": true,
             "legacy_person_field": "author"
@@ -253,6 +254,7 @@
           "settings": {
             "target": "vortex.service_desk.knowledge:article",
             "reverse_key": "case_links",
+            "reverse_name": "Case links",
             "on_parent_delete": "soft_delete_dependent"
           }
         },
@@ -270,6 +272,7 @@
           "settings": {
             "target": "vortex.service_desk.cases:case",
             "reverse_key": "knowledge_links",
+            "reverse_name": "Knowledge links",
             "on_parent_delete": "soft_delete_dependent"
           }
         },

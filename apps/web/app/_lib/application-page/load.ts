@@ -872,7 +872,9 @@ const loadApplicationPageJoined = async (
       }
       const fields = placements.filter((entry) => {
         if (entry.formId !== placementId || entry.placementId === placementId) return false;
-        return isEditFieldPlacement(entry);
+        // A form may carry the page record to an action and ask separate questions. Only
+        // inputs that actually name its record fields receive stored values and field policy.
+        return isEditFieldPlacement(entry) && formFieldOf(entry, subjectRecordType) !== undefined;
       });
       const baseline: Record<string, JsonValue> = {};
       const projected: Record<string, PageDataState> = {};
