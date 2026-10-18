@@ -2,6 +2,8 @@
 import { Icon, type VortexIconName } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@vortex/ui/components/tooltip";
+import { Kbd } from "@vortex/ui/components/kbd";
 import type { StudioCanvasBreakpoint } from "@vortex/ui/studio/page-puck-editor";
 
 const devices: readonly Readonly<{ value: StudioCanvasBreakpoint; label: string; icon: VortexIconName }>[] = [
@@ -19,7 +21,7 @@ export type StudioCanvasZoom = (typeof studioCanvasZooms)[number];
  * at, and the inspector toggle.
  */
 export function StudioCanvasToolbar({ title, breakpoint, onBreakpoint, zoom, onZoom, showsCanvas,
-  inspectorOpen, onToggleInspector, appearance, onAppearance, viewAs }: Readonly<{
+  inspectorOpen, onToggleInspector, focused, onFocusCanvas, appearance, onAppearance, viewAs }: Readonly<{
   title: string;
   /** "Who can see this": the roles the canvas and its menu can be previewed as, and the one shown (`null` is the design view). */
   viewAs: Readonly<{ roles: readonly Readonly<{ key: string; name: string }>[]; value: string | null;
@@ -35,6 +37,8 @@ export function StudioCanvasToolbar({ title, breakpoint, onBreakpoint, zoom, onZ
   showsCanvas: boolean;
   inspectorOpen: boolean;
   onToggleInspector: () => void;
+  focused: boolean;
+  onFocusCanvas: () => void;
 }>) {
   const step = studioCanvasZooms.indexOf(zoom);
   return <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-background px-3 py-1">
@@ -70,6 +74,11 @@ export function StudioCanvasToolbar({ title, breakpoint, onBreakpoint, zoom, onZ
             onClick={() => onZoom(studioCanvasZooms[step + 1]!)}><Icon name="plus" /></Button>
         </div>
       </>}
+      <Tooltip>
+        <TooltipTrigger render={<Button type="button" size="icon-sm" variant={focused ? "secondary" : "ghost"}
+          aria-label="Focus canvas" aria-pressed={focused} onClick={onFocusCanvas} />}><Icon name="monitor" /></TooltipTrigger>
+        <TooltipContent>Focus canvas <Kbd>Ctrl \\</Kbd></TooltipContent>
+      </Tooltip>
       <Button type="button" size="sm" variant={inspectorOpen ? "secondary" : "ghost"} aria-pressed={inspectorOpen}
         onClick={onToggleInspector}><Icon name="panel-left" className="rotate-180" />Inspector</Button>
     </div>

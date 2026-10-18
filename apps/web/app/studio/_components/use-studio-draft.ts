@@ -50,7 +50,7 @@ export type StudioSaveStatus =
   | Readonly<{ kind: "conflict"; message: string; changedBy: string | null; changedAt: string | null;
       changes: readonly SourceChangeRow[] }>
   /** The platform refused the batch; the next edit (an Undo, say) tries again. */
-  | Readonly<{ kind: "refused"; message: string }>
+  | Readonly<{ kind: "refused"; message: string; reason?: string | undefined }>
   /** The platform did not confirm the save; Studio tries again by itself. */
   | Readonly<{ kind: "failed"; message: string }>;
 
@@ -117,6 +117,8 @@ export type StudioDraft = Readonly<{
   redo: () => void;
   /** Saves what is waiting now and answers whether the draft on screen is the saved draft. */
   flush: () => Promise<boolean>;
+  /** A user-requested retry of a refused save, preserving the current history and expected revision. */
+  retry: () => Promise<void>;
   /** Loads the latest saved draft into a new history (after a conflict, a restore or a page adoption). */
   reload: () => Promise<boolean>;
   isActive: () => boolean;
@@ -284,7 +286,7 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
           return;
         }
         case "refused":
-          setStatus({ kind: "refused", message: refusalMessage(outcome.reason, "Your latest change was not saved; Undo it or change it, and Studio saves again.") });
+          setStatus({ kind: "refused", reason: outcome.reason, message: refusalMessage(outcome.reason, "Your latest change was not saved; Undo it or change it, and Studio saves again.") });
           // An edit made while the refused save ran is a new attempt.
           if (after.isDirty && after.source !== before.source) scheduleSave(autosaveDelayMs);
           return;
@@ -413,6 +415,12 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
   }, [organizationId, draft.rootId, draft.organizationId, history, hold]);
 
   const source = parsed(state.source);
+  const retry = useCallback(async () => {
+    if (!active.current || !history.getState().isDirty || blockedReason() !== undefined) return;
+    retries.current = 0;
+    setStatus({ kind: "saving" });
+    await saveNow();
+  }, [history, blockedReason, saveNow]);
   const updatingCanvas = view.draftRevision !== saved.draftRevision || state.isDirty;
   const words = status.kind === "saved" ? "Saved" : status.kind === "saving" ? "Saving…" : "Not saved";
   const chip = status.kind === "conflict" || status.kind === "refused" ? words
@@ -425,7 +433,7 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
     select: (next) => selection.select(next),
     undo: () => { if (blockedReason() === undefined) history.undo(); },
     redo: () => { if (blockedReason() === undefined) history.redo(); },
-    flush, reload, isActive: () => active.current,
+    flush, retry, reload, isActive: () => active.current,
   }), [organizationId, history, selection, state, source, selected, saved, view, updatingCanvas, status, chip, lifetime, locked,
-    renderedHolds, hold, blockedReason, parsed, run, flush, reload]);
+    renderedHolds, hold, blockedReason, parsed, run, flush, retry, reload]);
 }

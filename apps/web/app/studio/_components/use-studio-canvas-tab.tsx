@@ -384,13 +384,14 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
       </div>}
   </section>;
 
-  const toolbar = (inspectorOpen: boolean, toggleInspector: () => void, centreTitle: string, showsCanvas: boolean) =>
+  const toolbar = (inspectorOpen: boolean, toggleInspector: () => void, centreTitle: string, showsCanvas: boolean,
+    focused: boolean, focusCanvas: () => void) =>
     <StudioCanvasToolbar title={centreTitle} breakpoint={breakpoint} onBreakpoint={setBreakpoint}
       zoom={canvasZoom} onZoom={setCanvasZoom} showsCanvas={showsCanvas && canvasPage !== undefined}
       appearance={appearance} onAppearance={setAppearance}
       viewAs={{ value: viewAsRole === undefined ? null : viewAs, onChange: setViewAs,
         roles: source.body.roles.filter((role) => view.frames?.roles[role.key] !== undefined) }}
-      inspectorOpen={inspectorOpen} onToggleInspector={toggleInspector} />;
+      inspectorOpen={inspectorOpen} onToggleInspector={toggleInspector} focused={focused} onFocusCanvas={focusCanvas} />;
 
   const dialog = <StudioBlockSetupDialog request={blockSetup} choices={draftChoices} onClose={() => setBlockSetup(null)} />;
 
