@@ -57,6 +57,7 @@ export type FieldInputSourceField = Readonly<{
   label: string;
   required: boolean;
   type: string;
+  textFormat?: string | undefined;
   tableSettings?: Extract<ModuleField, { type: "table" }>["settings"] | undefined;
   displayTimeZone?: "person" | "organization" | "utc" | undefined;
   maximumSelections?: number | undefined;
