@@ -1731,7 +1731,7 @@ REVOKE ALL ON FUNCTION vortex_access.evaluate_permission_saved_condition(p_recor
 
 grant execute on function vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) to postgres;
 
-CREATE FUNCTION vortex_access.evaluate_typed_condition_node_internal(p_condition jsonb, p_field_types jsonb, p_field_values jsonb, p_parameter_types jsonb, p_parameter_values jsonb, p_validate_only boolean) RETURNS boolean
+CREATE OR REPLACE FUNCTION vortex_access.evaluate_typed_condition_node_internal(p_condition jsonb, p_field_types jsonb, p_field_values jsonb, p_parameter_types jsonb, p_parameter_values jsonb, p_validate_only boolean) RETURNS boolean
     LANGUAGE plpgsql IMMUTABLE
     SET search_path TO ''
     AS $$
