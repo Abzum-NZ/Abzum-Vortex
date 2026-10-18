@@ -693,6 +693,8 @@ export function PaginationControl({
 }>): ReactElement | null {
   if (page === undefined) return null;
   const onPage = events?.page_changed;
+  // A keyset preview has neither a page count nor paging actions to present.
+  if (onPage === undefined && pageCount === undefined) return null;
   const numbered = pageCount !== undefined;
   const previousDisabled = numbered ? page <= 1 : hasPreviousPage !== true;
   const nextDisabled = pageCount !== undefined ? page >= pageCount : hasNextPage !== true;
@@ -703,7 +705,6 @@ export function PaginationControl({
   const previousTarget = numbered ? page - 1 : 2;
   const nextTarget = numbered ? page + 1 : 2;
   const lastTarget = pageCount ?? 2;
-  const pageLabel = pageCount === undefined ? "Records" : `Page ${page} of ${pageCount}`;
   return (
     <Pagination aria-label={`Pages of ${accessibleName}`} className="mt-2">
       <PaginationContent className="flex-wrap justify-center gap-1">
@@ -744,11 +745,13 @@ export function PaginationControl({
             </Button>
           </PaginationItem>
         )}
-        <PaginationItem>
-          <span className="px-2 text-sm" aria-label={pageLabel}>
-            {pageLabel}
-          </span>
-        </PaginationItem>
+        {pageCount === undefined ? null : (
+          <PaginationItem>
+            <span className="px-2 text-sm">
+              Page {page} of {pageCount}
+            </span>
+          </PaginationItem>
+        )}
         {onPage === undefined ? null : (
           <PaginationItem>
             <Button

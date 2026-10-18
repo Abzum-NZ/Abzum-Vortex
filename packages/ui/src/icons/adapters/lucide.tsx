@@ -1,4 +1,6 @@
 import {
+  SunIcon,
+  MoonIcon,
   NetworkIcon,
   ListTreeIcon,
   BlocksIcon,
@@ -43,6 +45,8 @@ import type { VortexIconAdapter } from "../icon-names";
 
 /** The semantic icon set drawn with Lucide, the names the shadcn registry uses for it. */
 export const icons: VortexIconAdapter = {
+  sun: SunIcon,
+  moon: MoonIcon,
   "arrow-down": ArrowDownIcon,
   "arrow-up": ArrowUpIcon,
   calendar: CalendarIcon,

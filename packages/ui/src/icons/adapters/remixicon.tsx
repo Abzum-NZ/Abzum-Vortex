@@ -1,4 +1,6 @@
 import {
+  RiSunLine,
+  RiMoonLine,
   RiOrganizationChart,
   RiNodeTree,
   RiApps2Line,
@@ -52,6 +54,8 @@ const remixIcon = (Glyph: RemixiconComponentType): ComponentType<VortexIconProps
 
 /** The semantic icon set drawn with Remix Icon, the names the shadcn registry uses for it. */
 export const icons: VortexIconAdapter = {
+  sun: remixIcon(RiSunLine),
+  moon: remixIcon(RiMoonLine),
   "arrow-down": remixIcon(RiArrowDownLine),
   "arrow-up": remixIcon(RiArrowUpLine),
   calendar: remixIcon(RiCalendarLine),
