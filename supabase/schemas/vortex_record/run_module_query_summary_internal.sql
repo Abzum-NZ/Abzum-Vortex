@@ -673,8 +673,6 @@ begin
            $12, $13,
            (select coalesce(pg_catalog.jsonb_object_agg(referenced.id,
              case $13 ->> referenced.id
-               when ''record_reference'' then pg_catalog.to_jsonb(
-                 pg_catalog.lower(readable.result -> ''values'' -> referenced.id ->> ''recordId''))
                when ''organization_account_reference'' then pg_catalog.to_jsonb(
                  pg_catalog.lower(readable.result -> ''values'' -> referenced.id ->> ''organizationAccountId''))
                else readable.result -> ''values'' -> referenced.id

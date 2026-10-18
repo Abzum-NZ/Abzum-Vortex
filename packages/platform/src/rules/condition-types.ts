@@ -161,6 +161,8 @@ export const semanticTypeForLiteral = (value: JsonValue): ConditionValueType | u
     if (flowInstantMicros(value) !== undefined) return "date_time";
     return "text";
   }
+  if (recordLinkValueSchema.safeParse(value).success) return "record_reference";
+  if (recordLinkValueSchema.safeParse(value).success) return "record_reference";
   return Array.isArray(value) && value.every(validText) ? "text_collection" : "opaque_json";
 };
 export const literalMatchesType = (value: JsonValue, type: ConditionValueType): boolean =>

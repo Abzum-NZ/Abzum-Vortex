@@ -237,9 +237,7 @@ begin
           raise exception using errcode = '22023', message = 'Query filter is invalid';
         end if;
         field_sql := pg_catalog.format('stored.%I', field_token);
-        if operand_type = 'record_reference' then
-          field_sql := pg_catalog.format('pg_catalog.lower(%s ->> ''recordId'')', field_sql);
-        elsif operand_type = 'text' and field_database_type = 'json' then
+        if operand_type = 'text' and field_database_type = 'json' then
           field_sql := pg_catalog.format('%s #>> ''{}''', field_sql);
         end if;
       end if;
@@ -307,7 +305,7 @@ begin
         '(%s is null or %s = ''null''::jsonb or %s = ''""''::jsonb)',
         operand_sqls[1], operand_sqls[1], operand_sqls[1]
       );
-    elsif left_type in ('money', 'text_collection') then
+    elsif left_type in ('money', 'text_collection', 'record_reference') then
       empty_sql := pg_catalog.format(
         '(%s is null or %s = ''null''::jsonb)',
         operand_sqls[1], operand_sqls[1]
@@ -460,13 +458,13 @@ begin
 
   if left_is_field then
     left_sql := operand_sqls[1];
-    if left_type in ('money', 'text_collection', 'opaque_json') then
+    if left_type in ('money', 'text_collection', 'opaque_json', 'record_reference') then
       left_sql := pg_catalog.format('coalesce(%s, ''null''::jsonb)', left_sql);
     end if;
     left_array_sql := case when left_type = 'text_collection' then left_sql else null end;
   else
     left_sql := case
-      when shared_type in ('money', 'text_collection', 'opaque_json') then
+      when shared_type in ('money', 'text_collection', 'opaque_json', 'record_reference') then
         pg_catalog.format('($%s::jsonb -> %s)', p_parameter_sql_parameter,
           p_parameter_offset + operand_parameter_indices[1])
       else pg_catalog.format('($%s::jsonb #>> ''{%s}'')', p_parameter_sql_parameter,
@@ -479,13 +477,13 @@ begin
   end if;
   if right_is_field then
     right_sql := operand_sqls[2];
-    if right_type in ('money', 'text_collection', 'opaque_json') then
+    if right_type in ('money', 'text_collection', 'opaque_json', 'record_reference') then
       right_sql := pg_catalog.format('coalesce(%s, ''null''::jsonb)', right_sql);
     end if;
     right_array_sql := case when right_type = 'text_collection' then right_sql else null end;
   else
     right_sql := case
-      when shared_type in ('money', 'text_collection', 'opaque_json') then
+      when shared_type in ('money', 'text_collection', 'opaque_json', 'record_reference') then
         pg_catalog.format('($%s::jsonb -> %s)', p_parameter_sql_parameter,
           p_parameter_offset + operand_parameter_indices[2])
       else pg_catalog.format('($%s::jsonb #>> ''{%s}'')', p_parameter_sql_parameter,
@@ -533,7 +531,7 @@ begin
           '(%s::uuid is not distinct from %s::uuid)', left_sql, right_sql
         )
         when 'record_reference' then pg_catalog.format(
-          '(pg_catalog.lower(%s) is not distinct from pg_catalog.lower(%s))', left_sql, right_sql
+          '(pg_catalog.lower(%s::text) is not distinct from pg_catalog.lower(%s::text))', left_sql, right_sql
         )
         when 'organization_account_reference' then pg_catalog.format(
           '(pg_catalog.lower(%s) is not distinct from pg_catalog.lower(%s))', left_sql, right_sql
@@ -583,7 +581,7 @@ begin
           '(%s::uuid is not distinct from (item.value #>> ''{}'')::uuid)', left_sql
         )
         when 'record_reference' then pg_catalog.format(
-          '(pg_catalog.lower(%s) is not distinct from pg_catalog.lower(item.value #>> ''{}''))', left_sql
+          '(pg_catalog.lower(%s::text) is not distinct from pg_catalog.lower(item.value::text))', left_sql
         )
         when 'organization_account_reference' then pg_catalog.format(
           '(pg_catalog.lower(%s) is not distinct from pg_catalog.lower(item.value #>> ''{}''))', left_sql

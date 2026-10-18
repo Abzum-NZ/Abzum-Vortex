@@ -393,8 +393,7 @@ const calculationSettingsSchema = z
         path: ["evaluation"],
         message: "A deadline-passed calculation uses the current time and is read-time",
       });
-    const resultTypes: readonly string[] =
-      calculationResultTypesByOperation[value.expression.kind];
+    const resultTypes: readonly string[] = calculationResultTypesByOperation[value.expression.kind];
     const valid = resultTypes.includes(value.resultType);
     if (
       value.expression.kind === "numeric" &&
@@ -535,8 +534,7 @@ const fieldMembers = [
 ] as const;
 
 const textFormatValid = (format: z.infer<typeof textFormatSchema> | undefined, value: string) =>
-  format === undefined ||
-  (format === "uuid" && z.uuid().safeParse(value).success);
+  format === undefined || (format === "uuid" && z.uuid().safeParse(value).success);
 const wholeNumberValid = (value: number, settings: z.infer<typeof wholeNumberSettingsSchema>) =>
   (settings.minimum === undefined || value >= settings.minimum) &&
   (settings.maximum === undefined || value <= settings.maximum) &&
@@ -887,6 +885,8 @@ const sharingParameterValueSchema = (
       return z.iso.datetime({ offset: true });
     case "organization_account_reference":
       return organizationAccountIdSchema;
+    case "record_reference":
+      return recordLinkValueSchema;
   }
 };
 
@@ -1253,76 +1253,76 @@ export const isSystemRecordProtectedOperation = (
  * or actor.
  */
 export const actionDefinitionSchema = z
-    .object({
-      actionId: actionIdSchema,
-      key: namespacedKeySchema,
-      label: labelSchema,
-      subjectRecordTypeId: recordTypeIdSchema,
-      permissionKey: namespacedKeySchema.optional(),
-      permissionKeys: z.array(namespacedKeySchema).min(2).optional(),
-      sharing: z.enum(["refused", "allowed"]),
-      inputs: z.array(actionInputDefinitionSchema).max(50),
-      precondition: conditionNodeSchema.optional(),
-      tasks: z.array(actionTaskSchema).max(10).superRefine(refineActionTaskIds),
-      protectedOperation: protectedOperationReferenceSchema.optional(),
-      /** The choice field and option this action sets, so a plain save of that option runs it. */
-      setsChoiceFieldId: fieldIdSchema.optional(),
-      setsChoiceOption: z.string().min(1).max(120).optional(),
-    })
-    .strict()
-    .superRefine((value, context) => {
-      if ((value.setsChoiceFieldId === undefined) !== (value.setsChoiceOption === undefined))
-        context.addIssue({
-          code: "custom",
-          path: ["setsChoiceOption"],
-          message: "An action names the choice field and the option it sets together",
-        });
-      if ((value.permissionKey === undefined) === (value.permissionKeys === undefined))
+  .object({
+    actionId: actionIdSchema,
+    key: namespacedKeySchema,
+    label: labelSchema,
+    subjectRecordTypeId: recordTypeIdSchema,
+    permissionKey: namespacedKeySchema.optional(),
+    permissionKeys: z.array(namespacedKeySchema).min(2).optional(),
+    sharing: z.enum(["refused", "allowed"]),
+    inputs: z.array(actionInputDefinitionSchema).max(50),
+    precondition: conditionNodeSchema.optional(),
+    tasks: z.array(actionTaskSchema).max(10).superRefine(refineActionTaskIds),
+    protectedOperation: protectedOperationReferenceSchema.optional(),
+    /** The choice field and option this action sets, so a plain save of that option runs it. */
+    setsChoiceFieldId: fieldIdSchema.optional(),
+    setsChoiceOption: z.string().min(1).max(120).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.setsChoiceFieldId === undefined) !== (value.setsChoiceOption === undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["setsChoiceOption"],
+        message: "An action names the choice field and the option it sets together",
+      });
+    if ((value.permissionKey === undefined) === (value.permissionKeys === undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["permissionKeys"],
+        message: "An action requires either one permission or canonical alternatives",
+      });
+    if (value.permissionKeys) {
+      if (new Set(value.permissionKeys).size !== value.permissionKeys.length)
         context.addIssue({
           code: "custom",
           path: ["permissionKeys"],
-          message: "An action requires either one permission or canonical alternatives",
+          message: "Action permission alternatives must be unique",
         });
-      if (value.permissionKeys) {
-        if (new Set(value.permissionKeys).size !== value.permissionKeys.length)
-          context.addIssue({
-            code: "custom",
-            path: ["permissionKeys"],
-            message: "Action permission alternatives must be unique",
-          });
-        if (
-          value.permissionKeys.some(
-            (permission, index) => index > 0 && value.permissionKeys![index - 1]! >= permission,
-          )
+      if (
+        value.permissionKeys.some(
+          (permission, index) => index > 0 && value.permissionKeys![index - 1]! >= permission,
         )
-          context.addIssue({
-            code: "custom",
-            path: ["permissionKeys"],
-            message: "Action permission alternatives must use canonical order",
-          });
-      }
-      if (new Set(value.inputs.map((input) => input.key)).size !== value.inputs.length)
+      )
         context.addIssue({
           code: "custom",
-          path: ["inputs"],
-          message: "Action input keys must be unique",
+          path: ["permissionKeys"],
+          message: "Action permission alternatives must use canonical order",
         });
-    })
-    .superRefine((value, context) => {
-      const operation = value.protectedOperation;
-      if ((operation !== undefined) === value.tasks.length > 0)
-        context.addIssue({
-          code: "custom",
-          path: ["protectedOperation"],
-          message: "An action targets either ordered tasks or one registered protected operation",
-        });
-      if (operation !== undefined && !isSystemRecordProtectedOperation(operation))
-        context.addIssue({
-          code: "custom",
-          path: ["protectedOperation"],
-          message: "An action targets a registered platform-service operation on one existing row",
-        });
-    });
+    }
+    if (new Set(value.inputs.map((input) => input.key)).size !== value.inputs.length)
+      context.addIssue({
+        code: "custom",
+        path: ["inputs"],
+        message: "Action input keys must be unique",
+      });
+  })
+  .superRefine((value, context) => {
+    const operation = value.protectedOperation;
+    if ((operation !== undefined) === value.tasks.length > 0)
+      context.addIssue({
+        code: "custom",
+        path: ["protectedOperation"],
+        message: "An action targets either ordered tasks or one registered protected operation",
+      });
+    if (operation !== undefined && !isSystemRecordProtectedOperation(operation))
+      context.addIssue({
+        code: "custom",
+        path: ["protectedOperation"],
+        message: "An action targets a registered platform-service operation on one existing row",
+      });
+  });
 
 /**
  * A Module's canonical content. `flows` is the one home of its behaviour (architecture decision 1):
@@ -1333,94 +1333,94 @@ export const actionDefinitionSchema = z
  * no rule exists without its flow.
  */
 export const moduleContentSchema = z
-    .object({
-      name: z.string().min(1).max(120),
-      description: z.string().min(1).max(1_000),
-      /** The one Application that owns this Module; every other Application uses it by name. */
-      ownerApplication: namespacedKeySchema,
-      dependencies: z.array(moduleDependencySchema),
-      recordTypes: z.array(recordTypeDefinitionSchema).max(100),
-      permissions: z.array(permissionDeclarationSchema),
-      actions: z.array(actionDefinitionSchema),
-      events: z.array(eventDefinitionSchema),
-      sharingConditions: z.array(savedSharingConditionSchema),
-      extensionPoints: z.array(
-        z
-          .object({
-            extensionPointId: containedComponentIdSchema,
-            key: builderKeySchema,
-            recordTypeId: recordTypeIdSchema,
-            accepts: z.array(z.enum(["field", "action", "choice_option", "link_target"])).min(1),
-          })
-          .strict(),
-      ),
-      flows: z.array(flowSchema).max(100),
-      rules: z.array(ruleGraphSchema).max(100),
-      queries: z.array(moduleQueryDefinitionSchema).max(100).default([]),
-      contributions: z.array(moduleContributionSchema).max(100).optional(),
-    })
-    .strict();
+  .object({
+    name: z.string().min(1).max(120),
+    description: z.string().min(1).max(1_000),
+    /** The one Application that owns this Module; every other Application uses it by name. */
+    ownerApplication: namespacedKeySchema,
+    dependencies: z.array(moduleDependencySchema),
+    recordTypes: z.array(recordTypeDefinitionSchema).max(100),
+    permissions: z.array(permissionDeclarationSchema),
+    actions: z.array(actionDefinitionSchema),
+    events: z.array(eventDefinitionSchema),
+    sharingConditions: z.array(savedSharingConditionSchema),
+    extensionPoints: z.array(
+      z
+        .object({
+          extensionPointId: containedComponentIdSchema,
+          key: builderKeySchema,
+          recordTypeId: recordTypeIdSchema,
+          accepts: z.array(z.enum(["field", "action", "choice_option", "link_target"])).min(1),
+        })
+        .strict(),
+    ),
+    flows: z.array(flowSchema).max(100),
+    rules: z.array(ruleGraphSchema).max(100),
+    queries: z.array(moduleQueryDefinitionSchema).max(100).default([]),
+    contributions: z.array(moduleContributionSchema).max(100).optional(),
+  })
+  .strict();
 
 export const moduleDraftSchema = z
-    .object({ envelope: moduleDefinitionEnvelopeSchema, content: moduleContentSchema })
-    .strict()
-    .superRefine((draft, context) => {
-      const invalid = (message: string, path: (string | number)[]) =>
-        context.addIssue({ code: "custom", path: ["content", ...path], message });
-      const flowIds = new Set<string>();
-      const flowKeys = new Set<string>();
-      draft.content.flows.forEach((flow, index) => {
-        if (flowIds.has(flow.id)) invalid("Flow identities must be unique", ["flows", index, "id"]);
-        if (flowKeys.has(flow.key)) invalid("Flow keys must be unique", ["flows", index, "key"]);
-        flowIds.add(flow.id);
-        flowKeys.add(flow.key);
-      });
-      const beforeSave = new Map(
-        draft.content.flows.flatMap((flow) =>
-          flow.triggers.some((trigger) => trigger.type === "BeforeSave")
-            ? [[String(flow.id), flow] as const]
-            : [],
-        ),
-      );
-      const ruleIds = new Set<string>();
-      draft.content.rules.forEach((rule, index) => {
-        ruleIds.add(String(rule.ruleId));
-        const flow = beforeSave.get(String(rule.ruleId));
-        const trigger = flow?.triggers[0];
-        if (
-          flow === undefined ||
-          flow.triggers.length !== 1 ||
-          trigger?.type !== "BeforeSave" ||
-          trigger.recordTypeId !== rule.subjectRecordTypeId ||
-          trigger.priority !== rule.priority ||
-          flow.key !== rule.key
-        )
-          invalid("A rule is the executable form of exactly one BeforeSave flow", ["rules", index]);
-      });
-      for (const flowId of beforeSave.keys())
-        if (!ruleIds.has(flowId))
-          invalid("Every BeforeSave flow needs its executable rule", [
-            "flows",
-            draft.content.flows.findIndex((flow) => String(flow.id) === flowId),
-          ]);
-      // Every named action on a system projection targets a registered protected operation, and no
-      // other record type's action may target one; standard update is governed by the closed registry.
-      const projections = new Set(
-        draft.content.recordTypes.flatMap((recordType) =>
-          recordType.systemProjection === undefined ? [] : [String(recordType.recordTypeId)],
-        ),
-      );
-      draft.content.actions.forEach((action, index) => {
-        if (
-          projections.has(String(action.subjectRecordTypeId)) !==
-          (action.protectedOperation !== undefined)
-        )
-          invalid(
-            "Exactly the actions of a system projection record type target a protected operation",
-            ["actions", index, "protectedOperation"],
-          );
-      });
+  .object({ envelope: moduleDefinitionEnvelopeSchema, content: moduleContentSchema })
+  .strict()
+  .superRefine((draft, context) => {
+    const invalid = (message: string, path: (string | number)[]) =>
+      context.addIssue({ code: "custom", path: ["content", ...path], message });
+    const flowIds = new Set<string>();
+    const flowKeys = new Set<string>();
+    draft.content.flows.forEach((flow, index) => {
+      if (flowIds.has(flow.id)) invalid("Flow identities must be unique", ["flows", index, "id"]);
+      if (flowKeys.has(flow.key)) invalid("Flow keys must be unique", ["flows", index, "key"]);
+      flowIds.add(flow.id);
+      flowKeys.add(flow.key);
     });
+    const beforeSave = new Map(
+      draft.content.flows.flatMap((flow) =>
+        flow.triggers.some((trigger) => trigger.type === "BeforeSave")
+          ? [[String(flow.id), flow] as const]
+          : [],
+      ),
+    );
+    const ruleIds = new Set<string>();
+    draft.content.rules.forEach((rule, index) => {
+      ruleIds.add(String(rule.ruleId));
+      const flow = beforeSave.get(String(rule.ruleId));
+      const trigger = flow?.triggers[0];
+      if (
+        flow === undefined ||
+        flow.triggers.length !== 1 ||
+        trigger?.type !== "BeforeSave" ||
+        trigger.recordTypeId !== rule.subjectRecordTypeId ||
+        trigger.priority !== rule.priority ||
+        flow.key !== rule.key
+      )
+        invalid("A rule is the executable form of exactly one BeforeSave flow", ["rules", index]);
+    });
+    for (const flowId of beforeSave.keys())
+      if (!ruleIds.has(flowId))
+        invalid("Every BeforeSave flow needs its executable rule", [
+          "flows",
+          draft.content.flows.findIndex((flow) => String(flow.id) === flowId),
+        ]);
+    // Every named action on a system projection targets a registered protected operation, and no
+    // other record type's action may target one; standard update is governed by the closed registry.
+    const projections = new Set(
+      draft.content.recordTypes.flatMap((recordType) =>
+        recordType.systemProjection === undefined ? [] : [String(recordType.recordTypeId)],
+      ),
+    );
+    draft.content.actions.forEach((action, index) => {
+      if (
+        projections.has(String(action.subjectRecordTypeId)) !==
+        (action.protectedOperation !== undefined)
+      )
+        invalid(
+          "Exactly the actions of a system projection record type target a protected operation",
+          ["actions", index, "protectedOperation"],
+        );
+    });
+  });
 
 export type ModuleField = z.infer<typeof moduleFieldSchema>;
 export type ActionInputDefinition = z.infer<typeof actionInputDefinitionSchema>;

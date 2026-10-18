@@ -22,6 +22,7 @@ import {
 import {
   sourceExactDecimalTextSchema,
   sourceMoneyValueSchema,
+  sourceRecordLinkValueSchema,
 } from "../records/module-field-values";
 import { recordOwnershipModeSchema } from "../records/record-ownership-mode";
 import { sourceFlowCollectionSchema } from "../workflows/flow-source-contracts";
@@ -677,6 +678,7 @@ const moduleSourceSharingParameterSchema = z
         "date",
         "date_time",
         "organization_account_reference",
+        "record_reference",
       ]),
     ),
   })
@@ -712,6 +714,7 @@ const sourceSharingParameterValueSchemas: Record<
   date: z.iso.date(),
   date_time: z.iso.datetime({ offset: true }),
   organization_account_reference: organizationAccountIdSchema,
+  record_reference: sourceRecordLinkValueSchema,
 };
 
 const moduleSourceSharingConditionSchema = z

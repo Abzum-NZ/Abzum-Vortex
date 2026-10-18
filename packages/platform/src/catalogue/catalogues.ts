@@ -87,6 +87,7 @@ export const actionInputValueTypes = {
 
 /** Sharing-parameter value types accepted by the current condition contract. */
 export const sharingParameterValueTypeKeys = [
+  "record_reference",
   "text",
   "whole_number",
   "yes_no",

@@ -650,14 +650,10 @@ begin
         ));
         continue;
       end if;
-      -- The same canonical value text the record reader projects; references
-      -- are compared by their identifier, as the condition engine defines.
+      -- Keep the canonical typed link object, including its target record type.
       filter_expressions := pg_catalog.array_append(filter_expressions, pg_catalog.format(
         '%L, %s', field_key,
         case
-          when semantic_type = 'record_reference' then
-            pg_catalog.format('pg_catalog.to_jsonb(pg_catalog.lower(stored.%I ->> ''recordId''))',
-              mapping_row.physical_column_token)
           when mapping_row.database_value_type = 'decimal' then
             pg_catalog.format('pg_catalog.to_jsonb(stored.%I::text)', mapping_row.physical_column_token)
           when mapping_row.database_value_type = 'timestamp_with_time_zone' then
@@ -673,8 +669,7 @@ begin
     end loop;
   end if;
 
-  -- Inputs: exactly the declared keys, required ones present, references
-  -- reduced to their identifier. Types are checked by the condition bridge.
+  -- Inputs retain their canonical values. The bridge validates declared types.
   for input_key in select supplied.key from pg_catalog.jsonb_object_keys(p_input_values) as supplied(key) loop
     if not exists (
       select 1 from pg_catalog.jsonb_array_elements(coalesce(query_item -> 'inputs', '[]'::jsonb)) as item(value)
@@ -703,7 +698,6 @@ begin
         ) then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'input_invalid');
       end if;
-      input_value := pg_catalog.to_jsonb(pg_catalog.lower(input_value ->> 'recordId'));
     end if;
     parameter_types := parameter_types || pg_catalog.jsonb_build_object(input_key, case input_item ->> 'type'
       when 'formatted_text' then 'opaque_json'

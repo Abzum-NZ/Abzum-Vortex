@@ -502,6 +502,8 @@ A relationship names one source field and either one target record type or an ex
 
 Shipped Person fields use this same typed record-link value, with the Person record type and organisation-account record identity. There is one stored field and one declared relationship; publication and record writes do not create or synchronize a second Person value. Rebuilding the shipped applications requires a data reset.
 
+Filters and saved permission conditions retain the typed link object in field values, literal operands and record-reference parameters. Equality and membership compare both UUIDs case-insensitively. Bare UUID strings are not record-reference values. A saved permission condition may declare a `record_reference` parameter bound to `current_organization_account_id`; the protected evaluator constructs the current account's typed record identity using the registered organisation-account projection. Scalar account parameters continue to carry account IDs.
+
 
 The twenty-one type keys and their settings are defined in [Modules, fields and relationships](../05-modules-fields-and-relationships.md#field-types). Attachment settings are defined only in [Files and attachments](../11-files-and-attachments.md#canonical-attachment-settings). Unsupported common properties and unknown type settings are refused.
 
