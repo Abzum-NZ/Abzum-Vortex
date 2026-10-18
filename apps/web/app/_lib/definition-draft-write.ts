@@ -46,7 +46,7 @@ export const createHumanApplicationDraft = (
 ): Promise<HumanApplicationDraftWriteResult> =>
   writeApplicationDraft(organizationId, candidate, "create");
 
-/** A stale save is a visible neutral conflict; no browser identity or authority enters this writer. */
+/** Source validation belongs to the platform store; this boundary resolves only the live session. */
 export const saveHumanApplicationDraft = (
   organizationId: string,
   candidate: unknown,

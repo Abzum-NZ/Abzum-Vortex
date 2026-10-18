@@ -32,6 +32,8 @@ export {
   type FileRecordImportSourceService,
 } from "./record-import-source";
 export * from "./storage-credentials";
+export { resolveFileStorageDestination, type FileStorageDestination } from "./storage-destination";
+export { createStoredUploadInspection } from "./upload-inspection";
 export {
   createFileRemovalEligibilityService,
   matchesProtectedLegalHold,
@@ -53,22 +55,13 @@ export {
   type FileStorageDeleter,
 } from "./object-removal";
 export {
-  runUploadCapabilityAdmission,
-  type UploadCapabilityAdmissionRequest,
-  type UploadCapabilityAdmissionResult,
-  type UploadCapabilityReservationPorts,
-} from "./upload-capability-admission";
-export {
   PENDING_UPLOAD_WINDOW_SECONDS,
-  activateUploadedFile,
   completeFileUpload,
   createFileUploadCoordinator,
   createUploadStorageAuthorityResolver,
   renewPendingUpload,
   reservePendingUpload,
   type ClaimedUploadGrant,
-  type FileUploadActivationInput,
-  type FileUploadActivationResult,
   type FileUploadAdmissionInput,
   type FileUploadAdmissionResult,
   type FileUploadCompletionInput,
@@ -78,7 +71,6 @@ export {
   type FileUploadRenewalInput,
   type FileUploadRenewalResult,
   type FileUploadRepository,
-  type IsolatedFileScanner,
   type PendingUploadReservation,
   type PendingUploadState,
   type UploadAttachmentSettings,
@@ -86,9 +78,7 @@ export {
   type UploadedObjectLocation,
 } from "./upload";
 export {
-  MAXIMUM_ABANDONED_UPLOAD_BATCH,
   buildContentDisposition,
-  cleanupAbandonedUploads,
   composeStorageAuthorityResolvers,
   createDefaultUpstreamStorageReader,
   createFileReadCoordinator,
@@ -98,11 +88,6 @@ export {
   isExecutableOrActiveBrowserContent,
   parseRangeHeader,
   privateFileResponseHeaders,
-  type AbandonedUploadCandidate,
-  type AbandonedUploadCleanupDependencies,
-  type AbandonedUploadCleanupOutcome,
-  type AbandonedUploadCleanupRepository,
-  type AbandonedUploadCleanupResult,
   type ClaimedDownloadGrant,
   type CurrentReadAuthority,
   type FilePreviewRenderer,
@@ -190,3 +175,7 @@ export {
   type ComponentBootstrapDocument,
   type ComponentBootstrapTarget,
 } from "./component-bootstrap-serving";
+
+export { admitAttachmentUpload, completeAttachmentUpload } from "./upload-file";
+
+export { cleanupAbandonedUploads } from "./upload-cleanup";

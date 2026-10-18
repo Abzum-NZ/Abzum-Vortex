@@ -143,6 +143,23 @@ The custom-component and file pages read additional variables and report a confi
 | `VORTEX_FILE_STORAGE_SIGNING_KEY` | The private key the file routes sign file-storage tokens with. |
 | `VORTEX_FILE_STORAGE_SIGNING_KEY_ID` | The key id published in those signed file-storage tokens. |
 
+For private files, `VORTEX_ENVIRONMENT=local` accepts only a loopback HTTP Supabase origin
+with an explicit port. Set `VORTEX_SUPABASE_WORKDIR` to the Local Supabase workdir (a worker's
+lane directory); file routes use its existing ignored `supabase/.temp/signing-keys.json`.
+Tenant provisioning derives the destination project from `VORTEX_SUPABASE_URL` in every
+environment and persists it in `vortex_platform.storage_destination` in the same transaction.
+The project is immutable after provisioning. Storage policies read this protected row through
+`storage_destination_project()`; no database parameter is required. Hosted file routes require
+the server-only signing variables above.
+
+Generated New and Edit forms include attachment fields through the registered Puck input.
+Admission checks current record/field access, file limits, then returns
+a 60-second credential for one private object. The browser uploads directly to Storage.
+Completion reads a bounded copy, detects its binary type with `file-type` and computes SHA-256;
+unknown and disallowed content stays unavailable. This is content admission, with no malware
+scanner integration. Save activates admitted references and detaches removed files atomically
+inside `apply_record_changes`. Pending uploads never appear in record detail or download routes.
+
 `VORTEX_CLUSTER_ID` and `VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID` are not needed locally: `pnpm setup:local` takes the configured operator from its manifest. `VORTEX_APPLICATION_KESTRA_URL` and the flow secret `VORTEX_WORKFLOW_CALLBACK_KEY` belong to the application Kestra instance and are not read by `pnpm dev` or `pnpm setup:local`.
 
 ## Delivery and contribution
