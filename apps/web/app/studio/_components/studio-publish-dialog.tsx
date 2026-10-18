@@ -73,7 +73,7 @@ export function StudioPublishDialog(props: StudioPublishDialogProps) {
     >
       <DialogContent className="min-w-0 max-h-dvh max-w-xl overflow-y-auto break-words">
         <DialogHeader>
-          <DialogTitle className="pr-6 text-xl tracking-tight">
+          <DialogTitle className="text-xl tracking-tight">
             {prepared === null
               ? "Publish version"
               : `Publish version ${prepared.confirmation.assignedVersion}`}

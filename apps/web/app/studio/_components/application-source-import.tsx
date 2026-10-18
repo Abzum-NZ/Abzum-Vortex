@@ -519,16 +519,18 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
             hint="Keep each component's original id when changing its name."
           >
             {(control) => (
-              <Textarea
-                {...control}
-                className="min-h-48 font-mono"
-                value={text}
-                disabled={disabled}
-                onChange={(event) => {
-                  if (disabled || readSnapshot() === null) return;
-                  replaceText(event.target.value);
-                }}
-              />
+              <div className="font-mono">
+                <Textarea
+                  {...control}
+                  className="min-h-48"
+                  value={text}
+                  disabled={disabled}
+                  onChange={(event) => {
+                    if (disabled || readSnapshot() === null) return;
+                    replaceText(event.target.value);
+                  }}
+                />
+              </div>
             )}
           </StudioField>
         </CollapsibleContent>

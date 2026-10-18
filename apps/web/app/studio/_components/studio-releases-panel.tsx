@@ -28,6 +28,7 @@ export function StudioReleasesPanel({
             <Item
               size="sm"
               variant={section === entry.value ? "muted" : "default"}
+              className={section === entry.value ? "bg-accent text-accent-foreground" : undefined}
               render={
                 <button
                   type="button"
@@ -41,7 +42,13 @@ export function StudioReleasesPanel({
                   {entry.label}
                   {entry.value === "import" && <Badge variant="outline">Advanced</Badge>}
                 </ItemTitle>
-                <ItemDescription className="line-clamp-1">{entry.description}</ItemDescription>
+                <ItemDescription
+                  className={
+                    section === entry.value ? "line-clamp-1 text-accent-foreground" : "line-clamp-1"
+                  }
+                >
+                  {entry.description}
+                </ItemDescription>
               </ItemContent>
             </Item>
           </li>
