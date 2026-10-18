@@ -5,13 +5,12 @@ import {
   sourceMoneyValueSchema,
   sourceModuleFieldValueSchemas,
   moduleFieldValueSchemas,
-  jsonValueSchema,
-  platformIdSchema,
   recordLinkValueSchema,
   personLinkValueSchema,
   recordRichTextDocumentSchema,
-  type JsonValue,
-} from "../schema";
+} from "../records/module-field-values";
+import { jsonValueSchema, type JsonValue } from "../catalogue/common";
+import { platformIdSchema } from "../catalogue/identifiers";
 import { validText, validDate } from "./typed-condition-core";
 import { flowInstantMicros } from "./flow-instant";
 
@@ -185,9 +184,6 @@ const orderableTypes = new Set<ConditionValueType>([
 ]);
 const unaryOperators = new Set(["is_empty", "is_not_empty"]);
 
-const sameComparableType = (left: ConditionValueType, right: ConditionValueType): boolean =>
-  left === right || (exactNumericTypes.has(left) && exactNumericTypes.has(right));
-
 const exactNumericLiteral = (value: JsonValue | undefined): boolean =>
   value === null ||
   (typeof value === "number" && Number.isSafeInteger(value)) ||
@@ -202,25 +198,37 @@ export const conditionSharedType = (
   left: OperandInfo,
   right: OperandInfo,
 ): ConditionValueType | undefined => {
+  if (
+    [left, right].some(
+      (operand) =>
+        operand.source === "value" &&
+        operand.semanticType !== undefined &&
+        exactNumericTypes.has(operand.semanticType) &&
+        operand.literal !== null &&
+        !typedValueMatchesType(operand.literal, operand.semanticType),
+    )
+  )
+    return undefined;
+  if (
+    left.semanticType &&
+    right.semanticType &&
+    exactNumericTypes.has(left.semanticType) &&
+    exactNumericTypes.has(right.semanticType) &&
+    exactNumericOperand(left) &&
+    exactNumericOperand(right)
+  )
+    return left.semanticType === right.semanticType ? left.semanticType : "decimal_number";
   if (left.source === "value" && right.source === "value") {
     if (left.literal === null && right.literal === null) return "opaque_json";
     if (left.literal === null && right.literal !== undefined)
-      return semanticTypeForLiteral(right.literal);
+      return right.semanticType ?? semanticTypeForLiteral(right.literal);
     if (right.literal === null && left.literal !== undefined)
-      return semanticTypeForLiteral(left.literal);
+      return left.semanticType ?? semanticTypeForLiteral(left.literal);
     return left.semanticType === right.semanticType ? left.semanticType : undefined;
   }
 
-  if (left.source === "reference" && right.source === "reference") {
-    if (left.semanticType === right.semanticType) return left.semanticType;
-    return left.semanticType &&
-      right.semanticType &&
-      sameComparableType(left.semanticType, right.semanticType) &&
-      exactNumericOperand(left) &&
-      exactNumericOperand(right)
-      ? "decimal_number"
-      : undefined;
-  }
+  if (left.source === "reference" && right.source === "reference")
+    return left.semanticType === right.semanticType ? left.semanticType : undefined;
 
   const reference = left.source === "reference" ? left : right;
   const literal = left.source === "value" ? left : right;

@@ -12,6 +12,7 @@ import {
   type RuleGraphVariableDeclaration,
 } from "../schema";
 import { compareFlowText, flowJsonValuesEqual } from "./flow-formula";
+import { conditionValueType } from "./condition-types";
 import {
   evaluateResolvedTypedCondition,
   semanticTypeForField,
@@ -96,35 +97,8 @@ const hasOwn = (value: Readonly<Record<string, unknown>>, key: string): boolean 
 
 const clone = <Value extends JsonValue>(value: Value): Value => structuredClone(value);
 
-const semanticTypeForGraphValue = (type: RuleGraphValueType): SemanticType => {
-  switch (type) {
-    case "whole_number":
-      return "whole_number";
-    case "decimal_number":
-      return "decimal_number";
-    case "money":
-      return "money";
-    case "yes_no":
-      return "yes_no";
-    case "date":
-      return "date";
-    case "date_time":
-      return "date_time";
-    case "several_choices":
-      return "text_collection";
-    case "formatted_text":
-    case "table":
-    case "attachment":
-      return "opaque_json";
-    case "link":
-    case "link_to_one_of_several":
-      return "record_reference";
-    case "link_to_person":
-      return "organization_account_reference";
-    default:
-      return "text";
-  }
-};
+const semanticTypeForGraphValue = (type: RuleGraphValueType): SemanticType =>
+  conditionValueType(type) ?? refuse("graph_refused");
 
 const valueMatchesDeclaration = (
   value: unknown,
