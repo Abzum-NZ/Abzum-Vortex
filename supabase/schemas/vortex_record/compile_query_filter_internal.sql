@@ -239,10 +239,6 @@ begin
         field_sql := pg_catalog.format('stored.%I', field_token);
         if operand_type = 'record_reference' then
           field_sql := pg_catalog.format('pg_catalog.lower(%s ->> ''recordId'')', field_sql);
-        elsif operand_type = 'organization_account_reference' then
-          field_sql := pg_catalog.format(
-            'pg_catalog.lower(%s ->> ''organizationAccountId'')', field_sql
-          );
         elsif operand_type = 'text' and field_database_type = 'json' then
           field_sql := pg_catalog.format('%s #>> ''{}''', field_sql);
         end if;

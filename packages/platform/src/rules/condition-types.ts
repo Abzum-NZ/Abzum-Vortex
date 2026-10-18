@@ -6,7 +6,6 @@ import {
   sourceModuleFieldValueSchemas,
   moduleFieldValueSchemas,
   recordLinkValueSchema,
-  personLinkValueSchema,
   recordRichTextDocumentSchema,
 } from "../records/module-field-values";
 import { jsonValueSchema, type JsonValue } from "../catalogue/common";
@@ -70,7 +69,6 @@ export function conditionValueType(type: unknown): ConditionValueType | undefine
   )
     return "text";
   if (["link", "link_to_one_of_several"].includes(type)) return "record_reference";
-  if (type === "link_to_person") return "organization_account_reference";
   if (type === "several_choices") return "text_collection";
   if (["table", "attachment", "formatted_text"].includes(type)) return "opaque_json";
   return undefined;
@@ -127,10 +125,7 @@ export function typedValueMatchesType(
       }
       return recordLinkValueSchema.safeParse(value).success;
     case "organization_account_reference":
-      return (
-        platformIdSchema.safeParse(value).success ||
-        (dialect === "canonical" && personLinkValueSchema.safeParse(value).success)
-      );
+      return platformIdSchema.safeParse(value).success;
     case "text_collection":
       return Array.isArray(value) && value.every(validText);
     case "opaque_json":

@@ -125,7 +125,7 @@ const cellText = (field: ModuleField, value: JsonValue | undefined, links: Proje
     const labelOf = (item: JsonValue) => options.find((option) => option.value === item)?.label ?? String(item);
     return Array.isArray(value) ? value.map(labelOf).join(", ") : labelOf(value);
   }
-  if (field.type === "link" || field.type === "link_to_one_of_several" || field.type === "link_to_person")
+  if (field.type === "link" || field.type === "link_to_one_of_several")
     return (Array.isArray(value) ? value : [value]).map((item) => recordLinkPlainText(item, links) ?? "Linked record").join(", ");
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "string" || typeof value === "number") return String(value);

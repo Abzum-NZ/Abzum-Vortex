@@ -13,19 +13,8 @@
       "storage_contract_id": "srt_00000011",
       "storage_scope": "application_contained",
       "ownership_mode": "group",
-      "standard_actions": [
-        "create",
-        "read",
-        "update",
-        "soft_delete",
-        "restore",
-        "export"
-      ],
-      "custom_actions": [
-        "act_case_assign",
-        "act_case_resolve",
-        "act_case_public_comment"
-      ],
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
+      "custom_actions": ["act_case_assign", "act_case_resolve", "act_case_public_comment"],
       "fields": [
         {
           "id": "fld_case_number",
@@ -73,13 +62,7 @@
           "public_display": "refused",
           "type": "formatted_text",
           "settings": {
-            "allowed_blocks": [
-              "paragraph",
-              "heading",
-              "list",
-              "link",
-              "attachment"
-            ]
+            "allowed_blocks": ["paragraph", "heading", "list", "link", "attachment"]
           }
         },
         {
@@ -128,30 +111,12 @@
           "sortable": false,
           "personal_data": "none",
           "public_display": "refused",
-          "type": "link_to_person",
-          "settings": {
-            "audience": "application_accounts",
-            "application_root_required": true,
-            "on_person_deactivation": "empty_optional"
-          }
-        },
-        {
-          "id": "fld_case_owner_person",
-          "key": "owner_person",
-          "label": "Owner",
-          "required": false,
-          "unique": false,
-          "filterable": false,
-          "sortable": false,
-          "personal_data": "none",
-          "public_display": "refused",
           "type": "link",
           "settings": {
             "target": "vortex.system_directory:person",
-            "reverse_key": "owner_person_references",
+            "reverse_key": "owner_references",
             "on_parent_delete": "empty_optional",
-            "application_root_required": true,
-            "legacy_person_field": "owner"
+            "application_root_required": true
           }
         },
         {
@@ -317,10 +282,7 @@
               "operation": "deadline_passed",
               "due_field": "resolution_due_at",
               "status_field": "status",
-              "terminal_status_values": [
-                "resolved",
-                "closed"
-              ]
+              "terminal_status_values": ["resolved", "closed"]
             }
           }
         },
@@ -443,9 +405,9 @@
           "on_parent_delete": "refuse"
         },
         {
-          "id": "fld_case_owner_person_relationship",
-          "key": "owner_person",
-          "from_field": "owner_person",
+          "id": "fld_case_owner_relationship",
+          "key": "owner",
+          "from_field": "owner",
           "to_record_type": "vortex.system_directory:person",
           "cardinality": "many_to_one",
           "on_parent_delete": "empty_optional"
@@ -462,14 +424,7 @@
       "storage_scope": "application_contained",
       "ownership_mode": "inherited",
       "ownership_relationship": "case",
-      "standard_actions": [
-        "create",
-        "read",
-        "update",
-        "soft_delete",
-        "restore",
-        "export"
-      ],
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
       "custom_actions": [],
       "fields": [
         {
@@ -502,12 +457,7 @@
           "public_display": "refused",
           "type": "formatted_text",
           "settings": {
-            "allowed_blocks": [
-              "paragraph",
-              "list",
-              "link",
-              "attachment"
-            ]
+            "allowed_blocks": ["paragraph", "list", "link", "attachment"]
           }
         },
         {
@@ -534,30 +484,12 @@
           "sortable": false,
           "personal_data": "personal",
           "public_display": "refused",
-          "type": "link_to_person",
-          "settings": {
-            "audience": "organization_identities_and_external_requesters",
-            "application_root_required": false,
-            "on_person_deactivation": "retain_reference"
-          }
-        },
-        {
-          "id": "fld_comment_by_person",
-          "key": "created_by_person",
-          "label": "Created by",
-          "required": false,
-          "unique": false,
-          "filterable": false,
-          "sortable": false,
-          "personal_data": "personal",
-          "public_display": "refused",
           "type": "link",
           "settings": {
             "target": "vortex.system_directory:person",
-            "reverse_key": "created_by_person_references",
+            "reverse_key": "created_by_references",
             "on_parent_delete": "empty_optional",
-            "application_root_required": false,
-            "legacy_person_field": "created_by"
+            "application_root_required": false
           }
         },
         {
@@ -585,9 +517,9 @@
           "on_parent_delete": "soft_delete_dependent"
         },
         {
-          "id": "fld_comment_by_person_relationship",
-          "key": "created_by_person",
-          "from_field": "created_by_person",
+          "id": "fld_comment_by_relationship",
+          "key": "created_by",
+          "from_field": "created_by",
           "to_record_type": "vortex.system_directory:person",
           "cardinality": "many_to_one",
           "on_parent_delete": "empty_optional"
@@ -824,20 +756,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "case",
-          "body",
-          "customer_visible",
-          "created_by",
-          "created_at"
-        ],
-        "changeable_fields": [
-          "case",
-          "body",
-          "customer_visible",
-          "created_by",
-          "created_at"
-        ]
+        "readable_fields": ["case", "body", "customer_visible", "created_by", "created_at"],
+        "changeable_fields": ["case", "body", "customer_visible", "created_by", "created_at"]
       }
     },
     {
@@ -856,13 +776,7 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "case",
-          "body",
-          "customer_visible",
-          "created_by",
-          "created_at"
-        ],
+        "readable_fields": ["case", "body", "customer_visible", "created_by", "created_at"],
         "changeable_fields": []
       }
     },
@@ -882,20 +796,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "case",
-          "body",
-          "customer_visible",
-          "created_by",
-          "created_at"
-        ],
-        "changeable_fields": [
-          "case",
-          "body",
-          "customer_visible",
-          "created_by",
-          "created_at"
-        ]
+        "readable_fields": ["case", "body", "customer_visible", "created_by", "created_at"],
+        "changeable_fields": ["case", "body", "customer_visible", "created_by", "created_at"]
       }
     },
     {
@@ -954,13 +856,7 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "case",
-          "body",
-          "customer_visible",
-          "created_by",
-          "created_at"
-        ],
+        "readable_fields": ["case", "body", "customer_visible", "created_by", "created_at"],
         "changeable_fields": []
       }
     },
@@ -981,12 +877,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "owner"
-        ],
-        "changeable_fields": [
-          "owner"
-        ]
+        "readable_fields": ["owner"],
+        "changeable_fields": ["owner"]
       }
     },
     {
@@ -1006,14 +898,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "status",
-          "resolved_at"
-        ],
-        "changeable_fields": [
-          "status",
-          "resolved_at"
-        ]
+        "readable_fields": ["status", "resolved_at"],
+        "changeable_fields": ["status", "resolved_at"]
       }
     },
     {
@@ -1051,7 +937,8 @@
           "key": "owner",
           "label": "Owner",
           "required": true,
-          "type": "organization_account_reference"
+          "type": "record_reference",
+          "record_types": ["vortex.system_directory:person"]
         }
       ],
       "tasks": [
@@ -1091,10 +978,7 @@
       "precondition": {
         "field": "status",
         "operator": "in",
-        "value": [
-          "in_progress",
-          "waiting_customer"
-        ]
+        "value": ["in_progress", "waiting_customer"]
       },
       "tasks": [
         {
@@ -1201,62 +1085,42 @@
       "id": "evt_case_created",
       "key": "vortex.service_desk.cases.case.created",
       "record_type": "case",
-      "carries": [
-        "case_number",
-        "subject",
-        "customer_company",
-        "priority"
-      ],
+      "carries": ["case_number", "subject", "customer_company", "priority"],
       "personal_or_sensitive_values_allowed": false
     },
     {
       "id": "evt_case_assigned",
       "key": "vortex.service_desk.cases.case.assigned",
       "record_type": "case",
-      "carries": [
-        "case_number",
-        "owner"
-      ],
+      "carries": ["case_number", "owner"],
       "personal_or_sensitive_values_allowed": false
     },
     {
       "id": "evt_case_resolved",
       "key": "vortex.service_desk.cases.case.resolved",
       "record_type": "case",
-      "carries": [
-        "case_number",
-        "subject",
-        "resolved_at"
-      ],
+      "carries": ["case_number", "subject", "resolved_at"],
       "personal_or_sensitive_values_allowed": false
     },
     {
       "id": "evt_case_public_comment",
       "key": "vortex.service_desk.cases.case.public_comment_added",
       "record_type": "case",
-      "carries": [
-        "case_number"
-      ],
+      "carries": ["case_number"],
       "personal_or_sensitive_values_allowed": false
     },
     {
       "id": "evt_case_first_response_overdue",
       "key": "vortex.service_desk.cases.case.first_response_overdue",
       "record_type": "case",
-      "carries": [
-        "case_number",
-        "first_response_due_at"
-      ],
+      "carries": ["case_number", "first_response_due_at"],
       "personal_or_sensitive_values_allowed": false
     },
     {
       "id": "evt_case_resolution_overdue",
       "key": "vortex.service_desk.cases.case.resolution_overdue",
       "record_type": "case",
-      "carries": [
-        "case_number",
-        "resolution_due_at"
-      ],
+      "carries": ["case_number", "resolution_due_at"],
       "personal_or_sensitive_values_allowed": false
     }
   ],
@@ -2027,17 +1891,13 @@
       "id": "ext_case_fields",
       "key": "case_fields",
       "record_type": "case",
-      "accepts": [
-        "field"
-      ]
+      "accepts": ["field"]
     },
     {
       "id": "ext_case_actions",
       "key": "case_actions",
       "record_type": "case",
-      "accepts": [
-        "action"
-      ]
+      "accepts": ["action"]
     }
   ],
   "sharing_conditions": [
@@ -2056,9 +1916,7 @@
         "operator": "equals",
         "parameter": "allowed_priority"
       },
-      "declared_fields": [
-        "priority"
-      ],
+      "declared_fields": ["priority"],
       "publication_tests": [
         {
           "name": "Matching priority is shared",
@@ -2095,18 +1953,10 @@
           "label": "Company",
           "required": true,
           "type": "record_reference",
-          "record_types": [
-            "vortex.crm.organisations:company"
-          ]
+          "record_types": ["vortex.crm.organisations:company"]
         }
       ],
-      "select": [
-        "case_number",
-        "subject",
-        "status",
-        "priority",
-        "customer_company"
-      ],
+      "select": ["case_number", "subject", "status", "priority", "customer_company"],
       "filter": {
         "field": "customer_company",
         "operator": "equals",
@@ -2134,18 +1984,10 @@
           "label": "Case",
           "required": true,
           "type": "record_reference",
-          "record_types": [
-            "vortex.service_desk.cases:case"
-          ]
+          "record_types": ["vortex.service_desk.cases:case"]
         }
       ],
-      "select": [
-        "created_at",
-        "created_by",
-        "body",
-        "customer_visible",
-        "case"
-      ],
+      "select": ["created_at", "created_by", "body", "customer_visible", "case"],
       "filter": {
         "field": "case",
         "operator": "equals",
@@ -2182,10 +2024,7 @@
       "filter": {
         "field": "status",
         "operator": "not_in",
-        "value": [
-          "resolved",
-          "closed"
-        ]
+        "value": ["resolved", "closed"]
       },
       "group_by": [],
       "aggregates": [],
@@ -2209,20 +2048,13 @@
       "description": "Open case count for each unresolved status",
       "record_type": "case",
       "inputs": [],
-      "select": [
-        "status"
-      ],
+      "select": ["status"],
       "filter": {
         "field": "status",
         "operator": "not_in",
-        "value": [
-          "resolved",
-          "closed"
-        ]
+        "value": ["resolved", "closed"]
       },
-      "group_by": [
-        "status"
-      ],
+      "group_by": ["status"],
       "aggregates": [
         {
           "operation": "count",
@@ -2245,17 +2077,9 @@
       "description": "Cases grouped by status",
       "record_type": "case",
       "inputs": [],
-      "select": [
-        "status",
-        "subject",
-        "case_number",
-        "priority",
-        "resolution_due_at"
-      ],
+      "select": ["status", "subject", "case_number", "priority", "resolution_due_at"],
       "filter": null,
-      "group_by": [
-        "status"
-      ],
+      "group_by": ["status"],
       "aggregates": [
         {
           "operation": "count",
@@ -2277,12 +2101,7 @@
       "label": "Customers",
       "record_type": "vortex.crm.organisations:company",
       "inputs": [],
-      "select": [
-        "company_number",
-        "name",
-        "phone",
-        "website"
-      ],
+      "select": ["company_number", "name", "phone", "website"],
       "filter": {
         "field": "company_kind",
         "operator": "contains",
@@ -2305,12 +2124,7 @@
       "label": "Requesters",
       "record_type": "vortex.crm.people:contact",
       "inputs": [],
-      "select": [
-        "contact_number",
-        "full_name",
-        "email",
-        "company"
-      ],
+      "select": ["contact_number", "full_name", "email", "company"],
       "filter": null,
       "group_by": [],
       "aggregates": [],

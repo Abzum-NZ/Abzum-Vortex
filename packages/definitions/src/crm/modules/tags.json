@@ -13,14 +13,7 @@
       "storage_contract_id": "srt_00000007",
       "storage_scope": "organization_shared",
       "ownership_mode": "group",
-      "standard_actions": [
-        "create",
-        "read",
-        "update",
-        "soft_delete",
-        "restore",
-        "export"
-      ],
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
       "custom_actions": [],
       "fields": [
         {
@@ -100,16 +93,8 @@
       "storage_scope": "organization_shared",
       "ownership_mode": "inherited",
       "ownership_relationship": "record",
-      "standard_actions": [
-        "create",
-        "read",
-        "soft_delete",
-        "restore",
-        "export"
-      ],
-      "custom_actions": [
-        "act_tag_assign"
-      ],
+      "standard_actions": ["create", "read", "soft_delete", "restore", "export"],
+      "custom_actions": ["act_tag_assign"],
       "fields": [
         {
           "id": "fld_record_tag_tag",
@@ -172,30 +157,12 @@
           "sortable": false,
           "personal_data": "none",
           "public_display": "refused",
-          "type": "link_to_person",
-          "settings": {
-            "audience": "organization_accounts",
-            "application_root_required": false,
-            "on_person_deactivation": "retain_reference"
-          }
-        },
-        {
-          "id": "fld_record_tag_by_person",
-          "key": "assigned_by_person",
-          "label": "Assigned by",
-          "required": false,
-          "unique": false,
-          "filterable": false,
-          "sortable": false,
-          "personal_data": "none",
-          "public_display": "refused",
           "type": "link",
           "settings": {
             "target": "vortex.system_directory:person",
-            "reverse_key": "assigned_by_person_references",
+            "reverse_key": "assigned_by_references",
             "on_parent_delete": "empty_optional",
-            "application_root_required": false,
-            "legacy_person_field": "assigned_by"
+            "application_root_required": false
           }
         }
       ],
@@ -223,9 +190,9 @@
           "on_parent_delete": "soft_delete_dependent"
         },
         {
-          "id": "fld_record_tag_by_person_relationship",
-          "key": "assigned_by_person",
-          "from_field": "assigned_by_person",
+          "id": "fld_record_tag_by_relationship",
+          "key": "assigned_by",
+          "from_field": "assigned_by",
           "to_record_type": "vortex.system_directory:person",
           "cardinality": "many_to_one",
           "on_parent_delete": "empty_optional"
@@ -250,17 +217,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "name",
-          "description",
-          "active",
-          "assignment_count"
-        ],
-        "changeable_fields": [
-          "name",
-          "description",
-          "active"
-        ]
+        "readable_fields": ["name", "description", "active", "assignment_count"],
+        "changeable_fields": ["name", "description", "active"]
       }
     },
     {
@@ -279,12 +237,7 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "name",
-          "description",
-          "active",
-          "assignment_count"
-        ],
+        "readable_fields": ["name", "description", "active", "assignment_count"],
         "changeable_fields": []
       }
     },
@@ -304,17 +257,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "name",
-          "description",
-          "active",
-          "assignment_count"
-        ],
-        "changeable_fields": [
-          "name",
-          "description",
-          "active"
-        ]
+        "readable_fields": ["name", "description", "active", "assignment_count"],
+        "changeable_fields": ["name", "description", "active"]
       }
     },
     {
@@ -373,12 +317,7 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "name",
-          "description",
-          "active",
-          "assignment_count"
-        ],
+        "readable_fields": ["name", "description", "active", "assignment_count"],
         "changeable_fields": []
       }
     },
@@ -398,18 +337,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "tag",
-          "record",
-          "assigned_at",
-          "assigned_by"
-        ],
-        "changeable_fields": [
-          "tag",
-          "record",
-          "assigned_at",
-          "assigned_by"
-        ]
+        "readable_fields": ["tag", "record", "assigned_at", "assigned_by"],
+        "changeable_fields": ["tag", "record", "assigned_at", "assigned_by"]
       }
     },
     {
@@ -428,12 +357,7 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "tag",
-          "record",
-          "assigned_at",
-          "assigned_by"
-        ],
+        "readable_fields": ["tag", "record", "assigned_at", "assigned_by"],
         "changeable_fields": []
       }
     },
@@ -493,12 +417,7 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "tag",
-          "record",
-          "assigned_at",
-          "assigned_by"
-        ],
+        "readable_fields": ["tag", "record", "assigned_at", "assigned_by"],
         "changeable_fields": []
       }
     },
@@ -538,9 +457,7 @@
           "label": "Tag",
           "required": true,
           "type": "record_reference",
-          "record_types": [
-            "vortex.crm.tags:tag"
-          ]
+          "record_types": ["vortex.crm.tags:tag"]
         },
         {
           "key": "record",
@@ -584,11 +501,7 @@
       "id": "evt_tag_assigned",
       "key": "vortex.crm.tags.record_tag.assigned",
       "record_type": "record_tag",
-      "carries": [
-        "tag",
-        "record",
-        "assigned_by"
-      ],
+      "carries": ["tag", "record", "assigned_by"],
       "personal_or_sensitive_values_allowed": false
     }
   ],

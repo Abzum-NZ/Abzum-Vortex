@@ -325,11 +325,8 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
 const pendingCheckIsAuthorized = (
   check: RecordFieldValuePendingCheck,
   singleRequiredPermissionId: string | undefined,
-  actorOrganizationAccountId: string,
 ): boolean =>
   check.kind === "record_reference" ||
-  (check.kind === "person_reference" &&
-    check.organizationAccountId.toLowerCase() === actorOrganizationAccountId.toLowerCase()) ||
   (check.kind === "choice_permission" &&
     singleRequiredPermissionId !== undefined &&
     check.permissionId.toLowerCase() === singleRequiredPermissionId.toLowerCase());
@@ -454,12 +451,7 @@ const creationFinalValues = (
     }
     if (
       calculated.pendingChecks.some(
-        (check) =>
-          !pendingCheckIsAuthorized(
-            check,
-            prepared.singleRequiredPermissionId,
-            prepared.actorOrganizationAccountId,
-          ),
+        (check) => !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
       )
     )
       return {
@@ -892,12 +884,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 );
               if (
                 calculated.pendingChecks.some(
-                  (check) =>
-                    !pendingCheckIsAuthorized(
-                      check,
-                      prepared.singleRequiredPermissionId,
-                      prepared.actorOrganizationAccountId,
-                    ),
+                  (check) => !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
                 )
               )
                 return safeRefusal(
@@ -1035,12 +1022,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 );
               if (
                 calculated.pendingChecks.some(
-                  (check) =>
-                    !pendingCheckIsAuthorized(
-                      check,
-                      prepared.singleRequiredPermissionId,
-                      prepared.actorOrganizationAccountId,
-                    ),
+                  (check) => !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
                 )
               )
                 return safeRefusal(
@@ -1053,11 +1035,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 Object.values(calculated.creationPendingChecks).some((checks) =>
                   checks.some(
                     (check) =>
-                      !pendingCheckIsAuthorized(
-                        check,
-                        prepared.singleRequiredPermissionId,
-                        prepared.actorOrganizationAccountId,
-                      ),
+                      !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
                   ),
                 )
               ) {

@@ -10,6 +10,7 @@ declare
   result_kind text;
   semantic_type text;
   field_types jsonb := '{}'::jsonb;
+  condition_values jsonb := '{}'::jsonb;
   declared_fields jsonb;
   declaration jsonb;
   binding jsonb;
@@ -107,7 +108,6 @@ begin
       when field_kind = 'several_choices' then 'text_collection'
       when field_kind in ('table', 'attachment') then 'opaque_json'
       when field_kind in ('link', 'link_to_one_of_several') then 'record_reference'
-      when field_kind = 'link_to_person' then 'organization_account_reference'
       when field_kind in ('calculation', 'total') then null
       when field_kind in (
         'text', 'long_text', 'formatted_text', 'choice', 'reference_number',
@@ -148,6 +148,16 @@ begin
   end if;
   for supplied_key, supplied_value in select key, value from pg_catalog.jsonb_each(p_field_values) loop
     semantic_type := field_types ->> supplied_key;
+    if semantic_type = 'record_reference' and supplied_value <> 'null'::jsonb then
+      if pg_catalog.jsonb_typeof(supplied_value) <> 'object'
+        or supplied_value - array['recordTypeId', 'recordId']::text[] <> '{}'::jsonb
+        or not vortex_platform.is_non_nil_uuid(supplied_value ->> 'recordTypeId')
+        or not vortex_platform.is_non_nil_uuid(supplied_value ->> 'recordId') then
+        raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+      end if;
+      supplied_value := pg_catalog.to_jsonb(pg_catalog.lower(supplied_value ->> 'recordId'));
+    end if;
+    condition_values := condition_values || pg_catalog.jsonb_build_object(supplied_key, supplied_value);
     if not (declared_fields ? supplied_key)
       or not vortex_access.typed_condition_value_matches_internal(supplied_value, semantic_type, true)
       or (
@@ -250,11 +260,11 @@ begin
   end if;
 
   perform vortex_access.evaluate_typed_condition_node_internal(
-    p_saved_condition -> 'condition', field_types, p_field_values,
+    p_saved_condition -> 'condition', field_types, condition_values,
     parameter_types, parameter_values, true
   );
   return vortex_access.evaluate_typed_condition_node_internal(
-    p_saved_condition -> 'condition', field_types, p_field_values,
+    p_saved_condition -> 'condition', field_types, condition_values,
     parameter_types, parameter_values, false
   );
 exception

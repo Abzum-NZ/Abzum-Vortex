@@ -25,6 +25,7 @@ declare
   decision_organization_id uuid;
   decision_account_id uuid;
   audit_projection boolean;
+  person_record_type_id uuid;
   after_occurred_at timestamptz;
   after_record_id uuid;
   keyset_sql text := '';
@@ -90,6 +91,12 @@ begin
     false
   );
 
+  select distinct catalogue.record_type_id into strict person_record_type_id
+  from vortex_record.storage_catalogue as catalogue
+  where catalogue.physical_schema_token = 'system_projection'
+    and catalogue.protected_read_model_key = 'organization_accounts'
+    and catalogue.state = 'active';
+
   order_sql := pg_catalog.format(
     ' order by entry.occurred_at %s, entry.activity_id %s limit $8',
     case when p_direction = 'descending' then 'desc' else 'asc' end,
@@ -131,7 +138,7 @@ begin
         when 'public_session' then 'Public visitor'
         else 'Other' end,
       'actor', case when entry.actor_kind = 'organization_account'
-        then pg_catalog.jsonb_build_object('organizationAccountId', entry.actor_id::text)
+        then pg_catalog.jsonb_build_object('recordTypeId', $9, 'recordId', entry.actor_id::text)
         else null end,
       'action', entry.action,
       'subject_count', pg_catalog.cardinality(entry.subject_ids),
@@ -144,7 +151,7 @@ begin
       case when p_direction = 'descending' then 'desc' else 'asc' end);
   return query execute scan_sql using visible_organization_id, p_record_ids,
     audit_projection, actor_account_id, actor_identity_id,
-    after_occurred_at, after_record_id, p_limit;
+    after_occurred_at, after_record_id, p_limit, person_record_type_id;
 end
 $function$;
 

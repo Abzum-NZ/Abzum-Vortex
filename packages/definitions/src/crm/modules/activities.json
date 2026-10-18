@@ -13,17 +13,8 @@
       "storage_contract_id": "srt_00000006",
       "storage_scope": "application_contained",
       "ownership_mode": "organization_account",
-      "standard_actions": [
-        "create",
-        "read",
-        "update",
-        "soft_delete",
-        "restore",
-        "export"
-      ],
-      "custom_actions": [
-        "act_activity_complete"
-      ],
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
+      "custom_actions": ["act_activity_complete"],
       "fields": [
         {
           "id": "fld_activity_subject",
@@ -148,30 +139,12 @@
           "sortable": false,
           "personal_data": "none",
           "public_display": "refused",
-          "type": "link_to_person",
-          "settings": {
-            "audience": "application_accounts",
-            "application_root_required": true,
-            "on_person_deactivation": "retain_reference"
-          }
-        },
-        {
-          "id": "fld_activity_owner_person",
-          "key": "owner_person",
-          "label": "Owner",
-          "required": false,
-          "unique": false,
-          "filterable": false,
-          "sortable": false,
-          "personal_data": "none",
-          "public_display": "refused",
           "type": "link",
           "settings": {
             "target": "vortex.system_directory:person",
-            "reverse_key": "owner_person_references",
+            "reverse_key": "owner_references",
             "on_parent_delete": "empty_optional",
-            "application_root_required": true,
-            "legacy_person_field": "owner"
+            "application_root_required": true
           }
         },
         {
@@ -187,11 +160,7 @@
           "public_display": "refused",
           "type": "formatted_text",
           "settings": {
-            "allowed_blocks": [
-              "paragraph",
-              "list",
-              "link"
-            ]
+            "allowed_blocks": ["paragraph", "list", "link"]
           }
         }
       ],
@@ -211,9 +180,9 @@
           "on_parent_delete": "empty_optional"
         },
         {
-          "id": "fld_activity_owner_person_relationship",
-          "key": "owner_person",
-          "from_field": "owner_person",
+          "id": "fld_activity_owner_relationship",
+          "key": "owner",
+          "from_field": "owner",
           "to_record_type": "vortex.system_directory:person",
           "cardinality": "many_to_one",
           "on_parent_delete": "empty_optional"
@@ -413,12 +382,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "completed"
-        ],
-        "changeable_fields": [
-          "completed"
-        ]
+        "readable_fields": ["completed"],
+        "changeable_fields": ["completed"]
       }
     }
   ],
@@ -462,23 +427,14 @@
       "id": "evt_activity_due",
       "key": "vortex.crm.activities.activity.due",
       "record_type": "activity",
-      "carries": [
-        "subject",
-        "due_at",
-        "owner",
-        "regarding"
-      ],
+      "carries": ["subject", "due_at", "owner", "regarding"],
       "personal_or_sensitive_values_allowed": false
     },
     {
       "id": "evt_activity_completed",
       "key": "vortex.crm.activities.activity.completed",
       "record_type": "activity",
-      "carries": [
-        "subject",
-        "owner",
-        "regarding"
-      ],
+      "carries": ["subject", "owner", "regarding"],
       "personal_or_sensitive_values_allowed": false
     }
   ],
@@ -492,14 +448,7 @@
       "label": "Activities",
       "record_type": "activity",
       "inputs": [],
-      "select": [
-        "subject",
-        "activity_type",
-        "due_at",
-        "completed",
-        "regarding",
-        "owner"
-      ],
+      "select": ["subject", "activity_type", "due_at", "completed", "regarding", "owner"],
       "filter": {
         "field": "completed",
         "operator": "equals",

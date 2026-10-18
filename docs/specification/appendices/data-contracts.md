@@ -500,6 +500,9 @@ A calculation field uses one closed expression kind: join text fields, apply a n
 
 A relationship names one source field and either one target record type or an explicit polymorphic target list. This lets a single logical link-to-one-of-several relationship retain one stable relationship identity, including when inherited ownership or totals refer to it. A link to a person or a group is an ordinary `link` field whose target is the People or Group system record type; the optional application-access requirement is a link setting accepted only for a People target, and a well-formed target identifier alone proves neither existence nor access.
 
+Shipped Person fields use this same typed record-link value, with the Person record type and organisation-account record identity. There is one stored field and one declared relationship; publication and record writes do not create or synchronize a second Person value. Rebuilding the shipped applications requires a data reset.
+
+
 The twenty-one type keys and their settings are defined in [Modules, fields and relationships](../05-modules-fields-and-relationships.md#field-types). Attachment settings are defined only in [Files and attachments](../11-files-and-attachments.md#canonical-attachment-settings). Unsupported common properties and unknown type settings are refused.
 
 A calendar mapping is either `start_field_id` plus `end_field_id`, or `start_field_id` plus whole-number `duration_field_id` and explicit `duration_unit`. A money aggregate carries one currency code and refuses inputs containing a second currency code.

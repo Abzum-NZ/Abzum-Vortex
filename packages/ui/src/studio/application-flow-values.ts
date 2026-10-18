@@ -79,7 +79,6 @@ export const studioFieldValueType = (fieldType: string): LiteralType | undefined
     case "whole_number": case "decimal_number": case "money": case "yes_no": case "date": case "date_time":
     case "choice": case "several_choices": case "formatted_text": return fieldType;
     case "link": case "link_to_one_of_several": return "record_reference";
-    case "link_to_person": return "organization_account_reference";
     default: return undefined;
   }
 };

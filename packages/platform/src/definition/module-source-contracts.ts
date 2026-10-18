@@ -371,7 +371,6 @@ const moduleSourceSystemProjectionSchema = z
 const systemProjectionRefusedFieldTypes: ReadonlySet<string> = new Set([
   "reference_number",
   "table",
-  "link",
   "link_to_one_of_several",
   "total",
   "attachment",
@@ -390,9 +389,7 @@ const moduleSourceRecordTypeSchema = z
       ["storageScope"],
     ),
     system_projection: sourceProvenanceUnchanged(moduleSourceSystemProjectionSchema.optional()),
-    ownership_mode: sourceProvenanceTarget(recordOwnershipModeSchema, [
-      "ownershipMode",
-    ]),
+    ownership_mode: sourceProvenanceTarget(recordOwnershipModeSchema, ["ownershipMode"]),
     ownership_relationship: sourceProvenanceTarget(builderKeySchema.optional(), [
       "ownershipRelationshipId",
     ]),
