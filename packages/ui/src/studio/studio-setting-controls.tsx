@@ -805,7 +805,7 @@ const entryHeading = (
   const fieldName = field?.kind === "field_reference" ? fieldLabel(field.field) : undefined;
   const text = values.find((entry) => entry.kind === "text" && entry.value !== "");
   return label !== undefined
-    ? { title: label, summary: fieldName }
+    ? { title: label, summary: fieldName === label ? undefined : fieldName }
     : fieldName !== undefined
       ? { title: fieldName, summary: undefined }
       : { title: text?.kind === "text" ? text.value : undefined, summary: undefined };
