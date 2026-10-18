@@ -109,13 +109,7 @@ export const compareApplicationSharedContent = (
     "moduleRootId",
     "module_binding",
     (left, right) =>
-      compareSimpleComponent(
-        reasons,
-        "module_binding",
-        right.moduleRootId,
-        left,
-        right,
-      ),
+      compareSimpleComponent(reasons, "module_binding", right.moduleRootId, left, right),
     () => "major",
   );
   compareNavigation(
@@ -201,25 +195,6 @@ export const compareApplicationSharedContent = (
     "id",
     "flow",
     (left, right) => compareFlow(reasons, left, right),
-  );
-  const flowBindingKey = (item: RecordValue) => String(item.bindingId);
-  const previousFlowBindings = (previous.flowBindings as RecordValue[]).map((b) => ({
-    ...b,
-    _flowBindingKey: flowBindingKey(b),
-  }));
-  const candidateFlowBindings = (candidate.flowBindings as RecordValue[]).map((b) => ({
-    ...b,
-    _flowBindingKey: flowBindingKey(b),
-  }));
-  compareKeyed(
-    reasons,
-    previousFlowBindings,
-    candidateFlowBindings,
-    "_flowBindingKey",
-    "flow_binding",
-    (left, right) =>
-      compareSimpleComponent(reasons, "flow_binding", right._flowBindingKey, left, right),
-    () => "major",
   );
   compareKeyed(
     reasons,
