@@ -26,6 +26,10 @@ export async function proxy(request: NextRequest) {
   if (request.method === "POST" && request.nextUrl.pathname === "/auth/sign-in")
     return privateResponse(responseFor("missing"));
 
+  // These mutations own their cookie rotation. Running refresh here as well would race it.
+  if (request.nextUrl.pathname === "/auth/session" && request.method !== "GET")
+    return privateResponse(responseFor("missing"));
+
   // The cleanup route verifies its own first-party proof against the original cookies.
   // Processing them here could delete or rotate the cookie before that verification.
   if (request.nextUrl.pathname === "/auth/session-ended")
