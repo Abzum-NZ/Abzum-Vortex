@@ -13,8 +13,8 @@ import { studioReleasesSections, type StudioReleasesSection } from "./studio-rai
 
 const sectionIcons: Record<StudioReleasesSection, VortexIconName> = {
   history: "history",
-  "page-adoption": "files",
-  import: "upload",
+  "page-adoption": "file",
+  import: "arrow-up",
 };
 
 /** The Releases tab's panel: what it can open in the centre. Publishing itself is the top bar's Publish button. */
