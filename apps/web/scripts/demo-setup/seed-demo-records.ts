@@ -362,7 +362,10 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
   const personType = recordType(hrSet, "vortex.system_directory", "person");
   const ownerSession = nominatedOwnerSession(facts.stewardIdentityId);
   const saveRecord = createRecordSaveService({ identityAuthorityId: facts.identityAuthorityId });
-  const personOwner = { organizationAccountId: facts.stewardOrganizationAccountId };
+  const personOwner = {
+    recordTypeId: personType.recordTypeId,
+    recordId: facts.stewardOrganizationAccountId,
+  };
   const readOwnerGroup = async (applicationRootId: string): Promise<string> => {
     const result = await createHumanOrganizationRequestService({
       identityAuthorityId: facts.identityAuthorityId,

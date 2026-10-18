@@ -180,9 +180,6 @@ const compileTypedValue = (
       recordTypeId: resolver.qualifiedRecordTypeId(link.record_type),
       recordId: link.record_id,
     };
-  } else if (entry.type === "link_to_person") {
-    const link = entry.value as { organization_account_id: string };
-    canonicalValue = { organizationAccountId: link.organization_account_id };
   } else if (entry.type === "table" && columns)
     canonicalValue = compileTableRows(entry.value, columns.value);
   const canonical = ruleGraphTypedValueSchema.parse({
@@ -214,17 +211,6 @@ const compileTypedValue = (
             [...sourceBase, "value", "record_id"],
             (entry.value as { record_id: string }).record_id,
             (canonical.value as { recordId: string }).recordId,
-          ),
-        );
-        return;
-      }
-      if (entry.type === "link_to_person") {
-        provenance.push(
-          sourceEntry(
-            [...canonicalBase, "value", "organizationAccountId"],
-            [...sourceBase, "value", "organization_account_id"],
-            (entry.value as { organization_account_id: string }).organization_account_id,
-            (canonical.value as { organizationAccountId: string }).organizationAccountId,
           ),
         );
         return;

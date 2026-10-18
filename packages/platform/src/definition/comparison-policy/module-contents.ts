@@ -170,7 +170,6 @@ const compareFieldSettings = (
       break;
     case "reference_number":
     case "link":
-    case "link_to_person":
     case "calculation":
     case "total":
       pushChange(
