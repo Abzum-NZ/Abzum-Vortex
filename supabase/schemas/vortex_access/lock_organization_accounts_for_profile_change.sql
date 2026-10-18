@@ -9,6 +9,8 @@ volatile
 security definer
 set search_path = ''
 as $function$
+declare
+  locked_account_id uuid;
 begin
   if not vortex_platform.is_non_nil_uuid(p_identity_id::text)
     or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
@@ -29,22 +31,36 @@ begin
   where version.organization_id = p_organization_id
   for share of version;
 
-  -- The actor's account and the changed one are locked in account identity order, the changed
-  -- one only when the actor has an active account in the organisation.
-  perform 1
-  from vortex_identity.organization_accounts as account
-  where account.organization_id = p_organization_id
-    and (account.identity_id = p_identity_id
-      or (account.organization_account_id = p_organization_account_id
-        and exists (
-          select 1
-          from vortex_identity.organization_accounts as actor
-          where actor.organization_id = p_organization_id
-            and actor.identity_id = p_identity_id
-            and actor.state = 'active'
-        )))
-  order by account.organization_account_id
-  for no key update of account;
+  -- Both accounts follow one identity order, including when two administrators edit each
+  -- other. Only the target needs a write lock; the actor stays shared like the request scope,
+  -- so editing another account does not wait for the actor's unrelated publication.
+  for locked_account_id in
+    select account.organization_account_id
+    from vortex_identity.organization_accounts as account
+    where account.organization_id = p_organization_id
+      and (account.identity_id = p_identity_id
+        or (account.organization_account_id = p_organization_account_id
+          and exists (
+            select 1
+            from vortex_identity.organization_accounts as actor
+            where actor.organization_id = p_organization_id
+              and actor.identity_id = p_identity_id
+              and actor.state = 'active'
+          )))
+    order by account.organization_account_id
+  loop
+    if locked_account_id = p_organization_account_id then
+      perform 1 from vortex_identity.organization_accounts as account
+      where account.organization_id = p_organization_id
+        and account.organization_account_id = locked_account_id
+      for update of account;
+    else
+      perform 1 from vortex_identity.organization_accounts as account
+      where account.organization_id = p_organization_id
+        and account.organization_account_id = locked_account_id
+      for share of account;
+    end if;
+  end loop;
 end
 $function$;
 
@@ -55,7 +71,7 @@ grant execute on function vortex_access.lock_organization_accounts_for_profile_c
   to vortex_runtime;
 
 comment on function vortex_access.lock_organization_accounts_for_profile_change(uuid, uuid, uuid) is
-  'Holds the organisation Access version shared, then locks the acting account and the account whose profile changes, in account identity order, before the request scope takes its shared account lock, so concurrent profile saves of one account queue instead of deadlocking. Decides nothing: the scope and the profile writer still check the actor, the account state and the revision.';
+  'Holds the organisation Access version shared, then locks the actor shared and the profile target exclusively, in account identity order, before scope resolution, so concurrent profile saves queue instead of deadlocking. Decides nothing: the scope and profile writer still check the actor, account state and revision.';
 
 alter function vortex_access.lock_organization_accounts_for_profile_change(p_identity_id uuid, p_organization_id uuid, p_organization_account_id uuid) owner to vortex_owner;
 
