@@ -33,8 +33,11 @@ import {
 import {
   fieldTypeLabel, ownedDataModules, studioEditProblem, type StudioDataEdit, type StudioDataModule,
 } from "../_lib/studio-data-model";
+import { describeStudioCompileFailure } from "../_lib/studio-compile-failure";
 
 type Source = ApplicationSourceDocument;
+
+const peopleDirectoryLabel = "Person (people directory)";
 
 function Problems({ issues }: Readonly<{ issues: readonly string[] }>) {
   return issues.length === 0 ? null : <ul role="alert" className="space-y-1 text-sm text-destructive">
@@ -247,6 +250,10 @@ export function useStudioDataTab({ draft, applications, initialModule, hidden, c
     return outcome.kind === "blocked" ? outcome : outcome.result;
   };
   const saved = useMemo(() => draft.parsed(draft.saved.source), [draft, draft.saved.source]);
+  // The compile refusal of the revision the view was compiled from, while no newer edit is on its way.
+  const { parsed, updatingCanvas } = draft;
+  const compileProblem = useMemo(() => view.failure === null || updatingCanvas ? null
+    : describeStudioCompileFailure(view.failure, parsed(view.source)), [parsed, updatingCanvas, view.failure, view.source]);
   const used = view.usedModules;
   const owned = useMemo(() => ownedDataModules(source), [source]);
   const publication = useMemo(() => studioFieldPublication(view.published, saved), [view.published, saved]);
@@ -259,14 +266,15 @@ export function useStudioDataTab({ draft, applications, initialModule, hidden, c
         titleLabel: record.fields.find((field) => field.key === record.titleFieldKey)?.label };
     }));
     if (view.peopleDirectory !== null && !targets.some((target) => target.key === directory.recordType))
-      targets.push({ key: directory.recordType, label: "Person (people directory)", titleLabel: view.peopleDirectory.titleLabel });
+      targets.push({ key: directory.recordType, label: peopleDirectoryLabel, titleLabel: view.peopleDirectory.titleLabel });
     return targets;
   }, [used, view.peopleDirectory]);
   const fieldContext: ModuleFieldEditorContext = { publication, composition: compositionContext, usedRecordTypes,
     peopleDirectory: view.peopleDirectory, readRecords, compiledFields: view.compiledFields };
   const targetLabel = (key: string): string => {
     const [owner, local] = key.split(":");
-    return recordIn(source, owner ?? "", local ?? "")?.name ?? usedRecordTypes.find((target) => target.key === key)?.label ?? key;
+    return recordIn(source, owner ?? "", local ?? "")?.name ?? usedRecordTypes.find((target) => target.key === key)?.label
+      ?? (key === directory.recordType ? peopleDirectoryLabel : key);
   };
   const savedOwned = useMemo(() => ownedDataModules(saved), [saved]);
   const modules = useMemo(() => [...owned, ...(used ?? [])], [owned, used]);
@@ -294,7 +302,8 @@ export function useStudioDataTab({ draft, applications, initialModule, hidden, c
         applications={applications} source={source} disabled={disabled} edit={edit} />
       : current.kind === "query"
         ? <StudioQueryEditor key={`query:${current.moduleKey}:${current.queryKey}`} source={source} moduleKey={current.moduleKey}
-          queryKey={current.queryKey} compiledFields={view.compiledFields} recordTypes={recordTypes} disabled={disabled}
+          queryKey={current.queryKey} compiledFields={view.compiledFields} draftCompiles={view.failure === null}
+          recordTypes={recordTypes} disabled={disabled}
           edit={edit}
           onDeleted={(recordKey) => select(recordKey === undefined ? { kind: "module", moduleKey: current.moduleKey }
             : { kind: "record_type", moduleKey: current.moduleKey, recordKey })} />
@@ -309,8 +318,17 @@ export function useStudioDataTab({ draft, applications, initialModule, hidden, c
             disabled={disabled} context={fieldContext} edit={edit}
             onRemoved={() => select({ kind: "record_type", moduleKey: current.moduleKey, recordKey: current.recordKey })} />;
   const usedIn = studioUseTargetOf(current);
+  const problemHere = compileProblem?.selection != null && current !== null &&
+    JSON.stringify(compileProblem.selection) === JSON.stringify(current);
   const inspector = <StudioPanelShell title="Inspector"
     description={current === null ? "Select an item to change it." : describeSelection(modules, current)}>
+    {compileProblem === null ? null : <div role="alert" className="space-y-2 rounded-md border border-destructive/50 p-3 text-sm">
+      <p className="font-semibold text-destructive">{problemHere ? "This stops the draft from compiling"
+        : "The draft does not compile, so it can't be previewed or published yet"}</p>
+      <p className="break-words">{compileProblem.message}</p>
+      {compileProblem.selection === null || problemHere ? null
+        : <Button type="button" size="sm" variant="outline" onClick={() => select(compileProblem.selection)}>Show me</Button>}
+    </div>}
     {inspectorBody}
     {usedIn === null ? null : <StudioUsedIn source={source} target={usedIn} name={describeSelection(modules, current)} />}
   </StudioPanelShell>;

@@ -501,10 +501,22 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
               : settings.decimalPlaces === undefined;
           valid = valid && resultTypeValid && precisionValid;
         }
-        if (!valid)
-          failures.push(
-            failure(output, "vortex.definition.module_field_references", "broken_reference"),
-          );
+        if (!valid) {
+          // Located at the field, so the builder is shown which field to change.
+          const root = rootLocation(output);
+          failures.push({
+            ruleCode: "vortex.definition.module_field_references",
+            family: "broken_reference",
+            location: {
+              ...root,
+              segments: [
+                ...root.segments,
+                { kind: "record_type", key: String(record.key) },
+                { kind: "field", key: String(field.key) },
+              ],
+            },
+          });
+        }
       }
       const calculationIds = new Set(
         array(record.fields)

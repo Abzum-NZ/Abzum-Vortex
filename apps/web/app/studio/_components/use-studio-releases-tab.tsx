@@ -13,6 +13,7 @@ import { StandardPageAdoption } from "./standard-page-adoption";
 import { StudioHistoryTab } from "./studio-history-tab";
 import { StudioPublishDialog } from "./studio-publish-dialog";
 import { previewProblem, unavailableMessage } from "./studio-refusal-messages";
+import { describeStudioCompileFailure } from "../_lib/studio-compile-failure";
 import { StudioReleasesPanel } from "./studio-releases-panel";
 import { studioReleasesSections, type StudioReleasesSection } from "./studio-rail-tabs";
 import type { StudioDraft } from "./use-studio-draft";
@@ -31,9 +32,10 @@ const sameSnapshot = (left: PublicationSnapshot, right: PublicationSnapshot | nu
   left.source === right.source && left.lifetime === right.lifetime;
 
 /** Words a person can act on for a publication the platform declined. */
-const publicationProblemText = (kind: string, reason: string | undefined, blockAlias?: string): string => {
-  // A compilation refusal names its rule and, when it is about one, the block, so it can be fixed.
+const publicationProblemText = (kind: string, reason: string | undefined, blockAlias?: string, compileProblem?: string): string => {
+  // A compilation refusal names what it is about (the field, query or block) so it can be fixed.
   if (reason?.startsWith("compilation_") === true) {
+    if (compileProblem !== undefined) return `This draft does not compile, so it cannot be published. ${compileProblem} Then try again.`;
     const rule = reason.slice("compilation_".length).replace(/^vortex.definition./u, "").replaceAll("_", " ");
     return `This draft does not compile, so it cannot be published: ${rule}${blockAlias === undefined ? "" : ` (block ${blockAlias})`}. Change it and try again.`;
   }
@@ -95,6 +97,13 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, appStoreHr
     if (preparedRef.current !== null && !sameSnapshot(preparedRef.current.snapshot, readSnapshot())) setPrepared(null);
   }, [draft.state, draft.saved, draft.lifetime, readSnapshot, setPrepared]);
 
+  /** The saved draft's compile refusal in words, when the workspace's compile is of this revision. */
+  const compileProblemOf = (draftRevision: number): string | undefined => {
+    const view = latest.current.view;
+    return view.failure === null || view.draftRevision !== draftRevision ? undefined
+      : describeStudioCompileFailure(view.failure, latest.current.parsed(view.source)).message;
+  };
+
   const requestPublication = async (mode: "prepare" | "publish", suppliedNote?: string): Promise<StudioPublicationOutcome> => {
     if (draft.isHeld("publication") || latest.current.blockedReason() !== undefined) return { kind: "not_started", reason: "busy" };
     if (!await latest.current.flush()) return { kind: "not_started", reason: "not_saved" };
@@ -134,7 +143,8 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, appStoreHr
           setProblem("The summary did not match the saved draft, so nothing can be published from it. Close this window and try again.");
           return { kind: "unverified" };
         }
-        setProblem(publicationProblemText(result.kind, result.reason, "blockAlias" in result ? result.blockAlias : undefined));
+        setProblem(publicationProblemText(result.kind, result.reason, "blockAlias" in result ? result.blockAlias : undefined,
+          compileProblemOf(snapshot.draftRevision)));
         return { kind: "declined", result: result.kind, reason: result.reason };
       }
       const confirmation = confirmed!.confirmation;
@@ -158,7 +168,8 @@ export function useStudioReleasesTab({ draft, hidden, initialSection, appStoreHr
         setProblem(publicationProblemText("temporarily_unavailable", undefined));
         return { kind: "unverified" };
       }
-      setProblem(publicationProblemText(result.kind, result.reason, "blockAlias" in result ? result.blockAlias : undefined));
+      setProblem(publicationProblemText(result.kind, result.reason, "blockAlias" in result ? result.blockAlias : undefined,
+        compileProblemOf(snapshot.draftRevision)));
       // A transient failure of the append may still have completed.
       return result.kind === "temporarily_unavailable" ? { kind: "unverified" }
         : { kind: "declined", result: result.kind, reason: result.reason };
