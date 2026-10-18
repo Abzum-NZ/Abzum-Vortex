@@ -32,8 +32,6 @@ export {
   type FileRecordImportSourceService,
 } from "./record-import-source";
 export * from "./storage-credentials";
-export { resolveFileStorageDestination, type FileStorageDestination } from "./storage-destination";
-export { createStoredUploadInspection, type FileScannerConfiguration } from "./upload-inspection";
 export {
   createFileRemovalEligibilityService,
   matchesProtectedLegalHold,

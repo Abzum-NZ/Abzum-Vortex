@@ -4,7 +4,7 @@ packages:
 allowBuilds:
   esbuild: false
 catalog:
-  "@js-temporal/polyfill": 0.5.1
+  '@js-temporal/polyfill': 0.5.1
   "@puckeditor/core": 0.23.0
   "@supabase/ssr": 0.12.7
   "@supabase/supabase-js": 2.116.0
@@ -24,8 +24,7 @@ catalog:
   sonner: 2.0.8
   knip: 5.63.0
   re2js: 2.8.6
-  "@xyflow/react": 12.12.0
-  file-type: 22.2.0
+  '@xyflow/react': 12.12.0
 
 catalogMode: strict
 

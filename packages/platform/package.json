@@ -13,7 +13,6 @@
   "dependencies": {
     "@js-temporal/polyfill": "catalog:",
     "@supabase/supabase-js": "catalog:",
-    "file-type": "catalog:",
     "postgres": "catalog:",
     "re2js": "catalog:",
     "semver": "catalog:",
