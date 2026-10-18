@@ -312,6 +312,7 @@ export type BoardPlacementValues = Readonly<{
   choiceFieldId: string;
   /** The key the record save names the choice field by when a card moves to another column. */
   choiceFieldKey: string;
+  choiceFieldRequired: boolean;
   cardTitleFieldId: string;
   cardFieldIds: readonly string[];
   totalRowCount: number;
@@ -531,6 +532,7 @@ export const projectBoardPlacement = async (
         plan: board.plan,
         choiceFieldId: contract.choiceField,
         choiceFieldKey: String(choiceField.key),
+        choiceFieldRequired: choiceField.required,
         cardTitleFieldId: contract.cardTitleField,
         cardFieldIds: requestedFieldIds,
         totalRowCount: board.totalRowCount,

@@ -193,7 +193,7 @@ export function ApplicationDraftAgentTools({ draft, catalogue, command, readQuer
           ? places.targets.map((target) => ({ area: target.area, destination: target.destination, label: target.label,
             blocks: target.choices.map((choice) => ({ blockId: choice.blockId, releaseVersion: choice.releaseVersion,
               key: choice.key, name: choice.name, description: choice.description, group: choice.groupLabel,
-              needsQuery: choice.needsQuery, setup: choice.setup,
+              needsQuery: choice.needsQuery, setup: choice.setup, studioSetup: choice.studioSetup,
               ...(choice.unavailable === undefined ? {} : { unavailable: choice.unavailable }) })) }))
           : places.kind }];
       }),

@@ -179,6 +179,7 @@ export const parseBoardPayload = (
       "plan",
       "choiceFieldId",
       "choiceFieldKey",
+      "choiceFieldRequired",
       "cardTitleFieldId",
       "cardFieldIds",
       "totalRowCount",
@@ -209,6 +210,8 @@ export const parseBoardPayload = (
   const cardTitleFieldId = fieldIdSchema.safeParse(record.cardTitleFieldId);
   const choiceFieldKey = builderKeySchema.safeParse(record.choiceFieldKey);
   if (!choiceFieldKey.success) fail("A board requires the key of its choice field", location);
+  if (typeof record.choiceFieldRequired !== "boolean")
+    fail("A board requires its stage field's required setting", location);
   if (!choiceFieldId.success || !cardTitleFieldId.success)
     fail("A board requires valid choice and card-title field identities", location);
   const cardFieldCandidates = requireArray(
@@ -334,6 +337,7 @@ export const parseBoardPayload = (
     }),
     choiceFieldId: choiceFieldId.data,
     choiceFieldKey: choiceFieldKey.data,
+    choiceFieldRequired: record.choiceFieldRequired as boolean,
     cardTitleFieldId: cardTitleFieldId.data,
     cardFieldIds: Object.freeze(cardFieldIds),
     totalRowCount,
