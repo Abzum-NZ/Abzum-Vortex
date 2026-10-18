@@ -2,9 +2,10 @@
 import dynamic from "next/dynamic";
 import { useCallback, useMemo, type ReactNode } from "react";
 import { describeFailure, type ApplicationSourceDocument, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
+import { useAppearanceMode } from "@vortex/ui";
 import {
   applyStudioFlowCommand, applyStudioFlowCreate, applyStudioFlowStart, describeStudioFlowStarts,
-  projectStudioFlowCreateChoices, projectStudioFlowDraftChoices, projectStudioFlowStart,
+  projectStudioFlowCreateChoices, projectStudioFlowDraftChoices, projectStudioFlowStart, projectStudioFlowStepActions,
   samePath, studioFlowOfSelection, studioFlowOutline, studioSemanticSelectionKey,
   type StudioFlowCommand, type StudioFlowContext, type StudioFlowCreateCommand, type StudioFlowCreateResult, type StudioFlowEditResult, type StudioFlowPath,
   type StudioFlowSelection, type StudioFlowStartDraft, type StudioSemanticSelection,
@@ -34,6 +35,7 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
   openFlowsTab: () => void;
 }>) {
   const { state, source, selected } = draft;
+  const appearance = useAppearanceMode();
   const disabled = draft.locked;
   // The flow and its selected step are the workspace's one selection (a flow or a flow step).
   const currentFlow = studioFlowOfSelection(selected);
@@ -134,6 +136,8 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
 
   const owner = flowSelection?.moduleKey === null || flowSelection === null ? undefined
     : source.body.modules.find((module) => module.key === flowSelection.moduleKey);
+  const stepTypes = useMemo(() => flowSelection === null ? []
+    : projectStudioFlowStepActions(context, flowSelection, null).stepTypes, [context, flowSelection]);
 
   const panel = (hidden: boolean): ReactNode => <StudioFlowsPanel source={source} organizationId={draft.organizationId}
     applications={applications} selectedKey={selectionKey} hidden={hidden} disabled={disabled}
@@ -145,6 +149,14 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
       ? <p role="alert" className="text-sm">This flow cannot be drawn because it could not be read from the draft.</p>
       : <div className="flex h-full min-h-96 flex-col">
         <StudioFlowCanvas lists={outline.lists} starts={starts} selectedPath={stepPath} onSelect={selectStep}
+          appearance={appearance} types={stepTypes} forms={flowChoices.forms} disabled={disabled}
+          title={labels.get(selectionKey) ?? "Flow"}
+          onAdd={(insertion, taskType, formAlias) => {
+            const result = command(context, flowSelection, { kind: "insert_task", ...insertion, taskType, ...(formAlias === undefined ? {} : { formAlias }) });
+            if (result.kind !== "applied") return result.reason;
+            draft.select({ kind: "flow_step", flowAlias: flowSelection.flowAlias, moduleKey: flowSelection.moduleKey, taskId: result.taskId });
+            return true;
+          }}
           label={`Workflow canvas of ${labels.get(selectionKey) ?? "the flow"}`} />
       </div>;
 
