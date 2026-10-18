@@ -25,8 +25,8 @@ import { traverseStudioSemanticSelectionDraft, type StudioSemanticSelection } fr
  * - for a record event: a transaction flow an owned Module runs before one of its record types is
  *   saved, with one Warn step (the trigger is the flow's own `triggers`): a before-save rule, added
  *   on its record type in the Data tab.
- * A binding of a control on a page of a record type declares its event for that record type, as
- * publication requires of every bound event.
+ * A binding declares its event for the board's record type or the record type of its page, as
+ * publication requires of every bound record event.
  */
 
 type SourceBinding = ApplicationSourceDocument["body"]["flow_bindings"][number];
@@ -122,7 +122,16 @@ const bindControl = (body: ApplicationSourceDocument["body"], controlAlias: stri
   const id = keyFrom(`binding_${flowKey}`, aliases);
   if (id === undefined) return refuse("No free name could be made for the binding. Choose another name.");
   const page = body.pages.find((candidate) => sourcePageItems(candidate.composition).some((item) => item.props.id === controlAlias));
-  const recordType = page !== undefined && "record_type" in page && typeof page.record_type === "string" ? page.record_type : undefined;
+  let recordType = page !== undefined && "record_type" in page && typeof page.record_type === "string" ? page.record_type : undefined;
+  if (event === "card_moved") {
+    const board = page === undefined ? undefined
+      : sourcePageItems(page.composition).find((item) => item.props.id === controlAlias);
+    const stageField = board?.props.choice_field;
+    if (typeof stageField !== "string") return refuse("Choose the board's choice field first.");
+    // A board can be on a dashboard or on a page for a different record type.
+    // Its event belongs to the cards' record type, never the containing page.
+    recordType = stageField.slice(0, stageField.lastIndexOf("."));
+  }
   // A binding is unique by its control and event, so every control of one record type raising one
   // kind of event shares that record type's one declared event of that kind.
   const declared = new Set(body.events.filter((entry) => entry.record_type === recordType).map((entry) => entry.id));
