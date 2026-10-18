@@ -14,6 +14,7 @@ import { ApplicationExperiencePage } from "./_components/application-experience-
 import { ApplicationPageView } from "./_components/application-page-view";
 import { BarePage } from "../_components/bare-page";
 import {
+  PageNotOpenAddress,
   suspendedOrganizationAccount,
   TemporarilyUnavailableAddress,
   unavailableAddress,
@@ -212,10 +213,29 @@ export default async function ApplicationAddressPage({
 
   if (resolved.kind !== "application_page") {
     // A refused page and a missing page of an application the viewer may open both show that
-    // application's own not-found page, in that application's installed theme; everything else
-    // shows the fixed neutral fallback.
+    // application's own not-found page, in that application's installed theme, or, when it has
+    // none, a refusal that leads back to its home page; everything else shows the fixed neutral
+    // fallback.
     const experience = resolved.kind === "unavailable" ? resolved.experience : undefined;
-    if (experience === undefined) return <BarePage>{unavailableAddress}</BarePage>;
+    const permitted = resolved.kind === "unavailable" ? resolved.application : undefined;
+    if (experience === undefined)
+      return (
+        <BarePage>
+          {permitted === undefined ? (
+            unavailableAddress
+          ) : (
+            <PageNotOpenAddress
+              applicationName={permitted.name}
+              homeHref={addressPath(
+                tenantShortName,
+                organizationShortName,
+                permitted.key,
+                permitted.homePageKey,
+              )}
+            />
+          )}
+        </BarePage>
+      );
     const launcher = await loadOrganizationLauncher(identity.session);
     if (launcher.kind !== "available")
       throw new Error(`Organisation launcher unavailable for the account menu: ${launcher.kind}`);

@@ -13,6 +13,7 @@ import {
   exactDecimalTextSchema,
   timestampSchema,
   richTextDocumentSchema,
+  moduleFieldValueSchemas,
   sameId,
   isRecord,
 } from "@vortex/platform/schema";
@@ -261,6 +262,18 @@ export const projectEditField = (
       }
       kind = "link_input";
       break;
+    case "attachment":
+      if (stored !== null && !moduleFieldValueSchemas.attachment.safeParse(stored).success)
+        return undefined;
+      displayed = stored ?? [];
+      kind = "attachment_input";
+      break;
+    case "table":
+      if (stored !== null && !moduleFieldValueSchemas.table.safeParse(stored).success)
+        return undefined;
+      displayed = stored ?? [];
+      kind = "table_input";
+      break;
     case "rich_text":
       if (stored !== null && !richTextDocumentSchema.safeParse(stored).success) return undefined;
       kind = "rich_text_input";
@@ -274,12 +287,19 @@ export const projectEditField = (
       kind === "text_input" &&
       stored === null &&
       isRecord(settings.input_type) &&
-      settings.input_type.value === "email"
+      (settings.input_type.value === "email" ||
+        settings.input_type.value === "tel" ||
+        settings.input_type.value === "url")
         ? null
         : displayed,
     data: {
       status: "ready",
-      values: { kind, value: displayed, ...(kind === "date_time_input" ? dateTimeZones : {}) },
+      values: {
+        kind,
+        value: displayed,
+        ...(kind === "date_time_input" ? dateTimeZones : {}),
+        ...(kind === "attachment_input" ? { files: [], uploadUrl: "/api/files/upload?" } : {}),
+      },
     },
   };
 };

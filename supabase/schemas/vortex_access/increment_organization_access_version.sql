@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.increment_organization_access_version(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid, p_change_reason text) RETURNS TABLE(organization_id uuid, current_version bigint, changed_at timestamp with time zone, changed_by uuid, change_correlation_id uuid, change_reason text)
+CREATE OR REPLACE FUNCTION vortex_access.increment_organization_access_version(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid, p_change_reason text) RETURNS TABLE(organization_id uuid, current_version bigint, changed_at timestamp with time zone, changed_by uuid, change_correlation_id uuid, change_reason text)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -30,6 +30,14 @@ begin
       'mcp_authorization_changed'
     ) then
     raise exception using errcode = '22023', message = 'Access-version increment input is invalid';
+  end if;
+
+  -- This marker detects a wrong request runner before UPDATE attempts a lock upgrade.
+  -- It is not authority: callers still validate the current context and permission.
+  if pg_catalog.current_setting('vortex_access.exclusive_organization_id', true)
+    is distinct from p_organization_id::text then
+    raise exception using errcode = '55000',
+      message = 'Access-version increment requires an exclusive access-change scope';
   end if;
 
   return query
