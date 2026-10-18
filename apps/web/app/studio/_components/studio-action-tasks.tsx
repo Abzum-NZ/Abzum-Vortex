@@ -177,7 +177,7 @@ export function StudioActionTasks({
           ),
         ]),
     ...inputs.map((input) =>
-      choice({ source: "input", name: input.key }, input.label, input.type, "Inputs"),
+      choice({ source: "input", name: input.key }, input.label, input.type, "Flow inputs"),
     ),
     ...record.fields.map((field) =>
       choice(
