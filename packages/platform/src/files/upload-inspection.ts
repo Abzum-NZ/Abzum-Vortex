@@ -3,22 +3,13 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { mkdtemp, open, rm } from "node:fs/promises";
-import { connect, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileTypeFromFile } from "file-type";
-import { trustedFileInspectionSchema, type TrustedFileInspection } from "../schema";
+import { trustedFileInspectionSchema } from "../schema";
 import type { StorageCredentialBridge } from "./storage-credentials";
 import { resolveFileStorageDestination, type FileStorageDestination } from "./storage-destination";
-import type {
-  IsolatedFileScanner,
-  UploadedObjectInspector,
-  UploadedObjectLocation,
-} from "./upload";
-
-export type FileScannerConfiguration =
-  | Readonly<{ kind: "local_development_noop" }>
-  | Readonly<{ kind: "clamav"; host: string; port: number; timeoutMilliseconds: number }>;
+import type { UploadedObjectInspector, UploadedObjectLocation } from "./upload";
 
 /** A complete, bounded temporary copy of bytes read under an exact-object inspect credential. */
 const withStoredObject = async <Result>(
@@ -97,63 +88,15 @@ const withStoredObject = async <Result>(
   }
 };
 
-const writeSocket = (socket: Socket, bytes: Uint8Array): Promise<void> =>
-  new Promise((resolve, reject) =>
-    socket.write(bytes, (cause) => (cause ? reject(cause) : resolve())),
-  );
-
-/** One bounded, NUL-terminated ClamD response; unexpected closure never means clean. */
-const clamavCommand = async (
-  configuration: Extract<FileScannerConfiguration, { kind: "clamav" }>,
-  send: (socket: Socket) => Promise<void>,
-): Promise<string> => {
-  const socket = connect({ host: configuration.host, port: configuration.port });
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    const reply = new Promise<string>((resolve, reject) => {
-      let received = Buffer.alloc(0);
-      timer = setTimeout(
-        () => socket.destroy(new Error("FILE_SCANNER_TIMEOUT")),
-        configuration.timeoutMilliseconds,
-      );
-      socket.on("error", reject);
-      socket.on("end", () => reject(new Error("FILE_SCANNER_RESPONSE_INCOMPLETE")));
-      socket.on("data", (chunk: Buffer) => {
-        received = Buffer.concat([received, chunk]);
-        if (received.length > 1024) {
-          socket.destroy(new Error("FILE_SCANNER_RESPONSE_TOO_LARGE"));
-          return;
-        }
-        const end = received.indexOf(0);
-        if (end !== -1) resolve(received.subarray(0, end).toString("utf8"));
-      });
-    });
-    // Attach a rejection handler before sending so an early disconnect is observed immediately.
-    const sending = send(socket);
-    const [response] = await Promise.all([reply, sending]);
-    return response;
-  } finally {
-    clearTimeout(timer);
-    socket.destroy();
-  }
-};
-
-/**
- * Concrete implementations of the coordinator's existing inspection and scanner ports.
- * The scanner receives the same checksum and byte count as inspection. A missing object,
- * storage error, scanner error or changed object never supplies a clean outcome.
- */
 export const createStoredUploadInspection = (
   configuration: Readonly<{
     bridge: StorageCredentialBridge;
     destination: FileStorageDestination;
     maximumBytes: number;
-    scanner: FileScannerConfiguration;
     fetchImplementation?: typeof fetch;
   }>,
 ): Readonly<{
   inspectUploadedObject: UploadedObjectInspector;
-  scanUploadedObject: IsolatedFileScanner;
 }> => {
   const { origin: storageOrigin } = resolveFileStorageDestination(configuration.destination);
   if (
@@ -162,22 +105,6 @@ export const createStoredUploadInspection = (
     configuration.maximumBytes > 5000 * 1024 * 1024
   )
     throw new Error("FILE_INSPECTION_LIMIT_INVALID");
-  const scanner = configuration.scanner;
-  if (scanner.kind === "local_development_noop") {
-    if (configuration.destination.environment !== "local")
-      throw new Error("FILE_SCANNER_NOOP_REQUIRES_LOCAL_ENVIRONMENT");
-    console.warn("[files] Local development uses a no-op scanner. Malware scanning is disabled.");
-  } else if (
-    scanner.kind !== "clamav" ||
-    scanner.host.trim().length === 0 ||
-    !Number.isSafeInteger(scanner.port) ||
-    scanner.port < 1 ||
-    scanner.port > 65535 ||
-    !Number.isSafeInteger(scanner.timeoutMilliseconds) ||
-    scanner.timeoutMilliseconds < 1 ||
-    scanner.timeoutMilliseconds > 60_000
-  )
-    throw new Error("FILE_SCANNER_CONFIGURATION_INVALID");
   const fetchImplementation = configuration.fetchImplementation ?? fetch;
   const inspectUploadedObject: UploadedObjectInspector = (location) =>
     withStoredObject(
@@ -187,7 +114,27 @@ export const createStoredUploadInspection = (
       configuration.maximumBytes,
       fetchImplementation,
       async (filename, size, checksum) => {
-        const detected = await fileTypeFromFile(filename);
+        let detected: { ext: string; mime: string } | undefined = await fileTypeFromFile(filename);
+        if (detected === undefined) {
+          const decoder = new TextDecoder("utf-8", { fatal: true });
+          let text = true;
+          try {
+            for await (const chunk of createReadStream(filename)) {
+              const decoded = decoder.decode(chunk, { stream: true });
+              // eslint-disable-next-line no-control-regex -- Binary control bytes cannot be admitted as plain text.
+              const hasControlBytes = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(decoded);
+              if (hasControlBytes) {
+                text = false;
+                break;
+              }
+            }
+            decoder.decode();
+          } catch (cause) {
+            if (!(cause instanceof TypeError)) throw cause;
+            text = false;
+          }
+          if (text) detected = { ext: "txt", mime: "text/plain" };
+        }
         // Unknown bytes remain unknown; neither a filename nor a browser Content-Type promotes them.
         return trustedFileInspectionSchema.parse({
           actualSizeBytes: size,
@@ -197,50 +144,5 @@ export const createStoredUploadInspection = (
         });
       },
     );
-  const scanUploadedObject: IsolatedFileScanner = async ({ location, inspection }) => {
-    const trusted: TrustedFileInspection = trustedFileInspectionSchema.parse(inspection);
-    const result = await withStoredObject(
-      configuration.bridge,
-      storageOrigin,
-      location,
-      configuration.maximumBytes,
-      fetchImplementation,
-      async (filename, size, checksum) => {
-        if (size !== trusted.actualSizeBytes || checksum !== trusted.checksum)
-          throw new Error("FILE_SCANNER_OBJECT_CHANGED");
-        if (scanner.kind === "local_development_noop")
-          return {
-            scannerName: "local-development-noop",
-            scannerVersion: "1",
-            scannerResult: "clean" as const,
-          };
-        const version = await clamavCommand(scanner, (socket) =>
-          writeSocket(socket, Buffer.from("zVERSION\0")),
-        );
-        if (!/^ClamAV [\x20-\x7e]{1,110}$/.test(version))
-          throw new Error("FILE_SCANNER_VERSION_INVALID");
-        const response = await clamavCommand(scanner, async (socket) => {
-          await writeSocket(socket, Buffer.from("zINSTREAM\0"));
-          for await (const chunk of createReadStream(filename, { highWaterMark: 64 * 1024 })) {
-            const bytes = chunk as Buffer;
-            const length = Buffer.alloc(4);
-            length.writeUInt32BE(bytes.byteLength);
-            await writeSocket(socket, length);
-            await writeSocket(socket, bytes);
-          }
-          await writeSocket(socket, Buffer.alloc(4));
-        });
-        if (response !== "stream: OK" && !/^stream: .+ FOUND$/.test(response))
-          throw new Error("FILE_SCANNER_SCAN_FAILED");
-        return {
-          scannerName: "ClamAV",
-          scannerVersion: version,
-          scannerResult: response === "stream: OK" ? ("clean" as const) : ("quarantined" as const),
-        };
-      },
-    );
-    if (result === null) throw new Error("FILE_SCANNER_OBJECT_MISSING");
-    return result;
-  };
-  return { inspectUploadedObject, scanUploadedObject };
+  return { inspectUploadedObject };
 };

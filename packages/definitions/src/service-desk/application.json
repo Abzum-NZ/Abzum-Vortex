@@ -1788,6 +1788,30 @@
                               }
                             },
                             {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_service_desk_case_edit_attachments",
+                                "field": "vortex.service_desk.cases:case.attachments",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
                               "type": "platform.renderer.button",
                               "props": {
                                 "id": "submit_service_desk_case_edit",

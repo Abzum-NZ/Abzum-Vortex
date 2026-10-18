@@ -33,7 +33,7 @@ export {
 } from "./record-import-source";
 export * from "./storage-credentials";
 export { resolveFileStorageDestination, type FileStorageDestination } from "./storage-destination";
-export { createStoredUploadInspection, type FileScannerConfiguration } from "./upload-inspection";
+export { createStoredUploadInspection } from "./upload-inspection";
 export {
   createFileRemovalEligibilityService,
   matchesProtectedLegalHold,
@@ -55,12 +55,6 @@ export {
   type FileStorageDeleter,
 } from "./object-removal";
 export {
-  runUploadCapabilityAdmission,
-  type UploadCapabilityAdmissionRequest,
-  type UploadCapabilityAdmissionResult,
-  type UploadCapabilityReservationPorts,
-} from "./upload-capability-admission";
-export {
   PENDING_UPLOAD_WINDOW_SECONDS,
   completeFileUpload,
   createFileUploadCoordinator,
@@ -77,7 +71,6 @@ export {
   type FileUploadRenewalInput,
   type FileUploadRenewalResult,
   type FileUploadRepository,
-  type IsolatedFileScanner,
   type PendingUploadReservation,
   type PendingUploadState,
   type UploadAttachmentSettings,
@@ -190,4 +183,4 @@ export {
   type ComponentBootstrapTarget,
 } from "./component-bootstrap-serving";
 
-export { uploadAttachmentFile, type AttachmentUploadResult } from "./upload-file";
+export { admitAttachmentUpload, completeAttachmentUpload } from "./upload-file";

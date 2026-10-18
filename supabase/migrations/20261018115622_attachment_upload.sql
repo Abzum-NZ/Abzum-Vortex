@@ -1,7 +1,7 @@
 -- The Storage API uses its own connections. Session settings in the seed cannot
 -- configure those connections; database defaults require privileges the local
 -- operational postgres role deliberately does not have. Keep the destination
--- in protected platform data, provisioned by operations and the local seed.
+-- in protected platform data, provisioned by operations through tenant provisioning.
 set local role vortex_owner;
 
 create table vortex_platform.storage_destination (
@@ -59,12 +59,17 @@ CREATE POLICY vortex_private_file_read ON storage.objects FOR SELECT TO authenti
 DROP POLICY vortex_private_file_upload ON storage.objects;
 CREATE POLICY vortex_private_file_upload ON storage.objects FOR INSERT TO authenticated WITH CHECK (((bucket_id = 'private_files'::text) AND ((auth.jwt() ->> 'tokenKind'::text) = 'vortex_file_storage_operation'::text) AND ((auth.jwt() ->> 'role'::text) = 'authenticated'::text) AND ((auth.jwt() ->> 'destinationProject'::text) = vortex_platform.storage_destination_project()) AND ((auth.jwt() ->> 'bucketId'::text) = bucket_id) AND ((auth.jwt() ->> 'objectPath'::text) = name) AND (name ~~ ((auth.jwt() ->> 'organizationId'::text) || '/%'::text)) AND ((auth.jwt() ->> 'organizationId'::text) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'::text) AND ((auth.jwt() ->> 'operation'::text) = 'upload'::text) AND ((auth.jwt() ->> 'iat'::text) ~ '^[0-9]{1,18}$'::text) AND ((auth.jwt() ->> 'exp'::text) ~ '^[0-9]{1,18}$'::text) AND (((auth.jwt() ->> 'exp'::text))::bigint > ((auth.jwt() ->> 'iat'::text))::bigint) AND ((((auth.jwt() ->> 'exp'::text))::bigint - ((auth.jwt() ->> 'iat'::text))::bigint) <= 60) AND (((auth.jwt() ->> 'iat'::text))::bigint <= ((floor(date_part('epoch'::text, clock_timestamp())))::bigint + 5)) AND (((auth.jwt() ->> 'exp'::text))::bigint >= (floor(date_part('epoch'::text, clock_timestamp())))::bigint)));
 
-reset role;
 
 set local role vortex_owner;
+alter table vortex_platform.file_records drop constraint file_records_owner_complete;
+alter table vortex_platform.file_records add constraint file_records_owner_complete check (
+  pg_catalog.num_nonnulls(owner_record_type_id, owner_record_id, owner_field_id) in (0, 3)
+  or (owner_record_type_id is not null and owner_field_id is not null and owner_record_id is null
+    and lifecycle_state in ('pending','uploaded','scanning','quarantined','abandoned','removed'))
+);
+
 create table vortex_platform.file_uploads (
   file_id uuid primary key references vortex_platform.file_records(file_id),
-  capability_reservation_id uuid not null unique references vortex_access.capability_reservations(reservation_id),
   maximum_bytes bigint not null check (maximum_bytes > 0),
   upload_expires_at timestamptz not null,
   replacing_file_id uuid references vortex_platform.file_records(file_id),
@@ -80,7 +85,313 @@ revoke all on vortex_platform.file_uploads from public, anon, authenticated, ser
 grant select, insert, update, delete on vortex_platform.file_uploads to postgres;
 create policy file_uploads_operations on vortex_platform.file_uploads to postgres using(true) with check(true);
 
-create or replace function vortex_platform.read_attachment_upload_authority(
+
+drop function vortex_identity.provision_tenant(uuid,uuid,uuid,text,text,text,text,text,uuid,uuid,text,text,text,text,text,text,text,text);
+
+create or replace function vortex_identity.provision_tenant(
+  p_cluster_id uuid,
+  p_operator_actor_id uuid,
+  p_duplicate_key uuid,
+  p_command_fingerprint text,
+  p_tenant_short_name text,
+  p_tenant_display_name text,
+  p_organization_short_name text,
+  p_organization_display_name text,
+  p_tenant_steward_identity_id uuid,
+  p_organization_steward_identity_id uuid,
+  p_account_display_name text,
+  p_account_language text,
+  p_account_time_zone text,
+  p_runtime_language text,
+  p_runtime_time_zone text,
+  p_runtime_currency text,
+  p_runtime_date_format text,
+  p_runtime_number_format text,
+  p_storage_project text
+)
+returns table (
+  outcome text,
+  operation text,
+  tenant_id uuid,
+  root_organization_id uuid,
+  tenant_administrator_assignment_id uuid,
+  tenant_administrator_assignment_revision bigint,
+  organization_account_id uuid,
+  organization_account_revision bigint,
+  access_version bigint,
+  correlation_id uuid,
+  accepted_at timestamptz
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  stored record;
+  claimed jsonb;
+  new_tenant_id uuid := pg_catalog.gen_random_uuid();
+  new_organization_id uuid := pg_catalog.gen_random_uuid();
+  new_tenant_assignment_id uuid := pg_catalog.gen_random_uuid();
+  new_account_id uuid := pg_catalog.gen_random_uuid();
+  new_role_id uuid := pg_catalog.gen_random_uuid();
+  new_role_assignment_id uuid := pg_catalog.gen_random_uuid();
+  new_delegation_id uuid := pg_catalog.gen_random_uuid();
+  new_group_id uuid := pg_catalog.gen_random_uuid();
+  new_membership_id uuid := pg_catalog.gen_random_uuid();
+  new_correlation_id uuid := pg_catalog.gen_random_uuid();
+  operation_at timestamptz := pg_catalog.clock_timestamp();
+  resulting_access_version bigint;
+  result_subject_ids uuid[];
+  result_subject_revisions bigint[];
+  replay_tenant_id uuid;
+  replay_organization_id uuid;
+  replay_assignment_id uuid;
+  replay_account_id uuid;
+begin
+  if p_storage_project is null or p_storage_project !~ '^[a-z0-9][a-z0-9-]{0,119}$' then
+    raise exception using errcode = '22023', message = 'Storage destination is invalid';
+  end if;
+  insert into vortex_platform.storage_destination(singleton, project_ref)
+  values (true, p_storage_project) on conflict (singleton) do nothing;
+  if not exists (select 1 from vortex_platform.storage_destination where singleton and project_ref = p_storage_project) then
+    raise exception using errcode = '55000', message = 'Storage destination differs from the provisioned project';
+  end if;
+  if not vortex_platform.is_non_nil_uuid(p_cluster_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_operator_actor_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_command_fingerprint is null
+    or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$' then
+    raise exception using errcode = '22023', message = 'Tenant provisioning input is invalid';
+  end if;
+
+  -- The new tenant has no row to lock yet. This lock is limited to one trusted
+  -- actor/cluster/duplicate tuple and exists only to converge simultaneous retry.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+    p_operator_actor_id::text || '|' || p_cluster_id::text || '|provision_tenant|' ||
+      p_duplicate_key::text,
+    30
+  ));
+
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'provision_tenant', p_duplicate_key, null, null, p_operator_actor_id,
+    'Administration duplicate conflicts'
+  );
+
+  if claimed is not null then
+    select r.* into stored
+    from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid
+    );
+    if stored."fingerprint" <> p_command_fingerprint
+      or stored."clusterId" is distinct from p_cluster_id then
+      raise exception using errcode = 'V3001', message = 'Administration duplicate conflicts';
+    end if;
+    select tenant.tenant_id into replay_tenant_id
+    from vortex_identity.tenants as tenant
+    where tenant.tenant_id = any(stored."subjectIds");
+    select organization.organization_id into replay_organization_id
+    from vortex_identity.organizations as organization
+    where organization.organization_id = any(stored."subjectIds");
+    select assignment.assignment_id into replay_assignment_id
+    from vortex_identity.tenant_administrator_assignments as assignment
+    where assignment.assignment_id = any(stored."subjectIds");
+    select account.organization_account_id into replay_account_id
+    from vortex_identity.organization_accounts as account
+    where account.organization_account_id = any(stored."subjectIds");
+    if replay_tenant_id is null or replay_organization_id is null
+      or replay_assignment_id is null or replay_account_id is null then
+      raise exception using errcode = 'V3003', message = 'Administration scope is unavailable';
+    end if;
+    return query select 'replayed'::text, 'provision_tenant'::text,
+      replay_tenant_id, replay_organization_id, replay_assignment_id,
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", replay_assignment_id)],
+      replay_account_id,
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", replay_account_id)],
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", replay_organization_id)],
+      stored."receiptId", stored."acceptedAt";
+    return;
+  end if;
+
+  perform vortex_identity.assert_organization_runtime_settings_values(
+    p_runtime_language, p_runtime_time_zone, p_runtime_currency,
+    p_runtime_date_format, p_runtime_number_format
+  );
+  -- Reuse the same #430 language/time-zone validators for account preferences.
+  perform vortex_identity.assert_organization_runtime_settings_values(
+    p_account_language, p_account_time_zone, p_runtime_currency,
+    p_runtime_date_format, p_runtime_number_format
+  );
+
+  begin
+    insert into vortex_identity.tenants (
+      tenant_id, short_name, display_name, state, created_at, created_by,
+      state_changed_at, revision
+    ) values (
+      new_tenant_id, p_tenant_short_name, p_tenant_display_name, 'active',
+      operation_at, p_operator_actor_id, operation_at, 1
+    );
+    insert into vortex_identity.organizations (
+      organization_id, tenant_id, parent_organization_id, short_name,
+      display_name, state, created_at, created_by, state_changed_at, revision
+    ) values (
+      new_organization_id, new_tenant_id, null, p_organization_short_name,
+      p_organization_display_name, 'active', operation_at,
+      p_operator_actor_id, operation_at, 1
+    );
+  exception when unique_violation then
+    raise exception using errcode = 'V3003', message = 'Administration scope is unavailable';
+  end;
+
+  insert into vortex_identity.identity_projections (
+    identity_id, state, created_at, state_changed_at, state_changed_by,
+    state_change_correlation_id, revision
+  ) values
+    (p_tenant_steward_identity_id, 'active', operation_at, operation_at,
+      p_operator_actor_id, new_correlation_id, 1),
+    (p_organization_steward_identity_id, 'active', operation_at, operation_at,
+      p_operator_actor_id, new_correlation_id, 1)
+  on conflict on constraint identity_projections_pk do nothing;
+
+  perform 1
+  from vortex_identity.identity_projections as projection
+  where projection.identity_id in (
+      p_tenant_steward_identity_id, p_organization_steward_identity_id
+    ) and projection.state = 'active'
+  order by projection.identity_id
+  for update;
+  if (select pg_catalog.count(distinct projection.identity_id)
+      from vortex_identity.identity_projections as projection
+      where projection.identity_id in (
+        p_tenant_steward_identity_id, p_organization_steward_identity_id
+      ) and projection.state = 'active') <>
+     (select pg_catalog.count(distinct identity_id)
+      from (values (p_tenant_steward_identity_id),
+                   (p_organization_steward_identity_id)) as nominated(identity_id)) then
+    raise exception using errcode = 'V3002', message = 'Nominated steward is unavailable';
+  end if;
+
+  insert into vortex_identity.organization_accounts (
+    organization_account_id, organization_id, identity_id, display_name,
+    state, language, time_zone, activated_at, changed_at, state_changed_at,
+    state_changed_by, state_change_correlation_id, revision
+  ) values (
+    new_account_id, new_organization_id, p_organization_steward_identity_id,
+    p_account_display_name, 'active', p_account_language, p_account_time_zone,
+    operation_at, operation_at, operation_at, p_operator_actor_id,
+    new_correlation_id, 1
+  );
+
+  perform 1 from vortex_identity.initialize_organization_runtime_settings(
+    new_organization_id, p_runtime_language, p_runtime_time_zone,
+    p_runtime_currency, p_runtime_date_format, p_runtime_number_format
+  );
+  perform 1 from vortex_access.initialize_organization_access_version(
+    new_organization_id, p_operator_actor_id, new_correlation_id
+  );
+  perform 1 from vortex_access.initialize_platform_permission_catalogue(
+    new_organization_id, p_operator_actor_id, new_correlation_id
+  );
+
+  insert into vortex_identity.tenant_administrator_assignments (
+    assignment_id, tenant_id, identity_id, capability_keys, starts_at,
+    expires_at, revision, granted_at, granted_by_actor_id,
+    grant_correlation_id, changed_at, changed_by_actor_id, change_correlation_id
+  ) values (
+    new_tenant_assignment_id, new_tenant_id, p_tenant_steward_identity_id,
+    array[
+      'platform.tenant.administrators.manage',
+      'platform.tenant.administrators.read',
+      'platform.tenant.hierarchy.read',
+      'platform.tenant.organizations.create',
+      'platform.tenant.organizations.lifecycle',
+      'platform.tenant.organizations.rename',
+      'platform.tenant.organizations.reparent'
+    ], operation_at, null, 1, operation_at, p_operator_actor_id,
+    new_correlation_id, operation_at, p_operator_actor_id, new_correlation_id
+  );
+
+  select adopted.access_version into resulting_access_version
+  from vortex_access.coordinate_organization_stewardship_adoption(
+    new_organization_id, new_account_id, new_role_id, 'organization_steward',
+    'Organisation steward', 'Permanent minimum organisation administration.',
+    new_role_assignment_id, new_delegation_id, p_operator_actor_id,
+    new_correlation_id
+  ) as adopted;
+
+  -- The first owner needs a real current Group for Group-owned records. Access
+  -- owns both facts and their version; no application-specific permission is added.
+  perform 1 from vortex_access.coordinate_organization_group_change(
+    'create_group', new_organization_id, new_group_id, null,
+    'organisation_owners', 'Organisation owners', new_account_id,
+    new_correlation_id
+  );
+  select changed.access_version into resulting_access_version
+  from vortex_access.coordinate_organization_group_membership_change(
+    'add_membership', new_organization_id, new_membership_id, null,
+    new_group_id, new_account_id, operation_at, null, null,
+    new_account_id, new_correlation_id
+  ) as changed;
+
+  -- #33 queues this evidence trigger. Validate it while the privileged boundary
+  -- is still active so a runtime-role commit cannot bypass or fail its reads.
+  set constraints
+    vortex_access.organization_role_revisions_evidence
+    immediate;
+  set constraints
+    vortex_access.organization_role_revisions_evidence
+    deferred;
+
+  select pg_catalog.array_agg(subject_id order by subject_id),
+    pg_catalog.array_agg(subject_revision order by subject_id)
+  into result_subject_ids, result_subject_revisions
+  from (values
+    (new_tenant_id, 1::bigint),
+    (new_organization_id, resulting_access_version),
+    (new_tenant_assignment_id, 1::bigint),
+    (new_account_id, 1::bigint)
+  ) as result(subject_id, subject_revision);
+
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    pg_catalog.jsonb_build_object(
+      'receiptId', new_correlation_id, 'acceptedAt', operation_at,
+      'subjectIds', pg_catalog.to_jsonb(result_subject_ids),
+      'subjectRevisions', pg_catalog.to_jsonb(result_subject_revisions),
+      'fingerprint', p_command_fingerprint, 'clusterId', p_cluster_id
+    )
+  );
+
+  return query select 'accepted'::text, 'provision_tenant'::text,
+    new_tenant_id, new_organization_id, new_tenant_assignment_id, 1::bigint,
+    new_account_id, 1::bigint, resulting_access_version,
+    new_correlation_id, operation_at;
+end
+$function$;
+
+revoke execute on function vortex_identity.provision_tenant(
+  uuid, uuid, uuid, text, text, text, text, text, uuid, uuid, text, text,
+  text, text, text, text, text, text, text
+) from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
+grant execute on function vortex_identity.provision_tenant(
+  uuid, uuid, uuid, text, text, text, text, text, uuid, uuid, text, text,
+  text, text, text, text, text, text, text
+) to vortex_runtime;
+comment on function vortex_identity.provision_tenant(
+  uuid, uuid, uuid, text, text, text, text, text, uuid, uuid, text, text,
+  text, text, text, text, text, text, text
+) is 'Configured-system-only atomic tenant/root-organisation provisioning with separate explicit tenant and organisation steward nominations and an initial current owner Group membership for the organisation steward.';
+
+alter function vortex_identity.provision_tenant(p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_tenant_short_name text, p_tenant_display_name text, p_organization_short_name text, p_organization_display_name text, p_tenant_steward_identity_id uuid, p_organization_steward_identity_id uuid, p_account_display_name text, p_account_language text, p_account_time_zone text, p_runtime_language text, p_runtime_time_zone text, p_runtime_currency text, p_runtime_date_format text, p_runtime_number_format text, p_storage_project text) owner to vortex_owner;
+
+grant execute on function vortex_identity.provision_tenant(p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_tenant_short_name text, p_tenant_display_name text, p_organization_short_name text, p_organization_display_name text, p_tenant_steward_identity_id uuid, p_organization_steward_identity_id uuid, p_account_display_name text, p_account_language text, p_account_time_zone text, p_runtime_language text, p_runtime_time_zone text, p_runtime_currency text, p_runtime_date_format text, p_runtime_number_format text, p_storage_project text) to postgres;
+
+
+reset role;
+set local role vortex_record_adapter;
+
+create or replace function vortex_record.read_attachment_upload_authority(
   p_record_type_id uuid, p_record_id uuid, p_field_id uuid
 ) returns jsonb
 language plpgsql volatile security definer set search_path = ''
@@ -93,9 +404,6 @@ declare
   bounds jsonb;
   field_value jsonb;
   eligible jsonb;
-  permission_value jsonb;
-  readable jsonb := '[]'::jsonb;
-  changeable jsonb := '[]'::jsonb;
 begin
   -- Live uploads cannot escape into preview storage. A create admission is provisional:
   -- the final proposed record must still pass the ordinary create writer at Save.
@@ -120,21 +428,10 @@ begin
     if eligible ->> 'outcome' is distinct from 'eligible' then
       return pg_catalog.jsonb_build_object('outcome', 'refused');
     end if;
-    for permission_value in select value from pg_catalog.jsonb_array_elements(eligible -> 'eligiblePermissions') loop
-      select coalesce(entry.field_policy -> 'readableFieldIds', '[]'::jsonb),
-        coalesce(entry.field_policy -> 'changeableFieldIds', '[]'::jsonb)
-      into readable, changeable
-      from vortex_access.permission_catalogue_entries entry
-      where entry.organization_id = (context_value ->> 'organizationId')::uuid
-        and entry.registration_revision = (permission_value ->> 'registrationRevision')::bigint
-        and entry.application_root_id = (permission_value #>> '{permission,applicationRootId}')::uuid
-        and entry.owner_kind = permission_value #>> '{permission,ownerKind}'
-        and entry.owner_id = (permission_value #>> '{permission,ownerId}')::uuid
-        and entry.permission_id = (permission_value #>> '{permission,permissionId}')::uuid;
-      if readable @> pg_catalog.jsonb_build_array(p_field_id::text)
-        and changeable @> pg_catalog.jsonb_build_array(p_field_id::text) then exit; end if;
-    end loop;
-    bounds := pg_catalog.jsonb_build_object('readableFieldIds', readable, 'changeableFieldIds', changeable);
+    bounds := vortex_access.resolve_record_field_bounds_internal(pg_catalog.jsonb_build_object(
+      'outcome', 'allowed', 'organizationId', context_value -> 'organizationId',
+      'matchedContributions', eligible -> 'eligiblePermissions'
+    ));
   else
     loaded := vortex_record.load_record_access_facts_internal(p_record_type_id, 'update', p_record_id, null, null);
     if loaded ->> 'outcome' is distinct from 'loaded' then
@@ -144,7 +441,7 @@ begin
     if decision ->> 'outcome' is distinct from 'allowed' then
       return pg_catalog.jsonb_build_object('outcome', 'refused');
     end if;
-    bounds := vortex_record.decide_record_field_bounds_internal(decision);
+    bounds := vortex_record.resolve_record_field_bounds_internal(decision);
   end if;
   if not coalesce(bounds -> 'readableFieldIds' @> pg_catalog.jsonb_build_array(p_field_id::text), false)
     or not coalesce(bounds -> 'changeableFieldIds' @> pg_catalog.jsonb_build_array(p_field_id::text), false) then
@@ -159,9 +456,13 @@ begin
   );
 end
 $function$;
-alter function vortex_platform.read_attachment_upload_authority(uuid,uuid,uuid) owner to vortex_record_adapter;
-revoke all on function vortex_platform.read_attachment_upload_authority(uuid,uuid,uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_platform.read_attachment_upload_authority(uuid,uuid,uuid) to vortex_runtime, vortex_owner;
+alter function vortex_record.read_attachment_upload_authority(uuid,uuid,uuid) owner to vortex_record_adapter;
+revoke all on function vortex_record.read_attachment_upload_authority(uuid,uuid,uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.read_attachment_upload_authority(uuid,uuid,uuid) to vortex_request, vortex_owner;
+
+
+reset role;
+set local role vortex_owner;
 
 create or replace function vortex_platform.file_upload_operation(p_operation text, p_input jsonb)
 returns jsonb language plpgsql volatile security definer set search_path = ''
@@ -179,16 +480,17 @@ declare
   settings_value jsonb;
   maximum_files integer;
   existing_count integer;
-  pending_count integer;
   evaluated_at timestamptz := pg_catalog.clock_timestamp();
-  capability_id uuid;
 begin
+  if pg_catalog.jsonb_typeof(p_input) is distinct from 'object' then
+    raise exception using errcode = '22023', message = 'Upload input must be an object';
+  end if;
   if actor_value is null then raise exception using errcode = '42501', message = 'Upload actor unavailable'; end if;
   if p_operation = 'reserve' then
     candidate := p_input -> 'fileRecord';
     grant_value := p_input -> 'grant';
     file_id_value := (candidate ->> 'fileId')::uuid;
-    authority_value := vortex_platform.read_attachment_upload_authority(
+    authority_value := vortex_record.read_attachment_upload_authority(
       (candidate ->> 'ownerRecordTypeId')::uuid, (candidate ->> 'ownerRecordId')::uuid, (candidate ->> 'ownerFieldId')::uuid);
     if authority_value ->> 'outcome' is distinct from 'allowed'
       or (candidate ->> 'organizationId')::uuid is distinct from organization_value
@@ -217,17 +519,6 @@ begin
     perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
       organization_value::text || ':' || (candidate ->> 'ownerRecordTypeId') || ':' ||
       coalesce(candidate ->> 'ownerRecordId', actor_value::text) || ':' || (candidate ->> 'ownerFieldId'), 652));
-    capability_id := (p_input ->> 'capabilityReservationId')::uuid;
-    perform 1 from vortex_access.capability_reservations funding
-    where funding.reservation_id = capability_id
-      and funding.tenant_id = (context_value ->> 'tenantId')::uuid
-      and funding.request_organization_id = organization_value
-      and funding.correlation_id = (context_value ->> 'correlationId')::uuid
-      and funding.capability_key = 'platform.file_upload' and funding.unit = 'bytes'
-      and funding.state = 'active' and funding.expires_at > evaluated_at
-      and funding.reserved_quantity - funding.consumed_quantity - funding.released_quantity = (grant_value ->> 'maximumBytes')::numeric
-    for update;
-    if not found then return vortex_platform.upload_refusal('capability_refused'); end if;
     select pg_catalog.count(*) into existing_count from vortex_platform.file_records f
     where f.organization_id = organization_value and f.application_root_id = (context_value ->> 'applicationRootId')::uuid
       and f.owner_record_type_id = (candidate ->> 'ownerRecordTypeId')::uuid
@@ -240,15 +531,7 @@ begin
         and f.owner_record_id = (candidate ->> 'ownerRecordId')::uuid
         and f.owner_field_id = (candidate ->> 'ownerFieldId')::uuid and f.lifecycle_state = 'active'
     ) then return vortex_platform.upload_refusal('replacement_file_not_found'); end if;
-    select pg_catalog.count(*) into pending_count from vortex_platform.file_uploads u
-    join vortex_platform.file_records f using(file_id)
-    where f.organization_id = organization_value and f.application_root_id = (context_value ->> 'applicationRootId')::uuid
-      and f.owner_record_type_id = (candidate ->> 'ownerRecordTypeId')::uuid
-      and f.owner_record_id is not distinct from (candidate ->> 'ownerRecordId')::uuid
-      and (f.owner_record_id is not null or f.uploaded_by = actor_value)
-      and f.owner_field_id = (candidate ->> 'ownerFieldId')::uuid
-      and u.upload_expires_at > evaluated_at and f.lifecycle_state in ('pending','scanning');
-    if existing_count - case when p_input ? 'replacingFileId' then 1 else 0 end + pending_count >= maximum_files then
+    if existing_count - (case when p_input ? 'replacingFileId' then 1 else 0 end) >= maximum_files then
       return vortex_platform.upload_refusal('field_capacity_exceeded'); end if;
     insert into vortex_platform.file_records(
       file_id,organization_id,application_root_id,owner_record_type_id,owner_record_id,owner_field_id,
@@ -259,8 +542,8 @@ begin
       'pending',candidate ->> 'originalSafeDisplayName','application/octet-stream',candidate ->> 'extension',0,
       'sha256:' || pg_catalog.repeat('0',64),candidate ->> 'storageKey','private_files','vortex_file_preflight','1','pending','[]',actor_value,false,evaluated_at,'{}')
     returning * into file_value;
-    insert into vortex_platform.file_uploads(file_id,capability_reservation_id,maximum_bytes,upload_expires_at,replacing_file_id,correlation_id,grant_value)
-    values(file_id_value,capability_id,(grant_value ->> 'maximumBytes')::bigint,(p_input ->> 'uploadExpiresAt')::timestamptz,
+    insert into vortex_platform.file_uploads(file_id,maximum_bytes,upload_expires_at,replacing_file_id,correlation_id,grant_value)
+    values(file_id_value,(grant_value ->> 'maximumBytes')::bigint,(p_input ->> 'uploadExpiresAt')::timestamptz,
       (p_input ->> 'replacingFileId')::uuid,(context_value ->> 'correlationId')::uuid,grant_value);
     return pg_catalog.jsonb_build_object('outcome','reserved','fileRecord',vortex_platform.upload_file_record(file_value));
   end if;
@@ -275,7 +558,7 @@ begin
   if not found then return null; end if;
   select * into state_value from vortex_platform.file_uploads u where u.file_id = file_id_value for update;
   if not found then return null; end if;
-  authority_value := vortex_platform.read_attachment_upload_authority(file_value.owner_record_type_id,file_value.owner_record_id,file_value.owner_field_id);
+  authority_value := vortex_record.read_attachment_upload_authority(file_value.owner_record_type_id,file_value.owner_record_id,file_value.owner_field_id);
   if authority_value ->> 'outcome' is distinct from 'allowed' then return null; end if;
   if p_operation = 'read' then
     return pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
@@ -291,7 +574,7 @@ begin
     update vortex_platform.file_uploads set grant_claimed = true where file_id = file_id_value;
     return pg_catalog.jsonb_build_object('grant',state_value.grant_value,'fileRecord',vortex_platform.upload_file_record(file_value),'correlationId',state_value.correlation_id);
   end if;
-  if state_value.revision <> (p_input ->> 'expectedRevision')::bigint then return vortex_platform.upload_refusal('upload_conflict'); end if;
+  if state_value.revision <> (p_input ->> 'expectedRevision')::bigint then return vortex_platform.upload_refusal('revision_conflict'); end if;
   if file_value.lifecycle_state <> 'pending' then return vortex_platform.upload_refusal('invalid_lifecycle_state'); end if;
   if p_operation = 'renew' then
     grant_value := p_input -> 'grant';
@@ -299,7 +582,7 @@ begin
       or (grant_value - array['oneTimeId','policyFingerprint','expiresAt']) is distinct from (state_value.grant_value - array['oneTimeId','policyFingerprint','expiresAt'])
       or (grant_value ->> 'expiresAt')::timestamptz <= evaluated_at
       or (grant_value ->> 'expiresAt')::timestamptz > least(evaluated_at + interval '65 seconds',state_value.upload_expires_at) then
-      return vortex_platform.upload_refusal('upload_grant_superseded'); end if;
+      return vortex_platform.upload_refusal('grant_mismatch'); end if;
     update vortex_platform.file_uploads set grant_value = p_input -> 'grant', grant_claimed = false, revision = revision + 1 where file_id = file_id_value;
     return pg_catalog.jsonb_build_object('outcome','renewed');
   end if;
@@ -323,15 +606,16 @@ end
 $function$;
 alter function vortex_platform.file_upload_operation(text,jsonb) owner to vortex_owner;
 revoke all on function vortex_platform.file_upload_operation(text,jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-grant execute on function vortex_platform.file_upload_operation(text,jsonb) to vortex_runtime;
+grant execute on function vortex_platform.file_upload_operation(text,jsonb) to vortex_request;
+
 
 create or replace function vortex_platform.attach_record_files_internal(
   p_record_type_id uuid, p_record_id uuid, p_record_type jsonb, p_values jsonb
 ) returns void language plpgsql volatile security definer set search_path = ''
 as $function$
 declare
-  context_value jsonb := vortex_access.validated_human_request_context();
-  actor_value jsonb := vortex_platform.upload_request_actor(context_value);
+  context_value jsonb;
+  actor_value jsonb;
   field_value jsonb;
   attached jsonb;
   file_id_value uuid;
@@ -339,6 +623,10 @@ declare
   upload_value vortex_platform.file_uploads%rowtype;
   maximum_files integer;
 begin
+  if not exists (select 1 from pg_catalog.jsonb_array_elements(p_record_type -> 'fields') as field(value)
+    where field.value ->> 'type' = 'attachment' and p_values ? (field.value ->> 'fieldId')) then return; end if;
+  context_value := vortex_access.validated_human_request_context();
+  actor_value := vortex_platform.upload_request_actor(context_value);
   -- Only apply_record_changes may call this, after the record writer accepted
   -- the final values under current permissions and concurrency. An exception
   -- rolls back its record, attachment, activity and receipt transaction together.
@@ -359,8 +647,10 @@ begin
         or file_value.application_root_id is distinct from (context_value ->> 'applicationRootId')::uuid
         or file_value.owner_record_type_id is distinct from p_record_type_id
         or file_value.owner_field_id is distinct from (field_value ->> 'fieldId')::uuid
-        or file_value.scanner_result <> 'clean' then
+        or file_value.scanner_result is distinct from 'clean' then
         raise exception using errcode = 'P4021', message = 'Attachment reference refused'; end if;
+      if file_value.size_bytes > (field_value #>> '{settings,maxFileSizeMb}')::numeric * 1048576 then
+        raise exception using errcode = 'P4021', message = 'Attachment size refused'; end if;
       if file_value.lifecycle_state = 'active' then
         if file_value.owner_record_id is distinct from p_record_id
           or not (p_record_id = any(file_value.owning_attachment_references)) then
@@ -398,6 +688,10 @@ $function$;
 alter function vortex_platform.attach_record_files_internal(uuid,uuid,jsonb,jsonb) owner to vortex_owner;
 revoke all on function vortex_platform.attach_record_files_internal(uuid,uuid,jsonb,jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_platform.attach_record_files_internal(uuid,uuid,jsonb,jsonb) to vortex_record_adapter;
+
+
+reset role;
+set local role vortex_record_adapter;
 
 create or replace function vortex_record.apply_record_changes(
   p_command_id uuid,
@@ -1752,9 +2046,7 @@ begin
 
   saved_record_id := (mutation ->> 'recordId')::uuid;
   saved_concurrency_number := (mutation ->> 'concurrencyNumber')::bigint;
-  perform vortex_platform.attach_record_files_internal(
-    p_record_type_id, saved_record_id, meta -> 'recordType', final_values
-  );
+  perform vortex_platform.attach_record_files_internal(p_record_type_id, saved_record_id, meta -> 'recordType', final_values);
   perform vortex_record.mirror_person_links_internal(
     (meta ->> 'storageContractId')::uuid, organization_id_value,
     saved_record_id, final_values
@@ -2287,5 +2579,6 @@ comment on function vortex_record.apply_record_changes(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, jsonb, uuid, uuid, jsonb
 ) is
   'The one protected Record-change operation: claims one command receipt (a preview command carries its own preview-scoped id) and applies an ordered mutation list under one canonical lock order. Live changes keep their access decisions, Activity, Event and background effects; preview changes belong only to the validated preview owner and append no live effects. Named-action and lifecycle commands are refused in previews.';
+
 
 reset role;

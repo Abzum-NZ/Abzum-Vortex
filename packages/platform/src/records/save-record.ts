@@ -157,7 +157,9 @@ const parsePreparation = (candidate: unknown): PreparationOutcome => {
     return { outcome: "unavailable", ...(correlationId ? { correlationId } : {}) };
   if (value.outcome === "unsupported") {
     // An Application-owned rule names this record type; only a Module's own rules run on a save.
-    console.error("[record] save refused RECORD_SAVE_UNSUPPORTED: an Application rule names the record type");
+    console.error(
+      "[record] save refused RECORD_SAVE_UNSUPPORTED: an Application rule names the record type",
+    );
     return { outcome: "unavailable", ...(correlationId ? { correlationId } : {}) };
   }
   if (value.outcome !== "prepared")
@@ -468,8 +470,7 @@ const persist = async (
   preview: boolean,
 ): Promise<StoredResult> => {
   if (recordType.systemProjection !== undefined) {
-    if (preview)
-      return { outcome: "refused", reasonCode: "field_refused" };
+    if (preview) return { outcome: "refused", reasonCode: "field_refused" };
     const registration = writableSystemProjection(recordType);
     if (
       command.operation !== "update" ||
@@ -698,10 +699,9 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
           selection,
           async (transaction, _scope, issuedAt) => {
             // A preview request's own selection addresses its isolated storage.
-            const totalPreparation =
-              !preview
-                ? await prepareRelationshipTotals(transaction, command.data, activityId)
-                : { outcome: "not_required" as const };
+            const totalPreparation = !preview
+              ? await prepareRelationshipTotals(transaction, command.data, activityId)
+              : { outcome: "not_required" as const };
             if (totalPreparation.outcome === "restart") return restartRelationshipTotalSave;
             if (totalPreparation.outcome === "refused_recorded") return recordedRefusal;
             if (totalPreparation.outcome === "conflict")
@@ -888,10 +888,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                 check.kind !== "record_reference" &&
                 check.kind !== "person_reference" &&
                 check.kind !== "file_reference" &&
-                !(
-                  preview &&
-                  check.kind === "choice_permission"
-                ),
+                !(preview && check.kind === "choice_permission"),
             );
             if (unsupportedChecks.length > 0) {
               if (unsupportedChecks.some((check) => !prepared.readableFieldIds.has(check.fieldId)))

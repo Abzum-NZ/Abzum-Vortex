@@ -203,7 +203,6 @@ const ownerMatches = (
   grant: Pick<UploadGrant, "recordTypeId" | "recordId" | "fieldId">,
 ): boolean =>
   fileRecord.ownerRecordTypeId !== undefined &&
-  fileRecord.ownerRecordId !== undefined &&
   fileRecord.ownerFieldId !== undefined &&
   fileRecord.ownerRecordTypeId === grant.recordTypeId &&
   fileRecord.ownerRecordId === grant.recordId &&

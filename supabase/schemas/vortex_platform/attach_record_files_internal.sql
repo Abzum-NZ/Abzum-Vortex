@@ -3,8 +3,8 @@ create or replace function vortex_platform.attach_record_files_internal(
 ) returns void language plpgsql volatile security definer set search_path = ''
 as $function$
 declare
-  context_value jsonb := vortex_access.validated_human_request_context();
-  actor_value jsonb := vortex_platform.upload_request_actor(context_value);
+  context_value jsonb;
+  actor_value jsonb;
   field_value jsonb;
   attached jsonb;
   file_id_value uuid;
@@ -12,6 +12,10 @@ declare
   upload_value vortex_platform.file_uploads%rowtype;
   maximum_files integer;
 begin
+  if not exists (select 1 from pg_catalog.jsonb_array_elements(p_record_type -> 'fields') as field(value)
+    where field.value ->> 'type' = 'attachment' and p_values ? (field.value ->> 'fieldId')) then return; end if;
+  context_value := vortex_access.validated_human_request_context();
+  actor_value := vortex_platform.upload_request_actor(context_value);
   -- Only apply_record_changes may call this, after the record writer accepted
   -- the final values under current permissions and concurrency. An exception
   -- rolls back its record, attachment, activity and receipt transaction together.
@@ -32,8 +36,10 @@ begin
         or file_value.application_root_id is distinct from (context_value ->> 'applicationRootId')::uuid
         or file_value.owner_record_type_id is distinct from p_record_type_id
         or file_value.owner_field_id is distinct from (field_value ->> 'fieldId')::uuid
-        or file_value.scanner_result <> 'clean' then
+        or file_value.scanner_result is distinct from 'clean' then
         raise exception using errcode = 'P4021', message = 'Attachment reference refused'; end if;
+      if file_value.size_bytes > (field_value #>> '{settings,maxFileSizeMb}')::numeric * 1048576 then
+        raise exception using errcode = 'P4021', message = 'Attachment size refused'; end if;
       if file_value.lifecycle_state = 'active' then
         if file_value.owner_record_id is distinct from p_record_id
           or not (p_record_id = any(file_value.owning_attachment_references)) then

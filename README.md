@@ -146,21 +146,19 @@ The custom-component and file pages read additional variables and report a confi
 For private files, `VORTEX_ENVIRONMENT=local` accepts only a loopback HTTP Supabase origin
 with an explicit port. Set `VORTEX_SUPABASE_WORKDIR` to the Local Supabase workdir (a worker's
 lane directory); file routes use its existing ignored `supabase/.temp/signing-keys.json`.
-The local seed provisions `vortex_platform.storage_destination` with project ref `local`.
-Hosted operators provision that table with their destination project ref, using the operational
-`postgres` role. Runtime and Storage request roles cannot change this configuration. Storage
-policies read it through `storage_destination_project()`; no database parameter or superuser
-is required. Hosted file routes require an HTTPS Supabase project and the server-only signing
-variables above.
+Tenant provisioning derives the destination project from `VORTEX_SUPABASE_URL` in every
+environment and persists it in `vortex_platform.storage_destination` in the same transaction.
+The project is immutable after provisioning. Storage policies read this protected row through
+`storage_destination_project()`; no database parameter is required. Hosted file routes require
+the server-only signing variables above.
 
-The upload coordinator's stored-object inspector reads bytes with an exact-object inspect
-credential, bounds the stream by the admitted byte limit, detects binary type with `file-type`,
-and computes SHA-256. Unknown types remain unknown. Its scanner can connect to a separately
-operated ClamAV daemon using INSTREAM; scanner failures refuse completion. The explicitly named
-`local_development_noop` scanner works only with a local destination, warns that malware scanning
-is disabled, and records `local-development-noop` as its scanner name. It is not a production
-scanner. These adapters do not themselves provide upload admission, an upload endpoint, or record
-attachment activation.
+Generated New and Edit forms include attachment fields through the registered Puck input.
+Admission checks current record/field access, file limits, then returns
+a 60-second credential for one private object. The browser uploads directly to Storage.
+Completion reads a bounded copy, detects its binary type with `file-type` and computes SHA-256;
+unknown and disallowed content stays unavailable. This is content admission, with no malware
+scanner integration. Save activates admitted references and detaches removed files atomically
+inside `apply_record_changes`. Pending uploads never appear in record detail or download routes.
 
 `VORTEX_CLUSTER_ID` and `VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID` are not needed locally: `pnpm setup:local` takes the configured operator from its manifest. `VORTEX_APPLICATION_KESTRA_URL` and the flow secret `VORTEX_WORKFLOW_CALLBACK_KEY` belong to the application Kestra instance and are not read by `pnpm dev` or `pnpm setup:local`.
 

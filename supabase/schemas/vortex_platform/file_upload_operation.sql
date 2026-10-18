@@ -14,16 +14,17 @@ declare
   settings_value jsonb;
   maximum_files integer;
   existing_count integer;
-  pending_count integer;
   evaluated_at timestamptz := pg_catalog.clock_timestamp();
-  capability_id uuid;
 begin
+  if pg_catalog.jsonb_typeof(p_input) is distinct from 'object' then
+    raise exception using errcode = '22023', message = 'Upload input must be an object';
+  end if;
   if actor_value is null then raise exception using errcode = '42501', message = 'Upload actor unavailable'; end if;
   if p_operation = 'reserve' then
     candidate := p_input -> 'fileRecord';
     grant_value := p_input -> 'grant';
     file_id_value := (candidate ->> 'fileId')::uuid;
-    authority_value := vortex_platform.read_attachment_upload_authority(
+    authority_value := vortex_record.read_attachment_upload_authority(
       (candidate ->> 'ownerRecordTypeId')::uuid, (candidate ->> 'ownerRecordId')::uuid, (candidate ->> 'ownerFieldId')::uuid);
     if authority_value ->> 'outcome' is distinct from 'allowed'
       or (candidate ->> 'organizationId')::uuid is distinct from organization_value
@@ -52,17 +53,6 @@ begin
     perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
       organization_value::text || ':' || (candidate ->> 'ownerRecordTypeId') || ':' ||
       coalesce(candidate ->> 'ownerRecordId', actor_value::text) || ':' || (candidate ->> 'ownerFieldId'), 652));
-    capability_id := (p_input ->> 'capabilityReservationId')::uuid;
-    perform 1 from vortex_access.capability_reservations funding
-    where funding.reservation_id = capability_id
-      and funding.tenant_id = (context_value ->> 'tenantId')::uuid
-      and funding.request_organization_id = organization_value
-      and funding.correlation_id = (context_value ->> 'correlationId')::uuid
-      and funding.capability_key = 'platform.file_upload' and funding.unit = 'bytes'
-      and funding.state = 'active' and funding.expires_at > evaluated_at
-      and funding.reserved_quantity - funding.consumed_quantity - funding.released_quantity = (grant_value ->> 'maximumBytes')::numeric
-    for update;
-    if not found then return vortex_platform.upload_refusal('capability_refused'); end if;
     select pg_catalog.count(*) into existing_count from vortex_platform.file_records f
     where f.organization_id = organization_value and f.application_root_id = (context_value ->> 'applicationRootId')::uuid
       and f.owner_record_type_id = (candidate ->> 'ownerRecordTypeId')::uuid
@@ -75,15 +65,7 @@ begin
         and f.owner_record_id = (candidate ->> 'ownerRecordId')::uuid
         and f.owner_field_id = (candidate ->> 'ownerFieldId')::uuid and f.lifecycle_state = 'active'
     ) then return vortex_platform.upload_refusal('replacement_file_not_found'); end if;
-    select pg_catalog.count(*) into pending_count from vortex_platform.file_uploads u
-    join vortex_platform.file_records f using(file_id)
-    where f.organization_id = organization_value and f.application_root_id = (context_value ->> 'applicationRootId')::uuid
-      and f.owner_record_type_id = (candidate ->> 'ownerRecordTypeId')::uuid
-      and f.owner_record_id is not distinct from (candidate ->> 'ownerRecordId')::uuid
-      and (f.owner_record_id is not null or f.uploaded_by = actor_value)
-      and f.owner_field_id = (candidate ->> 'ownerFieldId')::uuid
-      and u.upload_expires_at > evaluated_at and f.lifecycle_state in ('pending','scanning');
-    if existing_count - case when p_input ? 'replacingFileId' then 1 else 0 end + pending_count >= maximum_files then
+    if existing_count - (case when p_input ? 'replacingFileId' then 1 else 0 end) >= maximum_files then
       return vortex_platform.upload_refusal('field_capacity_exceeded'); end if;
     insert into vortex_platform.file_records(
       file_id,organization_id,application_root_id,owner_record_type_id,owner_record_id,owner_field_id,
@@ -94,8 +76,8 @@ begin
       'pending',candidate ->> 'originalSafeDisplayName','application/octet-stream',candidate ->> 'extension',0,
       'sha256:' || pg_catalog.repeat('0',64),candidate ->> 'storageKey','private_files','vortex_file_preflight','1','pending','[]',actor_value,false,evaluated_at,'{}')
     returning * into file_value;
-    insert into vortex_platform.file_uploads(file_id,capability_reservation_id,maximum_bytes,upload_expires_at,replacing_file_id,correlation_id,grant_value)
-    values(file_id_value,capability_id,(grant_value ->> 'maximumBytes')::bigint,(p_input ->> 'uploadExpiresAt')::timestamptz,
+    insert into vortex_platform.file_uploads(file_id,maximum_bytes,upload_expires_at,replacing_file_id,correlation_id,grant_value)
+    values(file_id_value,(grant_value ->> 'maximumBytes')::bigint,(p_input ->> 'uploadExpiresAt')::timestamptz,
       (p_input ->> 'replacingFileId')::uuid,(context_value ->> 'correlationId')::uuid,grant_value);
     return pg_catalog.jsonb_build_object('outcome','reserved','fileRecord',vortex_platform.upload_file_record(file_value));
   end if;
@@ -110,7 +92,7 @@ begin
   if not found then return null; end if;
   select * into state_value from vortex_platform.file_uploads u where u.file_id = file_id_value for update;
   if not found then return null; end if;
-  authority_value := vortex_platform.read_attachment_upload_authority(file_value.owner_record_type_id,file_value.owner_record_id,file_value.owner_field_id);
+  authority_value := vortex_record.read_attachment_upload_authority(file_value.owner_record_type_id,file_value.owner_record_id,file_value.owner_field_id);
   if authority_value ->> 'outcome' is distinct from 'allowed' then return null; end if;
   if p_operation = 'read' then
     return pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
@@ -158,4 +140,4 @@ end
 $function$;
 alter function vortex_platform.file_upload_operation(text,jsonb) owner to vortex_owner;
 revoke all on function vortex_platform.file_upload_operation(text,jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-grant execute on function vortex_platform.file_upload_operation(text,jsonb) to vortex_runtime;
+grant execute on function vortex_platform.file_upload_operation(text,jsonb) to vortex_request;

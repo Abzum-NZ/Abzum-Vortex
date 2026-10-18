@@ -16,8 +16,3 @@ insert into vortex_access.system_actor_grants (
   '7c4e9a2b-1d3f-4a6c-8b5e-2f9d0c1a3e47',
   'dispatch_event_occurrences'
 );
-
--- Local Storage uses the same exact-object policy as hosted Storage. Provision
--- its destination as protected data; no superuser or database setting is needed.
-insert into vortex_platform.storage_destination (singleton, project_ref)
-values (true, 'local');

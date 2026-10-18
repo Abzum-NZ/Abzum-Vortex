@@ -1351,9 +1351,7 @@ begin
 
   saved_record_id := (mutation ->> 'recordId')::uuid;
   saved_concurrency_number := (mutation ->> 'concurrencyNumber')::bigint;
-  perform vortex_platform.attach_record_files_internal(
-    p_record_type_id, saved_record_id, meta -> 'recordType', final_values
-  );
+  perform vortex_platform.attach_record_files_internal(p_record_type_id, saved_record_id, meta -> 'recordType', final_values);
   perform vortex_record.mirror_person_links_internal(
     (meta ->> 'storageContractId')::uuid, organization_id_value,
     saved_record_id, final_values

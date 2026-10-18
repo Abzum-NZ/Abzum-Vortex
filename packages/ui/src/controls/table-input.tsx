@@ -206,12 +206,7 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
         className="space-y-3"
       >
         {rows.map((row, index) => (
-          <Card
-            key={index}
-            className="space-y-3 p-3"
-            role="group"
-            aria-label={`Row ${index + 1}`}
-          >
+          <Card key={index} className="space-y-3 p-3" role="group" aria-label={`Row ${index + 1}`}>
             {columns.map((column) => {
               const value = row[column.key];
               const cellId = `${ids.control}-${index}-${column.key}`;

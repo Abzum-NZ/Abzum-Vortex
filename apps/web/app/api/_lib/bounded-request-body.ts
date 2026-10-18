@@ -16,7 +16,9 @@ type BoundedRequestText =
 export const readBoundedRequestBytes = async (
   request: Request,
   maximumBytes: number,
-): Promise<Readonly<{kind:"read";bytes:Uint8Array}> | Readonly<{kind:"too_large"|"unreadable"}>> => {
+): Promise<
+  Readonly<{ kind: "read"; bytes: Uint8Array }> | Readonly<{ kind: "too_large" | "unreadable" }>
+> => {
   if (Number(request.headers.get("content-length") ?? 0) > maximumBytes)
     return { kind: "too_large" };
   if (request.body === null) return { kind: "read", bytes: new Uint8Array() };
@@ -49,7 +51,12 @@ export const readBoundedRequestBytes = async (
   return { kind: "read", bytes: body };
 };
 
-export const readBoundedRequestText = async (request:Request,maximumBytes:number):Promise<BoundedRequestText>=>{
-  const result=await readBoundedRequestBytes(request,maximumBytes);
-  return result.kind==="read"?{kind:"read",text:new TextDecoder().decode(result.bytes)}:result;
+export const readBoundedRequestText = async (
+  request: Request,
+  maximumBytes: number,
+): Promise<BoundedRequestText> => {
+  const result = await readBoundedRequestBytes(request, maximumBytes);
+  return result.kind === "read"
+    ? { kind: "read", text: new TextDecoder().decode(result.bytes) }
+    : result;
 };
