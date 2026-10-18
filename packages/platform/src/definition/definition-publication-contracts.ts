@@ -224,16 +224,6 @@ export interface DefinitionPublicationTransaction extends DefinitionPublicationR
   appendModuleRelease(release: DefinitionReleaseAppend): Promise<PublishDefinitionResult>;
   /** Must append the release and manifest and advance only this root's pointer atomically. */
   appendRelease(release: DefinitionReleaseAppend): Promise<PublishDefinitionResult>;
-  /** Runs an operation whose writes are undone afterwards: a rehearsal of a publication. */
-  rehearse<Result>(operation: () => Promise<Result>): Promise<Result>;
-  /**
-   * Inside a rehearsal, the stored rows of the releases it wrote for one Application and the
-   * Modules it owns, each with its dependency rows, for a preview to run after the rehearsal.
-   */
-  readRehearsedReleases(
-    applicationRootId: string,
-    pins: readonly Readonly<{ rootId: string; releaseRevision: number }>[],
-  ): Promise<readonly Readonly<{ release: unknown; dependencies: unknown }>[]>;
 }
 
 export interface DefinitionPublicationRepository {

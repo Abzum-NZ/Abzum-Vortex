@@ -24,6 +24,8 @@ import {
   type DefinitionPublicationCandidate,
   type DefinitionPublicationCatalogue,
   type DefinitionPublicationTransaction,
+  type DefinitionPublicationReader,
+  type DefinitionReleaseAppend,
   type ModuleOutput,
   type OwnedModuleRoot,
   type PreparedState,
@@ -37,6 +39,7 @@ import {
   resolveDependencies,
   selectCurrentModuleRelease,
 } from "./definition-dependency-resolution";
+import { createDraftModuleOverlay } from "./publication/draft-module-overlay";
 import { moduleDependencies } from "./module-dependencies";
 import { assignNextDefinitionVersion } from "./semantic-version";
 import { compareDefinitionVersionImpactWithEvidence } from "./version-impact-definition";
@@ -49,12 +52,16 @@ import { compareDefinitionVersionImpactWithEvidence } from "./version-impact-def
  */
 
 export type ApplicationPublicationState = PreparedState &
-  Readonly<{ moduleOutputs: readonly ModuleOutput[] }>;
+  Readonly<{
+    moduleOutputs: readonly ModuleOutput[];
+    moduleReleases: readonly DefinitionReleaseAppend[];
+  }>;
 
 type ModuleStep = Readonly<{
   output: ModuleOutput;
   reasons: readonly VersionImpactReason[];
   release: PublishDefinitionResult;
+  append: DefinitionReleaseAppend;
 }>;
 
 /** Reads and checks the Application draft a publication is for; any other kind is refused. */
@@ -187,7 +194,7 @@ const releaseInlineModules = async (
     const reasons = impact.outcome === "no_change" ? [] : impact.reasons;
     const output = compileCandidate(module, dependencies, resolution, true, catalogue.permissions);
     if (output.kind !== "module") return refuse("DEFINITION_COMPILATION_REFUSED");
-    const release = await transaction.appendModuleRelease({
+    const append: DefinitionReleaseAppend = {
       draft: module.draft,
       compilationOutput: output,
       assignedVersion: version,
@@ -196,8 +203,9 @@ const releaseInlineModules = async (
       resolutionSnapshot: resolution,
       validationContractVersion: "3.0.0",
       releaseNote,
-    });
-    steps.push({ output, reasons, release });
+    };
+    const release = await transaction.appendModuleRelease(append);
+    steps.push({ output, reasons, release, append });
   }
   return steps;
 };
@@ -206,7 +214,7 @@ const releaseInlineModules = async (
 const compileApplication = async (
   transaction: DefinitionPublicationTransaction,
   catalogue: DefinitionPublicationCatalogue,
-  candidate: DefinitionPublicationCandidate,
+  candidate: DefinitionDraftCandidate | DefinitionPublicationCandidate,
   version: string,
   final: boolean,
   pinned?: readonly ExactDefinitionDependency[],
@@ -214,13 +222,11 @@ const compileApplication = async (
   const dependencies = await resolveDependencies(transaction, catalogue, candidate, pinned);
   await assertNoCycle(transaction, candidate, dependencies.modules);
   const resolution = buildResolution(candidate, dependencies, version);
-  const output = compileCandidate(
-    candidate,
-    dependencies,
-    resolution,
-    final,
-    catalogue.permissions,
-  );
+  const output =
+    "historyEvidence" in candidate
+      ? compileCandidate(candidate, dependencies, resolution, final, catalogue.permissions)
+      : compileApplicationCandidate(candidate, dependencies, resolution, catalogue.permissions)
+          .output;
   if (output.kind !== "application") return refuse("DEFINITION_COMPILATION_REFUSED");
   return {
     output,
@@ -285,12 +291,7 @@ const publicationReasons = (
   ].sort((left, right) => (canonicalJson(left) < canonicalJson(right) ? -1 : 1));
 };
 
-/**
- * Releases the inline Modules and compiles the Application exactly as its publication will. The
- * version depends on what changed, and what changed is the same at every version, so a rehearsal
- * at a provisional version (rolled back) finds the reasons and then the real pass runs at the
- * version they assign. The caller appends the Application release, or rehearses this whole step.
- */
+/** Plan both version passes in memory; only publication persists the resulting releases. */
 export const planApplicationPublication = async (
   context: SessionContext,
   transaction: DefinitionPublicationTransaction,
@@ -304,32 +305,20 @@ export const planApplicationPublication = async (
   const provisional =
     latestVersion === undefined ? "1.0.0" : assignNextDefinitionVersion(latestVersion, "major");
   const pass = async (version: string, final: boolean, pins?: typeof pinned) => {
-    const modules = await releaseInlineModules(
+    const application = await compileApplicationWithInlineModules(
       context,
       transaction,
       catalogue,
       candidate,
-      roots,
-      version,
-      releaseNote,
-    );
-    const application = await compileApplication(
-      transaction,
-      catalogue,
-      candidate,
-      version,
-      final,
-      pins,
+      { version, final, pinned: pins, releaseNote },
     );
     return {
-      modules,
+      modules: application.modules,
       application,
-      reasons: publicationReasons(candidate, roots, modules, application),
+      reasons: publicationReasons(candidate, roots, application.modules, application),
     };
   };
-  const rehearsed = await transaction.rehearse(
-    async () => (await pass(provisional, false)).reasons,
-  );
+  const rehearsed = (await pass(provisional, false)).reasons;
   if (latestVersion !== undefined && rehearsed.length === 0) refuse("DEFINITION_NO_CHANGE");
   const version =
     latestVersion === undefined
@@ -355,72 +344,8 @@ export const planApplicationPublication = async (
     compilationOutput: application.output,
     resolutionSnapshot: application.resolution,
     moduleOutputs: modules.map((module) => module.output),
+    moduleReleases: modules.map((module) => module.append),
   };
-};
-
-/** The internal releases a preview rehearsal writes are undone; the note only labels them. */
-const previewReleaseNote = "Rehearsed for a preview";
-
-/** One release a preview runs: its stored row and dependency rows, read back as JSON. */
-export type RehearsedPreviewRelease = Readonly<{ release: unknown; dependencies: unknown }>;
-
-/**
- * The draft exactly as its publication would release it: every inline Module that changed, each
- * Module that depends on one that did, and then the Application are compiled and appended
- * through the publication path, read back as the stored rows, and the whole rehearsal is undone.
- * Nothing is released; a preview runs these rows. An inline Module whose current release already
- * is what its publication would leave current is neither staged nor rehearsed, as a draft compile
- * skips it: the preview runs that release. A draft identical to its current release rehearses
- * nothing and previews that release.
- */
-export const rehearseApplicationPreview = async (
-  context: SessionContext,
-  transaction: DefinitionPublicationTransaction,
-  catalogue: DefinitionPublicationCatalogue,
-  candidate: DefinitionPublicationCandidate,
-): Promise<readonly RehearsedPreviewRelease[]> => {
-  const unchanged = await releasedUnchangedModules(transaction, candidate);
-  const roots = await materializeInlineModules(transaction, candidate, unchanged);
-  const latestVersion = candidate.historyEvidence.latestRelease?.publication.releaseVersion;
-  const version =
-    latestVersion === undefined ? "1.0.0" : assignNextDefinitionVersion(latestVersion, "major");
-  return transaction.rehearse(async () => {
-    const modules = await releaseInlineModules(
-      context,
-      transaction,
-      catalogue,
-      candidate,
-      roots,
-      version,
-      previewReleaseNote,
-      unchanged,
-    );
-    const pins = modules.map((module) => ({
-      rootId: String(module.release.rootId),
-      releaseRevision: module.release.releaseRevision,
-    }));
-    if (candidate.draft.publishedRevision !== candidate.draft.draftRevision) {
-      const application = await compileApplication(transaction, catalogue, candidate, version, true);
-      // Every Module the Application owns, the unchanged ones included, is its own.
-      const owned = new Map(
-        (await transaction.readOwnedModuleRoots(String(candidate.draft.rootId))).map(
-          (root) => [root.key, root] as const,
-        ),
-      );
-      const release = await transaction.appendRelease({
-        draft: candidate.draft,
-        compilationOutput: application.output,
-        assignedVersion: version,
-        reasons: publicationReasons(candidate, owned, modules, application),
-        dependencyManifest: application.manifest,
-        resolutionSnapshot: application.resolution,
-        validationContractVersion: applicationValidationContractVersion,
-        releaseNote: previewReleaseNote,
-      });
-      pins.push({ rootId: String(release.rootId), releaseRevision: release.releaseRevision });
-    }
-    return transaction.readRehearsedReleases(String(candidate.draft.rootId), pins);
-  });
 };
 
 /**
@@ -430,8 +355,8 @@ export const rehearseApplicationPreview = async (
  * publication would compile it, find no change and no new pin, and not release it, so a draft
  * compile takes the release as it is instead of compiling it again.
  */
-const releasedUnchangedModules = async (
-  transaction: DefinitionPublicationTransaction,
+export const releasedUnchangedModules = async (
+  transaction: DefinitionPublicationReader,
   candidate: DefinitionCandidateDraft,
 ): Promise<ReadonlySet<string>> => {
   const owned = new Map(
@@ -492,43 +417,46 @@ const releasedUnchangedModules = async (
 /** The inline Module releases a draft compile holds in memory are never stored; the note only labels them. */
 const draftCompileReleaseNote = "Compiled for the draft";
 
-/**
- * The Application draft compiled with its own inline Modules, exactly as its publication
- * compiles them: each inline Module is staged, compiled and released through the publication's
- * own steps, and the Application is compiled against those releases. Run against the in-memory
- * publication transaction it writes nothing, so Studio compiles a draft whose Modules add
- * fields, record types or queries that no installed release has yet.
- */
+/** The shared validated release-plan producer for Studio, preview and publication. */
 export const compileApplicationWithInlineModules = async (
   context: SessionContext,
-  transaction: DefinitionPublicationTransaction,
+  reader: DefinitionPublicationReader,
   catalogue: DefinitionPublicationCatalogue,
-  candidate: DefinitionDraftCandidate,
+  candidate: DefinitionDraftCandidate | DefinitionPublicationCandidate,
+  options: Readonly<{
+    version?: string;
+    final?: boolean;
+    pinned?: readonly ExactDefinitionDependency[] | undefined;
+    releaseNote?: string;
+  }> = {},
 ) => {
+  const transaction = createDraftModuleOverlay(reader, context, candidate.draft);
   const unchanged = await releasedUnchangedModules(transaction, candidate);
   const roots = await materializeInlineModules(transaction, candidate, unchanged);
+  const latestVersion =
+    "currentReleaseVersion" in candidate
+      ? candidate.currentReleaseVersion
+      : candidate.historyEvidence.latestRelease?.publication.releaseVersion;
   const version =
-    candidate.currentReleaseVersion === null
-      ? "1.0.0"
-      : assignNextDefinitionVersion(candidate.currentReleaseVersion, "major");
-  await releaseInlineModules(
+    options.version ??
+    (latestVersion == null ? "1.0.0" : assignNextDefinitionVersion(latestVersion, "major"));
+  const modules = await releaseInlineModules(
     context,
     transaction,
     catalogue,
     candidate,
     roots,
     version,
-    draftCompileReleaseNote,
+    options.releaseNote ?? draftCompileReleaseNote,
     unchanged,
   );
-  const dependencies = await resolveDependencies(transaction, catalogue, candidate);
-  await assertNoCycle(transaction, candidate, dependencies.modules);
-  const resolution = buildResolution(candidate, dependencies, version);
-  const { output } = compileApplicationCandidate(
+  const application = await compileApplication(
+    transaction,
+    catalogue,
     candidate,
-    dependencies,
-    resolution,
-    catalogue.permissions,
+    version,
+    options.final ?? false,
+    options.pinned,
   );
-  return { output, resolution, dependencies };
+  return { ...application, modules };
 };

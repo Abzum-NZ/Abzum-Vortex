@@ -38,22 +38,29 @@ const identityAssignments = (
   source: ModuleSourceDocument,
   recorded: IdentityAssignments,
 ): IdentityAssignments => {
+  const scoped = new Map<string, Set<string>>();
+  const unscoped = new Map<string, Set<string>>();
+  for (const identity of recorded) {
+    for (const [index, parts] of [
+      [scoped, [identity.scope, identity.kind, identity.componentOwner]],
+      [unscoped, [identity.kind, identity.componentOwner]],
+    ] as const) {
+      const key = JSON.stringify(parts);
+      let identifiers = index.get(key);
+      if (identifiers === undefined) index.set(key, (identifiers = new Set()));
+      identifiers.add(String(identity.identifier));
+    }
+  }
   const assignments: IdentityAssignments[number][] = [];
   for (const requirement of extractStoredSourceIdentityRequirements(source)) {
-    const recordedFor = (sameScope: boolean) => [
-      ...new Set(
-        recorded
-          .filter(
-            (identity) =>
-              identity.kind === requirement.kind &&
-              identity.componentOwner === requirement.componentOwner &&
-              (!sameScope || identity.scope === requirement.scope),
-          )
-          .map((identity) => String(identity.identifier)),
-      ),
+    const inScope = scoped.get(
+      JSON.stringify([requirement.scope, requirement.kind, requirement.componentOwner]),
+    );
+    const anyScope = [
+      ...(inScope ??
+        unscoped.get(JSON.stringify([requirement.kind, requirement.componentOwner])) ??
+        []),
     ];
-    const inScope = recordedFor(true);
-    const anyScope = inScope.length > 0 ? inScope : recordedFor(false);
     if (anyScope.length > 1) refuse("DEFINITION_COMPILATION_REFUSED");
     const identifier =
       requirement.kind === "root"
@@ -108,7 +115,8 @@ export const createDraftModuleOverlay = (
     return value;
   };
   const reader: DefinitionPublicationReader = {
-    readCandidate: (rootId) => storedReader.readCandidate(rootId),
+    readCandidate: (rootId) =>
+      once(["candidate", rootId.toLowerCase()], () => storedReader.readCandidate(rootId)),
     readDraftCandidate: (rootId) => storedReader.readDraftCandidate(rootId),
     readOwnedModuleRoots: (applicationRootId) =>
       once(["owned", String(applicationRootId).toLowerCase()], () =>
@@ -127,7 +135,10 @@ export const createDraftModuleOverlay = (
   };
   const candidates = new Map<string, DefinitionPublicationCandidate>();
   const releasesByKey = new Map<string, ResolvableModuleRelease>();
-  const storedAnchors = new Map<string, ResolvableModuleReleasePage["anchorReleaseRevision"] & number>();
+  const storedAnchors = new Map<
+    string,
+    ResolvableModuleReleasePage["anchorReleaseRevision"] & number
+  >();
   const key = (rootId: string) => rootId.toLowerCase();
   const actor = {
     at: applicationDraft.updatedAt,
@@ -213,7 +224,8 @@ export const createDraftModuleOverlay = (
       cursor?: ModuleReleasePageCursor,
     ): Promise<ResolvableModuleReleasePage> {
       const held = releasesByKey.get(moduleKey);
-      if (held === undefined) return reader.readModuleReleasePage(organizationId, moduleKey, cursor);
+      if (held === undefined)
+        return reader.readModuleReleasePage(organizationId, moduleKey, cursor);
       // The held release is the newest of its root: it anchors every page and ends the last one.
       // A continuation goes on through the stored pages under their own anchor.
       const storedAnchor = storedAnchors.get(moduleKey);
@@ -241,11 +253,18 @@ export const createDraftModuleOverlay = (
     },
     readModuleRelease,
     async readModuleReleases(organizationId, locators) {
-      return Promise.all(
-        locators.map((locator) =>
-          readModuleRelease(organizationId, locator.rootId, locator.releaseRevision),
-        ),
-      );
+      const missing = locators.filter((locator) => {
+        const held = overlayRelease(locator.rootId);
+        return held === undefined || held.releaseRevision !== locator.releaseRevision;
+      });
+      const stored = await reader.readModuleReleases(organizationId, missing);
+      let index = 0;
+      return locators.map((locator) => {
+        const held = overlayRelease(locator.rootId);
+        return held !== undefined && held.releaseRevision === locator.releaseRevision
+          ? held
+          : stored[index++];
+      });
     },
 
     async createOwnedModuleRoot(applicationRootId, source): Promise<OwnedModuleRoot> {
@@ -262,7 +281,8 @@ export const createDraftModuleOverlay = (
     },
 
     async stageOwnedModuleSource(root, source): Promise<OwnedModuleRoot> {
-      const previous = candidates.get(key(root.rootId)) ?? (await reader.readCandidate(root.rootId));
+      const previous =
+        candidates.get(key(root.rootId)) ?? (await reader.readCandidate(root.rootId));
       if (previous === undefined || previous.draft.draftRevision !== root.draftRevision)
         refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
       const draftRevision = root.draftRevision + 1;
@@ -335,9 +355,6 @@ export const createDraftModuleOverlay = (
     },
 
     appendRelease: () => refuse("DEFINITION_COMPILATION_REFUSED"),
-    // An in-memory publication has nothing to undo.
-    rehearse: (operation) => operation(),
-    readRehearsedReleases: () => refuse("DEFINITION_COMPILATION_REFUSED"),
   };
   return transaction;
 };

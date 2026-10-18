@@ -122,7 +122,7 @@ export const guardRules = {
     owner: "lead",
     reviewBy: "2027-01-15",
     reviewNote:
-      "Edit-save validation returns its parsed source for draft storage; offline publication still validates the same source rules.",
+      "Drafts, preview plans and publication share compilation; offline validation must continue to enforce the same source and dependency rules.",
     description:
       "A shipped definition source that publication would refuse (offline compile and validation)",
   },
