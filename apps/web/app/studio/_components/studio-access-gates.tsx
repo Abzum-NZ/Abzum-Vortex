@@ -1,10 +1,10 @@
 "use client";
-import { useMemo, useState, type FormEvent } from "react";
+import { Fragment, useMemo, useState, type FormEvent } from "react";
 import { applicationUses, type ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
+import { Badge } from "@vortex/ui/components/badge";
 import {
   Table,
   TableBody,
@@ -18,8 +18,10 @@ import {
   studioAccessMenuEntries,
   studioAccessPermissions,
   StudioIconButton,
+  StudioReferencePicker,
   type StudioAccessGate,
 } from "@vortex/ui/studio";
+import { StudioPermissionDeclaration } from "./studio-permission-declaration";
 import type { StudioAccessRun } from "./studio-access-role";
 import { StudioField } from "./studio-field";
 import { StudioPlaceList } from "./studio-used-in";
@@ -50,7 +52,6 @@ function GateSelect({
   const choices = useMemo(() => studioAccessGateChoices(source), [source]);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
-  const known = choices.some((choice) => choice.key === value);
   const create = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (onGate({ kind: "new", label: name })) {
@@ -60,30 +61,23 @@ function GateSelect({
   };
   return (
     <div className="space-y-2">
-      <NativeSelect
+      <StudioReferencePicker
         aria-label={label}
         value={creating ? newChoice : value}
         disabled={disabled}
-        onChange={(event) => {
-          if (event.target.value === newChoice) {
-            setCreating(true);
-            return;
-          }
-          setCreating(false);
-          onGate({ kind: "existing", key: event.target.value });
+        options={[
+          ...choices.map((choice) => ({
+            value: choice.key,
+            label: choice.label,
+            description: choice.roles.length === 0 ? "No role yet" : choice.roles.join(", "),
+          })),
+          { value: newChoice, label: "New permission?" },
+        ]}
+        onChange={(key) => {
+          setCreating(key === newChoice);
+          if (key !== newChoice) onGate({ kind: "existing", key });
         }}
-      >
-        {known ? null : (
-          <NativeSelectOption value={value}>Undeclared permission</NativeSelectOption>
-        )}
-        {choices.map((choice) => (
-          <NativeSelectOption key={choice.key} value={choice.key}>
-            {choice.label}
-            {choice.roles.length === 0 ? " (no role yet)" : ` (${choice.roles.join(", ")})`}
-          </NativeSelectOption>
-        ))}
-        <NativeSelectOption value={newChoice}>New permission…</NativeSelectOption>
-      </NativeSelect>
+      />
       {creating && (
         <form className="flex items-end gap-2" onSubmit={create}>
           <StudioField label="New permission">
@@ -237,7 +231,7 @@ export function StudioAccessPermissionList({
   disabled: boolean;
   run: StudioAccessRun;
 }>) {
-  const [name, setName] = useState("");
+  const [expanded, setExpanded] = useState<string | null>(null);
   const permissions = useMemo(() => studioAccessPermissions(source), [source]);
   const owner = (moduleKey: string | undefined, recordKey: string | undefined) => {
     if (moduleKey === undefined) return "This application";
@@ -247,36 +241,27 @@ export function StudioAccessPermissionList({
       ? (module?.name ?? moduleKey)
       : `${record.plural_name} (${module!.name})`;
   };
-  const add = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (run({ kind: "add_permission", label: name })) setName("");
-  };
   return (
     <section aria-label="Permissions" className="space-y-6">
-      <h2 className="text-xl font-semibold tracking-tight">Permissions</h2>
-      <form onSubmit={add}>
-        <StudioField
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-xl font-semibold tracking-tight">Permissions</h2>
+        <StudioIconButton
           label="New permission"
-          hint="A permission of this application that can open pages and show menu entries."
+          disabled={disabled}
+          onClick={() => setExpanded("new")}
         >
-          {(control) => (
-            <div className="flex items-center gap-2">
-              <Input
-                {...control}
-                value={name}
-                maxLength={60}
-                placeholder="For example: View reports"
-                disabled={disabled}
-                onChange={(event) => setName(event.target.value)}
-              />
-              <Button type="submit" size="sm" disabled={disabled || name.trim().length === 0}>
-                <Icon name="plus" />
-                Add permission
-              </Button>
-            </div>
-          )}
-        </StudioField>
-      </form>
+          <Icon name="plus" />
+        </StudioIconButton>
+      </div>
+      {expanded === "new" && (
+        <StudioPermissionDeclaration
+          source={source}
+          permission={undefined}
+          disabled={disabled}
+          run={run}
+          close={() => setExpanded(null)}
+        />
+      )}
       <div className="overflow-hidden rounded-xl border">
         <Table
           containerClassName="border-0"
@@ -288,7 +273,7 @@ export function StudioAccessPermissionList({
               <TableHead className="w-1/3">Permission</TableHead>
               <TableHead className="w-1/4">Belongs to</TableHead>
               <TableHead>Held by</TableHead>
-              <TableHead className="w-20">
+              <TableHead className="w-28">
                 <span className="sr-only">Actions</span>
               </TableHead>
             </TableRow>
@@ -296,106 +281,151 @@ export function StudioAccessPermissionList({
           <TableBody>
             {permissions.map((permission) => {
               const roles = source.body.roles
-                .filter((role) => role.permissions.includes(permission.key))
+                .filter(
+                  (role) =>
+                    role.permissions.includes(permission.key) ||
+                    (!permission.administrative && role.permissions.includes("*")),
+                )
                 .map((role) => role.name);
               const places = applicationUses(source, {
                 kind: "permission",
                 permissionKey: permission.key,
               });
+              const declaration = source.body.permissions.find(
+                (entry) =>
+                  entry.key === permission.key &&
+                  entry.action_kind === "named" &&
+                  entry.record_type === undefined,
+              );
               return (
-                <TableRow key={permission.key}>
-                  <TableCell>
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <span
-                            tabIndex={0}
-                            className="block truncate rounded-md font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          />
-                        }
-                      >
-                        {permission.label}
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="font-medium">{permission.label}</p>
-                        <p>{permission.description}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell className="whitespace-normal break-words text-sm">
-                    {owner(permission.moduleKey, permission.recordKey)}
-                  </TableCell>
-                  <TableCell className="whitespace-normal break-words text-sm">
-                    {roles.length === 0 ? (
-                      <span className="text-muted-foreground">No role</span>
-                    ) : (
-                      roles.join(", ")
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-end">
-                      <Popover>
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <PopoverTrigger
-                                render={
-                                  <Button
-                                    type="button"
-                                    size="icon-xs"
-                                    variant="ghost"
-                                    aria-label={`Where ${permission.label} is used (${places.length})`}
-                                  />
-                                }
-                              />
-                            }
-                          >
-                            <Icon name="list-tree" />
-                          </TooltipTrigger>
-                          <TooltipContent>Used in {places.length} places</TooltipContent>
-                        </Tooltip>
-                        <PopoverContent className="max-h-80 overflow-y-auto">
-                          <PopoverTitle>Where {permission.label} is used</PopoverTitle>
-                          {places.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">Not used anywhere yet.</p>
-                          ) : (
-                            <StudioPlaceList
-                              places={places}
-                              label={`Where ${permission.label} is used`}
+                <Fragment key={permission.key}>
+                  <TableRow>
+                    <TableCell>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <span
+                              tabIndex={0}
+                              className="block truncate rounded-md font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             />
-                          )}
-                        </PopoverContent>
-                      </Popover>
-                      {permission.standard ? (
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <span
-                                tabIndex={0}
-                                aria-label={`${permission.label} comes with its record type`}
-                                className="flex size-6 items-center justify-center rounded-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                              />
-                            }
-                          >
-                            <Icon name="shield" className="size-4" />
-                          </TooltipTrigger>
-                          <TooltipContent>Comes with its record type</TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <StudioIconButton
-                          disabled={disabled}
-                          label={`Remove ${permission.label}`}
-                          destructive
-                          onClick={() =>
-                            run({ kind: "remove_permission", permissionKey: permission.key })
                           }
                         >
-                          <Icon name="close" />
-                        </StudioIconButton>
+                          {permission.label}
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="font-medium">{permission.label}</p>
+                          <p>{permission.description}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      {permission.administrative && <Badge variant="outline">Administrative</Badge>}
+                    </TableCell>
+                    <TableCell className="whitespace-normal break-words text-sm">
+                      {owner(permission.moduleKey, permission.recordKey)}
+                    </TableCell>
+                    <TableCell className="whitespace-normal break-words text-sm">
+                      {roles.length === 0 ? (
+                        <span className="text-muted-foreground">No role</span>
+                      ) : (
+                        roles.join(", ")
                       )}
-                    </div>
-                  </TableCell>
-                </TableRow>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end">
+                        {declaration !== undefined && (
+                          <StudioIconButton
+                            label={`Edit ${permission.label}`}
+                            disabled={disabled}
+                            onClick={() =>
+                              setExpanded(expanded === permission.key ? null : permission.key)
+                            }
+                          >
+                            <Icon name="sliders-horizontal" />
+                          </StudioIconButton>
+                        )}
+                        <Popover>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <PopoverTrigger
+                                  render={
+                                    <Button
+                                      type="button"
+                                      size="icon-xs"
+                                      variant="ghost"
+                                      aria-label={`Where ${permission.label} is used (${places.length})`}
+                                    />
+                                  }
+                                />
+                              }
+                            >
+                              <Icon name="list-tree" />
+                            </TooltipTrigger>
+                            <TooltipContent>Used in {places.length} places</TooltipContent>
+                          </Tooltip>
+                          <PopoverContent className="max-h-80 overflow-y-auto">
+                            <PopoverTitle>Where {permission.label} is used</PopoverTitle>
+                            {places.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">
+                                Not used anywhere yet.
+                              </p>
+                            ) : (
+                              <StudioPlaceList
+                                places={places}
+                                label={`Where ${permission.label} is used`}
+                              />
+                            )}
+                          </PopoverContent>
+                        </Popover>
+                        {permission.standard ? (
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <span
+                                  tabIndex={0}
+                                  aria-label={`${permission.label} comes with its record type`}
+                                  className="flex size-6 items-center justify-center rounded-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                />
+                              }
+                            >
+                              <Icon name="shield" className="size-4" />
+                            </TooltipTrigger>
+                            <TooltipContent>Comes with its record type</TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <StudioIconButton
+                            disabled={disabled}
+                            label={`Remove ${permission.label}`}
+                            destructive
+                            onClick={() =>
+                              run({ kind: "remove_permission", permissionKey: permission.key })
+                            }
+                          >
+                            <Icon name="close" />
+                          </StudioIconButton>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                  {expanded === permission.key && declaration !== undefined && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="whitespace-normal py-4">
+                        <StudioPermissionDeclaration
+                          key={JSON.stringify([
+                            declaration.id,
+                            declaration.label,
+                            declaration.description,
+                            declaration.administrative,
+                          ])}
+                          source={source}
+                          permission={declaration}
+                          disabled={disabled}
+                          run={run}
+                          close={() => setExpanded(null)}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
               );
             })}
           </TableBody>
