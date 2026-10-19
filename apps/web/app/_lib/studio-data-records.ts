@@ -192,6 +192,7 @@ export const readStudioDataRecords = async (
       request.draftRevision,
       signal,
     );
+    signal?.throwIfAborted();
     if (preview.kind !== "available") return preview;
 
     const { context, selection, services, behind } = preview;

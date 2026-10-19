@@ -175,7 +175,9 @@ export const readStudioCanvasRecords = async (
     if (preview.kind !== "available") return preview;
     const { draft, context, services, selection, dependencies } = preview;
     if (draft.sourceFingerprint !== request.sourceFingerprint) return { kind: "conflict" };
+    signal?.throwIfAborted();
     const content = await compiledDraftContent(session, organization.data, draft);
+    signal?.throwIfAborted();
     if (typeof content === "string") return { kind: content };
     const pageIndex = draft.source.body.pages.findIndex((page) => page.id === request.pageAlias);
     const page = draft.source.body.pages[pageIndex];
@@ -270,6 +272,7 @@ export const readStudioCanvasRecords = async (
       adoptSubjectRead: () => {},
       markSubjectUnreadable: () => {},
     };
+    signal?.throwIfAborted();
     await Promise.all(placements.map((placement) => readPlacement(input, placement)));
     const records: Record<string, PageDataState> = {};
     for (const [placementId, state] of Object.entries(data)) {

@@ -73,6 +73,7 @@ export const openStudioPreviewRead = async (
     "read",
     signal,
   );
+  signal?.throwIfAborted();
   if (preview.kind === "refused") return { kind: "refused" };
   if (preview.kind !== "available") return preview;
   const dependencies = requestDependencies();
@@ -111,10 +112,12 @@ export const openStudioPreviewRead = async (
     ...application,
     previewInstallationId: preview.previewInstallationId,
   };
+  signal?.throwIfAborted();
   const [firstInstalled, launcher] = await Promise.all([
     loadInstalledContext(session, dependencies, selection),
     loadOrganizationLauncher(session),
   ]);
+  signal?.throwIfAborted();
   const installed =
     firstInstalled.kind === "temporarily_unavailable" && firstInstalled.databaseCode === "40001"
       ? await loadInstalledContext(session, dependencies, selection)
@@ -139,6 +142,7 @@ export const openStudioPreviewRead = async (
     return launcher.kind === "available"
       ? { kind: "refused" }
       : { kind: "temporarily_unavailable" };
+  signal?.throwIfAborted();
   const services = createPlacementReadServices({
     session,
     selection,

@@ -136,7 +136,7 @@ export type StudioDraftChangedElsewhere = Readonly<{
 }>;
 
 /**
- * Studio autosaves each batch through this one action; preview preparation runs after its response.
+ * Studio autosaves each batch through this one action; only a visible preview reader prepares a preview.
  * The draft is compiled for the canvas by the separate `reopenStudioApplication` request the
  * workspace sends once its saves are idle, so a save never waits for a compile. A save that no
  * longer extends the saved revision is refused as a conflict that names who wrote the newer
