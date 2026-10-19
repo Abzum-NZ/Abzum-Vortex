@@ -10,6 +10,7 @@ import {
   type PipelineStageTone,
   type RecordsTableActionContract,
   type RecordsTableFeatureProjection,
+  type RecordsTableRowFormat,
   type RecordsTableFilterValue,
   recordsTableActionCapabilities,
   type RecordsTableSortKey,
@@ -22,6 +23,7 @@ import {
   isRecord,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
+import { parseConditionalFormatting, parseRowFormat } from "./projected-format";
 
 /**
  * Validated structured rich-text document from the shared closed rich-text contract.
@@ -98,6 +100,8 @@ export type DisplayRow = Readonly<{
   revision?: number;
   capabilities?: DisplayRowCapabilities;
   cells: Readonly<Record<string, DisplayCellValue>>;
+  /** The style keys and measures the table's formatting gives the row, decided on the server. */
+  format?: RecordsTableRowFormat;
 }>;
 
 /** One declared table column; only declared columns are ever rendered. */
@@ -535,7 +539,7 @@ const requireBuilderKey = (
 };
 
 /** A row cell, column, detail field or sort key: a builder key or a declared field identity. */
-const requireFieldKey = (
+export const requireFieldKey = (
   value: unknown,
   message: string,
   location: DefinitionRenderErrorLocation,
@@ -759,7 +763,11 @@ const parseRows = (
     items.map((item, index) => {
       const rowLocation = { ...location, propertyPath: [`rows[${index}]`] };
       const record = requireRecord(item, "A projected row must be an object", rowLocation);
-      requireExactKeys(record, ["recordId", "revision", "capabilities", "cells"], rowLocation);
+      requireExactKeys(
+        record,
+        ["recordId", "revision", "capabilities", "cells", "format"],
+        rowLocation,
+      );
       const recordId = requireNonEmptyString(
         record.recordId,
         "A projected row requires a stable record identity",
@@ -794,11 +802,19 @@ const parseRows = (
               ...rowLocation,
               propertyPath: [`rows[${index}]`, "capabilities"],
             });
+      const format =
+        record.format === undefined
+          ? undefined
+          : parseRowFormat(record.format, {
+              ...rowLocation,
+              propertyPath: [`rows[${index}]`, "format"],
+            });
       return Object.freeze({
         recordId,
         ...(revision === undefined ? {} : { revision }),
         ...(capabilities === undefined ? {} : { capabilities }),
         cells: Object.freeze(cells),
+        ...(format === undefined ? {} : { format }),
       });
     }),
   );
@@ -1175,7 +1191,7 @@ const parseTableFeatures = (
   const record = requireRecord(value, "Projected table features are invalid", location);
   requireExactKeys(
     record,
-    ["search", "columnFilters", "savedViews", "bulkActions", "inlineEdit"],
+    ["search", "columnFilters", "savedViews", "bulkActions", "inlineEdit", "conditionalFormatting"],
     location,
   );
   if (Object.keys(record).length === 0) fail("Projected table features name no feature", location);
@@ -1214,6 +1230,11 @@ const parseTableFeatures = (
     ...(record.savedViews === true ? { savedViews: true as const } : {}),
     ...(bulkActions === undefined ? {} : { bulkActions: Object.freeze(bulkActions) }),
     ...(inlineEdit === undefined ? {} : { inlineEdit }),
+    ...(record.conditionalFormatting === undefined
+      ? {}
+      : {
+          conditionalFormatting: parseConditionalFormatting(record.conditionalFormatting, location),
+        }),
   });
 };
 

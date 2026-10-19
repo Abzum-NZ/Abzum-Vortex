@@ -8,6 +8,7 @@ import {
   recordsTableFeatureKeys,
   recordsTableFeatureState,
   type BlockPropertySchemaContract,
+  type ModuleField,
   type RecordsTableFeatureKey,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
@@ -24,6 +25,7 @@ import { Label } from "../components/label";
 import { Switch } from "../components/switch";
 import type { StudioQueryChoice } from "./contextual-palette";
 import { studioGridFeatureEditors, studioRecordsTableQueryFacts } from "./grid-features";
+import { StudioConditionalFormattingEditor } from "./grid-features/conditional-formatting";
 import { StudioInspectorGroup } from "./studio-inspector-group";
 import {
   StudioSettingFields,
@@ -62,6 +64,7 @@ export function StudioGridFeatures({
   property,
   value,
   query,
+  compiledFields,
   choices,
   disabled,
   onChange,
@@ -73,6 +76,8 @@ export function StudioGridFeatures({
   value: SourceBlockPropertyValueContract | undefined;
   /** The query the table reads, or undefined until one is chosen. */
   query: StudioQueryChoice | undefined;
+  /** The saved draft's compiled fields of the record type the query reads; undefined before a save. */
+  compiledFields: readonly ModuleField[] | undefined;
   /** The block's choices: the bound query's fields by business name. */
   choices: StudioSettingChoices;
   disabled: boolean;
@@ -161,6 +166,20 @@ export function StudioGridFeatures({
                   />
                 </ItemActions>
               </Item>
+              {enabled && key === "conditional_formatting" && features !== undefined ? (
+                <div className="pb-2">
+                  <StudioConditionalFormattingEditor
+                    idPrefix={`${switchId}-editor`}
+                    value={current}
+                    state={features.conditionalFormatting}
+                    query={query}
+                    facts={facts}
+                    compiledFields={compiledFields}
+                    disabled={disabled}
+                    onChange={(next) => write(key, next)}
+                  />
+                </div>
+              ) : null}
               {!enabled ||
               settings.length === 0 ||
               studioGridFeatureEditors[key].kind !== "settings" ? null : (

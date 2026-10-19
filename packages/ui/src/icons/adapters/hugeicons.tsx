@@ -42,6 +42,9 @@ import {
   Search01Icon,
   SidebarLeftIcon,
   Tick02Icon,
+  Alert02Icon,
+  Flag01Icon,
+  StarIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import type { ComponentType } from "react";
@@ -67,6 +70,10 @@ export const icons: VortexIconAdapter = {
 
   sun: hugeicon(Sun03Icon),
   moon: hugeicon(Moon02Icon),
+  "triangle-alert": hugeicon(Alert02Icon),
+  clock: hugeicon(Clock01Icon),
+  flag: hugeicon(Flag01Icon),
+  star: hugeicon(StarIcon),
   "arrow-down": hugeicon(ArrowDown02Icon),
   "arrow-up": hugeicon(ArrowUp02Icon),
   calendar: hugeicon(Calendar01Icon),

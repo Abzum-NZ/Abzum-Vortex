@@ -894,7 +894,9 @@ for (const file of files.filter(
     const keys = [...body.matchAll(/(?:^|[\s,{])"?([a-z_]+)"?\s*[:,\]]?/g)]
       .map((match) => match[1]!)
       .filter(
-        (key) => /^[a-z]+(?:_[a-z]+)*$/.test(key) && !["kind", "settings", "import"].includes(key),
+        (key) =>
+          /^[a-z]+(?:_[a-z]+)*$/.test(key) &&
+          !["kind", "settings", "custom", "import"].includes(key),
       );
     return [file, [...new Set(keys)].sort()];
   });
@@ -911,8 +913,12 @@ for (const file of files.filter(
   for (const file of codeFiles.filter((candidate) => candidate.startsWith("packages/ui/src/")))
     if (file !== `${chunkDirectory}registry.tsx` && !file.startsWith(chunkDirectory)) {
       const content = read(file);
-      for (const match of content.matchAll(/from\s+"[^"]*grid-features\/(?!registry")[^"]+"/g))
-        add("grid-feature-registry", file, lineAt(content, match.index ?? 0), match[0]);
+      // Studio's Features panel draws a feature's own editor from Studio's grid-features folder.
+      for (const match of content.matchAll(/from\s+"([^"]*grid-features\/(?!registry")[^"]+)"/g))
+        if (!(
+          file.startsWith("packages/ui/src/studio/") && match[1]!.startsWith("./grid-features/")
+        ))
+          add("grid-feature-registry", file, lineAt(content, match.index ?? 0), match[0]);
     }
 }
 

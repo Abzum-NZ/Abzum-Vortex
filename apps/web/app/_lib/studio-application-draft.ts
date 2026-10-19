@@ -776,6 +776,9 @@ export const loadStudioApplicationDraft = async (
                                 filterable: field.filterable,
                                 searchable: field.searchPriority !== undefined,
                                 ...(options === undefined ? {} : { choiceCount: options.length }),
+                                ...(field.type === "calculation" || field.type === "total"
+                                  ? { resultType: field.settings.resultType }
+                                  : {}),
                               },
                             ];
                       }),
@@ -808,8 +811,9 @@ export const loadStudioApplicationDraft = async (
                       });
                     }
                 }
-                // The compiled fields of every record type the draft binds, for the query filter's typed controls.
-                if (data)
+                // The compiled fields of every record type the draft binds, for the typed condition
+                // controls of a query filter and of a Records table's formatting rules.
+                if (data || canvas)
                   for (const record of records)
                     fieldsByRecord[`${release.key}:${record.key}`] = record.fields;
               }
@@ -824,9 +828,10 @@ export const loadStudioApplicationDraft = async (
               : null;
             usedModules = data ? used : null;
             peopleDirectory = data ? compiled.peopleDirectory : null;
-            compiledFields = data
-              ? { draftRevision: draft.draftRevision, recordTypes: fieldsByRecord }
-              : null;
+            compiledFields =
+              data || canvas
+                ? { draftRevision: draft.draftRevision, recordTypes: fieldsByRecord }
+                : null;
           } catch (error) {
             // A failed metadata refresh never makes old choices authoritative or changes the draft.
             // The draft stays open: the person sees the stable reason and can correct or remove the edit.
@@ -866,7 +871,7 @@ export const loadStudioApplicationDraft = async (
             catalogue,
             views: requests.map((request, index) => ({
               ...resourcesOf(request),
-              compiledFields: dataOf(request) ? compiledFields : null,
+              compiledFields: dataOf(request) || canvasOf(request) ? compiledFields : null,
               borrowedChoices: choicesOf(request) ? borrowedChoices : null,
               usedModules: dataOf(request) ? usedModules : null,
               published: publishedOf(request) ? published : null,

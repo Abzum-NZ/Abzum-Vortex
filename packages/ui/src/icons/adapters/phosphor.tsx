@@ -43,6 +43,10 @@ import {
   SpinnerIcon,
   XIcon,
   type Icon as PhosphorIcon,
+  WarningIcon,
+  ClockIcon,
+  FlagIcon,
+  StarIcon,
 } from "@phosphor-icons/react";
 import type { ComponentType } from "react";
 
@@ -63,6 +67,10 @@ export const icons: VortexIconAdapter = {
 
   sun: phosphorIcon(SunIcon),
   moon: phosphorIcon(MoonIcon),
+  "triangle-alert": phosphorIcon(WarningIcon),
+  clock: phosphorIcon(ClockIcon),
+  flag: phosphorIcon(FlagIcon),
+  star: phosphorIcon(StarIcon),
   "arrow-down": phosphorIcon(ArrowDownIcon),
   "arrow-up": phosphorIcon(ArrowUpIcon),
   calendar: phosphorIcon(CalendarBlankIcon),

@@ -43,6 +43,10 @@ import {
   IconSearch,
   IconX,
   type TablerIcon,
+  IconAlertTriangle,
+  IconClock,
+  IconFlag,
+  IconStar,
 } from "@tabler/icons-react";
 import type { ComponentType } from "react";
 
@@ -63,6 +67,10 @@ export const icons: VortexIconAdapter = {
 
   sun: tablerIcon(IconSun),
   moon: tablerIcon(IconMoon),
+  "triangle-alert": tablerIcon(IconAlertTriangle),
+  clock: tablerIcon(IconClock),
+  flag: tablerIcon(IconFlag),
+  star: tablerIcon(IconStar),
   "arrow-down": tablerIcon(IconArrowDown),
   "arrow-up": tablerIcon(IconArrowUp),
   calendar: tablerIcon(IconCalendar),

@@ -255,6 +255,9 @@ const compilePropertyValue = (
     case "field_reference":
       compiled = { kind: authored.kind, fieldId: resolution.field(authored.field) };
       break;
+    case "condition":
+      compiled = { kind: authored.kind, condition: resolution.condition(authored.condition) };
+      break;
     case "relationship_reference":
       compiled = {
         kind: authored.kind,

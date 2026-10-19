@@ -42,6 +42,10 @@ import {
   PlusIcon,
   SearchIcon,
   XIcon,
+  TriangleAlertIcon,
+  ClockIcon,
+  FlagIcon,
+  StarIcon,
 } from "lucide-react";
 
 import type { VortexIconAdapter } from "../icon-names";
@@ -54,6 +58,10 @@ export const icons: VortexIconAdapter = {
 
   sun: SunIcon,
   moon: MoonIcon,
+  "triangle-alert": TriangleAlertIcon,
+  clock: ClockIcon,
+  flag: FlagIcon,
+  star: StarIcon,
   "arrow-down": ArrowDownIcon,
   "arrow-up": ArrowUpIcon,
   calendar: CalendarIcon,

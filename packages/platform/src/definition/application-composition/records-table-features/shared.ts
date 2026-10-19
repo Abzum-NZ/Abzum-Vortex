@@ -97,7 +97,13 @@ export type RecordsTableFieldFacts = Readonly<{
   editable: boolean;
   /** For a choice field, how many options it declares. */
   choiceCount?: number;
+  /** For a calculation or total, the type of the value it produces. */
+  resultType?: string;
 }>;
+
+/** The type of value a field holds: a calculation's or total's result type, else its own type. */
+export const factsValueType = (field: RecordsTableFieldFacts): string =>
+  field.resultType ?? field.type;
 
 /**
  * What a Records table's bound query offers, the input of every feature check: the fields it
@@ -134,6 +140,7 @@ export type RecordsTableFeatureRefusalCode = Extract<
   | "definition_records_table_saved_views"
   | "definition_records_table_bulk_actions"
   | "definition_records_table_inline_edit"
+  | "definition_records_table_conditional_formatting"
 >;
 
 /** The outcome of one feature check: available, or not possible with its one business sentence. */
@@ -145,12 +152,8 @@ export const featureAvailable: RecordsTableFeatureCheck = Object.freeze({ kind: 
 
 export const featureNotPossible = (
   code: RecordsTableFeatureRefusalCode,
-): RecordsTableFeatureCheck =>
-  Object.freeze({
-    kind: "not_possible",
-    code,
-    reason: definitionValidationErrorCatalogue[code].message,
-  });
+  reason: string = definitionValidationErrorCatalogue[code].message,
+): RecordsTableFeatureCheck => Object.freeze({ kind: "not_possible", code, reason });
 
 /** The facts of a field the settings name, compared without regard to case. */
 export const factsOf = (
@@ -171,5 +174,8 @@ export type RecordsTableFeatureDefinition<Settings extends object> = Readonly<{
   /** One short line saying what the feature lets people do. */
   description: string;
   read(group: SettingsRecord): RecordsTableFeatureState<Settings>;
-  check(state: RecordsTableFeatureState<Settings>, facts: RecordsTableQueryFacts): RecordsTableFeatureCheck;
+  check(
+    state: RecordsTableFeatureState<Settings>,
+    facts: RecordsTableQueryFacts,
+  ): RecordsTableFeatureCheck;
 }>;

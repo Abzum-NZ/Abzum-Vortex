@@ -43,6 +43,10 @@ import {
   RiSideBarLine,
   RiSubtractLine,
   type RemixiconComponentType,
+  RiAlertLine,
+  RiTimeLine,
+  RiFlagLine,
+  RiStarLine,
 } from "@remixicon/react";
 import type { ComponentType } from "react";
 
@@ -63,6 +67,10 @@ export const icons: VortexIconAdapter = {
 
   sun: remixIcon(RiSunLine),
   moon: remixIcon(RiMoonLine),
+  "triangle-alert": remixIcon(RiAlertLine),
+  clock: remixIcon(RiTimeLine),
+  flag: remixIcon(RiFlagLine),
+  star: remixIcon(RiStarLine),
   "arrow-down": remixIcon(RiArrowDownLine),
   "arrow-up": remixIcon(RiArrowUpLine),
   calendar: remixIcon(RiCalendarLine),
