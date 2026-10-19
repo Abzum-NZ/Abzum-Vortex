@@ -60,7 +60,8 @@ const nextRequest = (continuationToken: string): TableRequest => ({
  * Holds, in memory only, at most one next page per table: read once while the browser is idle
  * after the shown page rendered, and only for the page shown. Next uses it only when the request
  * and the full state still match; any other read of the table, a navigation, or a change of query,
- * view or access drops it, and a dropped read is ignored when it lands. Nothing else is read ahead.
+ * view or access drops it, and a dropped read is ignored when it lands. While a foreground read of
+ * a table runs, nothing is read ahead from the page it replaces. Nothing else is read ahead.
  */
 export function useTableNextPage(context: ReadContext) {
   const contextRef = useRef(context);
@@ -68,8 +69,10 @@ export function useTableNextPage(context: ReadContext) {
   const heldRef = useRef(new Map<string, Held>());
   // The states already read ahead, so a refused or failed read is not retried for the same page.
   const attemptedRef = useRef(new Set<string>());
+  // Foreground reads running per table: the page shown is about to be replaced.
+  const readingRef = useRef(new Map<string, number>());
   const handleRef = useRef<ReturnType<typeof createHandle> | undefined>(undefined);
-  handleRef.current ??= createHandle(contextRef, heldRef, attemptedRef);
+  handleRef.current ??= createHandle(contextRef, heldRef, attemptedRef, readingRef);
   const handle = handleRef.current;
   // A navigation or a change of the address or access drops every held page at once.
   useEffect(
@@ -83,15 +86,13 @@ function createHandle(
   contextRef: Readonly<{ current: ReadContext }>,
   heldRef: Readonly<{ current: Map<string, Held> }>,
   attemptedRef: Readonly<{ current: Set<string> }>,
+  readingRef: Readonly<{ current: Map<string, number> }>,
 ) {
   const dropList = (list: string): void => {
     const held = heldRef.current.get(list);
     if (held === undefined) return;
     held.dropped = true;
     heldRef.current.delete(list);
-  };
-  const drop = (placementIds: readonly string[]): void => {
-    for (const placementId of placementIds) dropList(placementId.toLowerCase());
   };
 
   const read = async (
@@ -129,8 +130,28 @@ function createHandle(
   };
 
   return {
-    /** Forgets the held next page of each table, so a read still running is ignored when it lands. */
-    drop,
+    /**
+     * Starts a foreground read of each table: forgets its held next page, so a read still running
+     * is ignored when it lands, and reads nothing ahead from the shown page until the returned end
+     * is called. A Next click before the idle read started thus sends one read, not two.
+     */
+    beginRead(placementIds: readonly string[]): () => void {
+      const lists = [...new Set(placementIds.map((placementId) => placementId.toLowerCase()))];
+      for (const list of lists) {
+        dropList(list);
+        readingRef.current.set(list, (readingRef.current.get(list) ?? 0) + 1);
+      }
+      let ended = false;
+      return () => {
+        if (ended) return;
+        ended = true;
+        for (const list of lists) {
+          const count = (readingRef.current.get(list) ?? 1) - 1;
+          if (count > 0) readingRef.current.set(list, count);
+          else readingRef.current.delete(list);
+        }
+      };
+    },
 
     dropAll(): void {
       for (const list of [...heldRef.current.keys()]) dropList(list);
@@ -168,7 +189,7 @@ function createHandle(
         const list = placementId.toLowerCase();
         const table = tablePayloadFor(currentData[placementId]);
         const token = table?.hasNextPage === true ? table.nextContinuationToken : undefined;
-        if (token === undefined || pending(placementId)) {
+        if (token === undefined || pending(placementId) || readingRef.current.has(list)) {
           dropList(list);
           continue;
         }
