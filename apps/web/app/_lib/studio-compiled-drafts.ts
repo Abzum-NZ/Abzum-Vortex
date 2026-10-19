@@ -21,7 +21,7 @@ import { studioDraftTargetFacts } from "./studio-application-draft";
 export const compiledDraftContent = async (
   session: IdentitySession,
   organizationId: OrganizationId,
-  draft: Pick<StoredApplicationDefinitionDraft, "rootId" | "draftRevision">,
+  draft: StoredApplicationDefinitionDraft,
 ): Promise<ApplicationContent | "refused" | "temporarily_unavailable" | "conflict"> => {
   const result = await humanOrganizationRequests().run(
     session,
