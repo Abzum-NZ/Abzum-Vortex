@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   createProtectedQueryService,
+  createHumanOrganizationRequestService,
   createRecordChoiceReader,
   recordChoicePageSizes,
   recordLinkLabelKey,
@@ -28,6 +29,7 @@ import {
 } from "./placement-helpers";
 import { projectReferenceChoicePage, type ReferenceChoiceAddress } from "./reference-choice";
 import type { PageDataState, SearchParameters } from "./types";
+import { decideRecordTypeFieldIds } from "./form-field-access";
 
 /** What a viewer may see of a linked record's title. */
 const titleOf = (
@@ -139,7 +141,9 @@ const linkFilterTarget = (
   context: InstalledRuntimeContext,
   settings: Readonly<Record<string, unknown>>,
   fieldId: string,
-): Readonly<{ moduleRootId: string; recordTypeId: string }> | undefined => {
+):
+  | Readonly<{ moduleRootId: string; recordTypeId: string; sourceRecordTypeId: string }>
+  | undefined => {
   const contract = readRecordsTableContract(
     settings as Readonly<Record<string, BlockPropertyValueContract>>,
   );
@@ -156,6 +160,7 @@ const linkFilterTarget = (
         if (sameId(String(field.fieldId), fieldId))
           return field.type === "link" && field.settings.target.state === "resolved"
             ? {
+                sourceRecordTypeId: String(recordType.recordTypeId),
                 moduleRootId: String(field.settings.target.moduleRootId),
                 recordTypeId: String(field.settings.target.recordTypeId),
               }
@@ -207,6 +212,15 @@ export const loadRecordChoicePage = async (
     if (filtered === undefined) return { kind: "refused", cause: "field_not_a_link_filter" };
     if (projectedUseAvailability(placement) !== "available")
       return { kind: "refused", cause: "placement_unavailable" };
+    const readable = await createHumanOrganizationRequestService(dependencies).run(
+      session,
+      selection,
+      (transaction, scope) =>
+        decideRecordTypeFieldIds(transaction, scope, context, filtered.sourceRecordTypeId, "read"),
+    );
+    if (readable.kind === "temporarily_unavailable") return readable;
+    if (readable.kind !== "available" || !readable.value.has(request.fieldId.toLowerCase()))
+      return { kind: "refused", cause: "filter_field_withheld" };
     declaredTargets = [filtered];
   } else {
     if (!isLinkInputPlacement(placement))

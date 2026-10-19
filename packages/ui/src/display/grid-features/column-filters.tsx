@@ -432,6 +432,8 @@ function LinkEditor({
   const [state, setState] = useState<"idle" | "loading" | "failed">("idle");
   const generation = useRef(0);
   const chosen = applied?.recordIds ?? [];
+  const latestEvents = useRef(events);
+  latestEvents.current = events;
   useEffect(() => {
     if (!open) {
       generation.current += 1;
@@ -440,7 +442,7 @@ function LinkEditor({
     const request = ++generation.current;
     const timeout = setTimeout(
       () => {
-        const handler = events?.filter_records_requested;
+        const handler = latestEvents.current?.filter_records_requested;
         if (handler === undefined) return;
         setState("loading");
         const bounded = search.trim().slice(0, 100);
@@ -450,23 +452,25 @@ function LinkEditor({
             field: field.fieldId,
             ...(bounded === "" ? {} : { search: bounded }),
           }),
-        ).then(
-          (answer) => {
+        )
+          .then((answer) => {
             if (generation.current !== request) return;
             setChoices(parseRecordChoicePage(answer).choices);
             setState("idle");
-          },
-          (cause: unknown) => {
+          })
+          .catch((cause: unknown) => {
             if (generation.current !== request) return;
             console.error("[column-filters] records unavailable", cause);
             setState("failed");
-          },
-        );
+          });
       },
       search.trim() === "" ? 0 : TEXT_COMMIT_DELAY_MS,
     );
-    return () => clearTimeout(timeout);
-  }, [open, search, events, field.fieldId]);
+    return () => {
+      clearTimeout(timeout);
+      generation.current += 1;
+    };
+  }, [open, search, field.fieldId]);
   const remove = (recordId: string): void => {
     const next = chosen.filter((held) => held !== recordId);
     onCommit(next.length === 0 ? undefined : { kind: "link", recordIds: next });

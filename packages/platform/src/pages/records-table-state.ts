@@ -158,7 +158,19 @@ export const readRecordsTableQueryState = (
   placementId: string,
   entries: Iterable<readonly [string, string]>,
 ): RecordsTableQueryStateRead => {
-  const owned = placementEntries(placementId, entries);
+  const addressed = [...entries];
+  const filtersSeen = new Set<string>();
+  for (const [name] of addressed) {
+    if (
+      !name.startsWith("filter.") ||
+      recordsTableParameterPlacement(name) !== placementId.toLowerCase()
+    )
+      continue;
+    const key = name.toLowerCase();
+    if (filtersSeen.has(key)) return { kind: "malformed", part: "filter" };
+    filtersSeen.add(key);
+  }
+  const owned = placementEntries(placementId, addressed);
   const sortText = owned.get(sortParameter(placementId));
   const sort = sortText === undefined ? [] : parseSort(sortText);
   if (sort === undefined) return { kind: "malformed", part: "sort" };

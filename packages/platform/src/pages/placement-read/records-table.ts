@@ -9,7 +9,6 @@ import {
   fieldFilterTargetsOf,
   fieldLabelsOf,
   fieldLinkTypesOf,
-  firstParameter,
   logPlacementFailure,
   placementSettingsOf,
   type PlacementModule,
@@ -60,8 +59,7 @@ export const readRecordsTable = async (
   const addressed = readRecordsTableQueryState(
     placementId,
     Object.entries(read.parameters).flatMap(([name, value]): [string, string][] => {
-      const text = firstParameter(value);
-      return text === undefined ? [] : [[name, text]];
+      return (typeof value === "string" ? [value] : (value ?? [])).map((text) => [name, text]);
     }),
   );
   if (addressed.kind === "malformed") {
@@ -71,14 +69,13 @@ export const readRecordsTable = async (
   }
   const queryId = String(bound.query.queryId).toLowerCase();
   const recordType = bound.query.recordType;
-  const authored = authoredGridLayout(
-    contract,
+  const readable =
     gridLayouts.readable === undefined
       ? undefined
       : (gridLayouts.readable.get(
           recordType.state === "resolved" ? String(recordType.recordTypeId).toLowerCase() : "",
-        ) ?? new Set()),
-  );
+        ) ?? new Set<string>());
+  const authored = authoredGridLayout(contract, readable);
   if (authored === undefined) {
     logPlacementFailure(address, placementId, "table_columns_withheld");
     data[placementId] = { status: "refused", reason: "not_permitted" };
@@ -100,7 +97,11 @@ export const readRecordsTable = async (
   };
   // A date-and-time filter takes whole days in the organisation's time zone, so the zone is read
   // only when the table offers a filter on such a field.
-  const filterTargets = fieldFilterTargetsOf(bound.module);
+  const filterTargets = Object.fromEntries(
+    Object.entries(fieldFilterTargetsOf(bound.module)).filter(
+      ([fieldId]) => readable === undefined || readable.has(fieldId),
+    ),
+  );
   const timeZone = contract.features.columnFilters.enabled
     ? await filterTimeZone(
         read,
