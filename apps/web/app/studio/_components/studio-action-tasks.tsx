@@ -5,6 +5,7 @@ import {
   type FlowReference,
   type FlowValue,
 } from "@vortex/platform/schema";
+import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Label } from "@vortex/ui/components/label";
@@ -378,24 +379,28 @@ export function StudioActionTasks({
                     },
                   });
                 return (
-                  <div className="space-y-2 rounded-md border p-2" key={at}>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={task.properties.changes.length === 1}
-                      onClick={() =>
-                        replace(index, {
-                          ...task,
-                          properties: {
-                            changes: task.properties.changes.filter((_, place) => place !== at),
-                          },
-                        })
-                      }
-                    >
-                      Remove copy group
-                    </Button>
-                    <Label htmlFor={`${task.id}-target-${at}`}>Copy relationships to input</Label>
+                  <div className="space-y-2" key={at}>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor={`${task.id}-target-${at}`}>Copy relationships to input</Label>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={`Remove copy group ${at + 1}`}
+                        title="Remove copy group"
+                        disabled={task.properties.changes.length === 1}
+                        onClick={() =>
+                          replace(index, {
+                            ...task,
+                            properties: {
+                              changes: task.properties.changes.filter((_, place) => place !== at),
+                            },
+                          })
+                        }
+                      >
+                        <Icon name="minus" />
+                      </Button>
+                    </div>
                     <NativeSelect
                       id={`${task.id}-target-${at}`}
                       className="w-full"
@@ -434,8 +439,10 @@ export function StudioActionTasks({
               })}
               <Button
                 type="button"
-                size="sm"
-                variant="outline"
+                size="icon-sm"
+                variant="ghost"
+                aria-label="Add copy group"
+                title="Add copy group"
                 disabled={
                   task.properties.changes.length >= 10 ||
                   targets.length === 0 ||
@@ -457,7 +464,7 @@ export function StudioActionTasks({
                   })
                 }
               >
-                Add copy group
+                <Icon name="plus" />
               </Button>
             </div>
           )}
