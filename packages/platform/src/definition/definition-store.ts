@@ -181,12 +181,13 @@ type DefinitionStoreOperation = "create_root" | "save_draft";
 const safeStoreOperation = async <Result>(
   operationKind: DefinitionStoreOperation,
   operation: () => Promise<Result>,
+  source?: unknown,
 ): Promise<Result> => {
   try {
     return await operation();
   } catch (error) {
     if (error instanceof DefinitionError) throw error;
-    const retired = identityRetiredFailure(error);
+    const retired = identityRetiredFailure(error, source);
     if (retired !== undefined) throw retired;
     const cause = { cause: error };
     switch (classifyDatabaseError(error)) {
@@ -310,16 +311,18 @@ export const createDefinitionStore = (
         kind: "draft_change",
         rootId: rootId.data.rootId,
       });
-      return safeStoreOperation("save_draft", async () => {
-        const command = saveCommandEnvelope.safeParse(candidate);
-        if (!command.success) {
-          throw new DefinitionError("INVALID_DEFINITION_COMMAND", {
-            detail: commandIssueDetail(command.error),
-          });
-        }
-        const prepared = prepareSource(command.data.source, permissions);
-        const { canonicalSource, sourceFingerprint, identityRequirements } = prepared;
-        const rows = await transaction.query<StoredDraftRow>`
+      const command = saveCommandEnvelope.safeParse(candidate);
+      if (!command.success) {
+        throw new DefinitionError("INVALID_DEFINITION_COMMAND", {
+          detail: commandIssueDetail(command.error),
+        });
+      }
+      return safeStoreOperation(
+        "save_draft",
+        async () => {
+          const prepared = prepareSource(command.data.source, permissions);
+          const { canonicalSource, sourceFingerprint, identityRequirements } = prepared;
+          const rows = await transaction.query<StoredDraftRow>`
           select *
           from vortex_definition.save_draft(
             ${command.data.rootId},
@@ -329,10 +332,12 @@ export const createDefinitionStore = (
             ${JSON.stringify(identityRequirements)}::text::jsonb
           )
         `;
-        if (rows.length === 0) throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
-        if (rows.length !== 1) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
-        return verifyStoredSource(rows[0]!, prepared);
-      });
+          if (rows.length === 0) throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+          if (rows.length !== 1) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
+          return verifyStoredSource(rows[0]!, prepared);
+        },
+        command.data.source,
+      );
     },
   };
 };

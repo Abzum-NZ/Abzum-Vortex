@@ -6,6 +6,7 @@ import {
   describeFailure,
   type ApplicationSourceDocument,
   type PeopleDirectoryOwner,
+  type SourceIdentityReservation,
 } from "@vortex/platform/schema";
 import {
   createStudioApplicationDraftHistoryController,
@@ -65,6 +66,7 @@ export type StudioCompiledView = StudioViewResources &
     usedModules: readonly StudioDataModule[] | null;
     published: StudioPublishedData | null;
     peopleDirectory: PeopleDirectoryOwner | null;
+    identityReservations: readonly SourceIdentityReservation[] | null;
   }>;
 
 /** Where the draft stands against the saved draft, for the one status chip and what blocks edits. */
@@ -177,6 +179,7 @@ class StudioSaveError extends Error {
   constructor(
     readonly code: string,
     readonly reason?: string,
+    readonly sentence?: string,
   ) {
     super(code);
     this.name = "StudioSaveError";
@@ -224,6 +227,7 @@ const viewOf = (
   usedModules: loaded.usedModules,
   published: loaded.published,
   peopleDirectory: loaded.peopleDirectory,
+  identityReservations: loaded.identityReservations,
 });
 
 const personWords = (label: StudioDraftChangedElsewhere["changedBy"]): string | null =>
@@ -300,6 +304,7 @@ export function useStudioDraft({
               ? "DEFINITION_CONTEXT_REFUSED"
               : "STUDIO_SAVE_FAILED",
           result.kind === "conflict" || result.kind === "refused" ? result.reason : undefined,
+          result.kind === "refused" ? result.sentence : undefined,
         );
       },
     }),
@@ -363,6 +368,7 @@ export function useStudioDraft({
             usedModules: initialView.usedModules,
             published: initialView.published,
             peopleDirectory: initialView.peopleDirectory,
+            identityReservations: initialView.identityReservations,
             pageCompiledSlots: initialView.slots,
             canvasFrames: initialView.frames,
             compileFailure: initialView.failure,
@@ -638,10 +644,12 @@ export function useStudioDraft({
           setStatus({
             kind: "refused",
             reason: outcome.reason,
-            message: refusalMessage(
-              outcome.reason,
-              "Your latest change was not saved; Undo it or change it, and Studio saves again.",
-            ),
+            message:
+              outcome.sentence ??
+              refusalMessage(
+                outcome.reason,
+                "Your latest change was not saved; Undo it or change it, and Studio saves again.",
+              ),
           });
           // An edit made while the refused save ran is a new attempt.
           if (after.isDirty && after.source !== before.source) scheduleSave(autosaveDelayMs);

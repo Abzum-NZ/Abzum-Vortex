@@ -26,6 +26,7 @@ begin
     from vortex_definition.roots as root
     join vortex_definition.source_identity_aliases as alias on alias.root_id = root.root_id
     where root.organization_id = root_row.organization_id
+      and alias.scope = 'content' and alias.kind in ('role', 'permission')
       and (root.root_id = p_root_id or root.owner_application_root_id = p_root_id)
   ), '[]'::jsonb);
 end

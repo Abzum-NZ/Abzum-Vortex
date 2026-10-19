@@ -68,7 +68,6 @@ type WorkspaceProps =
       mode: "existing";
       organizationId: string;
       draft: StudioStoredApplicationDraft;
-      identityReservations: readonly SourceIdentityReservation[];
       place: StudioWorkspacePlace;
       initialTab?: string | undefined;
       initialSection?: string | undefined;
@@ -126,7 +125,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     return () => window.removeEventListener("popstate", restoreTab);
   }, []);
   const { source, state } = draft;
-  const accessReservations = useRef<SourceIdentityReservation[]>([...props.identityReservations]);
+  const accessReservations = useRef<SourceIdentityReservation[]>([]);
   const openIn = (nextTab: StudioRailKey, next: StudioSemanticSelection) => {
     setTab(nextTab);
     draft.select(next);
@@ -190,6 +189,9 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
 
   // The Access tab's one edit path, the same envelope as every other tab.
   const commandAccess = (command: StudioAccessCommand, merge?: string): StudioAccessResult => {
+    const reservations = draft.view.identityReservations;
+    if (reservations === null)
+      return { kind: "refused", message: "Access is still loading. Try again in a moment." };
     const outcome = draft.run<StudioAccessResult>(
       (current) => {
         const known = new Set(
@@ -198,9 +200,10 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
           ),
         );
         accessReservations.current.push(
-          ...studioAccessIdentityReservations(current).filter(
-            (entry) => !known.has(`${entry.definitionKey}:${entry.kind}:${entry.alias}`),
-          ),
+          ...[
+            ...reservations,
+            ...studioAccessIdentityReservations(current),
+          ].filter((entry) => !known.has(`${entry.definitionKey}:${entry.kind}:${entry.alias}`)),
         );
         const result = applyStudioAccessCommand(current, command, accessReservations.current);
         return result.kind === "applied"

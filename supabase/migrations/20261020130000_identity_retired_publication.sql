@@ -1,4 +1,4 @@
--- Explain retired identity names and expose their reservations to Studio.
+-- Explain retired identity names and expose Access reservations to Studio.
 set local role vortex_owner;
 
 create or replace function vortex_definition.record_source_identities(p_root_id uuid, p_requirements jsonb, p_actor_id uuid, p_operation_at timestamp with time zone) returns void
@@ -208,6 +208,7 @@ begin
     from vortex_definition.roots as root
     join vortex_definition.source_identity_aliases as alias on alias.root_id = root.root_id
     where root.organization_id = root_row.organization_id
+      and alias.scope = 'content' and alias.kind in ('role', 'permission')
       and (root.root_id = p_root_id or root.owner_application_root_id = p_root_id)
   ), '[]'::jsonb);
 end

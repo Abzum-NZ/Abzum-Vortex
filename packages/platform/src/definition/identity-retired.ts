@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { StoredDefinitionSource } from "../schema";
 import { databaseErrorCode, DefinitionError } from "./definition-error";
 
 const retiredIdentitySchema = z
@@ -13,7 +12,7 @@ const retiredIdentitySchema = z
 /** Map only this database refusal; unrelated uniqueness failures keep their own handling. */
 export const identityRetiredFailure = (
   cause: unknown,
-  source?: StoredDefinitionSource,
+  source?: unknown,
 ): DefinitionError | undefined => {
   if (
     databaseErrorCode(cause) !== "23505" ||

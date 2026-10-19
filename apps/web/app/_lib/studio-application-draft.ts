@@ -154,6 +154,7 @@ export type StudioViewResources = Readonly<{
 /** What one requested editor view draws from, projected from the saved revision's one compile. */
 export type StudioLoadedView = StudioViewResources &
   Readonly<{
+    identityReservations: Awaited<ReturnType<typeof readSourceIdentityReservations>> | null;
     compiledFields: StudioCompiledFields | null;
     borrowedChoices: StudioBorrowedChoices | null;
     usedModules: readonly StudioDataModule[] | null;
@@ -172,7 +173,6 @@ type StudioApplicationLoadResult =
       kind: "available";
       organizationId: OrganizationId;
       draft: StoredApplicationDefinitionDraft;
-      identityReservations: Awaited<ReturnType<typeof readSourceIdentityReservations>>;
       /** The draft's data shape: Studio reads its records once the builder's preview runs this shape. */
       previewShape: string;
       /** The immutable block catalogue, once for every view; complete when any view uses its releases. */
@@ -439,7 +439,6 @@ export const loadStudioApplicationDraft = async (
           Readonly<{
             organizationId: OrganizationId;
             draft: StoredApplicationDefinitionDraft;
-            identityReservations: Awaited<ReturnType<typeof readSourceIdentityReservations>>;
             previewShape: string;
             catalogue: typeof IMMUTABLE_PLATFORM_BLOCK_CATALOGUE;
             views: readonly StudioLoadedView[];
@@ -467,10 +466,9 @@ export const loadStudioApplicationDraft = async (
           rootId: root.data,
           ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
         });
-        const identityReservations = await readSourceIdentityReservations(
-          transaction,
-          draft.rootId,
-        );
+        const identityReservations = requests.some((request) => request.kind === "access")
+          ? await readSourceIdentityReservations(transaction, draft.rootId)
+          : null;
         if (
           requests.some(
             (request) =>
@@ -875,11 +873,11 @@ export const loadStudioApplicationDraft = async (
           value: {
             organizationId: scope.organizationId,
             draft,
-            identityReservations,
             previewShape: studioPreviewShapeFingerprint(draft.source),
             catalogue,
             views: requests.map((request, index) => ({
               ...resourcesOf(request),
+              identityReservations: request.kind === "access" ? identityReservations : null,
               compiledFields: dataOf(request) || canvasOf(request) ? compiledFields : null,
               borrowedChoices: choicesOf(request) ? borrowedChoices : null,
               usedModules: dataOf(request) ? usedModules : null,

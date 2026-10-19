@@ -99,13 +99,13 @@ export default async function StudioApplicationPage({
       mode="existing"
       organizationId={result.organizationId}
       draft={result.draft}
-      identityReservations={result.identityReservations}
       place={place}
       initialTab={tab}
       initialSection={section}
       initialModule={module}
       applications={applications}
       initialView={{
+        identityReservations: view.identityReservations,
         request: view.request,
         catalogue: result.catalogue,
         previewShape: result.previewShape,
