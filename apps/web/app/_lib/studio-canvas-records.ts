@@ -60,15 +60,11 @@ export type StudioCanvasRecordsResult =
        * its type the builder can read in the preview, or none when the preview has none yet.
        */
       sample?: Readonly<{ recordTypeName: string; title?: string }>;
-      /**
-       * The preview still runs an older revision's data shape and is moving to this one: blocks
-       * whose query it does not have yet have no records here; read again shortly.
-       */
-      behind: boolean;
     }>
   | Readonly<{ kind: "conflict" }>
   /** The builder may not edit or preview this application, so the canvas reads no records. */
   | Readonly<{ kind: "refused" }>
+  /** The preview does not run this revision's data shape yet: read once it is ready. */
   | Readonly<{ kind: "following" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
@@ -304,7 +300,6 @@ export const readStudioCanvasRecords = async (
       pageAlias: request.pageAlias,
       area: request.area,
       records,
-      behind: preview.behind,
       ...(sample === undefined
         ? {}
         : {
