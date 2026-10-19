@@ -287,7 +287,7 @@
                       {
                         "field": "vortex.app_store:store_application.records_processed",
                         "label": "Records processed",
-                        "visible": true
+                        "visible": false
                       },
                       {
                         "field": "vortex.app_store:store_application.installed_version",
@@ -302,7 +302,7 @@
                       {
                         "field": "vortex.app_store:store_application.published_at",
                         "label": "Published",
-                        "visible": true
+                        "visible": false
                       }
                     ],
                     "row_actions": [
