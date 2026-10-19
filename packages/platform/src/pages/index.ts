@@ -67,6 +67,7 @@ export {
   type ProjectedRecordLink,
   type ProjectedRecordLinks,
   type RecordLinkResolver,
+  type TableFieldColumn,
   type ProjectedTableRow,
   type ProjectedTableValues,
 } from "./component-data-projection";

@@ -29,6 +29,45 @@ const deepFreeze = <Value>(value: Value): Value => {
   return value;
 };
 
+// The compile of a key that is running now, so a second caller (the canvas compile and a preview
+// move that follows a save) joins it instead of compiling the same revision beside it. An entry
+// holds only pending work and is removed when it settles; a failed compile is never retained.
+const runningCompilationsKey = Symbol.for("vortex.platform.application-draft-compilations-running");
+const processRunning = globalThis as typeof globalThis & {
+  [runningCompilationsKey]?: Map<string, Promise<ApplicationDraftCompilation>>;
+};
+const runningCompilations = (processRunning[runningCompilationsKey] ??= new Map<
+  string,
+  Promise<ApplicationDraftCompilation>
+>());
+
+/**
+ * The retained compile of this key, the running one, or a new one. A caller that joined a compile
+ * that failed compiles for itself, so another request's failure is never its answer.
+ */
+export const compileApplicationDraftOnce = async (
+  key: string,
+  compile: () => Promise<ApplicationDraftCompilation>,
+): Promise<ApplicationDraftCompilation> => {
+  const cached = readCachedApplicationDraftCompilation(key);
+  if (cached !== undefined) return cached;
+  const running = runningCompilations.get(key);
+  if (running !== undefined) {
+    try {
+      return await running;
+    } catch {
+      return compile();
+    }
+  }
+  const started = compile();
+  runningCompilations.set(key, started);
+  try {
+    return await started;
+  } finally {
+    if (runningCompilations.get(key) === started) runningCompilations.delete(key);
+  }
+};
+
 export const applicationDraftCompilationKey = (parts: readonly unknown[]): string =>
   JSON.stringify(parts);
 

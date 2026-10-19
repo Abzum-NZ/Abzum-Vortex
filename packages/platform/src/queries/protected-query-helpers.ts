@@ -1,0 +1,77 @@
+import "server-only";
+
+import type { z } from "zod";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type {
+  ProtectedQueryRefusalReasonCode,
+  ProtectedQueryResult,
+  ProtectedQueryCommand,
+  ProtectedQuerySummaryCommand,
+} from "./protected-query-contracts";
+import { inputsReadSchema } from "./protected-query-read-schemas";
+
+export type ResolvedInputs = Extract<z.infer<typeof inputsReadSchema>, { outcome: "resolved" }>;
+
+export type ResultRow = DatabaseRow & { readonly result: unknown };
+
+export const refusal = (
+  reasonCode: ProtectedQueryRefusalReasonCode,
+): Extract<ProtectedQueryResult, { outcome: "refused" }> => ({
+  outcome: "refused",
+  reasonCode,
+});
+
+export const one = (rows: readonly ResultRow[]): unknown => {
+  if (rows.length !== 1 || rows[0] === undefined) throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+  return rows[0].result;
+};
+
+/** Every field identifier a typed condition tree reads, lower-cased; a malformed node contributes none. */
+export const conditionFieldIds = (condition: unknown, into: Set<string>): void => {
+  if (Array.isArray(condition)) {
+    for (const item of condition) conditionFieldIds(item, into);
+    return;
+  }
+  if (condition === null || typeof condition !== "object") return;
+  const record = condition as Record<string, unknown>;
+  if (record.source === "field" && typeof record.fieldId === "string")
+    into.add(record.fieldId.toLowerCase());
+  for (const item of Object.values(record)) conditionFieldIds(item, into);
+};
+
+export const readInputs = async (
+  transaction: RequestDatabaseTransaction,
+  command: Pick<ProtectedQueryCommand, "moduleRootId" | "queryId">,
+) => {
+  const rows = await transaction.query<ResultRow>`
+    select vortex_record.read_module_query_inputs(
+      ${command.moduleRootId}::uuid,
+      ${command.queryId}::uuid
+    ) as result
+  `;
+  return inputsReadSchema.parse(one(rows));
+};
+
+export const filterInputRefusal = (
+  command: Pick<ProtectedQuerySummaryCommand, "filter" | "filterableFieldIds">,
+): ProtectedQueryRefusalReasonCode | undefined => {
+  if (command.filter === undefined) return undefined;
+  const filterable = new Set(command.filterableFieldIds.map((fieldId) => fieldId.toLowerCase()));
+  const referenced = new Set<string>();
+  conditionFieldIds(command.filter, referenced);
+  return [...referenced].some((fieldId) => !filterable.has(fieldId)) ? "filter_invalid" : undefined;
+};
+
+export const normalizeConditionFieldIdentifiers = (condition: unknown): unknown => {
+  if (Array.isArray(condition)) return condition.map(normalizeConditionFieldIdentifiers);
+  if (condition === null || typeof condition !== "object") return condition;
+  const record = condition as Record<string, unknown>;
+  const normalized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(record)) {
+    normalized[key] =
+      key === "fieldId" && record.source === "field" && typeof value === "string"
+        ? value.toLowerCase()
+        : normalizeConditionFieldIdentifiers(value);
+  }
+  return normalized;
+};

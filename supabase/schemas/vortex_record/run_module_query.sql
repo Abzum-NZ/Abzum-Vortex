@@ -1129,12 +1129,14 @@ begin
     end if;
     if passes then
       page_access_loaded := null;
-      if not preview_mode and not page_eligibility_checked then
+      if not page_eligibility_checked then
         -- Keep the reusable decision in this invocation; the request role cannot
         -- write it or pass it to the owner-only exact-record evaluator.
         page_eligibility_checked := true;
         page_shared := pg_catalog.jsonb_build_object(
-          'installation', vortex_definition.read_current_active_installation());
+          'installation', case when preview_mode
+            then vortex_record.read_current_preview_installation_internal()
+            else vortex_definition.read_current_active_installation() end);
         page_access_loaded := vortex_record.load_record_access_facts_from_installation_internal(
           record_type_id_value, 'read', scan_record.record_id, null,
           page_shared -> 'installation', scan_record.projection_row
@@ -1142,10 +1144,19 @@ begin
         if page_access_loaded ->> 'outcome' = 'loaded'
           and pg_catalog.jsonb_typeof(page_access_loaded -> 'declaration') = 'object' then
           page_declaration := page_access_loaded -> 'declaration';
-          page_eligibility := vortex_access.evaluate_organization_record_permission_eligibility_internal(
-            page_declaration, vortex_access.validated_human_request_context(),
-            pg_catalog.clock_timestamp()
-          );
+          if preview_mode then
+            -- Owner authority and the exact storage binding were validated by
+            -- preparation and the first loader in this invocation. Bounds are
+            -- identical for every copied row of this record type.
+            page_shared := page_shared || pg_catalog.jsonb_build_object(
+              'previewBounds', vortex_record.preview_record_field_bounds_internal(
+                record_type_id_value, v_storage_contract_id, record_type_item));
+          else
+            page_eligibility := vortex_access.evaluate_organization_record_permission_eligibility_internal(
+              page_declaration, vortex_access.validated_human_request_context(),
+              pg_catalog.clock_timestamp()
+            );
+          end if;
           page_first_loaded := page_access_loaded;
           select page_shared || pg_catalog.jsonb_build_object('envelope', page.envelope) || page.read_time,
             page.narrowed
@@ -1393,6 +1404,16 @@ begin
     pg_catalog.jsonb_build_object('column', board_column_item, 'rows', rows_value, 'next', next_value)
   );
   end loop column_pass;
+  if preview_mode then
+    -- No rows leave this invocation until the builder's authority is current
+    -- again. Its role/group path can expire while the page is assembled;
+    -- invocation-local reuse must never extend that permission deadline.
+    if vortex_record.read_current_preview_installation_internal() -> 'previewInstallationId'
+      is distinct from prepared_plan #> '{preview,previewInstallationId}' then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'query_unavailable');
+    end if;
+  end if;
   if board_columns_mode then
     return pg_catalog.jsonb_build_object(
       'outcome', 'completed',

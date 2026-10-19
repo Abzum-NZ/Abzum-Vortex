@@ -921,9 +921,9 @@ export function ModuleFieldsEditor({
 }
 
 /**
- * The published record types and fields. The workspace always loads them with the draft (they are
- * read from the stored releases, whether or not the draft compiles); a view without them counts
- * every saved one as published, so nothing published is ever offered a change its records can't take.
+ * The published record types and fields, loaded with Data or record-page creation, even when
+ * compilation fails. Other views carry no publication facts and conservatively count saved fields
+ * as published; consumers that change storage settings must first load their authorized view.
  */
 export const studioFieldPublication = (
   published: Readonly<{ recordTypes: readonly string[]; fields: readonly string[] }> | null,

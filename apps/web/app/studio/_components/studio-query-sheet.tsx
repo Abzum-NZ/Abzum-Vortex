@@ -141,7 +141,8 @@ export function StudioQuerySheet({
           )}
         </div>
         {step.kind === "edit" && exists && (
-          <SheetFooter>
+          // The way back stays in view while the editor scrolls.
+          <SheetFooter className="sticky bottom-0 border-t bg-background">
             <Button type="button" onClick={() => onDone(`${step.moduleKey}:${step.queryKey}`)}>
               {doneLabel}
             </Button>

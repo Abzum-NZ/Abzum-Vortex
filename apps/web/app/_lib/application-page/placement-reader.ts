@@ -67,6 +67,7 @@ import {
   fieldChoiceLabelsOf,
   fieldDateTypesOf,
   fieldLinkTypesOf,
+  fieldTableColumnsOf,
   findModuleQuery,
   noticeQueryInput,
   coerceInput,
@@ -450,6 +451,7 @@ export const readPlacement = async (
               fieldChoiceLabels: fieldChoiceLabelsOf(subjectModule),
               fieldDateTypes: fieldDateTypesOf(subjectModule),
               fieldLinkTypes: fieldLinkTypesOf(subjectModule),
+              fieldTableColumns: fieldTableColumnsOf(subjectModule),
             }),
         ...(subjectFieldIds === undefined ? {} : { readableFieldIds: subjectFieldIds }),
       },
@@ -985,6 +987,7 @@ export const readPlacement = async (
         fieldChoiceLabels: fieldChoiceLabelsOf(detailModule),
         fieldDateTypes: fieldDateTypesOf(detailModule),
         fieldLinkTypes: fieldLinkTypesOf(detailModule),
+        fieldTableColumns: fieldTableColumnsOf(detailModule),
       },
       rows,
     );

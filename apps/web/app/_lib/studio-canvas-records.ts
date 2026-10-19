@@ -60,15 +60,11 @@ export type StudioCanvasRecordsResult =
        * its type the builder can read in the preview, or none when the preview has none yet.
        */
       sample?: Readonly<{ recordTypeName: string; title?: string }>;
-      /**
-       * The preview still runs an older revision's data shape and is moving to this one: blocks
-       * whose query it does not have yet have no records here; read again shortly.
-       */
-      behind: boolean;
     }>
   | Readonly<{ kind: "conflict" }>
   /** The builder may not edit or preview this application, so the canvas reads no records. */
   | Readonly<{ kind: "refused" }>
+  /** The preview does not run this revision's data shape yet: read once it is ready. */
   | Readonly<{ kind: "following" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
@@ -93,7 +89,11 @@ type StudioPreview = Extract<
   Awaited<ReturnType<typeof openStudioPreviewRead>>,
   { kind: "available" }
 >;
-type CanvasSample = Readonly<{ recordTypeName: string; recordId?: string; title?: string }>;
+type CanvasSample = Readonly<{
+  recordTypeName: string;
+  recordId?: string;
+  title?: string;
+}>;
 
 /**
  * The first record of a page's record type the builder can read in the preview, by its title, as a
@@ -143,7 +143,11 @@ const readSample = async (
   const first = read.value.choices[0];
   return first === undefined
     ? { recordTypeName: record.singularLabel }
-    : { recordTypeName: record.singularLabel, recordId: first.recordId, title: first.title };
+    : {
+        recordTypeName: record.singularLabel,
+        recordId: first.recordId,
+        title: first.title,
+      };
 };
 
 /**
@@ -190,7 +194,9 @@ export const readStudioCanvasRecords = async (
           );
     const zone =
       page === undefined || address === undefined ? undefined : sourcePageSlotAt(page, address);
-    const slot = pageCompiledSlotsFor(draft.source, content)[request.pageAlias]?.[request.area];
+    const slot = pageCompiledSlotsFor(draft.source, content, request.pageAlias)[
+      request.pageAlias
+    ]?.[request.area];
     if (
       page === undefined ||
       compiledPage === undefined ||
@@ -202,7 +208,10 @@ export const readStudioCanvasRecords = async (
     placementAliases(zone.items, slot, aliases);
 
     // The draft's page, drawn as the running page reads it: its content is this area's blocks.
-    const areaPage = { ...compiledPage, composition: { root: { props: {} }, content: slot } };
+    const areaPage = {
+      ...compiledPage,
+      composition: { root: { props: {} }, content: slot },
+    };
     // A detail page shows one record, named by its address in the running application. The canvas
     // shows the first record of its type the builder can read in the preview, as if it were opened.
     const subjectType =
@@ -258,7 +267,10 @@ export const readStudioCanvasRecords = async (
       dependencies,
       subjectId,
       readSubject: (recordTypeId: string, recordId: string) =>
-        (subjectRead ??= services.subjects.read(session, selection, { recordTypeId, recordId })),
+        (subjectRead ??= services.subjects.read(session, selection, {
+          recordTypeId,
+          recordId,
+        })),
       linkTiles: services.linkTiles,
       queryNotices: services.queryNotices,
       boardContinuation: undefined,
@@ -286,7 +298,6 @@ export const readStudioCanvasRecords = async (
       pageAlias: request.pageAlias,
       area: request.area,
       records,
-      behind: preview.behind,
       ...(sample === undefined
         ? {}
         : {

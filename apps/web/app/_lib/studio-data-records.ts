@@ -56,8 +56,6 @@ export type StudioDataRecordsResult =
       rows: readonly Readonly<{ id: string; cells: Readonly<Record<string, string>> }>[];
       next?: string;
       previous?: string;
-      /** Read from the preview while it still runs an older revision's data shape: read again shortly. */
-      behind: boolean;
     }>
   /** A query that groups records or adds totals: its groups, each with its count and totals, and its overall totals. */
   | Readonly<{
@@ -79,11 +77,10 @@ export type StudioDataRecordsResult =
       previous?: string;
       totalRowCount: number;
       totals: readonly StudioDataTotal[];
-      behind: boolean;
     }>
   /** The saved draft revision does not have this module, record type or query: save first. */
   | Readonly<{ kind: "not_saved" }>
-  /** The preview is still moving to the saved revision that has this: read again shortly. */
+  /** The preview does not run the saved revision's data shape yet: read once it is ready. */
   | Readonly<{ kind: "following" }>
   /** The saved draft changed since the revision the request names: read again for the current one. */
   | Readonly<{ kind: "conflict" }>
@@ -195,9 +192,9 @@ export const readStudioDataRecords = async (
     signal?.throwIfAborted();
     if (preview.kind !== "available") return preview;
 
-    const { context, selection, services, behind } = preview;
-    // What the preview does not have yet, while it still moves to this revision, follows shortly.
-    const missing = behind ? ({ kind: "following" } as const) : ({ kind: "not_saved" } as const);
+    const { context, selection, services } = preview;
+    // The preview runs this revision's data shape, so what it does not have is not saved.
+    const missing = { kind: "not_saved" } as const;
     const module = context.releaseSet.modules.find(
       (candidateModule) => candidateModule.definitionKey === request.moduleKey,
     );
@@ -209,8 +206,7 @@ export const readStudioDataRecords = async (
       request.queryKey === undefined
         ? plainQueryOf(module, record)
         : module.content.queries.find((candidateQuery) => candidateQuery.key === request.queryKey);
-    if (query === undefined)
-      return request.queryKey === undefined && !behind ? { kind: "no_query" } : missing;
+    if (query === undefined) return request.queryKey === undefined ? { kind: "no_query" } : missing;
     const queryRecord =
       query.recordType.state === "resolved"
         ? context.releaseSet.modules
@@ -288,7 +284,6 @@ export const readStudioDataRecords = async (
         });
       return {
         kind: "summary",
-        behind,
         queryLabel: label,
         totalRowCount: completed.totalRowCount,
         totals: totalsOf(completed.aggregates),
@@ -355,7 +350,6 @@ export const readStudioDataRecords = async (
     );
     return {
       kind: "available",
-      behind,
       queryLabel: label,
       columns: fields.map((field) => ({ key: field.key, label: field.label })),
       ...(title === undefined ? {} : { titleColumn: title.key }),

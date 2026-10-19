@@ -1,10 +1,12 @@
 import type { readStudioCanvasRecords as canvasRead } from "../../_lib/studio-canvas-records";
 import type { readStudioDataRecords as dataRead } from "../../_lib/studio-data-records";
 import type { loadStudioApplicationDraft } from "../../_lib/studio-application-draft";
+import type { prepareStudioPreview as previewRead } from "../../_lib/studio-application-preview";
+import type { StudioViewRequest } from "./studio-view-request";
 
 const read = async <Result>(
   organizationId: string,
-  operation: "canvas" | "data" | "compile",
+  operation: "canvas" | "data" | "compile" | "preview",
   candidate: unknown,
   signal?: AbortSignal,
 ): Promise<Result> => {
@@ -32,5 +34,22 @@ export const readStudioDataRecords = (
   signal?: AbortSignal,
 ) => read<Awaited<ReturnType<typeof dataRead>>>(organizationId, "data", candidate, signal);
 
-export const reopenStudioApplication = (organizationId: string, rootId: string) =>
-  read<Awaited<ReturnType<typeof loadStudioApplicationDraft>>>(organizationId, "compile", rootId);
+/** Waits until the builder's preview runs a saved revision's data shape, preparing it when nothing else does. */
+export const prepareStudioPreview = (
+  organizationId: string,
+  candidate: Readonly<{ rootId: string; draftRevision: number }>,
+  signal?: AbortSignal,
+) => read<Awaited<ReturnType<typeof previewRead>>>(organizationId, "preview", candidate, signal);
+
+/** The saved draft's views for the requested editors, all projected from one compile of it. */
+export const reopenStudioApplication = (
+  organizationId: string,
+  rootId: string,
+  requests: readonly StudioViewRequest[],
+  expectedDraftRevision?: number,
+) =>
+  read<Awaited<ReturnType<typeof loadStudioApplicationDraft>>>(organizationId, "compile", {
+    rootId,
+    requests,
+    ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
+  });
