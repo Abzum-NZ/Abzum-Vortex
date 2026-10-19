@@ -219,7 +219,7 @@ export function StudioModuleEvents({
                 />
               }
             >
-              <Icon name="pencil" />
+              <Icon name="sliders-horizontal" />
             </TooltipTrigger>
             <TooltipContent>Edit event</TooltipContent>
           </Tooltip>
