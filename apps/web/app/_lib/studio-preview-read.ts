@@ -60,11 +60,19 @@ export const openStudioPreviewRead = async (
   organizationId: OrganizationId,
   rootId: ApplicationRootId,
   draftRevision: number,
+  signal?: AbortSignal,
 ): Promise<StudioPreviewRead> => {
   const state = await readStudioPreviewState(session, organizationId, rootId, draftRevision);
   if (state.kind === "refused") return { kind: "refused" };
   if (state.kind !== "read") return state;
-  const preview = await currentStudioPreview(session, organizationId, state.draft, state.preview, "read");
+  const preview = await currentStudioPreview(
+    session,
+    organizationId,
+    state.draft,
+    state.preview,
+    "read",
+    signal,
+  );
   if (preview.kind === "refused") return { kind: "refused" };
   if (preview.kind !== "available") return preview;
   const dependencies = requestDependencies();
@@ -72,42 +80,80 @@ export const openStudioPreviewRead = async (
   // Copied live records are read only once they are decided again by the builder's current live
   // access in the installed Application, at most every five minutes, as opening the preview does.
   if (preview.reconcileDue) {
-    const reconcile = () => humanOrganizationRequests(dependencies.identityAuthorityId).run(
-      session,
-      application,
-      async (transaction) => {
-        await createPreviewInstallationRepository(transaction).reconcile(preview.previewInstallationId);
-        return true;
-      },
-    );
+    const reconcile = () =>
+      humanOrganizationRequests(dependencies.identityAuthorityId).run(
+        session,
+        application,
+        async (transaction) => {
+          await createPreviewInstallationRepository(transaction).reconcile(
+            preview.previewInstallationId,
+          );
+          return true;
+        },
+      );
     let reconciled = await reconcile();
     if (reconciled.kind === "temporarily_unavailable" && reconciled.databaseCode === "40001") {
-      console.info("[studio] retrying preview reconcile after serialization conflict: STUDIO_PREVIEW_RECONCILE_RETRY");
+      console.info(
+        "[studio] retrying preview reconcile after serialization conflict: STUDIO_PREVIEW_RECONCILE_RETRY",
+      );
       reconciled = await reconcile();
     }
     if (reconciled.kind !== "available") {
-      console.error(`[studio] preview records unchecked: STUDIO_PREVIEW_RECORDS_UNCHECKED kind=${reconciled.kind}`);
-      return reconciled.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };
+      console.error(
+        `[studio] preview records unchecked: STUDIO_PREVIEW_RECORDS_UNCHECKED kind=${reconciled.kind}`,
+      );
+      return reconciled.kind === "temporarily_unavailable"
+        ? { kind: "temporarily_unavailable" }
+        : { kind: "refused" };
     }
   }
-  const selection: StudioPreviewSelection = { ...application, previewInstallationId: preview.previewInstallationId };
+  const selection: StudioPreviewSelection = {
+    ...application,
+    previewInstallationId: preview.previewInstallationId,
+  };
   const [firstInstalled, launcher] = await Promise.all([
     loadInstalledContext(session, dependencies, selection),
     loadOrganizationLauncher(session),
   ]);
-  const installed = firstInstalled.kind === "temporarily_unavailable" && firstInstalled.databaseCode === "40001"
-    ? await loadInstalledContext(session, dependencies, selection) : firstInstalled;
+  const installed =
+    firstInstalled.kind === "temporarily_unavailable" && firstInstalled.databaseCode === "40001"
+      ? await loadInstalledContext(session, dependencies, selection)
+      : firstInstalled;
   if (installed !== firstInstalled)
-    console.info("[studio] retried preview context after serialization conflict: STUDIO_PREVIEW_CONTEXT_RETRY");
+    console.info(
+      "[studio] retried preview context after serialization conflict: STUDIO_PREVIEW_CONTEXT_RETRY",
+    );
   if (installed.kind !== "available") {
-    console.error(`[studio] preview context unavailable: STUDIO_PREVIEW_CONTEXT_UNAVAILABLE kind=${installed.kind}`);
-    return installed.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };
+    console.error(
+      `[studio] preview context unavailable: STUDIO_PREVIEW_CONTEXT_UNAVAILABLE kind=${installed.kind}`,
+    );
+    return installed.kind === "temporarily_unavailable"
+      ? { kind: "temporarily_unavailable" }
+      : { kind: "refused" };
   }
-  const entry = launcher.kind === "available"
-    ? launcher.entries.find((candidate) => sameId(candidate.organizationId, organizationId)) : undefined;
-  if (entry === undefined) return launcher.kind === "available" ? { kind: "refused" } : { kind: "temporarily_unavailable" };
-  const services = createPlacementReadServices({ session, selection, dependencies,
-    continuationKey: getQueryContinuationKey(), tenantShortName: entry.tenantShortName,
-    organizationShortName: entry.organizationShortName });
-  return { kind: "available", draft: state.draft, behind: preview.behind, selection, context: installed.value, dependencies, services };
+  const entry =
+    launcher.kind === "available"
+      ? launcher.entries.find((candidate) => sameId(candidate.organizationId, organizationId))
+      : undefined;
+  if (entry === undefined)
+    return launcher.kind === "available"
+      ? { kind: "refused" }
+      : { kind: "temporarily_unavailable" };
+  const services = createPlacementReadServices({
+    session,
+    selection,
+    dependencies,
+    continuationKey: getQueryContinuationKey(),
+    tenantShortName: entry.tenantShortName,
+    organizationShortName: entry.organizationShortName,
+  });
+  return {
+    kind: "available",
+    draft: state.draft,
+    behind: preview.behind,
+    selection,
+    context: installed.value,
+    dependencies,
+    services,
+  };
 };

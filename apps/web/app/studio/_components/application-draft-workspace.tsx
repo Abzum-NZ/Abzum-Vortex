@@ -365,8 +365,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                 >
                   {canvasShown && canvas.centre}
                   {tab === "flows" && flows.centre}
-                  {/* The Data tab's centre keeps its paging and reads while another tab is open. */}
-                  <div hidden={tab !== "data"}>{data.centre}</div>
+                  {tab === "data" && data.centre}
                   {tab === "access" && access.centre}
                   <div hidden={tab !== "releases"}>{releases.centre}</div>
                 </div>

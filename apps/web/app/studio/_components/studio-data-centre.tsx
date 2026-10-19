@@ -389,26 +389,33 @@ function PreviewResults({
   }, [read, request, followUp]);
   useEffect(() => {
     latest.current = request;
+    const controller = new AbortController();
     void (async () => {
       let result: StudioDataRecordsResult;
       try {
-        result = await readStudioDataRecords(organizationId, {
-          rootId,
-          draftRevision,
-          moduleKey,
-          recordKey,
-          ...(queryKey === undefined ? {} : { queryKey }),
-          pageSize,
-          ...(page.token === undefined
-            ? {}
-            : { continuationToken: page.token, pageDirection: page.direction }),
-        });
+        result = await readStudioDataRecords(
+          organizationId,
+          {
+            rootId,
+            draftRevision,
+            moduleKey,
+            recordKey,
+            ...(queryKey === undefined ? {} : { queryKey }),
+            pageSize,
+            ...(page.token === undefined
+              ? {}
+              : { continuationToken: page.token, pageDirection: page.direction }),
+          },
+          controller.signal,
+        );
       } catch (error) {
+        if (controller.signal.aborted) return;
         console.error("[studio] reading data records failed", describeFailure(error));
         result = { kind: "temporarily_unavailable" };
       }
-      if (latest.current === request) setRead({ request, result });
+      if (!controller.signal.aborted && latest.current === request) setRead({ request, result });
     })();
+    return () => controller.abort();
   }, [
     organizationId,
     rootId,
@@ -709,7 +716,7 @@ export function StudioDataCentre({
             />
             {relationships}
           </TabsContent>
-          <TabsContent value="records">{results}</TabsContent>
+          <TabsContent value="records">{section === "records" && results}</TabsContent>
           <TabsContent value="rules">
             {rules ?? (
               <StudioDataEmpty

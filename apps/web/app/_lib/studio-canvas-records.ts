@@ -29,21 +29,32 @@ import { isStreamablePlacement, readPlacement } from "./application-page/placeme
 import { openStudioPreviewRead } from "./studio-preview-read";
 import type { PageDataState } from "./application-page/types";
 
-const requestSchema = z.object({
-  rootId: applicationRootIdSchema,
-  draftRevision: revisionSchema,
-  sourceFingerprint: fingerprintSchema,
-  pageAlias: z.string().min(1).max(160).regex(/^[a-z][a-z0-9_]*$/),
-  area: z.string().min(1).max(400),
-}).strict();
+const requestSchema = z
+  .object({
+    rootId: applicationRootIdSchema,
+    draftRevision: revisionSchema,
+    sourceFingerprint: fingerprintSchema,
+    pageAlias: z
+      .string()
+      .min(1)
+      .max(160)
+      .regex(/^[a-z][a-z0-9_]*$/),
+    area: z.string().min(1).max(400),
+  })
+  .strict();
 
 /**
  * The records the data blocks of one content area of a saved draft page show, by block name, for
  * exactly that draft revision, including a detail page's sample subject.
  */
 export type StudioCanvasRecordsResult =
-  | Readonly<{ kind: "available"; draftRevision: number; sourceFingerprint: string; pageAlias: string;
-      area: string; records: Readonly<Record<string, PageDataState>>;
+  | Readonly<{
+      kind: "available";
+      draftRevision: number;
+      sourceFingerprint: string;
+      pageAlias: string;
+      area: string;
+      records: Readonly<Record<string, PageDataState>>;
       /**
        * On a page of one record (a detail page), the record its blocks show: the first record of
        * its type the builder can read in the preview, or none when the preview has none yet.
@@ -53,7 +64,8 @@ export type StudioCanvasRecordsResult =
        * The preview still runs an older revision's data shape and is moving to this one: blocks
        * whose query it does not have yet have no records here; read again shortly.
        */
-      behind: boolean }>
+      behind: boolean;
+    }>
   | Readonly<{ kind: "conflict" }>
   /** The builder may not edit or preview this application, so the canvas reads no records. */
   | Readonly<{ kind: "refused" }>
@@ -61,8 +73,11 @@ export type StudioCanvasRecordsResult =
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 /** The compiled slot of one page area beside its stored items, and the block name of each compiled placement. */
-const placementAliases = (stored: readonly SourceItem[], compiled: readonly CompiledItem[],
-  aliases: Map<string, string>): void => {
+const placementAliases = (
+  stored: readonly SourceItem[],
+  compiled: readonly CompiledItem[],
+  aliases: Map<string, string>,
+): void => {
   if (stored.length !== compiled.length) throw new Error("STUDIO_CANVAS_RECORDS_SLOT_MISMATCH");
   stored.forEach((item, index) => {
     const compiledItem = compiled[index]!;
@@ -74,7 +89,10 @@ const placementAliases = (stored: readonly SourceItem[], compiled: readonly Comp
 };
 
 type Placement = ReturnType<typeof collectPlacements>[number];
-type StudioPreview = Extract<Awaited<ReturnType<typeof openStudioPreviewRead>>, { kind: "available" }>;
+type StudioPreview = Extract<
+  Awaited<ReturnType<typeof openStudioPreviewRead>>,
+  { kind: "available" }
+>;
 type CanvasSample = Readonly<{ recordTypeName: string; recordId?: string; title?: string }>;
 
 /**
@@ -88,26 +106,43 @@ const readSample = async (
   recordType: Readonly<{ moduleRootId: unknown; recordTypeId: unknown }>,
 ): Promise<CanvasSample | "temporarily_unavailable" | undefined> => {
   const module = preview.context.releaseSet.modules.find((candidate) =>
-    sameId(String(candidate.rootId), String(recordType.moduleRootId)));
+    sameId(String(candidate.rootId), String(recordType.moduleRootId)),
+  );
   const record = module?.content.recordTypes.find((candidate) =>
-    sameId(String(candidate.recordTypeId), String(recordType.recordTypeId)));
+    sameId(String(candidate.recordTypeId), String(recordType.recordTypeId)),
+  );
   if (module === undefined || record === undefined) return undefined;
-  const read = await createRecordChoiceReader(preview.services.queries).read(session, preview.selection, {
-    targets: [{ moduleRootId: String(module.rootId), recordTypeId: String(record.recordTypeId),
-      titleFieldId: String(record.titleFieldId), label: record.singularLabel }],
-    pageSize: 1,
-  });
+  const read = await createRecordChoiceReader(preview.services.queries).read(
+    session,
+    preview.selection,
+    {
+      targets: [
+        {
+          moduleRootId: String(module.rootId),
+          recordTypeId: String(record.recordTypeId),
+          titleFieldId: String(record.titleFieldId),
+          label: record.singularLabel,
+        },
+      ],
+      pageSize: 1,
+    },
+  );
   if (read.kind === "temporarily_unavailable") return "temporarily_unavailable";
   if (read.kind !== "available") {
-    console.error(`[studio] canvas sample record unread: STUDIO_CANVAS_SAMPLE_REFUSED cause=${read.kind}`);
+    console.error(
+      `[studio] canvas sample record unread: STUDIO_CANVAS_SAMPLE_REFUSED cause=${read.kind}`,
+    );
     return "temporarily_unavailable";
   }
   if (read.value.outcome !== "completed") {
-    console.error(`[studio] canvas sample record unread: STUDIO_CANVAS_SAMPLE_REFUSED cause=${read.value.reasonCode}`);
+    console.error(
+      `[studio] canvas sample record unread: STUDIO_CANVAS_SAMPLE_REFUSED cause=${read.value.reasonCode}`,
+    );
     return "temporarily_unavailable";
   }
   const first = read.value.choices[0];
-  return first === undefined ? { recordTypeName: record.singularLabel }
+  return first === undefined
+    ? { recordTypeName: record.singularLabel }
     : { recordTypeName: record.singularLabel, recordId: first.recordId, title: first.title };
 };
 
@@ -123,13 +158,20 @@ export const readStudioCanvasRecords = async (
   session: IdentitySession,
   candidateOrganizationId: string,
   candidate: unknown,
+  signal?: AbortSignal,
 ): Promise<StudioCanvasRecordsResult> => {
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
   const parsed = requestSchema.safeParse(candidate);
   if (!organization.success || !parsed.success) return { kind: "refused" };
   const request = parsed.data;
   try {
-    const preview = await openStudioPreviewRead(session, organization.data, request.rootId, request.draftRevision);
+    const preview = await openStudioPreviewRead(
+      session,
+      organization.data,
+      request.rootId,
+      request.draftRevision,
+      signal,
+    );
     if (preview.kind !== "available") return preview;
     const { draft, context, services, selection, dependencies } = preview;
     if (draft.sourceFingerprint !== request.sourceFingerprint) return { kind: "conflict" };
@@ -138,11 +180,21 @@ export const readStudioCanvasRecords = async (
     const pageIndex = draft.source.body.pages.findIndex((page) => page.id === request.pageAlias);
     const page = draft.source.body.pages[pageIndex];
     const compiledPage = content.pages[pageIndex] as PageDefinition | undefined;
-    const address = page === undefined ? undefined
-      : sourcePageSlotAddresses(page).find((candidateAddress) => candidateAddress.key === request.area);
-    const zone = page === undefined || address === undefined ? undefined : sourcePageSlotAt(page, address);
+    const address =
+      page === undefined
+        ? undefined
+        : sourcePageSlotAddresses(page).find(
+            (candidateAddress) => candidateAddress.key === request.area,
+          );
+    const zone =
+      page === undefined || address === undefined ? undefined : sourcePageSlotAt(page, address);
     const slot = pageCompiledSlotsFor(draft.source, content)[request.pageAlias]?.[request.area];
-    if (page === undefined || compiledPage === undefined || zone === undefined || slot === undefined)
+    if (
+      page === undefined ||
+      compiledPage === undefined ||
+      zone === undefined ||
+      slot === undefined
+    )
       return { kind: "refused" };
     const aliases = new Map<string, string>();
     placementAliases(zone.items, slot, aliases);
@@ -151,40 +203,72 @@ export const readStudioCanvasRecords = async (
     const areaPage = { ...compiledPage, composition: { root: { props: {} }, content: slot } };
     // A detail page shows one record, named by its address in the running application. The canvas
     // shows the first record of its type the builder can read in the preview, as if it were opened.
-    const subjectType = compiledPage.type === "detail" && compiledPage.recordType?.state === "resolved"
-      ? compiledPage.recordType : undefined;
-    const sample = subjectType === undefined ? undefined : await readSample(session, preview, subjectType);
+    const subjectType =
+      compiledPage.type === "detail" && compiledPage.recordType?.state === "resolved"
+        ? compiledPage.recordType
+        : undefined;
+    const sample =
+      subjectType === undefined ? undefined : await readSample(session, preview, subjectType);
     if (sample === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
     const subjectId = recordIdSchema.safeParse(sample?.recordId);
-    const parameters: Record<string, string> = subjectId.success ? { [pageSubjectParameter]: subjectId.data } : {};
-    const settingsOf = (placement: Placement) => placement.settings as Parameters<typeof readRecordDetailContract>[0];
+    const parameters: Record<string, string> = subjectId.success
+      ? { [pageSubjectParameter]: subjectId.data }
+      : {};
+    const settingsOf = (placement: Placement) =>
+      placement.settings as Parameters<typeof readRecordDetailContract>[0];
     // The page's own record, shown by a Record detail that reads no query.
-    const readsSubject = (placement: Placement) => subjectId.success && typeof placement.vortex.queryId !== "string" &&
+    const readsSubject = (placement: Placement) =>
+      subjectId.success &&
+      typeof placement.vortex.queryId !== "string" &&
       readRecordDetailContract(settingsOf(placement)) !== undefined;
     // A table whose query takes a value from the page's address is read only when the canvas has it.
-    const hasPageValues = (placement: Placement) => (readRecordsTableContract(settingsOf(placement))?.parameters ?? [])
-      .every((parameter) => parameter.source !== "page" ||
-        (parameter.pageParameter !== undefined && Object.hasOwn(parameters, parameter.pageParameter)));
+    const hasPageValues = (placement: Placement) =>
+      (readRecordsTableContract(settingsOf(placement))?.parameters ?? []).every(
+        (parameter) =>
+          parameter.source !== "page" ||
+          (parameter.pageParameter !== undefined &&
+            Object.hasOwn(parameters, parameter.pageParameter)),
+      );
     // A query the preview does not run yet is read once the preview has moved to this revision.
-    const placements = collectPlacements(areaPage).filter((placement) => readsSubject(placement) ||
-      (isStreamablePlacement(placement) && findModuleQuery(context, String(placement.vortex.queryId)) !== undefined &&
-        hasPageValues(placement)));
+    const placements = collectPlacements(areaPage).filter(
+      (placement) =>
+        readsSubject(placement) ||
+        (isStreamablePlacement(placement) &&
+          findModuleQuery(context, String(placement.vortex.queryId)) !== undefined &&
+          hasPageValues(placement)),
+    );
     const data: Record<string, PageDataState> = {};
     let subjectRead: ReturnType<typeof services.subjects.read> | undefined;
     const input = {
-      pageDefinition: compiledPage, pageSubjectRecordTypeId: subjectType === undefined ? undefined : String(subjectType.recordTypeId),
-      data, page: areaPage, context,
-      referenceChoiceInputs: [], referenceChoices: services.referenceChoices, session, selection,
+      pageDefinition: compiledPage,
+      pageSubjectRecordTypeId:
+        subjectType === undefined ? undefined : String(subjectType.recordTypeId),
+      data,
+      page: areaPage,
+      context,
+      referenceChoiceInputs: [],
+      referenceChoices: services.referenceChoices,
+      session,
+      selection,
       address: { application: { key: draft.key }, pageKey: page.key },
-      subjectType, parameters, dependencies, subjectId,
+      subjectType,
+      parameters,
+      dependencies,
+      subjectId,
       readSubject: (recordTypeId: string, recordId: string) =>
         (subjectRead ??= services.subjects.read(session, selection, { recordTypeId, recordId })),
       linkTiles: services.linkTiles,
-      queryNotices: services.queryNotices, boardContinuation: undefined, permittedApplicationKeys: undefined,
-      permittedApplicationsRead: undefined, queries: services.queries,
-      readCalendarSettings: services.readCalendarSettings, tables: services.tables,
-      resolveRecordLinks: services.recordLinkResolver(context), tableContinuation: undefined,
-      adoptSubjectRead: () => {}, markSubjectUnreadable: () => {},
+      queryNotices: services.queryNotices,
+      boardContinuation: undefined,
+      permittedApplicationKeys: undefined,
+      permittedApplicationsRead: undefined,
+      queries: services.queries,
+      readCalendarSettings: services.readCalendarSettings,
+      tables: services.tables,
+      resolveRecordLinks: services.recordLinkResolver(context),
+      tableContinuation: undefined,
+      adoptSubjectRead: () => {},
+      markSubjectUnreadable: () => {},
     };
     await Promise.all(placements.map((placement) => readPlacement(input, placement)));
     const records: Record<string, PageDataState> = {};
@@ -192,13 +276,30 @@ export const readStudioCanvasRecords = async (
       const alias = aliases.get(placementId.toLowerCase());
       if (alias !== undefined) records[alias] = state;
     }
-    return { kind: "available", draftRevision: request.draftRevision, sourceFingerprint: request.sourceFingerprint,
-      pageAlias: request.pageAlias, area: request.area, records, behind: preview.behind,
-      ...(sample === undefined ? {} : { sample: { recordTypeName: sample.recordTypeName,
-        ...(sample.recordId === undefined ? {} : { title: sample.title }) } }) };
+    return {
+      kind: "available",
+      draftRevision: request.draftRevision,
+      sourceFingerprint: request.sourceFingerprint,
+      pageAlias: request.pageAlias,
+      area: request.area,
+      records,
+      behind: preview.behind,
+      ...(sample === undefined
+        ? {}
+        : {
+            sample: {
+              recordTypeName: sample.recordTypeName,
+              ...(sample.recordId === undefined ? {} : { title: sample.title }),
+            },
+          }),
+    };
   } catch (error) {
-    if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING") return { kind: "conflict" };
-    console.error(`[studio] canvas records unavailable: STUDIO_CANVAS_RECORDS_FAILED cause=${describeFailure(error)}`);
+    signal?.throwIfAborted();
+    if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING")
+      return { kind: "conflict" };
+    console.error(
+      `[studio] canvas records unavailable: STUDIO_CANVAS_RECORDS_FAILED cause=${describeFailure(error)}`,
+    );
     return { kind: "temporarily_unavailable" };
   }
 };

@@ -8,6 +8,7 @@ import {
   canonicalJson,
   compiledItemSlots,
   readSourceItem,
+  readRecordDetailContract,
   releaseSettingDeclarations,
   setSourcePageSlot,
   sourcePageSlotAddresses,
@@ -95,10 +96,18 @@ const recordKeys = (
       const release = storedItemRelease(catalogue, item);
       if (release === undefined) continue;
       const reading = readSourceItem(item, release);
-      keys.set(
-        item.props.id,
-        canonicalJson([item.props.vortex.block, item.props.vortex.query ?? null, reading.settings]),
-      );
+      if (
+        item.props.vortex.query !== undefined ||
+        readRecordDetailContract(reading.settings) !== undefined
+      )
+        keys.set(
+          item.props.id,
+          canonicalJson([
+            item.props.vortex.block,
+            item.props.vortex.query ?? null,
+            reading.settings,
+          ]),
+        );
       for (const [, slot] of reading.slots) if (slot.items !== undefined) visit(slot.items);
     }
   };
@@ -194,7 +203,8 @@ export type ApplicationPagePuckEditorProps = Readonly<{
    * Reads the records of one content area's data blocks for the saved revision `compiledSource`
    * is. The canvas reads again whenever a newer saved revision is compiled.
    */
-  readRecords?: ((area: string) => Promise<StudioCanvasRecordsRead>) | undefined;
+  readRecords?:
+    ((area: string, signal: AbortSignal) => Promise<StudioCanvasRecordsRead>) | undefined;
   /** A newer saved revision than `compiledSource` is being compiled. */
   updating?: boolean | undefined;
   /** The role the canvas previews, hiding what it may not see; `null` or absent is the design view. */
@@ -464,10 +474,11 @@ function ApplicationPageSlotPuckEditor({
   const followUp =
     followed.source === compiledSource && followed.area === at.key ? followed.count : 0;
   useEffect(() => {
-    if (readRecords === undefined) return;
+    if (readRecords === undefined || savedKeys.size === 0) return;
     let cancelled = false;
+    const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    readRecords(at.key).then(
+    readRecords(at.key, controller.signal).then(
       (read) => {
         if (cancelled) return;
         const again = read.behind === true && followUp < 30;
@@ -481,6 +492,7 @@ function ApplicationPageSlotPuckEditor({
           );
       },
       (error: unknown) => {
+        if (controller.signal.aborted) return;
         console.error("[studio] the canvas records could not be read", error);
         if (!cancelled)
           setRecordsRead({
@@ -493,6 +505,7 @@ function ApplicationPageSlotPuckEditor({
     );
     return () => {
       cancelled = true;
+      controller.abort();
       if (timer !== undefined) clearTimeout(timer);
     };
   }, [readRecords, compiledSource, at.key, followUp]);

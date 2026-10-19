@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { Button } from "../components/button";
 import { ChevronsDown, RotateCcw } from "lucide-react";
 import { StudioReferencePicker } from "./studio-reference-picker";
@@ -31,6 +31,7 @@ export type StudioRecordReader = (
     recordType: string;
     after?: string;
   }>,
+  signal?: AbortSignal,
 ) => Promise<StudioRecordPage>;
 
 type RecordValue = Readonly<{ recordType: string; recordId: string }>;
@@ -84,34 +85,42 @@ export function StudioRecordReferenceControl({
   }
   const [loaded, setLoaded] = useState<Loaded>({ state: "loading" });
   const [records, setRecords] = useState<readonly StudioRecordChoice[]>([]);
+  const demand = useRef<AbortController | null>(null);
   const [attempt, setAttempt] = useState(0);
   const recordId = value?.recordType === recordType ? value.recordId : undefined;
 
   useEffect(() => {
     if (read === null || recordType === "") return;
     let cancelled = false;
+    const controller = new AbortController();
+    demand.current = controller;
     setLoaded({ state: "loading" });
     setRecords([]);
-    read({ recordType }).then(
+    read({ recordType }, controller.signal).then(
       (page) => {
         if (cancelled) return;
         setLoaded({ state: "read", page });
         if (page.kind === "available") setRecords(page.records);
       },
       (error: unknown) => {
+        if (controller.signal.aborted) return;
         console.error(`[studio] record choices could not be read: setting=${id}`, error);
         if (!cancelled) setLoaded({ state: "failed" });
       },
     );
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [read, recordType, id, attempt]);
 
   const more = async (after: string) => {
     if (read === null) return;
     try {
-      const page = await read({ recordType, after });
+      const controller = demand.current;
+      if (controller === null || controller.signal.aborted) return;
+      const page = await read({ recordType, after }, controller.signal);
+      if (controller.signal.aborted) return;
       setLoaded({ state: "read", page });
       if (page.kind === "available")
         setRecords((previous) => [
@@ -121,6 +130,7 @@ export function StudioRecordReferenceControl({
           ),
         ]);
     } catch (error) {
+      if (demand.current?.signal.aborted) return;
       console.error(`[studio] more record choices could not be read: setting=${id}`, error);
       setLoaded({ state: "failed" });
     }
