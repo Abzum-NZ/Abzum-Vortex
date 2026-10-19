@@ -464,9 +464,10 @@ function ApplicationPageSlotPuckEditor({
   useEffect(() => {
     const element = well.current;
     if (element === null) return;
-    const observer = new IntersectionObserver(([entry]) =>
-      setVisible(entry?.isIntersecting === true),
-    );
+    // An area reads once it has been on screen; scrolling it away later does not read it again.
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry?.isIntersecting === true) setVisible(true);
+    });
     observer.observe(element);
     return () => observer.disconnect();
   }, [shown !== undefined]);
