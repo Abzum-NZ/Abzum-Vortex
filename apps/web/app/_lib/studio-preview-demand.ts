@@ -1,9 +1,6 @@
 import "server-only";
 
-import { z } from "zod";
 import {
-  builderKeySchema,
-  namespacedKeySchema,
   previewDemandSchema,
   sameId,
   type ApplicationContent,
@@ -14,25 +11,13 @@ import {
 } from "@vortex/platform/schema";
 import type { collectPlacements } from "./application-page/placement-helpers";
 
-/** Readers name authored addresses only. Record identities and dependency closure stay server-side. */
-export const studioPreviewReaderSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("canvas"),
-      pageAlias: builderKeySchema,
-      areas: z.array(z.string().min(1).max(400)).min(1).max(100),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("records"),
-      moduleKey: namespacedKeySchema,
-      recordKey: builderKeySchema,
-      queryKey: builderKeySchema.optional(),
-    })
-    .strict(),
-]);
-export type StudioPreviewReader = z.infer<typeof studioPreviewReaderSchema>;
+/**
+ * A visible Studio reader, built on the server from its validated read request: authored addresses
+ * only. Record identities and the dependency closure stay server-side.
+ */
+export type StudioPreviewReader =
+  | Readonly<{ kind: "canvas"; pageAlias: string; areas: readonly string[] }>
+  | Readonly<{ kind: "records"; moduleKey: string; recordKey: string; queryKey?: string }>;
 
 type Module = Readonly<{ key: string; content: ModuleContent }>;
 type Query = ApplicationContent["queries"][number];

@@ -15,11 +15,12 @@ import {
 } from "@vortex/platform/schema";
 import { humanOrganizationRequests } from "./server-composition";
 import {
+  materializePreviewDemand,
   readStudioPreviewState,
   studioPreviewRunsDraft,
-  readStudioPreviewDemand,
-  readStudioDemandReadiness,
+  studioReaderDemand,
 } from "./studio-application-preview";
+import { compiledStudioDraft } from "./studio-compiled-drafts";
 import { loadInstalledContext, requestDependencies } from "./application-page/load";
 import { createPlacementReadServices } from "./application-page/placement-services";
 import { loadOrganizationLauncher } from "./organization-context";
@@ -39,7 +40,8 @@ export type StudioPreviewSelection = Readonly<{
  * installation of that draft, with its runtime context and the running application's own readers.
  * It reads only a preview that already runs the saved revision's data shape: a save moves the
  * preview on the server and Studio's readers wait for it to be ready before they read, so a read
- * never prepares or moves a preview. Presentation-only edits reuse the existing records. Every read in it runs under
+ * never prepares or moves a preview; it materializes only its own reader's demand. Presentation-only
+ * edits reuse the existing records. Every read in it runs under
  * the builder's preview access, as the preview itself decides it: the draft's roles for the
  * Application's own permissions, the builder's own live access for people and every other system
  * projection, and no record-share authority.
@@ -73,7 +75,11 @@ export const openStudioPreviewRead = async (
   signal?: AbortSignal,
 ): Promise<StudioPreviewRead> => {
   signal?.throwIfAborted();
-  const state = await readStudioPreviewState(session, organizationId, rootId, draftRevision);
+  // The retained compilation is looked up by revision, beside the draft and preview state.
+  const [state, compiled] = await Promise.all([
+    readStudioPreviewState(session, organizationId, rootId, draftRevision),
+    compiledStudioDraft(session, organizationId, { rootId, draftRevision }),
+  ]);
   signal?.throwIfAborted();
   if (state.kind === "refused") return { kind: "refused" };
   if (state.kind !== "read") return state;
@@ -81,7 +87,8 @@ export const openStudioPreviewRead = async (
   if (runs === "newer") return { kind: "conflict" };
   const preview = state.preview;
   if (runs !== "ready" || preview === undefined) return { kind: "following" };
-  const derived = await readStudioPreviewDemand(session, organizationId, state.draft, reader);
+  if (typeof compiled === "string") return { kind: compiled };
+  const derived = studioReaderDemand(state.draft, compiled, reader);
   if (derived.kind !== "derived") return derived;
   const dependencies = requestDependencies();
   const application = { organizationId, applicationRootId: rootId };
@@ -121,14 +128,19 @@ export const openStudioPreviewRead = async (
     previewInstallationId: preview.previewInstallationId,
   };
   signal?.throwIfAborted();
-  const [readiness, firstInstalled, launcher] = await Promise.all([
-    readStudioDemandReadiness(session, organizationId, rootId, preview, derived.demand),
+  // This reader's own demand is materialized while the preview's context loads.
+  const [materialized, firstInstalled, launcher] = await Promise.all([
+    materializePreviewDemand(session, organizationId, rootId, preview, derived.demand, signal),
     loadInstalledContext(session, dependencies, selection),
     loadOrganizationLauncher(session),
   ]);
   signal?.throwIfAborted();
-  if (readiness.kind !== "checked") return readiness;
-  if (!readiness.ready) return { kind: "following" };
+  if (materialized.kind !== "ready")
+    return materialized.kind === "conflict"
+      ? { kind: "following" }
+      : materialized.kind === "refused"
+        ? { kind: "refused" }
+        : { kind: "temporarily_unavailable" };
   const installed =
     firstInstalled.kind === "temporarily_unavailable" && firstInstalled.databaseCode === "40001"
       ? await loadInstalledContext(session, dependencies, selection)
@@ -165,7 +177,7 @@ export const openStudioPreviewRead = async (
   return {
     kind: "available",
     draft: state.draft,
-    compiled: derived.compiled,
+    compiled,
     selection,
     context: installed.value,
     dependencies,

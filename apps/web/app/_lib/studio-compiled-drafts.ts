@@ -22,7 +22,7 @@ import { studioDraftTargetFacts } from "./studio-application-draft";
 export const compiledStudioDraft = async (
   session: IdentitySession,
   organizationId: OrganizationId,
-  draft: StoredApplicationDefinitionDraft,
+  draft: Pick<StoredApplicationDefinitionDraft, "rootId" | "draftRevision">,
 ): Promise<ApplicationDraftCompilation | "refused" | "temporarily_unavailable" | "conflict"> => {
   const result = await humanOrganizationRequests().run(
     session,

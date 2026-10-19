@@ -422,11 +422,6 @@ export function useStudioCanvasTab({
         draft.preview,
         view.draftRevision,
         view.previewShape,
-        {
-          kind: "records",
-          moduleKey: recordType.slice(0, separator),
-          recordKey: recordType.slice(separator + 1),
-        },
         signal,
         () =>
           readStudioDataRecords(
@@ -500,7 +495,6 @@ export function useStudioCanvasTab({
         draft.preview,
         view.draftRevision,
         view.previewShape,
-        { kind: "canvas", pageAlias, areas: [area] },
         signal,
         () =>
           readStudioCanvasRecords(
