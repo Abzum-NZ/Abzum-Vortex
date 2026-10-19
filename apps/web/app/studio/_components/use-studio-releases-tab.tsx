@@ -233,6 +233,21 @@ export function useStudioReleasesTab({
           parsed.data.confirmation.expectedDraftRevision === snapshot.draftRevision &&
           parsed.data.confirmation.sourceFingerprint === snapshot.sourceFingerprint
         ) {
+          // A workspace opened on Releases or an unselected Structure page has no block catalogue.
+          // Read the existing authoring resources before judging where its new fields can go.
+          if (
+            parsed.data.addedFields.length > 0 &&
+            latest.current.readCatalogue().releases.length === 0
+          ) {
+            const resources = await latest.current.loadAuthoringResources();
+            if (superseded()) return { kind: "discarded" };
+            if (resources === null) {
+              setProblem(
+                "The pages could not be checked for new fields. Close this window and try again.",
+              );
+              return { kind: "unverified" };
+            }
+          }
           setPrepared({
             confirmation: parsed.data.confirmation,
             componentLabels: parsed.data.componentLabels,
