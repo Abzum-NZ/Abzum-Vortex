@@ -15,6 +15,7 @@ declare
   record_type_key text;
   type_meta jsonb;
   field_ids jsonb;
+  pending_ids jsonb;
   definitions jsonb := '{}'::jsonb;
   targets jsonb := '{}'::jsonb;
 begin
@@ -38,6 +39,11 @@ begin
     if installation is null or installation ->> 'outcome' = 'refused' then
       raise exception using errcode = '42501', message = 'Preview Record context is unavailable';
     end if;
+    -- A preview works out only the record types it was seeded with whose derived fields are not
+    -- worked out yet, as its seed ledger lists them.
+    pending_ids := vortex_definition.read_preview_pending_derived_internal(
+      (installation ->> 'previewInstallationId')::uuid
+    );
   end if;
   plan := vortex_record.resolve_installation_access_plan_internal(installation);
 
@@ -69,7 +75,9 @@ begin
       where field.value ->> 'type' = 'total'
         or (field.value ->> 'type' = 'calculation'
           and field.value #>> '{settings,evaluation}' is distinct from 'read_time');
-      if pg_catalog.jsonb_array_length(field_ids) > 0 then
+      -- Every definition stays listed: a total reads its source record type's definition.
+      if pg_catalog.jsonb_array_length(field_ids) > 0
+        and (pending_ids is null or pending_ids ? record_type_key) then
         targets := targets || pg_catalog.jsonb_build_object(record_type_key, field_ids);
       end if;
     end loop;
@@ -92,4 +100,4 @@ revoke all on function vortex_record.derived_field_backfill_scope_internal()
 grant execute on function vortex_record.derived_field_backfill_scope_internal()
   to vortex_record_adapter;
 comment on function vortex_record.derived_field_backfill_scope_internal() is
-  'Private derived-field backfill scope of the installation consumer''s live installation or the builder''s preview installation: each record type''s definition and the totals and stored calculations a backfill works out for its existing records.';
+  'Private derived-field backfill scope of the installation consumer''s live installation or the builder''s preview installation: each record type''s definition and the totals and stored calculations a backfill works out for its existing records. A preview lists only the seeded record types whose derived fields are not worked out yet.';

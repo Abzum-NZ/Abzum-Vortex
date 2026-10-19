@@ -1,8 +1,11 @@
 import { z } from "zod";
 import {
   applicationRootIdSchema,
+  containedComponentIdSchema,
+  fieldIdSchema,
   namespacedKeySchema,
   organizationIdSchema,
+  recordTypeIdSchema,
   revisionSchema,
   timestampSchema,
 } from "../catalogue/identifiers";
@@ -34,6 +37,49 @@ export const previewInstallationRefreshRequestSchema = z
   })
   .strict();
 
+/**
+ * What the visible readers of a preview need: the record types they read, the fields they show and
+ * the relationship paths their predicates and sorts follow. The database decides what else the
+ * preview needs for them.
+ */
+export const previewDemandSchema = z
+  .object({
+    recordTypes: z
+      .array(
+        z
+          .object({
+            recordTypeId: recordTypeIdSchema,
+            fieldIds: z.array(fieldIdSchema).max(500),
+            relationshipPaths: z.array(z.array(containedComponentIdSchema).min(1).max(8)).max(50),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(201),
+  })
+  .strict();
+
+/** Seeds the builder's preview, in the installed Application's context, with what a demand needs. */
+export const previewInstallationMaterializeRequestSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    previewInstallationId: previewInstallationIdSchema,
+    expectedDraftRevision: revisionSchema,
+    demand: previewDemandSchema,
+  })
+  .strict();
+
+/** One seed: the record types the demand needs, those it seeded now and those still worked out. */
+export const previewSeedResultSchema = z
+  .object({
+    draftRevision: revisionSchema,
+    closure: z.array(recordTypeIdSchema),
+    seeded: z.array(recordTypeIdSchema),
+    pendingDerived: z.array(recordTypeIdSchema),
+  })
+  .strict();
+
 /** One preview of an Application draft: the draft revision it runs and the release it pins. */
 export const previewInstallationSchema = z
   .object({
@@ -44,6 +90,12 @@ export const previewInstallationSchema = z
     applicationReleaseRevision: revisionSchema,
     createdAt: timestampSchema,
     expiresAt: timestampSchema,
+    /** Whether its builder's live records reach it through the installed Application. */
+    seedable: z.boolean(),
+    /** Every record type it has storage for: the record types a demand may name. */
+    recordTypeIds: z.array(recordTypeIdSchema),
+    /** The seeded record types whose totals and stored calculations are worked out. */
+    derivedReadyRecordTypeIds: z.array(recordTypeIdSchema),
   })
   .strict()
   .refine((value) => Date.parse(value.expiresAt) > Date.parse(value.createdAt), {
@@ -60,8 +112,12 @@ export const previewApplicationIdentitySchema = z
     definitionKey: namespacedKeySchema,
     draftRevision: revisionSchema,
     expiresAt: timestampSchema,
-    /** Whether the preview holds copies of live records, which are decided again on opening. */
-    seeded: z.boolean(),
+    /** Whether its builder's live records reach it through the installed Application. */
+    seedable: z.boolean(),
+    /** The record types it was seeded with; their copied live records are decided again on opening. */
+    seededRecordTypeIds: z.array(recordTypeIdSchema),
+    /** The seeded record types whose totals and stored calculations are worked out. */
+    derivedReadyRecordTypeIds: z.array(recordTypeIdSchema),
   })
   .strict();
 
@@ -70,6 +126,8 @@ export const builderPreviewInstallationSchema = previewApplicationIdentitySchema
   .extend({
     /** The data shape of the draft revision it runs; absent for a preview made before shapes. */
     shapeFingerprint: shapeFingerprintSchema.nullable(),
+    /** Every record type it has storage for: the record types a demand may name. */
+    recordTypeIds: z.array(recordTypeIdSchema),
     /** Whether its copied live records are due to be decided again before a read. */
     reconcileDue: z.boolean(),
   })
@@ -81,6 +139,11 @@ export type PreviewInstallationCreateRequest = z.infer<
 export type PreviewInstallationRefreshRequest = z.infer<
   typeof previewInstallationRefreshRequestSchema
 >;
+export type PreviewDemand = z.infer<typeof previewDemandSchema>;
+export type PreviewInstallationMaterializeRequest = z.infer<
+  typeof previewInstallationMaterializeRequestSchema
+>;
+export type PreviewSeedResult = z.infer<typeof previewSeedResultSchema>;
 export type BuilderPreviewInstallation = z.infer<typeof builderPreviewInstallationSchema>;
 export type PreviewInstallation = z.infer<typeof previewInstallationSchema>;
 export type PreviewApplicationIdentity = z.infer<typeof previewApplicationIdentitySchema>;

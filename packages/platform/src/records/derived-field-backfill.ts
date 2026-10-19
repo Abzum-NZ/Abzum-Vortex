@@ -89,6 +89,23 @@ const workOut = (
   return values;
 };
 
+/** Writes one page's worked-out values; with the last page, the record type is worked out. */
+const apply = async (
+  transaction: RequestDatabaseTransaction,
+  recordTypeId: string,
+  writes: readonly BackfillWrite[],
+  lastPage: boolean,
+): Promise<number> =>
+  Number(
+    one(
+      await transaction.query<Row>`
+        select vortex_record.apply_derived_field_backfill(
+          ${recordTypeId}::uuid, ${JSON.stringify(writes)}::text::jsonb, ${lastPage}::boolean
+        ) as backfill
+      `,
+    ),
+  );
+
 /** Computes and writes one locked page; the caller commits it with its durable cursor. */
 export const backfillDerivedFieldPage = async (
   transaction: RequestDatabaseTransaction,
@@ -104,8 +121,11 @@ export const backfillDerivedFieldPage = async (
     select vortex_record.read_derived_field_backfill(${recordTypeId}::uuid, ${after}::uuid) as backfill
   `,
   ) as BackfillPage;
-  if (page.records.length === 0) return { processed: 0, written: 0, after, complete: true };
-  let written = 0;
+  // The last page's write also records, for a preview, that the record type is worked out.
+  if (page.records.length === 0) {
+    await apply(transaction, recordTypeId, [], true);
+    return { processed: 0, written: 0, after, complete: true };
+  }
   const recordType = recordTypeDefinitionSchema.parse(page.recordType);
   const sources = page.sources.map((source) => ({
     relationshipId: source.relationshipId,
@@ -131,28 +151,21 @@ export const backfillDerivedFieldPage = async (
         values: changed,
       });
   }
-  if (writes.length > 0) {
-    const applied = one(
-      await transaction.query<Row>`
-          select vortex_record.apply_derived_field_backfill(
-            ${recordTypeId}::uuid, ${JSON.stringify(writes)}::text::jsonb
-          ) as backfill
-        `,
-    );
-    written = Number(applied);
-  }
+  const complete = page.records.length < pageSize;
   return {
     processed: page.records.length,
-    written,
+    written:
+      writes.length > 0 || complete ? await apply(transaction, recordTypeId, writes, complete) : 0,
     after: page.records[page.records.length - 1]!.recordId,
-    complete: page.records.length < pageSize,
+    complete,
   };
 };
 
 /**
  * Works out the totals and stored calculations that the request's installation has just brought
  * into storage, for every existing record: after an upgrade or installation activates a release,
- * and after a preview is seeded with copies of live records. It is the one backfill of derived
+ * and after a preview is seeded with copies of live records, for the seeded record types whose
+ * derived fields are not worked out yet. It is the one backfill of derived
  * fields. The database chooses the record types and fields and locks each page; this applies the
  * engines a save uses and writes back only values that differ. A calculation failure aborts the page so the durable consumer can report and retry it.
  */

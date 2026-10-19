@@ -9,12 +9,15 @@ import {
 import {
   identitySessionSchema,
   previewInstallationCreateRequestSchema,
+  previewInstallationMaterializeRequestSchema,
   previewInstallationRefreshRequestSchema,
   type IdentitySession,
   type OrganizationSelectionCandidate,
   type PreviewInstallation,
   type PreviewInstallationCreateRequest,
+  type PreviewInstallationMaterializeRequest,
   type PreviewInstallationRefreshRequest,
+  type PreviewSeedResult,
   type SelectedOrganizationScope,
   type SessionContext,
   sameId,
@@ -128,7 +131,8 @@ const toCoordinatorError = (
  * Establish permanent owned identities in a short authorised request, compile a read-only plan
  * without holding draft write locks, then atomically apply its exact source/dependency bindings.
  * Compatible refreshes keep the preview and its records; incompatible shapes request replacement.
- * Every phase checks fresh authority. Only the installed Application context can seed live records.
+ * Every phase checks fresh authority. Only the installed Application context can seed live records,
+ * and only what a demand needs.
  */
 export const createPreviewInstallationCoordinator = (
   dependencies: PreviewInstallationCoordinatorDependencies,
@@ -229,19 +233,9 @@ export const createPreviewInstallationCoordinator = (
           createPreviewInstallationRepository(transaction).create(request.data, releases),
         signal,
       );
-      const { previewInstallationId } = created.installation;
-      // The builder's live records are read as the builder reads them in the installed
-      // Application; an Application with no installation has none to seed.
-      if (created.seedable)
-        await builderRequest(
-          session.data,
-          { organizationId, applicationRootId },
-          applicationRootId,
-          (transaction) =>
-            createPreviewInstallationRepository(transaction).seed(previewInstallationId),
-          signal,
-        );
+      const { previewInstallationId } = created;
       // Last, in the preview itself: the release set it runs. A preview without it never runs.
+      // Its records are seeded later, by demand, through materialize.
       return builderRequest(
         session.data,
         { organizationId, applicationRootId, previewInstallationId },
@@ -252,13 +246,55 @@ export const createPreviewInstallationCoordinator = (
             dependencies.releaseCatalogue,
             previewInstallationId,
           );
-          // The copied records hold the live values only: their totals and stored calculations
-          // are worked out afresh for the draft's definitions.
-          if (created.seedable) await backfillDerivedFields(transaction, new Date().toISOString());
-          return created.installation;
+          return created;
         },
         signal,
       );
+    },
+
+    /**
+     * Seeds the builder's preview with what a demand needs, then works out the derived fields of
+     * the record types still pending. The database decides what the demand needs and seeds each
+     * record type once; demanding seeded record types again only finishes a pending backfill.
+     */
+    async materialize(
+      sessionCandidate: IdentitySession,
+      requestCandidate: PreviewInstallationMaterializeRequest,
+      signal?: AbortSignal,
+    ): Promise<PreviewSeedResult> {
+      const session = identitySessionSchema.safeParse(sessionCandidate);
+      const request = previewInstallationMaterializeRequestSchema.safeParse(requestCandidate);
+      if (!session.success || !request.success)
+        throw new DefinitionError("INVALID_PREVIEW_INSTALLATION_COMMAND");
+      const { organizationId, applicationRootId, previewInstallationId, expectedDraftRevision } =
+        request.data;
+      // The builder's live records are read as the builder reads them in the installed Application.
+      const seeded = await builderRequest(
+        session.data,
+        { organizationId, applicationRootId },
+        applicationRootId,
+        async (transaction) => {
+          const result = await createPreviewInstallationRepository(transaction).seed(
+            previewInstallationId,
+            request.data.demand,
+          );
+          if (result.draftRevision !== expectedDraftRevision)
+            throw new DefinitionError("PREVIEW_INSTALLATION_STALE");
+          return result;
+        },
+        signal,
+      );
+      if (seeded.pendingDerived.length === 0) return seeded;
+      // The copied records hold the live values only: their totals and stored calculations are
+      // worked out afresh for the draft's definitions, in the preview itself.
+      await builderRequest(
+        session.data,
+        { organizationId, applicationRootId, previewInstallationId },
+        applicationRootId,
+        (transaction) => backfillDerivedFields(transaction, new Date().toISOString()),
+        signal,
+      );
+      return seeded;
     },
 
     async refresh(
