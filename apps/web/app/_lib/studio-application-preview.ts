@@ -286,10 +286,18 @@ const available = (
  * holds only the pending operation, never an access decision: every read in the preview is still
  * decided by the database for the requesting builder.
  */
-const pending = new Map<
-  string,
-  { controller: AbortController; consumers: number; result: Promise<StudioPreviewResult> }
->();
+type PendingPreview = {
+  controller: AbortController;
+  consumers: number;
+  result: Promise<StudioPreviewResult>;
+};
+// Explicit Preview actions and canvas routes must join the same pending operation even though
+// Next loads them in separate module runtimes. Completed results are never kept here.
+const pendingPreviewsKey = Symbol.for("vortex.web.studio-preview-operations");
+const processPreviews = globalThis as typeof globalThis & {
+  [pendingPreviewsKey]?: Map<string, PendingPreview>;
+};
+const pending = (processPreviews[pendingPreviewsKey] ??= new Map<string, PendingPreview>());
 
 const once = async (
   key: string,
