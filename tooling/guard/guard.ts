@@ -794,6 +794,50 @@ for (const file of files.filter(
   }
 }
 
+// A Records table grid feature exists in exactly three registries: the platform contract (with its
+// one capability check), Studio's Features panel and the UI's lazy chunks. All three name the same
+// features, and only the UI registry imports a feature's chunk, so there is no second gating path.
+{
+  const registries: Array<[string, RegExp]> = [
+    [
+      "packages/platform/src/definition/application-composition/records-table-features/index.ts",
+      /export const recordsTableFeatureKeys = \[([^\]]*)\]/,
+    ],
+    [
+      "packages/ui/src/studio/grid-features/index.ts",
+      /export const studioGridFeatureEditors[^=]*= \{([^;]*)\};/,
+    ],
+    ["packages/ui/src/display/grid-features/registry.tsx", /const loaders[\s\S]*?> = \{([^;]*)\};/],
+  ];
+  const keySets = registries.map(([file, pattern]): [string, string[]] => {
+    const body = existsSync(resolve(root, file)) ? pattern.exec(read(file))?.[1] : undefined;
+    if (body === undefined) {
+      add("grid-feature-registry", file, 1, "the grid feature registry could not be read");
+      return [file, []];
+    }
+    const keys = [...body.matchAll(/(?:^|[\s,{])"?([a-z_]+)"?\s*[:,\]]?/g)]
+      .map((match) => match[1]!)
+      .filter((key) => /^[a-z]+(?:_[a-z]+)*$/.test(key) && !["kind", "settings", "import"].includes(key));
+    return [file, [...new Set(keys)].sort()];
+  });
+  const [platformFile, platformKeys] = keySets[0]!;
+  for (const [file, keys] of keySets.slice(1))
+    if (JSON.stringify(keys) !== JSON.stringify(platformKeys))
+      add(
+        "grid-feature-registry",
+        file,
+        1,
+        `registers ${JSON.stringify(keys)}, ${platformFile} registers ${JSON.stringify(platformKeys)}`,
+      );
+  const chunkDirectory = "packages/ui/src/display/grid-features/";
+  for (const file of codeFiles.filter((candidate) => candidate.startsWith("packages/ui/src/")))
+    if (file !== `${chunkDirectory}registry.tsx` && !file.startsWith(chunkDirectory)) {
+      const content = read(file);
+      for (const match of content.matchAll(/from\s+"[^"]*grid-features\/(?!registry")[^"]+"/g))
+        add("grid-feature-registry", file, lineAt(content, match.index ?? 0), match[0]);
+    }
+}
+
 // The validator prints a JSON array on stdout and exits 0 (clean) or 1 (failures); anything else
 // means it did not run.
 const definitionValidation = await definitionValidationRun;

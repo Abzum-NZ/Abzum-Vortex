@@ -140,6 +140,13 @@ export const guardRules = {
     description:
       "The derived Definition identity in TypeScript and SQL drifting apart: the TypeScript derivation must reproduce the recorded SQL vectors, and the SQL function must be the one they were recorded from",
   },
+  "grid-feature-registry": {
+    tier: "blocking",
+    owner: "lead",
+    reviewBy: "2027-01-15",
+    description:
+      "A Records table grid feature missing from one of its three registries (platform contract and check, Studio Features panel, UI lazy chunk), or a feature chunk imported outside the UI registry",
+  },
   "invalid-guard-allow": {
     tier: "blocking",
     owner: "lead",
@@ -172,4 +179,5 @@ export const scannedRuleIds = new Set([
   "definition-validation",
   "derived-id-parity",
   "contract-version-parity",
+  "grid-feature-registry",
 ]);

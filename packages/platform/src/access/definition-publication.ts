@@ -24,6 +24,7 @@ import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder
 import type { PlatformPermissionSource } from "./platform-permissions";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
 import { DefinitionCompilationError, DefinitionError, isVersionImpactRefusal } from "../definition/definition-index";
+import { definitionValidationErrorCatalogue } from "../catalogue/validation-errors";
 
 /** `reason` is the stable code logged on the server and mapped to a message for the person. */
 type Failure = Readonly<{
@@ -31,6 +32,8 @@ type Failure = Readonly<{
   reason?: string;
   /** For a compilation refusal, the name of the block it is about, when it is about one. */
   blockAlias?: string;
+  /** For a compilation refusal with its own business sentence, that sentence. */
+  sentence?: string;
 }>;
 export type HumanDefinitionPublicationPreparationResult = Failure |
   Readonly<{ kind: "available"; preparation: PrepareDefinitionPublicationResult }>;
@@ -134,7 +137,10 @@ const classifyFailure = (error: unknown): Failure => {
   if (compilation !== undefined) {
     const block = compilation.location?.segments.find((segment) => segment.kind === "block");
     return { kind: "refused", reason: `compilation_${compilation.ruleCode.toLowerCase()}`,
-      ...(block === undefined ? {} : { blockAlias: block.key }) };
+      ...(block === undefined ? {} : { blockAlias: block.key }),
+      ...(compilation.code === undefined
+        ? {}
+        : { sentence: definitionValidationErrorCatalogue[compilation.code].message }) };
   }
   if (isVersionImpactRefusal(error)) return { kind: "refused", reason: "version_impact_refused" };
   if (error instanceof DefinitionError && error.code !== "DEFINITION_PUBLICATION_FAILED")

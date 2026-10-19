@@ -25,6 +25,8 @@ import {
   studioSettingProblems,
   StudioQueryPicker,
   StudioSettingFields,
+  StudioGridFeatures,
+  studioGridFeaturesProperty,
   type StudioCompositionBreakpoint,
   type StudioCompositionCommand,
   type StudioCompositionContext,
@@ -185,6 +187,11 @@ export function ApplicationCompositionEditor(props: Props) {
       </section>
     );
 
+  // A Records table's grid features are edited in their own Features panel, not as a setting group.
+  const featuresProperty =
+    settingsModel.kind === "available"
+      ? studioGridFeaturesProperty(settingsModel.properties)
+      : undefined;
   const destinations = moveModel.kind === "available" ? moveModel.destinations : [];
   const inputs = layout.value;
   const orderEditable = breakpoint === "desktop" || model.responsiveOrder;
@@ -339,7 +346,9 @@ export function ApplicationCompositionEditor(props: Props) {
             )}
             <StudioSettingFields
               idPrefix={settingsId}
-              properties={settingsModel.properties}
+              properties={settingsModel.properties.filter(
+                (property) => property !== featuresProperty,
+              )}
               values={settingsInputs.settings}
               choices={choices}
               disabled={props.disabled}
@@ -359,6 +368,22 @@ export function ApplicationCompositionEditor(props: Props) {
             ? "This item's settings can't be changed here."
             : "This item's settings can't be read."}
         </p>
+      )}
+      {featuresProperty === undefined ? null : (
+        <StudioGridFeatures
+          idPrefix={`${settingsId}-features`}
+          property={featuresProperty}
+          value={settingsInputs.settings[featuresProperty.key]}
+          query={props.choices.queries.find((query) => query.reference === settingsInputs.query)}
+          choices={choices}
+          disabled={props.disabled}
+          onChange={(features) =>
+            changeSettings({
+              ...settingsInputs,
+              settings: { ...settingsInputs.settings, [featuresProperty.key]: features },
+            })
+          }
+        />
       )}
       <StudioInspectorGroup title="Behaviour">
         <StudioField label="Screen size">

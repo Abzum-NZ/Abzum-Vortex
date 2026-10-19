@@ -4,6 +4,7 @@ export * from "./application-contract-versions";
 export * from "./application-composition/block-property-values";
 export * from "./application-composition/block-property-schema";
 export * from "./application-composition/records-display";
+export * from "./application-composition/records-table-features";
 export * from "./application-composition/platform-block-release";
 export * from "./application-composition/custom-components";
 export * from "./application-composition/theme";

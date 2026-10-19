@@ -1,5 +1,17 @@
 import type { DefinitionValidationErrorCode } from "../../catalogue/validation-errors";
 import type { ComponentSettingValue } from "./block-property-schema";
+import { readRecordsTableFeatures, type RecordsTableFeatures } from "./records-table-features";
+import {
+  readActionList,
+  settingField,
+  settingGroup,
+  settingItems,
+  settingOptionalChoice,
+  settingText,
+  fieldList,
+  type RecordsTableActionContract,
+  type SettingsRecord,
+} from "./records-table-features/shared";
 
 export const recordsDisplayFormats = [
   "automatic",
@@ -17,7 +29,6 @@ export const recordsTableColumnWidths = ["auto", "narrow", "medium", "wide"] as 
 export const recordsTableColumnAlignments = ["start", "center", "end"] as const;
 /** Low priority columns hide first on small screens; an essential column never hides. */
 export const recordsTableColumnPriorities = ["essential", "high", "medium", "low"] as const;
-export const recordsTableSelectionModes = ["none", "single", "multiple"] as const;
 /** Row height of the grid: comfortable rows are 44px, compact rows 32px. */
 export const recordsTableDensities = ["comfortable", "compact"] as const;
 export type RecordsTableDensity = (typeof recordsTableDensities)[number];
@@ -33,10 +44,6 @@ export const recordsTableViewports = ["bounded", "page"] as const;
 export type RecordsTableViewport = (typeof recordsTableViewports)[number];
 /** The most rows a page mounts without virtualization; a larger page mounts only its window. */
 export const RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT = 100;
-
-/** The record action kinds a configured row or bulk action may require of the viewer. */
-export const recordsTableActionCapabilities = ["update", "delete", "restore"] as const;
-export type RecordsTableActionCapability = (typeof recordsTableActionCapabilities)[number];
 
 /**
  * One declared Records table column. `field` is the authored qualified field when read from a
@@ -76,37 +83,15 @@ export type RecordsDisplayMessages = Readonly<{
   error?: string;
 }>;
 
-/**
- * One named row action or bulk action. `eventId` is the stable identity of the flow binding the
- * command runs; it is unique across one placement's declared behaviours, so a click reaches
- * exactly one flow. `capability`, when declared, names the record action the command needs: the
- * renderer hides it for a row whose per-row capabilities do not include that kind. A command that
- * declares no capability (an open, read or custom command) stays shown, and the server still
- * re-checks every action it runs.
- */
-export type RecordsTableActionContract = Readonly<{
-  eventId: string;
-  label: string;
-  capability?: RecordsTableActionCapability;
-}>;
-
 /** A row click held as a binding to a flow; the bound flow decides what opening the row does. */
 export type RecordsTableRowClickContract = Readonly<{
   eventId: string;
 }>;
 
-/** Inline edit of permitted fields, with one commit binding shared by those fields. */
-export type RecordsTableInlineEditContract = Readonly<{
-  eventId: string;
-  fields: readonly string[];
-}>;
-
-/** The configured row behaviours of one Records table placement. */
+/** The configured row behaviours of one Records table placement: a row click and named row actions. */
 export type RecordsTableRowBehaviourContract = Readonly<{
   rowClick?: RecordsTableRowClickContract;
   rowActions: readonly RecordsTableActionContract[];
-  bulkActions: readonly RecordsTableActionContract[];
-  inlineEdit?: RecordsTableInlineEditContract;
 }>;
 
 /**
@@ -118,11 +103,7 @@ export type RecordsTableContract = Readonly<{
   /** The authored ordered default sort; empty orders by the bound query's own sort. */
   defaultSort: readonly RecordsTableSortContract[];
   sortableFields: readonly string[];
-  filterableFields: readonly string[];
-  search: boolean;
-  savedViews: boolean;
   pageSize: number;
-  selectionMode: (typeof recordsTableSelectionModes)[number];
   parameters: readonly RecordsTableParameterContract[];
   messages: RecordsDisplayMessages;
   /** Configured row behaviours; empty for a placement that declares none. */
@@ -134,6 +115,8 @@ export type RecordsTableContract = Readonly<{
   stickyFirstColumn: boolean;
   phonePresentation: RecordsTablePhonePresentation;
   viewport: RecordsTableViewport;
+  /** The optional grid features (search, column filters, saved views, bulk actions, inline editing). */
+  features: RecordsTableFeatures;
 }>;
 
 export type RecordDetailFieldContract = Readonly<{
@@ -149,16 +132,6 @@ export type RecordDetailContract = Readonly<{
   messages: RecordsDisplayMessages;
 }>;
 
-type SettingsRecord = Readonly<Record<string, ComponentSettingValue>>;
-
-const settingGroup = (value: ComponentSettingValue | undefined): SettingsRecord | undefined =>
-  value?.kind === "group" ? value.properties : undefined;
-const settingItems = (
-  value: ComponentSettingValue | undefined,
-): readonly ComponentSettingValue[] | undefined =>
-  value?.kind === "list" ? value.items : undefined;
-const settingText = (value: ComponentSettingValue | undefined): string | undefined =>
-  value?.kind === "text" && value.value.trim().length > 0 ? value.value.trim() : undefined;
 const settingChoice = <Choice extends string>(
   value: ComponentSettingValue | undefined,
   allowed: readonly Choice[],
@@ -167,23 +140,6 @@ const settingChoice = <Choice extends string>(
   value?.kind === "choice" && (allowed as readonly string[]).includes(value.value)
     ? (value.value as Choice)
     : fallback;
-const settingField = (value: ComponentSettingValue | undefined): string | undefined =>
-  value?.kind !== "field_reference"
-    ? undefined
-    : "fieldId" in value
-      ? String(value.fieldId)
-      : String(value.field);
-const settingFlag = (value: ComponentSettingValue | undefined): boolean =>
-  value?.kind === "boolean" && value.value;
-
-/** A choice setting read only when it names one of the allowed values; otherwise absent. */
-const settingOptionalChoice = <Choice extends string>(
-  value: ComponentSettingValue | undefined,
-  allowed: readonly Choice[],
-): Choice | undefined =>
-  value?.kind === "choice" && (allowed as readonly string[]).includes(value.value)
-    ? (value.value as Choice)
-    : undefined;
 
 const displayMessages = (settings: SettingsRecord): RecordsDisplayMessages => {
   const empty = settingText(settings["empty_message"]);
@@ -196,26 +152,6 @@ const displayMessages = (settings: SettingsRecord): RecordsDisplayMessages => {
   };
 };
 
-const fieldList = (value: ComponentSettingValue | undefined): string[] =>
-  (settingItems(value) ?? []).flatMap((item) => settingField(item) ?? []);
-
-const settingEventId = (value: ComponentSettingValue | undefined): string | undefined =>
-  settingText(value);
-
-/** Reads one declared row-action or bulk-action list, keeping only entries with both parts. */
-const readRowActionList = (
-  value: ComponentSettingValue | undefined,
-): RecordsTableActionContract[] =>
-  (settingItems(value) ?? []).flatMap((item): RecordsTableActionContract[] => {
-    const action = settingGroup(item);
-    if (action === undefined) return [];
-    const eventId = settingEventId(action["event_id"]);
-    const label = settingText(action["label"]);
-    if (eventId === undefined || label === undefined) return [];
-    const capability = settingOptionalChoice(action["capability"], recordsTableActionCapabilities);
-    return [{ eventId, label, ...(capability === undefined ? {} : { capability }) }];
-  });
-
 /**
  * Reads the configured row behaviours from settings that already passed the shared validator. A
  * behaviour appears only when it carries the event identity that names its flow binding, so a
@@ -223,17 +159,10 @@ const readRowActionList = (
  */
 const readRowBehaviours = (settings: SettingsRecord): RecordsTableRowBehaviourContract => {
   const click = settingGroup(settings["row_click"]);
-  const clickEventId = click === undefined ? undefined : settingEventId(click["event_id"]);
-  const inline = settingGroup(settings["inline_edit"]);
-  const inlineEventId = inline === undefined ? undefined : settingEventId(inline["event_id"]);
-  const inlineFields = inline === undefined ? [] : fieldList(inline["fields"]);
+  const clickEventId = click === undefined ? undefined : settingText(click["event_id"]);
   return {
     ...(clickEventId === undefined ? {} : { rowClick: { eventId: clickEventId } }),
-    rowActions: readRowActionList(settings["row_actions"]),
-    bulkActions: readRowActionList(settings["bulk_actions"]),
-    ...(inlineEventId === undefined || inlineFields.length === 0
-      ? {}
-      : { inlineEdit: { eventId: inlineEventId, fields: inlineFields } }),
+    rowActions: readActionList(settings["row_actions"]),
   };
 };
 
@@ -299,7 +228,9 @@ export const readRecordsTableContract = (
   const viewport = settingOptionalChoice(settings["viewport"], recordsTableViewports);
   const stickyHeader = settings["sticky_header"];
   const stickyFirstColumn = settings["sticky_first_column"];
+  const features = readRecordsTableFeatures(settings["features"]);
   if (
+    features === undefined ||
     density === undefined ||
     phonePresentation === undefined ||
     viewport === undefined ||
@@ -328,11 +259,7 @@ export const readRecordsTableContract = (
     columns,
     defaultSort,
     sortableFields: fieldList(settings["sortable_fields"]),
-    filterableFields: fieldList(settings["filterable_fields"]),
-    search: settingFlag(settings["search"]),
-    savedViews: settingFlag(settings["saved_views"]),
     pageSize: pageSize.value,
-    selectionMode: settingChoice(settings["selection_mode"], recordsTableSelectionModes, "none"),
     parameters,
     messages: displayMessages(settings),
     rowBehaviours: readRowBehaviours(settings),
@@ -341,6 +268,7 @@ export const readRecordsTableContract = (
     stickyFirstColumn: stickyFirstColumn.value,
     phonePresentation,
     viewport,
+    features,
   };
 };
 
