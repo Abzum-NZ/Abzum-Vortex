@@ -685,7 +685,11 @@ export const createEventDispatcher = (
     // only keeps that guarantee local if it were ever violated.
     const unsettledRecords = new Set<string>();
     for (const claimed of occurrences) {
-      const recordKey = `${claimed.occurrence.organizationId}:${"recordId" in claimed.occurrence ? claimed.occurrence.recordId : claimed.occurrence.applicationRootId}`;
+      const subject =
+        "recordId" in claimed.occurrence
+          ? claimed.occurrence.recordId
+          : claimed.occurrence.applicationRootId;
+      const recordKey = `${claimed.occurrence.organizationId}:${subject}`;
       const settlement = unsettledRecords.has(recordKey)
         ? "interrupted"
         : await deliver(consumer, ackCursor, claimed);

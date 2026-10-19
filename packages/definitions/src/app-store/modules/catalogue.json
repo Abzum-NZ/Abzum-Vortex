@@ -213,7 +213,7 @@
               },
               {
                 "value": "retrying",
-                "label": "Record update failed ? retry scheduled"
+                "label": "Record update failed, retrying"
               },
               {
                 "value": "failed",

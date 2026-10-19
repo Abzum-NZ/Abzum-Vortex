@@ -7,7 +7,6 @@ set search_path = ''
 as $function$
 declare
   context_value jsonb;
-  preview_installation jsonb;
   installation jsonb;
   plan jsonb;
   binding_item jsonb;
@@ -19,6 +18,9 @@ declare
   definitions jsonb := '{}'::jsonb;
   targets jsonb := '{}'::jsonb;
 begin
+  -- Two callers work out derived values: the installation consumer under the dispatcher's
+  -- system context for the live installation, and preview seeding under the builder's
+  -- human context for the preview's own new storage. Both work out every stored derived field.
   context_value := vortex_platform.current_context();
   if context_value ->> 'callerKind' = 'system' then
     context_value := vortex_access.derived_backfill_context_internal();
@@ -28,19 +30,14 @@ begin
     );
   else
     context_value := vortex_access.validated_human_request_context();
-  end if;
-  if not context_value ? 'applicationRootId' then
-    raise exception using errcode = '42501',
-      message = 'Derived field backfill requires an application context';
-  end if;
-  if context_value ->> 'callerKind' <> 'system' then
-    preview_installation := vortex_record.read_current_preview_installation_internal();
-    if preview_installation is not null and preview_installation ->> 'outcome' = 'refused' then
-    raise exception using errcode = '42501', message = 'Preview Record context is unavailable';
+    if not context_value ? 'applicationRootId' then
+      raise exception using errcode = '42501',
+        message = 'Derived field backfill requires an application context';
     end if;
-    installation := case when preview_installation is null
-    then vortex_definition.read_current_active_installation()
-    else preview_installation end;
+    installation := vortex_record.read_current_preview_installation_internal();
+    if installation is null or installation ->> 'outcome' = 'refused' then
+      raise exception using errcode = '42501', message = 'Preview Record context is unavailable';
+    end if;
   end if;
   plan := vortex_record.resolve_installation_access_plan_internal(installation);
 
@@ -63,26 +60,15 @@ begin
       continue when type_meta is null
         or coalesce((type_meta ->> 'isSystemProjection')::boolean, false);
       definitions := definitions || pg_catalog.jsonb_build_object(record_type_key, record_type_item);
-      -- The fields a backfill works out: every total and every stored calculation. A preview's
-      -- storage is new, so all of them; a live upgrade only those this exact Module release
-      -- brought into storage. A background delivery catches up all stored derived fields of
-      -- the current installation, including fields from releases superseded while it waited.
+      -- The fields a backfill works out: every total and every stored calculation. The
+      -- installation consumer also catches up fields from releases superseded while it waited.
       select coalesce(pg_catalog.jsonb_agg(pg_catalog.lower(field.value ->> 'fieldId')
           order by pg_catalog.lower(field.value ->> 'fieldId') collate "C"), '[]'::jsonb)
       into field_ids
       from pg_catalog.jsonb_array_elements(record_type_item -> 'fields') as field(value)
-      where (field.value ->> 'type' = 'total'
-          or (field.value ->> 'type' = 'calculation'
-            and field.value #>> '{settings,evaluation}' is distinct from 'read_time'))
-        and (context_value ->> 'callerKind' = 'system' or preview_installation is not null or exists (
-          select 1
-          from vortex_record.field_storage_mappings as mapping
-          where mapping.storage_contract_id = (type_meta ->> 'storageContractId')::uuid
-            and mapping.field_id = (field.value ->> 'fieldId')::uuid
-            and mapping.state = 'active'
-            and mapping.introduced_by_module_root_id = (type_meta ->> 'moduleRootId')::uuid
-            and mapping.introduced_at_release_revision = (type_meta ->> 'releaseRevision')::bigint
-        ));
+      where field.value ->> 'type' = 'total'
+        or (field.value ->> 'type' = 'calculation'
+          and field.value #>> '{settings,evaluation}' is distinct from 'read_time');
       if pg_catalog.jsonb_array_length(field_ids) > 0 then
         targets := targets || pg_catalog.jsonb_build_object(record_type_key, field_ids);
       end if;
@@ -106,4 +92,4 @@ revoke all on function vortex_record.derived_field_backfill_scope_internal()
 grant execute on function vortex_record.derived_field_backfill_scope_internal()
   to vortex_record_adapter;
 comment on function vortex_record.derived_field_backfill_scope_internal() is
-  'Private derived-field backfill scope of the request''s live or preview installation: each record type''s definition and the totals and stored calculations a backfill works out for its existing records.';
+  'Private derived-field backfill scope of the installation consumer''s live installation or the builder''s preview installation: each record type''s definition and the totals and stored calculations a backfill works out for its existing records.';

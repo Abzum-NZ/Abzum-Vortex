@@ -68,6 +68,9 @@ export const createDerivedFieldBackfillConsumer = (): EventConsumerAdapter => ({
           if (listed.length !== 1) throw new Error("DERIVED_FIELD_BACKFILL_RESULT_INVALID");
           const types = typesSchema.parse(listed[0]!.backfill).recordTypeIds;
           const recordTypeId = checkpoint.recordTypeId ?? types[0];
+          // A checkpoint is bound to its release, whose record types never change.
+          if (recordTypeId !== undefined && !types.includes(recordTypeId))
+            throw new Error("INSTALLATION_BACKFILL_CHECKPOINT_STALE");
           const page =
             recordTypeId === undefined
               ? undefined
