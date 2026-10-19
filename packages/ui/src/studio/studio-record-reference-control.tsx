@@ -116,9 +116,9 @@ export function StudioRecordReferenceControl({
 
   const more = async (after: string) => {
     if (read === null) return;
+    const controller = demand.current;
+    if (controller === null || controller.signal.aborted) return;
     try {
-      const controller = demand.current;
-      if (controller === null || controller.signal.aborted) return;
       const page = await read({ recordType, after }, controller.signal);
       if (controller.signal.aborted) return;
       setLoaded({ state: "read", page });
@@ -130,7 +130,7 @@ export function StudioRecordReferenceControl({
           ),
         ]);
     } catch (error) {
-      if (demand.current?.signal.aborted) return;
+      if (controller.signal.aborted) return;
       console.error(`[studio] more record choices could not be read: setting=${id}`, error);
       setLoaded({ state: "failed" });
     }
