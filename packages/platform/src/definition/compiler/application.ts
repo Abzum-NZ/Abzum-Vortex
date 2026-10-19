@@ -35,6 +35,7 @@ import {
 import { validateApplicationSourceCatalogue } from "../application-catalogue-validation";
 import { settleDefinitionRuleFailures } from "../rule-failure-order";
 import { applicationProvenance } from "./application-provenance";
+import { compiledSourceFlowBindings } from "./application-flow-binding-sources";
 import { compileApplicationToolBundle } from "./application-tools";
 import { dependencyOrder, resolvedDependencies } from "./dependencies";
 import { compileCheckedFlowSources } from "./flow-sources";
@@ -563,7 +564,7 @@ function compileApplicationFlowBindings(
   const body = asObject(source.body);
   const definitionKey = String(source.key);
   const flowsById = new Map(flows.map((flow) => [String(flow.id), flow]));
-  return (body.flow_bindings as JsonObject[]).map((binding) => {
+  return compiledSourceFlowBindings(body).map((binding) => {
     const flowId = resolution.id(definitionKey, "flow", String(binding.flow), "content");
     const flow = flowsById.get(flowId);
     const location = resolution.location("flow_binding", String(binding.id));

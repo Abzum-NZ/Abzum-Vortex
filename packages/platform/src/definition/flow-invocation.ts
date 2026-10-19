@@ -41,6 +41,10 @@ import {
   createPrivateFormSubmitAdapter,
 } from "../pages/form-request";
 import { createPageSubjectReader } from "../pages/page-subject-read";
+import {
+  logRecordsTableRequestRefusal,
+  recordsTableBindingRefusal,
+} from "../pages/records-table-features";
 import { createNamedActionRecordPort } from "../records/action-record-port";
 import { createRecordSaveService } from "../records/save-record";
 import type { createDatabaseApplicationBoundReleaseSetService } from "./application-bound-release-set";
@@ -1170,6 +1174,21 @@ export async function invokeInstalledFlow(
       (guided === null || !guided.summary || binding?.event !== "form_submit")
     ) {
       logFlowRefusal("BINDING_GUIDED_CONTROL_NOT_CONFIRMED");
+      return { kind: "refused" };
+    }
+    // A Records table bulk command or inline edit runs only while the installed placement turns
+    // that grid feature on for exactly this command and field; a forged request is refused here.
+    const featureRefusal =
+      binding === undefined
+        ? undefined
+        : recordsTableBindingRefusal(
+            bindingInstallation.applicationContent,
+            binding,
+            invocation.callerInputs ?? {},
+          );
+    if (featureRefusal !== undefined) {
+      logRecordsTableRequestRefusal(featureRefusal, "flow_dispatch");
+      logFlowRefusal("BINDING_GRID_FEATURE_NOT_PROJECTED");
       return { kind: "refused" };
     }
   }

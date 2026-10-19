@@ -12,6 +12,7 @@ import {
   platformIdSchema,
   sourceQualifiedRecordTypeSchema,
 } from "../../catalogue/identifiers";
+import { fieldTypeSchema } from "../../catalogue/catalogues";
 import {
   richTextDocumentSchema,
   richTextElementKindSchema,
@@ -82,8 +83,15 @@ export type BlockPropertySchemaContract =
     })
   | (BlockPropertySchemaBase & { kind: "url" | "asset_reference" | "icon" })
   | (BlockPropertySchemaBase & {
+      kind: "field_reference";
+      /**
+       * The field types the reference may name. Studio's picker offers only fields of these types
+       * and publication refuses any other; absent, every field of the bound data fits.
+       */
+      fieldTypes?: z.infer<typeof fieldTypeSchema>[] | undefined;
+    })
+  | (BlockPropertySchemaBase & {
       kind:
-        | "field_reference"
         | "relationship_reference"
         | "action_reference"
         | "page_reference"
@@ -939,9 +947,21 @@ export const blockPropertySchema: z.ZodType<BlockPropertySchemaContract> = z.laz
       z
         .object({
           ...propertySchemaBase,
+          kind: sourceProvenanceUnchanged(z.literal("field_reference")),
+          fieldTypes: sourceProvenanceUnchanged(z.array(fieldTypeSchema).min(1).optional()),
+        })
+        .strict()
+        .refine(
+          (value) =>
+            value.fieldTypes === undefined ||
+            new Set(value.fieldTypes).size === value.fieldTypes.length,
+          { path: ["fieldTypes"], message: "Field types must be unique" },
+        ),
+      z
+        .object({
+          ...propertySchemaBase,
           kind: sourceProvenanceUnchanged(
             z.enum([
-              "field_reference",
               "relationship_reference",
               "action_reference",
               "page_reference",

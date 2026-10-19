@@ -77,6 +77,14 @@ export {
   type RecordsTableQueryResolution,
   type RecordsTableQueryRunner,
 } from "./records-table-query";
+export {
+  logRecordsTableRequestRefusal,
+  projectRecordsTableFeatures,
+  recordsTableBindingRefusal,
+  recordsTableFlowEventRefusal,
+  type RecordsTableRequestPart,
+  type RecordsTableRequestRefusal,
+} from "./records-table-features";
 export { readPageSubjectInTransaction } from "./page-subject-read";
 export {
   createPageSubjectReader,
