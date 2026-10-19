@@ -40,8 +40,10 @@ type BoardBucket = Readonly<{
   label: string;
   selector: BoardColumnSelector;
   values: BoardBucketPayload;
-  /** The pipeline stage a column is: its colour role, where its cards may go, its owning action. */
-  stage?: Readonly<{ tone: PipelineStageTone; moves: readonly string[]; gatedBy?: string }>;
+  /** The stages a card in this bucket may move to. */
+  moves: readonly string[];
+  /** The pipeline stage a column is: its colour role and its owning action. */
+  stage?: Readonly<{ tone: PipelineStageTone; gatedBy?: string }>;
 }>;
 
 /** Each stage colour role as its theme token; never a colour value. */
@@ -56,14 +58,12 @@ const toneClasses: Readonly<Record<PipelineStageTone, string>> = {
   chart_5: "bg-chart-5",
 };
 
-/**
- * Whether the pipeline lets a card in one bucket move to another column. A card with no stage yet
- * may go to any stage; a stage's own moves name every column it may go to.
- */
-const mayMove = (from: BoardBucket | undefined, to: BoardBucket): boolean => {
-  if (to.selector.kind !== "option" || from === undefined || from.key === to.key) return false;
-  return from.stage === undefined || from.stage.moves.includes(to.selector.value);
-};
+/** Whether the pipeline lets a card in one bucket move to another column. */
+const mayMove = (from: BoardBucket | undefined, to: BoardBucket): boolean =>
+  to.selector.kind === "option" &&
+  from !== undefined &&
+  from.key !== to.key &&
+  from.moves.includes(to.selector.value);
 
 /** The card a move acts on: its record, the revision it was read at and the column it sits in. */
 type BoardMoveCard = Readonly<{
@@ -443,9 +443,9 @@ export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElem
             label: column.label,
             selector: { kind: "option" as const, value: column.value },
             values: column,
+            moves: column.moves,
             stage: {
               tone: column.tone,
-              moves: column.moves,
               ...(column.gatedBy === undefined ? {} : { gatedBy: column.gatedBy }),
             },
           })),
@@ -454,6 +454,7 @@ export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElem
             label: "Unassigned",
             selector: { kind: "unassigned" as const },
             values: values.unassigned,
+            moves: values.unassigned.moves,
           }] : []),
         ];
 
