@@ -18,6 +18,7 @@ import {
   studioFlowConditionContext,
   studioFlowOutline,
   studioFlowReferenceChoices,
+  studioFlowFieldOptions,
   type StudioFlowCommand,
   type StudioFlowContext,
   type StudioFlowDraftChoices,
@@ -226,12 +227,31 @@ export function StudioFlowInspector({
     }
     return result;
   };
+  const pickerContext = (path: StudioFlowPath) => ({
+    condition: studioFlowConditionContext(
+      outline === null
+        ? []
+        : studioFlowReferenceChoices(
+            context.source,
+            outline.flow,
+            outline.siblings,
+            selection.moduleKey,
+            path,
+            choices.forms,
+          ),
+    ),
+    fields:
+      outline === null
+        ? []
+        : (studioFlowFieldOptions(context.source, outline.flow, selection.moduleKey, {}) ?? []),
+  });
   const add = (
     command: Extract<StudioFlowCommand, { kind: "insert_task" | "add_branch" }>,
     done: string,
   ) => {
     const result = run(command, done);
     if (result.kind === "applied") setFocusId(result.taskId);
+    return result.kind === "applied";
   };
 
   const stepPicker = (
@@ -305,17 +325,18 @@ export function StudioFlowInspector({
         {main !== undefined && (
           <StudioFlowStepPicker
             forms={choices.forms}
+            context={pickerContext([...main.path, main.tasks.length])}
             id="flow-add-last"
             label="Add a step at the end"
             types={actions.stepTypes}
             disabled={disabled}
             action="Add"
-            onAdd={(taskType, formAlias) =>
+            onAdd={(taskType, settings) =>
               add(
                 {
                   kind: "insert_task",
                   taskType,
-                  ...(formAlias === undefined ? {} : { formAlias }),
+                  settings,
                   listPath: main.path,
                   index: main.tasks.length,
                 },
@@ -467,17 +488,18 @@ export function StudioFlowInspector({
       <StudioInspectorGroup title="Add steps">
         <StudioFlowStepPicker
           forms={choices.forms}
+          context={pickerContext([...listPath, index + 1])}
           id="flow-add-after"
           label="Add a step after this one"
           types={actions.stepTypes}
           disabled={disabled}
           action="Add"
-          onAdd={(taskType, formAlias) =>
+          onAdd={(taskType, settings) =>
             add(
               {
                 kind: "insert_task",
                 taskType,
-                ...(formAlias === undefined ? {} : { formAlias }),
+                settings,
                 listPath,
                 index: index + 1,
               },
@@ -489,17 +511,18 @@ export function StudioFlowInspector({
           <StudioFlowStepPicker
             forms={choices.forms}
             key={JSON.stringify(child.path)}
+            context={pickerContext([...child.path, child.tasks.length])}
             id={`flow-add-in-${JSON.stringify(child.path)}`}
             label={`Add a step to ${child.label}`}
             types={actions.stepTypes}
             disabled={disabled}
             action="Add"
-            onAdd={(taskType, formAlias) =>
+            onAdd={(taskType, settings) =>
               add(
                 {
                   kind: "insert_task",
                   taskType,
-                  ...(formAlias === undefined ? {} : { formAlias }),
+                  settings,
                   listPath: child.path,
                   index: child.tasks.length,
                 },
@@ -511,19 +534,20 @@ export function StudioFlowInspector({
         {actions.branch !== null && (
           <StudioFlowStepPicker
             forms={choices.forms}
+            context={pickerContext(step.path)}
             id="flow-add-branch"
             label={`Add the ${actions.branch} branch, starting with`}
             types={actions.stepTypes}
             disabled={disabled}
             action="Add branch"
-            onAdd={(taskType, formAlias) =>
+            onAdd={(taskType, settings) =>
               add(
                 {
                   kind: "add_branch",
                   taskId: step.id,
                   taskPath: step.path,
                   taskType,
-                  ...(formAlias === undefined ? {} : { formAlias }),
+                  settings,
                 },
                 `${actions.branch} branch added.`,
               )

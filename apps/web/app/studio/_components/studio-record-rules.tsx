@@ -22,6 +22,7 @@ import {
   ItemTitle,
 } from "@vortex/ui/components/item";
 import { Label } from "@vortex/ui/components/label";
+import { Textarea } from "@vortex/ui/components/textarea";
 import {
   applyStudioFlowCreate,
   deleteStudioRecordRule,
@@ -56,6 +57,7 @@ export function StudioRecordRules({
   const opener = useStudioPlaceOpener();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
+  const [message, setMessage] = useState("");
   const [onCreate, setOnCreate] = useState(true);
   const [onUpdate, setOnUpdate] = useState(true);
   const [problem, setProblem] = useState("");
@@ -77,6 +79,7 @@ export function StudioRecordRules({
           moduleKey,
           recordTypeKey: recordKey,
           name,
+          message,
           operations: [
             ...(onCreate ? ["create" as const] : []),
             ...(onUpdate ? ["update" as const] : []),
@@ -98,6 +101,7 @@ export function StudioRecordRules({
     }
     setAdding(false);
     setName("");
+    setMessage("");
     setProblem("");
     open(result.flowAlias, label);
   };
@@ -160,6 +164,11 @@ export function StudioRecordRules({
                 setProblem("");
               }}
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="record-rule-message">Warning message</Label>
+            <Textarea id="record-rule-message" required value={message} disabled={disabled}
+              onChange={(event) => setMessage(event.target.value)} />
           </div>
           <div className="flex items-center gap-2">
             <Checkbox

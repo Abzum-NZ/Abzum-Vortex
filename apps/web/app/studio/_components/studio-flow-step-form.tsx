@@ -545,11 +545,10 @@ function ConditionControl({
           size="sm"
           disabled={disabled}
           onClick={() => {
-            const fresh: FlowFormula = { op: "literal", type: "yes_no", value: true };
             setReplaced(true);
             setTree(undefined);
-            setShown(fresh);
-            onChange(fresh, null);
+            setShown(condition);
+            onChange(condition, "Set a condition before replacing this one.");
           }}
         >
           Replace it with a new condition
@@ -559,7 +558,7 @@ function ConditionControl({
   const change = (next: ConditionNode | undefined, validation: StudioConditionValidation) => {
     setTree(next);
     const formula = studioFlowConditionFormula(next, context);
-    if (!validation.isValid || formula === undefined)
+    if (next === undefined || !validation.isValid || formula === undefined)
       onChange(
         condition,
         "Condition: finish every comparison, with a value on both sides, and the step takes it.",
@@ -572,7 +571,9 @@ function ConditionControl({
   return (
     <fieldset className="space-y-2" id={id} disabled={disabled}>
       <legend className="text-sm font-medium">Condition</legend>
-      {tree === undefined && <StudioHelp hint="No condition yet: the Then branch always runs." />}
+      {tree === undefined && (
+        <StudioHelp hint="Set a condition. The step keeps its saved condition until this is complete." />
+      )}
       <StudioConditionControls
         {...(tree === undefined ? {} : { value: tree })}
         context={context.controls}
