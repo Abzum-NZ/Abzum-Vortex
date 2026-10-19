@@ -271,6 +271,7 @@ const pages = [
             field: `${incidentRecordType}.${field}`,
             label,
             visible: true,
+            auto_size: false,
           })),
           row_click: { event_id: incidentRowClickEventId },
         },

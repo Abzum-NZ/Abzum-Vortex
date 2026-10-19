@@ -64,6 +64,8 @@ export type RecordsTableColumnContract = Readonly<{
   alignment: (typeof recordsTableColumnAlignments)[number];
   priority: (typeof recordsTableColumnPriorities)[number];
   visible: boolean;
+  /** People may fit the column to the content of the page they see, from its column menu. */
+  autoSize: boolean;
 }>;
 
 export const recordsTableSortDirections = ["ascending", "descending"] as const;
@@ -119,6 +121,8 @@ export type RecordsTableContract = Readonly<{
   stickyHeader: boolean;
   /** The first visible data column (after any selection column) stays in view on a wide scroll. */
   stickyFirstColumn: boolean;
+  /** People may expand the table to fill the screen from its toolbar. */
+  allowFullScreen: boolean;
   phonePresentation: RecordsTablePhonePresentation;
   viewport: RecordsTableViewport;
   /** The optional grid features (search, column filters, saved views, bulk actions, inline editing). */
@@ -191,6 +195,7 @@ export const readRecordsTableContract = (
     if (column === undefined || field === undefined) return [];
     const label = settingText(column["label"]);
     const visible = column["visible"];
+    const autoSize = column["auto_size"];
     return [
       {
         field,
@@ -200,11 +205,18 @@ export const readRecordsTableContract = (
         alignment: settingChoice(column["alignment"], recordsTableColumnAlignments, "start"),
         priority: settingChoice(column["priority"], recordsTableColumnPriorities, "medium"),
         visible: visible?.kind === "boolean" && visible.value,
+        autoSize: autoSize?.kind === "boolean" && autoSize.value,
       },
     ];
   });
-  // Default visibility is explicit on every column; a column that does not declare it is not read.
-  if (columnItems.some((item) => settingGroup(item)?.["visible"]?.kind !== "boolean"))
+  // Default visibility and auto-size are explicit on every column; a column that does not declare
+  // them is not read.
+  if (
+    columnItems.some((item) => {
+      const column = settingGroup(item);
+      return column?.["visible"]?.kind !== "boolean" || column["auto_size"]?.kind !== "boolean";
+    })
+  )
     return undefined;
   // Every default sort key declares its field and direction; a key missing either is not read, so
   // the table never runs an order other than the authored one.
@@ -234,6 +246,7 @@ export const readRecordsTableContract = (
   const viewport = settingOptionalChoice(settings["viewport"], recordsTableViewports);
   const stickyHeader = settings["sticky_header"];
   const stickyFirstColumn = settings["sticky_first_column"];
+  const allowFullScreen = settings["allow_full_screen"];
   const features = readRecordsTableFeatures(settings["features"]);
   if (
     features === undefined ||
@@ -241,7 +254,8 @@ export const readRecordsTableContract = (
     phonePresentation === undefined ||
     viewport === undefined ||
     stickyHeader?.kind !== "boolean" ||
-    stickyFirstColumn?.kind !== "boolean"
+    stickyFirstColumn?.kind !== "boolean" ||
+    allowFullScreen?.kind !== "boolean"
   )
     return undefined;
   const parameters = (settingItems(settings["query_parameters"]) ?? []).flatMap(
@@ -272,6 +286,7 @@ export const readRecordsTableContract = (
     density,
     stickyHeader: stickyHeader.value,
     stickyFirstColumn: stickyFirstColumn.value,
+    allowFullScreen: allowFullScreen.value,
     phonePresentation,
     viewport,
     features,
