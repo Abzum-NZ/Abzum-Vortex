@@ -4,6 +4,7 @@ import {
   actorIdSchema,
   applicationRootIdSchema,
   definitionKindSchema,
+  fingerprintSchema,
   moduleRootIdSchema,
   namespacedKeySchema,
   organizationAccountIdSchema,
@@ -33,7 +34,10 @@ const draftReadCommandSchema = z
   .strict();
 
 type ApplicationDefinitionDraftReadCommand = z.infer<typeof draftReadCommandSchema>;
-export type StoredApplicationDefinitionDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
+export type StoredApplicationDefinitionDraft = Extract<
+  StoredDefinitionDraft,
+  { kind: "application" }
+>;
 
 const moduleDraftReadCommandSchema = z
   .object({
@@ -87,10 +91,7 @@ const publicationStateSchema = z
 const sameUuid = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
-const hasMatchingLiveContext = (
-  candidate: unknown,
-  scope: SelectedOrganizationScope,
-): boolean => {
+const hasMatchingLiveContext = (candidate: unknown, scope: SelectedOrganizationScope): boolean => {
   const parsed = humanReadContextSchema.safeParse(candidate);
   if (!parsed.success) return false;
   const context = parsed.data;
@@ -201,6 +202,65 @@ export const readApplicationDefinitionDraft = async (
   )
     throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
   return draft;
+};
+
+/** Rechecks the exact saved revision without transferring or parsing its source again. */
+export const requireApplicationDefinitionDraftConsistency = async (
+  transaction: RequestDatabaseTransaction,
+  serverResolvedScope: SelectedOrganizationScope,
+  draft: StoredApplicationDefinitionDraft,
+): Promise<void> => {
+  const scope = selectedOrganizationScopeSchema.parse(serverResolvedScope);
+  if (
+    !sameUuid(scope.organizationId, draft.organizationId) ||
+    (scope.applicationRootId !== undefined && !sameUuid(scope.applicationRootId, draft.rootId))
+  )
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
+  let rows: readonly DatabaseRow[];
+  try {
+    rows = await transaction.query`
+      select vortex_access.validated_human_request_context() as request_context,
+        vortex_definition.read_application_draft_consistency(
+          ${draft.rootId}::uuid, ${draft.draftRevision}::bigint,
+          ${draft.sourceFingerprint}::text, ${draft.publishedRevision ?? null}::bigint
+        ) as consistency
+    `;
+  } catch (cause) {
+    throw new DefinitionError(
+      isDefinitionContextFailure(cause)
+        ? "DEFINITION_CONTEXT_REFUSED"
+        : "DEFINITION_STORAGE_FAILED",
+      { cause },
+    );
+  }
+  const row = z
+    .object({
+      request_context: requiredJsonSchema,
+      consistency: z
+        .object({
+          draftRevision: revisionSchema,
+          sourceFingerprint: fingerprintSchema,
+          publishedRevision: revisionSchema.nullable(),
+        })
+        .strict()
+        .nullable(),
+    })
+    .strict()
+    .safeParse(rows[0]);
+  if (rows.length !== 1 || !row.success)
+    throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT", {
+      cause: row.success ? rows.length : row.error,
+    });
+  if (!hasMatchingLiveContext(row.data.request_context, scope))
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
+  const current = row.data.consistency;
+  if (
+    current === null ||
+    current.draftRevision !== draft.draftRevision ||
+    current.sourceFingerprint !== draft.sourceFingerprint ||
+    current.publishedRevision !== (draft.publishedRevision ?? null)
+  )
+    throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
 };
 
 /**
