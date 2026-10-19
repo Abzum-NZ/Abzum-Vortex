@@ -62,11 +62,12 @@ const readFirstInstallCandidateInTransaction = async (
   environment: FirstInstallEnvironment,
   selector: FirstInstallSelector,
 ): Promise<
-  Readonly<{
-    latest: ApplicationLatestRelease;
-    releaseSet: SystemApplicationBoundReleaseSetResult;
-    bindings: InstallationBindings;
-  }>
+  | Readonly<{
+      latest: ApplicationLatestRelease;
+      releaseSet: SystemApplicationBoundReleaseSetResult;
+      bindings: InstallationBindings;
+    }>
+  | "already_installed"
 > => {
   const { permissions } = environment;
   const expected = { organizationId: selector.organizationId };
@@ -90,7 +91,7 @@ const readFirstInstallCandidateInTransaction = async (
     bindings.registeredReleaseRevision !== null &&
     bindings.registeredReleaseRevision !== selector.releaseRevision
   )
-    firstInstallUnavailable("already_installed");
+    return "already_installed";
   const releaseSet = await readFirstInstallReleaseSet(
     transaction,
     environment.catalogue,
@@ -253,7 +254,7 @@ export const readCurrentFirstInstallCandidate = async (
   selector: FirstInstallSelector,
   expected?: FirstInstallSnapshot,
 ): Promise<FirstInstallCandidate> => {
-  const { latest, releaseSet, bindings } = await runFirstInstallChange(
+  const current = await runFirstInstallChange(
     environment,
     session,
     { organizationId: selector.organizationId },
@@ -267,6 +268,8 @@ export const readCurrentFirstInstallCandidate = async (
         selector,
       ),
   );
+  if (current === "already_installed") return firstInstallUnavailable("already_installed");
+  const { latest, releaseSet, bindings } = current;
   const registrationState = firstInstallState(selector, releaseSet, bindings);
   const snapshot = firstInstallSnapshot(selector, latest, releaseSet, bindings, registrationState);
   if (expected !== undefined && !sameContent(expected, snapshot))
