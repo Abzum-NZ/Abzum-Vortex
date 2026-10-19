@@ -93,6 +93,7 @@ export {
 export { readPageSubjectInTransaction } from "./page-subject-read";
 export {
   createPageSubjectReader,
+  pageSubjectFieldIds,
   type PageSubjectReader,
   type PageSubjectReadResult,
 } from "./page-subject-read";
