@@ -3,10 +3,12 @@
 import { useId, type ReactElement } from "react";
 import {
   checkRecordsTableFeature,
+  plainSourceSettingValue,
   readRecordsTableFeatures,
   recordsTableFeatureDescription,
   recordsTableFeatureKeys,
   recordsTableFeatureState,
+  typedSourceSettingValue,
   type BlockPropertySchemaContract,
   type ModuleField,
   type RecordsTableFeatureKey,
@@ -98,8 +100,18 @@ export function StudioGridFeatures({
   };
   const features = readRecordsTableFeatures(whole);
   const facts = studioRecordsTableQueryFacts(query, choices.actions, choices.relationships);
-  const write = (key: RecordsTableFeatureKey, next: GroupValue): void =>
-    onChange({ ...whole, properties: { ...whole.properties, [key]: next } });
+  const write = (key: RecordsTableFeatureKey, next: GroupValue): void => {
+    const candidate = { ...whole, properties: { ...whole.properties, [key]: next } };
+    // New list entries need their catalogue defaults before the composition command checks the
+    // typed value's round trip. Keep invalid user input in the inspector's ordinary validation path.
+    const normalized = typedSourceSettingValue(
+      plainSourceSettingValue(candidate),
+      property,
+      [property.key],
+      [],
+    );
+    onChange(normalized ?? candidate);
+  };
 
   return (
     <StudioInspectorGroup title="Features">
