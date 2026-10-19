@@ -11,7 +11,10 @@ import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Label } from "@vortex/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import {
+  StudioEntryList,
+  StudioIconButton,
   StudioOptionControl,
+  studioWords,
   studioFieldValueType,
   studioFixedLiteralType,
   studioFlowReferenceToken,
@@ -90,12 +93,9 @@ function ActionValues({
                 }}
               />
             </div>
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              aria-label={`Remove ${field?.label ?? key} mapping`}
-              title="Remove field mapping"
+            <StudioIconButton
+              label={`Remove ${field?.label ?? key} mapping`}
+              destructive
               onClick={() =>
                 onChange(
                   Object.fromEntries(Object.entries(values).filter(([name]) => name !== key)),
@@ -103,7 +103,7 @@ function ActionValues({
               }
             >
               <Icon name="minus" />
-            </Button>
+            </StudioIconButton>
           </div>
         );
       })}
@@ -224,12 +224,39 @@ export function StudioActionTasks({
       input.type === "record_reference" &&
       input.record_types.includes(`${module.key}:${record.key}`),
   );
+  const taskSummary = (task: Task): string => {
+    switch (task.type) {
+      case "record.delete":
+        return `Move ${record.name.toLowerCase()} to the recycle bin`;
+      case "event.announce":
+        return studioWords(task.properties.event);
+      case "record.changes":
+        return task.properties.changes
+          .map((change) => {
+            const target =
+              inputs.find((input) => input.key === change.target_input)?.label ?? "Choose an input";
+            return `${change.relationships.length} relationship${change.relationships.length === 1 ? "" : "s"} to ${target}`;
+          })
+          .join("; ");
+      case "record.create":
+      case "record.set_fields": {
+        const target =
+          task.type === "record.create"
+            ? records.find((entry) => entry.key === task.properties.record_type)?.record
+            : record;
+        const fields = Object.keys(task.properties.values).map(
+          (key) => target?.fields.find((field) => field.key === key)?.label ?? studioWords(key),
+        );
+        return `${target?.name ?? "Choose a record type"} / ${fields.length === 0 ? "Choose fields" : fields.join(", ")}`;
+      }
+    }
+  };
   const replace = (index: number, task: Task) =>
     onChange(tasks.map((entry, at) => (at === index ? task : entry)));
-  const move = (index: number, by: number) => {
+  const move = (index: number, to: number) => {
     const next = [...tasks];
     const [task] = next.splice(index, 1);
-    next.splice(index + by, 0, task!);
+    next.splice(to, 0, task!);
     onChange(next);
   };
   const add = (type: Task["type"]) => {
@@ -278,241 +305,215 @@ export function StudioActionTasks({
   return (
     <fieldset className="space-y-3">
       <legend className="text-sm font-medium">Ordered tasks</legend>
-      {tasks.map((task, index) => (
-        <div key={task.id} className="space-y-3 rounded-md border p-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="mr-auto text-sm font-medium">
-              {index + 1}. {titles[task.type]}
-            </span>
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              aria-label={`Move task ${index + 1} up`}
-              title="Move task up"
-              disabled={index === 0}
-              onClick={() => move(index, -1)}
-            >
-              <Icon name="arrow-up" />
-            </Button>
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              aria-label={`Move task ${index + 1} down`}
-              title="Move task down"
-              disabled={index === tasks.length - 1}
-              onClick={() => move(index, 1)}
-            >
-              <Icon name="arrow-down" />
-            </Button>
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              aria-label={`Remove task ${index + 1}`}
-              title="Remove task"
-              onClick={() => onChange(tasks.filter((_, at) => at !== index))}
-            >
-              <Icon name="minus" />
-            </Button>
-          </div>
-          {task.type === "record.create" && (
-            <div className="space-y-1">
-              <Label htmlFor={`${task.id}-record`}>Record type to create</Label>
-              <NativeSelect
-                id={`${task.id}-record`}
-                className="w-full"
-                value={task.properties.record_type}
-                onChange={(event) =>
-                  replace(index, {
-                    ...task,
-                    properties: { record_type: event.target.value, values: {} },
-                  })
-                }
-              >
-                {records.map((entry) => (
-                  <NativeSelectOption key={entry.key} value={entry.key}>
-                    {entry.label}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </div>
-          )}
-          {(task.type === "record.set_fields" || task.type === "record.create") && (
-            <ActionValues
-              id={task.id}
-              record={
-                task.type === "record.set_fields"
-                  ? record
-                  : records.find((entry) => entry.key === task.properties.record_type)?.record
-              }
-              values={task.properties.values}
-              references={references}
-              subject={record}
-              inputs={inputs}
-              subjectType={`${module.key}:${record.key}`}
-              onChange={(values) =>
-                replace(index, { ...task, properties: { ...task.properties, values } } as Task)
-              }
-            />
-          )}
-          {task.type === "event.announce" && (
-            <div className="space-y-1">
-              <Label htmlFor={`${task.id}-event`}>Declared event</Label>
-              <NativeSelect
-                id={`${task.id}-event`}
-                className="w-full"
-                value={task.properties.event}
-                onChange={(event) =>
-                  replace(index, { ...task, properties: { event: event.target.value } })
-                }
-              >
-                {events.map((entry) => (
-                  <NativeSelectOption key={entry.key} value={entry.key}>
-                    {entry.key}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </div>
-          )}
-          {task.type === "record.changes" && (
-            <div className="space-y-3">
-              {task.properties.changes.map((change, at) => {
-                const set = (next: typeof change) =>
-                  replace(index, {
-                    ...task,
-                    properties: {
-                      changes: task.properties.changes.map((entry, place) =>
-                        place === at ? next : entry,
-                      ),
-                    },
-                  });
-                return (
-                  <div className="space-y-2" key={at}>
-                    <div className="flex items-center justify-between gap-2">
-                      <Label htmlFor={`${task.id}-target-${at}`}>Copy relationships to input</Label>
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label={`Remove copy group ${at + 1}`}
-                        title="Remove copy group"
-                        disabled={task.properties.changes.length === 1}
-                        onClick={() =>
-                          replace(index, {
-                            ...task,
-                            properties: {
-                              changes: task.properties.changes.filter((_, place) => place !== at),
-                            },
-                          })
-                        }
-                      >
-                        <Icon name="minus" />
-                      </Button>
-                    </div>
-                    <NativeSelect
-                      id={`${task.id}-target-${at}`}
-                      className="w-full"
-                      value={change.target_input}
-                      onChange={(event) => set({ ...change, target_input: event.target.value })}
-                    >
-                      {targets.map((input) => (
-                        <NativeSelectOption key={input.key} value={input.key}>
-                          {input.label}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
-                    {record.relationships.map((relationship) => (
-                      <div className="flex items-center gap-2" key={relationship.key}>
-                        <Checkbox
-                          id={`${task.id}-${at}-${relationship.key}`}
-                          checked={change.relationships.includes(relationship.key)}
-                          onCheckedChange={(checked) =>
-                            set({
-                              ...change,
-                              relationships:
-                                checked === true
-                                  ? [...change.relationships, relationship.key]
-                                  : change.relationships.filter((key) => key !== relationship.key),
-                            })
-                          }
-                        />
-                        <Label htmlFor={`${task.id}-${at}-${relationship.key}`}>
-                          {record.fields.find((field) => field.key === relationship.from_field)
-                            ?.label ?? relationship.key}
-                        </Label>
-                      </div>
+      <StudioEntryList
+        label="Action tasks"
+        itemName="task"
+        empty="No tasks yet."
+        onMove={move}
+        onRemove={(index) => onChange(tasks.filter((_, at) => at !== index))}
+        items={tasks.map((task, index) => ({
+          key: task.id,
+          title: `${index + 1}. ${titles[task.type]}`,
+          summary: taskSummary(task),
+          content: (
+            <>
+              {task.type === "record.create" && (
+                <div className="space-y-1">
+                  <Label htmlFor={`${task.id}-record`}>Record type to create</Label>
+                  <NativeSelect
+                    id={`${task.id}-record`}
+                    className="w-full"
+                    value={task.properties.record_type}
+                    onChange={(event) =>
+                      replace(index, {
+                        ...task,
+                        properties: { record_type: event.target.value, values: {} },
+                      })
+                    }
+                  >
+                    {records.map((entry) => (
+                      <NativeSelectOption key={entry.key} value={entry.key}>
+                        {entry.label}
+                      </NativeSelectOption>
                     ))}
-                  </div>
-                );
-              })}
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Add copy group"
-                title="Add copy group"
-                disabled={
-                  task.properties.changes.length >= 10 ||
-                  targets.length === 0 ||
-                  record.relationships.length === 0
-                }
-                onClick={() =>
-                  replace(index, {
-                    ...task,
-                    properties: {
-                      changes: [
-                        ...task.properties.changes,
-                        {
-                          kind: "copy_relationships",
-                          target_input: targets[0]!.key,
-                          relationships: [record.relationships[0]!.key],
+                  </NativeSelect>
+                </div>
+              )}
+              {(task.type === "record.set_fields" || task.type === "record.create") && (
+                <ActionValues
+                  id={task.id}
+                  record={
+                    task.type === "record.set_fields"
+                      ? record
+                      : records.find((entry) => entry.key === task.properties.record_type)?.record
+                  }
+                  values={task.properties.values}
+                  references={references}
+                  subject={record}
+                  inputs={inputs}
+                  subjectType={`${module.key}:${record.key}`}
+                  onChange={(values) =>
+                    replace(index, { ...task, properties: { ...task.properties, values } } as Task)
+                  }
+                />
+              )}
+              {task.type === "event.announce" && (
+                <div className="space-y-1">
+                  <Label htmlFor={`${task.id}-event`}>Event</Label>
+                  <NativeSelect
+                    id={`${task.id}-event`}
+                    className="w-full"
+                    value={task.properties.event}
+                    onChange={(event) =>
+                      replace(index, { ...task, properties: { event: event.target.value } })
+                    }
+                  >
+                    {events.map((entry) => (
+                      <NativeSelectOption key={entry.key} value={entry.key}>
+                        {studioWords(entry.key)}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </div>
+              )}
+              {task.type === "record.changes" && (
+                <div className="space-y-3">
+                  {task.properties.changes.map((change, at) => {
+                    const set = (next: typeof change) =>
+                      replace(index, {
+                        ...task,
+                        properties: {
+                          changes: task.properties.changes.map((entry, place) =>
+                            place === at ? next : entry,
+                          ),
                         },
-                      ],
-                    },
-                  })
-                }
-              >
-                <Icon name="plus" />
-              </Button>
-            </div>
-          )}
-          {task.type === "record.delete" && (
-            <p className="text-sm text-muted-foreground">
-              Soft-delete the record this action runs on.
-            </p>
-          )}
+                      });
+                    return (
+                      <div className="space-y-2" key={at}>
+                        <div className="flex items-center justify-between gap-2">
+                          <Label htmlFor={`${task.id}-target-${at}`}>Copy relationships to</Label>
+                          <StudioIconButton
+                            label={`Remove copy group ${at + 1}`}
+                            destructive
+                            disabled={task.properties.changes.length === 1}
+                            onClick={() =>
+                              replace(index, {
+                                ...task,
+                                properties: {
+                                  changes: task.properties.changes.filter(
+                                    (_, place) => place !== at,
+                                  ),
+                                },
+                              })
+                            }
+                          >
+                            <Icon name="minus" />
+                          </StudioIconButton>
+                        </div>
+                        <NativeSelect
+                          id={`${task.id}-target-${at}`}
+                          className="w-full"
+                          value={change.target_input}
+                          onChange={(event) => set({ ...change, target_input: event.target.value })}
+                        >
+                          {targets.map((input) => (
+                            <NativeSelectOption key={input.key} value={input.key}>
+                              {input.label}
+                            </NativeSelectOption>
+                          ))}
+                        </NativeSelect>
+                        {record.relationships.map((relationship) => (
+                          <div className="flex items-center gap-2" key={relationship.key}>
+                            <Checkbox
+                              id={`${task.id}-${at}-${relationship.key}`}
+                              checked={change.relationships.includes(relationship.key)}
+                              onCheckedChange={(checked) =>
+                                set({
+                                  ...change,
+                                  relationships:
+                                    checked === true
+                                      ? [...change.relationships, relationship.key]
+                                      : change.relationships.filter(
+                                          (key) => key !== relationship.key,
+                                        ),
+                                })
+                              }
+                            />
+                            <Label htmlFor={`${task.id}-${at}-${relationship.key}`}>
+                              {record.fields.find((field) => field.key === relationship.from_field)
+                                ?.label ?? studioWords(relationship.key)}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                  <StudioIconButton
+                    label="Add copy group"
+                    disabled={
+                      task.properties.changes.length >= 10 ||
+                      targets.length === 0 ||
+                      record.relationships.length === 0
+                    }
+                    onClick={() =>
+                      replace(index, {
+                        ...task,
+                        properties: {
+                          changes: [
+                            ...task.properties.changes,
+                            {
+                              kind: "copy_relationships",
+                              target_input: targets[0]!.key,
+                              relationships: [record.relationships[0]!.key],
+                            },
+                          ],
+                        },
+                      })
+                    }
+                  >
+                    <Icon name="plus" />
+                  </StudioIconButton>
+                </div>
+              )}
+              {task.type === "record.delete" && (
+                <p className="text-sm text-muted-foreground">
+                  Move this record to the recycle bin.
+                </p>
+              )}
+            </>
+          ),
+        }))}
+      >
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(titles) as Task["type"][]).map((type) => (
+            <Button
+              key={type}
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={
+                tasks.length >= 10 ||
+                (type === "event.announce" && events.length === 0) ||
+                (type === "record.create" && records.length === 0) ||
+                (type === "record.changes" &&
+                  (record.relationships.length === 0 || targets.length === 0))
+              }
+              onClick={() => add(type)}
+            >
+              <Icon name="plus" />
+              Add {titles[type].toLowerCase()}
+            </Button>
+          ))}
         </div>
-      ))}
-      <div className="flex flex-wrap gap-2">
-        {(Object.keys(titles) as Task["type"][]).map((type) => (
-          <Button
-            key={type}
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={
-              tasks.length >= 10 ||
-              (type === "event.announce" && events.length === 0) ||
-              (type === "record.create" && records.length === 0) ||
-              (type === "record.changes" &&
-                (record.relationships.length === 0 || targets.length === 0))
-            }
-            onClick={() => add(type)}
-          >
-            Add {titles[type].toLowerCase()}
-          </Button>
-        ))}
-      </div>
+      </StudioEntryList>
       {events.length === 0 && (
-        <p className="text-xs text-muted-foreground">
-          Declare an event of this record type to add announcements.
+        <p className="text-sm text-muted-foreground">
+          Add an event for this record type to use announcements.
         </p>
       )}
       {targets.length === 0 && record.relationships.length > 0 && (
-        <p className="text-xs text-muted-foreground">
-          Add a record input permitting this record type to copy relationships.
+        <p className="text-sm text-muted-foreground">
+          Add an input for this record type to copy relationships.
         </p>
       )}
     </fieldset>
