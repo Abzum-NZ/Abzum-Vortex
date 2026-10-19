@@ -8,8 +8,10 @@ import {
   type BlockPropertyValueContract,
   type ComponentSemanticEventKind,
   type PipelineStageTone,
+  type RecordsTableFilterValue,
   type RecordsTableSortKey,
   type RecordsTableSortState,
+  RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
   RECORDS_TABLE_MAXIMUM_SORT_KEYS,
   isRecord,
 } from "@vortex/platform/schema";
@@ -124,6 +126,12 @@ export type ListPayload = Readonly<{
   pageCount?: number;
 }>;
 
+/** The viewer's search and filters one table page was read with. */
+export type TableNarrowing = Readonly<{
+  search: string | null;
+  filters: readonly RecordsTableFilterValue[];
+}>;
+
 /** The ready values a table block renders. */
 export type TablePayload = Readonly<{
   kind: "table";
@@ -136,6 +144,11 @@ export type TablePayload = Readonly<{
    * visible column.
    */
   sort?: RecordsTableSortState;
+  /**
+   * The search and filters the page was read with; the table shows them in its controls and tells
+   * a page that matched nothing apart from a table with no records.
+   */
+  narrowing?: TableNarrowing;
   page?: number;
   pageCount?: number;
   hasNextPage?: boolean;
@@ -987,6 +1000,38 @@ export const parseListPayload = (
   });
 };
 
+/** The search and filters a table page was read with: a bounded search and one value per field. */
+const parseTableNarrowing = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): TableNarrowing => {
+  const record = requireRecord(value, "Projected table narrowing is invalid", location);
+  requireExactKeys(record, ["search", "filters"], location);
+  if (
+    record.search !== null &&
+    (typeof record.search !== "string" ||
+      record.search.trim() === "" ||
+      record.search.length > RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH)
+  )
+    fail("A projected table search must be null or non-empty bounded text", location);
+  const items = requireArray(record.filters, "Projected table filters must be an array", location);
+  const filters = items.map((item): RecordsTableFilterValue => {
+    const filter = requireRecord(item, "A projected table filter must be an object", location);
+    requireExactKeys(filter, ["fieldId", "value"], location);
+    const fieldId = requireFieldKey(
+      filter.fieldId,
+      "A projected table filter requires a field",
+      location,
+    );
+    if (typeof filter.value !== "string" || filter.value === "")
+      fail("A projected table filter value must be non-empty text", location);
+    return Object.freeze({ fieldId, value: filter.value as string });
+  });
+  if (new Set(filters.map((filter) => filter.fieldId.toLowerCase())).size !== filters.length)
+    fail("A projected table narrowing names each filtered field once", location);
+  return Object.freeze({ search: record.search as string | null, filters: Object.freeze(filters) });
+};
+
 /** The ready values a table block accepts. */
 export const parseTablePayload = (
   value: unknown,
@@ -1003,6 +1048,7 @@ export const parseTablePayload = (
       "rows",
       "selectedRecordIds",
       "sort",
+      "narrowing",
       "page",
       "pageCount",
       "hasNextPage",
@@ -1087,12 +1133,15 @@ export const parseTablePayload = (
       fail("A projected sort names each field once", location);
     sort = Object.freeze({ keys: Object.freeze(keys), explicit: sortRecord.explicit });
   }
+  const narrowing =
+    record.narrowing === undefined ? undefined : parseTableNarrowing(record.narrowing, location);
   return Object.freeze({
     kind: "table",
     columns,
     rows,
     ...(selection === undefined ? {} : { selectedRecordIds: selection }),
     ...(sort === undefined ? {} : { sort }),
+    ...(narrowing === undefined ? {} : { narrowing }),
     ...(page === undefined ? {} : { page }),
     ...(pageCount === undefined ? {} : { pageCount }),
     ...(hasNextPage === undefined ? {} : { hasNextPage }),

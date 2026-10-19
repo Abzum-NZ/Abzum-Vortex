@@ -9,6 +9,7 @@ import {
   type BlockPropertyValueContract,
   type JsonValue,
   type RecordsDisplayFormat,
+  type RecordsTableFilterValue,
   type RecordsTableSortState,
 } from "../schema";
 import type { ProtectedQueryRow } from "../queries/index";
@@ -118,11 +119,22 @@ export type ProjectedTableValues = Readonly<{
   rows: readonly ProjectedTableRow[];
   /** The order the page was read in, when it is the viewer's or the authored default sort. */
   sort?: RecordsTableSortState;
+  /**
+   * The search and filters the page was read with, so the table shows them in its controls and
+   * tells a page that matched nothing apart from a table that has no records.
+   */
+  narrowing?: RecordsTableNarrowing;
   page?: number;
   hasNextPage?: boolean;
   nextContinuationToken?: string;
   hasPreviousPage?: boolean;
   previousContinuationToken?: string;
+}>;
+
+/** The viewer's search and filters a table page was read with; both empty when it was not narrowed. */
+export type RecordsTableNarrowing = Readonly<{
+  search: string | null;
+  filters: readonly RecordsTableFilterValue[];
 }>;
 
 export type ProjectedRecordDetailValues = Readonly<{
@@ -463,14 +475,32 @@ export const projectRecordDetailData = (
             ),
     });
   }
-  const headingValue = contract.headingField === undefined || !isReadable(contract.headingField, input)
-    ? undefined : valueOf(row, contract.headingField);
-  const heading = contract.headingField === undefined ? undefined : headingValue === undefined ? RESTRICTED_CELL
-    : projectCell(headingValue.value, "automatic", input.fieldChoiceLabels?.[contract.headingField.toLowerCase()],
-      input.fieldDateTypes?.[contract.headingField.toLowerCase()], input.recordLinks,
-      input.fieldLinkTypes?.[contract.headingField.toLowerCase()]);
+  const headingValue =
+    contract.headingField === undefined || !isReadable(contract.headingField, input)
+      ? undefined
+      : valueOf(row, contract.headingField);
+  const heading =
+    contract.headingField === undefined
+      ? undefined
+      : headingValue === undefined
+        ? RESTRICTED_CELL
+        : projectCell(
+            headingValue.value,
+            "automatic",
+            input.fieldChoiceLabels?.[contract.headingField.toLowerCase()],
+            input.fieldDateTypes?.[contract.headingField.toLowerCase()],
+            input.recordLinks,
+            input.fieldLinkTypes?.[contract.headingField.toLowerCase()],
+          );
   return fields.length === 0
     ? { status: "empty" }
-    : { status: "ready", values: { kind: "record_detail", recordId: row.recordId, fields,
-      ...(heading === undefined ? {} : { heading }) } };
+    : {
+        status: "ready",
+        values: {
+          kind: "record_detail",
+          recordId: row.recordId,
+          fields,
+          ...(heading === undefined ? {} : { heading }),
+        },
+      };
 };

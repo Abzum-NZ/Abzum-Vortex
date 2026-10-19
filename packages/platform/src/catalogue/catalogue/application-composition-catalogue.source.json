@@ -4613,6 +4613,96 @@
         }
       },
       {
+        "kind": "choice",
+        "key": "density",
+        "presentation": true,
+        "label": "Density",
+        "help": "Row height: comfortable rows are easier to read, compact rows show more at once",
+        "required": false,
+        "options": [
+          {
+            "key": "comfortable",
+            "label": "Comfortable"
+          },
+          {
+            "key": "compact",
+            "label": "Compact"
+          }
+        ],
+        "defaultValue": {
+          "kind": "choice",
+          "value": "comfortable"
+        }
+      },
+      {
+        "kind": "choice",
+        "key": "viewport",
+        "presentation": true,
+        "label": "Scrolling",
+        "help": "Bounded keeps the rows in the table's own scroll area, under a sticky header; Page lets the table grow with the page. Pages of more than 100 rows need Bounded",
+        "required": false,
+        "options": [
+          {
+            "key": "bounded",
+            "label": "Bounded"
+          },
+          {
+            "key": "page",
+            "label": "Page"
+          }
+        ],
+        "defaultValue": {
+          "kind": "choice",
+          "value": "bounded"
+        }
+      },
+      {
+        "kind": "boolean",
+        "key": "sticky_header",
+        "presentation": true,
+        "label": "Sticky header",
+        "help": "Keep the column headings in view while the rows scroll; applies when Scrolling is Bounded",
+        "required": false,
+        "defaultValue": {
+          "kind": "boolean",
+          "value": true
+        }
+      },
+      {
+        "kind": "boolean",
+        "key": "sticky_first_column",
+        "presentation": true,
+        "label": "Sticky first column",
+        "help": "Keep the first column in view while a wide table scrolls sideways",
+        "required": false,
+        "defaultValue": {
+          "kind": "boolean",
+          "value": true
+        }
+      },
+      {
+        "kind": "choice",
+        "key": "phone_presentation",
+        "presentation": true,
+        "label": "On phones",
+        "help": "Show each record as a card built from the column priorities, or keep the grid",
+        "required": false,
+        "options": [
+          {
+            "key": "cards",
+            "label": "Cards"
+          },
+          {
+            "key": "grid",
+            "label": "Grid"
+          }
+        ],
+        "defaultValue": {
+          "kind": "choice",
+          "value": "cards"
+        }
+      },
+      {
         "kind": "list",
         "key": "query_parameters",
         "label": "Query parameters",

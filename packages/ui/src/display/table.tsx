@@ -1,16 +1,24 @@
-import type { ReactElement } from "react";
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import {
-  nextRecordsTableSort,
   readRecordsTableContract,
   type RecordsTableActionContract,
   type RecordsTableColumnContract,
   type RecordsTableContract,
 } from "@vortex/platform/schema";
 import { Button } from "../components/button";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../components/dropdown-menu";
+import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "../components/empty";
 import { Icon } from "../icons/icon";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/table";
-import { cn } from "../lib/utils";
-import { DisplayCellView } from "./cell";
+import { cellValueToText, DisplayCellView } from "./cell";
 import {
   BulkActionsMenu,
   DisplayHeader,
@@ -23,74 +31,55 @@ import {
   SearchControl,
   SelectAllControl,
   SelectionControl,
-  ClickableRow,
 } from "./controls";
 import { resolveDisplayContext, rowName, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
-import { useRowEntrance } from "./row-entrance";
+import type {
+  DisplayCellValue,
+  DisplayColumn,
+  DisplayRow,
+  TableNarrowing,
+  TablePayload,
+} from "./projected-data";
+import { RecordsCards, type CardRenderers } from "./table-cards";
+import { columnWidth, useTablePresentation } from "./table-geometry";
+import { RecordsGrid, type GridRenderers } from "./table-grid";
+import { useGridLayout, type GridColumn, type GridLayoutControls } from "./table-layout";
 import { TableLoadingState, useLoadingReveal } from "./table-loading";
-import type { DisplayCellValue, DisplayColumn, DisplayRow, TablePayload } from "./projected-data";
-
-type RenderedColumn = Readonly<{
-  key: string;
-  label: string;
-  declared: RecordsTableColumnContract;
-}>;
-
-/**
- * The columns to render: the declared columns in declared order, but only those the permission
- * projection supplies. A column whose field the viewer cannot read is withheld from the projection
- * and never rendered, not even as a heading. The projected column supplies the label a declared
- * column left unset.
- */
-const renderedColumns = (
-  contract: RecordsTableContract,
-  projected: readonly DisplayColumn[],
-): readonly RenderedColumn[] => {
-  const labels = new Map(projected.map((column) => [column.key, column.label]));
-  return contract.columns.flatMap((column): RenderedColumn[] => {
-    const projectedLabel = labels.get(column.field);
-    return projectedLabel === undefined
-      ? []
-      : [{ key: column.field, label: column.label ?? projectedLabel, declared: column }];
-  });
-};
-
-/** Declared presentation of one column, exposed as data attributes and an inline alignment. */
-const columnAttributes = (
-  column: RenderedColumn,
-): {
-  "data-vortex-column-width"?: string;
-  "data-vortex-column-priority"?: string;
-  style?: { textAlign: "start" | "center" | "end" };
-} =>
-  ({
-    "data-vortex-column-width": column.declared.width,
-    "data-vortex-column-priority": column.declared.priority,
-    style: { textAlign: column.declared.alignment },
-  });
-
-/**
- * Declared column priority as a responsive utility: a low priority column hides first on a narrow
- * viewport, a medium priority one next, and an essential or high priority column never hides.
- * The first column always shows, so a narrow table never loses every column. The
- * declared priority stays a data attribute for the platform's own styling hooks.
- */
-const priorityClass = (column: RenderedColumn, first: boolean): string | undefined => {
-  if (first) return undefined;
-  switch (column.declared.priority) {
-    case "low":
-      return "max-lg:hidden";
-    case "medium":
-      return "max-md:hidden";
-    default:
-      return undefined;
-  }
-};
 
 /** Field identities compare without regard to case, as the Query engine keys them. */
 const sameFieldKey = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
+
+const narrowed = (narrowing: TableNarrowing | undefined): boolean =>
+  narrowing !== undefined && (narrowing.search !== null || narrowing.filters.length > 0);
+
+/**
+ * The columns the page carries: the declared columns in declared order, but only those the
+ * permission projection supplies. A column whose field the viewer cannot read, or that the read did
+ * not request, is not in the projection and never rendered, not even as a heading. The projected
+ * column supplies the label a declared column left unset.
+ */
+const carriedColumns = (
+  contract: RecordsTableContract,
+  projected: readonly DisplayColumn[],
+): GridColumn[] => {
+  const labels = new Map(projected.map((column) => [column.key, column.label]));
+  return contract.columns.flatMap((column): GridColumn[] => {
+    const projectedLabel = labels.get(column.field);
+    return projectedLabel === undefined
+      ? []
+      : [
+          {
+            key: column.field,
+            label: column.label ?? projectedLabel,
+            declared: column,
+            sortable: contract.sortableFields.some((field) => sameFieldKey(field, column.field)),
+            width: columnWidth(column),
+          },
+        ];
+  });
+};
 
 /** The filter control kind for a declared filterable field, from the column it is declared with. */
 const filterInputKind = (declared: RecordsTableColumnContract): FilterInputKind => {
@@ -121,16 +110,82 @@ const rowShowsAction = (
 ): boolean =>
   action.capability === undefined || row.capabilities?.actions.includes(action.capability) === true;
 
+/** A polite live region's message; the same text twice is still announced twice. */
+const useAnnouncer = (): [string, (message: string) => void] => {
+  const [message, setMessage] = useState("");
+  const announce = useCallback(
+    (next: string) =>
+      setMessage((current) => (current === next ? `${next}${String.fromCharCode(160)}` : next)),
+    [],
+  );
+  return [message, announce];
+};
+
+/** Hide, show and reset the columns the page carries; arranging them reads nothing. */
+function ColumnsMenu({
+  accessibleName,
+  layout,
+  announce,
+}: Readonly<{
+  accessibleName: string;
+  layout: GridLayoutControls;
+  announce: (message: string) => void;
+}>): ReactElement | null {
+  if (layout.columns.length < 2) return null;
+  const shownCount = layout.shown.length;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={<Button variant="outline" size="sm" aria-label={`Columns of ${accessibleName}`} />}
+      >
+        <Icon name="sliders-horizontal" data-icon="inline-start" aria-hidden="true" />
+        Columns
+      </DropdownMenuTrigger>
+      <DropdownMenuContent>
+        {layout.state.order.map((key) => {
+          const column = layout.columns.find((candidate) => candidate.key === key);
+          if (column === undefined) return null;
+          const shown = !layout.state.hidden.includes(key);
+          return (
+            <DropdownMenuCheckboxItem
+              key={key}
+              checked={shown}
+              // One column always stays shown.
+              disabled={shown && shownCount <= 1}
+              onCheckedChange={(checked: boolean) => {
+                layout.setHidden(key, !checked);
+                announce(`${column.label} ${checked ? "shown" : "hidden"}`);
+              }}
+            >
+              {column.label}
+            </DropdownMenuCheckboxItem>
+          );
+        })}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          disabled={!layout.changed}
+          onClick={() => {
+            layout.reset();
+            announce("Columns reset");
+          }}
+        >
+          Reset columns
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /**
- * Shared browser-safe display component for tabular data, rendered with the shadcn Table, Checkbox,
- * Dropdown Menu, Pagination, Input, Skeleton and Empty parts. It renders only declared columns and
- * permitted rows, preserving stable identities and declared events. A Records table placement
- * declares its columns, sortable and filterable fields, search, page size, selection mode and row
- * behaviours as settings. Every control reports a declared data event; the component never sorts,
- * filters or pages the returned rows itself.
+ * Shared browser-safe display component for tabular data: the one Records table block. It shows
+ * exactly the permitted page the host read, as an accessible data grid on wide screens and, when
+ * the definition asks for it, as cards on a phone; only the active presentation is mounted. Every
+ * control reports a declared data event, and the host reads a new page on the server; the
+ * component never sorts, filters, pages or fetches rows itself. Loading, empty, no-match, refused
+ * and error states stay distinct, and search and filters stay usable when nothing matched.
  */
 export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElement {
-  const { placementId, availability } = props;
+  const { placementId, availability, settings } = props;
   const {
     title,
     accessibleName,
@@ -142,27 +197,208 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     events,
   } = resolveDisplayContext<TablePayload>(
     props,
-    (table) => table.rows.length === 0,
+    // A narrowed page or a later page that matched nothing keeps its controls and columns.
+    (table) => table.rows.length === 0 && !narrowed(table.narrowing) && (table.page ?? 1) <= 1,
     "No records to show",
   );
   // Publication refuses a Records table without its contract, so a missing one is a definition
   // error: it renders the error state below, never a second way of choosing columns or controls.
-  const contract = readRecordsTableContract(props.settings);
-  const columns =
-    values === undefined || contract === undefined ? [] : renderedColumns(contract, values.columns);
+  const contract = useMemo(() => readRecordsTableContract(settings), [settings]);
+  const presentation = useTablePresentation(contract);
+  const projectedColumns = values?.columns;
+  const columns = useMemo(
+    () =>
+      contract === undefined || projectedColumns === undefined
+        ? []
+        : carriedColumns(contract, projectedColumns),
+    [contract, projectedColumns],
+  );
+  const layout = useGridLayout(columns);
   const rows = values?.rows ?? [];
-  const sortable = (column: RenderedColumn): boolean =>
-    contract?.sortableFields.some((field) => sameFieldKey(field, column.key)) === true;
-  const sortKeys = values?.sort?.keys ?? [];
   const selectionMode = contract?.selectionMode ?? "none";
   const selectable =
     events?.selection_changed !== undefined && contract !== undefined && selectionMode !== "none";
+  const selectedRecordIds = values?.selectedRecordIds ?? [];
+  const narrowing = values?.narrowing;
+  const [message, announce] = useAnnouncer();
+  const [clearCount, setClearCount] = useState(0);
 
-  // Filter controls and the search box report their declared data events; sorting already does the
-  // same. The host sends each to the Query engine and returns a new page, so the component never
-  // sorts, filters or searches the returned rows itself. A filter is offered only for a configured
-  // filterable field the viewer can read: a field withheld from the projection has no rendered
-  // column, so it gets no control and its identity is never shown as a label.
+  // Configured row behaviours: a row click, named row actions, bulk actions over the selection and
+  // inline edit of permitted fields. Each declared control carries the stable identity of its own
+  // flow binding, so one table placement can run several different flows.
+  const behaviours = contract?.rowBehaviours;
+  const rowClickEventId = behaviours?.rowClick?.eventId;
+  const onRowClick = rowClickEventId === undefined ? undefined : events?.row_clicked;
+  const activateRow = useMemo(
+    () =>
+      onRowClick === undefined || rowClickEventId === undefined
+        ? undefined
+        : (recordId: string): unknown =>
+            onRowClick({ event: "row_clicked", eventId: rowClickEventId, recordId }),
+    [onRowClick, rowClickEventId],
+  );
+  const declaredBulkActions = behaviours?.bulkActions ?? [];
+  const showActions = (behaviours?.rowActions.length ?? 0) > 0 && events?.row_action !== undefined;
+  const headingKey = layout.shown[0]?.key;
+
+  // Cell, selection and command renderers shared by the grid and the cards. They change only with
+  // the bindings and the heading column, so the grid's memoized rows keep their identity.
+  const renderers = useMemo((): GridRenderers & CardRenderers => {
+    const inlineEdit = behaviours?.inlineEdit;
+    const onInlineEdit = inlineEdit === undefined ? undefined : events?.inline_edit;
+    const rowActions = behaviours?.rowActions ?? [];
+    // Only a text, link, number or yes/no cell of a field the row may change has a closed value
+    // the editor can commit without guessing; any other cell stays read-only. The row revision
+    // travels with the commit so the server refuses a stale change.
+    const editable = (row: DisplayRow, columnKey: string, value: DisplayCellValue): boolean =>
+      onInlineEdit !== undefined &&
+      inlineEdit !== undefined &&
+      inlineEdit.fields.some((field) => sameFieldKey(field, columnKey)) &&
+      row.capabilities !== undefined &&
+      row.capabilities.actions.includes("update") &&
+      row.capabilities.changeableFieldIds.some((fieldId) => sameFieldKey(fieldId, columnKey)) &&
+      (value.kind === "text" ||
+        value.kind === "link" ||
+        value.kind === "number" ||
+        value.kind === "boolean");
+    const value = (row: DisplayRow, column: GridColumn) => {
+      const cell: DisplayCellValue = row.cells[column.key] ?? { kind: "empty" };
+      return <DisplayCellView value={cell} />;
+    };
+    return {
+      value,
+      text: (row, column) => cellValueToText(row.cells[column.key] ?? { kind: "empty" }),
+      cell: (row, column) => {
+        const cell: DisplayCellValue = row.cells[column.key] ?? { kind: "empty" };
+        if (
+          onInlineEdit !== undefined &&
+          inlineEdit !== undefined &&
+          editable(row, column.key, cell)
+        )
+          return (
+            // Keyed by the projected value so a refreshed row resets the editor.
+            <InlineEditCell
+              key={JSON.stringify(cell)}
+              eventId={inlineEdit.eventId}
+              recordId={row.recordId}
+              {...(row.revision === undefined ? {} : { revision: row.revision })}
+              field={column.key}
+              label={column.label}
+              value={cell.kind === "link" ? { kind: "text", text: cell.label } : cell}
+              handler={onInlineEdit}
+            />
+          );
+        return (
+          <span className="min-w-0 truncate">
+            <DisplayCellView value={cell} />
+          </span>
+        );
+      },
+      select: (row, selected) => (
+        <SelectionControl
+          row={row}
+          name={rowName(row, headingKey)}
+          selected={selected}
+          mode={selectionMode === "single" ? "single" : "multiple"}
+          groupName={`vortex-selection-${placementId}`}
+          events={events}
+        />
+      ),
+      selectAll: () => null,
+      actions: (row) => (
+        <RowActionsMenu
+          recordId={row.recordId}
+          {...(row.revision === undefined ? {} : { revision: row.revision })}
+          name={rowName(row, headingKey)}
+          actions={rowActions.filter((action) => rowShowsAction(row, action))}
+          events={events}
+        />
+      ),
+    };
+  }, [behaviours, events, headingKey, placementId, selectionMode]);
+
+  const pageRecordIds = rows.map((row) => row.recordId);
+  const allSelected =
+    pageRecordIds.length > 0 &&
+    pageRecordIds.every((recordId) => selectedRecordIds.includes(recordId));
+  const gridRenderers = useMemo(
+    (): GridRenderers => ({
+      ...renderers,
+      selectAll: () => (
+        <SelectAllControl
+          allSelected={allSelected}
+          recordIds={pageRecordIds}
+          accessibleName={accessibleName}
+          events={events}
+        />
+      ),
+    }),
+    // The page's record identities are part of `allSelected` and the rows' own identity.
+    [renderers, allSelected, pageRecordIds.join("\u0000"), accessibleName, events],
+  );
+
+  // A bulk command that declares a capability stays disabled unless every selected row reports it.
+  const bulkCapable = (capability: RecordsTableActionContract["capability"]): boolean => {
+    if (capability === undefined) return true;
+    if (selectedRecordIds.length === 0) return false;
+    return selectedRecordIds.every(
+      (recordId) =>
+        rows
+          .find((row) => row.recordId === recordId)
+          ?.capabilities?.actions.includes(capability) === true,
+    );
+  };
+
+  // Announcements: a new order or page of rows, and the selection count.
+  const sortKeys = values?.sort?.keys;
+  const sortSignature = JSON.stringify(sortKeys ?? []);
+  const rowSignature = pageRecordIds.join("\u0000");
+  const announced = useRef<{ sort: string; rows: string; selected: number } | undefined>(undefined);
+  useEffect(() => {
+    if (values === undefined) return;
+    const previous = announced.current;
+    announced.current = {
+      sort: sortSignature,
+      rows: rowSignature,
+      selected: selectedRecordIds.length,
+    };
+    if (previous === undefined) return;
+    const parts: string[] = [];
+    if (previous.sort !== sortSignature) {
+      const keys = sortKeys ?? [];
+      const label = (fieldId: string): string =>
+        columns.find((column) => sameFieldKey(column.key, fieldId))?.label ?? "another field";
+      parts.push(
+        keys.length === 0
+          ? "Default order."
+          : `Sorted by ${keys.map((key) => `${label(key.fieldId)}, ${key.direction}`).join(", then ")}.`,
+      );
+    }
+    if (previous.rows !== rowSignature || previous.sort !== sortSignature)
+      parts.push(rows.length === 1 ? "1 row shown." : `${rows.length} rows shown.`);
+    if (previous.selected !== selectedRecordIds.length)
+      parts.push(
+        selectedRecordIds.length === 0
+          ? "Selection cleared."
+          : `${selectedRecordIds.length} selected.`,
+      );
+    if (parts.length > 0) announce(parts.join(" "));
+  }, [
+    values,
+    sortSignature,
+    rowSignature,
+    selectedRecordIds.length,
+    sortKeys,
+    columns,
+    rows.length,
+    announce,
+  ]);
+
+  const revealed = useLoadingReveal(state.status === "loading");
+  const showSearch = contract?.search === true && events?.search_changed !== undefined;
+  // A filter is offered only for a configured filterable field the viewer can read: a field
+  // withheld from the projection has no carried column, so it gets no control and its identity is
+  // never shown as a label.
   const filterColumns =
     contract === undefined
       ? []
@@ -171,64 +407,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
           return column === undefined ? [] : [column];
         });
   const showFilters = events?.filter_changed !== undefined && filterColumns.length > 0;
-  const showSearch = contract?.search === true && events?.search_changed !== undefined;
 
-  // Configured row behaviours: a row click, named row actions, bulk actions over the selection and
-  // inline edit of permitted fields. Each declared control carries the stable identity of its own
-  // flow binding, so one table placement can run several different flows.
-  const behaviours = contract?.rowBehaviours;
-  const rowClickEventId = behaviours?.rowClick?.eventId;
-  const onRowClick = rowClickEventId === undefined ? undefined : events?.row_clicked;
-  const activateRow =
-    onRowClick === undefined || rowClickEventId === undefined
-      ? undefined
-      : (recordId: string): unknown =>
-          onRowClick({ event: "row_clicked", eventId: rowClickEventId, recordId });
-  const declaredRowActions = behaviours?.rowActions ?? [];
-  const declaredBulkActions = behaviours?.bulkActions ?? [];
-  const inlineEdit = behaviours?.inlineEdit;
-  const inlineEventId = inlineEdit?.eventId;
-  const onInlineEdit = inlineEdit === undefined ? undefined : events?.inline_edit;
-  const inlineFields = inlineEdit?.fields ?? [];
-  // Only a text, link, number or yes/no cell of a field the row may change has a closed value the editor
-  // can commit without guessing; any other cell stays read-only. The row revision travels with the
-  // commit so the server refuses a stale change.
-  const editable = (row: DisplayRow, columnKey: string, value: DisplayCellValue): boolean =>
-    onInlineEdit !== undefined &&
-    inlineEventId !== undefined &&
-    inlineFields.some((field) => sameFieldKey(field, columnKey)) &&
-    row.capabilities !== undefined &&
-    row.capabilities.actions.includes("update") &&
-    row.capabilities.changeableFieldIds.some((fieldId) => sameFieldKey(fieldId, columnKey)) &&
-    (value.kind === "text" ||
-      value.kind === "link" ||
-      value.kind === "number" ||
-      value.kind === "boolean");
-  const showActionsColumn = declaredRowActions.length > 0 && events?.row_action !== undefined;
-  const selectedRecordIds = values?.selectedRecordIds ?? [];
-  const pageRecordIds = rows.map((row) => row.recordId);
-  const allSelected =
-    pageRecordIds.length > 0 &&
-    pageRecordIds.every((recordId) => selectedRecordIds.includes(recordId));
-  const showBulkActions =
-    selectable && declaredBulkActions.length > 0 && events?.bulk_action !== undefined;
-  // A bulk command that declares a capability stays disabled unless every selected row reports it.
-  const bulkCapable = (capability: RecordsTableActionContract["capability"]): boolean => {
-    if (capability === undefined) return true;
-    const required = capability;
-    if (selectedRecordIds.length === 0) return false;
-    return selectedRecordIds.every(
-      (recordId) =>
-        rows.find((row) => row.recordId === recordId)?.capabilities?.actions.includes(required) ===
-        true,
-    );
-  };
-
-  // The table's own loading and no-rows presentations keep the state identity, role and accessible
-  // name the standard state container gives them, and the container still owns the refused, error
-  // and unavailable states of this placement.
-  const revealed = useLoadingReveal(state.status === "loading");
-  const rowsRef = useRowEntrance<HTMLDivElement>(pageRecordIds, "tbody > tr");
   if (contract === undefined) {
     console.error("[display] Records table settings do not declare a readable contract", {
       placementId,
@@ -245,71 +424,46 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
       </DisplayStateContainer>
     );
   }
-  if (state.status === "loading")
-    return (
-      <TableLoadingState
-        title={title}
-        accessibleName={accessibleName}
-        events={events}
-        contract={contract}
-      />
-    );
-  if (state.status === "empty")
-    return (
-      <div data-vortex-display="table" data-vortex-placement-id={placementId}>
-        <DisplayHeader title={title} accessibleName={accessibleName} events={undefined} />
+
+  const ready = state.status === "ready" && values !== undefined;
+  // The search and filter controls start from what the first shown page was read with, and start
+  // again when the person clears them; their own commits keep the controls (and their focus).
+  const controlsKey = `${clearCount}:${values === undefined ? "reading" : "read"}`;
+  const filterValue = (key: string): string =>
+    narrowing?.filters.find((filter) => sameFieldKey(filter.fieldId, key))?.value ?? "";
+  const toolbar =
+    !showSearch && !showFilters && !(ready && rows.length > 0) ? null : (
+      <div className="mb-2 flex flex-wrap items-end gap-2" key={controlsKey}>
         {!showSearch ? null : (
-          <div className="mb-2 flex flex-wrap items-start gap-4">
-            <SearchControl accessibleName={accessibleName} events={events} />
+          <SearchControl
+            accessibleName={accessibleName}
+            initialQuery={narrowing?.search ?? ""}
+            events={events}
+          />
+        )}
+        {!showFilters || state.status === "empty" ? null : (
+          <div
+            className="flex flex-wrap gap-2"
+            role="group"
+            aria-label={`Filters for ${accessibleName}`}
+          >
+            {filterColumns.map((column) => (
+              <FilterControl
+                key={column.key}
+                field={column.key}
+                label={column.label}
+                input={filterInputKind(column.declared)}
+                initialValue={filterValue(column.key)}
+                events={events}
+              />
+            ))}
           </div>
         )}
-        <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />
-      </div>
-    );
-
-  return (
-    <DisplayStateContainer
-      accessibleName={accessibleName}
-      availability={availability}
-      projectedData={state}
-      emptyMessage={emptyMessage}
-      {...(refusedMessage === undefined ? {} : { refusedMessage })}
-      {...(errorMessage === undefined ? {} : { errorMessage })}
-    >
-      {values === undefined ? null : (
-        <div
-          ref={rowsRef}
-          data-vortex-display="table"
-          data-vortex-placement-id={placementId}
-          {...(revealed ? { "data-vortex-display-revealed": "" } : {})}
-        >
-          <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
-          {!showSearch && !showFilters ? null : (
-            <div className="mb-2 flex flex-wrap items-start gap-4">
-              {!showSearch ? null : (
-                <SearchControl accessibleName={accessibleName} events={events} />
-              )}
-              {!showFilters ? null : (
-                <div
-                  className="flex flex-wrap gap-2"
-                  role="group"
-                  aria-label={`Filters for ${accessibleName}`}
-                >
-                  {filterColumns.map((column) => (
-                    <FilterControl
-                      key={column.key}
-                      field={column.key}
-                      label={column.label}
-                      input={filterInputKind(column.declared)}
-                      events={events}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          {!showBulkActions ? null : (
-            <div className="mb-2">
+        {!ready || rows.length === 0 ? null : (
+          <div className="ms-auto flex flex-wrap items-center gap-2">
+            {!selectable ||
+            declaredBulkActions.length === 0 ||
+            events?.bulk_action === undefined ? null : (
               <BulkActionsMenu
                 accessibleName={accessibleName}
                 actions={declaredBulkActions}
@@ -317,169 +471,148 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                 canRun={(action) => bulkCapable(action.capability)}
                 events={events}
               />
-            </div>
+            )}
+            <ColumnsMenu accessibleName={accessibleName} layout={layout} announce={announce} />
+          </div>
+        )}
+      </div>
+    );
+  const clearNarrowing = (): void => {
+    setClearCount((count) => count + 1);
+    if (narrowing?.search !== null && narrowing?.search !== undefined)
+      void events?.search_changed?.({ event: "search_changed", query: "" });
+    for (const filter of narrowing?.filters ?? [])
+      void events?.filter_changed?.({ event: "filter_changed", field: filter.fieldId, value: "" });
+  };
+  const loading = (
+    <TableLoadingState
+      accessibleName={accessibleName}
+      contract={contract}
+      presentation={presentation ?? "grid"}
+      selectionColumn={selectable}
+      actionsColumn={showActions}
+    />
+  );
+
+  const body = ((): ReactElement => {
+    if (state.status === "loading") return loading;
+    if (state.status === "empty")
+      return <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />;
+    if (state.status === "error" || state.status === "refused")
+      return (
+        <div className="flex flex-col items-start gap-2">
+          <DisplayStateContainer
+            accessibleName={accessibleName}
+            availability={availability}
+            projectedData={state}
+            emptyMessage={emptyMessage}
+            {...(refusedMessage === undefined ? {} : { refusedMessage })}
+            {...(errorMessage === undefined ? {} : { errorMessage })}
+          >
+            {null}
+          </DisplayStateContainer>
+          {state.status !== "error" || events?.refresh === undefined ? null : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void events.refresh?.({ event: "refresh" })}
+            >
+              Try again
+            </Button>
           )}
-          <Table aria-label={accessibleName}>
-            <TableHeader>
-              <TableRow>
-                {!selectable ? null : (
-                  <TableHead scope="col" className="w-px">
-                    {selectionMode === "multiple" ? (
-                      <SelectAllControl
-                        allSelected={allSelected}
-                        recordIds={pageRecordIds}
-                        accessibleName={accessibleName}
-                        events={events}
-                      />
-                    ) : (
-                      <span className="sr-only">Selected</span>
-                    )}
-                  </TableHead>
-                )}
-                {columns.map((column) => {
-                  // The page's order is an ordered list of keys: the primary key sets aria-sort,
-                  // and every key states its direction and priority in the header's own text.
-                  const priority = sortKeys.findIndex((key) =>
-                    sameFieldKey(key.fieldId, column.key),
-                  );
-                  const direction = priority < 0 ? undefined : sortKeys[priority]?.direction;
-                  const onSort = sortable(column) ? events?.sort_changed : undefined;
-                  const sortText =
-                    direction === undefined
-                      ? undefined
-                      : sortKeys.length === 1
-                        ? `sorted ${direction}`
-                        : `sorted ${direction}, sort priority ${priority + 1} of ${sortKeys.length}`;
-                  return (
-                    <TableHead
-                      key={column.key}
-                      scope="col"
-                      aria-sort={priority === 0 && direction !== undefined ? direction : "none"}
-                      className={cn(priorityClass(column, column.key === columns[0]?.key))}
-                      {...columnAttributes(column)}
-                    >
-                      {onSort === undefined ? (
-                        <>
-                          {column.label}
-                          {sortText === undefined ? null : (
-                            <span className="sr-only">, {sortText}</span>
-                          )}
-                        </>
-                      ) : (
-                        // A click replaces the order with this column; Shift with a click adds,
-                        // turns or removes this column's key and keeps the others' priority.
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          title="Sort; hold Shift to add to the sort"
-                          onClick={(event) =>
-                            onSort({
-                              event: "sort_changed",
-                              sort: nextRecordsTableSort(values.sort, column.key, event.shiftKey),
-                            })
-                          }
-                        >
-                          {column.label}
-                          {sortText === undefined ? null : (
-                            <span className="sr-only">, {sortText}</span>
-                          )}
-                          {direction === undefined ? null : (
-                            <Icon
-                              name={direction === "ascending" ? "arrow-up" : "arrow-down"}
-                              aria-hidden="true"
-                              className="size-3.5"
-                            />
-                          )}
-                          {direction === undefined || sortKeys.length < 2 ? null : (
-                            <span aria-hidden="true" className="text-xs text-muted-foreground">
-                              {priority + 1}
-                            </span>
-                          )}
-                        </Button>
-                      )}
-                    </TableHead>
-                  );
-                })}
-                {!showActionsColumn ? null : (
-                  <TableHead scope="col" className="w-px">
-                    <span className="sr-only">Actions</span>
-                  </TableHead>
-                )}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {values.rows.map((row) => {
-                const name = rowName(row, columns[0]?.key);
-                const selected = selectedRecordIds.includes(row.recordId);
-                const shownActions = declaredRowActions.filter((action) =>
-                  rowShowsAction(row, action),
-                );
-                return (
-                  <ClickableRow
-                    key={row.recordId}
-                    recordId={row.recordId}
-                    selected={selected}
-                    activate={activateRow}
-                  >
-                    {!selectable ? null : (
-                      <TableCell className="w-px">
-                        <SelectionControl
-                          row={row}
-                          name={name}
-                          selected={selected}
-                          mode={selectionMode === "single" ? "single" : "multiple"}
-                          groupName={`vortex-selection-${placementId}`}
-                          events={events}
-                        />
-                      </TableCell>
-                    )}
-                    {columns.map((column) => {
-                      const cell: DisplayCellValue = row.cells[column.key] ?? { kind: "empty" };
-                      return (
-                        <TableCell
-                          key={column.key}
-                          className={cn(priorityClass(column, column.key === columns[0]?.key))}
-                          {...columnAttributes(column)}
-                        >
-                          {editable(row, column.key, cell) &&
-                          onInlineEdit !== undefined &&
-                          inlineEventId !== undefined ? (
-                            // Keyed by the projected value so a refreshed row resets the editor.
-                            <InlineEditCell
-                              key={JSON.stringify(cell)}
-                              eventId={inlineEventId}
-                              recordId={row.recordId}
-                              {...(row.revision === undefined ? {} : { revision: row.revision })}
-                              field={column.key}
-                              label={column.label}
-                              value={
-                                cell.kind === "link" ? { kind: "text", text: cell.label } : cell
-                              }
-                              handler={onInlineEdit}
-                            />
-                          ) : (
-                            <DisplayCellView value={cell} />
-                          )}
-                        </TableCell>
-                      );
-                    })}
-                    {!showActionsColumn ? null : (
-                      <TableCell className="w-px">
-                        <RowActionsMenu
-                          recordId={row.recordId}
-                          {...(row.revision === undefined ? {} : { revision: row.revision })}
-                          name={name}
-                          actions={shownActions}
-                          events={events}
-                        />
-                      </TableCell>
-                    )}
-                  </ClickableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+        </div>
+      );
+    if (values === undefined) return loading;
+    if (rows.length === 0)
+      return (
+        <Empty
+          role="status"
+          data-vortex-display-state={narrowed(narrowing) ? "no-match" : "empty"}
+          className="border border-border text-muted-foreground"
+          aria-label={`${accessibleName}: ${narrowed(narrowing) ? "no matches" : "empty"}`}
+        >
+          <EmptyHeader>
+            <EmptyTitle>
+              {narrowed(narrowing)
+                ? "No records match the search or filters"
+                : "No records on this page"}
+            </EmptyTitle>
+          </EmptyHeader>
+          {!narrowed(narrowing) ? null : (
+            <EmptyContent>
+              <Button variant="outline" size="sm" onClick={clearNarrowing}>
+                Clear search and filters
+              </Button>
+            </EmptyContent>
+          )}
+        </Empty>
+      );
+    // The viewport is unknown while the server renders and the page hydrates: the declared
+    // skeleton stands in until the one presentation that fits is known.
+    if (presentation === undefined) return loading;
+    return presentation === "cards" ? (
+      <RecordsCards
+        accessibleName={accessibleName}
+        columns={layout.shown}
+        rows={rows}
+        selectedRecordIds={selectedRecordIds}
+        selectable={selectable}
+        showActions={showActions}
+        activateRow={activateRow}
+        renderers={renderers}
+      />
+    ) : (
+      <RecordsGrid
+        accessibleName={accessibleName}
+        contract={contract}
+        layout={layout}
+        rows={rows}
+        sort={values.sort}
+        selection={selectable ? (selectionMode === "single" ? "single" : "multiple") : undefined}
+        selectedRecordIds={selectedRecordIds}
+        showActions={showActions}
+        events={events}
+        activateRow={activateRow}
+        renderers={gridRenderers}
+        announce={announce}
+      />
+    );
+  })();
+
+  return (
+    <div
+      data-vortex-display="table"
+      data-vortex-placement-id={placementId}
+      data-vortex-table-density={contract.density}
+      {...(revealed ? { "data-vortex-display-revealed": "" } : {})}
+    >
+      <DisplayHeader
+        title={title}
+        accessibleName={accessibleName}
+        events={state.status === "empty" ? undefined : events}
+      />
+      {state.status === "refused" || state.status === "error" ? null : toolbar}
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {message}
+      </div>
+      {ready && availability === "unavailable" ? (
+        <DisplayStateContainer
+          accessibleName={accessibleName}
+          availability={availability}
+          projectedData={state}
+          emptyMessage={emptyMessage}
+        >
+          {body}
+        </DisplayStateContainer>
+      ) : (
+        body
+      )}
+      {!ready || values === undefined ? null : (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="m-0 text-xs text-muted-foreground tabular-nums">
+            {values.page === undefined ? "" : `Page ${values.page} · `}
+            {rows.length === 1 ? "1 row" : `${rows.length} rows`}
+          </p>
           <PaginationControl
             page={values.page}
             pageCount={values.pageCount}
@@ -498,6 +631,6 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
           />
         </div>
       )}
-    </DisplayStateContainer>
+    </div>
   );
 }
