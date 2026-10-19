@@ -67,7 +67,6 @@ import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
 import { platformPermissionSource } from "./platform-permission-source";
 import { studioCanvasFramesFor, type StudioApplicationCanvasFrames } from "./studio-canvas-frames";
-import { rememberCompiledDraft } from "./studio-compiled-drafts";
 
 export type { StudioApplicationCanvasFrames } from "./studio-canvas-frames";
 
@@ -116,7 +115,6 @@ const loadFailure = (operation: string, error: unknown): StudioApplicationFailur
 
 export type StudioViewResources = Readonly<{
   request: StudioViewRequest;
-  catalogue: typeof IMMUTABLE_PLATFORM_BLOCK_CATALOGUE;
   themeOptions: StudioThemeOptions | null;
   fieldInputControlReleases: FieldInputControlReleaseMap | null;
   platformThemeTokens: PlatformThemeTokens | null;
@@ -143,6 +141,8 @@ type StudioApplicationLoadResult =
       kind: "available";
       organizationId: OrganizationId;
       draft: StoredApplicationDefinitionDraft;
+      /** The immutable block catalogue, once for every view; complete when any view uses its releases. */
+      catalogue: typeof IMMUTABLE_PLATFORM_BLOCK_CATALOGUE;
       /** One view per request, in request order. */
       views: readonly StudioLoadedView[];
     }>
@@ -403,6 +403,7 @@ export const loadStudioApplicationDraft = async (
           Readonly<{
             organizationId: OrganizationId;
             draft: StoredApplicationDefinitionDraft;
+            catalogue: typeof IMMUTABLE_PLATFORM_BLOCK_CATALOGUE;
             views: readonly StudioLoadedView[];
           }>
         >
@@ -454,15 +455,16 @@ export const loadStudioApplicationDraft = async (
           ? findPinnedPlatformThemeRelease(draft.source.body.theme.base)
           : undefined;
         if (canvas && themeRelease === undefined) throw new Error("STUDIO_THEME_RELEASE_MISSING");
+        const catalogue = requests.some(
+          (request) => choicesOf(request) || request.creation !== undefined,
+        )
+          ? IMMUTABLE_PLATFORM_BLOCK_CATALOGUE
+          : {
+              compositionPolicy: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE.compositionPolicy,
+              releases: [],
+            };
         const resourcesOf = (request: StudioViewRequest): StudioViewResources => ({
           request,
-          catalogue:
-            choicesOf(request) || request.creation !== undefined
-              ? IMMUTABLE_PLATFORM_BLOCK_CATALOGUE
-              : {
-                  compositionPolicy: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE.compositionPolicy,
-                  releases: [],
-                },
           themeOptions: request.kind === "theme" ? studioThemeOptions : null,
           fieldInputControlReleases: canvasOf(request) ? FIELD_INPUT_CONTROL_RELEASES : null,
           platformThemeTokens: canvasOf(request) ? (themeRelease?.tokens ?? null) : null,
@@ -529,12 +531,6 @@ export const loadStudioApplicationDraft = async (
                     request.pageAlias,
                   )
                 : null,
-            );
-            // The canvas reads this revision's records against this same compile.
-            rememberCompiledDraft(
-              scope.organizationId,
-              draft,
-              compiled.compilation.canonical.content,
             );
             canvasFrames = requests.map((request) =>
               canvasOf(request) || request.kind === "access"
@@ -788,6 +784,7 @@ export const loadStudioApplicationDraft = async (
           value: {
             organizationId: scope.organizationId,
             draft,
+            catalogue,
             views: requests.map((request, index) => ({
               ...resourcesOf(request),
               compiledFields: dataOf(request) ? compiledFields : null,

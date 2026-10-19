@@ -486,34 +486,40 @@
                     "columns": [
                       {
                         "field": "vortex.organisation_administration:activity_entry.occurred_at",
-                        "label": "Occurred"
+                        "label": "Occurred",
+                        "visible": true
                       },
                       {
                         "field": "vortex.organisation_administration:activity_entry.actor_kind",
-                        "label": "Actor kind"
+                        "label": "Actor kind",
+                        "visible": true
                       },
                       {
                         "field": "vortex.organisation_administration:activity_entry.actor",
-                        "label": "Actor"
+                        "label": "Actor",
+                        "visible": true
                       },
                       {
                         "field": "vortex.organisation_administration:activity_entry.action",
-                        "label": "Action"
+                        "label": "Action",
+                        "visible": true
                       },
                       {
                         "field": "vortex.organisation_administration:activity_entry.subject_count",
-                        "label": "Subjects"
+                        "label": "Subjects",
+                        "visible": true
                       },
                       {
                         "field": "vortex.organisation_administration:activity_entry.changed_field_count",
-                        "label": "Changed fields"
+                        "label": "Changed fields",
+                        "visible": true
                       }
                     ],
                     "title": "Activity (last 90 days)",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.2.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.organisation_administration:activity_entries",
                       "responsive": {
@@ -628,19 +634,23 @@
                     "columns": [
                       {
                         "field": "vortex.system_directory:person.display_name",
-                        "label": "Display name"
+                        "label": "Display name",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:person.state",
-                        "label": "State"
+                        "label": "State",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:person.language",
-                        "label": "Language"
+                        "label": "Language",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:person.time_zone",
-                        "label": "Time zone"
+                        "label": "Time zone",
+                        "visible": true
                       }
                     ],
                     "row_actions": [
@@ -660,7 +670,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.4.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.system_directory:people",
                       "responsive": {
@@ -730,19 +740,23 @@
                     "columns": [
                       {
                         "field": "vortex.system_directory:organization_invitation.invited_email",
-                        "label": "Invited email"
+                        "label": "Invited email",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:organization_invitation.state",
-                        "label": "State"
+                        "label": "State",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:organization_invitation.invited_at",
-                        "label": "Invited at"
+                        "label": "Invited at",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:organization_invitation.expires_at",
-                        "label": "Expires at"
+                        "label": "Expires at",
+                        "visible": true
                       }
                     ],
                     "row_actions": [
@@ -754,7 +768,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.4.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.system_directory:organization_invitations",
                       "responsive": {
@@ -931,33 +945,39 @@
                     "columns": [
                       {
                         "field": "vortex.organisation_administration:organization_settings.language",
-                        "label": "Language"
+                        "label": "Language",
+                        "visible": true
                       },
                       {
                         "field": "vortex.organisation_administration:organization_settings.time_zone",
-                        "label": "Time zone"
+                        "label": "Time zone",
+                        "visible": true
                       },
                       {
                         "field": "vortex.organisation_administration:organization_settings.currency",
-                        "label": "Currency"
+                        "label": "Currency",
+                        "visible": true
                       },
                       {
                         "field": "vortex.organisation_administration:organization_settings.date_format",
-                        "label": "Date format"
+                        "label": "Date format",
+                        "visible": true
                       },
                       {
                         "field": "vortex.organisation_administration:organization_settings.number_format",
-                        "label": "Number format"
+                        "label": "Number format",
+                        "visible": true
                       },
                       {
                         "field": "vortex.organisation_administration:organization_settings.default_application_root_id",
-                        "label": "Default application"
+                        "label": "Default application",
+                        "visible": true
                       }
                     ],
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.organisation_administration:organization_settings",
                       "responsive": {
@@ -1226,26 +1246,30 @@
                     "columns": [
                       {
                         "field": "vortex.organisation_administration:organisation_notice.title",
-                        "label": "Title"
+                        "label": "Title",
+                        "visible": true
                       },
                       {
                         "field": "vortex.organisation_administration:organisation_notice.body",
-                        "label": "Body"
+                        "label": "Body",
+                        "visible": true
                       },
                       {
                         "field": "vortex.organisation_administration:organisation_notice.state",
-                        "label": "State"
+                        "label": "State",
+                        "visible": true
                       },
                       {
                         "field": "vortex.organisation_administration:organisation_notice.published_at",
-                        "label": "Published"
+                        "label": "Published",
+                        "visible": true
                       }
                     ],
                     "title": "Organisation notices",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.2.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.organisation_administration:organisation_notices",
                       "responsive": {
@@ -1442,30 +1466,35 @@
                     "columns": [
                       {
                         "field": "vortex.organisation_administration:privacy_request_case.subject",
-                        "label": "Subject"
+                        "label": "Subject",
+                        "visible": true
                       },
                       {
                         "field": "vortex.organisation_administration:privacy_request_case.request_kind",
-                        "label": "Request kind"
+                        "label": "Request kind",
+                        "visible": true
                       },
                       {
                         "field": "vortex.organisation_administration:privacy_request_case.state",
-                        "label": "State"
+                        "label": "State",
+                        "visible": true
                       },
                       {
                         "field": "vortex.organisation_administration:privacy_request_case.received_at",
-                        "label": "Received"
+                        "label": "Received",
+                        "visible": true
                       },
                       {
                         "field": "vortex.organisation_administration:privacy_request_case.closed_at",
-                        "label": "Closed"
+                        "label": "Closed",
+                        "visible": true
                       }
                     ],
                     "title": "Privacy request cases",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.2.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.organisation_administration:privacy_request_cases",
                       "responsive": {

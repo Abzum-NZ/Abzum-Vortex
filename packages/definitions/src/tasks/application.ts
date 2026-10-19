@@ -15,7 +15,7 @@ const {
   CONTAINER_BLOCK_RELEASE,
   CONTAINER_BLOCK_RELEASE_1_2_0,
   FORM_CONTAINER_BLOCK_RELEASE,
-  TABLE_BLOCK_RELEASE_1_3_0,
+  TABLE_BLOCK_RELEASE,
   TEXT_INPUT_BLOCK_RELEASE,
 } = PLATFORM_BLOCK_RELEASE_IDENTITIES;
 
@@ -228,12 +228,13 @@ export const tasksApplication: ApplicationSourceDocument = loadApplicationSource
       pages: [
         page("tasks", "Tasks", "list", readPage, {
           tasks_table: placement(
-            TABLE_BLOCK_RELEASE_1_3_0,
+            TABLE_BLOCK_RELEASE,
             {
               title: "Tasks",
               columns: (["title", "notes"] as const).map((field) => ({
                 field: `${recordType}.${field}`,
                 label: field === "title" ? "Title" : "Notes",
+                visible: true,
               })),
             },
             {},

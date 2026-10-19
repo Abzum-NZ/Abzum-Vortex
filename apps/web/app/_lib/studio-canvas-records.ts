@@ -69,6 +69,7 @@ export type StudioCanvasRecordsResult =
   | Readonly<{ kind: "conflict" }>
   /** The builder may not edit or preview this application, so the canvas reads no records. */
   | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "following" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 /** The compiled slot of one page area beside its stored items, and the block name of each compiled placement. */
@@ -92,7 +93,11 @@ type StudioPreview = Extract<
   Awaited<ReturnType<typeof openStudioPreviewRead>>,
   { kind: "available" }
 >;
-type CanvasSample = Readonly<{ recordTypeName: string; recordId?: string; title?: string }>;
+type CanvasSample = Readonly<{
+  recordTypeName: string;
+  recordId?: string;
+  title?: string;
+}>;
 
 /**
  * The first record of a page's record type the builder can read in the preview, by its title, as a
@@ -142,7 +147,11 @@ const readSample = async (
   const first = read.value.choices[0];
   return first === undefined
     ? { recordTypeName: record.singularLabel }
-    : { recordTypeName: record.singularLabel, recordId: first.recordId, title: first.title };
+    : {
+        recordTypeName: record.singularLabel,
+        recordId: first.recordId,
+        title: first.title,
+      };
 };
 
 /**
@@ -157,6 +166,7 @@ export const readStudioCanvasRecords = async (
   session: IdentitySession,
   candidateOrganizationId: string,
   candidate: unknown,
+  signal?: AbortSignal,
 ): Promise<StudioCanvasRecordsResult> => {
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
   const parsed = requestSchema.safeParse(candidate);
@@ -168,11 +178,14 @@ export const readStudioCanvasRecords = async (
       organization.data,
       request.rootId,
       request.draftRevision,
+      signal,
     );
     if (preview.kind !== "available") return preview;
     const { draft, context, services, selection, dependencies } = preview;
     if (draft.sourceFingerprint !== request.sourceFingerprint) return { kind: "conflict" };
+    signal?.throwIfAborted();
     const content = await compiledDraftContent(session, organization.data, draft);
+    signal?.throwIfAborted();
     if (typeof content === "string") return { kind: content };
     const pageIndex = draft.source.body.pages.findIndex((page) => page.id === request.pageAlias);
     const page = draft.source.body.pages[pageIndex];
@@ -199,7 +212,10 @@ export const readStudioCanvasRecords = async (
     placementAliases(zone.items, slot, aliases);
 
     // The draft's page, drawn as the running page reads it: its content is this area's blocks.
-    const areaPage = { ...compiledPage, composition: { root: { props: {} }, content: slot } };
+    const areaPage = {
+      ...compiledPage,
+      composition: { root: { props: {} }, content: slot },
+    };
     // A detail page shows one record, named by its address in the running application. The canvas
     // shows the first record of its type the builder can read in the preview, as if it were opened.
     const subjectType =
@@ -255,7 +271,10 @@ export const readStudioCanvasRecords = async (
       dependencies,
       subjectId,
       readSubject: (recordTypeId: string, recordId: string) =>
-        (subjectRead ??= services.subjects.read(session, selection, { recordTypeId, recordId })),
+        (subjectRead ??= services.subjects.read(session, selection, {
+          recordTypeId,
+          recordId,
+        })),
       linkTiles: services.linkTiles,
       queryNotices: services.queryNotices,
       boardContinuation: undefined,
@@ -269,6 +288,7 @@ export const readStudioCanvasRecords = async (
       adoptSubjectRead: () => {},
       markSubjectUnreadable: () => {},
     };
+    signal?.throwIfAborted();
     await Promise.all(placements.map((placement) => readPlacement(input, placement)));
     const records: Record<string, PageDataState> = {};
     for (const [placementId, state] of Object.entries(data)) {
@@ -293,6 +313,7 @@ export const readStudioCanvasRecords = async (
           }),
     };
   } catch (error) {
+    signal?.throwIfAborted();
     if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING")
       return { kind: "conflict" };
     console.error(

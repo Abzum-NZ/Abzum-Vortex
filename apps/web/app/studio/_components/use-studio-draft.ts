@@ -18,11 +18,8 @@ import {
   type StudioSemanticSelectionStore,
   type StudioStoredApplicationDraft,
 } from "@vortex/ui/studio";
-import {
-  reopenStudioApplication,
-  saveStudioApplication,
-  type StudioDraftChangedElsewhere,
-} from "../actions";
+import { saveStudioApplication, type StudioDraftChangedElsewhere } from "../actions";
+import { reopenStudioApplication } from "../_lib/studio-reads";
 import type {
   StudioViewResources,
   StudioApplicationCanvasFrames,
@@ -51,6 +48,7 @@ const maximumRetries = 5;
  */
 export type StudioCompiledView = StudioViewResources &
   Readonly<{
+    catalogue: StudioCatalogue;
     source: StudioStoredApplicationDraft["source"];
     draftRevision: number;
     sourceFingerprint: string;
@@ -85,7 +83,11 @@ export type StudioSaveStatus =
 
 /** What one command did to the draft: changed it (one history entry) or kept it as it is. */
 export type StudioDraftStep<Result> =
-  | Readonly<{ kind: "edit"; source: ApplicationSourceDocument; result: Result }>
+  | Readonly<{
+      kind: "edit";
+      source: ApplicationSourceDocument;
+      result: Result;
+    }>
   | Readonly<{ kind: "keep"; result: Result }>;
 
 /** The envelope's answer: the command ran (and `changed` says whether the draft took an edit), or it could not run now. */
@@ -180,7 +182,9 @@ type LoadedResult = Extract<
   Awaited<ReturnType<typeof reopenStudioApplication>>,
   { kind: "available" }
 >;
-type LoadedView = LoadedResult["views"][number];
+type StudioCatalogue = LoadedResult["catalogue"];
+/** One view a read returned, with the catalogue that read sent once for all its views. */
+type LoadedView = LoadedResult["views"][number] & Readonly<{ catalogue: StudioCatalogue }>;
 /** Views read for one saved revision, by request key; a newer saved revision replaces them all. */
 type StudioViewCache = Readonly<{
   draftRevision: number;
@@ -260,7 +264,9 @@ export function useStudioDraft({
   const holds = useRef(new Set<StudioDraftHold>());
   const [renderedHolds, setRenderedHolds] = useState<ReadonlySet<StudioDraftHold>>(() => new Set());
   const statusRef = useRef<StudioSaveStatus>({ kind: "saved" });
-  const [status, setStatusState] = useState<StudioSaveStatus>({ kind: "saved" });
+  const [status, setStatusState] = useState<StudioSaveStatus>({
+    kind: "saved",
+  });
   const setStatus = (next: StudioSaveStatus) => {
     statusRef.current = next;
     setStatusState(next);
@@ -365,13 +371,19 @@ export function useStudioDraft({
       ]),
     };
   // The idle read of the other tabs' views, which a switch to one of them waits for instead of reading again.
-  const reading = useRef<Readonly<{ keys: ReadonlySet<string>; done: Promise<void> }> | null>(null);
+  const reading = useRef<Readonly<{
+    keys: ReadonlySet<string>;
+    done: Promise<void>;
+  }> | null>(null);
 
   /** Keeps every view a read returned for the saved revision it was read at. */
   const remember = useCallback(
     (
       result: LoadedResult,
-      requested: readonly Readonly<{ request: StudioViewRequest; key: string }>[],
+      requested: readonly Readonly<{
+        request: StudioViewRequest;
+        key: string;
+      }>[],
     ) => {
       const { draftRevision, sourceFingerprint } = result.draft;
       const known = viewCache.current;
@@ -384,9 +396,15 @@ export function useStudioDraft({
       requested.forEach(({ request, key }, index) => {
         const loaded = result.views[index];
         // Kept under the request as it was sent, so a drawn view always matches its key.
-        if (loaded !== undefined) views.set(key, { ...loaded, request });
+        if (loaded !== undefined)
+          views.set(key, { ...loaded, request, catalogue: result.catalogue });
       });
-      viewCache.current = { draftRevision, sourceFingerprint, draft: result.draft, views };
+      viewCache.current = {
+        draftRevision,
+        sourceFingerprint,
+        draft: result.draft,
+        views,
+      };
     },
     [],
   );
@@ -502,7 +520,7 @@ export function useStudioDraft({
           }
           remember(result, [requested]);
           generation.current += 1;
-          const loaded = result.views[0]!;
+          const loaded = { ...result.views[0]!, catalogue: result.catalogue };
           setView((previous) => viewOf(result.draft, loaded, generation.current, previous));
         } catch (error) {
           console.error(
@@ -546,7 +564,8 @@ export function useStudioDraft({
       );
       return null;
     }
-    const { catalogue, borrowedChoices } = result.views[0]!;
+    const { catalogue } = result;
+    const { borrowedChoices } = result.views[0]!;
     // Only the immutable catalogue survives the call. Revision-bound choices belong to its caller.
     catalogueRef.current = catalogue;
     setView((previous) => ({ ...previous, catalogue }));
@@ -710,7 +729,11 @@ export function useStudioDraft({
   }, [history, selection, parsed, scheduleSave]);
 
   useEffect(() => {
-    selection.reconcile({ rootId: state.rootId, source: parsed(state.source), catalogue });
+    selection.reconcile({
+      rootId: state.rootId,
+      source: parsed(state.source),
+      catalogue,
+    });
   }, [selection, state.rootId, state.source, parsed, catalogue]);
 
   useEffect(() => {
@@ -795,7 +818,9 @@ export function useStudioDraft({
     const timer = setTimeout(
       () => {
         if (typeof window.requestIdleCallback === "function")
-          handle = window.requestIdleCallback(read, { timeout: idleReadTimeoutMs });
+          handle = window.requestIdleCallback(read, {
+            timeout: idleReadTimeoutMs,
+          });
         else read();
       },
       readCount === 0 ? 0 : idleReadDelayMs,
@@ -926,7 +951,7 @@ export function useStudioDraft({
       setSaved(result.draft);
       remember(result, [requested]);
       generation.current += 1;
-      const loaded = result.views[0]!;
+      const loaded = { ...result.views[0]!, catalogue: result.catalogue };
       setView((previous) => viewOf(result.draft, loaded, generation.current, previous));
       lifetimeRef.current += 1;
       setLifetime(lifetimeRef.current);

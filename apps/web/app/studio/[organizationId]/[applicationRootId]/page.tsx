@@ -106,7 +106,7 @@ export default async function StudioApplicationPage({
       applications={applications}
       initialView={{
         request: view.request,
-        catalogue: view.catalogue,
+        catalogue: result.catalogue,
         themeOptions: view.themeOptions,
         fieldInputControlReleases: view.fieldInputControlReleases,
         platformThemeTokens: view.platformThemeTokens,

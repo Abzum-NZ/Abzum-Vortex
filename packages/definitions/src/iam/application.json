@@ -1062,25 +1062,29 @@
                     "columns": [
                       {
                         "field": "vortex.system_directory:person.display_name",
-                        "label": "Display name"
+                        "label": "Display name",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:person.state",
-                        "label": "State"
+                        "label": "State",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:person.language",
-                        "label": "Language"
+                        "label": "Language",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:person.time_zone",
-                        "label": "Time zone"
+                        "label": "Time zone",
+                        "visible": true
                       }
                     ],
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.system_directory:people",
                       "responsive": {
@@ -1214,36 +1218,49 @@
                     "columns": [
                       {
                         "field": "vortex.system_directory:role.key",
-                        "label": "Key"
+                        "label": "Key",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role.label",
-                        "label": "Label"
+                        "label": "Label",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role.lifecycle",
-                        "label": "Lifecycle"
+                        "label": "Lifecycle",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role.role_kind",
-                        "label": "Role kind"
+                        "label": "Role kind",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role.privilege_classification",
-                        "label": "Privilege"
+                        "label": "Privilege",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role.assignment_policy",
-                        "label": "Assignment policy"
+                        "label": "Assignment policy",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role.accepted_permission_count",
-                        "label": "Accepted permissions"
+                        "label": "Accepted permissions",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role.revision",
-                        "label": "Role revision"
+                        "label": "Role revision",
+                        "visible": true
                       }
+                    ],
+                    "sortable_fields": [
+                      "vortex.system_directory:role.key",
+                      "vortex.system_directory:role.label",
+                      "vortex.system_directory:role.lifecycle"
                     ],
                     "row_actions": [
                       {
@@ -1262,7 +1279,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.4.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.system_directory:roles",
                       "responsive": {
@@ -1287,16 +1304,24 @@
                     "columns": [
                       {
                         "field": "vortex.system_directory:group.key",
-                        "label": "Key"
+                        "label": "Key",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:group.label",
-                        "label": "Label"
+                        "label": "Label",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:group.state",
-                        "label": "State"
+                        "label": "State",
+                        "visible": true
                       }
+                    ],
+                    "sortable_fields": [
+                      "vortex.system_directory:group.key",
+                      "vortex.system_directory:group.label",
+                      "vortex.system_directory:group.state"
                     ],
                     "row_actions": [
                       {
@@ -1319,7 +1344,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.4.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.system_directory:groups",
                       "responsive": {
@@ -1344,23 +1369,28 @@
                     "columns": [
                       {
                         "field": "vortex.system_directory:group_membership.account_display_name",
-                        "label": "Member"
+                        "label": "Member",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:group_membership.group_id",
-                        "label": "Group"
+                        "label": "Group",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:group_membership.starts_at",
-                        "label": "Starts at"
+                        "label": "Starts at",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:group_membership.expires_at",
-                        "label": "Expires at"
+                        "label": "Expires at",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:group_membership.state",
-                        "label": "State"
+                        "label": "State",
+                        "visible": true
                       }
                     ],
                     "row_actions": [
@@ -1372,7 +1402,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.4.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.system_directory:group_memberships",
                       "responsive": {
@@ -2031,51 +2061,63 @@
                     "columns": [
                       {
                         "field": "vortex.system_directory:role_assignment.role_label",
-                        "label": "Role"
+                        "label": "Role",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.assignee_kind",
-                        "label": "Assignee kind"
+                        "label": "Assignee kind",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.assignment_kind",
-                        "label": "Assignment kind"
+                        "label": "Assignment kind",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.starts_at",
-                        "label": "Starts"
+                        "label": "Starts",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.expires_at",
-                        "label": "Expires"
+                        "label": "Expires",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.state",
-                        "label": "State"
+                        "label": "State",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.temporal_state",
-                        "label": "Temporal state"
+                        "label": "Temporal state",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.role_id",
-                        "label": "Role ID"
+                        "label": "Role ID",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.role_key",
-                        "label": "Role key"
+                        "label": "Role key",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.organization_account_id",
-                        "label": "Organisation account ID"
+                        "label": "Organisation account ID",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.group_id",
-                        "label": "Group ID"
+                        "label": "Group ID",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.revision",
-                        "label": "Assignment revision"
+                        "label": "Assignment revision",
+                        "visible": true
                       }
                     ],
                     "row_actions": [
@@ -2087,7 +2129,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.4.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.system_directory:role_assignments",
                       "responsive": {
@@ -2112,23 +2154,28 @@
                     "columns": [
                       {
                         "field": "vortex.system_directory:delegation.holder_kind",
-                        "label": "Holder"
+                        "label": "Holder",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:delegation.scope_kind",
-                        "label": "Scope"
+                        "label": "Scope",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:delegation.starts_at",
-                        "label": "Starts at"
+                        "label": "Starts at",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:delegation.expires_at",
-                        "label": "Expires at"
+                        "label": "Expires at",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:delegation.state",
-                        "label": "State"
+                        "label": "State",
+                        "visible": true
                       }
                     ],
                     "row_actions": [
@@ -2140,7 +2187,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.4.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.system_directory:delegations",
                       "responsive": {
@@ -2545,23 +2592,28 @@
                     "columns": [
                       {
                         "field": "vortex.system_directory:role_activation.account_display_name",
-                        "label": "Person"
+                        "label": "Person",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role_activation.role_label",
-                        "label": "Role"
+                        "label": "Role",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role_activation.activated_at",
-                        "label": "Activated at"
+                        "label": "Activated at",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role_activation.expires_at",
-                        "label": "Expires at"
+                        "label": "Expires at",
+                        "visible": true
                       },
                       {
                         "field": "vortex.system_directory:role_activation.state",
-                        "label": "State"
+                        "label": "State",
+                        "visible": true
                       }
                     ],
                     "row_actions": [
@@ -2573,7 +2625,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.4.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.system_directory:role_activations",
                       "responsive": {
@@ -2622,34 +2674,40 @@
                     "columns": [
                       {
                         "field": "vortex.iam.core:access_request.request_number",
-                        "label": "Request number"
+                        "label": "Request number",
+                        "visible": true
                       },
                       {
                         "field": "vortex.iam.core:access_request.title",
-                        "label": "Title"
+                        "label": "Title",
+                        "visible": true
                       },
                       {
                         "field": "vortex.iam.core:access_request.request_type",
-                        "label": "Request type"
+                        "label": "Request type",
+                        "visible": true
                       },
                       {
                         "field": "vortex.iam.core:access_request.state",
-                        "label": "State"
+                        "label": "State",
+                        "visible": true
                       },
                       {
                         "field": "vortex.iam.core:access_request.beneficiary",
-                        "label": "Beneficiary"
+                        "label": "Beneficiary",
+                        "visible": true
                       },
                       {
                         "field": "vortex.iam.core:access_request.submitted_at",
-                        "label": "Submitted"
+                        "label": "Submitted",
+                        "visible": true
                       }
                     ],
                     "title": "Access Requests",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.iam.core:iam_access_requests",
                       "responsive": {

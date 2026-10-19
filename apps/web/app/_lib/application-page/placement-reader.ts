@@ -52,13 +52,10 @@ import {
   sameId,
   isRecord,
   describeFailure,
+  readRecordsTableQueryState,
+  type RecordsTablePageRequest,
 } from "@vortex/platform/schema";
 import { hasReferenceChoiceSource, projectedReferenceChoiceForm } from "../reference-choices";
-import {
-  parseTablePagePosition,
-  tablePageParameterName,
-  type TablePageRequest,
-} from "../table-page-position";
 import type { collectPlacements } from "./placement-helpers";
 import { projectedUseAvailability, isBoardPlacement, first } from "./placement-helpers";
 import { readCalendarPlacement } from "./calendar";
@@ -77,7 +74,6 @@ import {
   launcherCellKey,
   summaryAggregateCellValue,
   summaryAggregateLabel,
-  requestState,
   type PlacementLogPlace,
 } from "./query-helpers";
 import type {
@@ -871,17 +867,26 @@ export const readPlacement = async (
       if (parameter.pageParameter !== undefined && value !== undefined)
         pageParameters[parameter.pageParameter] = value;
     }
-    const state = requestState(placementId, parameters);
+    // The table's whole query state comes from the page address; a malformed part is refused
+    // rather than read as another order or projection.
+    const addressed = readRecordsTableQueryState(
+      placementId,
+      Object.entries(parameters).flatMap(([name, value]): [string, string][] => {
+        const text = first(value);
+        return text === undefined ? [] : [[name, text]];
+      }),
+    );
+    if (addressed.kind === "malformed") {
+      logPlacementFailure(address, placementId, "table_state_malformed", addressed.part);
+      data[placementId] = { status: "refused", reason: "not_permitted" };
+      return;
+    }
     const explicitRequest =
       tableContinuation !== undefined && sameId(tableContinuation.placementId, placementId)
         ? tableContinuation.request
         : undefined;
     // An explicit page request wins; otherwise the page position in the address is honoured.
-    const addressRequest =
-      explicitRequest === undefined
-        ? parseTablePagePosition(first(parameters[tablePageParameterName(placementId)]))
-        : undefined;
-    const readPage = (request: TablePageRequest | undefined) =>
+    const readPage = (page: RecordsTablePageRequest | undefined) =>
       tables.resolve(session, selection, {
         moduleRootId: bound.module.rootId,
         queryId: bound.query.queryId,
@@ -892,22 +897,15 @@ export const readPlacement = async (
         fieldDateTypes: fieldDateTypesOf(bound.module),
         fieldLinkTypes: fieldLinkTypesOf(bound.module),
         resolveRecordLinks,
-        page: request?.page ?? 1,
-        ...(request === undefined ? {} : { pageDirection: request.pageDirection }),
-        ...(request?.continuationToken === undefined
-          ? {}
-          : { continuationToken: request.continuationToken }),
-        sort: state.sort,
-        filters: state.filters,
-        search: state.search,
+        state: { ...addressed.state, page },
       });
     const fromAddress =
-      addressRequest !== undefined ||
+      (explicitRequest === undefined && addressed.state.page !== undefined) ||
       (explicitRequest !== undefined && tableContinuation?.fromAddress === true);
-    let resolved = await readPage(explicitRequest ?? addressRequest);
-    // A shared link opened by another account, or after an access, release, sort or filter
-    // change, no longer matches its sealed cursor (invalid or stale): it opens the first page
-    // without an error.
+    let resolved = await readPage(explicitRequest ?? addressed.state.page);
+    // A shared link opened by another account, or after an access, release, sort, filter or
+    // column change, no longer matches its sealed cursor (invalid or stale): it opens the first
+    // page without an error.
     if (
       fromAddress &&
       resolved.kind === "refused" &&
@@ -925,16 +923,7 @@ export const readPlacement = async (
       );
       data[placementId] = { status: "refused", reason: "not_permitted" };
     } else if (resolved.display.status === "empty") data[placementId] = { status: "empty" };
-    else
-      data[placementId] = {
-        status: "ready",
-        values: {
-          ...resolved.display.values,
-          ...(state.sort === null
-            ? {}
-            : { sort: { columnKey: state.sort.fieldId, direction: state.sort.direction } }),
-        },
-      };
+    else data[placementId] = { status: "ready", values: resolved.display.values };
     return;
   }
 

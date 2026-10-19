@@ -42,7 +42,7 @@ import type {
   StudioCanvasFrame,
 } from "@vortex/ui/studio/page-puck-editor";
 import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-empty-state";
-import { readStudioCanvasRecords, readStudioDataRecords } from "../actions";
+import { readStudioCanvasRecords, readStudioDataRecords } from "../_lib/studio-reads";
 import { applyStudioItemLabels } from "@vortex/ui/studio";
 import { studioDraftNavigation } from "../_lib/studio-draft-navigation";
 import { studioUseTargetOf } from "../_lib/studio-places";
@@ -252,7 +252,11 @@ export function useStudioCanvasTab({
       return { kind: "stale" };
     const outcome = draft.run(
       ():
-        | { kind: "edit"; source: ApplicationSourceDocument; result: StudioCompositionOutcome }
+        | {
+            kind: "edit";
+            source: ApplicationSourceDocument;
+            result: StudioCompositionOutcome;
+          }
         | { kind: "keep"; result: StudioCompositionOutcome } => {
         const result = applyStudioCompositionCommand(liveContext(), expected, now, command);
         return result.kind === "applied"
@@ -275,7 +279,11 @@ export function useStudioCanvasTab({
     const after: { added?: string | undefined } = {};
     const outcome = draft.run(
       ():
-        | { kind: "edit"; source: ApplicationSourceDocument; result: string | true }
+        | {
+            kind: "edit";
+            source: ApplicationSourceDocument;
+            result: string | true;
+          }
         | { kind: "keep"; result: string | true } => {
         const context = liveContext();
         const result = applyStudioCompositionCommand(
@@ -386,16 +394,20 @@ export function useStudioCanvasTab({
   // A record reference picks a record of the builder's preview of the saved draft, read 40 at a
   // time with their preview access through the same reader as the Data tab's results.
   const readRecordChoices = useCallback<StudioRecordReader>(
-    async ({ recordType, after }) => {
+    async ({ recordType, after }, signal) => {
       const separator = recordType.indexOf(":");
-      const result = await readStudioDataRecords(organizationId, {
-        rootId,
-        draftRevision: view.draftRevision,
-        moduleKey: recordType.slice(0, separator),
-        recordKey: recordType.slice(separator + 1),
-        pageSize: 40,
-        ...(after === undefined ? {} : { continuationToken: after }),
-      });
+      const result = await readStudioDataRecords(
+        organizationId,
+        {
+          rootId,
+          draftRevision: view.draftRevision,
+          moduleKey: recordType.slice(0, separator),
+          recordKey: recordType.slice(separator + 1),
+          pageSize: 40,
+          ...(after === undefined ? {} : { continuationToken: after }),
+        },
+        signal,
+      );
       switch (result.kind) {
         case "available": {
           const title = result.titleColumn;
@@ -446,16 +458,20 @@ export function useStudioCanvasTab({
   );
   // The records of the canvas's data blocks, read for the compiled saved revision only.
   const readCanvasRecords = useCallback(
-    async (area: string) => {
+    async (area: string, signal: AbortSignal) => {
       const pageAlias = canvasPageRef.current;
       if (pageAlias === undefined) return { state: "unavailable" as const, records: {} };
-      const result = await readStudioCanvasRecords(organizationId, {
-        rootId,
-        draftRevision: view.draftRevision,
-        sourceFingerprint: view.sourceFingerprint,
-        pageAlias,
-        area,
-      });
+      const result = await readStudioCanvasRecords(
+        organizationId,
+        {
+          rootId,
+          draftRevision: view.draftRevision,
+          sourceFingerprint: view.sourceFingerprint,
+          pageAlias,
+          area,
+        },
+        signal,
+      );
       if (
         result.kind === "available" &&
         result.draftRevision === view.draftRevision &&
@@ -471,7 +487,7 @@ export function useStudioCanvasTab({
         };
       if (result.kind === "refused") return { state: "refused" as const, records: {} };
       // A conflict means a newer save replaced this revision, whose own read follows; anything else is a failure.
-      if (result.kind !== "conflict")
+      if (result.kind !== "conflict" && result.kind !== "following")
         console.error(
           `[studio] the canvas records were not read: STUDIO_CANVAS_RECORDS_${result.kind.toUpperCase()}`,
         );
@@ -498,7 +514,10 @@ export function useStudioCanvasTab({
             source: ApplicationSourceDocument;
             result: ReturnType<typeof applyStudioVisibilityCondition>;
           }
-        | { kind: "keep"; result: ReturnType<typeof applyStudioVisibilityCondition> } => {
+        | {
+            kind: "keep";
+            result: ReturnType<typeof applyStudioVisibilityCondition>;
+          } => {
         const result = applyStudioVisibilityCondition(
           expected,
           liveContext(),
@@ -807,9 +826,15 @@ export function useStudioCanvasTab({
                 onSelectPlacement={(alias) =>
                   Promise.resolve(
                     alias !== null
-                      ? draft.select({ kind: "placement", placementAlias: alias })
+                      ? draft.select({
+                          kind: "placement",
+                          placementAlias: alias,
+                        })
                       : canvasPageRef.current !== undefined &&
-                          draft.select({ kind: "page", pageAlias: canvasPageRef.current }),
+                          draft.select({
+                            kind: "page",
+                            pageAlias: canvasPageRef.current,
+                          }),
                   )
                 }
                 breakpoint={breakpoint}

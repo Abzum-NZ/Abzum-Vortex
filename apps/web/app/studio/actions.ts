@@ -22,16 +22,7 @@ import {
   saveHumanApplicationDraft,
 } from "../_lib/definition-draft-write";
 import { mapWebError } from "../_lib/web-error-mapper";
-import type { StudioViewRequest } from "./_lib/studio-view-request";
 import { loadStudioApplicationDraft } from "../_lib/studio-application-draft";
-import {
-  readStudioCanvasRecords as readStudioCanvasRecordsWithSession,
-  type StudioCanvasRecordsResult,
-} from "../_lib/studio-canvas-records";
-import {
-  readStudioDataRecords as readStudioDataRecordsWithSession,
-  type StudioDataRecordsResult,
-} from "../_lib/studio-data-records";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { readSavedStudioApplicationConditionContext } from "../_lib/studio-application-condition-context";
 import type { StudioApplicationConditionContextResult } from "@vortex/ui/studio";
@@ -114,7 +105,11 @@ export async function reviewStudioApplicationSource(
         ...binding,
         validation: translateDefinitionRuleFailures(validation.failures, {
           correlationId: randomUUID(),
-          rootLocation: { documentKind: "application", documentKey: draft.key, segments: [] },
+          rootLocation: {
+            documentKind: "application",
+            documentKey: draft.key,
+            segments: [],
+          },
         }),
       });
     const session = await resolveIdentitySession();
@@ -199,7 +194,11 @@ export async function createStudioApplication(organizationId: string, candidate:
 /** What one autosave came to: the platform's answer, or a conflict that names the newer saved draft. */
 export type StudioSaveApplicationResult =
   | Awaited<ReturnType<typeof saveHumanApplicationDraft>>
-  | Readonly<{ kind: "conflict"; reason: "draft_changed"; elsewhere: StudioDraftChangedElsewhere }>;
+  | Readonly<{
+      kind: "conflict";
+      reason: "draft_changed";
+      elsewhere: StudioDraftChangedElsewhere;
+    }>;
 
 /** The saved draft another window or person wrote, which a save from this workspace no longer extends. */
 export type StudioDraftChangedElsewhere = Readonly<{
@@ -209,7 +208,7 @@ export type StudioDraftChangedElsewhere = Readonly<{
 }>;
 
 /**
- * Saves the draft and nothing else: Studio autosaves each batch of edits through this one action.
+ * Studio autosaves each batch through this one action; only a visible preview reader prepares a preview.
  * The draft is compiled for the canvas by the separate `reopenStudioApplication` request the
  * workspace sends once its saves are idle, so a save never waits for a compile. A save that no
  * longer extends the saved revision is refused as a conflict that names who wrote the newer
@@ -235,68 +234,6 @@ export async function saveStudioApplication(
     reason: "draft_changed",
     elsewhere: { draft: latest.draft, changedBy },
   };
-}
-
-/**
- * The saved draft compiled for the requested editor views (page slots, frames, choices and compile
- * failure), one view per request from one compile.
- */
-export async function reopenStudioApplication(
-  organizationId: string,
-  applicationRootId: string,
-  requests: readonly StudioViewRequest[],
-  expectedDraftRevision?: number,
-) {
-  return loadStudioApplicationDraft(
-    organizationId,
-    applicationRootId,
-    requests,
-    expectedDraftRevision,
-  );
-}
-
-/** The records the data blocks of one saved draft page area show, read with the builder's own access. */
-export async function readStudioCanvasRecords(
-  organizationId: string,
-  candidate: unknown,
-): Promise<StudioCanvasRecordsResult> {
-  try {
-    const resolved = await resolveIdentitySession();
-    if (resolved.kind !== "active")
-      return resolved.kind === "temporarily_unavailable"
-        ? { kind: "temporarily_unavailable" }
-        : { kind: "refused" };
-    return await readStudioCanvasRecordsWithSession(resolved.session, organizationId, candidate);
-  } catch (error) {
-    return refuse(
-      "read-canvas-records",
-      "STUDIO_CANVAS_RECORDS_FAILED",
-      { kind: "temporarily_unavailable" } as const,
-      error,
-    );
-  }
-}
-
-/** One page of the records of a record type or query in the running application, read with the builder's own access. */
-export async function readStudioDataRecords(
-  organizationId: string,
-  candidate: unknown,
-): Promise<StudioDataRecordsResult> {
-  try {
-    const resolved = await resolveIdentitySession();
-    if (resolved.kind !== "active")
-      return resolved.kind === "temporarily_unavailable"
-        ? { kind: "temporarily_unavailable" }
-        : { kind: "refused" };
-    return await readStudioDataRecordsWithSession(resolved.session, organizationId, candidate);
-  } catch (error) {
-    return refuse(
-      "read-data-records",
-      "STUDIO_DATA_RECORDS_FAILED",
-      { kind: "temporarily_unavailable" } as const,
-      error,
-    );
-  }
 }
 
 const themeFailureWords: Readonly<Record<string, string>> = {
@@ -331,7 +268,10 @@ const describeThemeFailure = (
 };
 
 const themeRequestSchema = z
-  .object({ rootId: z.string().min(1).max(200), theme: sourceApplicationThemeSchema })
+  .object({
+    rootId: z.string().min(1).max(200),
+    theme: sourceApplicationThemeSchema,
+  })
   .strict();
 
 /**
@@ -358,11 +298,15 @@ export async function resolveStudioApplicationTheme(
     draft.rootId !== request.data.rootId ||
     canonicalJson(draft.source.body.theme.base) !== canonicalJson(request.data.theme.base)
   )
-    return refuse("resolve-theme", "STUDIO_THEME_BASE_MISMATCH", { kind: "refused" } as const);
+    return refuse("resolve-theme", "STUDIO_THEME_BASE_MISMATCH", {
+      kind: "refused",
+    } as const);
   try {
     const release = findPinnedPlatformThemeRelease(request.data.theme.base);
     if (release === undefined)
-      return refuse("resolve-theme", "STUDIO_THEME_RELEASE_UNKNOWN", { kind: "refused" } as const);
+      return refuse("resolve-theme", "STUDIO_THEME_RELEASE_UNKNOWN", {
+        kind: "refused",
+      } as const);
     const result = materialiseApplicationTheme(request.data.theme, draft.key, release);
     if (result.valid) return { kind: "available", valid: true, theme: result.theme };
     console.error(
