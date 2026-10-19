@@ -10,6 +10,7 @@ import type {
   JsonValue,
   BoardColumnContinuationRequest,
   PageDefinition,
+  RecordsTablePageRequest,
 } from "@vortex/platform/schema";
 import type { PageWebMcpTool } from "./webmcp-projection";
 export type { PageWebMcpTool } from "./webmcp-projection";
@@ -60,10 +61,11 @@ export type ApplicationPageModel = Readonly<{
    */
   streamedData?: Readonly<Record<string, Promise<PageDataState>>>;
   /**
-   * The table page positions of the address this data was read for, by `page.<placement>`
-   * parameter name. A client that finds its address at another position rereads that table.
+   * The table query state of the address this data was read for: every sort, filter, search,
+   * visible-column and page parameter of a table placement, by parameter name. A client that finds
+   * its address holding another state for a table rereads only that table.
    */
-  tablePositions: Readonly<Record<string, string>>;
+  tableAddress: Readonly<Record<string, string>>;
   /** Each placement's flow bindings, by stable placement identity. */
   bindings: Readonly<Record<string, readonly PlacementFlowBinding[]>>;
   /** Data placements to re-read after a write from each installed flow binding. */
@@ -173,11 +175,7 @@ export type TableContinuationTarget = Readonly<{
   placementId: string;
   /** The position came from the page address, so a cursor that no longer opens falls back to page one. */
   fromAddress?: true;
-  request: Readonly<{
-    page: number;
-    pageDirection: "forward" | "backward";
-    continuationToken?: string;
-  }>;
+  request: RecordsTablePageRequest;
 }>;
 
 export type ModuleRelease = InstalledRuntimeContext["releaseSet"]["modules"][number];

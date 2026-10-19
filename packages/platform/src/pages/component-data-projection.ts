@@ -9,6 +9,7 @@ import {
   type BlockPropertyValueContract,
   type JsonValue,
   type RecordsDisplayFormat,
+  type RecordsTableSortState,
 } from "../schema";
 import type { ProtectedQueryRow } from "../queries/index";
 import { formatDecimal, formatMoney, isExactDecimal } from "./value-format";
@@ -115,6 +116,8 @@ export type ProjectedTableValues = Readonly<{
   kind: "table";
   columns: readonly Readonly<{ key: string; label: string }>[];
   rows: readonly ProjectedTableRow[];
+  /** The order the page was read in, when it is the viewer's or the authored default sort. */
+  sort?: RecordsTableSortState;
   page?: number;
   hasNextPage?: boolean;
   nextContinuationToken?: string;
@@ -343,17 +346,20 @@ const RESTRICTED_CELL: ProjectedCellValue = Object.freeze({ kind: "restricted" }
 
 /**
  * Projects a Records table's query rows into its display payload. Columns and headings come only
- * from the declared contract. The Query engine omits a field the viewer cannot read, including a
+ * from the declared contract, narrowed to the visible columns the read requested (`visibleFieldIds`,
+ * already validated as declared columns), so a hidden column has neither a heading nor a value. The Query engine omits a field the viewer cannot read, including a
  * calculation or total whose inputs the viewer cannot read, so a row without a declared field
  * shows it as Restricted, never blank and never inferred. Undeclared fields the engine
  * returned are dropped, and each row keeps only the record identity, revision and per-row
- * capabilities the engine returned. Returns undefined when the placement declares no data
+ * capabilities the engine returned; a row's changeable fields are narrowed to the visible columns,
+ * so its capability metadata never names a field the payload does not carry. Returns undefined when the placement declares no data
  * contract, a heading is missing, a row carries no revision or capabilities, or the rows are not a
  * valid page (a repeated record identity), so the caller refuses neutrally. A continuation page
  * with no rows keeps its columns and an empty row list when `keepEmptyPage` is set, so the viewer
  * can still page back; a first page with no rows is the plain empty state.
  */
 export const projectRecordsTableData = (
+  visibleFieldIds: readonly string[],
   input: ComponentDataProjectionInput,
   rows: readonly ProtectedQueryRow[],
   keepEmptyPage = false,
@@ -370,6 +376,7 @@ export const projectRecordsTableData = (
   const columns: { key: string; label: string; format: RecordsDisplayFormat }[] = [];
   for (const column of contract.columns) {
     if (columns.some((shown) => sameField(shown.key, column.field))) continue;
+    if (!visibleFieldIds.some((fieldId) => sameField(fieldId, column.field))) continue;
     const label = headingFor(column.field, column.label, input.fieldLabels);
     if (label === undefined) return undefined;
     columns.push({ key: column.field, label, format: column.format });
@@ -384,7 +391,12 @@ export const projectRecordsTableData = (
       rows: completeRows.map((row) => ({
         recordId: row.recordId,
         revision: row.revision,
-        capabilities: row.capabilities,
+        capabilities: {
+          ...row.capabilities,
+          changeableFieldIds: row.capabilities.changeableFieldIds.filter((fieldId) =>
+            columns.some((column) => sameField(column.key, fieldId)),
+          ),
+        },
         cells: Object.fromEntries(
           columns.map((column) => {
             const stored = isReadable(column.key, input) ? valueOf(row, column.key) : undefined;

@@ -7,3 +7,4 @@ export * from "./text-input-pattern";
 export * from "./placement-walk";
 export * from "./page-frame-projection";
 export * from "./page-composition-resolution";
+export * from "./records-table-state";

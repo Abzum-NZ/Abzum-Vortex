@@ -24,7 +24,8 @@ export type RecordsTableActionCapability = (typeof recordsTableActionCapabilitie
 
 /**
  * One declared Records table column. `field` is the authored qualified field when read from a
- * source document and the canonical field identity when read from compiled settings.
+ * source document and the canonical field identity when read from compiled settings. `visible` is
+ * the authored default visibility: the column shows until a person chooses other columns.
  */
 export type RecordsTableColumnContract = Readonly<{
   field: string;
@@ -33,6 +34,16 @@ export type RecordsTableColumnContract = Readonly<{
   width: (typeof recordsTableColumnWidths)[number];
   alignment: (typeof recordsTableColumnAlignments)[number];
   priority: (typeof recordsTableColumnPriorities)[number];
+  visible: boolean;
+}>;
+
+export const recordsTableSortDirections = ["ascending", "descending"] as const;
+export type RecordsTableSortDirection = (typeof recordsTableSortDirections)[number];
+
+/** One key of an ordered sort: a field and its direction. */
+export type RecordsTableSortContract = Readonly<{
+  field: string;
+  direction: RecordsTableSortDirection;
 }>;
 
 export type RecordsTableParameterContract = Readonly<{
@@ -88,7 +99,8 @@ export type RecordsTableRowBehaviourContract = Readonly<{
  */
 export type RecordsTableContract = Readonly<{
   columns: readonly RecordsTableColumnContract[];
-  defaultSort?: Readonly<{ field: string; direction: "ascending" | "descending" }>;
+  /** The authored ordered default sort; empty orders by the bound query's own sort. */
+  defaultSort: readonly RecordsTableSortContract[];
   sortableFields: readonly string[];
   filterableFields: readonly string[];
   search: boolean;
@@ -204,7 +216,8 @@ const readRowBehaviours = (settings: SettingsRecord): RecordsTableRowBehaviourCo
 
 /**
  * Reads a Records table placement's declared data contract from its settings, applying the
- * declared defaults. Returns undefined when the settings do not declare a table's `columns`.
+ * declared defaults. Returns undefined when the settings do not declare a table's `columns`, or a
+ * column does not declare its default visibility.
  * It reads settings that already passed the
  * shared setting validator and never widens what a release declares; the same reader serves the
  * publication rule, the server query request and the renderer.
@@ -219,6 +232,7 @@ export const readRecordsTableContract = (
     const field = column === undefined ? undefined : settingField(column["field"]);
     if (column === undefined || field === undefined) return [];
     const label = settingText(column["label"]);
+    const visible = column["visible"];
     return [
       {
         field,
@@ -227,11 +241,28 @@ export const readRecordsTableContract = (
         width: settingChoice(column["width"], recordsTableColumnWidths, "auto"),
         alignment: settingChoice(column["alignment"], recordsTableColumnAlignments, "start"),
         priority: settingChoice(column["priority"], recordsTableColumnPriorities, "medium"),
+        visible: visible?.kind === "boolean" && visible.value,
       },
     ];
   });
-  const sort = settingGroup(settings["default_sort"]);
-  const sortField = sort === undefined ? undefined : settingField(sort["field"]);
+  // Default visibility is explicit on every column; a column that does not declare it is not read.
+  if (columnItems.some((item) => settingGroup(item)?.["visible"]?.kind !== "boolean"))
+    return undefined;
+  // Every default sort key declares its field and direction; a key missing either is not read, so
+  // the table never runs an order other than the authored one.
+  const defaultSort: RecordsTableSortContract[] = [];
+  for (const item of settingItems(settings["default_sort"]) ?? []) {
+    const key = settingGroup(item);
+    const field = key === undefined ? undefined : settingField(key["field"]);
+    const direction = key?.["direction"];
+    if (
+      field === undefined ||
+      direction?.kind !== "choice" ||
+      !recordsTableSortDirections.some((candidate) => candidate === direction.value)
+    )
+      return undefined;
+    defaultSort.push({ field, direction: direction.value as RecordsTableSortDirection });
+  }
   const pageSize = settings["page_size"];
   // The catalogue default is the only source of the page size; a table without one is not read.
   if (pageSize?.kind !== "number") return undefined;
@@ -252,20 +283,9 @@ export const readRecordsTableContract = (
       ];
     },
   );
-  const direction = sort?.["direction"];
   return {
     columns,
-    ...(sortField === undefined
-      ? {}
-      : {
-          defaultSort: {
-            field: sortField,
-            direction:
-              direction?.kind === "choice" && direction.value === "descending"
-                ? "descending"
-                : "ascending",
-          },
-        }),
+    defaultSort,
     sortableFields: fieldList(settings["sortable_fields"]),
     filterableFields: fieldList(settings["filterable_fields"]),
     search: settingFlag(settings["search"]),
@@ -285,8 +305,10 @@ export const readRecordDetailContract = (
   const items = settingItems(settings["detail_fields"]);
   if (items === undefined) return undefined;
   const headingSource = settings["heading_source"];
-  if (headingSource?.kind !== "choice" || !["title", "field"].includes(headingSource.value)) return undefined;
-  const headingField = headingSource.value === "field" ? settingField(settings["heading_field"]) : undefined;
+  if (headingSource?.kind !== "choice" || !["title", "field"].includes(headingSource.value))
+    return undefined;
+  const headingField =
+    headingSource.value === "field" ? settingField(settings["heading_field"]) : undefined;
   if (headingSource.value === "field" && headingField === undefined) return undefined;
   const fields = items.flatMap((item): RecordDetailFieldContract[] => {
     const entry = settingGroup(item);
@@ -301,5 +323,9 @@ export const readRecordDetailContract = (
       },
     ];
   });
-  return { fields, ...(headingField === undefined ? {} : { headingField }), messages: displayMessages(settings) };
+  return {
+    fields,
+    ...(headingField === undefined ? {} : { headingField }),
+    messages: displayMessages(settings),
+  };
 };

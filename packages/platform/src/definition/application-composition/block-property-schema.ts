@@ -323,7 +323,11 @@ export const validateComponentSettingValue = (
       for (const property of declaration.properties) {
         const nested = properties[property.key];
         if (nested === undefined) {
-          if (property.required && property.defaultValue === undefined)
+          if (
+            property.required &&
+            property.defaultValue === undefined &&
+            componentSettingApplies(property, properties)
+          )
             failures.push({ family: "required_value", path: [...path, property.key] });
         } else {
           failures.push(
@@ -368,10 +372,24 @@ export const validateComponentSettings = (
     const value = settings[declaration.key];
     if (value !== undefined)
       failures.push(...validateComponentSettingValue(value, declaration, [declaration.key]));
-    else if (declaration.required && declaration.defaultValue === undefined)
+    else if (
+      declaration.required &&
+      declaration.defaultValue === undefined &&
+      componentSettingApplies(declaration, settings)
+    )
       failures.push({ family: "required_value", path: [declaration.key] });
   }
   return failures;
+};
+
+/** A conditional setting is required and shown only for its selected sibling choice. */
+export const componentSettingApplies = (
+  declaration: BlockPropertySchemaContract,
+  settings: Readonly<Record<string, ComponentSettingValue>>,
+): boolean => {
+  if (declaration.showWhen === undefined) return true;
+  const selected = settings[declaration.showWhen.property];
+  return selected?.kind === "choice" && declaration.showWhen.values.includes(selected.value);
 };
 
 const plainObject = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
@@ -549,7 +567,13 @@ export const typedSourceSettings = (
       });
   for (const declaration of declarations) {
     if (!Object.hasOwn(effectiveSettings, declaration.key)) {
-      if (declaration.required)
+      if (
+        declaration.required &&
+        (declaration.showWhen === undefined ||
+          declaration.showWhen.values.includes(
+            String(effectiveSettings[declaration.showWhen.property]),
+          ))
+      )
         failures.push({ family: "required_value", path: [declaration.key] });
       continue;
     }
@@ -933,7 +957,9 @@ export const blockPropertySchema: z.ZodType<BlockPropertySchemaContract> = z.laz
           ...propertySchemaBase,
           kind: sourceProvenanceUnchanged(z.literal("group")),
           properties: sourceProvenanceUnchanged(z.array(blockPropertySchema)),
-          namedEntry: sourceProvenanceUnchanged(z.object({ label: builderKeySchema, value: builderKeySchema }).strict().optional()),
+          namedEntry: sourceProvenanceUnchanged(
+            z.object({ label: builderKeySchema, value: builderKeySchema }).strict().optional(),
+          ),
         })
         .strict()
         .refine(
@@ -959,9 +985,20 @@ export const blockPropertySchema: z.ZodType<BlockPropertySchemaContract> = z.laz
     .superRefine((value, context) => {
       if (value.kind === "group" && value.namedEntry !== undefined) {
         const named = value.namedEntry;
-        if (named.label === named.value || ![named.label, named.value].every((key) =>
-          value.properties.some((property) => property.key === key && property.kind === "text" && property.required)))
-          context.addIssue({ code: "custom", path: ["namedEntry"], message: "A named entry needs separate required text properties for its label and value" });
+        if (
+          named.label === named.value ||
+          ![named.label, named.value].every((key) =>
+            value.properties.some(
+              (property) => property.key === key && property.kind === "text" && property.required,
+            ),
+          )
+        )
+          context.addIssue({
+            code: "custom",
+            path: ["namedEntry"],
+            message:
+              "A named entry needs separate required text properties for its label and value",
+          });
       }
       if (!defaultMatchesProperty(value))
         context.addIssue({

@@ -119,25 +119,15 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
       parsePayload: SUMMARY_VALUES_PAYLOAD_PARSER,
     }),
-    // Release 1.2.0 declares the data contract as settings; the same renderers and parsers read it.
+    // The one Records table release: its data contract, row behaviours and interactive controls.
     Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE_1_2_0,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE,
       parsePayload: TABLE_PAYLOAD_PARSER,
     }),
+    // Release 1.2.0 of the record detail declares its detail fields as settings.
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
       parsePayload: RECORD_DETAIL_PAYLOAD_PARSER,
-    }),
-    // Release 1.3.0 adds configured row behaviours; the same parser reads them.
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE_1_3_0,
-      parsePayload: TABLE_PAYLOAD_PARSER,
-    }),
-    // Release 1.4.0 adds the interactive filter, search, sort, paging and selection controls and
-    // each action's declared capability; the same parser reads them.
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE_1_4_0,
-      parsePayload: TABLE_PAYLOAD_PARSER,
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CALENDAR_BLOCK_RELEASE,

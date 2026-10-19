@@ -393,8 +393,9 @@ const keyColumns = (record: RecordType, title: Field, readable: ReadonlySet<stri
 };
 
 /**
- * A table column of one field, with its responsive priority: the numbers and the title never hide,
- * the first choice field (the record's state) stays on a phone, and the rest hide on narrow screens.
+ * A table column of one field, visible by default, with its responsive priority: the numbers and
+ * the title never hide, the first choice field (the record's state) stays on a phone, and the rest
+ * hide on narrow screens.
  */
 const tableColumns = (
   reference: (entry: Field) => string,
@@ -411,6 +412,7 @@ const tableColumns = (
         : entry.key === state
           ? "high"
           : "medium",
+    visible: true,
   }));
 };
 
@@ -645,7 +647,7 @@ const addList = (
   const columns = wanted.filter((entry) => query.select.includes(entry.key));
   const tableAlias = freshAlias(plan, `table_${record.key}`);
   const table = blockItem(
-    release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE_1_4_0, "records table"),
+    release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE, "records table"),
     tableAlias,
     {
       title: record.plural_name,
@@ -824,7 +826,7 @@ const relatedTables = (
             blockItem(
               release(
                 context,
-                PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE_1_4_0,
+                PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE,
                 "records table",
               ),
               freshAlias(plan, `table_${child.key}_of_${resolved.record.key}`),
