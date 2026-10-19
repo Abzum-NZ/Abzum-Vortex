@@ -236,6 +236,7 @@ export const tasksApplication: ApplicationSourceDocument = loadApplicationSource
                 field: `${recordType}.${field}`,
                 label: field === "title" ? "Title" : "Notes",
                 visible: true,
+                auto_size: false,
               })),
             },
             {},
