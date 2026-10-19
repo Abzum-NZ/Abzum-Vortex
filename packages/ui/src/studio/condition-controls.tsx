@@ -50,6 +50,7 @@ import {
   operatorOptions,
   pathEquals,
   pathStartsWith,
+  pointerForPath,
   studioConditionOperatorsFor,
   unaryOperators,
   validateStudioCondition,
@@ -57,13 +58,19 @@ import {
 } from "./condition-model";
 import { LiteralEditor } from "./condition-literal-editor";
 
+type ChildListChange = Readonly<{ path: ConditionPath; from: number; to: number | null }>;
+
 type TreeEditorProps = Readonly<{
   condition: ConditionNode;
   context: StudioConditionControlsContext;
   validation: StudioConditionValidation;
   path: ConditionPath;
   remainingOperandCount: number;
-  onReplace: (condition: ConditionNode, resolvedPath?: ConditionPath) => void;
+  onReplace: (
+    condition: ConditionNode,
+    resolvedPath?: ConditionPath,
+    childListChange?: ChildListChange,
+  ) => void;
   onInvalid: (issue: StudioConditionValidationIssue) => void;
 }>;
 
@@ -138,10 +145,10 @@ function TreeEditor({
                   validation={validation}
                   path={childPath}
                   remainingOperandCount={remainingOperandCount}
-                  onReplace={(next, resolvedPath) => {
+                  onReplace={(next, resolvedPath, childListChange) => {
                     const conditions = [...condition.conditions];
                     conditions[index] = next;
-                    onReplace({ ...condition, conditions }, resolvedPath);
+                    onReplace({ ...condition, conditions }, resolvedPath, childListChange);
                   }}
                   onInvalid={onInvalid}
                 />
@@ -155,7 +162,7 @@ function TreeEditor({
             conditions.splice(to, 0, moved);
             const [movedKey] = keys.current.splice(from, 1);
             keys.current.splice(to, 0, movedKey!);
-            onReplace({ ...condition, conditions }, path);
+            onReplace({ ...condition, conditions }, undefined, { path, from, to });
           }}
           onRemove={
             condition.conditions.length <= 1
@@ -169,7 +176,8 @@ function TreeEditor({
                         (_, childIndex) => childIndex !== index,
                       ),
                     },
-                    path,
+                    undefined,
+                    { path, from: index, to: null },
                   );
                 }
           }
@@ -223,8 +231,8 @@ function TreeEditor({
           validation={validation}
           path={[...path, "condition"]}
           remainingOperandCount={remainingOperandCount}
-          onReplace={(next, resolvedPath) =>
-            onReplace({ kind: "not", condition: next }, resolvedPath)
+          onReplace={(next, resolvedPath, childListChange) =>
+            onReplace({ kind: "not", condition: next }, resolvedPath, childListChange)
           }
           onInvalid={onInvalid}
         />
@@ -557,9 +565,36 @@ export function StudioConditionControls({
     hasLiteralAtPath(baseValidation.condition, issue.path),
   );
   const validation = withDraftIssues(baseValidation, activeDraftIssues);
-  const emit = (next: ConditionNode | undefined, resolvedPath?: ConditionPath) => {
+  const emit = (
+    next: ConditionNode | undefined,
+    resolvedPath?: ConditionPath,
+    childListChange?: ChildListChange,
+  ) => {
     const nextValidation = validateStudioCondition(next, context);
-    const remainingIssues = activeDraftIssues.filter(
+    // Held literal input stays mounted when its row moves; its located refusal must follow it.
+    const relocatedIssues = activeDraftIssues.flatMap((issue) => {
+      if (childListChange === undefined) return [issue];
+      const { path, from, to } = childListChange;
+      const prefix = [...path, "conditions"];
+      const index = issue.path[prefix.length];
+      if (!pathStartsWith(issue.path, prefix) || typeof index !== "number") return [issue];
+      if (index === from && to === null) return [];
+      const nextIndex =
+        index === from
+          ? to!
+          : to === null
+            ? index > from
+              ? index - 1
+              : index
+            : from < to && index > from && index <= to
+              ? index - 1
+              : from > to && index >= to && index < from
+                ? index + 1
+                : index;
+      const nextPath = [...prefix, nextIndex, ...issue.path.slice(prefix.length + 1)];
+      return [{ ...issue, path: nextPath, pointer: pointerForPath(nextPath) }];
+    });
+    const remainingIssues = relocatedIssues.filter(
       (issue) =>
         (resolvedPath === undefined || !pathStartsWith(issue.path, resolvedPath)) &&
         hasLiteralAtPath(nextValidation.condition, issue.path),
