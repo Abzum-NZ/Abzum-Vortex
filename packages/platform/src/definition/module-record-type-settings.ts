@@ -88,6 +88,15 @@ const ownerProblem = (
   );
   if (relationship === undefined)
     return `${name(target)} takes its owner from a relationship it no longer has.`;
+  const field = record.fields.find((item) => item.key === relationship.from_field);
+  if (
+    field === undefined ||
+    !field.required ||
+    (field.type !== "link" && field.type !== "link_to_one_of_several") ||
+    field.key !== relationship.key ||
+    relationship.cardinality === "many_to_many"
+  )
+    return `${name(target)} needs a required link to one record to take its owner from.`;
   const next = new Set([...visiting, target]);
   for (const further of relationshipTargets(module.key, relationship)) {
     const problem = ownerProblem(source, further, context, next, name, target);
