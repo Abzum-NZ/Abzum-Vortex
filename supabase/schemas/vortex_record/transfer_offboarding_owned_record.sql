@@ -28,7 +28,7 @@ begin
       p_source_organization_account_id
     );
   exception
-    when serialization_failure then
+    when serialization_failure or lock_not_available then
       -- A contested final update is an expected per-record result. The nested
       -- exception block rolls back its pending receipt before returning it.
       return pg_catalog.jsonb_build_object('outcome', 'conflict');

@@ -67,8 +67,7 @@ begin
   -- Invalidate every builder's snapshot atomically with the version advance, while the
   -- access-change scope excludes preview requests. The next open seeds a new preview
   -- using current live access; retired physical storage is dropped in the background.
-  delete from vortex_definition.preview_installations as preview
-  where preview.organization_id = p_organization_id;
+  perform vortex_access.invalidate_preview_installations_internal(p_organization_id);
 end
 $$;
 
