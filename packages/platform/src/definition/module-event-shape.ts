@@ -3,6 +3,8 @@ import {
   type ApplicationSourceDocument,
 } from "./application-source-contracts";
 import type { SourceFlowTask } from "../workflows/flow-source-contracts";
+import { namespacedKeySchema } from "../catalogue/identifiers";
+import { deriveFieldKey } from "./module-field-shape";
 
 type ModuleEvent = ApplicationSourceDocument["body"]["modules"][number]["events"][number];
 
@@ -27,28 +29,53 @@ export const saveInlineModuleEvent = (
   change: Readonly<{
     moduleKey: string;
     eventId?: string;
-    key: string;
     label: string;
     recordKey: string;
     carries: readonly string[];
   }>,
 ):
   | Readonly<{ kind: "changed"; source: ApplicationSourceDocument }>
-  | Readonly<{ kind: "invalid"; issues: readonly string[] }> => {
+  | Readonly<{
+      kind: "invalid";
+      issues: readonly string[];
+      field?: "label" | "record" | "carries";
+    }> => {
   const source = structuredClone(current);
   const module = source.body.modules.find((entry) => entry.key === change.moduleKey);
   const record = module?.record_types.find((entry) => entry.key === change.recordKey);
   if (module === undefined || record === undefined)
-    return { kind: "invalid", issues: ["Choose a record type owned by this module."] };
+    return {
+      kind: "invalid",
+      field: "record",
+      issues: ["Choose a record type owned by this module."],
+    };
   const existing =
     change.eventId === undefined
       ? undefined
       : module.events.find((entry) => entry.id === change.eventId);
   if (change.eventId !== undefined && existing === undefined)
     return { kind: "invalid", issues: ["The event is no longer in this module."] };
+  const label = change.label.trim();
+  if (label.length === 0 || label.length > 60)
+    return {
+      kind: "invalid",
+      field: "label",
+      issues: ["Enter an event label of 1 to 60 characters."],
+    };
+  const prefix = `${module.key}.${record.key}.`;
+  const suffix = deriveFieldKey(
+    label,
+    new Set(
+      module.events
+        .filter((entry) => entry.key.startsWith(prefix))
+        .map((entry) => entry.key.slice(prefix.length)),
+    ),
+  );
+  // The saved key identifies announcements and flow triggers, even when the label changes.
+  const key = existing?.key ?? (suffix === undefined ? undefined : `${prefix}${suffix}`);
+  if (key === undefined || !namespacedKeySchema.safeParse(key).success)
+    return { kind: "invalid", field: "label", issues: ["Use a shorter, distinct event label."] };
   const issues: string[] = [];
-  if (existing !== undefined && existing.key !== change.key)
-    issues.push("An existing event keeps its key so its references remain valid.");
   if (existing !== undefined && existing.record_type !== record.key) {
     const referenced =
       source.body.modules.some((owner) =>
@@ -70,12 +97,14 @@ export const saveInlineModuleEvent = (
         ),
       );
     if (referenced)
-      issues.push(
-        "Remove this event's announcements and flow references before changing its record type.",
-      );
+      return {
+        kind: "invalid",
+        field: "record",
+        issues: [
+          "Remove this event's announcements and flow references before changing its record type.",
+        ],
+      };
   }
-  if (module.events.some((entry) => entry !== existing && entry.key === change.key))
-    issues.push("This event key is already declared.");
   if (new Set(change.carries).size !== change.carries.length)
     issues.push("Choose each carried field once.");
   for (const key of change.carries) {
@@ -86,7 +115,7 @@ export const saveInlineModuleEvent = (
         `${field.label} contains personal or sensitive data and cannot be carried by an event.`,
       );
   }
-  if (issues.length > 0) return { kind: "invalid", issues };
+  if (issues.length > 0) return { kind: "invalid", field: "carries", issues };
   const aliases = new Set<string>();
   const collect = (value: unknown): void => {
     if (value === null || typeof value !== "object") return;
@@ -98,8 +127,8 @@ export const saveInlineModuleEvent = (
   while (aliases.has(`event_${n}`)) n += 1;
   const event: ModuleEvent = {
     id: existing?.id ?? `event_${n}`,
-    key: change.key,
-    label: change.label.trim(),
+    key,
+    label,
     record_type: record.key,
     carries: [...change.carries],
     personal_or_sensitive_values_allowed: false,
