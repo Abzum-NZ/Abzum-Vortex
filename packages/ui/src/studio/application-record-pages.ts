@@ -840,7 +840,7 @@ const relatedTables = (
                   shown,
                   childResolved.title.key,
                 ),
-                query_parameters: [{ input, source: "page", page_parameter: "record_id" }],
+                query_parameters: [{ input, source: "page_parameter", name: "record_id" }],
               },
               {},
               { query: `${module.key}:${query.key}`, view_permission: viewPermission },

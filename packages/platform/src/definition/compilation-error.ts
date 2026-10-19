@@ -151,12 +151,15 @@ export class DefinitionCompilationError extends Error {
   readonly location: DefinitionValidationLocation | undefined;
   /** The catalogue code of a rule with its own business sentence; absent for a family refusal. */
   readonly code: DefinitionRuleFailure["code"];
+  /** The failure's own sentence when it names its parts (a query binding, for one). */
+  readonly sentence: string | undefined;
 
   constructor(
     ruleCode: string,
     family: DefinitionRuleFailureFamily,
     location?: DefinitionValidationLocation,
     code?: DefinitionRuleFailure["code"],
+    sentence?: string,
   ) {
     assertDefinitionCompilerRefusalCode(ruleCode);
     super(
@@ -169,5 +172,6 @@ export class DefinitionCompilationError extends Error {
     this.family = family;
     this.location = location;
     this.code = code;
+    this.sentence = sentence;
   }
 }

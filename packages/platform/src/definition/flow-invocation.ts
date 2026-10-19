@@ -527,6 +527,7 @@ export async function invokeInstalledFlow(
         transaction,
         scope: {
           organizationId: scope.organizationId,
+          organizationAccountId: scope.organizationAccountId,
           applicationRootId: scope.applicationRootId,
           ...(scope.previewInstallationId === undefined
             ? {}
@@ -681,6 +682,7 @@ export async function invokeInstalledFlow(
               transaction,
               scope: {
                 organizationId: scope.organizationId,
+                organizationAccountId: scope.organizationAccountId,
                 applicationRootId: scope.applicationRootId,
                 ...(scope.previewInstallationId === undefined
                   ? {}
@@ -774,6 +776,7 @@ export async function invokeInstalledFlow(
               transaction,
               scope: {
                 organizationId: scope.organizationId,
+                organizationAccountId: scope.organizationAccountId,
                 applicationRootId: scope.applicationRootId,
                 ...(scope.previewInstallationId === undefined
                   ? {}
@@ -1018,6 +1021,7 @@ export async function invokeInstalledFlow(
           transaction,
           scope: {
             organizationId: scope.organizationId,
+            organizationAccountId: scope.organizationAccountId,
             applicationRootId: scope.applicationRootId,
             ...(scope.previewInstallationId === undefined
               ? {}

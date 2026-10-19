@@ -1,5 +1,6 @@
 import { cache } from "react";
 import {
+  placementBlockRelease,
   type InstalledRuntimeContext,
   type HumanOrganizationRequestDependencies,
   createHumanInstalledPageBundleContextLoader,
@@ -83,14 +84,29 @@ import {
 import {
   isApplicationLauncherPlacement,
   logPlacementFailure,
+  pageQueryBindingContext,
+  placementParameterDependencies,
   resolvedQueryRecordTypeId,
-} from "./query-helpers";
+} from "@vortex/platform/server";
+import {
+  applicationLauncherQueryRowsToListValues,
+  parseBoardPayload,
+  parseDisplayData,
+} from "@vortex/ui";
 import { projectAttachmentInputs } from "./attachment-inputs";
 import { projectEditField } from "./reference-choice";
 import { projectInitialLinkInputs, titleLinkInputs } from "./link-input";
-import { projectPlacementRecordTypes, projectFlowBindingTargets } from "./flow-bindings";
+import {
+  projectPlacementBindings,
+  projectPlacementRecordTypes,
+  projectFlowBindingTargets,
+} from "./flow-bindings";
 import { readPageGridLayouts } from "./grid-layouts";
-import { isStreamablePlacement, projectPlacementBindings, readPlacement } from "./placement-reader";
+import {
+  isStreamablePlacement,
+  readPlacement,
+  type PlacementReaderInput,
+} from "./placement-reader";
 import { projectPageWebMcpTools } from "./webmcp-projection";
 import { platformPermissionSource } from "../platform-permission-source";
 import {
@@ -119,6 +135,7 @@ export const loadInstalledContext = (
         transaction,
         scope: {
           organizationId: scope.organizationId,
+          organizationAccountId: scope.organizationAccountId,
           applicationRootId: scope.applicationRootId,
           ...(scope.previewInstallationId === undefined
             ? {}
@@ -687,41 +704,76 @@ const loadApplicationPageJoined = async (
   };
   const resolveRecordLinks: RecordLinkResolver = services.recordLinkResolver(context);
   const gridLayouts = await gridLayoutsRead;
-  const placementReaderInput = {
+  // Every query input of the page's blocks resolves from the same server-side facts: what the page
+  // declares, its address, the subject read above and the viewer. A relative date reads the
+  // organisation's time zone once, only when one asks for it.
+  const bindingContext = pageQueryBindingContext({
+    context,
+    pageDefinition,
+    parameters,
+    readSubject:
+      subjectType === undefined
+        ? undefined
+        : () =>
+            subjectId.success
+              ? readSubject(String(subjectType.recordTypeId), subjectId.data)
+              : Promise.resolve({ kind: "refused" }),
+    subjectRecordTypeId: subjectType === undefined ? undefined : String(subjectType.recordTypeId),
+    readTimeZone: async () => {
+      try {
+        const read = await readCalendarSettings();
+        return read.kind === "available" ? read.value.settings?.timeZone : undefined;
+      } catch (error) {
+        console.error(`[page] organisation time zone unavailable: ${describeFailure(error)}`);
+        return undefined;
+      }
+    },
+  });
+  const placementReaderInput: PlacementReaderInput = {
+    context,
+    session,
+    selection,
+    address,
+    pageDefinition,
+    accessVersion: typeof page.accessVersion === "number" ? page.accessVersion : undefined,
+    subjectType,
+    subjectId: subjectId.success ? subjectId.data : undefined,
+    parameters,
+    bindings: bindingContext,
+    data,
+    services: {
+      queries,
+      linkTiles,
+      queryNotices,
+      tables,
+      resolveRecordLinks,
+      readCalendarSettings,
+      readSubject,
+      launcherValues: applicationLauncherQueryRowsToListValues,
+      boardData: (values) => parseDisplayData({ status: "ready", values }, parseBoardPayload),
+    },
+    permittedApplicationKeys,
+    permittedApplicationsUnavailable: permittedApplicationsRead?.kind === "temporarily_unavailable",
+    ...(boardContinuation === undefined ? {} : { boardContinuation }),
+    ...(tableContinuation === undefined ? {} : { tableContinuation }),
+    gridLayouts,
+    markSubjectUnreadable,
+    page,
+    pageSubjectRecordTypeId,
+    referenceChoiceInputs,
+    referenceChoices,
+    dependencies,
+    adoptSubjectRead,
+  };
+  const flowBindingInput = {
     application,
     recordTypeByPlacement,
     bindings,
     pageDefinition,
     pageSubjectRecordTypeId,
     selectedReadTypesByFlow,
-    data,
-    page,
-    context,
-    referenceChoiceInputs,
-    referenceChoices,
-    session,
-    selection,
-    address,
-    subjectType,
-    parameters,
-    dependencies,
-    subjectId,
-    readSubject,
-    linkTiles,
-    queryNotices,
-    boardContinuation,
-    permittedApplicationKeys,
-    permittedApplicationsRead,
-    queries,
-    readCalendarSettings,
-    tables,
-    resolveRecordLinks,
-    tableContinuation,
-    gridLayouts,
-    adoptSubjectRead,
-    markSubjectUnreadable,
   };
-  for (const entry of placements) projectPlacementBindings(placementReaderInput, entry);
+  for (const entry of placements) projectPlacementBindings(flowBindingInput, entry);
   // A page load may stream the placements that only show their own query's rows: the frame, the
   // title and every other placement are decided and sent first, each streamed placement shows its
   // loading state until its own read settles. A placement reread by id is always read in full.
@@ -1092,6 +1144,24 @@ const loadApplicationPageJoined = async (
     ),
     bindings,
     refreshPlacementsByBinding,
+    pageParameters: {
+      tableIds: allPlacements.filter(isTablePlacement).map((placement) => placement.placementId),
+      controlKinds: Object.fromEntries(
+        allPlacements
+          .filter(({ placementId }) => bindingContext.controls.has(placementId.toLowerCase()))
+          .map((placement) => [
+            placement.placementId,
+            placementBlockRelease(placement.vortex.block).key.split(".").at(-1)!,
+          ]),
+      ),
+      dependents: placementParameterDependencies(allPlacements, bindingContext),
+      controls: Object.fromEntries(
+        allPlacements.flatMap(({ placementId }) => {
+          const name = bindingContext.controls.get(placementId.toLowerCase());
+          return name === undefined ? [] : [[placementId, name] as const];
+        }),
+      ),
+    },
     editFormBaselines,
     referenceChoiceInputs,
     linkInputPlacementIds: linkInputs.map((entry) => entry.placementId),
