@@ -3,6 +3,12 @@
 -- preference metadata, never a business record and never row data or a cursor. Named and shared
 -- views (#3023) add further kinds to the same table.
 
+-- The referenced tables belong to postgres; the layout table's owner may reference them so a
+-- removed account or installation removes its layouts.
+grant references (organization_id, organization_account_id)
+  on vortex_identity.organization_accounts to vortex_owner;
+grant references (organization_id, root_id) on vortex_definition.roots to vortex_owner;
+
 set local role vortex_owner;
 
 create table vortex_platform.grid_views (
@@ -31,7 +37,13 @@ create table vortex_platform.grid_views (
     pg_catalog.jsonb_typeof(layout) = 'object'
     and pg_catalog.octet_length(layout::text) <= 16384
   ),
-  constraint grid_views_times_valid check (updated_at >= created_at)
+  constraint grid_views_times_valid check (updated_at >= created_at),
+  constraint grid_views_account_fk foreign key (organization_id, organization_account_id)
+    references vortex_identity.organization_accounts (organization_id, organization_account_id)
+    on delete cascade,
+  constraint grid_views_installation_fk foreign key (organization_id, application_root_id)
+    references vortex_definition.roots (organization_id, root_id)
+    on delete cascade
 );
 alter table vortex_platform.grid_views enable row level security;
 alter table vortex_platform.grid_views force row level security;
@@ -315,12 +327,3 @@ comment on function vortex_platform.reset_grid_view(uuid, uuid, bigint) is
 alter function vortex_platform.reset_grid_view(uuid, uuid, bigint) owner to vortex_owner;
 
 reset role;
-
--- The referenced tables belong to postgres: a removed account or installation removes its layouts.
-alter table vortex_platform.grid_views
-  add constraint grid_views_account_fk foreign key (organization_id, organization_account_id)
-    references vortex_identity.organization_accounts (organization_id, organization_account_id)
-    on delete cascade,
-  add constraint grid_views_installation_fk foreign key (organization_id, application_root_id)
-    references vortex_definition.roots (organization_id, root_id)
-    on delete cascade;
