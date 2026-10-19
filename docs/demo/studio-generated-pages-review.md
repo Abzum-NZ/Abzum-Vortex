@@ -147,6 +147,12 @@ its configured tag is `x3082-proof-20261019`. The final PR review comment pairs
 the original and corrected light/dark forms. The original release below remains
 the baseline, not evidence of the corrected renderer.
 
+Main then advanced to `4c85438a` with PR #3076's grid replacement. It was merged
+without conflicts. Neither file changed by this PR overlaps that merge; the
+table-input correction and its walkthrough remain applicable. The matrix above
+records `c7efdf3b`, not a walkthrough of the new grid. The merged head is checked
+by the UI package typecheck and CI, following the no-overlap re-walk rule.
+
 ## Original screenshots
 
 The [draft proof release](https://github.com/Abzum-NZ/Abzum-Vortex/releases/tag/untagged-e21dd79e668b5644a446)
