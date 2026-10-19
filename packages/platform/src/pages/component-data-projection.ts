@@ -11,16 +11,33 @@ import {
   type RecordsDisplayFormat,
   type RecordsTableFilterValue,
   type RecordsTableSortState,
+  type tableCellTypeKeys,
 } from "../schema";
 import type { ProtectedQueryRow } from "../queries/index";
 import { formatDecimal, formatMoney, isExactDecimal } from "./value-format";
 import { recordLinkLabelKey, type RecordLinkReference } from "../definition/app-index";
+import { defaultQueryPageSize } from "../definition/module-query-edit";
 
 /**
  * One closed display value. It is structurally the value the shared display components render, so
  * the payload passes their projected-data parser unchanged; this module never imports the UI.
  */
-export type ProjectedCellValue =
+export type ProjectedCellValue = ProjectedScalarCellValue | ProjectedTableField;
+
+/**
+ * A table field's stored rows as a record detail shows them: its declared columns in declared order
+ * with readable headings, at most the first page of rows with each row's cells for exactly those
+ * columns, each a scalar display value, and how many rows the field holds in total.
+ */
+export type ProjectedTableField = Readonly<{
+  kind: "field_table";
+  columns: readonly Readonly<{ key: string; label: string }>[];
+  rows: readonly Readonly<Record<string, ProjectedScalarCellValue>>[];
+  rowCount: number;
+}>;
+
+/** One display value that is not itself a table. */
+export type ProjectedScalarCellValue =
   | Readonly<{ kind: "text"; text: string }>
   | Readonly<{ kind: "number"; value: number; formatted: string }>
   | Readonly<{ kind: "boolean"; value: boolean }>
@@ -104,7 +121,7 @@ export type ProjectedTableRow = Readonly<{
   recordId: string;
   revision: number;
   capabilities: NonNullable<ProtectedQueryRow["capabilities"]>;
-  cells: Readonly<Record<string, ProjectedCellValue>>;
+  cells: Readonly<Record<string, ProjectedScalarCellValue>>;
 }>;
 
 /** A query row proven to carry the revision and capabilities the engine decided for a list row. */
@@ -146,7 +163,7 @@ export type ProjectedRecordDetailValues = Readonly<{
   kind: "record_detail";
   recordId: string;
   fields: readonly Readonly<{ key: string; label: string; value: ProjectedCellValue }>[];
-  heading?: ProjectedCellValue;
+  heading?: ProjectedScalarCellValue;
 }>;
 
 /**
@@ -178,13 +195,23 @@ export type ComponentDataProjectionInput = Readonly<{
   fieldLinkTypes?: Readonly<Record<string, LinkFieldType>>;
   /** The labels of the linked records the rows carry; absent when they could not be read. */
   recordLinks?: ProjectedRecordLinks;
+  /** The declared columns of every table field of the installed definition (field identity to columns), so a record detail shows its rows. */
+  fieldTableColumns?: Readonly<Record<string, readonly TableFieldColumn[]>>;
+}>;
+
+/** One declared column of a table field: its key, readable heading, cell type and, for a choice, its options. */
+export type TableFieldColumn = Readonly<{
+  key: string;
+  label: string;
+  type: (typeof tableCellTypeKeys)[number];
+  options?: readonly Readonly<{ value: string; label: string }>[];
 }>;
 
 /** The field types whose stored text is an address a viewer can follow. */
 export type LinkFieldType = "web_address" | "email_address" | "phone_number";
 
 const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
-const empty: ProjectedCellValue = Object.freeze({ kind: "empty" as const });
+const empty: ProjectedScalarCellValue = Object.freeze({ kind: "empty" as const });
 
 const hasOwn = (record: object, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(record, key);
@@ -199,7 +226,7 @@ const isRealCalendarDate = (value: string): boolean => {
  * A stored value of a date or date-time column. One that is not an ISO date or offset timestamp is
  * logged with a stable code and shown as an explicit invalid-value text, never as the raw stored text.
  */
-const projectDate = (value: string): ProjectedCellValue => {
+const projectDate = (value: string): ProjectedScalarCellValue => {
   if (
     (ISO_CALENDAR_DATE.test(value) && isRealCalendarDate(value)) ||
     timestampSchema.safeParse(value).success
@@ -214,7 +241,7 @@ const projectDate = (value: string): ProjectedCellValue => {
  * scheme of its field type. A value that cannot form a safe address is logged with a stable code
  * and shown as plain text, never as a link.
  */
-const projectLink = (value: string, linkType: LinkFieldType): ProjectedCellValue => {
+const projectLink = (value: string, linkType: LinkFieldType): ProjectedScalarCellValue => {
   const text = value.trim();
   const address =
     linkType === "web_address"
@@ -227,7 +254,7 @@ const projectLink = (value: string, linkType: LinkFieldType): ProjectedCellValue
   return { kind: "text", text: value };
 };
 
-const numberCell = (value: number, grouped: boolean): ProjectedCellValue => ({
+const numberCell = (value: number, grouped: boolean): ProjectedScalarCellValue => ({
   kind: "number",
   value,
   formatted: grouped ? formatDecimal(value) : String(value),
@@ -245,7 +272,7 @@ const projectCell = (
   dateType?: "date" | "date_time",
   recordLinks?: ProjectedRecordLinks,
   linkType?: LinkFieldType,
-): ProjectedCellValue => {
+): ProjectedScalarCellValue => {
   const format =
     declaredFormat === "automatic" && dateType !== undefined ? dateType : declaredFormat;
   if (value === null) return empty;
@@ -325,6 +352,58 @@ const projectCell = (
     : empty;
 };
 
+/** The display format each table cell type is shown in; money and choices are recognised by value. */
+const TABLE_CELL_FORMATS: Readonly<Record<TableFieldColumn["type"], RecordsDisplayFormat>> = {
+  text: "text",
+  whole_number: "number",
+  decimal_number: "number",
+  money: "text",
+  yes_no: "boolean",
+  date: "date",
+  date_time: "date_time",
+  choice: "text",
+};
+
+/**
+ * A table field's stored rows as its declared columns and rows. Each row carries exactly the
+ * declared column keys, in declared order, projected through the same cell rules as any field; an
+ * undeclared key is never read. Only the first page of rows is sent, with the total, so a detail
+ * never ships rows it does not show. A field with no rows is an empty table, so the detail can say
+ * so. A stored value that is not a list of rows is logged with a stable code and shown as unavailable.
+ */
+const projectTableField = (
+  value: JsonValue,
+  columns: readonly TableFieldColumn[],
+): ProjectedCellValue => {
+  const rows = value === null ? [] : value;
+  if (
+    !Array.isArray(rows) ||
+    rows.some((row) => row === null || typeof row !== "object" || Array.isArray(row))
+  ) {
+    console.error("[page] table field value refused TABLE_VALUE_INVALID");
+    return { kind: "unavailable" };
+  }
+  return {
+    kind: "field_table",
+    columns: columns.map(({ key, label }) => ({ key, label })),
+    rowCount: rows.length,
+    rows: rows.slice(0, defaultQueryPageSize).map((row) =>
+      Object.fromEntries(
+        columns.map((column) => {
+          const cells = row as Readonly<Record<string, JsonValue>>;
+          const stored = hasOwn(cells, column.key) ? cells[column.key] : undefined;
+          return [
+            column.key,
+            stored === undefined
+              ? empty
+              : projectCell(stored, TABLE_CELL_FORMATS[column.type], column.options),
+          ];
+        }),
+      ),
+    ),
+  };
+};
+
 /**
  * Field identities are UUIDs compared without regard to case: the Query engine keys row values by
  * the lowercase identity, while a declaration may spell it in either case.
@@ -359,7 +438,7 @@ const isReadable = (field: string, input: ComponentDataProjectionInput): boolean
   input.readableFieldIds.some((readable) => sameField(readable, field));
 
 /** The cell of a declared field the viewer may not read: never blank, never the stored value. */
-const RESTRICTED_CELL: ProjectedCellValue = Object.freeze({ kind: "restricted" });
+const RESTRICTED_CELL: ProjectedScalarCellValue = Object.freeze({ kind: "restricted" });
 
 /**
  * Projects a Records table's query rows into its display payload. Columns and headings come only
@@ -467,13 +546,16 @@ export const projectRecordDetailData = (
     const label = headingFor(declared.field, declared.label, input.fieldLabels);
     if (label === undefined) return undefined;
     const choiceLabels = input.fieldChoiceLabels?.[declared.field.toLowerCase()];
+    const tableColumns = input.fieldTableColumns?.[declared.field.toLowerCase()];
     fields.push({
       key: declared.field,
       label,
       value:
         stored === undefined
           ? RESTRICTED_CELL
-          : projectCell(
+          : tableColumns !== undefined
+            ? projectTableField(stored.value, tableColumns)
+            : projectCell(
               stored.value,
               declared.format,
               choiceLabels,

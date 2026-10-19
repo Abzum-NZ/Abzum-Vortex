@@ -8,13 +8,8 @@ import {
   ApplicationDraftWorkspace,
   type StudioWorkspacePlace,
 } from "../../_components/application-draft-workspace";
-import { findPinnedPlatformThemeRelease } from "../../_lib/pinned-platform-theme-release";
+import { studioViewRequest } from "../../_lib/studio-view-request";
 import { loadStudioOrganizationHome } from "../../../_lib/studio-organization-home";
-import { studioThemeOptions } from "../../_lib/studio-theme-catalogue";
-import {
-  FIELD_INPUT_CONTROL_RELEASES,
-  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
-} from "@vortex/platform/server";
 
 export const dynamic = "force-dynamic";
 
@@ -71,15 +66,22 @@ export default async function StudioApplicationPage({
   const session = await continueStudioSession();
   if (session.kind === "temporarily_unavailable")
     return <StudioUnavailable subject="Application draft" result={session} />;
-  const result = await loadStudioApplicationDraft(organizationId, applicationRootId);
+  const initial = await loadStudioApplicationDraft(organizationId, applicationRootId);
+  if (initial.kind !== "available")
+    return <StudioUnavailable subject="Application draft" result={initial} />;
+  const request = studioViewRequest(tab ?? "structure", null, initial.draft.source);
+  const result =
+    request.kind === "source"
+      ? initial
+      : await loadStudioApplicationDraft(
+          organizationId,
+          applicationRootId,
+          [request],
+          initial.draft.draftRevision,
+        );
   if (result.kind !== "available")
     return <StudioUnavailable subject="Application draft" result={result} />;
-  const pin = result.draft.source.body.theme.base;
-  const themeRelease = findPinnedPlatformThemeRelease(pin);
-  if (themeRelease === undefined)
-    throw new Error(
-      `Draft pins unknown platform theme ${pin.catalogue_theme_id}@${pin.release_version}`,
-    );
+  const view = result.views[0]!;
   const [place, home] = await Promise.all([
     loadWorkspacePlace(result.organizationId, result.draft.key),
     loadStudioOrganizationHome(result.organizationId),
@@ -98,22 +100,25 @@ export default async function StudioApplicationPage({
       organizationId={result.organizationId}
       draft={result.draft}
       place={place}
-      themeOptions={studioThemeOptions}
       initialTab={tab}
       initialSection={section}
       initialModule={module}
       applications={applications}
-      compiledFields={result.compiledFields}
-      borrowedChoices={result.borrowedChoices}
-      usedModules={result.usedModules}
-      published={result.published}
-      peopleDirectory={result.peopleDirectory}
-      pageCompiledSlots={result.pageCompiledSlots}
-      canvasFrames={result.canvasFrames}
-      compileFailure={result.compileFailure}
-      platformBlockCatalogue={IMMUTABLE_PLATFORM_BLOCK_CATALOGUE}
-      fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
-      platformThemeTokens={themeRelease.tokens}
+      initialView={{
+        request: view.request,
+        catalogue: result.catalogue,
+        themeOptions: view.themeOptions,
+        fieldInputControlReleases: view.fieldInputControlReleases,
+        platformThemeTokens: view.platformThemeTokens,
+        compiledFields: view.compiledFields,
+        borrowedChoices: view.borrowedChoices,
+        usedModules: view.usedModules,
+        published: view.published,
+        peopleDirectory: view.peopleDirectory,
+        slots: view.pageCompiledSlots,
+        frames: view.canvasFrames,
+        failure: view.compileFailure,
+      }}
     />
   );
 }
