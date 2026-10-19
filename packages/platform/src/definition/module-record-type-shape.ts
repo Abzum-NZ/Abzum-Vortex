@@ -14,6 +14,7 @@ import { applicationUses, type ApplicationUsePlace } from "./application-uses";
 import { fullRecordAccessRoleKeys } from "./module-permission-shape";
 import { recordTitleFieldEligible } from "./record-title-field";
 import { sourcePageItems } from "./application-composition/source-composition";
+import type { RecordStorageScope } from "./module-record-type-settings";
 
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
@@ -221,17 +222,19 @@ export type InlineRecordTypeCreation = Readonly<{
   key: string;
   /** The label of the title field that names each record. */
   titleLabel: string;
+  /** Where its records are kept; it is fixed once the record type is published. */
+  storageScope: RecordStorageScope;
+  /** Who owns each record. Inherited ownership needs a link, so it is chosen after creation. */
+  ownershipMode: "none" | "organization_account" | "group";
 }>;
 
 /**
  * The Application source with one new record type in an owned inline Module. A record type is
  * created in its minimum valid shape: a reference number that identifies each record, a required
  * title field, every standard action with its standard permission (granted only to roles holding
- * every existing record permission in the Application's owned Modules), and organisation-shared
- * storage of its own. Each record belongs to the account that created it, so anyone whose role
- * holds the create permission can create one without being in a Group; who may act on records is
- * decided by the roles alone. When the Application owns no Module yet, its first Module is created
- * with it.
+ * every existing record permission in the Application's owned Modules), and storage of its own
+ * with the storage scope and ownership the builder chose. When the Application owns no Module yet,
+ * its first Module is created with it.
  */
 export const createInlineRecordType = (
   current: ApplicationSourceDocument,
@@ -309,8 +312,8 @@ export const createInlineRecordType = (
     plural_name: pluralName,
     title_field: titleKey,
     storage_contract_id: uniqueAlias(`srt_${aliasPart(module.key)}_${key}`, taken),
-    storage_scope: "organization_shared",
-    ownership_mode: "organization_account",
+    storage_scope: creation.storageScope,
+    ownership_mode: creation.ownershipMode,
     standard_actions: standardActions.map((entry) => entry.action),
     custom_actions: [],
     fields,

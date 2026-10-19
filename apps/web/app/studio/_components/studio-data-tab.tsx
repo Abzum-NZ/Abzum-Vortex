@@ -17,6 +17,8 @@ import {
   setInlineRecordTitleField,
   type ApplicationSourceDocument,
   type ApplicationUsePlace,
+  type RecordOwnershipMode,
+  type RecordSettingsContext,
 } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
 import {
@@ -46,6 +48,7 @@ import { StudioModuleEvents } from "./studio-module-events";
 import { StudioModuleActions } from "./studio-module-actions";
 import { StudioRecordPipelines } from "./studio-record-pipelines";
 import { StudioRecordRules } from "./studio-record-rules";
+import { StudioRecordStorageOwnership } from "./studio-record-storage-ownership";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import type { StudioDraft } from "./use-studio-draft";
 import {
@@ -138,6 +141,9 @@ function RecordTypeInspector({
   disabled,
   edit,
   onSelect,
+  settings,
+  name: recordName,
+  onAddLink,
 }: Readonly<{
   source: Source;
   moduleKey: string;
@@ -145,6 +151,9 @@ function RecordTypeInspector({
   disabled: boolean;
   edit: StudioDataEdit;
   onSelect: (selection: StudioDataSelection | null) => void;
+  settings: RecordSettingsContext;
+  name: (qualified: string) => string;
+  onAddLink: () => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   // A new field, a new relationship (a new link field) or a new query is being added.
@@ -272,6 +281,16 @@ function RecordTypeInspector({
           )}
         </StudioField>
       </StudioInspectorGroup>
+      <StudioRecordStorageOwnership
+        source={source}
+        moduleKey={moduleKey}
+        recordKey={recordKey}
+        context={settings}
+        name={recordName}
+        disabled={disabled}
+        edit={edit}
+        onAddLink={onAddLink}
+      />
       <StudioInspectorGroup title="Queries" defaultOpen={false}>
         <Button
           type="button"
@@ -579,6 +598,14 @@ export function useStudioDataTab({
       });
     return targets;
   }, [used, view.peopleDirectory]);
+  const settingsContext = useMemo((): RecordSettingsContext => {
+    const ownership = new Map<string, RecordOwnershipMode>(
+      (used ?? []).flatMap((module) =>
+        module.recordTypes.map((record) => [`${module.key}:${record.key}`, record.ownershipMode]),
+      ),
+    );
+    return { publication, usedOwnership: (qualified) => ownership.get(qualified) };
+  }, [publication, used]);
   const fieldContext: ModuleFieldEditorContext = {
     publication,
     composition: compositionContext,
@@ -851,6 +878,9 @@ export function useStudioDataTab({
           disabled={disabled}
           edit={edit}
           onSelect={select}
+          settings={settingsContext}
+          name={targetLabel}
+          onAddLink={() => addField("link")}
         />
       )
     ) : (
