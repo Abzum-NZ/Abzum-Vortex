@@ -36,6 +36,7 @@ import {
   type RecordsTableSortState,
 } from "@vortex/platform/schema";
 import { Card } from "../components/card";
+import { ColumnMenu } from "./grid-features/column-menu";
 import { Icon } from "../icons/icon";
 import { cn } from "../lib/utils";
 import type { DisplayEventHandlers, DisplayRow } from "./projected-data";
@@ -100,6 +101,8 @@ export type GridRenderers = Readonly<{
   cell: (row: DisplayRow, column: GridColumn) => ReactNode;
   /** What the projected grid features draw after a column's heading (for example a filter mark). */
   headerAdornment?: (column: GridColumn) => ReactNode;
+  /** The items the projected grid features add to a column's menu. */
+  columnMenuItems?: (column: GridColumn) => ReactNode;
   select: (row: DisplayRow, selected: boolean) => ReactNode;
   selectAll: () => ReactNode;
   actions: (row: DisplayRow) => ReactNode;
@@ -122,6 +125,8 @@ export type RecordsGridProps = Readonly<{
   expansion: RowExpansionControls | undefined;
   /** The name a row is announced and labelled by. */
   rowName: (row: DisplayRow) => string;
+  /** The table fills the screen: the grid takes the remaining height instead of its bound. */
+  fill: boolean;
 }>;
 
 const cellAlignment = (column: GridColumn | undefined): string => {
@@ -280,9 +285,10 @@ const GridRowPanel = ({
  *
  * Keyboard: the grid is one tab stop. Arrows, Home/End, Ctrl+Home/End and PageUp/PageDown move
  * between cells of the loaded page; Enter or F2 enters a cell's controls, Escape returns to the
- * cell, Tab leaves the grid. Enter on a header sorts (Shift adds to the sort), Enter on a plain
- * cell opens the row, Space selects it. Alt+Left/Right resizes a header's column and
- * Alt+Shift+Left/Right moves it. Focus follows the record and column through a refresh.
+ * cell, Tab leaves the grid. Enter or Alt+Down on a column heading opens its menu (Escape closes it
+ * and returns to the heading), Shift+Enter adds the column to the sort; Enter on a plain cell opens
+ * the row, Space selects it. Alt+Left/Right resizes a header's column and Alt+Shift+Left/Right
+ * moves it. Focus follows the record and column through a refresh.
  */
 export function RecordsGrid({
   accessibleName,
@@ -299,6 +305,7 @@ export function RecordsGrid({
   announce,
   expansion,
   rowName,
+  fill,
 }: RecordsGridProps): ReactElement {
   const rowHeight = GRID_ROW_HEIGHT[layout.density];
   const virtual = virtualizesRows(rows.length);
@@ -474,6 +481,8 @@ export function RecordsGrid({
     columnId: visibleIds[0] ?? "",
   }));
   const [controlMode, setControlMode] = useState(false);
+  /** The column whose heading menu is open. */
+  const [menuColumnId, setMenuColumnId] = useState<string | undefined>(undefined);
   const [pendingRecordId, setPendingRecordId] = useState<string | undefined>(undefined);
   const lastPosition = useRef({ row: -1, column: 0 });
   const focusRequested = useRef(false);
@@ -627,6 +636,25 @@ export function RecordsGrid({
     layout.commit();
     announce(`${column.label} is ${next} pixels wide`);
   };
+  const autoSize = (columnId: string, width: number): void => {
+    const column = columnsById.get(columnId);
+    if (column === undefined) return;
+    setWidths((widths) => ({ ...widths, [columnId]: width }));
+    layout.commit();
+    announce(`${column.label} fitted to ${width} pixels`);
+  };
+  const hideColumn = (columnId: string): void => {
+    const column = columnsById.get(columnId);
+    if (column === undefined) return;
+    const remaining = visibleIds.filter((id) => id !== columnId);
+    const next = remaining[Math.min(visibleIds.indexOf(columnId), remaining.length - 1)];
+    if (next !== undefined) {
+      setActive({ recordId: null, columnId: next });
+      focusRequested.current = true;
+    }
+    layout.setVisible(columnId, false);
+    announce(`${column.label} hidden`);
+  };
   const moveColumnBy = (columnId: string, offset: number): void => {
     const column = columnsById.get(columnId);
     const position = layout.moveColumn(columnId, offset);
@@ -701,6 +729,11 @@ export function RecordsGrid({
         return;
       }
     }
+    if (header && event.altKey && event.key === "ArrowDown") {
+      handled();
+      if (columnsById.has(columnId)) setMenuColumnId(columnId);
+      return;
+    }
     if (header && event.altKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
       handled();
       const direction = event.key === "ArrowLeft" ? -1 : 1;
@@ -746,7 +779,8 @@ export function RecordsGrid({
         handled();
         if (header && event.key === "Enter") {
           if (columnId === SELECT_COLUMN) toggleAll();
-          else sortBy(columnId, event.shiftKey);
+          else if (event.shiftKey) sortBy(columnId, true);
+          else if (columnsById.has(columnId)) setMenuColumnId(columnId);
           return;
         }
         const target = cell.querySelector<HTMLElement>(INNER_FOCUSABLE);
@@ -911,6 +945,28 @@ export function RecordsGrid({
               </span>
             )}
             {column === undefined ? null : renderers.headerAdornment?.(column)}
+            {column === undefined ? null : (
+              <ColumnMenu
+                column={column}
+                open={menuColumnId === slot.id}
+                onOpenChange={(open) => setMenuColumnId(open ? slot.id : undefined)}
+                returnFocus={() =>
+                  cellElement(-1, slot.id) ?? cellElement(-1, activeColumnIdRef.current)
+                }
+                sort={sort}
+                sortable={sortable}
+                onSort={(keys) =>
+                  void events?.sort_changed?.({ event: "sort_changed", sort: keys })
+                }
+                position={layout.state.order.indexOf(slot.id) + 1}
+                shownCount={layout.state.order.length}
+                onHide={() => hideColumn(slot.id)}
+                onMove={(offset) => moveColumnBy(slot.id, offset)}
+                grid={() => gridRef.current}
+                onAutoSize={(width) => autoSize(slot.id, width)}
+                featureItems={renderers.columnMenuItems?.(column)}
+              />
+            )}
             {header === undefined || !header.column.getCanResize() ? null : (
               <div
                 aria-hidden="true"
@@ -991,16 +1047,16 @@ export function RecordsGrid({
       data-vortex-grid-virtualized={virtual ? "" : undefined}
       className={cn(
         "relative max-w-full gap-0 overflow-auto py-0",
-        bounded && BOUNDED_VIEWPORT_CLASS,
+        fill ? "min-h-0 flex-1" : bounded && BOUNDED_VIEWPORT_CLASS,
       )}
     >
       <span id={instructionsId} className="sr-only">
         Use the arrow keys to move between cells. Enter opens a row or uses the controls in a cell,
         F2 edits them and Escape returns to the cell. Space selects a row. On a row's expand button,
         the right arrow shows its related records and the left arrow hides them; F2 or Tab moves
-        into them and Escape returns to the row. On a column heading, Enter sorts, Shift and Enter
-        adds to the sort, Alt with the left or right arrow resizes the column and Alt, Shift with
-        the left or right arrow moves it.
+        into them and Escape returns to the row. On a column heading, Enter or Alt with the down
+        arrow opens the column menu, Shift and Enter adds to the sort, Alt with the left or right
+        arrow resizes the column and Alt, Shift with the left or right arrow moves it.
       </span>
       <div
         ref={gridRef}

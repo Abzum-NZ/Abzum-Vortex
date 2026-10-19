@@ -46,6 +46,7 @@ export function RecordsCards({
   activateRow,
   renderers,
   expansion,
+  fill,
 }: Readonly<{
   accessibleName: string;
   columns: readonly GridColumn[];
@@ -57,6 +58,7 @@ export function RecordsCards({
   renderers: CardRenderers;
   /** Cards expand to a panel of related records; undefined when no projected feature draws one. */
   expansion: RowExpansionControls | undefined;
+  fill: boolean;
 }>): ReactElement {
   const [heading, ...rest] = columns;
   const details = rest
@@ -86,7 +88,14 @@ export function RecordsCards({
     "li[data-vortex-record-id]",
   );
   return (
-    <ul ref={listRef} aria-label={accessibleName} className="m-0 flex list-none flex-col gap-2 p-0">
+    <ul
+      ref={listRef}
+      aria-label={accessibleName}
+      className={cn(
+        "m-0 flex list-none flex-col gap-2 p-0",
+        fill && "min-h-0 flex-1 overflow-auto",
+      )}
+    >
       {rows.map((row) => {
         const selected = selectedRecordIds.includes(row.recordId);
         const headingId = `record-${row.recordId}-heading`;

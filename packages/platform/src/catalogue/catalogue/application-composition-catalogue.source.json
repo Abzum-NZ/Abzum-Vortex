@@ -4470,6 +4470,17 @@
                 "kind": "boolean",
                 "value": true
               }
+            },
+            {
+              "kind": "boolean",
+              "key": "auto_size",
+              "label": "Auto-size",
+              "help": "Let people fit this column to the content of the rows they see, from its column menu",
+              "required": false,
+              "defaultValue": {
+                "kind": "boolean",
+                "value": false
+              }
             }
           ]
         }
@@ -4608,6 +4619,18 @@
         "presentation": true,
         "label": "Sticky first column",
         "help": "Keep the first column in view while a wide table scrolls sideways",
+        "required": false,
+        "defaultValue": {
+          "kind": "boolean",
+          "value": true
+        }
+      },
+      {
+        "kind": "boolean",
+        "key": "allow_full_screen",
+        "presentation": true,
+        "label": "Allow full screen",
+        "help": "Offer a Full screen button that expands the table to fill the screen",
         "required": false,
         "defaultValue": {
           "kind": "boolean",

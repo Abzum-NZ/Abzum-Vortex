@@ -226,6 +226,21 @@ export const studioSettingProblems = (
     )
   )
     problems.push("Keep at least one column visible.");
+  // Auto-size measures a column's values on screen, so it needs the field the column shows.
+  if (columns?.kind === "list")
+    columns.items.forEach((item, index) => {
+      if (
+        item?.kind === "group" &&
+        item.properties["auto_size"]?.kind === "boolean" &&
+        item.properties["auto_size"].value &&
+        item.properties["field"]?.kind !== "field_reference"
+      ) {
+        const label = item.properties["label"];
+        const name =
+          label?.kind === "text" && label.value.trim() !== "" ? label.value : `Column ${index + 1}`;
+        problems.push(`Auto-size is not possible: ${name} has no field to measure.`);
+      }
+    });
   return [...new Set(problems)];
 };
 
@@ -1319,6 +1334,16 @@ function SettingFields({
                 />
               )}
             </StudioField>
+            {property.key === "auto_size" && fieldProperty !== undefined && (
+              <p className="text-sm text-muted-foreground">
+                {fieldReference !== undefined
+                  ? "Available"
+                  : `Not possible - ${labelText?.trim() || "Column"} has no field to measure`}
+              </p>
+            )}
+            {property.key === "allow_full_screen" && (
+              <p className="text-sm text-muted-foreground">Available</p>
+            )}
             {property === labelProperty && fieldProperty !== undefined && (
               <div className="space-y-1 text-sm text-muted-foreground">
                 {field === undefined ? (

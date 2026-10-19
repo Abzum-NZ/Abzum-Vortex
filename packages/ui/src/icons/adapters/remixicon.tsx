@@ -43,6 +43,9 @@ import {
   RiSideBarLine,
   RiSubtractLine,
   type RemixiconComponentType,
+  RiEyeOffLine,
+  RiFullscreenLine,
+  RiFullscreenExitLine,
 } from "@remixicon/react";
 import type { ComponentType } from "react";
 
@@ -101,4 +104,7 @@ export const icons: VortexIconAdapter = {
   tablet: remixIcon(RiTabletLine),
   smartphone: remixIcon(RiSmartphoneLine),
   eye: remixIcon(RiEyeLine),
+  "eye-off": remixIcon(RiEyeOffLine),
+  maximize: remixIcon(RiFullscreenLine),
+  minimize: remixIcon(RiFullscreenExitLine),
 };
