@@ -25,6 +25,8 @@ catalog:
   knip: 5.63.0
   re2js: 2.8.6
   "@xyflow/react": 12.12.0
+  "@tanstack/react-table": 8.21.3
+  "@tanstack/react-virtual": 3.14.21
   file-type: 22.2.0
 
 catalogMode: strict

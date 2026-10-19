@@ -24,6 +24,8 @@
     "@puckeditor/core": "catalog:",
     "@remixicon/react": "4.9.0",
     "@tabler/icons-react": "3.48.0",
+    "@tanstack/react-table": "catalog:",
+    "@tanstack/react-virtual": "catalog:",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "date-fns": "catalog:",
