@@ -12,6 +12,7 @@ import {
   type ProtectedQueryRow,
   type RecordLinkResolver,
   readCurrentRecordOwnerGroupsAfterAuthorization,
+  pageSubjectFieldIds,
 } from "@vortex/platform/server";
 import {
   FORM_CONTAINER_BLOCK_RELEASE,
@@ -504,9 +505,43 @@ const loadApplicationPageJoined = async (
     !subjectId.success
   )
     return { kind: "unavailable" };
+  const subjectRecordType = context.releaseSet.modules
+    .flatMap((module) => module.content.recordTypes)
+    .find(
+      (recordType) =>
+        subjectType !== undefined &&
+        sameId(String(recordType.recordTypeId), String(subjectType.recordTypeId)),
+    );
   let subjectRead: Promise<PageSubjectReadResult> | undefined;
+  const requestedSubjectFieldIds =
+    pageDefinition.type === "detail" || pageDefinition.type === "public"
+      ? [
+          ...new Set([
+            ...pageSubjectFieldIds(allPlacements),
+            // A field refresh still needs its form's complete visible baseline. Named controls
+            // consume the same field that form projection resolves, even without a field reference.
+            ...allPlacements.filter(isEditFieldPlacement).flatMap((placement) => {
+              const field =
+                subjectRecordType === undefined
+                  ? undefined
+                  : formFieldOf(placement, subjectRecordType);
+              return field === undefined ? [] : [String(field.fieldId).toLowerCase()];
+            }),
+          ]),
+        ].filter(
+          (fieldId) =>
+            pageDefinition.type !== "public" ||
+            pageDefinition.publicFieldIds.some((allowed) => sameId(String(allowed), fieldId)),
+        )
+      : undefined;
   const readSubject = (recordTypeId: string, recordId: string): Promise<PageSubjectReadResult> =>
-    (subjectRead ??= subjects.read(session, selection, { recordTypeId, recordId }));
+    (subjectRead ??= subjects.read(session, selection, {
+      recordTypeId,
+      recordId,
+      ...(requestedSubjectFieldIds === undefined
+        ? {}
+        : { requestedFieldIds: requestedSubjectFieldIds }),
+    }));
   // A detail address always names one readable record, even if its authored placements do not
   // include a record-detail block. Other-org and unreadable IDs have the same outcome as absence.
   if (pageDefinition.type === "detail") {
@@ -926,13 +961,6 @@ const loadApplicationPageJoined = async (
   // Detail and ordinary form edit surfaces project their fields from the authorized subject read.
   // Guided-form fields instead come from the person's revisioned draft above.
   const editFormBaselines: Record<string, Record<string, JsonValue>> = {};
-  const subjectRecordType = context.releaseSet.modules
-    .flatMap((module) => module.content.recordTypes)
-    .find(
-      (recordType) =>
-        subjectType !== undefined &&
-        sameId(String(recordType.recordTypeId), String(subjectType.recordTypeId)),
-    );
   const unshown = new Set<string>();
   if (pageDefinition.type !== "guided_form") {
     for (const { placementId, vortex } of placements) {
