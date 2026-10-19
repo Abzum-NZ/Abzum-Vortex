@@ -310,7 +310,7 @@ const stepRecordType = (flow: SourceFlow, properties: Readonly<Record<string, Fl
     ? (flow.triggers ?? []).flatMap((trigger) => "recordTypeId" in trigger ? [trigger.recordTypeId] : [])[0] : undefined);
 
 /** The fields a field setting can name: of the step's record type, or of the record the flow runs for. */
-const fieldOptions = (source: Readonly<ApplicationSourceDocument>, flow: SourceFlow, moduleKey: string | null,
+export const studioFlowFieldOptions = (source: Readonly<ApplicationSourceDocument>, flow: SourceFlow, moduleKey: string | null,
   properties: Readonly<Record<string, FlowValue>>): readonly Readonly<{ value: string; label: string }>[] | undefined => {
   const recordType = stepRecordType(flow, properties) ?? (flow.triggers ?? []).flatMap((trigger) =>
     "recordTypeId" in trigger ? [trigger.recordTypeId] : [])[0] ??
@@ -439,7 +439,7 @@ export const projectStudioFlowStepForm = (
     const recordFieldList = control === "field_values" ? recordFields(source, recordType, moduleKey) : undefined;
     const options = task.type === "event.announce" && key === "event"
       ? studioFlowEventChoices(source, flow, moduleKey, task.properties.record)
-      : control === "field" ? fieldOptions(source, flow, moduleKey, task.properties) : undefined;
+      : control === "field" ? studioFlowFieldOptions(source, flow, moduleKey, task.properties) : undefined;
     const valueType = control === "value" && declaration.type === "record_change_list" ? "json"
       : control === "value" && declaration.type !== "any_value"
       ? declaration.type : control === "message" ? "text" : undefined;

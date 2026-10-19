@@ -1,10 +1,5 @@
 "use client";
 import { Button } from "@vortex/ui/components/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@vortex/ui/components/collapsible";
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -30,7 +25,7 @@ const inputClass = "w-full";
 
 /**
  * The new application form: a name and a description. The key is made from the name (it can be
- * set under Advanced); the home page, who can open it and the application's own empty Module are
+ * edited before creation); the home page, who can open it and the application's own empty Module are
  * made with it, and it starts in a layout with the application menu.
  */
 export function NewApplicationWorkspace({
@@ -46,7 +41,6 @@ export function NewApplicationWorkspace({
     description: "",
     key: "",
   });
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [isCreating, setCreating] = useState(false);
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<
@@ -81,7 +75,6 @@ export function NewApplicationWorkspace({
     const candidate = minimumApplicationSource(inputs, catalogue);
     if (candidate.kind !== "valid") {
       setFieldErrors(candidate.fieldErrors);
-      if (candidate.fieldErrors.key !== undefined) setAdvancedOpen(true);
       setMessage(candidate.message);
       return;
     }
@@ -165,38 +158,21 @@ export function NewApplicationWorkspace({
                 />
               )}
             </StudioField>
-            <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen} className="space-y-2">
-              <CollapsibleTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-start"
-                  />
-                }
-              >
-                Advanced
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-4">
-                <StudioField
-                  label="Key"
-                  error={fieldErrors.key}
-                  hint="Made from the name. It identifies the application everywhere and cannot be changed after it is created."
-                >
-                  {(control) => (
-                    <Input
-                      {...control}
-                      maxLength={100}
-                      value={inputs.key}
-                      placeholder={applicationKeyFromName(inputs.name) || "app.assets_hub"}
-                      disabled={isCreating}
-                      onChange={(event) => edit({ key: event.target.value })}
-                    />
-                  )}
-                </StudioField>
-              </CollapsibleContent>
-            </Collapsible>
+            <StudioField
+              label="Key"
+              error={fieldErrors.key}
+              hint="Made from the name. Review it before creating; it cannot be changed later."
+            >
+              {(control) => (
+                <Input
+                  {...control}
+                  maxLength={100}
+                  value={inputs.key || applicationKeyFromName(inputs.name)}
+                  disabled={isCreating}
+                  onChange={(event) => edit({ key: event.target.value })}
+                />
+              )}
+            </StudioField>
             <Button type="submit" disabled={isCreating}>
               Create application
             </Button>
