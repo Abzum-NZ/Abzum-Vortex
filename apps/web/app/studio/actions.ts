@@ -73,9 +73,7 @@ export async function reviewStudioApplicationSource(
         { kind: "invalid" } as const,
         request.error,
       );
-    const loaded = await loadStudioApplicationDraft(organizationId, request.data.rootId, {
-      kind: "source",
-    });
+    const loaded = await loadStudioApplicationDraft(organizationId, request.data.rootId);
     if (loaded.kind !== "available") return loaded;
     const draft = loaded.draft;
     if (
@@ -224,9 +222,7 @@ export async function saveStudioApplication(
   const saved = await saveHumanApplicationDraft(organizationId, candidate);
   if (saved.kind !== "conflict" || saved.reason !== "draft_changed") return saved;
   const command = saveDefinitionDraftCommandSchema.pick({ rootId: true }).strip().parse(candidate);
-  const latest = await loadStudioApplicationDraft(organizationId, command.rootId, {
-    kind: "source",
-  });
+  const latest = await loadStudioApplicationDraft(organizationId, command.rootId);
   if (latest.kind !== "available") {
     console.error(
       `[studio] the newer saved draft could not be read after a conflict: STUDIO_SAVE_CONFLICT_READ_${latest.kind.toUpperCase()}`,
@@ -241,17 +237,20 @@ export async function saveStudioApplication(
   };
 }
 
-/** The saved draft compiled for the canvas: its page slots, frames, choices and compile failure. */
+/**
+ * The saved draft compiled for the requested editor views (page slots, frames, choices and compile
+ * failure), one view per request from one compile.
+ */
 export async function reopenStudioApplication(
   organizationId: string,
   applicationRootId: string,
-  request: StudioViewRequest,
+  requests: readonly StudioViewRequest[],
   expectedDraftRevision?: number,
 ) {
   return loadStudioApplicationDraft(
     organizationId,
     applicationRootId,
-    request,
+    requests,
     expectedDraftRevision,
   );
 }
@@ -352,9 +351,7 @@ export async function resolveStudioApplicationTheme(
       { kind: "refused" } as const,
       request.error,
     );
-  const loaded = await loadStudioApplicationDraft(organizationId, request.data.rootId, {
-    kind: "source",
-  });
+  const loaded = await loadStudioApplicationDraft(organizationId, request.data.rootId);
   if (loaded.kind !== "available") return { kind: loaded.kind };
   const draft = loaded.draft;
   if (

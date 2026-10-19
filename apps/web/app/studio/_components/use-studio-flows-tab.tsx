@@ -1,4 +1,5 @@
 "use client";
+import { useIdlePreload } from "../_lib/use-idle-preload";
 import dynamic from "next/dynamic";
 import { useCallback, useMemo, type ReactNode } from "react";
 import { describeFailure, type ApplicationSourceDocument, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
@@ -19,6 +20,7 @@ import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 // The workflow canvas pulls in @xyflow/react; load it only when the Flows tab shows a flow.
 const StudioFlowCanvas = dynamic(
   () => import("@vortex/ui/studio/flow-canvas").then((module) => module.StudioFlowCanvas), { ssr: false });
+const preloadFlowCanvas = () => import("@vortex/ui/studio/flow-canvas");
 
 /**
  * The Flows tab of the one Studio: its panel (the flows), its centre (the workflow canvas), its
@@ -34,6 +36,7 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
   applications: readonly StudioModuleOwnerApplication[];
   openFlowsTab: () => void;
 }>) {
+  useIdlePreload(preloadFlowCanvas);
   const { state, source, selected } = draft;
   const appearance = useAppearanceMode();
   const disabled = draft.locked;

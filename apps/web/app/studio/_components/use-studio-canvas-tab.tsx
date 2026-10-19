@@ -1,4 +1,5 @@
 "use client";
+import { useIdlePreload } from "../_lib/use-idle-preload";
 import dynamic from "next/dynamic";
 import { Suspense, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -66,6 +67,7 @@ const ApplicationPagePuckEditor = dynamic(
     import("@vortex/ui/studio/page-puck-editor").then((module) => module.ApplicationPagePuckEditor),
   { ssr: false },
 );
+const preloadPuckEditor = () => import("@vortex/ui/studio/page-puck-editor");
 
 /**
  * The application frame the canvas draws the page inside: the compiled draft's shell, with the
@@ -137,6 +139,7 @@ export function useStudioCanvasTab({
   /** The organisation's applications, which name the owner of a choice from a used Module. */
   applications: readonly StudioModuleOwnerApplication[];
 }>) {
+  useIdlePreload(preloadPuckEditor);
   const { organizationId, source, selected, state, view } = draft;
   const rootId = state.rootId;
   const key = draft.saved.key;

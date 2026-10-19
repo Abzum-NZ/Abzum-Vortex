@@ -76,11 +76,12 @@ export default async function StudioApplicationPage({
       : await loadStudioApplicationDraft(
           organizationId,
           applicationRootId,
-          request,
+          [request],
           initial.draft.draftRevision,
         );
   if (result.kind !== "available")
     return <StudioUnavailable subject="Application draft" result={result} />;
+  const view = result.views[0]!;
   const [place, home] = await Promise.all([
     loadWorkspacePlace(result.organizationId, result.draft.key),
     loadStudioOrganizationHome(result.organizationId),
@@ -104,19 +105,19 @@ export default async function StudioApplicationPage({
       initialModule={module}
       applications={applications}
       initialView={{
-        request: result.request,
-        catalogue: result.catalogue,
-        themeOptions: result.themeOptions,
-        fieldInputControlReleases: result.fieldInputControlReleases,
-        platformThemeTokens: result.platformThemeTokens,
-        compiledFields: result.compiledFields,
-        borrowedChoices: result.borrowedChoices,
-        usedModules: result.usedModules,
-        published: result.published,
-        peopleDirectory: result.peopleDirectory,
-        slots: result.pageCompiledSlots,
-        frames: result.canvasFrames,
-        failure: result.compileFailure,
+        request: view.request,
+        catalogue: view.catalogue,
+        themeOptions: view.themeOptions,
+        fieldInputControlReleases: view.fieldInputControlReleases,
+        platformThemeTokens: view.platformThemeTokens,
+        compiledFields: view.compiledFields,
+        borrowedChoices: view.borrowedChoices,
+        usedModules: view.usedModules,
+        published: view.published,
+        peopleDirectory: view.peopleDirectory,
+        slots: view.pageCompiledSlots,
+        frames: view.canvasFrames,
+        failure: view.compileFailure,
       }}
     />
   );

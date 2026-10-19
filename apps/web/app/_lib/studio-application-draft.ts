@@ -1,5 +1,6 @@
 import "server-only";
 
+import { z } from "zod";
 import {
   createBuilderAuthority,
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
@@ -121,21 +122,30 @@ export type StudioViewResources = Readonly<{
   platformThemeTokens: PlatformThemeTokens | null;
 }>;
 
+/** What one requested editor view draws from, projected from the saved revision's one compile. */
+export type StudioLoadedView = StudioViewResources &
+  Readonly<{
+    compiledFields: StudioCompiledFields | null;
+    borrowedChoices: StudioBorrowedChoices | null;
+    usedModules: readonly StudioDataModule[] | null;
+    published: StudioPublishedData | null;
+    peopleDirectory: PeopleDirectoryOwner | null;
+    pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
+    canvasFrames: StudioApplicationCanvasFrames | null;
+    compileFailure: StudioCompileFailure | null;
+  }>;
+
+/** The most views one read projects: one per rail tab. */
+const maximumViewsPerRead = 9;
+
 type StudioApplicationLoadResult =
-  | (Readonly<{
+  | Readonly<{
       kind: "available";
       organizationId: OrganizationId;
       draft: StoredApplicationDefinitionDraft;
-      compiledFields: StudioCompiledFields | null;
-      borrowedChoices: StudioBorrowedChoices | null;
-      usedModules: readonly StudioDataModule[] | null;
-      published: StudioPublishedData | null;
-      peopleDirectory: PeopleDirectoryOwner | null;
-      pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
-      canvasFrames: StudioApplicationCanvasFrames | null;
-      compileFailure: StudioCompileFailure | null;
-    }> &
-      StudioViewResources)
+      /** One view per request, in request order. */
+      views: readonly StudioLoadedView[];
+    }>
   | StudioApplicationFailure;
 
 type SourcePage = StoredApplicationDefinitionDraft["source"]["body"]["pages"][number];
@@ -353,16 +363,24 @@ const studioCompileFailure = (error: unknown): StudioCompileFailure => {
   return { reasonCode: "STUDIO_DRAFT_COMPILE_UNEXPECTED", family: "unexpected" };
 };
 
-/** Classification, permission and detached draft read share one verified request transaction. */
+/**
+ * Classification, permission and detached draft read share one verified request transaction. The
+ * visible editor asks for its own view; an idle read asks for the views of the other rail tabs,
+ * all projected from the same single compile of the saved revision.
+ */
 export const loadStudioApplicationDraft = async (
   candidateOrganizationId: string,
   candidateRootId: string,
-  request: StudioViewRequest = { kind: "source" },
+  requests: readonly StudioViewRequest[] = [{ kind: "source" }],
   expectedDraftRevision?: number,
 ): Promise<StudioApplicationLoadResult> => {
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
   const root = applicationRootIdSchema.safeParse(candidateRootId);
-  if (!organization.success || !root.success || !studioViewRequestSchema.safeParse(request).success)
+  if (
+    !organization.success ||
+    !root.success ||
+    !z.array(studioViewRequestSchema).min(1).max(maximumViewsPerRead).safeParse(requests).success
+  )
     return declined("application-draft", { kind: "refused", reason: "request_invalid" });
   try {
     const resolved = await resolveIdentitySession();
@@ -385,16 +403,8 @@ export const loadStudioApplicationDraft = async (
           Readonly<{
             organizationId: OrganizationId;
             draft: StoredApplicationDefinitionDraft;
-            compiledFields: StudioCompiledFields | null;
-            pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
-            canvasFrames: StudioApplicationCanvasFrames | null;
-            compileFailure: StudioCompileFailure | null;
-            borrowedChoices: StudioBorrowedChoices | null;
-            usedModules: readonly StudioDataModule[] | null;
-            published: StudioPublishedData | null;
-            peopleDirectory: PeopleDirectoryOwner | null;
-          }> &
-            StudioViewResources
+            views: readonly StudioLoadedView[];
+          }>
         >
       > => {
         const authority = createBuilderAuthority({
@@ -419,46 +429,63 @@ export const loadStudioApplicationDraft = async (
           ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
         });
         if (
-          request.pageAlias !== undefined &&
-          !draft.source.body.pages.some((page) => page.id === request.pageAlias)
+          requests.some(
+            (request) =>
+              request.pageAlias !== undefined &&
+              !draft.source.body.pages.some((page) => page.id === request.pageAlias),
+          )
         )
           return { kind: "refused", reason: "page_missing" };
-        const canvas = request.kind === "canvas" || request.kind === "theme";
-        const data = request.kind === "data";
-        const choices = data || request.kind === "flows" || request.kind === "authoring" || canvas;
+        const canvasOf = (request: StudioViewRequest) =>
+          request.kind === "canvas" || request.kind === "theme";
+        const dataOf = (request: StudioViewRequest) => request.kind === "data";
+        const choicesOf = (request: StudioViewRequest) =>
+          dataOf(request) ||
+          request.kind === "flows" ||
+          request.kind === "authoring" ||
+          canvasOf(request);
+        const publishedOf = (request: StudioViewRequest) =>
+          dataOf(request) || request.creation === "record_page";
+        // The compile is read once for the union of the requested views; each view gets its own part.
+        const canvas = requests.some(canvasOf);
+        const data = requests.some(dataOf);
+        const choices = requests.some(choicesOf);
         const themeRelease = canvas
           ? findPinnedPlatformThemeRelease(draft.source.body.theme.base)
           : undefined;
         if (canvas && themeRelease === undefined) throw new Error("STUDIO_THEME_RELEASE_MISSING");
-        const resources: StudioViewResources = {
+        const resourcesOf = (request: StudioViewRequest): StudioViewResources => ({
           request,
           catalogue:
-            choices || request.creation !== undefined
+            choicesOf(request) || request.creation !== undefined
               ? IMMUTABLE_PLATFORM_BLOCK_CATALOGUE
               : {
                   compositionPolicy: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE.compositionPolicy,
                   releases: [],
                 },
           themeOptions: request.kind === "theme" ? studioThemeOptions : null,
-          fieldInputControlReleases: canvas ? FIELD_INPUT_CONTROL_RELEASES : null,
-          platformThemeTokens: themeRelease?.tokens ?? null,
-        };
+          fieldInputControlReleases: canvasOf(request) ? FIELD_INPUT_CONTROL_RELEASES : null,
+          platformThemeTokens: canvasOf(request) ? (themeRelease?.tokens ?? null) : null,
+        });
         let compiledFields: StudioCompiledFields | null = null;
-        let pageCompiledSlots: StudioApplicationCompiledPageSlots | null = null;
-        let canvasFrames: StudioApplicationCanvasFrames | null = null;
+        let pageCompiledSlots: (StudioApplicationCompiledPageSlots | null)[] = requests.map(
+          () => null,
+        );
+        let canvasFrames: (StudioApplicationCanvasFrames | null)[] = requests.map(() => null);
         let compileFailure: StudioCompileFailure | null = null;
         let borrowedChoices: StudioBorrowedChoices | null = null;
         let usedModules: StudioDataModule[] | null = null;
         let published: StudioPublishedData | null = null;
         let peopleDirectory: PeopleDirectoryOwner | null = null;
-        const context =
-          request.kind === "source" && request.creation !== "record_page"
-            ? null
-            : await readLiveHumanContext(transaction, {
-                scope,
-                session: resolved.session,
-                issuedAt,
-              });
+        const context = requests.every(
+          (request) => request.kind === "source" && request.creation !== "record_page",
+        )
+          ? null
+          : await readLiveHumanContext(transaction, {
+              scope,
+              session: resolved.session,
+              issuedAt,
+            });
         const service = createDatabaseDefinitionPublicationService(
           installedReleaseCatalogue,
           transaction,
@@ -471,8 +498,7 @@ export const loadStudioApplicationDraft = async (
                 rootId: draft.rootId,
                 expectedDraftRevision: draft.draftRevision,
               });
-        if (snapshot !== null && (data || request.creation === "record_page"))
-          published = snapshot.publication;
+        if (snapshot !== null && requests.some(publishedOf)) published = snapshot.publication;
         if (context !== null && snapshot !== null)
           try {
             if (snapshot.compilation === null) throw snapshot.failure;
@@ -495,28 +521,30 @@ export const loadStudioApplicationDraft = async (
                 compiled.compilation.resolutionFingerprint
             )
               throw new Error("STUDIO_DRAFT_COMPILE_MISMATCH");
-            pageCompiledSlots =
-              canvas && request.pageAlias !== undefined
+            pageCompiledSlots = requests.map((request) =>
+              canvasOf(request) && request.pageAlias !== undefined
                 ? pageCompiledSlotsFor(
                     draft.source,
                     compiled.compilation.canonical.content,
                     request.pageAlias,
                   )
-                : null;
+                : null,
+            );
             // The canvas reads this revision's records against this same compile.
             rememberCompiledDraft(
               scope.organizationId,
               draft,
               compiled.compilation.canonical.content,
             );
-            canvasFrames =
-              canvas || request.kind === "access"
+            canvasFrames = requests.map((request) =>
+              canvasOf(request) || request.kind === "access"
                 ? studioCanvasFramesFor(
                     draft.source.body.pages,
                     compiled.compilation.canonical.content,
                     request.pageAlias,
                   )
-                : null;
+                : null,
+            );
             const fieldsByRecord: Record<string, readonly ModuleField[]> = {};
             const borrowed: StudioQueryChoice[] = [];
             const borrowedActions: StudioActionChoice[] = [];
@@ -752,21 +780,25 @@ export const loadStudioApplicationDraft = async (
               error,
             );
             compiledFields = null;
+            pageCompiledSlots = requests.map(() => null);
+            canvasFrames = requests.map(() => null);
           }
         return {
           kind: "available",
           value: {
-            ...resources,
             organizationId: scope.organizationId,
             draft,
-            compiledFields,
-            borrowedChoices,
-            usedModules,
-            published,
-            peopleDirectory,
-            pageCompiledSlots,
-            canvasFrames,
-            compileFailure,
+            views: requests.map((request, index) => ({
+              ...resourcesOf(request),
+              compiledFields: dataOf(request) ? compiledFields : null,
+              borrowedChoices: choicesOf(request) ? borrowedChoices : null,
+              usedModules: dataOf(request) ? usedModules : null,
+              published: publishedOf(request) ? published : null,
+              peopleDirectory: dataOf(request) ? peopleDirectory : null,
+              pageCompiledSlots: pageCompiledSlots[index] ?? null,
+              canvasFrames: canvasFrames[index] ?? null,
+              compileFailure,
+            })),
           },
         };
       },

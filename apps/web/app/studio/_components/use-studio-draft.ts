@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   applicationSourceDocumentSchema,
   canonicalJson,
@@ -180,29 +180,45 @@ type LoadedResult = Extract<
   Awaited<ReturnType<typeof reopenStudioApplication>>,
   { kind: "available" }
 >;
+type LoadedView = LoadedResult["views"][number];
+/** Views read for one saved revision, by request key; a newer saved revision replaces them all. */
+type StudioViewCache = Readonly<{
+  draftRevision: number;
+  sourceFingerprint: string;
+  draft: LoadedResult["draft"];
+  views: Map<string, LoadedView>;
+}>;
+/**
+ * After the visible view settles, the other rail tabs' views are read once the browser is idle: at
+ * once after the workspace opens, and after a short pause later, so browsing selections reads once.
+ */
+const idleReadDelayMs = 400;
+const idleReadTimeoutMs = 2000;
+
 /** Revision-bound metadata is replaced; immutable editor resources remain for this visit. */
 const viewOf = (
-  result: LoadedResult,
+  draft: LoadedResult["draft"],
+  loaded: LoadedView,
   generation: number,
   previous: StudioCompiledView,
 ): StudioCompiledView => ({
-  request: result.request,
-  catalogue: result.catalogue.releases.length === 0 ? previous.catalogue : result.catalogue,
-  themeOptions: result.themeOptions ?? previous.themeOptions,
-  fieldInputControlReleases: result.fieldInputControlReleases,
-  platformThemeTokens: result.platformThemeTokens,
-  source: result.draft.source,
-  draftRevision: result.draft.draftRevision,
-  sourceFingerprint: result.draft.sourceFingerprint,
-  slots: result.pageCompiledSlots,
-  frames: result.canvasFrames,
-  failure: result.compileFailure,
+  request: loaded.request,
+  catalogue: loaded.catalogue.releases.length === 0 ? previous.catalogue : loaded.catalogue,
+  themeOptions: loaded.themeOptions ?? previous.themeOptions,
+  fieldInputControlReleases: loaded.fieldInputControlReleases,
+  platformThemeTokens: loaded.platformThemeTokens,
+  source: draft.source,
+  draftRevision: draft.draftRevision,
+  sourceFingerprint: draft.sourceFingerprint,
+  slots: loaded.pageCompiledSlots,
+  frames: loaded.canvasFrames,
+  failure: loaded.compileFailure,
   generation,
-  compiledFields: result.compiledFields,
-  borrowedChoices: result.borrowedChoices,
-  usedModules: result.usedModules,
-  published: result.published,
-  peopleDirectory: result.peopleDirectory,
+  compiledFields: loaded.compiledFields,
+  borrowedChoices: loaded.borrowedChoices,
+  usedModules: loaded.usedModules,
+  published: loaded.published,
+  peopleDirectory: loaded.peopleDirectory,
 });
 
 const personWords = (label: StudioDraftChangedElsewhere["changedBy"]): string | null =>
@@ -217,12 +233,15 @@ export function useStudioDraft({
   organizationId,
   draft,
   tab,
+  tabs,
   creation,
   initialView,
 }: Readonly<{
   organizationId: string;
   draft: StudioStoredApplicationDraft;
   tab: string;
+  /** Every tab one click away, whose views are read in the background once the visible one settles. */
+  tabs: readonly string[];
   creation: StudioViewRequest["creation"];
   initialView: Omit<
     StudioCompiledView,
@@ -317,6 +336,43 @@ export function useStudioDraft({
   const compiling = useRef<Promise<void> | null>(null);
   const compileAgain = useRef(false);
   const generation = useRef(0);
+  const viewCache = useRef<StudioViewCache | null>(null);
+  // The idle read of the other tabs' views, which a switch to one of them waits for instead of reading again.
+  const reading = useRef<Readonly<{ keys: ReadonlySet<string>; done: Promise<void> }> | null>(null);
+
+  /** Keeps every view a read returned for the saved revision it was read at. */
+  const remember = useCallback((result: LoadedResult, keys: readonly string[]) => {
+    const { draftRevision, sourceFingerprint } = result.draft;
+    const known = viewCache.current;
+    const views =
+      known !== null &&
+      known.draftRevision === draftRevision &&
+      known.sourceFingerprint === sourceFingerprint
+        ? known.views
+        : new Map<string, LoadedView>();
+    keys.forEach((key, index) => {
+      const loaded = result.views[index];
+      if (loaded !== undefined) views.set(key, loaded);
+    });
+    viewCache.current = { draftRevision, sourceFingerprint, draft: result.draft, views };
+  }, []);
+
+  /** Draws the visible view from a read already made for the saved revision, if there is one. */
+  const adoptKnown = useCallback((key: string): boolean => {
+    const known = viewCache.current;
+    const target = savedRef.current;
+    const loaded = known?.views.get(key);
+    if (
+      known === null ||
+      loaded === undefined ||
+      known.draftRevision !== target.draftRevision ||
+      known.sourceFingerprint !== target.sourceFingerprint
+    )
+      return false;
+    generation.current += 1;
+    setView((previous) => viewOf(known.draft, loaded, generation.current, previous));
+    return true;
+  }, []);
 
   // The compile of the saved head, asked for only once no edit is waiting, so a batch costs one save and one compile.
   const refreshCompiled = useCallback(async (): Promise<void> => {
@@ -325,16 +381,30 @@ export function useStudioDraft({
       return compiling.current;
     }
     const run = (async () => {
+      let again = false;
       do {
         compileAgain.current = false;
         const target = savedRef.current;
         setViewProblem("");
         try {
           const requested = requestRef.current;
+          // A view asked for while this read ran may have been read meanwhile, for this revision.
+          if (again && adoptKnown(requested.key)) continue;
+          again = true;
+          const background = reading.current;
+          if (background !== null && background.keys.has(requested.key)) {
+            await background.done;
+            if (!active.current) return;
+            if (requested.key !== requestRef.current.key) {
+              compileAgain.current = true;
+              continue;
+            }
+            if (adoptKnown(requested.key)) continue;
+          }
           const result = await reopenStudioApplication(
             organizationId,
             target.rootId,
-            requested.request,
+            [requested.request],
             target.draftRevision,
           );
           if (requested.key !== requestRef.current.key) {
@@ -379,8 +449,10 @@ export function useStudioDraft({
             );
             continue;
           }
+          remember(result, [requested.key]);
           generation.current += 1;
-          setView((previous) => viewOf(result, generation.current, previous));
+          const loaded = result.views[0]!;
+          setView((previous) => viewOf(result.draft, loaded, generation.current, previous));
         } catch (error) {
           console.error(
             "[studio] compiling the saved draft for the canvas failed",
@@ -397,7 +469,7 @@ export function useStudioDraft({
     } finally {
       compiling.current = null;
     }
-  }, [organizationId]);
+  }, [organizationId, remember, adoptKnown]);
 
   const loadAuthoringResources = useCallback(async () => {
     const target = savedRef.current;
@@ -405,7 +477,7 @@ export function useStudioDraft({
     const result = await reopenStudioApplication(
       organizationId,
       target.rootId,
-      { kind: "authoring" },
+      [{ kind: "authoring" }],
       target.draftRevision,
     );
     if (
@@ -423,15 +495,16 @@ export function useStudioDraft({
       );
       return null;
     }
+    const { catalogue, borrowedChoices } = result.views[0]!;
     // Only the immutable catalogue survives the call. Revision-bound choices belong to its caller.
-    catalogueRef.current = result.catalogue;
-    setView((previous) => ({ ...previous, catalogue: result.catalogue }));
+    catalogueRef.current = catalogue;
+    setView((previous) => ({ ...previous, catalogue }));
     selection.reconcile({
       rootId: target.rootId,
       source: parsed(history.getState().source),
-      catalogue: result.catalogue,
+      catalogue,
     });
-    return { catalogue: result.catalogue, borrowedChoices: result.borrowedChoices };
+    return { catalogue, borrowedChoices };
   }, [organizationId, selection, parsed, history]);
 
   const scheduleSave = useCallback((delay: number) => {
@@ -589,10 +662,110 @@ export function useStudioDraft({
     selection.reconcile({ rootId: state.rootId, source: parsed(state.source), catalogue });
   }, [selection, state.rootId, state.source, parsed, catalogue]);
 
+  // A view already read for the saved revision is drawn before the browser paints the switch.
+  useLayoutEffect(() => {
+    if (JSON.stringify(view.request) === requestKey || state.isDirty || state.isSaving) return;
+    if (!adoptKnown(requestKey)) void refreshCompiled();
+  }, [requestKey, view.request, state.isDirty, state.isSaving, adoptKnown, refreshCompiled]);
+
+  // Every other tab's view of the saved revision, read in one request (one compile) once the
+  // visible view has settled and the browser is idle, so their first use needs no read of its own.
+  const others = useMemo(() => {
+    const current = parsed(state.source);
+    const seen = new Set([requestKey]);
+    const list: { request: StudioViewRequest; key: string }[] = [];
+    for (const other of tabs) {
+      const otherRequest = studioViewRequest(other, selected, current);
+      const key = JSON.stringify(otherRequest);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      list.push({ request: otherRequest, key });
+    }
+    return list;
+  }, [tabs, selected, state.source, parsed, requestKey]);
+  const othersRef = useRef(others);
+  othersRef.current = others;
+  const [readCount, setReadCount] = useState(0);
+  const viewSettled = JSON.stringify(view.request) === requestKey;
+  const otherKeys = others.map((other) => other.key).join("\n");
   useEffect(() => {
-    if (JSON.stringify(view.request) !== requestKey && !state.isDirty && !state.isSaving)
-      void refreshCompiled();
-  }, [requestKey, view.request, state.isDirty, state.isSaving, refreshCompiled]);
+    if (
+      !viewSettled ||
+      state.isDirty ||
+      state.isSaving ||
+      lifetime === 0 ||
+      status.kind === "conflict" ||
+      reading.current !== null ||
+      otherKeys === ""
+    )
+      return;
+    let handle: number | undefined;
+    const read = () => {
+      const target = savedRef.current;
+      const known = viewCache.current;
+      const fresh =
+        known !== null &&
+        known.draftRevision === target.draftRevision &&
+        known.sourceFingerprint === target.sourceFingerprint;
+      const missing = othersRef.current.filter((other) => !(fresh && known.views.has(other.key)));
+      if (missing.length === 0 || document.visibilityState !== "visible" || !active.current) return;
+      const keys = missing.map((other) => other.key);
+      const done = (async () => {
+        try {
+          const result = await reopenStudioApplication(
+            organizationId,
+            target.rootId,
+            missing.map((other) => other.request),
+            target.draftRevision,
+          );
+          if (!active.current) return;
+          if (result.kind !== "available") {
+            console.error(
+              `[studio] the other tabs' views were not read: STUDIO_IDLE_VIEWS_${result.kind.toUpperCase()}`,
+            );
+            return;
+          }
+          // A newer saved revision is read by the visible view; this answer is for an older one.
+          if (
+            result.organizationId !== organizationId ||
+            result.draft.draftRevision !== savedRef.current.draftRevision ||
+            result.draft.sourceFingerprint !== savedRef.current.sourceFingerprint
+          )
+            return;
+          remember(result, keys);
+          setReadCount((count) => count + 1);
+        } catch (error) {
+          console.error("[studio] reading the other tabs' views failed", describeFailure(error));
+        } finally {
+          reading.current = null;
+        }
+      })();
+      reading.current = { keys: new Set(keys), done };
+    };
+    const timer = setTimeout(
+      () => {
+        if (typeof window.requestIdleCallback === "function")
+          handle = window.requestIdleCallback(read, { timeout: idleReadTimeoutMs });
+        else read();
+      },
+      viewCache.current === null ? 0 : idleReadDelayMs,
+    );
+    return () => {
+      clearTimeout(timer);
+      if (handle !== undefined) window.cancelIdleCallback(handle);
+    };
+  }, [
+    viewSettled,
+    state.isDirty,
+    state.isSaving,
+    lifetime,
+    status.kind,
+    otherKeys,
+    saved,
+    readCount,
+    organizationId,
+    remember,
+  ]);
 
   // Leaving the page while a batch is waiting to be saved is confirmed by the browser.
   const unsaved = state.isDirty || state.isSaving;
@@ -684,11 +857,10 @@ export function useStudioDraft({
     clearTimeout(saveTimer.current);
     try {
       if (saving.current !== null) await saving.current;
-      const result = await reopenStudioApplication(
-        organizationId,
-        draft.rootId,
-        requestRef.current.request,
-      );
+      const requested = requestRef.current;
+      const result = await reopenStudioApplication(organizationId, draft.rootId, [
+        requested.request,
+      ]);
       if (!active.current) return false;
       if (
         result.kind !== "available" ||
@@ -702,8 +874,10 @@ export function useStudioDraft({
       }
       savedRef.current = result.draft;
       setSaved(result.draft);
+      remember(result, [requested.key]);
       generation.current += 1;
-      setView((previous) => viewOf(result, generation.current, previous));
+      const loaded = result.views[0]!;
+      setView((previous) => viewOf(result.draft, loaded, generation.current, previous));
       lifetimeRef.current += 1;
       setLifetime(lifetimeRef.current);
       setStatus({ kind: "saved" });
@@ -714,7 +888,7 @@ export function useStudioDraft({
     } finally {
       hold("reopening", false);
     }
-  }, [organizationId, draft.rootId, draft.organizationId, history, hold]);
+  }, [organizationId, draft.rootId, draft.organizationId, history, hold, remember]);
 
   const source = parsed(state.source);
   const retry = useCallback(async () => {

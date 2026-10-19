@@ -1,4 +1,5 @@
 "use client";
+import { useIdlePreload } from "../_lib/use-idle-preload";
 import dynamic from "next/dynamic";
 import {
   applicationSourceDocumentSchema,
@@ -21,6 +22,7 @@ const StudioThemePanel = dynamic(
   () => import("./studio-theme-panel").then((module) => module.StudioThemePanel),
   { loading: () => <p role="status">Loading the theme editor…</p> },
 );
+const preloadThemePanel = () => import("./studio-theme-panel");
 
 /**
  * The Menu and Theme tabs: the application's navigation tree, and its shadcn create theme. Both edit the whole application, through the draft's envelope; the
@@ -43,6 +45,7 @@ export function useStudioMenuThemeTabs({
   /** Opens Access on its Pages and menu view, where who can see an entry is set. */
   openAccessPages: () => void;
 }>) {
+  useIdlePreload(preloadThemePanel);
   const { source, selected } = draft;
   const themeVisited = useStudioTabVisited(!themeHidden);
   const commandMenu = (command: StudioMenuCommand, merge?: string): StudioMenuResult => {
