@@ -227,3 +227,6 @@ export const tableCellTypeKeys = [
   "date_time",
   "choice",
 ] as const;
+
+/** The readable heading of a table column: its key in words, the same in the form and on display. */
+export const tableColumnLabel = (key: string): string => key.replaceAll("_", " ");
