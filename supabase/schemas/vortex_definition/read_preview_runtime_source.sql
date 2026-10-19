@@ -30,7 +30,13 @@ begin
     -- already holds this revision's set gets none.
     'releaseSet', case when preview_row.draft_revision is not distinct from p_cached_draft_revision
       then null else preview_row.runtime_release_set end,
-    'seedBoundedRecordTypeIds', pg_catalog.to_jsonb(preview_row.seed_bounded_record_type_ids)
+    -- The record types whose seed reached the preview bound, from the seed ledger.
+    'seedBoundedRecordTypeIds', coalesce((
+      select pg_catalog.jsonb_agg(seed.record_type_id order by seed.record_type_id)
+      from vortex_definition.preview_installation_seeds as seed
+      where seed.preview_installation_id = preview_row.preview_installation_id
+        and seed.bounded
+    ), '[]'::jsonb)
   );
 end
 $function$;
