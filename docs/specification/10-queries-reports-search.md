@@ -115,6 +115,12 @@ One gate decides every feature, in three places that cannot disagree:
 
 A feature that is off holds only its switch, so it compiles to nothing: its flow bindings are not compiled and its controls never render.
 
+### Column menu and toolbar
+
+Each column heading has one menu, opened by its chevron, Enter or Alt+Down (Escape closes it and returns to the heading). Its core items are always offered where the column supports them: Sort ascending, Sort descending, Add to sort and Clear sort (Shift+click or Shift+Enter on the heading also adds a sort key), Move left, Move right and Hide column. A column whose **Auto-size** setting is on (off by default) also offers Auto-size column, which fits the column to its heading and the cells of the page on screen, within the column width bounds, and stores the width in the person's layout; its code loads only when such a menu opens. Grid features add their own items to the same menu through the feature registry, only when the viewer's projection turns them on.
+
+The table has one toolbar in a fixed order: the projected features' items (search, filter chips, the view switcher), row density, Columns, then export and Full screen. There is no authored toolbar list: an item shows only when its feature is projected on, while density, Columns and Full screen are the table's own. On a phone the table's own controls fold into one More menu. **Allow full screen** (on by default) offers a Full screen button (Ctrl+Shift+F): the table fills the window as an in-app layer, and the browser's full screen is requested too where allowed; Escape or the shortcut leaves it and focus returns to the button. Entering or leaving keeps scroll, selection and an open editor, and reads nothing. Layout actions (density, hide, move, auto-size, full screen) read no records; a sort reads one bounded page, and the server re-checks that every sort key is sortable.
+
 ## Saved views
 
 A saved view records the query, visible columns, arrangement, grouping, sort, and display choices. A personal view is visible only to its owner. A shared view belongs to an application and requires a permission to publish or change.
