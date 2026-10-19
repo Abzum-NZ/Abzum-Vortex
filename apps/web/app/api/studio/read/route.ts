@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
-import { organizationIdSchema, logRefusal } from "@vortex/platform/schema";
+import { applicationRootIdSchema, organizationIdSchema, logRefusal } from "@vortex/platform/schema";
 import { readStudioCanvasRecords } from "../../../_lib/studio-canvas-records";
 import { readStudioDataRecords } from "../../../_lib/studio-data-records";
 import { loadStudioApplicationDraft } from "../../../_lib/studio-application-draft";
@@ -12,13 +12,22 @@ import { readBoundedRequestText } from "../../_lib/bounded-request-body";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const requestSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    operation: z.enum(["canvas", "data", "compile"]),
-    candidate: z.unknown(),
-  })
-  .strict();
+const requestSchema = z.discriminatedUnion("operation", [
+  z
+    .object({
+      organizationId: organizationIdSchema,
+      operation: z.enum(["canvas", "data"]),
+      candidate: z.unknown(),
+    })
+    .strict(),
+  z
+    .object({
+      organizationId: organizationIdSchema,
+      operation: z.literal("compile"),
+      candidate: applicationRootIdSchema,
+    })
+    .strict(),
+]);
 
 /** Read requests run independently of Next's serial mutation action queue. */
 export async function POST(request: NextRequest) {
@@ -38,7 +47,14 @@ export async function POST(request: NextRequest) {
       );
     const body = await readBoundedRequestText(request, 131_072);
     if (body.kind !== "read") return privateJsonResponse({ kind: "refused" }, 413);
-    const parsed = requestSchema.safeParse(JSON.parse(body.text));
+    let candidateBody: unknown;
+    try {
+      candidateBody = JSON.parse(body.text);
+    } catch (error) {
+      if (error instanceof SyntaxError) return privateJsonResponse({ kind: "refused" }, 400);
+      throw error;
+    }
+    const parsed = requestSchema.safeParse(candidateBody);
     if (!parsed.success) return privateJsonResponse({ kind: "refused" }, 400);
     const { organizationId, operation, candidate } = parsed.data;
     const result =
@@ -46,7 +62,7 @@ export async function POST(request: NextRequest) {
         ? await readStudioCanvasRecords(identity.session, organizationId, candidate, request.signal)
         : operation === "data"
           ? await readStudioDataRecords(identity.session, organizationId, candidate, request.signal)
-          : await loadStudioApplicationDraft(organizationId, z.string().parse(candidate));
+          : await loadStudioApplicationDraft(organizationId, candidate);
     return privateJsonResponse(result, 200);
   } catch (error) {
     if (request.signal.aborted) return new Response(null, { status: 499 });

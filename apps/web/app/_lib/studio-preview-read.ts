@@ -29,8 +29,8 @@ export type StudioPreviewSelection = Readonly<{
 /**
  * Where Studio's canvas and Data tab read the records of the saved draft: the builder's own preview
  * installation of that draft, with its runtime context and the running application's own readers.
- * The preview follows the draft: it moves to each saved revision in the background, keeping its
- * records, and reads meanwhile run on it as it is. Every read in it runs under
+ * The visible reader moves the preview to the saved data shape before reading its records.
+ * Presentation-only edits reuse the existing records. Every read in it runs under
  * the builder's preview access, as the preview itself decides it: the draft's roles for the
  * Application's own permissions, the builder's own live access for people and every other system
  * projection, and no record-share authority.
@@ -62,7 +62,9 @@ export const openStudioPreviewRead = async (
   draftRevision: number,
   signal?: AbortSignal,
 ): Promise<StudioPreviewRead> => {
+  signal?.throwIfAborted();
   const state = await readStudioPreviewState(session, organizationId, rootId, draftRevision);
+  signal?.throwIfAborted();
   if (state.kind === "refused") return { kind: "refused" };
   if (state.kind !== "read") return state;
   const preview = await currentStudioPreview(
@@ -93,6 +95,7 @@ export const openStudioPreviewRead = async (
         },
       );
     let reconciled = await reconcile();
+    signal?.throwIfAborted();
     if (reconciled.kind === "temporarily_unavailable" && reconciled.databaseCode === "40001") {
       console.info(
         "[studio] retrying preview reconcile after serialization conflict: STUDIO_PREVIEW_RECONCILE_RETRY",

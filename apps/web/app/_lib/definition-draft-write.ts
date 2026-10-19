@@ -26,10 +26,9 @@ const writeApplicationDraft = async (
       requests: humanOrganizationRequests(),
       permissions: platformPermissionSource,
     });
-    const result = mode === "create"
+    return mode === "create"
       ? await writer.createRoot(resolved.session, organizationId, candidate)
       : await writer.saveDraft(resolved.session, organizationId, candidate);
-    return result;
   } catch (error) {
     return mapWebError(error, {
       route: "definition-draft-write",
