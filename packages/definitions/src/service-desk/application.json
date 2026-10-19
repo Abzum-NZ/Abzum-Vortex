@@ -592,46 +592,55 @@
                     "columns": [
                       {
                         "field": "vortex.service_desk.cases:case.case_number",
-                        "label": "Case number"
+                        "label": "Case number",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.cases:case.subject",
-                        "label": "Subject"
+                        "label": "Subject",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.cases:case.customer_company",
-                        "label": "Customer company"
+                        "label": "Customer company",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.cases:case.requester",
-                        "label": "Requester"
+                        "label": "Requester",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.cases:case.owner",
-                        "label": "Owner"
+                        "label": "Owner",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.cases:case.status",
-                        "label": "Status"
+                        "label": "Status",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.cases:case.priority",
-                        "label": "Priority"
+                        "label": "Priority",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.cases:case.resolution_due_at",
-                        "label": "Resolution due"
+                        "label": "Resolution due",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.cases:case.breached",
-                        "label": "Service level breached"
+                        "label": "Service level breached",
+                        "visible": true
                       }
                     ],
                     "title": "Case queue",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.service_desk.cases:service_desk_open_cases",
                       "responsive": {
@@ -816,19 +825,23 @@
                     "columns": [
                       {
                         "field": "vortex.service_desk.cases:case_comment.created_at",
-                        "label": "Added"
+                        "label": "Added",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.cases:case_comment.created_by",
-                        "label": "Author"
+                        "label": "Author",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.cases:case_comment.body",
-                        "label": "Comment"
+                        "label": "Comment",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.cases:case_comment.customer_visible",
-                        "label": "Customer visible"
+                        "label": "Customer visible",
+                        "visible": true
                       }
                     ],
                     "query_parameters": [
@@ -841,7 +854,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.service_desk.cases:service_desk_case_comments",
                       "responsive": {
@@ -1359,34 +1372,40 @@
                     "columns": [
                       {
                         "field": "vortex.service_desk.knowledge:article.article_number",
-                        "label": "Article number"
+                        "label": "Article number",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.knowledge:article.title",
-                        "label": "Title"
+                        "label": "Title",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.knowledge:article.status",
-                        "label": "Status"
+                        "label": "Status",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.knowledge:article.public",
-                        "label": "Public"
+                        "label": "Public",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.knowledge:article.review_date",
-                        "label": "Review date"
+                        "label": "Review date",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.knowledge:article.author",
-                        "label": "Author"
+                        "label": "Author",
+                        "visible": true
                       }
                     ],
                     "title": "Knowledge",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.service_desk.knowledge:service_desk_knowledge",
                       "responsive": {
@@ -1690,30 +1709,35 @@
                     "columns": [
                       {
                         "field": "vortex.service_desk.sla:service_level.name",
-                        "label": "Name"
+                        "label": "Name",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.sla:service_level.calendar",
-                        "label": "Business calendar"
+                        "label": "Business calendar",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.sla:service_level.first_response_minutes",
-                        "label": "First response minutes"
+                        "label": "First response minutes",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.sla:service_level.resolution_minutes",
-                        "label": "Resolution minutes"
+                        "label": "Resolution minutes",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.sla:service_level.active",
-                        "label": "Active"
+                        "label": "Active",
+                        "visible": true
                       }
                     ],
                     "title": "Service levels",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.service_desk.sla:service_desk_service_levels",
                       "responsive": {
@@ -2007,26 +2031,30 @@
                     "columns": [
                       {
                         "field": "vortex.crm.organisations:company.company_number",
-                        "label": "Company number"
+                        "label": "Company number",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.organisations:company.name",
-                        "label": "Company name"
+                        "label": "Company name",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.organisations:company.phone",
-                        "label": "Main phone"
+                        "label": "Main phone",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.organisations:company.website",
-                        "label": "Website"
+                        "label": "Website",
+                        "visible": true
                       }
                     ],
                     "title": "Customer companies",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.service_desk.cases:service_desk_customers",
                       "responsive": {
@@ -2144,19 +2172,23 @@
                     "columns": [
                       {
                         "field": "vortex.service_desk.cases:case.case_number",
-                        "label": "Case number"
+                        "label": "Case number",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.cases:case.subject",
-                        "label": "Subject"
+                        "label": "Subject",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.cases:case.status",
-                        "label": "Status"
+                        "label": "Status",
+                        "visible": true
                       },
                       {
                         "field": "vortex.service_desk.cases:case.priority",
-                        "label": "Priority"
+                        "label": "Priority",
+                        "visible": true
                       }
                     ],
                     "query_parameters": [
@@ -2169,7 +2201,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.service_desk.cases:service_desk_company_cases",
                       "responsive": {
@@ -2245,26 +2277,30 @@
                     "columns": [
                       {
                         "field": "vortex.crm.people:contact.contact_number",
-                        "label": "Contact number"
+                        "label": "Contact number",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.people:contact.full_name",
-                        "label": "Full name"
+                        "label": "Full name",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.people:contact.email",
-                        "label": "Email"
+                        "label": "Email",
+                        "visible": true
                       },
                       {
                         "field": "vortex.crm.people:contact.company",
-                        "label": "Company"
+                        "label": "Company",
+                        "visible": true
                       }
                     ],
                     "title": "Requesters",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.service_desk.cases:service_desk_requesters",
                       "responsive": {

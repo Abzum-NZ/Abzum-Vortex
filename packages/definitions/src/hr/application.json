@@ -473,18 +473,20 @@
                     "columns": [
                       {
                         "field": "vortex.hr:department.department_code",
-                        "label": "Department code"
+                        "label": "Department code",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:department.name",
-                        "label": "Name"
+                        "label": "Name",
+                        "visible": true
                       }
                     ],
                     "title": "Departments",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.hr:hr_departments",
                       "responsive": {
@@ -889,22 +891,25 @@
                     "columns": [
                       {
                         "field": "vortex.hr:position.position_code",
-                        "label": "Position code"
+                        "label": "Position code",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:position.title",
-                        "label": "Title"
+                        "label": "Title",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:position.department",
-                        "label": "Department"
+                        "label": "Department",
+                        "visible": true
                       }
                     ],
                     "title": "Positions",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.hr:hr_positions",
                       "responsive": {
@@ -1361,34 +1366,40 @@
                     "columns": [
                       {
                         "field": "vortex.hr:employee.employee_number",
-                        "label": "Employee identifier"
+                        "label": "Employee identifier",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:employee.employment_status",
-                        "label": "Employment status"
+                        "label": "Employment status",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:employee.start_date",
-                        "label": "Start date"
+                        "label": "Start date",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:employee.person",
-                        "label": "Person"
+                        "label": "Person",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:employee.position",
-                        "label": "Position"
+                        "label": "Position",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:employee.annual_leave_days",
-                        "label": "Annual leave entitlement (days)"
+                        "label": "Annual leave entitlement (days)",
+                        "visible": true
                       }
                     ],
                     "title": "Employees",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.hr:hr_employees",
                       "responsive": {
@@ -2005,34 +2016,40 @@
                     "columns": [
                       {
                         "field": "vortex.hr:leave_request.start_date",
-                        "label": "Start date"
+                        "label": "Start date",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:leave_request.end_date",
-                        "label": "End date"
+                        "label": "End date",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:leave_request.days",
-                        "label": "Leave days"
+                        "label": "Leave days",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:leave_request.status",
-                        "label": "Status"
+                        "label": "Status",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:leave_request.employee",
-                        "label": "Employee"
+                        "label": "Employee",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:leave_request.entitlement",
-                        "label": "Entitlement"
+                        "label": "Entitlement",
+                        "visible": true
                       }
                     ],
                     "title": "Leave requests",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.hr:hr_leave_requests",
                       "responsive": {
@@ -2703,30 +2720,35 @@
                     "columns": [
                       {
                         "field": "vortex.hr:leave_entitlement.employee",
-                        "label": "Employee"
+                        "label": "Employee",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:leave_entitlement.year",
-                        "label": "Year"
+                        "label": "Year",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:leave_entitlement.days",
-                        "label": "Entitlement (days)"
+                        "label": "Entitlement (days)",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:leave_entitlement.approved_days_taken",
-                        "label": "Approved days taken"
+                        "label": "Approved days taken",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:leave_entitlement.remaining_days",
-                        "label": "Remaining days"
+                        "label": "Remaining days",
+                        "visible": true
                       }
                     ],
                     "title": "Leave entitlements",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.hr:hr_leave_entitlements",
                       "responsive": {
@@ -3178,30 +3200,35 @@
                     "columns": [
                       {
                         "field": "vortex.hr:leave_entitlement.employee",
-                        "label": "Employee"
+                        "label": "Employee",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:leave_entitlement.year",
-                        "label": "Year"
+                        "label": "Year",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:leave_entitlement.days",
-                        "label": "Entitlement (days)"
+                        "label": "Entitlement (days)",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:leave_entitlement.approved_days_taken",
-                        "label": "Approved days taken"
+                        "label": "Approved days taken",
+                        "visible": true
                       },
                       {
                         "field": "vortex.hr:leave_entitlement.remaining_days",
-                        "label": "Remaining days"
+                        "label": "Remaining days",
+                        "visible": true
                       }
                     ],
                     "title": "Leave entitlement by employee and year",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.3.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.hr:hr_leave_entitlements",
                       "responsive": {

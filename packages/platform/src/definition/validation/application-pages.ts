@@ -162,6 +162,10 @@ export function applicationPageRules(scope: ApplicationScope): void {
       const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
       if (blockKey === "platform.display.record_detail" && settings.detail_fields !== undefined && detail === undefined)
         failures.push(failure(output, "vortex.definition.application_block_settings", "required_value"));
+      // A Records table always declares a readable contract: columns with their default
+      // visibility and a page size.
+      if (blockKey === "platform.display.table" && table === undefined)
+        failures.push(failure(output, "vortex.definition.application_block_settings", "required_value"));
       if (blockKey === "platform.display.board") {
         const board = readBoardPlacementContract(settings);
         const boardRecordType = records.get(String(object(bound.recordType).recordTypeId));
@@ -311,7 +315,6 @@ export function applicationPageRules(scope: ApplicationScope): void {
       const orderable = grouped ? lower(array(bound.groupByFieldIds)) : selected;
       const mapped = (fields: readonly string[], allowed: ReadonlySet<string>): boolean =>
         fields.every((field) => allowed.has(field.toLowerCase()));
-      const leading = array(bound.sort)[0];
       if (
         (table !== undefined &&
           (!mapped(
@@ -322,11 +325,15 @@ export function applicationPageRules(scope: ApplicationScope): void {
             table.pageSize > Number(bound.pageSize) ||
             !mapped(table.sortableFields, orderable) ||
             !mapped(table.filterableFields, orderable) ||
-            (table.defaultSort !== undefined &&
-              (!orderable.has(table.defaultSort.field.toLowerCase()) ||
-                leading === undefined ||
-                String(leading.fieldId).toLowerCase() !== table.defaultSort.field.toLowerCase() ||
-                leading.direction !== table.defaultSort.direction)))) ||
+            // The authored default order uses only declared sortable fields the query selects.
+            !mapped(
+              table.defaultSort.map((key) => key.field),
+              orderable,
+            ) ||
+            !mapped(
+              table.defaultSort.map((key) => key.field),
+              new Set(table.sortableFields.map((field) => field.toLowerCase())),
+            ))) ||
         (detail !== undefined &&
           !mapped(
             [...detail.fields.map((entry) => entry.field), ...(detail.headingField === undefined ? [] : [detail.headingField])],

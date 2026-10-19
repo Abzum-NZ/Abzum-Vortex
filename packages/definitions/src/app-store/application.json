@@ -268,23 +268,28 @@
                     "columns": [
                       {
                         "field": "vortex.app_store:store_application.name",
-                        "label": "Application"
+                        "label": "Application",
+                        "visible": true
                       },
                       {
                         "field": "vortex.app_store:store_application.status",
-                        "label": "Status"
+                        "label": "Status",
+                        "visible": true
                       },
                       {
                         "field": "vortex.app_store:store_application.installed_version",
-                        "label": "Installed version"
+                        "label": "Installed version",
+                        "visible": true
                       },
                       {
                         "field": "vortex.app_store:store_application.latest_version",
-                        "label": "Latest version"
+                        "label": "Latest version",
+                        "visible": true
                       },
                       {
                         "field": "vortex.app_store:store_application.published_at",
-                        "label": "Published"
+                        "label": "Published",
+                        "visible": true
                       }
                     ],
                     "row_actions": [
@@ -300,7 +305,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.4.0"
+                        "release_version": "2.0.0"
                       },
                       "view_permission": "vortex.app_store.store_application.read",
                       "query": "vortex.app_store:store_applications",

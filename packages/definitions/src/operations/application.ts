@@ -23,7 +23,7 @@ const {
   FORM_CONTAINER_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE,
   RICH_TEXT_INPUT_BLOCK_RELEASE,
-  TABLE_BLOCK_RELEASE_1_3_0,
+  TABLE_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE,
   TEXT_INPUT_BLOCK_RELEASE,
 } = PLATFORM_BLOCK_RELEASE_IDENTITIES;
@@ -264,12 +264,13 @@ const pages = [
     query: openIncidentsQuery,
     blocks: slot({
       operations_incidents_table: placement(
-        TABLE_BLOCK_RELEASE_1_3_0,
+        TABLE_BLOCK_RELEASE,
         {
           title: "Open incidents",
           columns: incidentColumns.map(([field, label]) => ({
             field: `${incidentRecordType}.${field}`,
             label,
+            visible: true,
           })),
           row_click: { event_id: incidentRowClickEventId },
         },

@@ -1067,52 +1067,62 @@
                       {
                         "field": "vortex.landing_zone:tile.target_kind",
                         "label": "Saved target type",
-                        "format": "text"
+                        "format": "text",
+                        "visible": true
                       },
                       {
                         "field": "vortex.landing_zone:tile.label",
                         "label": "Saved label",
-                        "format": "text"
+                        "format": "text",
+                        "visible": true
                       },
                       {
                         "field": "vortex.landing_zone:tile.application_key",
                         "label": "Saved application",
-                        "format": "text"
+                        "format": "text",
+                        "visible": true
                       },
                       {
                         "field": "vortex.landing_zone:tile.page_key",
                         "label": "Saved page",
-                        "format": "text"
+                        "format": "text",
+                        "visible": true
                       },
                       {
                         "field": "vortex.landing_zone:tile.record_type",
                         "label": "Saved record type",
-                        "format": "text"
+                        "format": "text",
+                        "visible": true
                       },
                       {
                         "field": "vortex.landing_zone:tile.record_id",
                         "label": "Saved record identifier",
-                        "format": "text"
+                        "format": "text",
+                        "visible": true
                       },
                       {
                         "field": "vortex.landing_zone:tile.external_address",
                         "label": "Saved external HTTPS address",
-                        "format": "text"
+                        "format": "text",
+                        "visible": true
                       },
                       {
                         "field": "vortex.landing_zone:tile.description",
                         "label": "Saved description",
-                        "format": "text"
+                        "format": "text",
+                        "visible": true
                       },
                       {
                         "field": "vortex.landing_zone:tile.open_behaviour",
                         "label": "Saved open behaviour",
-                        "format": "text"
+                        "format": "text",
+                        "visible": true
                       },
                       {
                         "field": "vortex.landing_zone:tile.is_favourite",
                         "label": "Favourite status",
-                        "format": "boolean"
+                        "format": "boolean",
+                        "visible": true
                       }
                     ],
                     "row_actions": [
@@ -1130,7 +1140,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.4.0"
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.landing_zone:landing_zone_tiles",
                       "responsive": {
