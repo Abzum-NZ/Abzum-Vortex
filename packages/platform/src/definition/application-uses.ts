@@ -988,8 +988,8 @@ const standardActionUses = (
                     set_fields: "update",
                     delete_subject: "soft_delete",
                     restore_subject: "restore",
-                    add_relationship: "update",
-                    remove_relationship: "update",
+                    change_relationship: "update",
+                    copy_relationships: "update",
                   } as Record<string, string>
                 )[String(mutation.kind)] === action,
             )

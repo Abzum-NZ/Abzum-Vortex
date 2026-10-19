@@ -41,28 +41,30 @@ export function StudioRecordStandardActions({
       {standardRecordActions.map((entry) => (
         <StudioField key={entry.action} label={entry.verb}>
           {(control) => (
-            <Switch
-              {...control}
-              checked={record.standard_actions.includes(entry.action)}
-              disabled={disabled}
-              onCheckedChange={(checked) => {
-                const result = edit((current) => {
-                  const now = current.body.modules
-                    .find((module) => module.key === moduleKey)
-                    ?.record_types.find((item) => item.key === recordKey);
-                  return setInlineRecordStandardActions(current, {
-                    moduleKey,
-                    recordKey,
-                    actions: checked
-                      ? [...(now?.standard_actions ?? []), entry.action]
-                      : (now?.standard_actions ?? []).filter((action) => action !== entry.action),
+            <div className="flex items-center">
+              <Switch
+                {...control}
+                checked={record.standard_actions.includes(entry.action)}
+                disabled={disabled}
+                onCheckedChange={(checked) => {
+                  const result = edit((current) => {
+                    const now = current.body.modules
+                      .find((module) => module.key === moduleKey)
+                      ?.record_types.find((item) => item.key === recordKey);
+                    return setInlineRecordStandardActions(current, {
+                      moduleKey,
+                      recordKey,
+                      actions: checked
+                        ? [...(now?.standard_actions ?? []), entry.action]
+                        : (now?.standard_actions ?? []).filter((action) => action !== entry.action),
+                    });
                   });
-                });
-                setReferences(result.kind === "referenced" ? result.references : []);
-                setProblem(result.kind === "referenced" ? undefined : studioEditProblem(result));
-                setRefusals((value) => value + 1);
-              }}
-            />
+                  setReferences(result.kind === "referenced" ? result.references : []);
+                  setProblem(result.kind === "referenced" ? undefined : studioEditProblem(result));
+                  setRefusals((value) => value + 1);
+                }}
+              />
+            </div>
           )}
         </StudioField>
       ))}
