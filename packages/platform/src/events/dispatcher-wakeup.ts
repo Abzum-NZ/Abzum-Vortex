@@ -1,5 +1,6 @@
 import "server-only";
 
+import { performance } from "node:perf_hooks";
 import { logRefusal } from "../schema";
 import type { DatabaseRow } from "../db/index";
 import { withRuntimeTransaction } from "../db/index";
@@ -22,6 +23,10 @@ export const eventDispatcherWakeupSources = ["database_webhook", "scheduled_reco
 export type EventDispatcherWakeupSource = (typeof eventDispatcherWakeupSources)[number];
 
 export const eventDispatcherWakeupLimits = Object.freeze({
+  /** Stop starting dispatches after ten seconds; let the current batch commit. */
+  dispatchBudgetMilliseconds: 10_000,
+  /** Also cap fast continuations independently of elapsed time. */
+  maximumDispatches: 200,
   /** Request body ceiling for the protected route. */
   maximumRequestBodyLength: 4096,
   /** A pending occurrence older than this is reported as a stalled backlog. */
@@ -130,8 +135,7 @@ type ParsedWakeupRequest =
  * so a caller can never tune the bounded operation.
  */
 const parseWakeupRequest = (body: unknown): ParsedWakeupRequest => {
-  if (body === undefined || body === null)
-    return { kind: "accepted", source: "database_webhook" };
+  if (body === undefined || body === null) return { kind: "accepted", source: "database_webhook" };
   const fields = record(body);
   if (fields === undefined || Object.keys(fields).some((key) => key !== "source"))
     return { kind: "invalid", source: null };
@@ -165,8 +169,7 @@ const parseBacklog = (candidate: unknown): EventDispatcherBacklog => {
   if (
     value === undefined ||
     !(
-      age === null ||
-      boundedInteger(age, 0, eventDispatcherWakeupLimits.maximumBacklogAgeSeconds)
+      age === null || boundedInteger(age, 0, eventDispatcherWakeupLimits.maximumBacklogAgeSeconds)
     ) ||
     !boundedInteger(failures, 0, eventDispatcherWakeupLimits.maximumBacklogFailureCount)
   )
@@ -192,13 +195,15 @@ export const createEventDispatchBacklogReader = (
   Object.freeze({
     async read(): Promise<EventDispatcherBacklog> {
       try {
-        const rows = await run((transaction) =>
-          transaction.query<BacklogRow>`
+        const rows = await run(
+          (transaction) =>
+            transaction.query<BacklogRow>`
             select vortex_platform.event_dispatch_backlog_status() as result
           `,
         );
         const first = rows[0];
-        if (rows.length !== 1 || first === undefined) return eventDispatcherUnavailableBacklog;
+        if (rows.length !== 1 || first === undefined)
+          throw new Error("EVENT_DISPATCH_BACKLOG_RESULT_INVALID");
         return parseBacklog(first.result);
       } catch (error) {
         logRefusal("events-dispatch", "backlog status", "backlog_read_failed", error);
@@ -211,9 +216,10 @@ export const createEventDispatchBacklogReader = (
  * Wake-up and recovery entry over the same bounded #641 dispatcher route. Both
  * a database webhook hint and a scheduled recovery tick authenticate with the
  * same configured dispatcher credential and run the identical claim, deliver,
- * acknowledge and retry operation; this module adds only the advisory source
- * label and a bounded, content-free backlog status. It never claims, settles or
- * mutates the durable outbox itself.
+ * acknowledge and retry operation. Successful nonempty batches are claimed
+ * again within a fixed budget, with authority resolved afresh for each dispatch.
+ * An in-flight batch finishes normally; no timeout races a consumer's commit.
+ * This module never claims, settles or mutates the durable outbox itself.
  */
 export const createEventDispatcherWakeup = (
   dependencies: EventDispatcherWakeupDependencies,
@@ -232,15 +238,44 @@ export const createEventDispatcherWakeup = (
           source: null,
         };
 
-      const dispatch = await route.handle({ authorization: request.authorization });
+      const deadline = performance.now() + eventDispatcherWakeupLimits.dispatchBudgetMilliseconds;
+      let dispatch = await route.handle({ authorization: request.authorization });
       if (dispatch.outcome === "refused")
         return { outcome: "refused", reason: dispatch.reason, source: parsed.source };
       if (dispatch.outcome === "invalid_request")
         return { outcome: "invalid_request", code: dispatch.code, source: parsed.source };
+      const result = { ...dispatch.result };
+      for (
+        let dispatches = 1;
+        dispatches < eventDispatcherWakeupLimits.maximumDispatches &&
+        performance.now() < deadline &&
+        dispatch.result.status === "completed" &&
+        // Per-consumer quotas and record ordering can leave eligible work after
+        // a short batch. Only an idle claim establishes that no work is ready.
+        dispatch.result.claimedCount > 0;
+        dispatches += 1
+      ) {
+        dispatch = await route.handle({ authorization: request.authorization });
+        if (dispatch.outcome === "refused")
+          return { outcome: "refused", reason: dispatch.reason, source: parsed.source };
+        if (dispatch.outcome === "invalid_request")
+          return { outcome: "invalid_request", code: dispatch.code, source: parsed.source };
+        // The response accounts for every batch, including failures after earlier progress.
+        // An idle final claim must not hide the work completed by preceding batches.
+        if (dispatch.result.status !== "idle") result.status = dispatch.result.status;
+        result.claimedCount += dispatch.result.claimedCount;
+        result.acknowledgedCount += dispatch.result.acknowledgedCount;
+        result.continuedCount += dispatch.result.continuedCount;
+        result.retryScheduledCount += dispatch.result.retryScheduledCount;
+        result.terminallyFailedCount += dispatch.result.terminallyFailedCount;
+        result.interruptedCount += dispatch.result.interruptedCount;
+        result.consumersDispatched += dispatch.result.consumersDispatched;
+        result.consumersUnavailable += dispatch.result.consumersUnavailable;
+      }
       return {
         outcome: "dispatched",
         source: parsed.source,
-        result: dispatch.result,
+        result: Object.freeze(result),
         backlog: await backlog.read(),
       };
     },

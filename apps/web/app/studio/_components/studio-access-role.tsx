@@ -42,6 +42,7 @@ import {
   studioAccessRecordRows,
   studioRoleFieldAccess,
   studioRoleHolds,
+  StudioReferencePicker,
   type StudioAccessCommand,
   type StudioAccessPermission,
 } from "@vortex/ui/studio";
@@ -119,9 +120,21 @@ function FieldAccess({
   disabled: boolean;
   run: StudioAccessRun;
 }>) {
-  const access = studioRoleFieldAccess(source, role.key, moduleKey, recordKey);
-  if (access.kind === "unavailable")
-    return <p className="text-sm text-muted-foreground">{access.message}</p>;
+  const [selectedRead, setSelectedRead] = useState<string | undefined>();
+  const reads = studioAccessPermissions(source).filter(
+    (permission) =>
+      permission.moduleKey === moduleKey &&
+      permission.recordKey === recordKey &&
+      permission.actionKind === "read" &&
+      role.permissions.includes(permission.key),
+  );
+  const access = studioRoleFieldAccess(
+    source,
+    role.key,
+    moduleKey,
+    recordKey,
+    reads.some((permission) => permission.key === selectedRead) ? selectedRead : undefined,
+  );
   const set = (fieldKey: string, readable: boolean, changeable: boolean) =>
     run({
       kind: "set_field_access",
@@ -131,51 +144,85 @@ function FieldAccess({
       fieldKey,
       readable,
       changeable,
+      readPermissionKey: access.kind === "available" ? access.readPermissionKey : "",
     });
   return (
-    <Table
-      aria-label={`Field access for ${recordName}`}
-      containerClassName="border-0"
-      className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:text-xs [&_th]:text-foreground [&_th]:normal-case [&_th]:tracking-normal [&_th]:font-medium"
-    >
-      <TableHeader>
-        <TableRow>
-          <TableHead>Field</TableHead>
-          <TableHead className="w-20 text-center">Can see</TableHead>
-          <TableHead className="w-20 text-center">Can change</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {access.fields.map((field) => (
-          <TableRow key={field.key}>
-            <TableCell>
-              {field.label}
-              {field.producedByPlatform && (
-                <span className="block text-sm text-muted-foreground">Filled by the platform</span>
-              )}
-            </TableCell>
-            <TableCell className="text-center">
-              <Checkbox
-                aria-label={`${role.name} can see ${field.label} on ${recordName}`}
-                checked={field.readable}
-                disabled={disabled}
-                onCheckedChange={(checked) => set(field.key, checked === true, false)}
-              />
-            </TableCell>
-            <TableCell className="text-center">
-              <Checkbox
-                aria-label={`${role.name} can change ${field.label} on ${recordName}`}
-                checked={field.changeable}
-                disabled={disabled || field.producedByPlatform || !access.canChange}
-                onCheckedChange={(checked) =>
-                  set(field.key, field.readable || checked === true, checked === true)
-                }
-              />
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <div className="space-y-3">
+      {reads.length > 1 && (
+        <StudioField
+          label="Read permission"
+          hint="Field edits affect only this Read declaration. Other Read grants keep their own fields."
+        >
+          {(control) => (
+            <StudioReferencePicker
+              {...control}
+              disabled={disabled}
+              value={access.kind === "available" ? access.readPermissionKey : (selectedRead ?? "")}
+              options={reads.map((permission) => ({
+                value: permission.key,
+                label: permission.label,
+              }))}
+              onChange={setSelectedRead}
+            />
+          )}
+        </StudioField>
+      )}
+      {access.kind === "unavailable" ? (
+        <p className="text-sm text-muted-foreground">{access.message}</p>
+      ) : (
+        <>
+          <p className="text-sm text-muted-foreground">
+            Can see reflects the selected Read permission. Other grants can provide additional
+            access. Can change reflects Create and Update.
+          </p>
+          <Table
+            aria-label={`Field access for ${recordName}`}
+            containerClassName="border-0"
+            className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:text-xs [&_th]:text-foreground [&_th]:normal-case [&_th]:tracking-normal [&_th]:font-medium"
+          >
+            <TableHeader>
+              <TableRow>
+                <TableHead>Field</TableHead>
+                <TableHead className="w-20 text-center">Can see</TableHead>
+                <TableHead className="w-20 text-center">Can change</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {access.fields.map((field) => (
+                <TableRow key={field.key}>
+                  <TableCell>
+                    {field.label}
+                    {field.producedByPlatform && (
+                      <span className="block text-sm text-muted-foreground">
+                        Filled by the platform
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Checkbox
+                      aria-label={`${role.name} can see ${field.label} on ${recordName}`}
+                      checked={field.readable}
+                      disabled={disabled}
+                      onCheckedChange={(checked) => set(field.key, checked === true, false)}
+                    />
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Checkbox
+                      aria-label={`${role.name} can change ${field.label} on ${recordName}`}
+                      checked={field.changeable}
+                      disabled={disabled || field.producedByPlatform || !access.canChange}
+                      onCheckedChange={(checked) =>
+                        set(field.key, field.readable || checked === true, checked === true)
+                      }
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </>
+      )}
+    </div>
   );
 }
 
