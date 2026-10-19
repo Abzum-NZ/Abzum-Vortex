@@ -68,7 +68,7 @@ values: the route address and the route bearer credential. It never receives a d
 migration credential or application secret, and it never reads the database. The route accepts
 only an optional `source` label and refuses any batch or consumer tuning.
 
-Each authenticated wake-up reclaims continued installation pages and full batches for up to ten
+Each authenticated wake-up reclaims work after every successful nonempty batch for up to ten
 seconds or 200 dispatches. Every dispatch rechecks the system actor grant and uses the existing
 claim, lease, retry and fencing operations. A failed or interrupted batch stops the wake-up;
 retries keep their existing backoff. The budget stops new dispatches, allowing the current bounded

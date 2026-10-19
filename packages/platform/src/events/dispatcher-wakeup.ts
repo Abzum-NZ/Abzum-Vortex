@@ -6,7 +6,6 @@ import type { DatabaseRow } from "../db/index";
 import { withRuntimeTransaction } from "../db/index";
 import {
   createEventDispatcherRoute,
-  eventDispatcherLimits,
   type EventDispatchResult,
   type EventDispatcherRefusalReason,
   type EventDispatcherRouteDependencies,
@@ -203,7 +202,8 @@ export const createEventDispatchBacklogReader = (
           `,
         );
         const first = rows[0];
-        if (rows.length !== 1 || first === undefined) return eventDispatcherUnavailableBacklog;
+        if (rows.length !== 1 || first === undefined)
+          throw new Error("EVENT_DISPATCH_BACKLOG_RESULT_INVALID");
         return parseBacklog(first.result);
       } catch (error) {
         logRefusal("events-dispatch", "backlog status", "backlog_read_failed", error);
@@ -216,7 +216,7 @@ export const createEventDispatchBacklogReader = (
  * Wake-up and recovery entry over the same bounded #641 dispatcher route. Both
  * a database webhook hint and a scheduled recovery tick authenticate with the
  * same configured dispatcher credential and run the identical claim, deliver,
- * acknowledge and retry operation. Continued pages and full batches are claimed
+ * acknowledge and retry operation. Successful nonempty batches are claimed
  * again within a fixed budget, with authority resolved afresh for each dispatch.
  * An in-flight batch finishes normally; no timeout races a consumer's commit.
  * This module never claims, settles or mutates the durable outbox itself.
@@ -250,8 +250,9 @@ export const createEventDispatcherWakeup = (
         dispatches < eventDispatcherWakeupLimits.maximumDispatches &&
         performance.now() < deadline &&
         dispatch.result.status === "completed" &&
-        (dispatch.result.continuedCount > 0 ||
-          dispatch.result.claimedCount === eventDispatcherLimits.defaultBatchLimit);
+        // Per-consumer quotas and record ordering can leave eligible work after
+        // a short batch. Only an idle claim establishes that no work is ready.
+        dispatch.result.claimedCount > 0;
         dispatches += 1
       ) {
         dispatch = await route.handle({ authorization: request.authorization });
