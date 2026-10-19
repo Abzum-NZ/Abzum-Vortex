@@ -175,7 +175,7 @@ const installReview = async (
     release_note: candidate.snapshot.latest.releaseNote,
     roles: roles.map(
       (role) =>
-        `${role.name}: ${role.permissions.map((permission) => permission.label).join(", ")}`,
+        `${role.name}: ${role.permissions.map((permission) => permission.description).join(" ")}`,
     ),
     member_role_name: releaseMemberRole(roles).name,
     member_role_assignable: await readMemberRoleAssignable(

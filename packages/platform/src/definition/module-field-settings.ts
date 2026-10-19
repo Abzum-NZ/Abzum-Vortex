@@ -93,7 +93,7 @@ const tableColumnItem = (permissions: ModuleFieldSettingsContext["permissions"])
   decimalText("maximum_amount", "Largest value (decimal number or money)"),
   isoDate("earliest", "Earliest date (date)"),
   isoDate("latest", "Latest date (date)"),
-  choice("display_time_zone", "Time zone shown (date and time)", false, timeZones),
+  choice("display_time_zone", "Time zone shown (date and time)", true, timeZones),
   list("options", "Options (choice)", false, 0, 200, optionItem(permissions)),
 ].map((property): Declaration => {
   if (["key", "required", "type"].includes(property.key)) return property;
@@ -134,7 +134,7 @@ export const moduleFieldSettingDeclarations = (
     case "date":
       return [isoDate("earliest", "Earliest date"), isoDate("latest", "Latest date")];
     case "date_time":
-      return [choice("display_time_zone", "Time zone shown", false, timeZones, "Leave empty for the person's own time zone.")];
+      return [choice("display_time_zone", "Time zone shown", true, timeZones)];
     case "choice":
       return [list("options", "Options", true, 1, 200, optionItem(context.permissions), "Add, rename and reorder the options people choose from.")];
     case "several_choices":
@@ -248,6 +248,7 @@ export const starterModuleFieldSettings = (
     case "formatted_text": return { allowed_blocks: ["paragraph", "heading", "list", "link"] };
     case "decimal_number": return { digits_before_decimal: 12, decimal_places: 2 };
     case "money": return { currency_mode: "organization_default" };
+    case "date_time": return { display_time_zone: "person" };
     case "choice": return { options: [] };
     case "several_choices": return { options: [] };
     case "reference_number": return { digits: 6 };
