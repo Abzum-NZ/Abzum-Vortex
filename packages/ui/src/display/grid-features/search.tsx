@@ -22,6 +22,11 @@ function SearchControl({
   events: DisplayEventHandlers | undefined;
 }>): ReactElement | null {
   const [query, setQuery] = useState(initialQuery);
+  const [appliedQuery, setAppliedQuery] = useState(initialQuery);
+  if (appliedQuery !== initialQuery) {
+    setAppliedQuery(initialQuery);
+    setQuery(initialQuery);
+  }
   const inputId = useId();
   const onSearch = events?.search_changed;
   if (onSearch === undefined) return null;

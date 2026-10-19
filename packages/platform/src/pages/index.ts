@@ -81,8 +81,6 @@ export {
 export {
   logRecordsTableRequestRefusal,
   projectRecordsTableFeatures,
-  recordsTableBindingRefusal,
-  recordsTableFlowEventRefusal,
   type RecordsTableRequestPart,
   type RecordsTableRequestRefusal,
 } from "./records-table-features";

@@ -1,3 +1,4 @@
+import { PLATFORM_BLOCK_RELEASE_IDENTITIES } from "../application-composition-release-identities";
 import {
   authoredRecordsTableFeatureEnabled,
   recordsTableFeatureOfEvent,
@@ -20,7 +21,7 @@ const sourcePlacementProps = (
     const record = value as Record<string, unknown>;
     const props = record["props"];
     if (
-      typeof record["type"] === "string" &&
+      record["type"] === PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE.rendererKey &&
       props !== null &&
       typeof props === "object" &&
       (props as Record<string, unknown>)["id"] === alias

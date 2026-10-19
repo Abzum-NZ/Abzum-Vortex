@@ -41,10 +41,8 @@ import {
   createPrivateFormSubmitAdapter,
 } from "../pages/form-request";
 import { createPageSubjectReader } from "../pages/page-subject-read";
-import {
-  logRecordsTableRequestRefusal,
-  recordsTableBindingRefusal,
-} from "../pages/records-table-features";
+import { logRecordsTableRequestRefusal } from "../pages/records-table-features";
+import { recordsTableBindingRefusal } from "../pages/records-table-features/flow-dispatch";
 import { createNamedActionRecordPort } from "../records/action-record-port";
 import { createRecordSaveService } from "../records/save-record";
 import type { createDatabaseApplicationBoundReleaseSetService } from "./application-bound-release-set";
@@ -1181,10 +1179,12 @@ export async function invokeInstalledFlow(
     const featureRefusal =
       binding === undefined
         ? undefined
-        : recordsTableBindingRefusal(
-            bindingInstallation.applicationContent,
+        : await recordsTableBindingRefusal(
+            bindingInstallation,
             binding,
             invocation.callerInputs ?? {},
+            invocation.subject,
+            (operation) => requests.run(identity.session, selection, operation),
           );
     if (featureRefusal !== undefined) {
       logRecordsTableRequestRefusal(featureRefusal, "flow_dispatch");

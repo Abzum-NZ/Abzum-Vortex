@@ -50,11 +50,6 @@ export const studioGridFeaturesProperty = (
     : undefined;
 };
 
-const featureOff: GroupValue = {
-  kind: "group",
-  properties: { enabled: { kind: "boolean", value: false } },
-};
-
 /**
  * The Features panel of a Records table: one compact row per grid feature with its switch and its
  * capability check beside it, "Available" or "Not possible" with the business sentence. The check is
@@ -87,7 +82,10 @@ export function StudioGridFeatures({
   const authored = value?.kind === "group" ? value.properties : {};
   const featureValue = (key: RecordsTableFeatureKey): GroupValue => {
     const held = authored[key];
-    return held?.kind === "group" ? held : featureOff;
+    const declared = property.properties.find((feature) => feature.key === key)?.defaultValue;
+    if (held?.kind === "group") return held;
+    if (declared?.kind !== "group") throw new Error(`Grid feature ${key} has no catalogue default`);
+    return declared as GroupValue;
   };
   const whole: GroupValue = {
     kind: "group",
@@ -125,7 +123,12 @@ export function StudioGridFeatures({
                   <ItemTitle>
                     <Label htmlFor={switchId}>{label}</Label>
                     {check === undefined ? null : check.kind === "available" ? (
-                      <Badge variant="secondary">Available</Badge>
+                      <Badge
+                        variant="outline"
+                        className="border-transparent bg-success/10 text-success"
+                      >
+                        Available
+                      </Badge>
                     ) : (
                       <Badge variant="outline">Not possible</Badge>
                     )}
@@ -147,7 +150,12 @@ export function StudioGridFeatures({
                               kind: "group",
                               properties: { enabled: { kind: "boolean", value: true } },
                             }
-                          : featureOff,
+                          : (() => {
+                              const defaultValue = declaration?.defaultValue;
+                              if (defaultValue?.kind !== "group")
+                                throw new Error(`Grid feature ${key} has no catalogue default`);
+                              return defaultValue as GroupValue;
+                            })(),
                       )
                     }
                   />

@@ -174,6 +174,7 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
     readonly NonNullable<GridFeatureModule["cellDecoration"]>[]
   >([]);
   useEffect(() => {
+    if (signature === "") return;
     let current = true;
     void Promise.all(
       signature === ""

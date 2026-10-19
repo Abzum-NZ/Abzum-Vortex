@@ -96,6 +96,12 @@ function FilterControl({
 }>): ReactElement | null {
   const [value, setValue] = useState(initialValue);
   const [committed, setCommitted] = useState(initialValue);
+  const [appliedValue, setAppliedValue] = useState(initialValue);
+  if (appliedValue !== initialValue) {
+    setAppliedValue(initialValue);
+    setValue(initialValue);
+    setCommitted(initialValue);
+  }
   const inputId = useId();
   const onFilter = events?.filter_changed;
   if (onFilter === undefined) return null;
