@@ -44,6 +44,7 @@ import {
   BuilderAuthorityError,
   DefinitionError,
   readApplicationDefinitionDraft,
+  requireApplicationDefinitionDraftConsistency,
   readLiveHumanContext,
   requireBuilderAuthority,
   createDatabaseDefinitionPublicationService,
@@ -395,8 +396,7 @@ const studioCompileFailure = (error: unknown): StudioCompileFailure => {
 
 /**
  * Classification, permission and detached draft read share one verified request transaction. The
- * visible editor asks for its own view; an idle read asks for the views of the other rail tabs,
- * all projected from the same single compile of the saved revision.
+ * visible editor asks for its own view, projected from the saved revision's single compile.
  */
 export const loadStudioApplicationDraft = async (
   candidateOrganizationId: string,
@@ -527,10 +527,14 @@ export const loadStudioApplicationDraft = async (
         const snapshot =
           context === null
             ? null
-            : await service.readApplicationDraftSnapshot(context, {
-                rootId: draft.rootId,
-                expectedDraftRevision: draft.draftRevision,
-              });
+            : await service.readApplicationDraftSnapshot(
+                context,
+                {
+                  rootId: draft.rootId,
+                  expectedDraftRevision: draft.draftRevision,
+                },
+                { publication: requests.some(publishedOf) },
+              );
         if (snapshot !== null && requests.some(publishedOf)) published = snapshot.publication;
         if (context !== null && snapshot !== null)
           try {
@@ -799,23 +803,6 @@ export const loadStudioApplicationDraft = async (
                     fieldsByRecord[`${release.key}:${record.key}`] = record.fields;
               }
             }
-            const final = await readApplicationDefinitionDraft(transaction, scope, {
-              rootId: root.data,
-              expectedDraftRevision: draft.draftRevision,
-            });
-            if (canonicalJson(final) !== canonicalJson(draft))
-              throw new Error("STUDIO_DRAFT_COMPILE_MISMATCH");
-            await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
-            if (
-              canonicalJson(
-                await readLiveHumanContext(transaction, {
-                  scope,
-                  session: resolved.session,
-                  issuedAt,
-                }),
-              ) !== canonicalJson(context)
-            )
-              throw new Error("STUDIO_DRAFT_COMPILE_MISMATCH");
             borrowedChoices = choices
               ? {
                   usesSignature: studioUsesSignature(draft.source),
@@ -843,6 +830,22 @@ export const loadStudioApplicationDraft = async (
             pageCompiledSlots = requests.map(() => null);
             canvasFrames = requests.map(() => null);
           }
+        if (context !== null) {
+          // Publication facts remain visible after a compile refusal, so they need the same
+          // current revision and authority checks as a successful compilation.
+          await requireApplicationDefinitionDraftConsistency(transaction, scope, draft);
+          await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
+          if (
+            canonicalJson(
+              await readLiveHumanContext(transaction, {
+                scope,
+                session: resolved.session,
+                issuedAt,
+              }),
+            ) !== canonicalJson(context)
+          )
+            throw new Error("STUDIO_DRAFT_COMPILE_MISMATCH");
+        }
         return {
           kind: "available",
           value: {

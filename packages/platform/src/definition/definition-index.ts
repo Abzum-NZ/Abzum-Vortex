@@ -22,6 +22,7 @@ export {
 export * from "./definition-store";
 export {
   readApplicationDefinitionDraft,
+  requireApplicationDefinitionDraftConsistency,
   readModuleDefinitionDraft,
   type StoredApplicationDefinitionDraft,
   type StoredModuleDefinitionDraft,
