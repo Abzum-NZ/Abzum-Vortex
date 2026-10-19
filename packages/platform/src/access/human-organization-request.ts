@@ -30,6 +30,8 @@ import {
   type ResolvedRequestContext,
 } from "../db/index";
 
+import { readDatabaseClock } from "./live-context";
+
 type ResolvedRequestTransactionRunner = <Scope, Result>(
   resolve: (transaction: RequestDatabaseTransaction) => Promise<ResolvedRequestContext<Scope>>,
   operation: (transaction: RequestDatabaseTransaction, scope: Scope) => Promise<Result>,
@@ -253,6 +255,10 @@ export const createHumanOrganizationRequestService = (
               ))
           )
             throw new Error("INVALID_SCOPE_RESULT");
+          // Live context and permission deadlines are checked on the database clock. Issue the
+          // context on that same clock: a web host ahead by even a few milliseconds must not
+          // produce a future-issued context that a fast request then refuses.
+          issuedAt = new Date(await readDatabaseClock(transaction)).toISOString();
           const context: SessionContext = sessionContextSchema.parse({
             callerKind: "human",
             identityAuthorityId: configuredAuthority,
