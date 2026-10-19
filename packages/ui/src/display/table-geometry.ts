@@ -2,6 +2,8 @@
 
 import { useSyncExternalStore } from "react";
 import {
+  RECORDS_TABLE_COLUMN_MAXIMUM_WIDTH,
+  RECORDS_TABLE_COLUMN_MINIMUM_WIDTH,
   RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT,
   type RecordsTableColumnContract,
   type RecordsTableContract,
@@ -23,8 +25,9 @@ const COLUMN_WIDTH: Readonly<Record<RecordsTableColumnContract["width"], number>
   wide: 320,
 });
 
-export const GRID_COLUMN_MIN_WIDTH = 64;
-export const GRID_COLUMN_MAX_WIDTH = 640;
+/** A person resizes a column within the contract's bounds; a stored layout holds the same bounds. */
+export const GRID_COLUMN_MIN_WIDTH = RECORDS_TABLE_COLUMN_MINIMUM_WIDTH;
+export const GRID_COLUMN_MAX_WIDTH = RECORDS_TABLE_COLUMN_MAXIMUM_WIDTH;
 /** The fixed width of the selection and row-actions columns. */
 export const GRID_CONTROL_COLUMN_WIDTH = 48;
 
