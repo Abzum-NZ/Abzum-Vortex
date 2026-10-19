@@ -1,4 +1,5 @@
 "use client";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   applicationSourceDocumentSchema,
@@ -15,9 +16,7 @@ import {
   type StudioApplicationSourceImportSnapshot,
 } from "../_lib/application-source-import";
 import type { SavedDraftContext, StudioPublicationOutcome } from "./application-draft-agent-tools";
-import { ApplicationSourceImport } from "./application-source-import";
-import { StandardPageAdoption } from "./standard-page-adoption";
-import { StudioHistoryTab } from "./studio-history-tab";
+import type { ApplicationSourceImport as ApplicationSourceImportComponent } from "./application-source-import";
 import { StudioPublishDialog } from "./studio-publish-dialog";
 import { previewProblem, unavailableMessage } from "./studio-refusal-messages";
 import { describeStudioCompileFailure } from "../_lib/studio-compile-failure";
@@ -26,6 +25,20 @@ import { studioReleasesSections, type StudioReleasesSection } from "./studio-rai
 import type { StudioDraft } from "./use-studio-draft";
 import { studioNotice } from "./studio-save-state";
 import { toast } from "@vortex/ui/components/sonner";
+import { useStudioTabVisited } from "./studio-frame";
+
+const ApplicationSourceImport = dynamic(
+  () => import("./application-source-import").then((module) => module.ApplicationSourceImport),
+  { loading: () => <p role="status">Loading source import…</p> },
+);
+const StandardPageAdoption = dynamic(
+  () => import("./standard-page-adoption").then((module) => module.StandardPageAdoption),
+  { loading: () => <p role="status">Loading page adoption…</p> },
+);
+const StudioHistoryTab = dynamic(
+  () => import("./studio-history-tab").then((module) => module.StudioHistoryTab),
+  { loading: () => <p role="status">Loading the published versions…</p> },
+);
 
 /** The saved revision a publication was prepared for; any edit or reload makes it out of date. */
 type PublicationSnapshot = Readonly<{
@@ -101,6 +114,7 @@ export function useStudioReleasesTab({
   const latest = useRef(draft);
   latest.current = draft;
   const [section, setSection] = useState<StudioReleasesSection>(initialSection);
+  const importVisited = useStudioTabVisited(!hidden && section === "import");
   const [publishOpen, setPublishOpen] = useState(false);
   const [note, setNote] = useState("");
   const [problem, setProblem] = useState("");
@@ -401,7 +415,7 @@ export function useStudioReleasesTab({
       localLifetime: current.lifetime,
     };
   };
-  const applyImport: Parameters<typeof ApplicationSourceImport>[0]["onApply"] = (
+  const applyImport: Parameters<typeof ApplicationSourceImportComponent>[0]["onApply"] = (
     expected,
     candidate,
   ) => {
@@ -475,14 +489,16 @@ export function useStudioReleasesTab({
         />
       )}
       {/* The import keeps what was pasted while another section or tab is open. */}
-      <section hidden={hidden || section !== "import"} aria-label="Import from source">
-        <ApplicationSourceImport
-          key={draft.lifetime}
-          disabled={draft.locked}
-          readSnapshot={readImportSnapshot}
-          onApply={applyImport}
-        />
-      </section>
+      {importVisited && (
+        <section hidden={hidden || section !== "import"} aria-label="Import from source">
+          <ApplicationSourceImport
+            key={draft.lifetime}
+            disabled={draft.locked}
+            readSnapshot={readImportSnapshot}
+            onApply={applyImport}
+          />
+        </section>
+      )}
     </div>
   );
   const title = studioReleasesSections.find((entry) => entry.value === section)!.label;
