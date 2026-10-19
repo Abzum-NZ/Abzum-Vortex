@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { canonicalJson } from "@vortex/platform/schema";
 
 type HeldState<Value> = Readonly<{
   /** The draft value this state was drawn over. */
@@ -11,7 +12,9 @@ type HeldState<Value> = Readonly<{
   held: Readonly<{ value: Value; problem: string }> | null;
 }>;
 
-const keyOf = (value: unknown): string => JSON.stringify(value ?? null);
+// Schema parsing can reorder object properties without changing the editor's value.
+// Compare the JSON shape (omitting undefined settings) while preserving array order.
+const keyOf = (value: unknown): string => canonicalJson(JSON.parse(JSON.stringify(value ?? null)));
 
 /**
  * A structured control bound to one draft value (a field's settings, a query's filter, an action's
@@ -29,15 +32,27 @@ export function useStudioDraftHeld<Value>(value: Value): Readonly<{
   applied: (next: Value) => void;
 }> {
   const key = keyOf(value);
-  const [state, setState] = useState<HeldState<Value>>({ seen: key, ours: null, epoch: 0, held: null });
+  const [state, setState] = useState<HeldState<Value>>({
+    seen: key,
+    ours: null,
+    epoch: 0,
+    held: null,
+  });
   let current = state;
   if (state.seen !== key) {
     const external = state.ours !== key;
-    current = { seen: key, ours: null, epoch: external ? state.epoch + 1 : state.epoch, held: null };
+    current = {
+      seen: key,
+      ours: null,
+      epoch: external ? state.epoch + 1 : state.epoch,
+      held: null,
+    };
     setState(current);
   }
   return {
-    value: current.held?.value ?? value, problem: current.held?.problem ?? "", epoch: current.epoch,
+    value: current.held?.value ?? value,
+    problem: current.held?.problem ?? "",
+    epoch: current.epoch,
     hold: (next, problem) => setState((before) => ({ ...before, held: { value: next, problem } })),
     applied: (next) => setState((before) => ({ ...before, ours: keyOf(next), held: null })),
   };

@@ -1,4 +1,13 @@
-import type { StudioApplicationSelectionDraft, StudioSemanticSelection } from "./semantic-selection";
+import {
+  PLATFORM_BLOCK_RELEASE_IDENTITIES,
+  sourcePageItems,
+  type ApplicationSourceDocument,
+  type VortexIconName,
+} from "@vortex/platform/schema";
+import type {
+  StudioApplicationSelectionDraft,
+  StudioSemanticSelection,
+} from "./semantic-selection";
 import {
   studioSemanticSelectionKey,
   traverseStudioSemanticSelectionDraft,
@@ -10,6 +19,7 @@ export type StudioSemanticOutlineNode = Readonly<{
   key: string;
   kind: StudioSemanticSelectionTraversalNode["kind"];
   label: string;
+  icon: VortexIconName;
   selection: StudioSemanticSelection | null;
   children: readonly StudioSemanticOutlineNode[];
 }>;
@@ -24,6 +34,7 @@ type MutableOutlineNode = {
   key: string;
   kind: StudioSemanticSelectionTraversalNode["kind"];
   label: string;
+  icon: VortexIconName;
   selection: StudioSemanticSelection | null;
   children: MutableOutlineNode[];
 };
@@ -33,6 +44,7 @@ const freezeOutlineNode = (node: MutableOutlineNode): StudioSemanticOutlineNode 
     key: node.key,
     kind: node.kind,
     label: node.label,
+    icon: node.icon,
     selection: node.selection,
     children: Object.freeze(node.children.map(freezeOutlineNode)),
   });
@@ -64,6 +76,26 @@ export const projectStudioSemanticOutline = (
   draft: StudioApplicationSelectionDraft,
   describePlacement?: StudioPlacementDescriber,
 ): StudioSemanticOutline => {
+  const pageKindIcons = {
+    list: "menu",
+    detail: "file-text",
+    dashboard: "grid",
+    form: "sliders-horizontal",
+    guided_form: "list-tree",
+    public: "eye",
+  } satisfies Record<ApplicationSourceDocument["body"]["pages"][number]["type"], VortexIconName>;
+  const pageIcons = new Map<string, VortexIconName>(
+    draft.source.body.pages.map((page) => [
+      page.id,
+      sourcePageItems(page.composition).some(
+        (item) =>
+          item.props.vortex.block.block_id ===
+          PLATFORM_BLOCK_RELEASE_IDENTITIES.BOARD_BLOCK_RELEASE.blockId,
+      )
+        ? "panel-left"
+        : pageKindIcons[page.type],
+    ]),
+  );
   let root: MutableOutlineNode | undefined;
   const stack: MutableOutlineNode[] = [];
 
@@ -74,6 +106,12 @@ export const projectStudioSemanticOutline = (
         key: outlineKey(node, parent?.key),
         kind: node.kind,
         label: (node.kind === "placement" ? describePlacement?.(node) : undefined) ?? node.label,
+        icon:
+          node.kind === "page"
+            ? pageIcons.get(node.selection.pageAlias)!
+            : node.kind === "shell"
+              ? "grid"
+              : "blocks",
         selection: "selection" in node ? node.selection : null,
         children: [],
       };

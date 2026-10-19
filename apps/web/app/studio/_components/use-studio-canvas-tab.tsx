@@ -11,7 +11,9 @@ import {
   type StudioCompositionCommand, type StudioCompositionContext, type StudioCompositionDestination,
   type StudioCompositionOutcome, type StudioRecordReader, type StudioSemanticOutline, type StudioSemanticSelection,
 } from "@vortex/ui/studio";
-import { createAppearanceRootProps, Icon, type FieldInputControlReleaseMap, type PlatformThemeTokens } from "@vortex/ui";
+import { Icon, type FieldInputControlReleaseMap, type PlatformThemeTokens } from "@vortex/ui";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@vortex/ui/components/empty";
+import { Spinner } from "@vortex/ui/components/spinner";
 import { Button } from "@vortex/ui/components/button";
 import type { StudioCanvasAddRequest, StudioCanvasBreakpoint, StudioCanvasFrame } from "@vortex/ui/studio/page-puck-editor";
 import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-empty-state";
@@ -28,6 +30,7 @@ import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-tool
 import { StudioPanelShell } from "./studio-frame";
 import { StudioInspector } from "./studio-inspector";
 import { StudioUsedIn } from "./studio-used-in";
+import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import { StudioBlockOutlinePanel } from "./studio-outline-panels";
 import type { StudioRailKey } from "./studio-rail-tabs";
 import type { StudioDraft } from "./use-studio-draft";
@@ -63,7 +66,7 @@ const sameDestination = (left: StudioCompositionDestination, right: StudioCompos
  * toolbar, and "Who can see this". Every edit is one command through the draft's envelope.
  */
 export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlReleases, platformThemeTokens, outline, labels,
-  theme, flowsInspector, placementWorkflows, openTab }: Readonly<{
+  theme, flowsInspector, placementWorkflows, openTab, applications }: Readonly<{
   draft: StudioDraft;
   tab: StudioRailKey;
   catalogue: ImmutablePlatformBlockCatalogue;
@@ -78,10 +81,13 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
   /** The selected block's workflows, from the Flows tab. */
   placementWorkflows: ReactNode;
   openTab: (tab: StudioRailKey) => void;
+  /** The organisation's applications, which name the owner of a choice from a used Module. */
+  applications: readonly StudioModuleOwnerApplication[];
 }>) {
   const { organizationId, source, selected, state, view } = draft;
   const rootId = state.rootId;
   const key = draft.saved.key;
+  const [fitZoom, setFitZoom] = useState(0);
   const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>(100);
   const [breakpoint, setBreakpoint] = useState<StudioCanvasBreakpoint>("desktop");
   // The canvas previews the application in light or dark; the running application keeps its own toggle.
@@ -240,8 +246,10 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
       case "temporarily_unavailable": return { kind: "temporarily_unavailable" };
     }
   }, [organizationId, rootId, view.draftRevision]);
-  const draftChoices = useMemo(() => studioDraftChoices(source, view.borrowedChoices, readRecordChoices),
-    [source, view.borrowedChoices, readRecordChoices]);
+  const applicationName = useCallback((application: string) =>
+    applications.find((candidate) => candidate.key === application)?.name ?? "another application", [applications]);
+  const draftChoices = useMemo(() => studioDraftChoices(source, view.borrowedChoices, readRecordChoices, applicationName),
+    [source, view.borrowedChoices, readRecordChoices, applicationName]);
   // The records of the canvas's data blocks, read for the compiled saved revision only.
   const readCanvasRecords = useCallback(async (area: string) => {
     const pageAlias = canvasPageRef.current;
@@ -317,7 +325,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
     <StudioPanelShell title="Blocks" description="Blocks to add to the page on the canvas." hidden={tab !== "blocks"}>
       {/* The canvas's editor draws the palette here, so its blocks drag with the canvas's own drag and drop. */}
       <div ref={setPaletteHost} />
-      {canvasPage === undefined && <p className="text-sm text-muted-foreground">Choose a page in Structure to add blocks to it.</p>}
+      {canvasPage === undefined && <Empty><EmptyHeader><EmptyMedia variant="icon"><Icon name="blocks" /></EmptyMedia><EmptyTitle>No page open</EmptyTitle><EmptyDescription>Choose a page in Structure to add blocks.</EmptyDescription></EmptyHeader></Empty>}
     </StudioPanelShell>
   </>;
 
@@ -354,7 +362,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
     {selected?.kind === "application" && <p>{source.body.description}</p>}
     {selected?.kind === "placement" && canvasPage === undefined && <p>This block is part of a layout. Change it in the inspector.</p>}
     {canvasPage === undefined && selected?.kind !== "flow" && selected?.kind !== "placement" &&
-      <p className="text-sm text-muted-foreground">Choose a page in Structure to arrange it here.</p>}
+      <Empty className="min-h-64"><EmptyHeader><EmptyMedia variant="icon"><Icon name="blocks" /></EmptyMedia><EmptyTitle>No page open</EmptyTitle><EmptyDescription>Choose a page in Structure, or add one.</EmptyDescription></EmptyHeader></Empty>}
     {(canvasPage === undefined ? selected?.kind === "application" : canvasPage.key === source.body.home_page) &&
       source.body.uses.length === 0 && source.body.modules.every((module) => module.record_types.length === 0) &&
       <FirstRecordTypeEmptyState action={<Button type="button" onClick={() => openTab("data")}>
@@ -365,9 +373,9 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
       {draft.updatingCanvas ? ", as the saved draft grants it. Your latest change shows once the canvas is updated." : "."}</p>}
     {shown && canvasPage !== undefined &&
       // The canvas previews the application in light or dark: the appearance is set on the canvas only, never on Studio's frame.
-      <div {...createAppearanceRootProps(appearance)} style={{ ...createAppearanceRootProps(appearance).style, zoom: canvasZoom / 100 }}>
+      <div>
         {/* A newly chosen icon library loads before the canvas draws with it; only the canvas waits. */}
-        <Suspense fallback={<p role="status" className="text-sm text-muted-foreground">Drawing the canvas with the new theme…</p>}>
+        <Suspense fallback={<Empty role="status" className="min-h-64"><EmptyHeader><Spinner /><EmptyTitle>Drawing the canvas</EmptyTitle><EmptyDescription>Loading the application theme.</EmptyDescription></EmptyHeader></Empty>}>
           <ApplicationPagePuckEditor key={`canvas:${canvasPage.id}`} source={source} compiledSource={view.source}
             platformBlockCatalogue={catalogue} fieldInputControlReleases={fieldInputControlReleases}
             platformThemeTokens={platformThemeTokens} pageAlias={canvasPage.id} compiledSlots={view.slots?.[canvasPage.id]}
@@ -377,7 +385,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
             onSelectPlacement={(alias) => Promise.resolve(alias !== null
               ? draft.select({ kind: "placement", placementAlias: alias })
               : canvasPageRef.current !== undefined && draft.select({ kind: "page", pageAlias: canvasPageRef.current }))}
-            breakpoint={breakpoint} disabled={draft.locked} compileFailure={view.failure}
+            breakpoint={breakpoint} zoom={canvasZoom} onFitZoom={setFitZoom} appearance={appearance} disabled={draft.locked} compileFailure={view.failure}
             onChange={applyPuckPageEdit} readRecords={readCanvasRecords} updating={draft.updatingCanvas}
             palette={addTargets === null ? undefined : { host: paletteHost, targets: addTargets, message: paletteMessage, onAdd: addBlock }} />
         </Suspense>
@@ -387,7 +395,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
   const toolbar = (inspectorOpen: boolean, toggleInspector: (() => void) | undefined, centreTitle: string, showsCanvas: boolean,
     focused: boolean, focusCanvas: () => void) =>
     <StudioCanvasToolbar title={centreTitle} breakpoint={breakpoint} onBreakpoint={setBreakpoint}
-      zoom={canvasZoom} onZoom={setCanvasZoom} showsCanvas={showsCanvas && canvasPage !== undefined}
+      zoom={canvasZoom} fitZoom={fitZoom} onZoom={setCanvasZoom} showsCanvas={showsCanvas && canvasPage !== undefined}
       appearance={appearance} onAppearance={setAppearance}
       viewAs={{ value: viewAsRole === undefined ? null : viewAs, onChange: setViewAs,
         roles: source.body.roles.filter((role) => view.frames?.roles[role.key] !== undefined) }}
@@ -398,6 +406,6 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
   return {
     panels, inspector: inspectorPanel, centre, toolbar, dialog, title, breadcrumbItem, compositionContext,
     commandComposition, readRecordChoices, previewAs,
-    readQueries: () => studioDraftChoices(draft.parsed(draft.history.getState().source), view.borrowedChoices, null).queries,
+    readQueries: () => studioDraftChoices(draft.parsed(draft.history.getState().source), view.borrowedChoices, null, applicationName).queries,
   };
 }

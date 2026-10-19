@@ -71,7 +71,7 @@ export function StudioBlockSetupDialog({ request, source, choices: draftChoices,
       setProblem("Choose the data this block shows.");
       return;
     }
-    const problems = studioSettingProblems(values, choice.setup);
+    const problems = studioSettingProblems(values, choice.setup, choices);
     if (problems.length > 0) {
       setProblem(problems.join(" "));
       return;
@@ -83,14 +83,14 @@ export function StudioBlockSetupDialog({ request, source, choices: draftChoices,
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-h-dvh overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Set up {choice.name}</DialogTitle>
           <DialogDescription>
-            It goes into {target.label}. Every other setting starts with its default; change them in the inspector.
+            Add to {target.label}. You can change its settings in the inspector.
           </DialogDescription>
         </DialogHeader>
-        <form id={formId} className="space-y-3" onSubmit={submit}>
+        <form id={formId} className="space-y-4" onSubmit={submit}>
           {pipelineSetup !== undefined ? <div className="space-y-2">
             <Label htmlFor={`${formId}-pipeline`}>{pipelineSetup.label}</Label>
             <StudioOptionControl id={`${formId}-pipeline`} disabled={false} value={pipeline?.reference ?? ""}
@@ -116,7 +116,7 @@ export function StudioBlockSetupDialog({ request, source, choices: draftChoices,
           {problem.length === 0 ? null : <p role="alert" className="text-sm text-destructive">{problem}</p>}
         </form>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
           <Button type="submit" form={formId}
             disabled={pipelineSetup !== undefined && pipeline?.selectable !== true}>Add {choice.name}</Button>
         </DialogFooter>

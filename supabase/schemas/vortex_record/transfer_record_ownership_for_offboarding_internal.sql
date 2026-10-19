@@ -35,7 +35,7 @@ begin
     or p_source_organization_account_id = '00000000-0000-0000-0000-000000000000'::uuid then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
   end if;
-  context_value := vortex_access.validated_human_request_context();
+  context_value := vortex_access.lock_human_request_access_version_internal();
   if not context_value ? 'applicationRootId' then
     raise exception using errcode = '42501', message = 'Offboarding ownership transfer requires an Application context';
   end if;
@@ -155,6 +155,7 @@ begin
       and updated_application_root_id is distinct from application_root_id_value) then
     raise exception using errcode='40001',message='Offboarding ownership transfer revision changed';
   end if;
+  perform vortex_access.invalidate_preview_installations_internal(organization_id_value);
   preview_installation := vortex_record.read_current_preview_installation_internal();
   if preview_installation ->> 'outcome' = 'refused' then
     raise exception using errcode='42501',message='Preview Record context is unavailable';

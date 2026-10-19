@@ -26,6 +26,7 @@ export * from "./application-composition-commands";
 export * from "./field-placement";
 export * from "./application-flow-model";
 export * from "./application-flow-commands";
+export * from "./studio-flow-step-picker";
 export * from "./application-flow-create";
 export * from "./application-flow-values";
 export * from "./application-flow-step-form";
@@ -38,10 +39,28 @@ export type { StudioCompileFailure } from "./compile-failure";
 export * from "./studio-setting-controls";
 export * from "./studio-record-reference-control";
 export * from "./theme-preset";
-export { removeFlowBindingsOf, StoredCompositionRefusal, syncStoredBlockDependencies, validateStoredShell, validateStoredZone } from "./stored-composition";
+export {
+  removeFlowBindingsOf,
+  StoredCompositionRefusal,
+  syncStoredBlockDependencies,
+  validateStoredShell,
+  validateStoredZone,
+} from "./stored-composition";
 export * from "./application-structure-commands";
+export { studioPageLayoutPlan, type StudioPageLayoutPlan } from "./application-page-layout";
 export * from "./application-menu-commands";
 export * from "./application-access-commands";
-export { studioRecordPageChoices, studioRecordPageKinds, type StudioRecordPageCommand, type StudioRecordPageKind } from "./application-record-pages";
+export {
+  studioRecordPageChoices,
+  studioRecordPageKinds,
+  type StudioRecordPageCommand,
+  type StudioRecordPageKind,
+} from "./application-record-pages";
 export * from "./application-item-labels";
 export { tokenName } from "./studio-words";
+export * from "./studio-reference-picker";
+export * from "./studio-entry-list";
+export * from "./studio-segmented-control";
+export * from "./studio-field";
+export * from "./studio-inspector-group";
+export * from "./studio-inspector-actions";

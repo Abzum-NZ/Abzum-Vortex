@@ -2,6 +2,9 @@ import { z } from "zod";
 
 /** Semantic icons available to definitions and the shadcn icon adapters. */
 export const VORTEX_ICON_NAMES = [
+  "file-text",
+  "info",
+  "grip-vertical",
   "arrow-down",
   "arrow-up",
   "calendar",
@@ -40,6 +43,8 @@ export const VORTEX_ICON_NAMES = [
   "tablet",
   "smartphone",
   "eye",
+  "sun",
+  "moon",
 ] as const;
 
 export const vortexIconNameSchema = z.enum(VORTEX_ICON_NAMES);

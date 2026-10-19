@@ -63,7 +63,7 @@ import { describeStudioCompileFailure } from "../_lib/studio-compile-failure";
 
 type Source = ApplicationSourceDocument;
 
-const peopleDirectoryLabel = "Person (people directory)";
+const peopleDirectoryLabel = "People";
 
 function Problems({ issues }: Readonly<{ issues: readonly string[] }>) {
   return issues.length === 0 ? null : (
@@ -106,7 +106,11 @@ function ModuleInspector({
   );
   return (
     <div className="space-y-3">
-      <StudioField label="Module name" error={name.problem === "" ? undefined : name.problem}>
+      <StudioField
+        label="Module name"
+        error={name.problem === "" ? undefined : name.problem}
+        onUndo={name.reset}
+      >
         {(control) => (
           <Input
             {...control}
@@ -205,6 +209,7 @@ function RecordTypeInspector({
         <StudioField
           label="Name of one record"
           error={name.problem === "" ? undefined : name.problem}
+          onUndo={name.reset}
         >
           {(control) => (
             <Input
@@ -219,6 +224,7 @@ function RecordTypeInspector({
         <StudioField
           label="Name of several records"
           error={plural.problem === "" ? undefined : plural.problem}
+          onUndo={plural.reset}
         >
           {(control) => (
             <Input
@@ -529,13 +535,13 @@ export function useStudioDataTab({
   // people directory, which the link then adds to the modules it uses.
   const usedRecordTypes = useMemo((): readonly StudioLinkTarget[] => {
     const targets: StudioLinkTarget[] = (used ?? []).flatMap((module) =>
-      module.recordTypes.map((record) => {
+      module.recordTypes.filter((record) => record.linkable).map((record) => {
         const key = `${module.key}:${record.key}`;
         return {
           key,
           label:
             key === directory.recordType
-              ? `${record.name} (people directory)`
+              ? peopleDirectoryLabel
               : `${record.name} (${module.name})`,
           titleLabel: record.fields.find((field) => field.key === record.titleFieldKey)?.label,
         };

@@ -253,7 +253,6 @@ export function ApplicationReleaseHistory({
     }
   };
 
-  const snapshot = page?.snapshot ?? initialPage.snapshot;
   const blocked = pending !== null || page === null;
   const author = (entry: DefinitionReleaseMetadata) =>
     page?.publishers[entry.publishedBy.toLowerCase()] ?? "someone you cannot see in the directory";
@@ -385,28 +384,6 @@ export function ApplicationReleaseHistory({
       {page !== null && page.entries.length > 0 && page.nextAfterReleaseRevision === null && (
         <p className="text-sm text-muted-foreground">End of release history.</p>
       )}
-      <Collapsible>
-        <CollapsibleTrigger render={<Button variant="ghost" size="sm" />}>
-          <Icon name="chevron-down" />
-          Details
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <dl className="space-y-2 break-all font-mono text-xs">
-            <div>
-              <dt>Technical name</dt>
-              <dd>{snapshot.definitionKey}</dd>
-            </div>
-            <div>
-              <dt>Saved draft revision</dt>
-              <dd>{snapshot.draftRevision}</dd>
-            </div>
-            <div>
-              <dt>Current release revision</dt>
-              <dd>{snapshot.anchorReleaseRevision ?? "No published release"}</dd>
-            </div>
-          </dl>
-        </CollapsibleContent>
-      </Collapsible>
       {confirmDialog}
     </section>
   );
