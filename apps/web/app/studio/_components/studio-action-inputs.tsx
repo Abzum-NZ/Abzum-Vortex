@@ -17,7 +17,7 @@ import { Input } from "@vortex/ui/components/input";
 import { InputGroup, InputGroupAddon } from "@vortex/ui/components/input-group";
 import { Label } from "@vortex/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
-import { StudioEntryList, useStudioEntryKeys } from "@vortex/ui/studio";
+import { StudioEntryList, StudioInspectorGroup, useStudioEntryKeys } from "@vortex/ui/studio";
 
 type Inputs = ApplicationSourceDocument["body"]["modules"][number]["actions"][number]["inputs"];
 const typeLabels = {
@@ -184,9 +184,8 @@ export function StudioActionInputs({
                     </p>
                   </div>
                 )}
-                <details className="text-sm">
-                  <summary className="cursor-pointer text-muted-foreground">Details</summary>
-                  <div className="space-y-1 pt-2">
+                <StudioInspectorGroup title="Details" defaultOpen={false}>
+                  <div className="space-y-1 text-sm">
                     <p>
                       Input key: <code className="font-mono text-xs">{input.key}</code>
                     </p>
@@ -194,7 +193,7 @@ export function StudioActionInputs({
                       Created from the label and kept after saving so other steps can use it.
                     </p>
                   </div>
-                </details>
+                </StudioInspectorGroup>
               </div>
             ),
           };
