@@ -83,16 +83,6 @@ export const openStudioPreviewRead = async (
   if (runs !== "ready" || preview === undefined) return { kind: "following" };
   const derived = await readStudioPreviewDemand(session, organizationId, state.draft, reader);
   if (derived.kind !== "derived") return derived;
-  const readiness = await readStudioDemandReadiness(
-    session,
-    organizationId,
-    rootId,
-    preview,
-    derived.demand,
-  );
-  signal?.throwIfAborted();
-  if (readiness.kind !== "checked") return readiness;
-  if (!readiness.ready) return { kind: "following" };
   const dependencies = requestDependencies();
   const application = { organizationId, applicationRootId: rootId };
   // Copied live records are read only once they are decided again by the builder's current live
@@ -131,11 +121,14 @@ export const openStudioPreviewRead = async (
     previewInstallationId: preview.previewInstallationId,
   };
   signal?.throwIfAborted();
-  const [firstInstalled, launcher] = await Promise.all([
+  const [readiness, firstInstalled, launcher] = await Promise.all([
+    readStudioDemandReadiness(session, organizationId, rootId, preview, derived.demand),
     loadInstalledContext(session, dependencies, selection),
     loadOrganizationLauncher(session),
   ]);
   signal?.throwIfAborted();
+  if (readiness.kind !== "checked") return readiness;
+  if (!readiness.ready) return { kind: "following" };
   const installed =
     firstInstalled.kind === "temporarily_unavailable" && firstInstalled.databaseCode === "40001"
       ? await loadInstalledContext(session, dependencies, selection)

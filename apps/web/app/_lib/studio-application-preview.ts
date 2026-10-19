@@ -272,7 +272,7 @@ const available = (
 type PendingPreview = {
   controller: AbortController;
   consumers: number;
-  result: Promise<StudioPreviewResult>;
+  result: Promise<unknown>;
 };
 // Explicit Preview actions and canvas routes must join the same pending operation even though
 // Next loads them in separate module runtimes. Completed results are never kept here.
@@ -282,11 +282,11 @@ const processPreviews = globalThis as typeof globalThis & {
 };
 const pending = (processPreviews[pendingPreviewsKey] ??= new Map<string, PendingPreview>());
 
-const once = async (
+const once = async <Result>(
   key: string,
   signal: AbortSignal | undefined,
-  run: (signal: AbortSignal) => Promise<StudioPreviewResult>,
-): Promise<StudioPreviewResult> => {
+  run: (signal: AbortSignal) => Promise<Result>,
+): Promise<Result> => {
   signal?.throwIfAborted();
   let operation = pending.get(key);
   if (operation === undefined || operation.controller.signal.aborted) {
@@ -312,7 +312,8 @@ const once = async (
     signal?.addEventListener("abort", release, { once: true });
   });
   try {
-    return await Promise.race([current.result, cancelled]);
+    // Each operation kind owns its key and result type; completed results are never retained.
+    return (await Promise.race([current.result, cancelled])) as Result;
   } finally {
     if (release !== undefined) signal?.removeEventListener("abort", release);
     current.consumers -= 1;
@@ -668,13 +669,13 @@ export const materializeStudioPreviewDemand = (
   preview: Extract<StudioPreviewResult, { kind: "available" }>,
   demand: PreviewDemand,
   signal?: AbortSignal,
-): Promise<StudioPreviewResult> =>
+): Promise<Readonly<{ kind: "materialized"; closure: readonly string[] }> | PreviewFailure> =>
   once(
     `${session.identityId}|${organizationId}|${rootId}|${preview.draftRevision}|${preview.previewInstallationId}|${JSON.stringify(demand)}`.toLowerCase(),
     signal,
     async (pendingSignal) => {
       try {
-        await coordinator().materialize(
+        const seeded = await coordinator().materialize(
           session,
           {
             organizationId,
@@ -685,7 +686,7 @@ export const materializeStudioPreviewDemand = (
           },
           pendingSignal,
         );
-        return preview;
+        return { kind: "materialized" as const, closure: seeded.closure };
       } catch (error) {
         if (pendingSignal.aborted)
           console.info("[studio] preview demand cancelled: STUDIO_PREVIEW_DEMAND_CANCELLED");
@@ -790,7 +791,7 @@ const prepareRuntimeDemand = async (
     demand,
     signal ?? undefined,
   );
-  if (seeded.kind !== "available") return false;
+  if (seeded.kind !== "materialized") return false;
   const after = await readStudioDemandReadiness(
     session,
     context.organizationId,
@@ -861,20 +862,11 @@ export const prepareStudioPreview = async (
     derived.demand,
     signal,
   );
-  if (seeded.kind !== "available") return seeded;
-  const after = await readStudioDemandReadiness(
-    session,
-    organization.data,
-    rootId,
-    seeded,
-    derived.demand,
-  );
+  if (seeded.kind !== "materialized") return seeded;
   signal?.throwIfAborted();
-  if (after.kind !== "checked")
-    return after.kind === "refused" ? { kind: "refused", reason: "permission_refused" } : after;
-  return after.ready
-    ? answer(after.requiredRecordTypeIds, after.readyRecordTypeIds)
-    : { kind: "following" };
+  // Materialization committed the SQL-derived closure and its pending backfill. Learn only that
+  // closure here: the ensuing Studio record read freshly checks authority, revision and readiness.
+  return answer(seeded.closure, seeded.closure);
 };
 
 /**
