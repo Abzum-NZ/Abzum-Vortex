@@ -98,7 +98,10 @@ export function StudioTopBar({
       <Breadcrumb className="min-w-0">
         <BreadcrumbList className="flex-nowrap">
           <BreadcrumbItem className="min-w-0">
-            <BreadcrumbLink className="truncate" render={<Link href={location.organizationHref} prefetch={false} />}>
+            <BreadcrumbLink
+              className="truncate"
+              render={<Link href={location.organizationHref} prefetch={false} />}
+            >
               {location.organizationName}
             </BreadcrumbLink>
           </BreadcrumbItem>
@@ -118,7 +121,10 @@ export function StudioTopBar({
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {location.applications.map((app) => (
-                  <DropdownMenuItem key={app.href} render={<Link href={app.href} prefetch={false} />}>
+                  <DropdownMenuItem
+                    key={app.href}
+                    render={<Link href={app.href} prefetch={false} />}
+                  >
                     {app.name}
                   </DropdownMenuItem>
                 ))}
