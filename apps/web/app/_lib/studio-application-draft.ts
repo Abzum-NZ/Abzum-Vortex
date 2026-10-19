@@ -24,6 +24,7 @@ import {
   type ModuleField,
   type PeopleDirectoryOwner,
   moduleQueryBorrowable,
+  definitionValidationErrorCatalogue,
 } from "@vortex/platform/schema";
 import type { DatabaseRow } from "@vortex/platform/server";
 import {
@@ -253,6 +254,7 @@ const studioCompileFailure = (error: unknown): StudioCompileFailure => {
       const keyOf = (kind: string) => segments.find((segment) => segment.kind === kind)?.key;
       const located = { moduleKey: keyOf("module"), recordTypeKey: keyOf("record_type"), fieldKey: keyOf("field"), queryKey: keyOf("query") };
       return { reasonCode: current.ruleCode, family: current.family,
+        ...(current.code === undefined ? {} : { sentence: definitionValidationErrorCatalogue[current.code].message }),
         ...(block === undefined ? {} : { blockAlias: block.key }),
         ...(setting === undefined || setting.key === "theme" ? {} : { tokenKey: setting.key }),
         ...Object.fromEntries(Object.entries(located).filter(([, key]) => key !== undefined)) };

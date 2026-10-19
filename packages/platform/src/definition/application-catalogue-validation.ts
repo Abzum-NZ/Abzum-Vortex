@@ -338,10 +338,10 @@ export function validateApplicationSourceCatalogue(
       if (features.bulkActions.enabled)
         for (const action of features.bulkActions.actions)
           checkRowBehaviour("features", action.eventId, "bulk_action", "record_reference_list");
+      // A draft may hold a feature that is not possible yet; publication refuses it with the
+      // feature's own sentence (an inline edit without its commit binding, for one).
       if (features.inlineEdit.enabled) {
-        if (features.inlineEdit.eventId === undefined)
-          report("vortex.definition.application_block_settings", "required_value", at("features"));
-        else
+        if (features.inlineEdit.eventId !== undefined)
           checkRowBehaviour(
             "features",
             features.inlineEdit.eventId,

@@ -712,6 +712,7 @@ export function compileParsedApplicationRequest(
         catalogueFailure.ruleCode,
         catalogueFailure.family,
         catalogueFailure.location,
+        catalogueFailure.code,
       );
     const resolution = new Resolution(request.resolution, sourceObject);
     const flowSet = compileCheckedFlowSources(sourceObject, resolution, dependencyOutputs);
