@@ -3,6 +3,7 @@ import { Badge } from "../components/badge";
 import {
   Table,
   TableBody,
+  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
@@ -29,13 +30,19 @@ const rowCountText = (count: number): string =>
 
 /**
  * A table field's rows as a compact read-only table that scrolls sideways inside its own container,
- * with the declared column headings; a table with no rows says so.
+ * with the declared column headings; a table with no rows says so, and one with more rows than are
+ * shown says how many it holds.
  */
 function TableFieldView({ value }: Readonly<{ value: DisplayTableFieldValue }>): ReactElement {
   if (value.rows.length === 0)
     return <span className="vortex-cell-empty text-muted-foreground">{NO_ROWS_TEXT}</span>;
   return (
-    <Table containerClassName="rounded-md">
+    <Table containerClassName="border-0 bg-transparent">
+      {value.rowCount > value.rows.length ? (
+        <TableCaption>
+          Showing the first {value.rows.length} of {value.rowCount} rows
+        </TableCaption>
+      ) : null}
       <TableHeader>
         <TableRow>
           {value.columns.map((column) => (
@@ -92,7 +99,7 @@ export function cellValueToText(value: DisplayCellValue, options?: DateFormatOpt
     case "empty":
       return "";
     case "field_table":
-      return rowCountText(value.rows.length);
+      return rowCountText(value.rowCount);
   }
 }
 

@@ -43,13 +43,15 @@ export type DisplayRichTextInline = Extract<
 export type DisplayCellValue = DisplayScalarCellValue | DisplayTableFieldValue;
 
 /**
- * A table field's rows on a record detail: its declared columns with readable headings, and each
- * row's scalar cells keyed by exactly those columns.
+ * A table field's rows on a record detail: its declared columns with readable headings, the first
+ * page of rows with each row's scalar cells keyed by exactly those columns, and the field's total
+ * row count, never fewer than the rows shown.
  */
 export type DisplayTableFieldValue = Readonly<{
   kind: "field_table";
   columns: readonly DisplayColumn[];
   rows: readonly Readonly<Record<string, DisplayScalarCellValue>>[];
+  rowCount: number;
 }>;
 
 /** One display value that is not itself a table. */
@@ -668,7 +670,7 @@ const parseDetailFieldValue = (
   location: DefinitionRenderErrorLocation,
 ): DisplayCellValue => {
   if (!isRecord(value) || value.kind !== "field_table") return parseCellValue(value, location);
-  requireExactKeys(value, ["kind", "columns", "rows"], location);
+  requireExactKeys(value, ["kind", "columns", "rows", "rowCount"], location);
   const columns = parseColumns(value.columns, location);
   if (columns.length === 0) fail("A table field value requires its declared columns", location);
   const keys = columns.map((column) => column.key);
@@ -688,7 +690,10 @@ const parseDetailFieldValue = (
       );
     },
   );
-  return Object.freeze({ kind: "field_table", columns, rows: Object.freeze(rows) });
+  const rowCount = value.rowCount;
+  if (typeof rowCount !== "number" || !Number.isSafeInteger(rowCount) || rowCount < rows.length)
+    fail("A table field value requires its total row count", location);
+  return Object.freeze({ kind: "field_table", columns, rows: Object.freeze(rows), rowCount });
 };
 
 /** @internal Shared with the board payload parser. */

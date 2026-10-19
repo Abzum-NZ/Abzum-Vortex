@@ -16,6 +16,7 @@ import {
 import type { ProtectedQueryRow } from "../queries/index";
 import { formatDecimal, formatMoney, isExactDecimal } from "./value-format";
 import { recordLinkLabelKey, type RecordLinkReference } from "../definition/app-index";
+import { defaultQueryPageSize } from "../definition/module-query-edit";
 
 /**
  * One closed display value. It is structurally the value the shared display components render, so
@@ -25,12 +26,14 @@ export type ProjectedCellValue = ProjectedScalarCellValue | ProjectedTableField;
 
 /**
  * A table field's stored rows as a record detail shows them: its declared columns in declared order
- * with readable headings, and each row's cells for exactly those columns, each a scalar display value.
+ * with readable headings, at most the first page of rows with each row's cells for exactly those
+ * columns, each a scalar display value, and how many rows the field holds in total.
  */
 export type ProjectedTableField = Readonly<{
   kind: "field_table";
   columns: readonly Readonly<{ key: string; label: string }>[];
   rows: readonly Readonly<Record<string, ProjectedScalarCellValue>>[];
+  rowCount: number;
 }>;
 
 /** One display value that is not itself a table. */
@@ -364,8 +367,9 @@ const TABLE_CELL_FORMATS: Readonly<Record<TableFieldColumn["type"], RecordsDispl
 /**
  * A table field's stored rows as its declared columns and rows. Each row carries exactly the
  * declared column keys, in declared order, projected through the same cell rules as any field; an
- * undeclared key is never read. A field with no rows is an empty table, so the detail can say so. A
- * stored value that is not a list of rows is logged with a stable code and shown as unavailable.
+ * undeclared key is never read. Only the first page of rows is sent, with the total, so a detail
+ * never ships rows it does not show. A field with no rows is an empty table, so the detail can say
+ * so. A stored value that is not a list of rows is logged with a stable code and shown as unavailable.
  */
 const projectTableField = (
   value: JsonValue,
@@ -382,7 +386,8 @@ const projectTableField = (
   return {
     kind: "field_table",
     columns: columns.map(({ key, label }) => ({ key, label })),
-    rows: rows.map((row) =>
+    rowCount: rows.length,
+    rows: rows.slice(0, defaultQueryPageSize).map((row) =>
       Object.fromEntries(
         columns.map((column) => {
           const cells = row as Readonly<Record<string, JsonValue>>;

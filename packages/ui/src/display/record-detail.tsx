@@ -77,7 +77,7 @@ export function RecordDetailDisplay(
                   data-vortex-field-key={field.key}
                   className={cn(
                     "flex min-w-0 flex-col gap-1",
-                    // A table field takes the full width so its columns have room on a phone.
+                    // A table field spans both columns so its own columns have room beside each other.
                     field.value.kind === "field_table" && "sm:col-span-2",
                   )}
                 >
