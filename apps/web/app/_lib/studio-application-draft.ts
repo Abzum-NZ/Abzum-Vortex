@@ -415,9 +415,13 @@ export const loadStudioApplicationDraft = async (
                     recordType: `${release.key}:${recordType.key}`,
                     fields: query.selectedFieldIds.flatMap((fieldId) => {
                       const field = recordType.fields.find((candidate) => sameId(String(candidate.fieldId), String(fieldId)));
+                      const options = field?.type === "choice" ? field.settings.options : undefined;
                       return field === undefined ? [] : [{ reference: `${release!.key}:${recordType.key}.${field.key}`,
-                        label: field.label, type: field.type }];
-                    }), inputs: queryInputs(query), exposure: query.exposure });
+                        label: field.label, type: field.type, sortable: field.sortable, filterable: field.filterable,
+                        searchable: field.searchPriority !== undefined,
+                        ...(options === undefined ? {} : { choiceCount: options.length }) }];
+                    }), grouped: query.groupByFieldIds.length > 0 || query.aggregates.length > 0,
+                    inputs: queryInputs(query), exposure: query.exposure });
                 }
                 // Its actions and relationships are chosen as they are too: they belong to its own application.
                 for (const action of content.actions.filter((action) => records.some((record) =>

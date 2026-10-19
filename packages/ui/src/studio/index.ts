@@ -37,6 +37,8 @@ export * from "./module-action-condition";
 export * from "./application-visibility-condition-commands";
 export type { StudioCompileFailure } from "./compile-failure";
 export * from "./studio-setting-controls";
+export * from "./studio-grid-features";
+export * from "./grid-features";
 export * from "./studio-record-reference-control";
 export * from "./theme-preset";
 export {

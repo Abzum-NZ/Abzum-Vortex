@@ -143,10 +143,12 @@ export const recordsTableFlowEventRefusal = (
   if (!inline.enabled) return recordsTableRequestRefusal("inline_edit", "feature_off");
   if (inline.eventId === undefined || !sameField(inline.eventId, eventId))
     return recordsTableRequestRefusal("inline_edit", "binding_not_declared");
+  // A binding that takes the edited field must name a declared editable one; a binding that takes
+  // no field cannot be steered by it.
   if (
-    changedFieldIds === undefined ||
-    changedFieldIds.length === 0 ||
-    changedFieldIds.some((fieldId) => !inline.fields.some((field) => sameField(field, fieldId)))
+    changedFieldIds !== undefined &&
+    (changedFieldIds.length === 0 ||
+      changedFieldIds.some((fieldId) => !inline.fields.some((field) => sameField(field, fieldId))))
   )
     return recordsTableRequestRefusal("inline_edit", "field_not_editable");
   return undefined;
@@ -184,8 +186,8 @@ const installedPlacementProps = (
 /**
  * The flow-dispatch gate: a binding of a Records table bulk command or inline edit starts its flow
  * only when the installed placement turns that feature on for exactly this command and, for an
- * inline edit, the edited field (the `field` value the surface supplies) is a declared editable
- * field. Every other event passes; a refusal is logged by the caller with its part and cause.
+ * inline edit, the edited field (the `field` value the surface supplies, when the binding takes
+ * one) is a declared editable field. Every other event passes; a refusal is logged by the caller with its part and cause.
  */
 export const recordsTableBindingRefusal = (
   content: unknown,
@@ -209,6 +211,10 @@ export const recordsTableBindingRefusal = (
     settings,
     binding.event,
     binding.eventId,
-    binding.event === "inline_edit" ? (typeof field === "string" ? [field] : []) : undefined,
+    binding.event !== "inline_edit" || !Object.hasOwn(callerInputs, "field")
+      ? undefined
+      : typeof field === "string"
+        ? [field]
+        : [],
   );
 };

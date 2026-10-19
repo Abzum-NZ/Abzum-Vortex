@@ -161,8 +161,42 @@ export function groupStudioPaletteChoices(
     ]) })));
 }
 
-/** One field a query reads, as the qualified field reference a block stores: `<module>:<record>.<field>`. */
-export type StudioQueryField = Readonly<{ reference: string; label: string; type: string }>;
+/**
+ * One field a query reads, as the qualified field reference a block stores:
+ * `<module>:<record>.<field>`, with the facts a Records table feature check needs: whether the
+ * record type lets people sort, filter and search by it, and a choice field's number of options.
+ */
+export type StudioQueryField = Readonly<{
+  reference: string;
+  label: string;
+  type: string;
+  sortable: boolean;
+  filterable: boolean;
+  searchable: boolean;
+  choiceCount?: number;
+}>;
+
+/** The facts of one draft field, as a query field carries them. */
+export const studioFieldFacts = (
+  field: Readonly<{
+    type: string;
+    sortable: boolean;
+    filterable: boolean;
+    search_priority?: string | undefined;
+    settings?: unknown;
+  }>,
+): Pick<StudioQueryField, "sortable" | "filterable" | "searchable" | "choiceCount"> => {
+  const options =
+    field.type === "choice" && typeof field.settings === "object" && field.settings !== null
+      ? (field.settings as { options?: unknown }).options
+      : undefined;
+  return {
+    sortable: field.sortable,
+    filterable: field.filterable,
+    searchable: field.search_priority !== undefined,
+    ...(Array.isArray(options) ? { choiceCount: options.length } : {}),
+  };
+};
 
 /** One input a query asks for, which a block binds to a value when it reads the query. */
 export type StudioQueryInput = Readonly<{
@@ -183,6 +217,8 @@ export type StudioQueryChoice = Readonly<{
   /** The record type the query reads, as `<module>:<record>`. */
   recordType: string;
   fields: readonly StudioQueryField[];
+  /** The query groups or totals its rows, so its rows are not records a person can act on. */
+  grouped: boolean;
   /** The values the query asks for. */
   inputs: readonly StudioQueryInput[];
   /** Whether the Applications that use its Module may read it. A borrowed query is always exposed. */
@@ -242,7 +278,7 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
     const fields = selected.flatMap((key) => {
       const field = record?.fields.find((candidate) => candidate.key === key);
       return field === undefined ? [] : [Object.freeze({
-        reference: `${recordType}.${field.key}`, label: field.label, type: field.type,
+        reference: `${recordType}.${field.key}`, label: field.label, type: field.type, ...studioFieldFacts(field),
       })];
     });
     const inputs = query.inputs.map((input) => Object.freeze({
@@ -251,7 +287,8 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
         type.includes(":") ? type : `${module.key}:${type}`)) } : {}),
     }));
     return Object.freeze({ reference: `${module.key}:${query.key}`, label: query.label ?? query.key,
-      recordType, fields: Object.freeze(fields), inputs: Object.freeze(inputs), exposure: query.exposure });
+      recordType, fields: Object.freeze(fields), grouped: query.group_by.length > 0 || query.aggregates.length > 0,
+      inputs: Object.freeze(inputs), exposure: query.exposure });
   }));
 
 /** The record types of the application's own Modules in the draft, as `<module>:<record>`. */
@@ -264,7 +301,7 @@ export const studioSourceFields = (source: ApplicationSourceDocument): readonly 
   Object.freeze((source.body.modules ?? []).flatMap((module) => module.record_types.flatMap((record) =>
     record.fields.map((field) => Object.freeze({
       reference: `${module.key}:${record.key}.${field.key}`,
-      label: `${record.name}: ${field.label}`, type: field.type,
+      label: `${record.name}: ${field.label}`, type: field.type, ...studioFieldFacts(field),
     })))));
 
 /**
