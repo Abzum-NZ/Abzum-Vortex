@@ -200,10 +200,9 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
           ),
         );
         accessReservations.current.push(
-          ...[
-            ...reservations,
-            ...studioAccessIdentityReservations(current),
-          ].filter((entry) => !known.has(`${entry.definitionKey}:${entry.kind}:${entry.alias}`)),
+          ...[...reservations, ...studioAccessIdentityReservations(current)].filter(
+            (entry) => !known.has(`${entry.definitionKey}:${entry.kind}:${entry.alias}`),
+          ),
         );
         const result = applyStudioAccessCommand(current, command, accessReservations.current);
         return result.kind === "applied"
