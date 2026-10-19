@@ -65,40 +65,44 @@ function ActionValues({
             ? (field.settings as { options: { value: string; label: string }[] }).options
             : [];
         return (
-          <div key={key} className="space-y-1 rounded-md border p-2">
-            <StudioFlowValueControl
-              id={`${id}-${key}`}
-              label={field?.label ?? key}
-              disabled={false}
-              valueType={field === undefined ? undefined : studioFieldValueType(field.type)}
-              options={options}
-              value={studioFlowValueSourceOf(value)}
-              references={references}
-              referenceCompatible={(reference) =>
-                actionValueCompatible(
-                  { kind: "reference", reference },
-                  field,
-                  new Map(subject.fields.map((entry) => [entry.key, entry])),
-                  new Map(inputs.map((entry) => [entry.key, entry])),
-                  subjectType,
-                  "source",
-                )
-              }
-              onChange={(next) => {
-                if (next !== null) onChange({ ...values, [key]: studioFlowValueOf(next) });
-              }}
-            />
+          <div key={key} className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <StudioFlowValueControl
+                id={`${id}-${key}`}
+                label={field?.label ?? key}
+                disabled={false}
+                valueType={field === undefined ? undefined : studioFieldValueType(field.type)}
+                options={options}
+                value={studioFlowValueSourceOf(value)}
+                references={references}
+                referenceCompatible={(reference) =>
+                  actionValueCompatible(
+                    { kind: "reference", reference },
+                    field,
+                    new Map(subject.fields.map((entry) => [entry.key, entry])),
+                    new Map(inputs.map((entry) => [entry.key, entry])),
+                    subjectType,
+                    "source",
+                  )
+                }
+                onChange={(next) => {
+                  if (next !== null) onChange({ ...values, [key]: studioFlowValueOf(next) });
+                }}
+              />
+            </div>
             <Button
               type="button"
-              size="sm"
-              variant="outline"
+              size="icon-sm"
+              variant="ghost"
+              aria-label={`Remove ${field?.label ?? key} mapping`}
+              title="Remove field mapping"
               onClick={() =>
                 onChange(
                   Object.fromEntries(Object.entries(values).filter(([name]) => name !== key)),
                 )
               }
             >
-              Remove field
+              <Icon name="minus" />
             </Button>
           </div>
         );
@@ -282,29 +286,35 @@ export function StudioActionTasks({
             </span>
             <Button
               type="button"
-              size="sm"
-              variant="outline"
+              size="icon-sm"
+              variant="ghost"
+              aria-label={`Move task ${index + 1} up`}
+              title="Move task up"
               disabled={index === 0}
               onClick={() => move(index, -1)}
             >
-              Move up
+              <Icon name="arrow-up" />
             </Button>
             <Button
               type="button"
-              size="sm"
-              variant="outline"
+              size="icon-sm"
+              variant="ghost"
+              aria-label={`Move task ${index + 1} down`}
+              title="Move task down"
               disabled={index === tasks.length - 1}
               onClick={() => move(index, 1)}
             >
-              Move down
+              <Icon name="arrow-down" />
             </Button>
             <Button
               type="button"
-              size="sm"
-              variant="outline"
+              size="icon-sm"
+              variant="ghost"
+              aria-label={`Remove task ${index + 1}`}
+              title="Remove task"
               onClick={() => onChange(tasks.filter((_, at) => at !== index))}
             >
-              Remove task
+              <Icon name="minus" />
             </Button>
           </div>
           {task.type === "record.create" && (
