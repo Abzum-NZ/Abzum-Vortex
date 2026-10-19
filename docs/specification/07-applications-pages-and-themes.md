@@ -348,3 +348,9 @@ application keys from the protected permitted-applications read. That protected 
 authority for which applications and pages may open, for address resolution, for the
 organisation-address launcher fallback and for the server-side tile-open recheck. A query row alone
 never grants access.
+
+### Declared page parameters
+
+A record page declares `record_id` of its subject type. A control may publish one named parameter with `publishes_parameter`; it reads and writes that same address name. A Data grid whose row-click mode is `select` publishes its selected record through the same contract. Parameter names are unique on the page and cannot use table-state namespaces or reserved names.
+
+Control changes update the address without reloading unrelated blocks. Text changes debounce for 300 ms; only blocks explicitly bound to the changed parameter reread, and their paging and selection reset. Reload and browser history restore the addressed values. An awaiting block shows its authored message through the shared empty-state renderer.

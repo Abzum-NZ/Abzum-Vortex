@@ -4,6 +4,10 @@ export * from "./application-contract-versions";
 export * from "./application-composition/block-property-values";
 export * from "./application-composition/block-property-schema";
 export * from "./application-composition/records-display";
+export * from "./application-composition/query-bindings";
+export * from "./application-composition/query-binding-values";
+export * from "./application-composition/query-binding-check";
+export * from "./application-composition/compiled-query-bindings";
 export * from "./application-composition/records-table-features";
 export * from "./application-composition/platform-block-release";
 export * from "./application-composition/custom-components";
@@ -17,7 +21,11 @@ export * from "./application-composition-release-identities";
 export * from "./preview-installation-contracts";
 export * from "./application-flow-bindings";
 // The one flow validator is pure, so Studio judges a flow edit with it before the draft takes it.
-export { validateFlow, type FlowValidationIssue, type FlowValidationOptions } from "./flow-validation";
+export {
+  validateFlow,
+  type FlowValidationIssue,
+  type FlowValidationOptions,
+} from "./flow-validation";
 export * from "./canonical-json";
 export * from "./definitions";
 export * from "./definition-source";

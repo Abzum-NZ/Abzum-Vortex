@@ -14,7 +14,6 @@ import {
   resolveLauncherListContext,
   type LauncherRenderProps,
 } from "./launcher-context";
-import { filterLauncherRows, useLauncherRowFilter } from "./view-filter-context";
 
 const cellText = (cells: Readonly<Record<string, DisplayCellValue>>, key: string): string => {
   const cell = cells[key];
@@ -28,10 +27,8 @@ const cellText = (cells: Readonly<Record<string, DisplayCellValue>>, key: string
  * declared `row_action` is bound and invocable. Tile activation emits only the row identity:
  * query-bound application rows use the application key, and the organisation launcher uses the
  * stable root identity. The addressed application page rechecks either value before opening.
- * An enclosing view filter can only hide rows it already received.
  */
 export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
-  const filter = useLauncherRowFilter();
   const context = resolveLauncherListContext(props);
   const settings = readLauncherSettings(props, context.location);
   const nameKey = settings.cellKey("name_key", "name");
@@ -39,7 +36,7 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
   // The launcher bindings write an optional fixed `description` cell; it is not a declared setting.
   const descriptionKey = "description";
   const values = context.values;
-  const rows = values === undefined ? [] : filterLauncherRows(values.rows, filter, nameKey);
+  const rows = values?.rows ?? [];
   const sidePanel = props.slots.side_panel ?? null;
   // A tile shows its open control only when the declared row action is bound and invocable.
   const openable = context.events?.row_action !== undefined;
@@ -73,7 +70,7 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
                   aria-label={`${context.accessibleName}: empty`}
                 >
                   <EmptyHeader>
-                    <EmptyTitle>{filter?.emptyMessage ?? "No applications to show"}</EmptyTitle>
+                    <EmptyTitle>No applications to show</EmptyTitle>
                     <EmptyDescription>
                       No applications match your search or are available for this account.
                     </EmptyDescription>

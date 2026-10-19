@@ -56,8 +56,8 @@ export type RecordsTableQueryRunner = Readonly<{
 
 /**
  * One Records table read. The module, query and compiled settings come from the installed release
- * the request already resolved; `pageParameters` are the values the current page supplies for
- * parameters the table declares as taken from the page. The Query engine runs installed Module
+ * the request already resolved; `inputValues` are the query inputs the table's bindings resolved
+ * on the server for this request (see `resolveQueryBindings`). The Query engine runs installed Module
  * queries, so `moduleRootId` and `queryId` must name the exact query the placement is bound to;
  * a caller never substitutes another query for one it cannot resolve.
  */
@@ -65,7 +65,7 @@ export type RecordsTableQueryRequest = Readonly<{
   moduleRootId: ModuleRootId;
   queryId: QueryId;
   settings: Readonly<Record<string, BlockPropertyValueContract>>;
-  pageParameters?: Readonly<Record<string, JsonValue>>;
+  inputValues: Readonly<Record<string, JsonValue>>;
   /**
    * The viewer's query state from the page address: ordered sort, filters, search and the requested
    * page. Every part is validated here against the installed placement's declared contract;
@@ -248,7 +248,7 @@ export type RecordsTableQueryCommand = Readonly<{
  * features: a search needs the Search feature on and a filter a field the Column filters feature
  * declares, so a request for a feature that is off is refused, whatever the browser sends. Returns
  * a typed refusal (the request part and its cause, logged by the caller) when the placement
- * declares no data contract, a page-supplied input is missing, any part of the state is outside the
+ * declares no data contract, any part of the state is outside the
  * declared contract, or the command is not one the Query engine accepts.
  */
 export const buildRecordsTableQueryCommand = (
@@ -270,17 +270,7 @@ export const buildRecordsTableQueryCommand = (
   )
     return recordsTableRequestRefusal("columns", "visible_columns_not_declared");
   const fieldIds = declaredFieldIds.filter((fieldId) => visibleSet.has(fieldId));
-  const inputValues: Record<string, JsonValue> = {};
-  for (const parameter of contract.parameters) {
-    const value =
-      parameter.source === "fixed"
-        ? parameter.fixedValue
-        : parameter.pageParameter === undefined
-          ? undefined
-          : request.pageParameters?.[parameter.pageParameter];
-    if (value === undefined) return recordsTableRequestRefusal("parameters", "input_missing");
-    inputValues[parameter.input] = value;
-  }
+  const inputValues = request.inputValues;
 
   const sortableFieldIds = lowerUnique(contract.sortableFields);
   const columnFilters = contract.features.columnFilters;

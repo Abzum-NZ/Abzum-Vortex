@@ -108,7 +108,13 @@ const assertFinalPublicationValidation = (
   });
   if (!validation.valid) {
     const first = validation.failures[0]!;
-    throw new DefinitionCompilationError(first.ruleCode, first.family, first.location, first.code);
+    throw new DefinitionCompilationError(
+      first.ruleCode,
+      first.family,
+      first.location,
+      first.code,
+      first.sentence,
+    );
   }
 };
 

@@ -25,10 +25,13 @@ export const failure = (
   component?: DefinitionValidationLocation["segments"][number],
   /** A rule with its own business sentence names its catalogue code; others use the family's. */
   code?: DefinitionRuleFailure["code"],
+  /** The sentence that names this failure's parts, for a rule whose sentence is not fixed. */
+  sentence?: string,
 ): DefinitionRuleFailure => ({
   ruleCode,
   family,
   ...(code === undefined ? {} : { code }),
+  ...(sentence === undefined ? {} : { sentence }),
   location: component
     ? { ...rootLocation(output), segments: [...rootLocation(output).segments, component] }
     : rootLocation(output),
