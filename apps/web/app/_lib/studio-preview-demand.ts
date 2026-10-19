@@ -1,0 +1,158 @@
+import "server-only";
+
+import { z } from "zod";
+import {
+  builderKeySchema,
+  namespacedKeySchema,
+  previewDemandSchema,
+  sameId,
+  type ApplicationContent,
+  type ConditionNode,
+  type ModuleContent,
+  type PageDefinition,
+  type PreviewDemand,
+} from "@vortex/platform/schema";
+import type { collectPlacements } from "./application-page/placement-helpers";
+
+/** Readers name authored addresses only. Record identities and dependency closure stay server-side. */
+export const studioPreviewReaderSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("canvas"),
+      pageAlias: builderKeySchema,
+      areas: z.array(z.string().min(1).max(400)).min(1).max(100),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("records"),
+      moduleKey: namespacedKeySchema,
+      recordKey: builderKeySchema,
+      queryKey: builderKeySchema.optional(),
+    })
+    .strict(),
+]);
+export type StudioPreviewReader = z.infer<typeof studioPreviewReaderSchema>;
+
+type Module = Readonly<{ key: string; content: ModuleContent }>;
+type Query = ApplicationContent["queries"][number];
+type Selection =
+  | Readonly<{
+      kind: "placements";
+      page: PageDefinition;
+      placements: ReturnType<typeof collectPlacements>;
+    }>
+  | Extract<StudioPreviewReader, { kind: "records" }>;
+
+/**
+ * The one pure demand derivation for canvas areas, Records and runtime preview pages. A demand
+ * describes only visible reads; SQL expands it through totals, relationships and live access.
+ */
+export const studioPreviewDemand = (
+  application: ApplicationContent,
+  modules: readonly Module[],
+  selection: Selection,
+): PreviewDemand | undefined => {
+  const types = new Map<
+    string,
+    { recordTypeId: string; fieldIds: Set<string>; relationshipPaths: string[][] }
+  >();
+  const add = (recordTypeId: string, fieldIds: readonly string[]) => {
+    const record = modules
+      .flatMap((module) => module.content.recordTypes)
+      .find((candidate) => sameId(candidate.recordTypeId, recordTypeId));
+    if (record === undefined) throw new Error("STUDIO_PREVIEW_DEMAND_RECORD_TYPE_MISSING");
+    // System projections read their live source; a preview has no copied storage for them.
+    if (record.systemProjection !== undefined) return;
+    const id = recordTypeId.toLowerCase();
+    const entry = types.get(id) ?? {
+      recordTypeId: id,
+      fieldIds: new Set<string>(),
+      relationshipPaths: [],
+    };
+    for (const field of fieldIds) entry.fieldIds.add(field.toLowerCase());
+    types.set(id, entry);
+  };
+  const queryDemand = (query: Query) => {
+    if (query.recordType.state !== "resolved")
+      throw new Error("STUDIO_PREVIEW_DEMAND_UNRESOLVED_QUERY");
+    const fields = new Set<string>([
+      ...query.selectedFieldIds,
+      ...query.groupByFieldIds,
+      ...query.sort.map((sort) => sort.fieldId),
+      ...query.aggregates.flatMap((aggregate) =>
+        aggregate.fieldId === undefined ? [] : [aggregate.fieldId],
+      ),
+    ]);
+    const condition = (node: ConditionNode): void => {
+      if (node.kind === "comparison") {
+        if (node.left.source === "field") fields.add(node.left.fieldId);
+        if (node.right?.source === "field") fields.add(node.right.fieldId);
+      } else if (node.kind === "not") condition(node.condition);
+      else node.conditions.forEach(condition);
+    };
+    if (query.filter != null) condition(query.filter);
+    add(query.recordType.recordTypeId, [...fields]);
+  };
+  if (selection.kind === "records") {
+    const module = modules.find((candidate) => candidate.key === selection.moduleKey);
+    const record = module?.content.recordTypes.find(
+      (candidate) => candidate.key === selection.recordKey,
+    );
+    if (module === undefined || record === undefined)
+      throw new Error("STUDIO_PREVIEW_READER_INVALID");
+    add(
+      record.recordTypeId,
+      record.fields.map((field) => field.fieldId),
+    );
+    if (selection.queryKey !== undefined) {
+      const query = module.content.queries.find(
+        (candidate) => candidate.key === selection.queryKey,
+      );
+      if (
+        query === undefined ||
+        query.recordType.state !== "resolved" ||
+        !sameId(query.recordType.recordTypeId, record.recordTypeId)
+      )
+        throw new Error("STUDIO_PREVIEW_READER_INVALID");
+      queryDemand(query);
+    }
+  } else {
+    for (const placement of selection.placements) {
+      if (typeof placement.vortex.queryId !== "string") continue;
+      const queryId = placement.vortex.queryId;
+      const query = [
+        ...application.queries,
+        ...modules.flatMap((module) => module.content.queries),
+      ].find((candidate) => sameId(candidate.queryId, queryId));
+      if (query === undefined) throw new Error("STUDIO_PREVIEW_DEMAND_QUERY_MISSING");
+      queryDemand(query);
+    }
+    const subject = "recordType" in selection.page ? selection.page.recordType : undefined;
+    if (subject?.state === "resolved") {
+      const record = modules
+        .flatMap((module) => module.content.recordTypes)
+        .find((candidate) => sameId(candidate.recordTypeId, subject.recordTypeId));
+      if (record === undefined) throw new Error("STUDIO_PREVIEW_DEMAND_SUBJECT_MISSING");
+      add(
+        record.recordTypeId,
+        record.fields.map((field) => field.fieldId),
+      );
+    }
+  }
+  if (types.size === 0) return undefined;
+  for (const entry of types.values()) {
+    const record = modules
+      .flatMap((module) => module.content.recordTypes)
+      .find((candidate) => sameId(candidate.recordTypeId, entry.recordTypeId))!;
+    entry.relationshipPaths = record.relationships
+      .filter((relationship) => entry.fieldIds.has(relationship.fromFieldId.toLowerCase()))
+      .map((relationship) => [relationship.relationshipId.toLowerCase()])
+      .sort((a, b) => a[0]!.localeCompare(b[0]!));
+  }
+  return previewDemandSchema.parse({
+    recordTypes: [...types.values()]
+      .sort((a, b) => a.recordTypeId.localeCompare(b.recordTypeId))
+      .map((entry) => ({ ...entry, fieldIds: [...entry.fieldIds].sort() })),
+  });
+};

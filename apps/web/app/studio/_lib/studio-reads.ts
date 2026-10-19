@@ -2,6 +2,7 @@ import type { readStudioCanvasRecords as canvasRead } from "../../_lib/studio-ca
 import type { readStudioDataRecords as dataRead } from "../../_lib/studio-data-records";
 import type { loadStudioApplicationDraft } from "../../_lib/studio-application-draft";
 import type { prepareStudioPreview as previewRead } from "../../_lib/studio-application-preview";
+import type { StudioPreviewReader } from "../../_lib/studio-preview-demand";
 import type { StudioViewRequest } from "./studio-view-request";
 
 const read = async <Result>(
@@ -37,7 +38,7 @@ export const readStudioDataRecords = (
 /** Waits until the builder's preview runs a saved revision's data shape, preparing it when nothing else does. */
 export const prepareStudioPreview = (
   organizationId: string,
-  candidate: Readonly<{ rootId: string; draftRevision: number }>,
+  candidate: Readonly<{ rootId: string; draftRevision: number; reader: StudioPreviewReader }>,
   signal?: AbortSignal,
 ) => read<Awaited<ReturnType<typeof previewRead>>>(organizationId, "preview", candidate, signal);
 

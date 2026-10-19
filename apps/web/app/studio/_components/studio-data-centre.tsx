@@ -385,6 +385,12 @@ function PreviewResults({
           preview,
           draftRevision,
           previewShape,
+          {
+            kind: "records",
+            moduleKey,
+            recordKey,
+            ...(queryKey === undefined ? {} : { queryKey }),
+          },
           controller.signal,
           () =>
             readStudioDataRecords(

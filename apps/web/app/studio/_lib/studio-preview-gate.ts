@@ -1,4 +1,5 @@
 import { describeFailure } from "@vortex/platform/schema";
+import type { StudioPreviewReader } from "../../_lib/studio-preview-demand";
 import { prepareStudioPreview } from "./studio-reads";
 
 /** Why Studio's readers cannot read the preview's records of a saved revision now. */
@@ -13,10 +14,13 @@ export type StudioPreviewGateOutcome = "ready" | "conflict" | "refused" | "tempo
  */
 export type StudioPreviewGate = Readonly<{
   /** `unknown` until a readiness answer or a read of the preview's records says which shape it runs. */
-  runs: (previewShape: string) => "ready" | "other" | "unknown";
-  whenReady: (draftRevision: number, previewShape: string, signal?: AbortSignal) => Promise<StudioPreviewGateOutcome>;
-  /** A read of the preview's records at this shape succeeded, so the preview runs it. */
-  learn: (previewShape: string) => void;
+  runs: (previewShape: string, reader: StudioPreviewReader) => "ready" | "other" | "unknown";
+  whenReady: (
+    draftRevision: number,
+    previewShape: string,
+    reader: StudioPreviewReader,
+    signal?: AbortSignal,
+  ) => Promise<StudioPreviewGateOutcome>;
   /** A read found the preview not running a shape the gate took as ready: the next reader asks again. */
   forget: (previewShape: string) => void;
 }>;
@@ -31,41 +35,93 @@ type Waiting = {
   outcome: Promise<StudioPreviewGateOutcome>;
 };
 
-export const createStudioPreviewGate = (organizationId: string, rootId: string): StudioPreviewGate => {
+export const createStudioPreviewGate = (
+  organizationId: string,
+  rootId: string,
+): StudioPreviewGate => {
   let readyShape: string | undefined;
-  let waiting: Waiting | undefined;
+  let readyTypes = new Set<string>();
+  const demands = new Map<string, readonly string[]>();
+  const waiting = new Map<string, Waiting>();
+  const keyOf = (reader: StudioPreviewReader) =>
+    JSON.stringify(
+      reader.kind === "canvas" ? { ...reader, areas: [...new Set(reader.areas)].sort() } : reader,
+    );
+  const runs = (shape: string, reader: StudioPreviewReader) => {
+    const required = demands.get(keyOf(reader));
+    return readyShape === undefined || required === undefined
+      ? ("unknown" as const)
+      : readyShape === shape && required.every((id) => readyTypes.has(id))
+        ? ("ready" as const)
+        : ("other" as const);
+  };
 
-  const ask = async (draftRevision: number, signal: AbortSignal): Promise<StudioPreviewGateOutcome> => {
+  const ask = async (
+    draftRevision: number,
+    reader: StudioPreviewReader,
+    signal: AbortSignal,
+  ): Promise<StudioPreviewGateOutcome> => {
     for (let attempt = 0; attempt < maximumFollowing; attempt += 1) {
-      const answer = await prepareStudioPreview(organizationId, { rootId, draftRevision }, signal);
+      const answer = await prepareStudioPreview(
+        organizationId,
+        { rootId, draftRevision, reader },
+        signal,
+      );
       if (answer.kind === "ready") {
+        if (readyShape !== answer.previewShape) demands.clear();
         readyShape = answer.previewShape;
+        readyTypes = new Set(answer.readyRecordTypeIds);
+        demands.set(keyOf(reader), answer.requiredRecordTypeIds);
         return "ready";
       }
       if (answer.kind === "following") continue;
       if (answer.kind === "conflict") return "conflict";
       if (answer.kind === "refused") return "refused";
-      console.error(`[studio] the preview is not ready: STUDIO_PREVIEW_${answer.kind.toUpperCase()}`);
+      console.error(
+        `[studio] the preview is not ready: STUDIO_PREVIEW_${answer.kind.toUpperCase()}`,
+      );
       return "temporarily_unavailable";
     }
-    console.error("[studio] the preview did not reach the saved revision: STUDIO_PREVIEW_FOLLOWING");
+    console.error(
+      "[studio] the preview did not reach the saved revision: STUDIO_PREVIEW_FOLLOWING",
+    );
     return "temporarily_unavailable";
   };
 
-  const whenReady = async (draftRevision: number, previewShape: string, signal?: AbortSignal) => {
+  const whenReady = async (
+    draftRevision: number,
+    previewShape: string,
+    reader: StudioPreviewReader,
+    signal?: AbortSignal,
+  ) => {
     signal?.throwIfAborted();
-    if (readyShape === previewShape) return "ready" as const;
-    let current = waiting;
-    if (current === undefined || current.draftRevision !== draftRevision || current.controller.signal.aborted) {
+    if (runs(previewShape, reader) === "ready") return "ready" as const;
+    const key = `${draftRevision}|${keyOf(reader)}`;
+    let current = waiting.get(key);
+    if (
+      current === undefined ||
+      current.draftRevision !== draftRevision ||
+      current.controller.signal.aborted
+    ) {
       const controller = new AbortController();
       const started: Waiting = {
-        draftRevision, controller, readers: 0,
-        outcome: ask(draftRevision, controller.signal).catch((error: unknown) => {
-          if (!controller.signal.aborted) console.error("[studio] the preview readiness request failed", describeFailure(error));
-          return "temporarily_unavailable" as const;
-        }).finally(() => { if (waiting === started) waiting = undefined; }),
+        draftRevision,
+        controller,
+        readers: 0,
+        outcome: ask(draftRevision, reader, controller.signal)
+          .catch((error: unknown) => {
+            if (!controller.signal.aborted)
+              console.error(
+                "[studio] the preview readiness request failed",
+                describeFailure(error),
+              );
+            return "temporarily_unavailable" as const;
+          })
+          .finally(() => {
+            if (waiting.get(key) === started) waiting.delete(key);
+          }),
       };
-      waiting = started;
+      waiting.set(key, started);
       current = started;
     }
     const joined = current;
@@ -86,39 +142,28 @@ export const createStudioPreviewGate = (organizationId: string, rootId: string):
   };
 
   return {
-    runs: (previewShape) => readyShape === undefined ? "unknown" : readyShape === previewShape ? "ready" : "other",
+    runs,
     whenReady,
-    learn: (previewShape) => { readyShape = previewShape; },
-    forget: (previewShape) => { if (readyShape === previewShape) readyShape = undefined; },
+    forget: (previewShape) => {
+      if (readyShape === previewShape) readyShape = undefined;
+    },
   };
 };
 
-/** Read outcomes that say nothing about which shape the preview runs. */
-const uninformative: ReadonlySet<string> = new Set(["following", "conflict", "refused", "temporarily_unavailable"]);
-
-/**
- * One read of the preview's records of a saved revision, sent once the preview runs its data
- * shape: at once when it does or when the gate does not know yet, after the one shared readiness
- * request when it runs another shape. A read that finds the preview not running the shape waits
- * for it once and reads again; it is never re-sent on a timer.
- */
+/** Read only after this visible demand has been prepared, retrying once if the server invalidates it. */
 export const readWhenPreviewReady = async <Result extends Readonly<{ kind: string }>>(
   gate: StudioPreviewGate,
   draftRevision: number,
   previewShape: string,
+  reader: StudioPreviewReader,
   signal: AbortSignal | undefined,
   read: () => Promise<Result>,
 ): Promise<Result | Readonly<{ kind: Exclude<StudioPreviewGateOutcome, "ready"> }>> => {
-  const readAndLearn = async () => {
-    const result = await read();
-    if (!uninformative.has(result.kind)) gate.learn(previewShape);
-    return result;
-  };
-  if (gate.runs(previewShape) !== "other") {
-    const result = await readAndLearn();
-    if (result.kind !== "following") return result;
-    gate.forget(previewShape);
-  }
-  const ready = await gate.whenReady(draftRevision, previewShape, signal);
-  return ready === "ready" ? readAndLearn() : { kind: ready };
+  const ready = await gate.whenReady(draftRevision, previewShape, reader, signal);
+  if (ready !== "ready") return { kind: ready };
+  const result = await read();
+  if (result.kind !== "following") return result;
+  gate.forget(previewShape);
+  const again = await gate.whenReady(draftRevision, previewShape, reader, signal);
+  return again === "ready" ? read() : { kind: again };
 };

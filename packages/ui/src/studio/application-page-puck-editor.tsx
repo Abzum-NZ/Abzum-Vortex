@@ -384,6 +384,7 @@ function ApplicationPageSlotPuckEditor({
   viewer,
 }: ApplicationPagePuckEditorProps & { at: PageSlotAddress }) {
   const well = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
   const [actionsHost, setActionsHost] = useState<HTMLDivElement | null>(null);
   const [availableWidth, setAvailableWidth] = useState(0);
   const width = deviceWidths[breakpoint];
@@ -460,6 +461,15 @@ function ApplicationPageSlotPuckEditor({
     [data, breakpoint, slot],
   );
 
+  useEffect(() => {
+    const element = well.current;
+    if (element === null) return;
+    const observer = new IntersectionObserver(([entry]) =>
+      setVisible(entry?.isIntersecting === true),
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [shown !== undefined]);
   // The records of this area's data blocks, read for the saved revision the compiled version is,
   // with each data block's release, settings and query in that revision.
   const savedKeys = useMemo(
@@ -476,7 +486,7 @@ function ApplicationPageSlotPuckEditor({
   // One read per content area and compiled revision: the workspace sends it once the preview runs
   // this revision's data shape, so it is never re-sent on a timer.
   useEffect(() => {
-    if (readRecords === undefined || savedKeys.size === 0) return;
+    if (!visible || readRecords === undefined || savedKeys.size === 0) return;
     let cancelled = false;
     const controller = new AbortController();
     readRecords(at.key, controller.signal).then(
@@ -502,7 +512,7 @@ function ApplicationPageSlotPuckEditor({
       cancelled = true;
       controller.abort();
     };
-  }, [readRecords, compiledSource, at.key]);
+  }, [readRecords, compiledSource, at.key, visible]);
   // Records read for another saved revision are never shown as this one's, except while this
   // revision's own read runs after a presentation edit: every data block is still exactly as it
   // was read (same release, settings and query), so its records are the same.

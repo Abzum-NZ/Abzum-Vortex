@@ -5,6 +5,7 @@ import {
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
   type StoredApplicationDefinitionDraft,
+  type ApplicationDraftCompilation,
 } from "@vortex/platform/server";
 import {
   sameId,
@@ -13,11 +14,18 @@ import {
   type OrganizationId,
 } from "@vortex/platform/schema";
 import { humanOrganizationRequests } from "./server-composition";
-import { readStudioPreviewState, studioPreviewRunsDraft } from "./studio-application-preview";
+import {
+  readStudioPreviewState,
+  studioPreviewRunsDraft,
+  readStudioPreviewDemand,
+  readStudioDemandReadiness,
+} from "./studio-application-preview";
 import { loadInstalledContext, requestDependencies } from "./application-page/load";
 import { createPlacementReadServices } from "./application-page/placement-services";
 import { loadOrganizationLauncher } from "./organization-context";
 import { getQueryContinuationKey } from "./query-continuation-key";
+
+import type { StudioPreviewReader } from "./studio-preview-demand";
 
 /** The selection every read of a Studio preview runs under: the Application and the builder's preview of it. */
 export type StudioPreviewSelection = Readonly<{
@@ -41,6 +49,7 @@ export type StudioPreviewRead =
       kind: "available";
       /** The saved draft at exactly the requested revision. */
       draft: StoredApplicationDefinitionDraft;
+      compiled: ApplicationDraftCompilation;
       selection: StudioPreviewSelection;
       context: InstalledRuntimeContext;
       dependencies: HumanOrganizationRequestDependencies;
@@ -60,6 +69,7 @@ export const openStudioPreviewRead = async (
   organizationId: OrganizationId,
   rootId: ApplicationRootId,
   draftRevision: number,
+  reader: StudioPreviewReader,
   signal?: AbortSignal,
 ): Promise<StudioPreviewRead> => {
   signal?.throwIfAborted();
@@ -71,6 +81,18 @@ export const openStudioPreviewRead = async (
   if (runs === "newer") return { kind: "conflict" };
   const preview = state.preview;
   if (runs !== "ready" || preview === undefined) return { kind: "following" };
+  const derived = await readStudioPreviewDemand(session, organizationId, state.draft, reader);
+  if (derived.kind !== "derived") return derived;
+  const readiness = await readStudioDemandReadiness(
+    session,
+    organizationId,
+    rootId,
+    preview,
+    derived.demand,
+  );
+  signal?.throwIfAborted();
+  if (readiness.kind !== "checked") return readiness;
+  if (!readiness.ready) return { kind: "following" };
   const dependencies = requestDependencies();
   const application = { organizationId, applicationRootId: rootId };
   // Copied live records are read only once they are decided again by the builder's current live
@@ -150,6 +172,7 @@ export const openStudioPreviewRead = async (
   return {
     kind: "available",
     draft: state.draft,
+    compiled: derived.compiled,
     selection,
     context: installed.value,
     dependencies,

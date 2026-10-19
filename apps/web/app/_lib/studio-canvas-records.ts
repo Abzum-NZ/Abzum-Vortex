@@ -22,7 +22,6 @@ import {
 } from "@vortex/platform/schema";
 import { z } from "zod";
 import { pageCompiledSlotsFor } from "./studio-application-draft";
-import { compiledDraftContent } from "./studio-compiled-drafts";
 import { collectPlacements, pageSubjectParameter } from "./application-page/placement-helpers";
 import { findModuleQuery } from "./application-page/query-helpers";
 import { isStreamablePlacement, readPlacement } from "./application-page/placement-reader";
@@ -174,15 +173,14 @@ export const readStudioCanvasRecords = async (
       organization.data,
       request.rootId,
       request.draftRevision,
+      { kind: "canvas", pageAlias: request.pageAlias, areas: [request.area] },
       signal,
     );
     if (preview.kind !== "available") return preview;
     const { draft, context, services, selection, dependencies } = preview;
     if (draft.sourceFingerprint !== request.sourceFingerprint) return { kind: "conflict" };
     signal?.throwIfAborted();
-    const content = await compiledDraftContent(session, organization.data, draft);
-    signal?.throwIfAborted();
-    if (typeof content === "string") return { kind: content };
+    const content = preview.compiled.compilation.canonical.content;
     const pageIndex = draft.source.body.pages.findIndex((page) => page.id === request.pageAlias);
     const page = draft.source.body.pages[pageIndex];
     const compiledPage = content.pages[pageIndex] as PageDefinition | undefined;
