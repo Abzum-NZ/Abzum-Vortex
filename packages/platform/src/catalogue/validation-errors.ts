@@ -2,7 +2,7 @@ import { z } from "zod";
 import { correlationIdSchema } from "./common";
 import { builderKeySchema, namespacedKeySchema } from "./identifiers";
 
-export const definitionValidationCatalogueVersion = "1.2.0" as const;
+export const definitionValidationCatalogueVersion = "1.3.0" as const;
 
 export const definitionDocumentKindSchema = z.enum(["module", "application", "connection_type"]);
 
@@ -55,6 +55,11 @@ export const definitionValidationErrorCodes = [
   "definition_invalid_value",
   "definition_unsupported_choice",
   "definition_records_table_bounded_scrolling",
+  "definition_records_table_search",
+  "definition_records_table_column_filters",
+  "definition_records_table_saved_views",
+  "definition_records_table_bulk_actions",
+  "definition_records_table_inline_edit",
   "definition_unknown_property",
   "definition_too_few_items",
   "definition_too_many_items",
@@ -110,6 +115,36 @@ const definitionValidationErrorCatalogueSource = {
     order: 35,
     message: "A Records table page of more than 100 rows needs bounded scrolling.",
     guidance: "Set the table's Scrolling to Bounded, or choose a page size of 100 rows or fewer.",
+  },
+  // One business sentence per Records table feature: Studio shows the same sentence beside the
+  // feature's switch, from the same capability check publication runs.
+  definition_records_table_search: {
+    order: 36,
+    message: "Search needs a searchable text field in the bound query.",
+    guidance:
+      "Select a text field the record type marks searchable in the query, or turn Search off.",
+  },
+  definition_records_table_column_filters: {
+    order: 37,
+    message: "Column filters need fields the bound query can filter by.",
+    guidance: "Choose filterable fields of the bound query, or turn Column filters off.",
+  },
+  definition_records_table_saved_views: {
+    order: 38,
+    message: "Saved views need a field the bound query can sort or filter by.",
+    guidance: "Select a sortable or filterable field in the bound query, or turn Saved views off.",
+  },
+  definition_records_table_bulk_actions: {
+    order: 39,
+    message: "Bulk actions need at least one command over the selected records.",
+    guidance:
+      "Add a named command bound to a flow that accepts several records, or turn Bulk actions off.",
+  },
+  definition_records_table_inline_edit: {
+    order: 39,
+    message: "Inline editing needs fields people may change.",
+    guidance:
+      "Choose editable fields shown as columns and the flow that saves a change, or turn Inline editing off.",
   },
   definition_unknown_property: {
     order: 40,
