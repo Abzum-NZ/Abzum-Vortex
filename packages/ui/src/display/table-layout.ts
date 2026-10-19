@@ -74,6 +74,7 @@ type Local = Readonly<{
   revision: number | null;
   /** Bumped by every change the person committed; each bump schedules one coalesced store. */
   commits: number;
+  savedCommits: number;
   /** The committed change is a reset: the stored layout is removed rather than written. */
   resetting: boolean;
 }>;
@@ -82,8 +83,9 @@ const startFrom = (base: GridLayoutState): Local => ({
   base,
   layout: base.layout,
   revision: base.revision,
-  commits: 0,
-  resetting: false,
+  commits: base.reset && base.persisted ? 1 : 0,
+  savedCommits: 0,
+  resetting: base.reset,
 });
 
 /**
@@ -130,12 +132,24 @@ export const useGridLayout = ({
   // A new page read carries the stored layout again; the local copy starts over from it.
   let current = local;
   if (source !== undefined && current?.base !== source) {
-    current = startFrom(source);
+    // A projection read may finish after another gesture. Keep that unsaved gesture while
+    // adopting the read's revision; its values are still persisted through the same writer.
+    current =
+      current !== undefined &&
+      current.base.queryId === source.queryId &&
+      current.commits > current.savedCommits
+        ? { ...current, base: source, revision: source.revision }
+        : startFrom(source);
     setLocal(current);
   }
   const layout = current?.layout ?? { columns: [] };
   const latest = useRef({ current, carried, contract, events });
   latest.current = { current, carried, contract, events };
+  const updateLocal = useCallback((update: (held: Local | undefined) => Local | undefined) => {
+    const next = update(latest.current.current);
+    latest.current.current = next;
+    setLocal(next);
+  }, []);
 
   const carriedByKey = useMemo(
     () => new Map(carried.map((column) => [column.key.toLowerCase(), column])),
@@ -181,7 +195,7 @@ export const useGridLayout = ({
 
   const change = useCallback(
     (update: (layout: GridLayout) => GridLayout | undefined, commit: boolean) =>
-      setLocal((held) => {
+      updateLocal((held) => {
         if (held === undefined) return held;
         const next = update(held.layout);
         if (next === undefined || (sameLayout(next, held.layout) && !commit)) return held;
@@ -191,7 +205,7 @@ export const useGridLayout = ({
           ...(commit ? { commits: held.commits + 1, resetting: false } : {}),
         };
       }),
-    [],
+    [updateLocal],
   );
 
   const setWidths = useCallback(
@@ -224,10 +238,10 @@ export const useGridLayout = ({
   );
   const commit = useCallback(
     () =>
-      setLocal((held) =>
+      updateLocal((held) =>
         held === undefined ? held : { ...held, commits: held.commits + 1, resetting: false },
       ),
-    [],
+    [updateLocal],
   );
   const moveColumn = useCallback(
     (key: string, offset: number): number | undefined => {
@@ -274,27 +288,24 @@ export const useGridLayout = ({
   const reset = useCallback(() => {
     if (contract === undefined) return;
     const authored = authoredGridLayout(contract);
-    setLocal((held) =>
+    updateLocal((held) =>
       held === undefined
         ? held
         : { ...held, layout: authored, commits: held.commits + 1, resetting: true },
     );
-  }, [contract]);
+  }, [contract, updateLocal]);
 
   // Stores committed changes: one write at a time, the latest layout after the person pauses.
   const writer = useRef<{
     timer: ReturnType<typeof setTimeout> | undefined;
     busy: boolean;
-    again: boolean;
   }>({
     timer: undefined,
     busy: false,
-    again: false,
   });
   const store = useCallback(async (): Promise<void> => {
     const held = writer.current;
     if (held.busy) {
-      held.again = true;
       return;
     }
     const {
@@ -312,9 +323,6 @@ export const useGridLayout = ({
     )
       return;
     const loadedKeys = new Set(loaded.map((column) => column.key.toLowerCase()));
-    const read = snapshot.layout.columns.some(
-      (entry) => entry.visible && !loadedKeys.has(entry.fieldId),
-    );
     held.busy = true;
     let result: GridLayoutCommitResult = { outcome: "unavailable" };
     try {
@@ -323,17 +331,24 @@ export const useGridLayout = ({
         layout: snapshot.resetting ? null : snapshot.layout,
         expectedRevision: snapshot.revision,
         queryId: snapshot.base.queryId,
-        read,
       });
       if (typeof outcome === "object" && outcome !== null && "outcome" in outcome)
         result = outcome as GridLayoutCommitResult;
     } finally {
       held.busy = false;
     }
+    // A response from an earlier page must never overwrite the new page's layout or revision.
+    if (latest.current.current?.base !== snapshot.base) return;
     if (result.outcome === "saved" || result.outcome === "reset") {
       const revision = result.outcome === "saved" ? result.revision : null;
-      setLocal((latestLocal) =>
-        latestLocal === undefined ? latestLocal : { ...latestLocal, revision },
+      updateLocal((latestLocal) =>
+        latestLocal === undefined
+          ? latestLocal
+          : {
+              ...latestLocal,
+              revision,
+              savedCommits: snapshot.commits,
+            },
       );
     } else if (result.outcome === "conflict") {
       // Another tab stored a newer layout first: show it, from its revision.
@@ -342,20 +357,36 @@ export const useGridLayout = ({
         result.stored ?? undefined,
         snapshot.base.queryId,
       ).layout;
-      setLocal((latestLocal) =>
+      updateLocal((latestLocal) =>
         latestLocal === undefined
           ? latestLocal
-          : { ...latestLocal, layout: adopted, revision: result.stored?.revision ?? null },
+          : {
+              ...latestLocal,
+              layout: adopted,
+              revision: result.stored?.revision ?? null,
+              savedCommits: latestLocal.commits,
+              resetting: false,
+            },
       );
-      held.again = false;
-      if (adopted.columns.some((entry) => entry.visible && !loadedKeys.has(entry.fieldId)))
-        void handlers?.refresh?.({ event: "refresh" });
+      if (held.timer !== undefined) clearTimeout(held.timer);
+      held.timer = undefined;
     }
-    if (held.again) {
-      held.again = false;
+    const pending = latest.current.current;
+    if (
+      (result.outcome === "saved" || result.outcome === "reset") &&
+      pending !== undefined &&
+      pending.commits > snapshot.commits
+    ) {
+      if (held.timer !== undefined) clearTimeout(held.timer);
+      held.timer = undefined;
       await store();
+    } else if (
+      result.outcome !== "unavailable" &&
+      pending?.layout.columns.some((entry) => entry.visible && !loadedKeys.has(entry.fieldId))
+    ) {
+      void handlers?.refresh?.({ event: "refresh" });
     }
-  }, []);
+  }, [updateLocal]);
   const commits = current?.commits ?? 0;
   useEffect(() => {
     if (commits === 0) return;

@@ -52,7 +52,7 @@ const unavailable: GridLayoutCommitResult = Object.freeze({ outcome: "unavailabl
 const conflictResult = (conflict: GridViewConflict): GridLayoutCommitResult => ({
   outcome: "conflict",
   stored:
-    conflict.stored === null || conflict.stored.layout === undefined
+    conflict.stored === null
       ? null
       : {
           revision: conflict.stored.revision,
@@ -111,7 +111,7 @@ export async function commitGridLayout(
         return outcome.outcome === "reset" ? { outcome: "reset" } : conflictResult(outcome);
       }
       const outcome = await writeGridView(transaction, {
-        pageId,
+        page,
         placementId: requested.placementId,
         queryId: requested.queryId,
         expectedRevision: requested.expectedRevision,

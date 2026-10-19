@@ -27,7 +27,45 @@ begin
     raise exception using errcode = '22023', message = 'Grid layout write is invalid';
   end if;
 
+  -- The API stores presentation metadata only, even when called directly by the request role.
+  if p_layout - array['columns', 'density'] <> '{}'::jsonb
+    or pg_catalog.jsonb_typeof(p_layout -> 'columns') is distinct from 'array'
+    or (p_layout ? 'density' and (pg_catalog.jsonb_typeof(p_layout -> 'density') <> 'string'
+      or p_layout ->> 'density' not in ('compact', 'comfortable'))) then
+    raise exception using errcode = '22023', message = 'Grid layout shape is invalid';
+  end if;
+  if pg_catalog.jsonb_array_length(p_layout -> 'columns') not between 1 and 200
+    or exists (
+      select 1 from pg_catalog.jsonb_array_elements(p_layout -> 'columns') as entry(value)
+      where pg_catalog.jsonb_typeof(entry.value) <> 'object'
+        or entry.value - array['fieldId', 'visible', 'width'] <> '{}'::jsonb
+        or pg_catalog.jsonb_typeof(entry.value -> 'fieldId') is distinct from 'string'
+        or not vortex_platform.is_non_nil_uuid(entry.value ->> 'fieldId')
+        or pg_catalog.jsonb_typeof(entry.value -> 'visible') is distinct from 'boolean'
+        or (entry.value ? 'width' and case
+          when pg_catalog.jsonb_typeof(entry.value -> 'width') = 'number' then
+            (entry.value ->> 'width')::numeric not between 64 and 640
+            or (entry.value ->> 'width')::numeric <> pg_catalog.trunc((entry.value ->> 'width')::numeric)
+          else true end)
+    )
+    or not exists (
+      select 1 from pg_catalog.jsonb_array_elements(p_layout -> 'columns') as entry(value)
+      where entry.value -> 'visible' = 'true'::jsonb
+    )
+    or (select pg_catalog.count(distinct pg_catalog.lower(entry.value ->> 'fieldId'))
+      from pg_catalog.jsonb_array_elements(p_layout -> 'columns') as entry(value))
+      <> pg_catalog.jsonb_array_length(p_layout -> 'columns') then
+    raise exception using errcode = '22023', message = 'Grid layout columns are invalid';
+  end if;
+
   select context.* into strict scope from vortex_platform.grid_view_scope_internal() as context;
+
+  -- Serialize creation, updates and deletion of this scope, including when no row exists yet.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+    scope.organization_id::text || ':' || scope.organization_account_id::text || ':' ||
+    scope.application_root_id::text || ':' || p_page_id::text || ':' || p_placement_id::text,
+    0
+  ));
 
   select held.* into stored
   from vortex_platform.grid_views as held
@@ -55,7 +93,7 @@ begin
   if held_found then
     update vortex_platform.grid_views as held
     set query_id = p_query_id,
-      revision = held.revision + 1,
+      revision = pg_catalog.nextval('vortex_platform.grid_view_revision_seq'::regclass),
       release_revision = scope.release_revision,
       layout = p_layout,
       updated_at = written_at
@@ -67,7 +105,6 @@ begin
       and held.kind = stored.kind
     returning held.* into stored;
   else
-    begin
       insert into vortex_platform.grid_views (
         tenant_id, organization_id, organization_account_id, application_root_id,
         page_id, placement_id, kind, query_id, revision, release_revision, layout,
@@ -75,15 +112,10 @@ begin
       ) values (
         scope.tenant_id, scope.organization_id, scope.organization_account_id,
         scope.application_root_id, p_page_id, p_placement_id, 'current_layout', p_query_id,
-        1, scope.release_revision, p_layout, written_at, written_at
+        pg_catalog.nextval('vortex_platform.grid_view_revision_seq'::regclass),
+        scope.release_revision, p_layout, written_at, written_at
       )
       returning * into stored;
-    exception
-      when unique_violation then
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'conflict', 'revision', null, 'queryId', null, 'layout', null
-        );
-    end;
   end if;
 
   return pg_catalog.jsonb_build_object('outcome', 'saved', 'revision', stored.revision);

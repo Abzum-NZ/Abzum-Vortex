@@ -8,7 +8,7 @@ import type { IdentitySession, OrganizationSelectionCandidate } from "@vortex/pl
 
 /** The person's stored layouts of a page's data grids, read once before any grid reads its rows. */
 export type PageGridLayouts = Readonly<{
-  /** False in a preview, or when the layouts could not be read: changes then stay on screen only. */
+  /** False in a preview: changes then stay on screen only. */
   persisted: boolean;
   stored: ReadonlyMap<string, StoredGridView>;
 }>;
@@ -17,8 +17,8 @@ const NONE: ReadonlyMap<string, StoredGridView> = new Map();
 
 /**
  * Reads every stored layout of the named grid placements in one protected request, so a page with
- * several grids makes one layout read. A preview stores nothing. A failed read is logged and the
- * grids show their authored layout without storing changes; it never fails the page.
+ * several grids makes one layout read. A preview stores nothing. A failed read is logged and
+ * refused; silently showing a different projection would disregard the person's saved layout.
  */
 export const readPageGridLayouts = async (
   session: IdentitySession,
@@ -38,5 +38,7 @@ export const readPageGridLayouts = async (
   console.error(
     `[page] grid layouts unavailable: code=GRID_LAYOUT_READ_FAILED kind=${result.kind}`,
   );
-  return { persisted: false, stored: NONE };
+  throw new Error("GRID_LAYOUT_READ_FAILED", {
+    cause: "cause" in result ? result.cause : result.kind,
+  });
 };

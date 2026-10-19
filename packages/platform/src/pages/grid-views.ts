@@ -3,6 +3,10 @@ import "server-only";
 import { z } from "zod";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { gridLayoutSchema, type GridLayout } from "./grid-view-state";
+import { readRecordsTableContract } from "../definition/application-composition/records-display";
+import { placementSettings } from "../definition/application-composition-catalogue";
+import { walkPageComposition } from "./placement-walk";
+import type { PageDefinition } from "../schema";
 
 /**
  * The stored grid layouts of the current person. Each operation runs inside the caller's protected
@@ -48,12 +52,12 @@ const resetResultSchema = z.discriminatedUnion("outcome", [
   conflictSchema,
 ]);
 
-/** One stored layout. A row whose layout does not parse is refused: its layout is undefined. */
+/** One stored layout, validated against the platform's storage contract. */
 export type StoredGridView = Readonly<{
   placementId: string;
   queryId: string;
   revision: number;
-  layout: GridLayout | undefined;
+  layout: GridLayout;
 }>;
 
 /** The layout another tab stored after this one read it, or null when none is stored now. */
@@ -72,13 +76,14 @@ const only = (rows: readonly ResultRow[]): unknown => {
 };
 
 /** A stored layout as the platform wrote it; anything else is logged and refused, never converted. */
-const storedLayout = (placementId: string, layout: unknown): GridLayout | undefined => {
+const storedLayout = (placementId: string, layout: unknown): GridLayout => {
   const parsed = gridLayoutSchema.safeParse(layout);
   if (parsed.success) return parsed.data;
   console.error(
     `[grid-views] stored layout refused code=GRID_LAYOUT_MALFORMED placement=${placementId.toLowerCase()}`,
+    parsed.error.issues.map(({ code, path, message }) => ({ code, path, message })),
   );
-  return undefined;
+  throw new Error("GRID_LAYOUT_MALFORMED", { cause: parsed.error });
 };
 
 const conflictOf = (
@@ -133,7 +138,7 @@ export const readGridViews = async (
 export const writeGridView = async (
   transaction: RequestDatabaseTransaction,
   write: Readonly<{
-    pageId: string;
+    page: PageDefinition;
     placementId: string;
     queryId: string;
     expectedRevision: number | null;
@@ -141,9 +146,25 @@ export const writeGridView = async (
   }>,
 ): Promise<GridViewWriteOutcome> => {
   const layout = gridLayoutSchema.parse(write.layout);
+  // The page is resolved from the installed release by the server. A forged client cannot
+  // invent a placement, switch its query or persist undeclared columns.
+  let permitted = false;
+  walkPageComposition(write.page.composition, ({ placementId, props, vortex }) => {
+    if (placementId.toLowerCase() !== write.placementId.toLowerCase()) return;
+    const contract = readRecordsTableContract(placementSettings(props));
+    if (
+      contract === undefined ||
+      typeof vortex.queryId !== "string" ||
+      vortex.queryId.toLowerCase() !== write.queryId.toLowerCase()
+    )
+      return;
+    const fields = new Set(contract.columns.map((column) => column.field.toLowerCase()));
+    permitted = layout.columns.every((column) => fields.has(column.fieldId));
+  });
+  if (!permitted) throw new Error("GRID_LAYOUT_PLACEMENT_INVALID");
   const rows = await transaction.query<ResultRow>`
     select vortex_platform.write_grid_view(
-      ${write.pageId}::uuid,
+      ${write.page.pageId}::uuid,
       ${write.placementId}::uuid,
       ${write.queryId}::uuid,
       ${write.expectedRevision}::bigint,

@@ -367,8 +367,6 @@ export type DisplaySemanticEvent =
       expectedRevision: number | null;
       /** The query the grid reads, as the page carried it. */
       queryId: string;
-      /** The layout shows a column the page was read without: the grid is read again after it. */
-      read: boolean;
     }>
   | Readonly<{
       event: "page_changed";

@@ -22,6 +22,13 @@ begin
 
   select context.* into strict scope from vortex_platform.grid_view_scope_internal() as context;
 
+  -- Serialize creation, updates and deletion of this scope, including when no row exists yet.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+    scope.organization_id::text || ':' || scope.organization_account_id::text || ':' ||
+    scope.application_root_id::text || ':' || p_page_id::text || ':' || p_placement_id::text,
+    0
+  ));
+
   -- Reset removes the person's layout, so the grid shows the authored defaults again.
   delete from vortex_platform.grid_views as held
   where held.organization_id = scope.organization_id

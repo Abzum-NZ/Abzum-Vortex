@@ -469,7 +469,7 @@ export function ApplicationPageViewContent({
     tableQueryPending,
   });
 
-  const { commitLayout } = useGridLayout({ model, currentData, refreshPlacements });
+  const { commitLayout } = useGridLayout({ model, currentData });
 
   const { runtimeInputs } = useRuntimeInputs({
     currentData,
