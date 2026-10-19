@@ -970,11 +970,15 @@ const runCommand = async (
     if (error instanceof QueryInputRefusalError) return refusal("input_invalid");
     throw error;
   }
-  // The fingerprint binds the query inputs and the user's sort, filter and search alike, so a
-  // continuation issued under one view can never be replayed under another.
+  // The fingerprint binds the query inputs, the user's sort, filter and search, the requested
+  // projection and the page size alike, so a continuation issued under one view can never be
+  // replayed under another (a cursor read for other visible columns opens nothing).
   const inputFingerprint = fingerprintQueryInputs({
     inputValues,
     user: userQueryInputs(command),
+    requestedFieldIds: command.requestedFieldIds.map((fieldId) => fieldId.toLowerCase()).sort(),
+    requestedSystemFieldKeys: [...command.requestedSystemFieldKeys].sort(),
+    pageSize: command.pageSize,
   });
   if (after !== undefined && after.inputFingerprint !== inputFingerprint)
     return refusal("cursor_stale");

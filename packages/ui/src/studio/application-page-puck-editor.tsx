@@ -8,6 +8,7 @@ import {
   canonicalJson,
   compiledItemSlots,
   readSourceItem,
+  readRecordDetailContract,
   releaseSettingDeclarations,
   setSourcePageSlot,
   sourcePageSlotAddresses,
@@ -18,7 +19,11 @@ import {
 } from "@vortex/platform/schema";
 import type { CompiledItem, SourceItem, SourcePageZone } from "@vortex/platform/schema";
 import type { FieldInputControlReleaseMap } from "../registry";
-import { createAppearanceRootProps, type PlatformThemeTokens } from "../theme";
+import {
+  createAppearanceRootProps,
+  createThemeRootProps,
+  type PlatformThemeTokens,
+} from "../theme";
 import { createPlatformComponentRegistryForReleases } from "../combined-registry";
 import { getVortexPuckConfig } from "../puck-config";
 import { contentConfigFor } from "../shell-outlet";
@@ -95,10 +100,18 @@ const recordKeys = (
       const release = storedItemRelease(catalogue, item);
       if (release === undefined) continue;
       const reading = readSourceItem(item, release);
-      keys.set(
-        item.props.id,
-        canonicalJson([item.props.vortex.block, item.props.vortex.query ?? null, reading.settings]),
-      );
+      if (
+        item.props.vortex.query !== undefined ||
+        readRecordDetailContract(reading.settings) !== undefined
+      )
+        keys.set(
+          item.props.id,
+          canonicalJson([
+            item.props.vortex.block,
+            item.props.vortex.query ?? null,
+            reading.settings,
+          ]),
+        );
       for (const [, slot] of reading.slots) if (slot.items !== undefined) visit(slot.items);
     }
   };
@@ -194,7 +207,8 @@ export type ApplicationPagePuckEditorProps = Readonly<{
    * Reads the records of one content area's data blocks for the saved revision `compiledSource`
    * is. The canvas reads again whenever a newer saved revision is compiled.
    */
-  readRecords?: ((area: string) => Promise<StudioCanvasRecordsRead>) | undefined;
+  readRecords?:
+    ((area: string, signal: AbortSignal) => Promise<StudioCanvasRecordsRead>) | undefined;
   /** A newer saved revision than `compiledSource` is being compiled. */
   updating?: boolean | undefined;
   /** The role the canvas previews, hiding what it may not see; `null` or absent is the design view. */
@@ -464,10 +478,11 @@ function ApplicationPageSlotPuckEditor({
   const followUp =
     followed.source === compiledSource && followed.area === at.key ? followed.count : 0;
   useEffect(() => {
-    if (readRecords === undefined) return;
+    if (readRecords === undefined || savedKeys.size === 0) return;
     let cancelled = false;
+    const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    readRecords(at.key).then(
+    readRecords(at.key, controller.signal).then(
       (read) => {
         if (cancelled) return;
         const again = read.behind === true && followUp < 30;
@@ -481,6 +496,7 @@ function ApplicationPageSlotPuckEditor({
           );
       },
       (error: unknown) => {
+        if (controller.signal.aborted) return;
         console.error("[studio] the canvas records could not be read", error);
         if (!cancelled)
           setRecordsRead({
@@ -493,6 +509,7 @@ function ApplicationPageSlotPuckEditor({
     );
     return () => {
       cancelled = true;
+      controller.abort();
       if (timer !== undefined) clearTimeout(timer);
     };
   }, [readRecords, compiledSource, at.key, followUp]);
@@ -651,11 +668,13 @@ function ApplicationPageSlotPuckEditor({
         className="min-h-96 overflow-x-auto bg-muted/40 px-4 py-4"
       >
         <div
+          {...createThemeRootProps(frame?.theme, platformThemeTokens)}
           {...createAppearanceRootProps(appearance)}
           data-vortex-studio-page-frame=""
-          className="mx-auto overflow-clip rounded-xl bg-background shadow-lg ring-1 ring-border"
+          className="mx-auto overflow-clip rounded-xl bg-background text-foreground shadow-lg ring-1 ring-border"
           style={
             {
+              ...createThemeRootProps(frame?.theme, platformThemeTokens).style,
               ...createAppearanceRootProps(appearance).style,
               width,
               zoom: scale > 0 ? scale : 1,

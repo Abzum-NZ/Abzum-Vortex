@@ -9,6 +9,8 @@ import {
   type ComponentRequestGeneration,
   containedComponentIdSchema,
   recordIdSchema,
+  searchWithoutRecordsTableState,
+  type RecordsTablePageRequest,
 } from "@vortex/platform/schema";
 import type {
   ApplicationPageModel,
@@ -16,12 +18,7 @@ import type {
 } from "../../../../../../_lib/application-page";
 import { rereadApplicationPlacements } from "../../placement-refresh-action";
 import type { Notice, RefreshedPlacementData, TableContinuationTarget } from "./types";
-import type { TablePageCache } from "./use-table-page-cache";
 import { asComponentBinding } from "./event-values";
-import {
-  searchWithoutTablePages,
-  type TablePageRequest,
-} from "../../../../../../_lib/table-page-position";
 import {
   boardPayloadFor,
   boardBucketForSelector,
@@ -45,7 +42,7 @@ export function usePlacementActions({
   router,
   tableContinuationScopeRef,
   commitTablePage,
-  pageCache,
+  tableQueryPending,
 }: Readonly<{
   applyDispatch: (
     dispatch: Promise<FlowDispatchResult | undefined>,
@@ -74,8 +71,8 @@ export function usePlacementActions({
   currentSearch: string;
   router: ReturnType<typeof useRouter>;
   tableContinuationScopeRef: RefObject<{ scopeKey: string; inFlight: Set<string> }>;
-  commitTablePage: (placementId: string, request: TablePageRequest) => void;
-  pageCache: TablePageCache;
+  commitTablePage: (placementId: string, request: RecordsTablePageRequest) => void;
+  tableQueryPending: (placementId: string) => boolean;
 }>) {
   /**
    * Runs the flow bound to a display or action event through the same runtime as a form gesture.
@@ -293,21 +290,11 @@ export function usePlacementActions({
       )
         return;
       const parsedId = containedComponentIdSchema.safeParse(placementId);
-      if (!parsedId.success) return;
-      // Pointer or focus on First or Last: read that page ahead when it is not held yet.
-      if (event.intent === true) {
-        if (
-          (event.direction === "first" && table.page > 1) ||
-          (event.direction === "last" && table.hasNextPage === true)
-        )
-          pageCache.prefetch(
-            parsedId.data,
-            pageCache.intentRequest(event.direction === "first" ? "first" : "last"),
-          );
-        return;
-      }
+      // The shown page was read for an earlier sort, filter, search or column state: its tokens
+      // belong to that state, so a page move waits for the new state's page.
+      if (!parsedId.success || tableQueryPending(parsedId.data)) return;
 
-      const scopeKey = `${navigationKey}\u0000${searchWithoutTablePages(currentSearch)}`;
+      const scopeKey = `${navigationKey}\u0000${searchWithoutRecordsTableState(currentSearch)}`;
       let scope = tableContinuationScopeRef.current;
       if (scope.scopeKey !== scopeKey) {
         scope = { scopeKey, inFlight: new Set() };
@@ -341,30 +328,20 @@ export function usePlacementActions({
       if (scope.inFlight.has(requestKey)) return;
       scope.inFlight.add(requestKey);
       try {
-        const request: TablePageRequest = {
+        const request: RecordsTablePageRequest = {
           page: event.page,
           pageDirection: direction === "previous" || direction === "last" ? "backward" : "forward",
           ...(continuationToken === undefined ? {} : { continuationToken }),
         };
+        // One read of the requested page under the viewer's current access; only a Next whose page
+        // was read ahead for this same state uses that read, and no page is replayed.
         commitTablePage(parsedId.data, request);
-        const leaving = Object.entries(currentData).find(
-          ([candidate]) => candidate.toLowerCase() === placementKey,
-        )?.[1];
-        if (leaving !== undefined) pageCache.leave(parsedId.data, request, leaving);
         await refreshPlacements([parsedId.data], { placementId: parsedId.data, request });
       } finally {
         scope.inFlight.delete(requestKey);
       }
     },
-    [
-      busy,
-      commitTablePage,
-      currentData,
-      currentSearch,
-      navigationKey,
-      pageCache,
-      refreshPlacements,
-    ],
+    [busy, commitTablePage, currentSearch, navigationKey, refreshPlacements, tableQueryPending],
   );
 
   return { runBinding, continueBoardColumn, continueTablePage };

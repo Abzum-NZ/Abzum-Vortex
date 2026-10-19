@@ -151,39 +151,20 @@ export const SUMMARY_VALUES_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
 );
 
 /**
- * Release 1.2.0 of the table and record detail blocks declares their data contract as settings
- * (decision 5): the Records table maps columns, sorting, filtering, search, saved views, page size,
- * selection, query parameters and its refused and error messages to fields of its bound query; the
- * record detail maps its detail fields. Table releases without a declared data contract are retired.
+ * The one Records table release. It declares the table data contract as settings (decision 5):
+ * columns with their explicit default visibility, the ordered default sort, sortable and
+ * filterable fields, search, saved views, page size, selection, query parameters, row behaviours
+ * held as flow bindings, and its refused and error messages. Every control (sort, filter, search,
+ * page) reports a data event that reaches the Query engine; nothing is applied to a returned page.
  */
-export const TABLE_BLOCK_RELEASE_1_2_0: PlatformBlockRelease = release(
-  sources.TABLE_BLOCK_RELEASE_1_2_0,
-);
+export const TABLE_BLOCK_RELEASE: PlatformBlockRelease = release(sources.TABLE_BLOCK_RELEASE);
 
+/**
+ * Release 1.2.0 of the record detail block declares its data contract as settings (decision 5):
+ * the detail fields it maps to its bound query.
+ */
 export const RECORD_DETAIL_BLOCK_RELEASE_1_2_0: PlatformBlockRelease = release(
   sources.RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
-);
-
-/**
- * Release 1.3.0 of the Records table adds configured row behaviours (decision 5): a row click, row
- * and bulk actions over the selection and inline edit of permitted fields, each held as a binding
- * to a flow. Earlier releases stay published unchanged, and a placement that declares no row
- * behaviour keeps its exact display-only behaviour.
- */
-export const TABLE_BLOCK_RELEASE_1_3_0: PlatformBlockRelease = release(
-  sources.TABLE_BLOCK_RELEASE_1_3_0,
-);
-
-/**
- * Release 1.4.0 of the Records table adds the interactive controls: a `filter_changed`
- * event for each configured filterable field and a `search_changed` event for the search box, so
- * sorting, filtering, searching and paging all reach the Query engine as data events
- * instead of being applied to the returned page. A declared row or bulk action may also name the
- * record action capability it needs (update, delete or restore), so the renderer hides a row
- * command the row's own per-row capabilities refuse. Earlier releases stay published unchanged.
- */
-export const TABLE_BLOCK_RELEASE_1_4_0: PlatformBlockRelease = release(
-  sources.TABLE_BLOCK_RELEASE_1_4_0,
 );
 
 /** Exact immutable metadata release for the query-bound calendar display block. */
@@ -437,10 +418,8 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.fr
   RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
   GROUPED_DATA_BLOCK_RELEASE_1_1_0,
   SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
-  TABLE_BLOCK_RELEASE_1_2_0,
+  TABLE_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
-  TABLE_BLOCK_RELEASE_1_3_0,
-  TABLE_BLOCK_RELEASE_1_4_0,
   CALENDAR_BLOCK_RELEASE,
   BOARD_BLOCK_RELEASE,
   BOARD_BLOCK_RELEASE_1_1_0,

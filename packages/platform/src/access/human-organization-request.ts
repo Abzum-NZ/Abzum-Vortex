@@ -49,7 +49,7 @@ export type HumanOrganizationRequestResult<Result> =
       code?: "recent_authentication_required" | "role_settings_change_required";
       cause?: string;
     }>
-  | Readonly<{ kind: "temporarily_unavailable"; cause?: string }>;
+  | Readonly<{ kind: "temporarily_unavailable"; cause?: string; databaseCode?: string }>;
 
 type OrganizationScopeResolutionResult =
   | HumanOrganizationRequestResult<SelectedOrganizationScope>
@@ -330,7 +330,7 @@ export const createHumanOrganizationRequestService = (
           ? { kind: "unavailable", code: "role_settings_change_required", cause }
           : refused
             ? { kind: "unavailable" }
-            : { kind: "temporarily_unavailable", cause };
+            : { kind: "temporarily_unavailable", cause, ...(code === undefined ? {} : { databaseCode: code }) };
     }
   };
 

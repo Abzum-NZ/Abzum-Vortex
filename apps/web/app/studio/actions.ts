@@ -15,8 +15,6 @@ import { humanOrganizationRequests } from "../_lib/server-composition";
 import { createHumanApplicationDraft, saveHumanApplicationDraft } from "../_lib/definition-draft-write";
 import { mapWebError } from "../_lib/web-error-mapper";
 import { loadStudioApplicationDraft } from "../_lib/studio-application-draft";
-import { readStudioCanvasRecords as readStudioCanvasRecordsWithSession, type StudioCanvasRecordsResult } from "../_lib/studio-canvas-records";
-import { readStudioDataRecords as readStudioDataRecordsWithSession, type StudioDataRecordsResult } from "../_lib/studio-data-records";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { readSavedStudioApplicationConditionContext } from "../_lib/studio-application-condition-context";
 import type { StudioApplicationConditionContextResult } from "@vortex/ui/studio";
@@ -138,7 +136,7 @@ export type StudioDraftChangedElsewhere = Readonly<{
 }>;
 
 /**
- * Saves the draft and nothing else: Studio autosaves each batch of edits through this one action.
+ * Studio autosaves each batch through this one action; only a visible preview reader prepares a preview.
  * The draft is compiled for the canvas by the separate `reopenStudioApplication` request the
  * workspace sends once its saves are idle, so a save never waits for a compile. A save that no
  * longer extends the saved revision is refused as a conflict that names who wrote the newer
@@ -155,35 +153,6 @@ export async function saveStudioApplication(organizationId: string, candidate: u
   }
   const changedBy = await readStudioPersonLabel(organizationId, latest.draft.updatedBy);
   return { kind: "conflict", reason: "draft_changed", elsewhere: { draft: latest.draft, changedBy } };
-}
-
-/** The saved draft compiled for the canvas: its page slots, frames, choices and compile failure. */
-export async function reopenStudioApplication(organizationId: string, applicationRootId: string) {
-  return loadStudioApplicationDraft(organizationId, applicationRootId);
-}
-
-/** The records the data blocks of one saved draft page area show, read with the builder's own access. */
-export async function readStudioCanvasRecords(organizationId: string, candidate: unknown): Promise<StudioCanvasRecordsResult> {
-  try {
-    const resolved = await resolveIdentitySession();
-    if (resolved.kind !== "active")
-      return resolved.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };
-    return await readStudioCanvasRecordsWithSession(resolved.session, organizationId, candidate);
-  } catch (error) {
-    return refuse("read-canvas-records", "STUDIO_CANVAS_RECORDS_FAILED", { kind: "temporarily_unavailable" } as const, error);
-  }
-}
-
-/** One page of the records of a record type or query in the running application, read with the builder's own access. */
-export async function readStudioDataRecords(organizationId: string, candidate: unknown): Promise<StudioDataRecordsResult> {
-  try {
-    const resolved = await resolveIdentitySession();
-    if (resolved.kind !== "active")
-      return resolved.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };
-    return await readStudioDataRecordsWithSession(resolved.session, organizationId, candidate);
-  } catch (error) {
-    return refuse("read-data-records", "STUDIO_DATA_RECORDS_FAILED", { kind: "temporarily_unavailable" } as const, error);
-  }
 }
 
 const themeFailureWords: Readonly<Record<string, string>> = {
