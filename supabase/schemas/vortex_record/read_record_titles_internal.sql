@@ -29,6 +29,8 @@ declare
   row_read record;
   projection jsonb;
   readable_values jsonb;
+  preview_meta jsonb;
+  preview_installation_id uuid;
   title_key text := pg_catalog.lower(p_title_field_id::text);
 begin
   if p_record_ids is null then
@@ -48,13 +50,21 @@ begin
         p_record_type_id, 'read', requested_id, null, null::jsonb
       );
       if loaded ->> 'outcome' = 'loaded'
-        and pg_catalog.jsonb_typeof(loaded -> 'declaration') = 'object'
-        and not (loaded ? 'previewInstallationId') then
+        and pg_catalog.jsonb_typeof(loaded -> 'declaration') = 'object' then
         page_declaration := loaded -> 'declaration';
-        page_eligibility := vortex_access.evaluate_organization_record_permission_eligibility_internal(
-          page_declaration, vortex_access.validated_human_request_context(),
-          pg_catalog.clock_timestamp()
-        );
+        if loaded ? 'previewInstallationId' then
+          preview_installation_id := (loaded ->> 'previewInstallationId')::uuid;
+          preview_meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'read');
+          page_shared := pg_catalog.jsonb_build_object('previewBounds',
+            vortex_record.preview_record_field_bounds_internal(
+              p_record_type_id, (preview_meta ->> 'storageContractId')::uuid,
+              preview_meta -> 'recordType'));
+        else
+          page_eligibility := vortex_access.evaluate_organization_record_permission_eligibility_internal(
+            page_declaration, vortex_access.validated_human_request_context(),
+            pg_catalog.clock_timestamp()
+          );
+        end if;
         first_loaded_id := requested_id;
         first_loaded := loaded;
         exit;
@@ -72,7 +82,8 @@ begin
     where candidate.id is not null and candidate.id <> first_loaded_id;
   end if;
   if candidate_ids is not null then
-    select pg_catalog.jsonb_build_object('envelope', page.envelope) || page.read_time,
+    select coalesce(page_shared, '{}'::jsonb)
+      || pg_catalog.jsonb_build_object('envelope', page.envelope) || page.read_time,
       page.narrowed
     into page_shared, page_narrowed
     from vortex_record.read_record_page_envelope_internal(p_record_type_id, first_loaded) as page;
@@ -128,6 +139,14 @@ begin
     end if;
     return next;
   end loop;
+  -- PL/pgSQL materializes this set before returning it. Revalidate after all
+  -- projections so invocation-local preview facts cannot extend a builder's
+  -- expiring role/group authority and disclose any part of the result.
+  if preview_installation_id is not null
+    and vortex_record.read_current_preview_installation_internal() ->> 'previewInstallationId'
+      is distinct from preview_installation_id::text then
+    raise exception using errcode = '42501', message = 'Preview title authority is unavailable';
+  end if;
 end
 $function$;
 
@@ -138,4 +157,4 @@ revoke all on function vortex_record.read_record_titles_internal(uuid,uuid[],uui
 grant execute on function vortex_record.read_record_titles_internal(uuid,uuid[],uuid) to vortex_owner;
 
 comment on function vortex_record.read_record_titles_internal(uuid,uuid[],uuid) is
-  'Private adapter batch of record titles: the first record is decided exactly, the others together by the page read pass with a local page eligibility, and any record the pass does not decide (missing, inaccessible, preview or relationship-routed) by the exact single-record path with the same refusal.';
+  'Private adapter batch of record titles: the first record is decided exactly, the others together by the page read pass with a local page eligibility, and any record the pass does not decide (missing, inaccessible or relationship-routed) by the exact single-record path with the same refusal.';
