@@ -2,7 +2,7 @@ import { z } from "zod";
 import { correlationIdSchema } from "./common";
 import { builderKeySchema, namespacedKeySchema } from "./identifiers";
 
-export const definitionValidationCatalogueVersion = "1.1.0" as const;
+export const definitionValidationCatalogueVersion = "1.2.0" as const;
 
 export const definitionDocumentKindSchema = z.enum(["module", "application", "connection_type"]);
 
@@ -54,6 +54,7 @@ export const definitionValidationErrorCodes = [
   "definition_required_value",
   "definition_invalid_value",
   "definition_unsupported_choice",
+  "definition_records_table_bounded_scrolling",
   "definition_unknown_property",
   "definition_too_few_items",
   "definition_too_many_items",
@@ -104,6 +105,11 @@ const definitionValidationErrorCatalogueSource = {
     order: 30,
     message: "A selected value is not supported.",
     guidance: "Choose one of the values supported by the current contract version.",
+  },
+  definition_records_table_bounded_scrolling: {
+    order: 35,
+    message: "A Records table page of more than 100 rows needs bounded scrolling.",
+    guidance: "Set the table's Scrolling to Bounded, or choose a page size of 100 rows or fewer.",
   },
   definition_unknown_property: {
     order: 40,
@@ -250,6 +256,8 @@ export const definitionRuleFailureSchema = z
   .object({
     ruleCode: namespacedKeySchema,
     family: definitionRuleFailureFamilySchema,
+    /** A rule with its own business sentence names its catalogue code; others use the family's. */
+    code: definitionValidationErrorCodeSchema.optional(),
     location: definitionValidationLocationSchema.optional(),
   })
   .strict();
@@ -429,12 +437,11 @@ function finishResult(
   return definitionValidationResultSchema.parse({
     catalogueVersion: definitionValidationCatalogueVersion,
     correlationId,
-    errors:
-      truncated
-        ? [...sorted.slice(0, 199), makePublicError("definition_more_errors", correlationId)]
-        : sorted.length > 0
-          ? sorted
-          : [makePublicError("definition_validation_failed", correlationId)],
+    errors: truncated
+      ? [...sorted.slice(0, 199), makePublicError("definition_more_errors", correlationId)]
+      : sorted.length > 0
+        ? sorted
+        : [makePublicError("definition_validation_failed", correlationId)],
   });
 }
 
@@ -550,7 +557,7 @@ export function translateDefinitionRuleFailures(
   return finishResult(
     failures.data.map((failure) =>
       makePublicError(
-        failureCodeByFamily[failure.family],
+        failure.code ?? failureCodeByFamily[failure.family],
         context.correlationId,
         failure.location ?? context.rootLocation,
       ),
