@@ -205,6 +205,17 @@ const requirePreparedPlanMatchesReleaseSet = (
   if (canonicalJson(plan.permissions) !== canonicalJson(expectedPermissions)) invalid();
 };
 
+// Bundle parts already carry the release contents; pass only the source identity beside them.
+const bundleReleaseEvidence = (candidate: unknown): Readonly<Record<string, unknown>> => {
+  if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate))
+    throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
+  const evidence = candidate as Record<string, unknown>;
+  return Object.fromEntries([
+    "organizationId", "kind", "key", "rootId", "releaseRevision", "releaseVersion",
+    "validationContractVersion", "contentFingerprint", "resolutionFingerprint", "dependencyManifest",
+  ].map((key) => [key, evidence[key]]));
+};
+
 export type PreparedInstallationRuntimeSourceCommand = Readonly<{
   organizationId: string;
   applicationRootId: string;
@@ -371,7 +382,10 @@ export const createDatabasePreparedInstallationRuntimeSourceService = (
         },
       }) as InstallationRuntimeBundleSourceManifest;
       return {
-        releaseEvidence: { application: parsed.data.application, modules: parsed.data.modules },
+        releaseEvidence: {
+          application: bundleReleaseEvidence(parsed.data.application),
+          modules: parsed.data.modules.map(bundleReleaseEvidence),
+        },
         releaseSet,
         sourceManifest,
         preparedRecordAccessPlan: parsed.data.preparedRecordAccessPlan,
