@@ -25,6 +25,7 @@ import {
   type BuilderPreviewInstallation,
   type IdentitySession,
   type OrganizationId,
+  type PreviewInstallation,
 } from "@vortex/platform/schema";
 import { z } from "zod";
 import { installedReleaseCatalogue } from "./definition-catalogue";
@@ -315,6 +316,39 @@ type Target = Readonly<{
 const keyOf = (target: Target): string =>
   `${target.session.identityId}|${target.organizationId}|${target.rootId}|${target.draftRevision}`.toLowerCase();
 
+/** The most record types one demand names. */
+const demandRecordTypeLimit = 201;
+
+/**
+ * Seeds the preview with every record type it has storage for, so it holds what its builder reads
+ * live; an Application with no installation has nothing to seed. Seeded record types are not
+ * seeded again, and a pending backfill of derived fields is finished.
+ */
+const materializeEveryRecordType = async (
+  target: Target,
+  preview: PreviewInstallation,
+  signal: AbortSignal,
+): Promise<PreviewInstallation> => {
+  if (!preview.seedable) return preview;
+  for (let start = 0; start < preview.recordTypeIds.length; start += demandRecordTypeLimit)
+    await coordinator().materialize(
+      target.session,
+      {
+        organizationId: target.organizationId,
+        applicationRootId: target.rootId,
+        previewInstallationId: preview.previewInstallationId,
+        expectedDraftRevision: preview.draftRevision,
+        demand: {
+          recordTypes: preview.recordTypeIds
+            .slice(start, start + demandRecordTypeLimit)
+            .map((recordTypeId) => ({ recordTypeId, fieldIds: [], relationshipPaths: [] })),
+        },
+      },
+      signal,
+    );
+  return preview;
+};
+
 /** A new preview of the draft, replacing the builder's previous one and its records. */
 const provision = (target: Target, signal?: AbortSignal): Promise<StudioPreviewResult> =>
   once(`${keyOf(target)}|create`, signal, (demand) =>
@@ -329,6 +363,7 @@ const provision = (target: Target, signal?: AbortSignal): Promise<StudioPreviewR
         },
         demand,
       )
+      .then((preview) => materializeEveryRecordType(target, preview, demand))
       .then(
         (preview) => {
           // Retired storage is dropped in short background transactions after provisioning commits.
@@ -366,6 +401,7 @@ const follow = (
         },
         demand,
       )
+      .then((preview) => materializeEveryRecordType(target, preview, demand))
       .then(
         (preview) => available(preview, false),
         (error: unknown) => {

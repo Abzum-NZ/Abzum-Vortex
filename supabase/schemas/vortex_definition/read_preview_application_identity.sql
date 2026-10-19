@@ -22,7 +22,20 @@ begin
     'definitionKey', root.key,
     'draftRevision', preview.draft_revision,
     'expiresAt', preview.expires_at,
-    'seeded', preview.seeded_at is not null
+    'seedable', preview.seedable,
+    'seededRecordTypeIds', coalesce((
+      select pg_catalog.jsonb_agg(pg_catalog.lower(seed.record_type_id::text)
+        order by seed.record_type_id)
+      from vortex_definition.preview_installation_seeds as seed
+      where seed.preview_installation_id = preview.preview_installation_id
+    ), '[]'::jsonb),
+    'derivedReadyRecordTypeIds', coalesce((
+      select pg_catalog.jsonb_agg(pg_catalog.lower(seed.record_type_id::text)
+        order by seed.record_type_id)
+      from vortex_definition.preview_installation_seeds as seed
+      where seed.preview_installation_id = preview.preview_installation_id
+        and seed.derived_ready_at is not null
+    ), '[]'::jsonb)
   ) into identity_value
   from vortex_definition.preview_installations as preview
   join vortex_definition.roots as root on root.root_id = preview.application_root_id
@@ -43,4 +56,4 @@ revoke all on function vortex_definition.read_preview_application_identity(uuid)
 grant execute on function vortex_definition.read_preview_application_identity(uuid)
   to vortex_request;
 comment on function vortex_definition.read_preview_application_identity(uuid) is
-  'The Application, key and draft revision of one unexpired preview, and whether it holds copied live records, for the builder of the validated human organisation context who opened it; null when there is no such preview.';
+  'The Application, key and draft revision of one unexpired preview, whether it can be seeded, the record types it holds copied live records of and those whose derived fields are worked out, for the builder of the validated human organisation context who opened it; null when there is no such preview.';

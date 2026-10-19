@@ -1,6 +1,7 @@
 create or replace function vortex_record.apply_derived_field_backfill(
   p_record_type_id uuid,
-  p_records jsonb
+  p_records jsonb,
+  p_last_page boolean
 )
 returns integer
 language plpgsql
@@ -10,6 +11,7 @@ set search_path = ''
 as $function$
 declare
   scope jsonb;
+  preview_installation jsonb;
   record_type_key text;
   type_meta jsonb;
   field_ids jsonb;
@@ -22,6 +24,7 @@ declare
   written integer := 0;
 begin
   if p_record_type_id is null
+    or p_last_page is null
     or pg_catalog.jsonb_typeof(p_records) is distinct from 'array'
     or pg_catalog.jsonb_array_length(p_records) > 100 then
     raise exception using errcode = '22023', message = 'Derived field backfill is invalid';
@@ -97,15 +100,25 @@ begin
       application_scope
     );
   end if;
+  -- With a preview's last page, the record type's derived fields are worked out: its seed ledger
+  -- says so in this same transaction.
+  if p_last_page then
+    preview_installation := vortex_record.read_current_preview_installation_internal();
+    if preview_installation is not null then
+      perform vortex_definition.mark_preview_derived_ready_internal(
+        (preview_installation ->> 'previewInstallationId')::uuid, p_record_type_id
+      );
+    end if;
+  end if;
   return written;
 end
 $function$;
 
-alter function vortex_record.apply_derived_field_backfill(uuid,jsonb) owner to vortex_record_adapter;
+alter function vortex_record.apply_derived_field_backfill(uuid, jsonb, boolean) owner to vortex_record_adapter;
 
-revoke all on function vortex_record.apply_derived_field_backfill(uuid, jsonb)
+revoke all on function vortex_record.apply_derived_field_backfill(uuid, jsonb, boolean)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.apply_derived_field_backfill(uuid, jsonb)
+grant execute on function vortex_record.apply_derived_field_backfill(uuid, jsonb, boolean)
   to vortex_runtime;
-comment on function vortex_record.apply_derived_field_backfill(uuid, jsonb) is
-  'Server-only derived-field backfill write: stores the totals and stored calculations the platform worked out for a page of existing records it read with read_derived_field_backfill, only for the fields the backfill provisions.';
+comment on function vortex_record.apply_derived_field_backfill(uuid, jsonb, boolean) is
+  'Server-only derived-field backfill write: stores the totals and stored calculations the platform worked out for a page of existing records it read with read_derived_field_backfill, only for the fields the backfill provisions. With the last page of a preview''s record type, its seed ledger records that the type''s derived fields are worked out.';

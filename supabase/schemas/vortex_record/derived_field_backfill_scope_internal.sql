@@ -16,6 +16,7 @@ declare
   record_type_key text;
   type_meta jsonb;
   field_ids jsonb;
+  pending_ids jsonb;
   definitions jsonb := '{}'::jsonb;
   targets jsonb := '{}'::jsonb;
 begin
@@ -32,6 +33,13 @@ begin
     then vortex_definition.read_current_active_installation()
     else preview_installation end;
   plan := vortex_record.resolve_installation_access_plan_internal(installation);
+  -- A preview works out only the record types it was seeded with whose derived fields are not
+  -- worked out yet, as its seed ledger lists them.
+  if preview_installation is not null then
+    pending_ids := vortex_definition.read_preview_pending_derived_internal(
+      (preview_installation ->> 'previewInstallationId')::uuid
+    );
+  end if;
 
   for binding_item in
     select item.value
@@ -50,7 +58,8 @@ begin
       record_type_key := pg_catalog.lower(record_type_item ->> 'recordTypeId');
       type_meta := plan -> 'recordTypes' -> record_type_key;
       continue when type_meta is null
-        or coalesce((type_meta ->> 'isSystemProjection')::boolean, false);
+        or coalesce((type_meta ->> 'isSystemProjection')::boolean, false)
+        or (preview_installation is not null and not pending_ids ? record_type_key);
       definitions := definitions || pg_catalog.jsonb_build_object(record_type_key, record_type_item);
       -- The fields a backfill works out: every total and every stored calculation. A preview's
       -- storage is new, so all of them; a live upgrade only those this exact Module release
@@ -94,4 +103,4 @@ revoke all on function vortex_record.derived_field_backfill_scope_internal()
 grant execute on function vortex_record.derived_field_backfill_scope_internal()
   to vortex_record_adapter;
 comment on function vortex_record.derived_field_backfill_scope_internal() is
-  'Private derived-field backfill scope of the request''s live or preview installation: each record type''s definition and the totals and stored calculations a backfill works out for its existing records.';
+  'Private derived-field backfill scope of the request''s live or preview installation: each record type''s definition and the totals and stored calculations a backfill works out for its existing records. A preview lists only the seeded record types whose derived fields are not worked out yet.';

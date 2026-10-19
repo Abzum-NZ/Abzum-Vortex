@@ -86,10 +86,26 @@ const workOut = (
   return values;
 };
 
+/** Writes one page's worked-out values; with the last page, the record type is worked out. */
+const apply = async (
+  transaction: RequestDatabaseTransaction,
+  recordTypeId: string,
+  writes: readonly BackfillWrite[],
+  lastPage: boolean,
+): Promise<number> =>
+  Number(
+    one(await transaction.query<Row>`
+      select vortex_record.apply_derived_field_backfill(
+        ${recordTypeId}::uuid, ${JSON.stringify(writes)}::text::jsonb, ${lastPage}::boolean
+      ) as backfill
+    `),
+  );
+
 /**
  * Works out the totals and stored calculations that the request's installation has just brought
  * into storage, for every existing record: after an upgrade or installation activates a release,
- * and after a preview is seeded with copies of live records. It is the one backfill of derived
+ * and after a preview is seeded with copies of live records, for the seeded record types whose
+ * derived fields are not worked out yet. It is the one backfill of derived
  * fields. The database chooses the record types and fields and locks each page; this applies the
  * engines a save uses and writes back only values that differ. A record whose values can't be
  * worked out keeps them empty, and the cause is logged.
@@ -112,7 +128,11 @@ export const backfillDerivedFields = async (
       const page = one(await transaction.query<Row>`
         select vortex_record.read_derived_field_backfill(${recordTypeId}::uuid, ${after}::uuid) as backfill
       `) as BackfillPage;
-      if (page.records.length === 0) break;
+      // The last page's write also records, for a preview, that the record type is worked out.
+      if (page.records.length === 0) {
+        await apply(transaction, recordTypeId, [], true);
+        break;
+      }
       const recordType = recordTypeDefinitionSchema.parse(page.recordType);
       const sources = page.sources.map((source) => ({
         relationshipId: source.relationshipId,
@@ -135,15 +155,9 @@ export const backfillDerivedFields = async (
         if (Object.keys(changed).length > 0)
           writes.push({ recordId: record.recordId, expectedConcurrencyNumber: record.concurrencyNumber, values: changed });
       }
-      if (writes.length > 0) {
-        const applied = one(await transaction.query<Row>`
-          select vortex_record.apply_derived_field_backfill(
-            ${recordTypeId}::uuid, ${JSON.stringify(writes)}::text::jsonb
-          ) as backfill
-        `);
-        written += Number(applied);
-      }
-      if (page.records.length < pageSize) break;
+      const last = page.records.length < pageSize;
+      if (writes.length > 0 || last) written += await apply(transaction, recordTypeId, writes, last);
+      if (last) break;
       after = page.records[page.records.length - 1]!.recordId;
     }
   }
