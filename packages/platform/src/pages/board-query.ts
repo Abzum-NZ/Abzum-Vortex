@@ -300,7 +300,8 @@ export type BoardPlacementValues = Readonly<{
   totalRowCount: number;
   aggregates: readonly BoardMetric[];
   columns: readonly (BoardBucketValues & BoardStageValues)[];
-  unassigned: BoardBucketValues;
+  /** Cards with no stage yet, and the stages they may move to: the start stage and its moves. */
+  unassigned: BoardBucketValues & Readonly<{ moves: readonly string[] }>;
 }>;
 
 export type BoardPlacementFailureCause =
@@ -517,6 +518,9 @@ export const projectBoardPlacement = async (
         aggregates,
         columns,
         unassigned: {
+          moves: pipelineMovesFrom(pipeline, undefined).filter((target) =>
+            board.columns.some((candidate) => candidate.value === target),
+          ),
           rowCount: board.unassigned.rowCount,
           aggregates: unassignedAggregates,
           page: projectPage(board.unassigned.page, contract, fieldsById),
