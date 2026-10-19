@@ -216,13 +216,23 @@ export const requireApplicationDefinitionDraftConsistency = async (
     (scope.applicationRootId !== undefined && !sameUuid(scope.applicationRootId, draft.rootId))
   )
     throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-  const rows = await transaction.query`
-    select vortex_access.validated_human_request_context() as request_context,
-      vortex_definition.read_application_draft_consistency(
-        ${draft.rootId}::uuid, ${draft.draftRevision}::bigint,
-        ${draft.sourceFingerprint}::text, ${draft.publishedRevision ?? null}::bigint
-      ) as consistency
-  `;
+  let rows: readonly DatabaseRow[];
+  try {
+    rows = await transaction.query`
+      select vortex_access.validated_human_request_context() as request_context,
+        vortex_definition.read_application_draft_consistency(
+          ${draft.rootId}::uuid, ${draft.draftRevision}::bigint,
+          ${draft.sourceFingerprint}::text, ${draft.publishedRevision ?? null}::bigint
+        ) as consistency
+    `;
+  } catch (cause) {
+    throw new DefinitionError(
+      isDefinitionContextFailure(cause)
+        ? "DEFINITION_CONTEXT_REFUSED"
+        : "DEFINITION_STORAGE_FAILED",
+      { cause },
+    );
+  }
   const row = z
     .object({
       request_context: requiredJsonSchema,
