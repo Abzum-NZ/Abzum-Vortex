@@ -4,7 +4,8 @@ create or replace function vortex_record.load_record_access_facts_from_installat
   p_record_id uuid,
   p_expected_concurrency_number bigint,
   p_installation jsonb,
-  p_projection_row jsonb
+  p_projection_row jsonb,
+  p_requested_field_ids jsonb default null
 )
 returns jsonb
 language plpgsql
@@ -58,6 +59,9 @@ declare
   target_concurrency_number bigint;
   target_definition_revision bigint;
   facts jsonb;
+  selected_field_ids jsonb;
+  selected_fields jsonb;
+  selected_value_expression text;
 begin
   if p_record_type_id is null or p_record_type_id = nil_uuid
     or p_record_id is null or p_record_id = nil_uuid
@@ -245,6 +249,42 @@ begin
   -- row is read, and refuses a stale number without doing the closure work.
   -- Organisation and application isolation is the scope policy's, which is what
   -- makes a foreign row indistinguishable from a missing one.
+  selected_value_expression := target_meta ->> 'valueExpression';
+  if p_requested_field_ids is not null then
+    if pg_catalog.jsonb_typeof(p_requested_field_ids) is distinct from 'array'
+      or exists (
+        select 1 from pg_catalog.jsonb_array_elements(p_requested_field_ids) as item(value)
+        where pg_catalog.jsonb_typeof(item.value) <> 'string'
+          or not pg_catalog.pg_input_is_valid(item.value #>> '{}', 'uuid')
+      ) then
+      raise exception using errcode = '22023', message = 'Requested record fields are invalid';
+    end if;
+    -- Access conditions must see the same operands even when no visible placement consumes them.
+    -- Read-time calculations also need their stored dependencies, without disclosing those values.
+    select coalesce(pg_catalog.jsonb_agg(distinct pg_catalog.lower(item.value)), '[]'::jsonb)
+    into selected_field_ids
+    from (
+      select value from pg_catalog.jsonb_array_elements_text(p_requested_field_ids)
+      union all
+      select value #>> '{}' from pg_catalog.jsonb_path_query(condition_list, 'strict $.**.declaredFieldIds[*]')
+      union all
+      select dependency.value #>> '{}'
+      from pg_catalog.jsonb_array_elements(target_meta -> 'fields') as field(value)
+      cross join lateral (values
+        (field.value #> '{settings,expression,dueFieldId}'),
+        (field.value #> '{settings,expression,statusFieldId}')
+      ) as dependency(value)
+      where p_requested_field_ids ? pg_catalog.lower(field.value ->> 'fieldId')
+        and field.value ->> 'type' = 'calculation'
+    ) as item(value);
+    select coalesce(pg_catalog.jsonb_agg(field.value), '[]'::jsonb) into selected_fields
+    from pg_catalog.jsonb_array_elements(target_meta -> 'fields') as field(value)
+    where selected_field_ids ? pg_catalog.lower(field.value ->> 'fieldId');
+    selected_value_expression := coalesce(vortex_record.named_action_storage_columns_internal(
+      (target_meta ->> 'storageContractId')::uuid, selected_fields
+    ) ->> 'valueExpression', '');
+  end if;
+
   load_sql := pg_catalog.format(
     'select pg_catalog.jsonb_build_object(
        ''recordScope'', pg_catalog.jsonb_build_object(
@@ -271,7 +311,7 @@ begin
      where stored.organisation_id = $1 and stored.record_id = $2%s',
     target_scope, target_module_root_id, p_record_type_id,
     (target_meta ->> 'storageContractId')::uuid, target_scope,
-    target_meta ->> 'valueExpression', target_source_sql,
+    selected_value_expression, target_source_sql,
     case when p_expected_concurrency_number is null then '' else ' for update' end
   );
 
@@ -547,8 +587,10 @@ exception
 end
 $function$;
 
-alter function vortex_record.load_record_access_facts_from_installation_internal(uuid,text,uuid,bigint,jsonb,jsonb) owner to vortex_record_adapter;
+alter function vortex_record.load_record_access_facts_from_installation_internal(uuid,text,uuid,bigint,jsonb,jsonb,jsonb) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.load_record_access_facts_from_installation_internal(
-  uuid, text, uuid, bigint, jsonb, jsonb
+  uuid, text, uuid, bigint, jsonb, jsonb, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+grant execute on function vortex_record.load_record_access_facts_from_installation_internal(uuid,text,uuid,bigint,jsonb,jsonb,jsonb) to vortex_owner;

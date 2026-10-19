@@ -38,6 +38,8 @@ declare
   due_value jsonb;
   status_value jsonb;
   batched boolean := false;
+  requested_field_ids jsonb := nullif(p_page -> 'requestedFieldIds', 'null'::jsonb);
+  projected_field_ids jsonb;
 begin
   if p_record_type_id is null or p_record_id is null
     or p_record_type_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -59,11 +61,12 @@ begin
     if p_page ? 'installation' then
       -- The active installation this invocation read and validated once.
       loaded := vortex_record.load_record_access_facts_from_installation_internal(
-        p_record_type_id, 'read', p_record_id, null, p_page -> 'installation', p_projection_row
+        p_record_type_id, 'read', p_record_id, null, p_page -> 'installation', p_projection_row,
+        requested_field_ids
       );
     else
       loaded := vortex_record.load_record_access_facts_internal(
-        p_record_type_id, 'read', p_record_id, null, p_projection_row
+        p_record_type_id, 'read', p_record_id, null, p_projection_row, requested_field_ids
       );
     end if;
   end if;
@@ -153,6 +156,14 @@ begin
     bounds := coalesce(case when batched then p_bounds end,
       vortex_record.decide_record_field_bounds_internal(decision));
   end if;
+  -- Keep full access bounds for capabilities; intersect only the values requested by the screen.
+  projected_field_ids := bounds -> 'readableFieldIds';
+  if requested_field_ids is not null then
+    select coalesce(pg_catalog.jsonb_agg(item.value order by item.ordinality), '[]'::jsonb)
+    into projected_field_ids
+    from pg_catalog.jsonb_array_elements(projected_field_ids) with ordinality as item(value, ordinality)
+    where requested_field_ids ? (item.value #>> '{}');
+  end if;
   field_values := case when compact then p_loaded -> 'record' -> 'fieldValues'
     else loaded -> 'fieldValues' end;
   -- Read-time calculations are worked out here, at one statement timestamp in
@@ -181,11 +192,11 @@ begin
     select coalesce(pg_catalog.jsonb_object_agg(item.value #>> '{}', field_values -> (item.value #>> '{}')
         order by item.ordinality), '{}'::jsonb)
     into values_value
-    from pg_catalog.jsonb_array_elements(bounds -> 'readableFieldIds') with ordinality as item(value, ordinality)
+    from pg_catalog.jsonb_array_elements(projected_field_ids) with ordinality as item(value, ordinality)
     where shared -> 'columns' ? (item.value #>> '{}');
   end if;
   for field_id in
-    select item.value #>> '{}' from pg_catalog.jsonb_array_elements(bounds -> 'readableFieldIds') as item(value)
+    select item.value #>> '{}' from pg_catalog.jsonb_array_elements(projected_field_ids) as item(value)
     where read_time_fields <> '{}'::jsonb
   loop
     if not (shared -> 'columns' ? field_id) then

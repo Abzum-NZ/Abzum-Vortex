@@ -12,6 +12,7 @@ import {
   type ProtectedQueryRow,
   type RecordLinkResolver,
   readCurrentRecordOwnerGroupsAfterAuthorization,
+  pageSubjectFieldIds,
 } from "@vortex/platform/server";
 import {
   FORM_CONTAINER_BLOCK_RELEASE,
@@ -505,8 +506,28 @@ const loadApplicationPageJoined = async (
   )
     return { kind: "unavailable" };
   let subjectRead: Promise<PageSubjectReadResult> | undefined;
+  const requestedSubjectFieldIds =
+    pageDefinition.type === "detail" || pageDefinition.type === "public"
+      ? pageSubjectFieldIds(
+          allPlacements.filter(
+            ({ placementId }) =>
+              selectedPlacementIds === undefined ||
+              selectedPlacementIds.has(placementId.toLowerCase()),
+          ),
+        ).filter(
+          (fieldId) =>
+            pageDefinition.type !== "public" ||
+            pageDefinition.publicFieldIds.some((allowed) => sameId(String(allowed), fieldId)),
+        )
+      : undefined;
   const readSubject = (recordTypeId: string, recordId: string): Promise<PageSubjectReadResult> =>
-    (subjectRead ??= subjects.read(session, selection, { recordTypeId, recordId }));
+    (subjectRead ??= subjects.read(session, selection, {
+      recordTypeId,
+      recordId,
+      ...(requestedSubjectFieldIds === undefined
+        ? {}
+        : { requestedFieldIds: requestedSubjectFieldIds }),
+    }));
   // A detail address always names one readable record, even if its authored placements do not
   // include a record-detail block. Other-org and unreadable IDs have the same outcome as absence.
   if (pageDefinition.type === "detail") {
