@@ -62,6 +62,12 @@ begin
     end if;
     raise exception using errcode = '40001', message = 'Access version is unavailable';
   end if;
+
+  -- A preview's copied live rows and fields were admitted under the previous access.
+  -- Invalidate every builder's snapshot atomically with the version advance, while the
+  -- access-change scope excludes preview requests. The next open seeds a new preview
+  -- using current live access; retired physical storage is dropped in the background.
+  perform vortex_access.invalidate_preview_installations_internal(p_organization_id);
 end
 $$;
 
