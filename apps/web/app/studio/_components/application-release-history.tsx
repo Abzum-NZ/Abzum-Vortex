@@ -2,7 +2,14 @@
 import { Button } from "@vortex/ui/components/button";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { StudioInspectorGroup, StudioEntryList, StudioIconButton } from "@vortex/ui/studio";
-import { FormattedTime, Icon } from "@vortex/ui";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@vortex/ui/components/empty";
+import { studioNotice } from "./studio-save-state";
 
 import { useEffect, useRef, useState } from "react";
 import type { DefinitionReleaseMetadata } from "@vortex/platform/schema";
@@ -12,10 +19,8 @@ import type {
   StudioApplicationHistorySnapshot,
 } from "../../_lib/studio-application-history";
 import type { StudioApplicationRestoreCommandResult } from "../../_lib/studio-application-restore-contracts";
-import {
-  listApplicationReleaseHistory,
-  restoreApplicationRelease,
-} from "../[organizationId]/[applicationRootId]/history/actions";
+import { listApplicationReleaseHistory, restoreApplicationRelease } from "../releases-actions";
+import { FormattedTime, Icon } from "@vortex/ui";
 
 const snapshotIdentity = (snapshot: StudioApplicationHistorySnapshot) =>
   JSON.stringify([
@@ -73,6 +78,8 @@ export function ApplicationReleaseHistory({
   onRestored: (message: string) => void;
 }) {
   const [confirm, confirmDialog] = useConfirm();
+  const currentRestoreBlocked = useRef(restoreBlocked);
+  currentRestoreBlocked.current = restoreBlocked;
   const [page, setPage] = useState<StudioApplicationHistoryPage | null>(initialPage);
   const [pending, setPending] = useState<Pending | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
@@ -123,6 +130,7 @@ export function ApplicationReleaseHistory({
     const fail = (kind: Failure) => {
       setFailure(kind);
       setMessage(failureMessage(kind));
+      studioNotice(failureMessage(kind), "error");
       if (kind === "refused" || kind === "conflict") {
         pageRef.current = null;
         setPage(null);
@@ -185,7 +193,13 @@ export function ApplicationReleaseHistory({
       }))
     )
       return;
-    if (pageRef.current !== sourcePage || pendingRef.current !== null) return;
+    if (
+      !mounted.current ||
+      pageRef.current !== sourcePage ||
+      pendingRef.current !== null ||
+      currentRestoreBlocked.current !== undefined
+    )
+      return;
     const token = begin("restore");
     setMessage(`Restoring version ${entry.releaseVersion} into the draft…`);
     hold(true);
@@ -204,36 +218,35 @@ export function ApplicationReleaseHistory({
       });
       if (!mounted.current || generation.current !== token) return;
       if (result.kind === "completed") {
-        onRestored(
-          `Version ${entry.releaseVersion} is now in the draft, saved as draft revision ${result.receipt.draftRevision}.`,
-        );
+        onRestored(`Restored version ${entry.releaseVersion} into the draft`);
         return;
       }
       setFailure(result.kind);
       setMessage(restoreFailureMessage(result));
+      studioNotice(restoreFailureMessage(result), "error");
     } catch (error) {
       console.error("[studio] restoring a release failed", error);
-      if (mounted.current && generation.current === token)
-        setMessage(
-          restoreFailureMessage({
-            kind: "temporarily_unavailable",
-            stateMayHaveChanged: "unknown",
-          }),
-        );
+      if (mounted.current && generation.current === token) {
+        const problem = restoreFailureMessage({
+          kind: "temporarily_unavailable",
+          stateMayHaveChanged: "unknown",
+        });
+        setMessage(problem);
+        studioNotice(problem, "error");
+      }
     } finally {
       hold(false);
       finish(token);
     }
   };
 
-  const snapshot = page?.snapshot ?? initialPage.snapshot;
   const blocked = pending !== null || page === null;
   const author = (entry: DefinitionReleaseMetadata) =>
     page?.publishers[entry.publishedBy.toLowerCase()] ?? "someone you cannot see in the directory";
   return (
     <section aria-label="Release history" className="space-y-6">
       <header className="space-y-2">
-        <h2 className="text-xl font-semibold">Published versions</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Published versions</h2>
         <p className="text-sm text-muted-foreground">
           Oldest first, 20 at a time. Organisations install and upgrade a version from the App
           Store.
@@ -259,7 +272,7 @@ export function ApplicationReleaseHistory({
           Next 20 versions
         </Button>
       </div>
-      <p role="status" aria-live="polite" aria-atomic="true">
+      <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {message}
       </p>
       {restoreBlocked !== undefined && page !== null && page.entries.length > 0 && (
@@ -270,9 +283,15 @@ export function ApplicationReleaseHistory({
       )}
       {page !== null &&
         (page.entries.length === 0 ? (
-          <p>
-            Nothing is published yet. Saving a draft does not publish it; use Publish at the top.
-          </p>
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Icon name="history" />
+              </EmptyMedia>
+              <EmptyTitle>No versions yet</EmptyTitle>
+              <EmptyDescription>Publish to create version 1.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : (
           <div aria-busy={pending !== null}>
             <StudioEntryList
@@ -325,22 +344,6 @@ export function ApplicationReleaseHistory({
       {page !== null && page.entries.length > 0 && page.nextAfterReleaseRevision === null && (
         <p className="text-sm text-muted-foreground">End of release history.</p>
       )}
-      <StudioInspectorGroup title="Details" defaultOpen={false}>
-        <dl className="space-y-3 font-mono text-xs">
-          <div>
-            <dt className="font-semibold">Technical name</dt>
-            <dd className="break-all">{snapshot.definitionKey}</dd>
-          </div>
-          <div>
-            <dt className="font-semibold">Saved draft revision</dt>
-            <dd>{snapshot.draftRevision}</dd>
-          </div>
-          <div>
-            <dt className="font-semibold">Current release revision</dt>
-            <dd>{snapshot.anchorReleaseRevision ?? "No published release"}</dd>
-          </div>
-        </dl>
-      </StudioInspectorGroup>
       {confirmDialog}
     </section>
   );

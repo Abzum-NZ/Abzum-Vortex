@@ -97,6 +97,7 @@ export function StudioNavItem({
     <Item
       size="sm"
       variant="navigation"
+      data-vortex-focus-primary=""
       data-two-line={description !== undefined ? "true" : undefined}
       className={cn(
         "min-w-0 flex-1 flex-nowrap text-left text-sm hover:bg-accent hover:text-accent-foreground focus-visible:border-transparent focus-visible:ring-0",

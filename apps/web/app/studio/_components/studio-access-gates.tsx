@@ -316,7 +316,10 @@ export function StudioAccessPermissionList({
                       >
                         {permission.label}
                       </TooltipTrigger>
-                      <TooltipContent>{permission.description}</TooltipContent>
+                      <TooltipContent>
+                        <p className="font-medium">{permission.label}</p>
+                        <p>{permission.description}</p>
+                      </TooltipContent>
                     </Tooltip>
                   </TableCell>
                   <TableCell className="whitespace-normal break-words text-sm">

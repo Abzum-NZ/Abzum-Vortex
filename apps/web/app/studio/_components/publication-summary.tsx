@@ -1,15 +1,9 @@
 "use client";
 
 import type { DefinitionPublicationConfirmation } from "@vortex/platform/schema";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@vortex/ui/components/table";
-import { StudioInspectorGroup, StudioSourceView } from "@vortex/ui/studio";
+import { Icon } from "@vortex/ui";
+import { Badge } from "@vortex/ui/components/badge";
+import { StudioInspectorGroup } from "@vortex/ui/studio";
 
 const impactLabels = {
   patch: "Small change",
@@ -112,39 +106,64 @@ export function PublicationSummary({
     confirmation.outcome === "initial_release"
       ? `This is the first release. It will be published as version ${confirmation.assignedVersion}.`
       : `${impactLabels[confirmation.impact]}: this will be published as version ${confirmation.assignedVersion}.`;
+  const groups = new Map<string, DefinitionPublicationConfirmation["reasons"]>();
+  for (const reason of confirmation.reasons) {
+    const key = reason.location.componentId ?? reason.location.componentKind;
+    groups.set(key, [...(groups.get(key) ?? []), reason]);
+  }
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-4 text-sm wrap-anywhere">
       <p>{intro}</p>
       {confirmation.reasons.length > 0 && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Item</TableHead>
-              <TableHead>What changed</TableHead>
-              <TableHead>Effect</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {confirmation.reasons.map((reason, index) => (
-              <TableRow key={`${reason.code}:${reason.location.componentId ?? ""}:${index}`}>
-                <TableCell>
-                  {kindLabels[reason.location.componentKind] ?? reason.location.componentKind} (
-                  {propertyLabels[reason.location.property] ?? reason.location.property})
-                  {reason.location.componentId === undefined ? null : (
-                    <span className="block text-sm font-medium">
-                      {names.get(reason.location.componentId.toLowerCase()) ?? "Unnamed item"}
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell>{reasonLabels[reason.code]}</TableCell>
-                <TableCell>{impactLabels[reason.impact]}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <ul aria-label="Publication changes" className="m-0 min-w-0 list-none space-y-2 p-0">
+          {Array.from(groups).map(([key, reasons]) => (
+            <li key={key} className="min-w-0 space-y-2 rounded-md py-3 hover:bg-muted/40">
+              <p className="m-0 font-medium">
+                {names.get(key.toLowerCase()) ??
+                  kindLabels[reasons[0]!.location.componentKind] ??
+                  reasons[0]!.location.componentKind}
+              </p>
+              <ul className="m-0 list-none space-y-2 p-0">
+                {reasons.map((reason, index) => {
+                  const added =
+                    reason.code === "component_added" || reason.code === "required_component_added";
+                  const removed = reason.code === "component_removed";
+                  return (
+                    <li key={`${reason.code}:${index}`} className="flex min-w-0 items-start gap-2">
+                      {added || removed ? (
+                        <Icon
+                          name={added ? "plus" : "minus"}
+                          className={`mt-1 size-4 shrink-0 ${added ? "text-success" : "text-destructive"}`}
+                        />
+                      ) : (
+                        <span
+                          aria-hidden="true"
+                          className="w-4 shrink-0 text-center font-medium text-info"
+                        >
+                          ~
+                        </span>
+                      )}
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <p>
+                          {reasonLabels[reason.code]}{" "}
+                          <span className="text-muted-foreground">
+                            · {propertyLabels[reason.location.property] ?? reason.location.property}
+                          </span>
+                        </p>
+                        <Badge variant="outline" className="max-w-full whitespace-normal">
+                          {impactLabels[reason.impact]}
+                        </Badge>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </li>
+          ))}
+        </ul>
       )}
       <StudioInspectorGroup title="Details" defaultOpen={false}>
-        <dl className="space-y-3 font-mono text-xs">
+        <dl className="space-y-2 font-mono text-xs">
           {confirmation.reasons.some((reason) => reason.location.componentId !== undefined) && (
             <div>
               <dt className="font-semibold">Changed item identities</dt>
@@ -180,8 +199,6 @@ export function PublicationSummary({
             </dd>
           </div>
         </dl>
-        <StudioSourceView value={confirmation} title="View complete confirmation" />
-        <StudioSourceView value={confirmation.dependencyManifest} title="View exact dependencies" />
       </StudioInspectorGroup>
     </div>
   );
