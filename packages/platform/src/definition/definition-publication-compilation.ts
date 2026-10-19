@@ -135,7 +135,8 @@ const deriveSavedConditionRevisionsFromHistory = (
   });
 };
 
-const compileModuleCandidate = (
+/** The one Module compile: a staged inline Module and its resolved dependencies to compiled output. */
+export const compileModuleCandidate = (
   candidate: DefinitionPublicationCandidate,
   dependencies: ResolvedDependencies,
   resolution: DefinitionResolution,
@@ -219,90 +220,42 @@ export const compileApplicationCandidate = (
     catalogueSnapshot: dependencies.composition,
     draftMetadata: draftMetadata(candidate.draft),
   });
-  return { request, output: compileParsedDefinition(request, dependencyOutputs, permissions), dependencyOutputs };
+  return {
+    request,
+    output: compileParsedDefinition(request, dependencyOutputs, permissions),
+    dependencyOutputs,
+  };
 };
 
-export const compileCandidate = (
-  candidate: DefinitionPublicationCandidate,
-  dependencies: ResolvedDependencies,
-  resolution: DefinitionResolution,
-  final: boolean,
+/**
+ * Judges one compiled Application or Module as a release against its published history: the
+ * Application's platform compatibility and the publication rules. A compile is produced once;
+ * whatever releases it (publication, preview) judges that same output here.
+ */
+export const assertReleasable = (
+  compiled: Readonly<{
+    request:
+      | z.output<typeof applicationCompilationRequestSchema>
+      | z.output<typeof moduleCompilationRequestSchema>;
+    output: PublishableCompilationOutput;
+    dependencyOutputs: readonly DefinitionCompilationOutput[];
+  }>,
+  historyEvidence: DefinitionPublicationHistoryEvidence,
   permissions: PlatformPermissionSource,
-): PublishableCompilationOutput => {
-  if (candidate.draft.source.kind === "application") {
-    const { request, output, dependencyOutputs } =
-      compileApplicationCandidate(candidate, dependencies, resolution, permissions);
-    if (
-      final &&
-      (output.kind !== "application" ||
-        output.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION)
-    )
-      return refuse("DEFINITION_COMPILATION_REFUSED");
-    if (final)
-      assertFinalPublicationValidation(
-        request,
-        output as Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>,
-        dependencyOutputs,
-        candidate.historyEvidence,
-        permissions,
-      );
-    return output;
-  }
-  const dependencyOutputs = [
-    ...dependencies.modules.map((release) => release.compilationOutput),
-    ...dependencies.connections.map((release) => release.compilationOutput),
-  ].map((output) => definitionCompilationOutputSchema.parse(output));
-  if (candidate.draft.source.kind === "module") {
-    if (final) {
-      const compiled = compileModuleCandidate(candidate, dependencies, resolution, permissions);
-      assertFinalPublicationValidation(
-        compiled.request,
-        compiled.output,
-        compiled.dependencyOutputs,
-        candidate.historyEvidence,
-        permissions,
-      );
-      return compiled.output;
-    }
-    if (resolution.contractVersion !== "3.0.0") return refuse("DEFINITION_COMPILATION_REFUSED");
-    const common = {
-      sourceContractVersion: moduleSourceContractVersion,
-      validationContractVersion: moduleValidationContractVersion,
-      source: candidate.draft.source,
-      resolution,
-      draftMetadata: draftMetadata(candidate.draft),
-    };
-    const provisional = compileParsedDefinition(
-      parsedCompilationRequest(moduleCompilationRequestSchema, {
-        ...common,
-        savedConditionRevisions: provisionalSavedConditionRevisions(candidate),
-      }),
-      dependencyOutputs,
-      permissions,
-    );
-    if (
-      provisional.kind !== "module" ||
-      !("validationContractVersion" in provisional) ||
-      provisional.validationContractVersion !== moduleValidationContractVersion
-    )
-      return refuse("DEFINITION_COMPILATION_REFUSED");
-    const savedConditionRevisions = deriveSavedConditionRevisionsFromHistory(
-      candidate,
-      provisional.canonical.content.sharingConditions,
-    );
-    const request = {
-      ...common,
-      savedConditionRevisions,
-    };
-    return compileParsedDefinition(
-      parsedCompilationRequest(moduleCompilationRequestSchema, request),
-      dependencyOutputs,
-      permissions,
-    );
-  }
-  // Only an Application or a Module is a customer-publishable definition, and each has exactly
-  // one current source/validation contract pair. A stored draft of any other shape is refused.
-  return refuse("DEFINITION_COMPILATION_REFUSED");
+): void => {
+  const output = compiled.output;
+  if (
+    output.kind === "application" &&
+    output.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION
+  )
+    return refuse("DEFINITION_COMPILATION_REFUSED");
+  assertFinalPublicationValidation(
+    compiled.request,
+    output,
+    compiled.dependencyOutputs,
+    historyEvidence,
+    permissions,
+  );
 };
 
 /** The stored draft re-read, of this organisation and at exactly the expected root and revision. */
@@ -335,7 +288,11 @@ export const validateDraftCandidate = (
   const draft = validatedDraft(context, candidateInput.draft, command);
   if ((draft.publishedRevision === undefined) !== (candidateInput.currentReleaseVersion === null))
     refuse("DEFINITION_HISTORY_INVALID");
-  return { draft, identities: candidateInput.identities, currentReleaseVersion: candidateInput.currentReleaseVersion };
+  return {
+    draft,
+    identities: candidateInput.identities,
+    currentReleaseVersion: candidateInput.currentReleaseVersion,
+  };
 };
 
 export const validateCandidate = (
