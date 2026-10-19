@@ -184,12 +184,12 @@ export function useApplyDispatch({
             }
           }
           if (!isCurrentNavigation()) return;
-          const sourceEvent = Object.values(model.bindings).flat()
-            .find((binding) => binding.bindingId === sourceBindingId)?.event;
-          const initialized = (sourceEvent === "form_ready" || sourceEvent === "load") &&
-            server.descriptor.outcome === "completed" && server.failure === undefined &&
+          // Reads, navigation and initialization have no write to confirm. Authored messages
+          // are already presented by the flow host; keep failures and gesture-specific feedback.
+          const silentCompletion = resultNotice === outcomeNotices.completed &&
+            server.failure === undefined &&
             server.descriptor.commit !== "confirmed" && server.descriptor.commit !== "partial";
-          if (!initialized) showResult(resultNotice, refusalFeedback);
+          if (!silentCompletion) showResult(resultNotice, refusalFeedback);
           // A finished guided-form submission may have abandoned its draft. Keep the journey
           // visible but inactive until a new page load establishes the next draft.
           if (
