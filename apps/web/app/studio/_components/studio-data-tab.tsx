@@ -953,6 +953,7 @@ export function useStudioDataTab({
         open={creating}
         source={source}
         initialModuleKey={isOwned ? current?.moduleKey : undefined}
+        publication={publication}
         edit={edit}
         onClose={() => setCreating(false)}
         onCreated={(moduleKey, recordKey) => select({ kind: "record_type", moduleKey, recordKey })}

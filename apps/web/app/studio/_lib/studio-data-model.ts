@@ -30,7 +30,7 @@ export const studioEditProblem = (result: Readonly<{ kind: string }>): string | 
 };
 
 /**
- * What the current published versions of the application's own modules hold, as qualified
+ * What any published version of the application's own modules held, as qualified
  * references: record types (`module:record`) and fields (`module:record.field`). Their stored shape
  * is fixed. It is read from the stored releases, so a draft that does not compile still has it; an
  * application never published has none.

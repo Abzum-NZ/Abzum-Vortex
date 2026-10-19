@@ -15,6 +15,7 @@ import { fullRecordAccessRoleKeys } from "./module-permission-shape";
 import { recordTitleFieldEligible } from "./record-title-field";
 import { sourcePageItems } from "./application-composition/source-composition";
 import type { RecordStorageScope } from "./module-record-type-settings";
+import type { ModuleFieldPublication } from "./module-field-edit";
 
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
@@ -239,6 +240,7 @@ export type InlineRecordTypeCreation = Readonly<{
 export const createInlineRecordType = (
   current: ApplicationSourceDocument,
   creation: InlineRecordTypeCreation,
+  publication: ModuleFieldPublication,
 ): InlineRecordTypeResult => {
   const source = structuredClone(current);
   const name = creation.name.trim();
@@ -267,6 +269,10 @@ export const createInlineRecordType = (
   }
   if (module !== undefined && module.record_types.some((record) => record.key === key))
     issues.push(`This module already has a record type with the key "${key}".`);
+  if (module !== undefined && publication.recordTypes.has(`${module.key}:${key}`))
+    issues.push(
+      "That key belongs to a previously published record type. Choose a different key for a new record type.",
+    );
   if (issues.length > 0 || module === undefined) return { kind: "invalid", issues };
 
   // Determine full access before adding the new type's permissions, across all owned Modules.

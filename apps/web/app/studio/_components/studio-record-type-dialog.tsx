@@ -5,6 +5,7 @@ import {
   defaultOwnedModuleKey,
   deriveRecordTypeKey,
   type ApplicationSourceDocument,
+  type ModuleFieldPublication,
   type RecordStorageScope,
 } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
@@ -48,6 +49,7 @@ export function StudioRecordTypeDialog({
   open,
   source,
   initialModuleKey,
+  publication,
   edit,
   onClose,
   onCreated,
@@ -55,6 +57,7 @@ export function StudioRecordTypeDialog({
   open: boolean;
   source: ApplicationSourceDocument;
   initialModuleKey: string | undefined;
+  publication: ModuleFieldPublication;
   edit: StudioDataEdit;
   onClose: () => void;
   /** Called with the record type the form added. */
@@ -72,13 +75,21 @@ export function StudioRecordTypeDialog({
   const [newModuleName, setNewModuleName] = useState<string | null>(null);
   const [issues, setIssues] = useState<readonly string[]>([]);
   const target = modules.find((module) => module.key === moduleKey) ?? modules[0];
+  const effectiveModuleKey = newModuleKey ?? defaultOwnedModuleKey(source);
+  const targetKey = target?.key ?? effectiveModuleKey;
   const derivedKey =
-    deriveRecordTypeKey(name, new Set(target?.record_types.map((record) => record.key) ?? [])) ??
-    "";
+    deriveRecordTypeKey(
+      name,
+      new Set([
+        ...(target?.record_types.map((record) => record.key) ?? []),
+        ...[...publication.recordTypes]
+          .filter((reference) => reference.startsWith(`${targetKey}:`))
+          .map((reference) => reference.slice(targetKey.length + 1)),
+      ]),
+    ) ?? "";
   const effectiveKey = key ?? derivedKey;
   const effectivePlural = plural ?? pluralOf(name);
   const firstModule = modules.length === 0;
-  const effectiveModuleKey = newModuleKey ?? defaultOwnedModuleKey(source);
   const effectiveModuleName = newModuleName ?? `${source.body.name} data`.slice(0, 120);
 
   const reset = () => {
@@ -95,17 +106,21 @@ export function StudioRecordTypeDialog({
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const result = edit((current) =>
-      createInlineRecordType(current, {
-        ...(firstModule
-          ? { newModule: { key: effectiveModuleKey, name: effectiveModuleName } }
-          : { moduleKey: target!.key }),
-        name,
-        pluralName: effectivePlural,
-        key: effectiveKey,
-        titleLabel,
-        storageScope,
-        ownershipMode,
-      }),
+      createInlineRecordType(
+        current,
+        {
+          ...(firstModule
+            ? { newModule: { key: effectiveModuleKey, name: effectiveModuleName } }
+            : { moduleKey: target!.key }),
+          name,
+          pluralName: effectivePlural,
+          key: effectiveKey,
+          titleLabel,
+          storageScope,
+          ownershipMode,
+        },
+        publication,
+      ),
     );
     if (result.kind !== "changed") {
       setIssues([studioEditProblem(result) ?? "The record type was not added."]);

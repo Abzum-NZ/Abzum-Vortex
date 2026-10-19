@@ -1,4 +1,4 @@
--- Keep live ownership fixed and replace previews when their owner link changes.
+-- Preserve first-publication storage and ownership, including removed record types.
 set local role vortex_owner;
 
 create or replace function vortex_record.provision_exact_module_storage(
@@ -984,5 +984,106 @@ grant execute on function vortex_record.evolve_preview_module_storage(uuid, uuid
   to vortex_owner;
 comment on function vortex_record.evolve_preview_module_storage(uuid, uuid, bigint) is
   'Moves a preview''s isolated Record storage to a newer exact Module release in place, keeping its records: new record types get empty storage, new fields new empty columns, changed fields their new definition and uniqueness, and removed fields are retired; a seeded record type whose totals or stored calculations changed has them worked out again. A change the stored records cannot take (another database type, storage scope or ownership, or a uniqueness they break) raises V3201.';
+
+create or replace function vortex_definition.read_owned_module_publication(
+  p_application_root_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  checked_context jsonb;
+  publication jsonb;
+  invalid_field_key boolean;
+begin
+  checked_context := vortex_definition.validated_builder_evidence_read_context_internal();
+  if p_application_root_id is null or not exists (
+    select 1 from vortex_definition.roots as root
+    where root.root_id = p_application_root_id and root.kind = 'application'
+      and root.organization_id = (checked_context ->> 'organizationId')::uuid
+  ) then
+    raise exception using errcode = '42501',
+      message = 'Definition root does not belong to the context organization';
+  end if;
+
+  -- A broken current-release pointer is a storage defect, never an empty publication.
+  if exists (
+    select 1 from vortex_definition.roots as root
+    left join vortex_definition.releases as release
+      on release.root_id = root.root_id
+      and release.release_revision = root.current_release_revision
+    where root.owner_application_root_id = p_application_root_id
+      and root.organization_id = (checked_context ->> 'organizationId')::uuid
+      and root.kind = 'module' and root.current_release_revision is not null
+      and (release.root_id is null
+        or pg_catalog.jsonb_typeof(release.compilation_output #> '{canonical,content,recordTypes}') is distinct from 'array')
+  ) then
+    raise exception using errcode = '23514', message = 'Owned Module publication is inconsistent';
+  end if;
+
+  if exists (
+    select 1 from vortex_definition.roots as root
+    join vortex_definition.releases as release
+      on release.root_id = root.root_id
+    cross join lateral pg_catalog.jsonb_array_elements(
+      release.compilation_output #> '{canonical,content,recordTypes}'
+    ) as record(value)
+    where root.owner_application_root_id = p_application_root_id
+      and root.organization_id = (checked_context ->> 'organizationId')::uuid
+      and root.kind = 'module'
+      and (pg_catalog.jsonb_typeof(record.value -> 'key') is distinct from 'string'
+        or pg_catalog.length(record.value ->> 'key') not between 1 and 40
+        or (record.value ->> 'key') !~ '^[a-z][a-z0-9]*(_[a-z0-9]+)*$'
+        or pg_catalog.jsonb_typeof(record.value -> 'fields') is distinct from 'array')
+  ) then
+    raise exception using errcode = '23514', message = 'Owned Module publication record is inconsistent';
+  end if;
+
+  -- Storage remains published even when a later release removes it. Preview plans
+  -- live on preview_installations, so only real publications contribute here.
+  with records as materialized (
+    select root.key as module_key, record.value as record, record.ordinality
+    from vortex_definition.roots as root
+    join vortex_definition.releases as release
+      on release.root_id = root.root_id
+    cross join lateral pg_catalog.jsonb_array_elements(
+      release.compilation_output #> '{canonical,content,recordTypes}'
+    ) with ordinality as record(value, ordinality)
+    where root.owner_application_root_id = p_application_root_id
+      and root.organization_id = (checked_context ->> 'organizationId')::uuid
+      and root.kind = 'module'
+  ), fields as materialized (
+    select module_key, record ->> 'key' as record_key,
+      records.ordinality as record_ordinality, field.value, field.ordinality
+    from records cross join lateral pg_catalog.jsonb_array_elements(record -> 'fields')
+      with ordinality as field(value, ordinality)
+  )
+  select pg_catalog.jsonb_build_object(
+    'recordTypes', coalesce((select pg_catalog.jsonb_agg(qualified_key order by qualified_key collate "C")
+      from (select distinct module_key || ':' || (record ->> 'key') as qualified_key from records) as names
+    ), '[]'::jsonb),
+    'fields', coalesce((select pg_catalog.jsonb_agg(qualified_key order by qualified_key collate "C")
+      from (select distinct module_key || ':' || record_key || '.' || (value ->> 'key') as qualified_key from fields) as names
+    ), '[]'::jsonb)
+  ), exists (
+    select 1 from fields
+    where pg_catalog.jsonb_typeof(value -> 'key') is distinct from 'string'
+      or pg_catalog.length(value ->> 'key') not between 1 and 40
+      or (value ->> 'key') !~ '^[a-z][a-z0-9]*(_[a-z0-9]+)*$'
+  ) into publication, invalid_field_key;
+  if invalid_field_key then
+    raise exception using errcode = '23514', message = 'Owned Module publication field is inconsistent';
+  end if;
+  return publication;
+end
+$function$;
+
+revoke all on function vortex_definition.read_owned_module_publication(uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_definition.read_owned_module_publication(uuid) to vortex_request;
+alter function vortex_definition.read_owned_module_publication(uuid) owner to vortex_owner;
 
 reset role;
