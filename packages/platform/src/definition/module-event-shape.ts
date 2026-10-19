@@ -28,6 +28,7 @@ export const saveInlineModuleEvent = (
     moduleKey: string;
     eventId?: string;
     key: string;
+    label: string;
     recordKey: string;
     carries: readonly string[];
   }>,
@@ -98,6 +99,7 @@ export const saveInlineModuleEvent = (
   const event: ModuleEvent = {
     id: existing?.id ?? `event_${n}`,
     key: change.key,
+    label: change.label.trim(),
     record_type: record.key,
     carries: [...change.carries],
     personal_or_sensitive_values_allowed: false,

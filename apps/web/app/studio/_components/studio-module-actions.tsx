@@ -168,7 +168,7 @@ export function ActionDialog({
                 : `Change ${action.label}`}
             </DialogTitle>
             <DialogDescription>
-              Declare its inputs and the tasks that run in order, in one atomic action.
+              Choose the information this action needs and the tasks it runs in order.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
@@ -181,7 +181,29 @@ export function ActionDialog({
               onChange={(event) => setLabel(event.target.value)}
             />
           </div>
-          <StudioActionInputs inputs={inputs} source={source} onChange={setInputs} />
+          <StudioActionInputs
+            inputs={inputs}
+            source={source}
+            onChange={setInputs}
+            onRename={(before, after) => {
+              // Only unsaved inputs are renamed. Carry their task references along, leaving literal data alone.
+              const rename = (value: unknown): unknown => {
+                if (Array.isArray(value)) return value.map(rename);
+                if (value === null || typeof value !== "object") return value;
+                const entry = value as Record<string, unknown>;
+                if (entry.kind === "literal") return value;
+                if (entry.source === "input" && entry.name === before)
+                  return { ...entry, name: after };
+                return Object.fromEntries(
+                  Object.entries(entry).map(([key, child]) => [
+                    key,
+                    key === "target_input" && child === before ? after : rename(child),
+                  ]),
+                );
+              };
+              setTasks((current) => rename(current) as Action["tasks"]);
+            }}
+          />
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">Runs only when</legend>
             {projected.kind === "unsupported" && !replacing ? (

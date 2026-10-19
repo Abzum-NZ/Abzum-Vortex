@@ -502,6 +502,7 @@
     {
       "id": "evt_tag_assigned",
       "key": "vortex.crm.tags.record_tag.assigned",
+      "label": "Record tag assigned",
       "record_type": "record_tag",
       "carries": ["tag", "record", "assigned_by"],
       "personal_or_sensitive_values_allowed": false

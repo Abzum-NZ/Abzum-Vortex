@@ -993,6 +993,7 @@
     {
       "id": "evt_incident_created",
       "key": "vortex.operations.incidents.incident.created",
+      "label": "Incident created",
       "record_type": "incident",
       "carries": [
         "incident_number",
@@ -1004,6 +1005,7 @@
     {
       "id": "evt_incident_attached",
       "key": "vortex.operations.incidents.incident.attached",
+      "label": "Incident attached",
       "record_type": "incident",
       "carries": [
         "incident_number",
@@ -1014,6 +1016,7 @@
     {
       "id": "evt_incident_acknowledged",
       "key": "vortex.operations.incidents.incident.acknowledged",
+      "label": "Incident acknowledged",
       "record_type": "incident",
       "carries": [
         "incident_number",
@@ -1024,6 +1027,7 @@
     {
       "id": "evt_incident_escalated",
       "key": "vortex.operations.incidents.incident.escalated",
+      "label": "Incident escalated",
       "record_type": "incident",
       "carries": [
         "incident_number",
@@ -1035,6 +1039,7 @@
     {
       "id": "evt_incident_resolved",
       "key": "vortex.operations.incidents.incident.resolved",
+      "label": "Incident resolved",
       "record_type": "incident",
       "carries": [
         "incident_number",

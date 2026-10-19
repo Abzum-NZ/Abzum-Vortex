@@ -897,6 +897,7 @@ const moduleSourceBodyFields = {
           .object({
             id: sourceProvenanceTarget(sourceAliasSchema, ["eventId"]),
             key: sourceProvenanceUnchanged(namespacedKeySchema),
+            label: sourceProvenanceUnchanged(labelSchema),
             record_type: sourceProvenanceTarget(builderKeySchema, ["recordTypeId"]),
             carries: sourceProvenanceUnchanged(
               z.array(sourceProvenanceTarget(builderKeySchema, ["carriedFieldIds/#"])).max(30),

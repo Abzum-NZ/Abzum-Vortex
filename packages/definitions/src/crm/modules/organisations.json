@@ -556,6 +556,7 @@
     {
       "id": "evt_company_created",
       "key": "vortex.crm.organisations.company.created",
+      "label": "Company created",
       "record_type": "company",
       "carries": [
         "company_number",
@@ -567,6 +568,7 @@
     {
       "id": "evt_company_merged",
       "key": "vortex.crm.organisations.company.merged",
+      "label": "Company merged",
       "record_type": "company",
       "carries": [
         "company_number"

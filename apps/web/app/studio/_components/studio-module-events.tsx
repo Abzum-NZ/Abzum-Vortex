@@ -33,6 +33,7 @@ function EventDialog({
   const [selectedRecord, setSelectedRecord] = useState(event?.record_type ?? recordKey);
   const record = module.record_types.find((entry) => entry.key === selectedRecord)!;
   const [key, setKey] = useState(event?.key ?? `${module.key}.${record.key}.`);
+  const [label, setLabel] = useState(event?.label ?? "");
   const [carries, setCarries] = useState(event?.carries ?? []);
   const [problem, setProblem] = useState<string>();
   const save = (submit: FormEvent<HTMLFormElement>) => {
@@ -43,6 +44,7 @@ function EventDialog({
         recordKey: selectedRecord,
         ...(event === undefined ? {} : { eventId: event.id }),
         key,
+        label,
         carries,
       }),
     );
@@ -64,6 +66,14 @@ function EventDialog({
               An event owned by {module.name}, announced for {record.name.toLowerCase()} records.
             </DialogDescription>
           </DialogHeader>
+          <Label htmlFor="module-event-label">Label</Label>
+          <Input
+            id="module-event-label"
+            required
+            maxLength={60}
+            value={label}
+            onChange={(change) => setLabel(change.target.value)}
+          />
           <Label htmlFor="module-event-key">Event key</Label>
           <Input
             id="module-event-key"
@@ -170,7 +180,7 @@ export function StudioModuleEvents({
       {events.map((event) => (
         <div key={event.id} className="flex items-center gap-2 rounded-md border p-2">
           <p className="mr-auto break-all text-sm">
-            {event.key}
+            {event.label}
             <span className="block text-xs text-muted-foreground">
               Carries {event.carries.join(", ") || "no fields"}
             </span>
