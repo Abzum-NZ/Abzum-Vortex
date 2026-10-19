@@ -464,8 +464,24 @@ export const createDefinitionPublicationService = (
       );
       if (usedModules.some((release) => release === undefined))
         refuse("DEFINITION_DEPENDENCY_MISSING");
+      const previousFields = new Set(
+        previousModules.flatMap((release) =>
+          release!.compilationOutput.canonical.content.recordTypes.flatMap((record) =>
+            record.fields.map((field) => `${release!.key}:${record.key}.${field.key}`),
+          ),
+        ),
+      );
+      const source = candidate.draft.source as ApplicationSourceDocument;
       return prepareDefinitionPublicationResultSchema.parse({
         confirmation: state.confirmation,
+        addedFields: source.body.modules.flatMap((module) =>
+          module.record_types.flatMap((record) =>
+            record.fields.flatMap((field) => {
+              const reference = `${module.key}:${record.key}.${field.key}`;
+              return previousFields.has(reference) ? [] : [reference];
+            }),
+          ),
+        ),
         componentLabels: await componentLabelsOf(
           (blockId, releaseVersion) => catalogue.readPlatformBlockRelease(blockId, releaseVersion),
           state.compilationOutput.canonical,
