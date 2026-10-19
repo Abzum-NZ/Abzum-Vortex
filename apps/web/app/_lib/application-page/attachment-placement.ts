@@ -121,6 +121,7 @@ export const readAttachmentListPlacement = async (input: {
       const currentSubject = await readPageSubjectInTransaction(transaction, {
         recordTypeId: pageSubjectRecordTypeId,
         recordId: subjectId.data,
+        requestedFieldIds: [fieldId],
       });
       if (currentSubject.kind !== "read")
         return { kind: "subject" as const, subject: currentSubject };

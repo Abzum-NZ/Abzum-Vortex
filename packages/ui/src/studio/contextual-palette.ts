@@ -47,7 +47,10 @@ export type StudioPaletteGroup = Readonly<{
 }>;
 
 const versionParts = (version: string): number[] =>
-  version.split(/[.+-]/u).slice(0, 3).map((part) => Number.parseInt(part, 10) || 0);
+  version
+    .split(/[.+-]/u)
+    .slice(0, 3)
+    .map((part) => Number.parseInt(part, 10) || 0);
 const newer = (left: string, right: string): boolean => {
   const a = versionParts(left);
   const b = versionParts(right);
@@ -61,15 +64,28 @@ const newer = (left: string, right: string): boolean => {
  * Vortex has no asset library yet, so there is nothing to pick and the control refuses it.
  */
 const editableKinds = new Set<BlockPropertySchemaContract["kind"]>([
-  "text", "url", "number", "boolean", "choice", "rich_text", "icon", "field_reference", "query_reference",
-  "page_reference", "record_type_reference", "action_reference", "relationship_reference",
+  "text",
+  "url",
+  "number",
+  "boolean",
+  "choice",
+  "rich_text",
+  "icon",
+  "field_reference",
+  "query_reference",
+  "page_reference",
+  "record_type_reference",
+  "action_reference",
+  "relationship_reference",
   "record_reference",
 ]);
 
 /** Whether Studio's typed setting controls edit a setting of this declaration, nested settings included. */
 export const studioSettingEditable = (property: BlockPropertySchemaContract): boolean =>
-  property.kind === "group" ? property.properties.every(studioSettingEditable)
-    : property.kind === "list" ? studioSettingEditable(property.item)
+  property.kind === "group"
+    ? property.properties.every(studioSettingEditable)
+    : property.kind === "list"
+      ? studioSettingEditable(property.item)
       : editableKinds.has(property.kind);
 
 /** Whether a block of this release reads its records from a query the person chooses. */
@@ -77,7 +93,10 @@ export const studioReleaseReadsQuery = (release: PlatformBlockRelease): boolean 
   release.paletteGroup === "data" || release.paletteGroup === "figures";
 
 /** What a new block of this release needs, or why Studio cannot create one yet. */
-const choiceFor = (catalogue: ImmutablePlatformBlockCatalogue, release: PlatformBlockRelease): StudioPaletteChoice => {
+const choiceFor = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  release: PlatformBlockRelease,
+): StudioPaletteChoice => {
   const setup: BlockPropertySchemaContract[] = [];
   let unavailable: string | undefined;
   for (const property of release.properties) {
@@ -85,8 +104,12 @@ const choiceFor = (catalogue: ImmutablePlatformBlockCatalogue, release: Platform
     if (studioSettingEditable(property)) setup.push(property);
     else unavailable ??= `It needs its ${property.label} setting, which Studio can't set yet.`;
   }
-  const requiredSlot = release.slots.find((slot) => slot.required && slot.repeats === undefined &&
-    !studioHasSlotStarter(catalogue, release, slot.key));
+  const requiredSlot = release.slots.find(
+    (slot) =>
+      slot.required &&
+      slot.repeats === undefined &&
+      !studioHasSlotStarter(catalogue, release, slot.key),
+  );
   if (requiredSlot !== undefined)
     unavailable ??= `Its ${requiredSlot.label} area must hold a block, so it can't start empty.`;
   return Object.freeze({
@@ -107,11 +130,18 @@ const choiceFor = (catalogue: ImmutablePlatformBlockCatalogue, release: Platform
   });
 };
 
-const releaseIndexes = new WeakMap<ImmutablePlatformBlockCatalogue, Map<string, PlatformBlockRelease>>();
-const releaseIndex = (catalogue: ImmutablePlatformBlockCatalogue): Map<string, PlatformBlockRelease> => {
+const releaseIndexes = new WeakMap<
+  ImmutablePlatformBlockCatalogue,
+  Map<string, PlatformBlockRelease>
+>();
+const releaseIndex = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+): Map<string, PlatformBlockRelease> => {
   let index = releaseIndexes.get(catalogue);
   if (index === undefined) {
-    index = new Map(catalogue.releases.map((release) => [platformBlockReleaseIdentity(release), release]));
+    index = new Map(
+      catalogue.releases.map((release) => [platformBlockReleaseIdentity(release), release]),
+    );
     releaseIndexes.set(catalogue, index);
   }
   return index;
@@ -131,14 +161,16 @@ export function studioPaletteChoices(
     const release = index.get(platformBlockReleaseIdentity(summary));
     if (release === undefined) continue;
     const known = newest.get(release.key);
-    if (known === undefined || newer(release.releaseVersion, known.releaseVersion)) newest.set(release.key, release);
+    if (known === undefined || newer(release.releaseVersion, known.releaseVersion))
+      newest.set(release.key, release);
   }
   return Object.freeze([...newest.values()].map((release) => choiceFor(catalogue, release)));
 }
 
 /** Whether a choice matches the search: its name, description, group or key holds every word. */
 const matches = (choice: StudioPaletteChoice, words: readonly string[]): boolean => {
-  const haystack = `${choice.name} ${choice.description} ${choice.groupLabel} ${choice.key}`.toLowerCase();
+  const haystack =
+    `${choice.name} ${choice.description} ${choice.groupLabel} ${choice.key}`.toLowerCase();
   return words.every((word) => haystack.includes(word));
 };
 
@@ -150,15 +182,29 @@ export function groupStudioPaletteChoices(
   choices: readonly StudioPaletteChoice[],
   searchText: string,
 ): readonly StudioPaletteGroup[] {
-  const words = searchText.trim().toLowerCase().split(/\s+/u).filter((word) => word.length > 0);
+  const words = searchText
+    .trim()
+    .toLowerCase()
+    .split(/\s+/u)
+    .filter((word) => word.length > 0);
   const groups = new Map<BlockPaletteGroup, StudioPaletteChoice[]>();
-  for (const group of Object.keys(PALETTE_GROUP_TITLES) as BlockPaletteGroup[]) groups.set(group, []);
+  for (const group of Object.keys(PALETTE_GROUP_TITLES) as BlockPaletteGroup[])
+    groups.set(group, []);
   for (const choice of choices) if (matches(choice, words)) groups.get(choice.group)?.push(choice);
-  return Object.freeze([...groups].filter(([, list]) => list.length > 0).map(([group, list]) =>
-    Object.freeze({ group, label: PALETTE_GROUP_TITLES[group], choices: Object.freeze([
-      ...list.filter((choice) => choice.unavailable === undefined),
-      ...list.filter((choice) => choice.unavailable !== undefined),
-    ]) })));
+  return Object.freeze(
+    [...groups]
+      .filter(([, list]) => list.length > 0)
+      .map(([group, list]) =>
+        Object.freeze({
+          group,
+          label: PALETTE_GROUP_TITLES[group],
+          choices: Object.freeze([
+            ...list.filter((choice) => choice.unavailable === undefined),
+            ...list.filter((choice) => choice.unavailable !== undefined),
+          ]),
+        }),
+      ),
+  );
 }
 
 /**
@@ -174,6 +220,8 @@ export type StudioQueryField = Readonly<{
   filterable: boolean;
   searchable: boolean;
   choiceCount?: number;
+  /** For a calculation or total, the type of the value it produces. */
+  resultType?: string;
 }>;
 
 /** The facts of one draft field, as a query field carries them. */
@@ -185,16 +233,27 @@ export const studioFieldFacts = (
     search_priority?: string | undefined;
     settings?: unknown;
   }>,
-): Pick<StudioQueryField, "sortable" | "filterable" | "searchable" | "choiceCount"> => {
+): Pick<
+  StudioQueryField,
+  "sortable" | "filterable" | "searchable" | "choiceCount" | "resultType"
+> => {
   const options =
     field.type === "choice" && typeof field.settings === "object" && field.settings !== null
       ? (field.settings as { options?: unknown }).options
       : undefined;
+  const declared =
+    (field.type === "calculation" || field.type === "total") &&
+    typeof field.settings === "object" &&
+    field.settings !== null
+      ? (field.settings as { result_type?: unknown }).result_type
+      : undefined;
+  const resultType = typeof declared === "string" ? declared : undefined;
   return {
     sortable: field.sortable,
     filterable: field.filterable,
     searchable: field.search_priority !== undefined,
     ...(Array.isArray(options) ? { choiceCount: options.length } : {}),
+    ...(resultType === undefined ? {} : { resultType }),
   };
 };
 
@@ -260,7 +319,10 @@ export type StudioBorrowedChoices = Readonly<{
 }>;
 
 /** What the draft's used Modules offer while the draft still uses exactly those Modules. */
-const borrowedFor = (source: ApplicationSourceDocument, borrowed: StudioBorrowedChoices | null): StudioBorrowedChoices | null =>
+const borrowedFor = (
+  source: ApplicationSourceDocument,
+  borrowed: StudioBorrowedChoices | null,
+): StudioBorrowedChoices | null =>
   borrowed !== null && borrowed.usesSignature === studioUsesSignature(source) ? borrowed : null;
 
 /** The Modules an application uses from other applications, in one comparable spelling. */
@@ -269,40 +331,89 @@ export const studioUsesSignature = (source: ApplicationSourceDocument): string =
 
 /** The queries of the application's own Modules: they are in its source. */
 const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
-  (source.body.modules ?? []).flatMap((module) => module.queries.map((query) => {
-    const recordType = query.record_type.includes(":") ? query.record_type : `${module.key}:${query.record_type}`;
-    const [moduleKey, recordKey] = recordType.split(":");
-    const record = source.body.modules.find((candidate) => candidate.key === moduleKey)
-      ?.record_types.find((candidate) => candidate.key === recordKey);
-    const selected = query.select.length === 0 ? (record?.fields ?? []).map((field) => field.key) : query.select;
-    const fields = selected.flatMap((key) => {
-      const field = record?.fields.find((candidate) => candidate.key === key);
-      return field === undefined ? [] : [Object.freeze({
-        reference: `${recordType}.${field.key}`, label: field.label, type: field.type, ...studioFieldFacts(field),
-      })];
-    });
-    const inputs = query.inputs.map((input) => Object.freeze({
-      key: input.key, label: input.label, type: input.type, required: input.required,
-      ...(input.type === "record_reference" ? { recordTypes: Object.freeze(input.record_types.map((type) =>
-        type.includes(":") ? type : `${module.key}:${type}`)) } : {}),
-    }));
-    return Object.freeze({ reference: `${module.key}:${query.key}`, label: query.label ?? query.key,
-      recordType, fields: Object.freeze(fields), grouped: query.group_by.length > 0 || query.aggregates.length > 0,
-      inputs: Object.freeze(inputs), exposure: query.exposure });
-  }));
+  (source.body.modules ?? []).flatMap((module) =>
+    module.queries.map((query) => {
+      const recordType = query.record_type.includes(":")
+        ? query.record_type
+        : `${module.key}:${query.record_type}`;
+      const [moduleKey, recordKey] = recordType.split(":");
+      const record = source.body.modules
+        .find((candidate) => candidate.key === moduleKey)
+        ?.record_types.find((candidate) => candidate.key === recordKey);
+      const selected =
+        query.select.length === 0 ? (record?.fields ?? []).map((field) => field.key) : query.select;
+      const fields = selected.flatMap((key) => {
+        const field = record?.fields.find((candidate) => candidate.key === key);
+        return field === undefined
+          ? []
+          : [
+              Object.freeze({
+                reference: `${recordType}.${field.key}`,
+                label: field.label,
+                type: field.type,
+                ...studioFieldFacts(field),
+              }),
+            ];
+      });
+      const inputs = query.inputs.map((input) =>
+        Object.freeze({
+          key: input.key,
+          label: input.label,
+          type: input.type,
+          required: input.required,
+          ...(input.type === "record_reference"
+            ? {
+                recordTypes: Object.freeze(
+                  input.record_types.map((type) =>
+                    type.includes(":") ? type : `${module.key}:${type}`,
+                  ),
+                ),
+              }
+            : {}),
+        }),
+      );
+      return Object.freeze({
+        reference: `${module.key}:${query.key}`,
+        label: query.label ?? query.key,
+        recordType,
+        fields: Object.freeze(fields),
+        grouped: query.group_by.length > 0 || query.aggregates.length > 0,
+        inputs: Object.freeze(inputs),
+        exposure: query.exposure,
+      });
+    }),
+  );
 
 /** The record types of the application's own Modules in the draft, as `<module>:<record>`. */
-export const studioSourceRecordTypes = (source: ApplicationSourceDocument): readonly Readonly<{ key: string; label: string }>[] =>
-  Object.freeze((source.body.modules ?? []).flatMap((module) => module.record_types.map((record) =>
-    Object.freeze({ key: `${module.key}:${record.key}`, label: record.name }))));
+export const studioSourceRecordTypes = (
+  source: ApplicationSourceDocument,
+): readonly Readonly<{ key: string; label: string }>[] =>
+  Object.freeze(
+    (source.body.modules ?? []).flatMap((module) =>
+      module.record_types.map((record) =>
+        Object.freeze({ key: `${module.key}:${record.key}`, label: record.name }),
+      ),
+    ),
+  );
 
 /** Every field of the application's own record types, for a block that reads no query. */
-export const studioSourceFields = (source: ApplicationSourceDocument): readonly StudioQueryField[] =>
-  Object.freeze((source.body.modules ?? []).flatMap((module) => module.record_types.flatMap((record) =>
-    record.fields.map((field) => Object.freeze({
-      reference: `${module.key}:${record.key}.${field.key}`,
-      label: `${record.name}: ${field.label}`, type: field.type, ...studioFieldFacts(field),
-    })))));
+export const studioSourceFields = (
+  source: ApplicationSourceDocument,
+): readonly StudioQueryField[] =>
+  Object.freeze(
+    (source.body.modules ?? []).flatMap((module) =>
+      module.record_types.flatMap((record) =>
+        record.fields.map((field) =>
+          Object.freeze({
+            reference: `${module.key}:${record.key}.${field.key}`,
+            label: `${record.name}: ${field.label}`,
+            type: field.type,
+            ...studioFieldFacts(field),
+          }),
+        ),
+      ),
+    ),
+  );
 
 /**
  * Every query a data block can read: those of the application's own Modules, then those of the
@@ -313,7 +424,7 @@ export function studioQueryChoices(
   source: ApplicationSourceDocument,
   borrowed: StudioBorrowedChoices | null,
 ): readonly StudioQueryChoice[] {
-  return Object.freeze([...ownQueries(source), ...borrowedFor(source, borrowed)?.queries ?? []]);
+  return Object.freeze([...ownQueries(source), ...(borrowedFor(source, borrowed)?.queries ?? [])]);
 }
 
 /**
@@ -324,9 +435,10 @@ export function studioActionChoices(
   source: ApplicationSourceDocument,
   borrowed: StudioBorrowedChoices | null,
 ): readonly StudioActionChoice[] {
-  const own = (source.body.modules ?? []).flatMap((module) => module.actions.map((action) =>
-    Object.freeze({ reference: action.key, label: action.label })));
-  return Object.freeze([...own, ...borrowedFor(source, borrowed)?.actions ?? []]);
+  const own = (source.body.modules ?? []).flatMap((module) =>
+    module.actions.map((action) => Object.freeze({ reference: action.key, label: action.label })),
+  );
+  return Object.freeze([...own, ...(borrowedFor(source, borrowed)?.actions ?? [])]);
 }
 
 /** The relationships of every record type in the draft, then those of the Modules it uses. */
@@ -334,13 +446,19 @@ export function studioRelationshipChoices(
   source: ApplicationSourceDocument,
   borrowed: StudioBorrowedChoices | null,
 ): readonly StudioRelationshipChoice[] {
-  const own = (source.body.modules ?? []).flatMap((module) => module.record_types.flatMap((record) =>
-    record.relationships.map((relationship) => {
-      const from = record.fields.find((field) => field.key === relationship.from_field);
-      return Object.freeze({ reference: `${module.key}:${record.key}.${relationship.key}`,
-        label: `${record.name}: ${from?.label ?? relationship.key}`, recordType: `${module.key}:${record.key}` });
-    })));
-  return Object.freeze([...own, ...borrowedFor(source, borrowed)?.relationships ?? []]);
+  const own = (source.body.modules ?? []).flatMap((module) =>
+    module.record_types.flatMap((record) =>
+      record.relationships.map((relationship) => {
+        const from = record.fields.find((field) => field.key === relationship.from_field);
+        return Object.freeze({
+          reference: `${module.key}:${record.key}.${relationship.key}`,
+          label: `${record.name}: ${from?.label ?? relationship.key}`,
+          recordType: `${module.key}:${record.key}`,
+        });
+      }),
+    ),
+  );
+  return Object.freeze([...own, ...(borrowedFor(source, borrowed)?.relationships ?? [])]);
 }
 
 /**

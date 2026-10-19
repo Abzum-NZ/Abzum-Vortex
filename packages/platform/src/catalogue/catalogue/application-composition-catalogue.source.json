@@ -5026,6 +5026,465 @@
                 }
               }
             ]
+          },
+          {
+            "kind": "group",
+            "key": "conditional_formatting",
+            "label": "Formatting",
+            "help": "Highlight rows and cells that match conditions, and show number columns as data bars or colour scales",
+            "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "properties": [
+              {
+                "kind": "boolean",
+                "key": "enabled",
+                "label": "On",
+                "help": "Format rows and cells by rules",
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              },
+              {
+                "kind": "list",
+                "key": "rules",
+                "label": "Rules",
+                "help": "Ordered rules; for each row or cell the first matching rule wins",
+                "required": false,
+                "minimumItems": 0,
+                "maximumItems": 20,
+                "item": {
+                  "kind": "group",
+                  "key": "rule",
+                  "label": "Rule",
+                  "help": "One condition, what it formats and how",
+                  "required": true,
+                  "properties": [
+                    {
+                      "kind": "text",
+                      "key": "rule_id",
+                      "label": "Rule identity",
+                      "help": "Stable identity of the rule within the table",
+                      "required": true,
+                      "minLength": 1,
+                      "maxLength": 40
+                    },
+                    {
+                      "kind": "boolean",
+                      "key": "enabled",
+                      "label": "On",
+                      "help": "Apply this rule",
+                      "required": false,
+                      "defaultValue": {
+                        "kind": "boolean",
+                        "value": true
+                      }
+                    },
+                    {
+                      "kind": "condition",
+                      "key": "condition",
+                      "label": "Condition",
+                      "help": "When the rule applies, over fields of the bound query",
+                      "required": true
+                    },
+                    {
+                      "kind": "choice",
+                      "key": "target",
+                      "label": "Formats",
+                      "help": "The whole row, or chosen cells",
+                      "required": false,
+                      "options": [
+                        {
+                          "key": "row",
+                          "label": "Whole row"
+                        },
+                        {
+                          "key": "cells",
+                          "label": "Chosen cells"
+                        }
+                      ],
+                      "defaultValue": {
+                        "kind": "choice",
+                        "value": "row"
+                      }
+                    },
+                    {
+                      "kind": "list",
+                      "key": "fields",
+                      "label": "Cells",
+                      "help": "The columns whose cells the rule formats",
+                      "required": false,
+                      "minimumItems": 0,
+                      "maximumItems": 50,
+                      "showWhen": {
+                        "property": "target",
+                        "values": ["cells"]
+                      },
+                      "item": {
+                        "kind": "field_reference",
+                        "key": "field",
+                        "label": "Field",
+                        "help": "Column of the table",
+                        "required": true
+                      }
+                    },
+                    {
+                      "kind": "choice",
+                      "key": "token",
+                      "label": "Colour",
+                      "help": "The semantic colour of the format",
+                      "required": false,
+                      "options": [
+                        {
+                          "key": "success",
+                          "label": "Success"
+                        },
+                        {
+                          "key": "warning",
+                          "label": "Warning"
+                        },
+                        {
+                          "key": "info",
+                          "label": "Information"
+                        },
+                        {
+                          "key": "destructive",
+                          "label": "Critical"
+                        },
+                        {
+                          "key": "muted",
+                          "label": "Muted"
+                        }
+                      ],
+                      "defaultValue": {
+                        "kind": "choice",
+                        "value": "info"
+                      }
+                    },
+                    {
+                      "kind": "boolean",
+                      "key": "tint",
+                      "label": "Background tint",
+                      "help": "Tint the background in the colour",
+                      "required": false,
+                      "defaultValue": {
+                        "kind": "boolean",
+                        "value": true
+                      }
+                    },
+                    {
+                      "kind": "boolean",
+                      "key": "text_colour",
+                      "label": "Text colour",
+                      "help": "Show the text in the colour",
+                      "required": false,
+                      "defaultValue": {
+                        "kind": "boolean",
+                        "value": false
+                      }
+                    },
+                    {
+                      "kind": "boolean",
+                      "key": "bold",
+                      "label": "Bold",
+                      "help": "Show the text in bold",
+                      "required": false,
+                      "defaultValue": {
+                        "kind": "boolean",
+                        "value": false
+                      }
+                    },
+                    {
+                      "kind": "boolean",
+                      "key": "strike",
+                      "label": "Strike through",
+                      "help": "Strike the text through",
+                      "required": false,
+                      "defaultValue": {
+                        "kind": "boolean",
+                        "value": false
+                      }
+                    },
+                    {
+                      "kind": "choice",
+                      "key": "icon",
+                      "label": "Icon",
+                      "help": "An icon shown before the value, read out with it",
+                      "required": false,
+                      "options": [
+                        {
+                          "key": "none",
+                          "label": "None"
+                        },
+                        {
+                          "key": "alert",
+                          "label": "Alert"
+                        },
+                        {
+                          "key": "check",
+                          "label": "Check"
+                        },
+                        {
+                          "key": "info",
+                          "label": "Information"
+                        },
+                        {
+                          "key": "clock",
+                          "label": "Clock"
+                        },
+                        {
+                          "key": "flag",
+                          "label": "Flag"
+                        },
+                        {
+                          "key": "star",
+                          "label": "Star"
+                        },
+                        {
+                          "key": "x",
+                          "label": "Cross"
+                        },
+                        {
+                          "key": "arrow_up",
+                          "label": "Arrow up"
+                        },
+                        {
+                          "key": "arrow_down",
+                          "label": "Arrow down"
+                        }
+                      ],
+                      "defaultValue": {
+                        "kind": "choice",
+                        "value": "none"
+                      }
+                    },
+                    {
+                      "kind": "text",
+                      "key": "badge_label",
+                      "label": "Label",
+                      "help": "A short label shown as a badge and read out with the value",
+                      "required": false,
+                      "minLength": 1,
+                      "maxLength": 30
+                    },
+                    {
+                      "kind": "boolean",
+                      "key": "stop_if_true",
+                      "label": "Stop if true",
+                      "help": "When this rule matches, later rules are not applied to the row",
+                      "required": false,
+                      "defaultValue": {
+                        "kind": "boolean",
+                        "value": false
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "list",
+                "key": "column_formats",
+                "label": "Number columns",
+                "help": "Data bars or three-point colour scales, measured over the rows on the page",
+                "required": false,
+                "minimumItems": 0,
+                "maximumItems": 10,
+                "item": {
+                  "kind": "group",
+                  "key": "column_format",
+                  "label": "Column format",
+                  "help": "One number column drawn as a bar or a colour scale",
+                  "required": true,
+                  "properties": [
+                    {
+                      "kind": "field_reference",
+                      "key": "field",
+                      "label": "Column",
+                      "help": "A number or money column of the table",
+                      "required": true
+                    },
+                    {
+                      "kind": "choice",
+                      "key": "kind",
+                      "label": "Format",
+                      "help": "A data bar, or a colour scale from low to high",
+                      "required": false,
+                      "options": [
+                        {
+                          "key": "data_bar",
+                          "label": "Data bar"
+                        },
+                        {
+                          "key": "colour_scale",
+                          "label": "Colour scale"
+                        }
+                      ],
+                      "defaultValue": {
+                        "kind": "choice",
+                        "value": "data_bar"
+                      }
+                    },
+                    {
+                      "kind": "choice",
+                      "key": "token",
+                      "label": "Bar colour",
+                      "help": "The colour of the bar",
+                      "required": false,
+                      "options": [
+                        {
+                          "key": "success",
+                          "label": "Success"
+                        },
+                        {
+                          "key": "warning",
+                          "label": "Warning"
+                        },
+                        {
+                          "key": "info",
+                          "label": "Information"
+                        },
+                        {
+                          "key": "destructive",
+                          "label": "Critical"
+                        },
+                        {
+                          "key": "muted",
+                          "label": "Muted"
+                        }
+                      ],
+                      "defaultValue": {
+                        "kind": "choice",
+                        "value": "info"
+                      },
+                      "showWhen": {
+                        "property": "kind",
+                        "values": ["data_bar"]
+                      }
+                    },
+                    {
+                      "kind": "choice",
+                      "key": "low_token",
+                      "label": "Low colour",
+                      "help": "The colour of the lowest value on the page",
+                      "required": false,
+                      "options": [
+                        {
+                          "key": "success",
+                          "label": "Success"
+                        },
+                        {
+                          "key": "warning",
+                          "label": "Warning"
+                        },
+                        {
+                          "key": "info",
+                          "label": "Information"
+                        },
+                        {
+                          "key": "destructive",
+                          "label": "Critical"
+                        },
+                        {
+                          "key": "muted",
+                          "label": "Muted"
+                        }
+                      ],
+                      "defaultValue": {
+                        "kind": "choice",
+                        "value": "destructive"
+                      },
+                      "showWhen": {
+                        "property": "kind",
+                        "values": ["colour_scale"]
+                      }
+                    },
+                    {
+                      "kind": "choice",
+                      "key": "mid_token",
+                      "label": "Middle colour",
+                      "help": "The colour of the middle value on the page",
+                      "required": false,
+                      "options": [
+                        {
+                          "key": "success",
+                          "label": "Success"
+                        },
+                        {
+                          "key": "warning",
+                          "label": "Warning"
+                        },
+                        {
+                          "key": "info",
+                          "label": "Information"
+                        },
+                        {
+                          "key": "destructive",
+                          "label": "Critical"
+                        },
+                        {
+                          "key": "muted",
+                          "label": "Muted"
+                        }
+                      ],
+                      "defaultValue": {
+                        "kind": "choice",
+                        "value": "warning"
+                      },
+                      "showWhen": {
+                        "property": "kind",
+                        "values": ["colour_scale"]
+                      }
+                    },
+                    {
+                      "kind": "choice",
+                      "key": "high_token",
+                      "label": "High colour",
+                      "help": "The colour of the highest value on the page",
+                      "required": false,
+                      "options": [
+                        {
+                          "key": "success",
+                          "label": "Success"
+                        },
+                        {
+                          "key": "warning",
+                          "label": "Warning"
+                        },
+                        {
+                          "key": "info",
+                          "label": "Information"
+                        },
+                        {
+                          "key": "destructive",
+                          "label": "Critical"
+                        },
+                        {
+                          "key": "muted",
+                          "label": "Muted"
+                        }
+                      ],
+                      "defaultValue": {
+                        "kind": "choice",
+                        "value": "success"
+                      },
+                      "showWhen": {
+                        "property": "kind",
+                        "values": ["colour_scale"]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
           }
         ],
         "defaultValue": {
@@ -5068,6 +5527,15 @@
               }
             },
             "inline_edit": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "conditional_formatting": {
               "kind": "group",
               "properties": {
                 "enabled": {

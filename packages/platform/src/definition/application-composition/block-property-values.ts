@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { safeHttpsUrlSchema } from "../../catalogue/common";
 import type {
+  sourceQualifiedConditionSchema,
   sourceQualifiedFieldSchema,
   sourceQualifiedQueryReferenceSchema,
   sourceQualifiedRelationshipSchema,
 } from "../definition-source-common";
+import { conditionNodeSchema, type ConditionNode } from "../module-foundation-contracts";
 import { sourceProvenanceUnchanged } from "../definition-source-common";
 import { recordTypeReferenceSchema } from "../definitions";
 import {
@@ -32,6 +34,8 @@ export type BlockPropertyValueContract =
   | { kind: "asset_reference"; assetId: z.infer<typeof platformIdSchema> }
   | { kind: "icon"; iconKey: string }
   | { kind: "field_reference"; fieldId: z.infer<typeof fieldIdSchema> }
+  /** A condition over the bound record's fields, in the one canonical condition tree. */
+  | { kind: "condition"; condition: ConditionNode }
   | {
       kind: "relationship_reference";
       relationshipId: z.infer<typeof containedComponentIdSchema>;
@@ -107,6 +111,12 @@ export const blockPropertyValueSchema: z.ZodType<BlockPropertyValueContract> = z
       .strict(),
     z
       .object({
+        kind: sourceProvenanceUnchanged(z.literal("condition")),
+        condition: sourceProvenanceUnchanged(conditionNodeSchema, true),
+      })
+      .strict(),
+    z
+      .object({
         kind: sourceProvenanceUnchanged(z.literal("relationship_reference")),
         relationshipId: sourceProvenanceUnchanged(containedComponentIdSchema),
       })
@@ -172,6 +182,8 @@ export type SourceBlockPropertyValueContract =
   | { kind: "asset_reference"; asset_id: z.infer<typeof platformIdSchema> }
   | { kind: "icon"; icon_key: string }
   | { kind: "field_reference"; field: z.infer<typeof sourceQualifiedFieldSchema> }
+  /** A condition in the authored form a query filter uses, naming qualified fields. */
+  | { kind: "condition"; condition: z.infer<typeof sourceQualifiedConditionSchema> }
   | {
       kind: "relationship_reference";
       relationship: z.infer<typeof sourceQualifiedRelationshipSchema>;
