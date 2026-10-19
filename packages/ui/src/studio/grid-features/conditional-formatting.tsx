@@ -115,7 +115,7 @@ function StyleSwatch({ rule }: Readonly<{ rule: ConditionalFormatRule }>): React
     <span
       aria-hidden
       className={cn(
-        "inline-flex h-6 min-w-10 shrink-0 items-center justify-center gap-1 rounded-sm border px-1.5 text-xs",
+        "inline-flex h-6 min-w-10 shrink-0 items-center justify-center gap-1 rounded-md border px-1.5 text-xs",
         style.tint && tokenTints[style.token],
         style.text && tokenTexts[style.token],
         style.bold && "font-semibold",

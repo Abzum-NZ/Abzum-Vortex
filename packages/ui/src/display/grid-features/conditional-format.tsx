@@ -158,7 +158,7 @@ function ConditionalFormatCell({
         <span
           aria-hidden
           className={cn(
-            "pointer-events-none absolute inset-y-1 left-0 rounded-sm",
+            "pointer-events-none absolute inset-y-1 left-0",
             barClasses[format.token],
           )}
           style={{ width: `${Math.round(measure * 100)}%` }}
