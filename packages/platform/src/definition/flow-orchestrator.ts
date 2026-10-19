@@ -234,7 +234,11 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     let step = first;
     for (;;) {
       if (step.kind === "finished") return finished(run, step);
-      if (elapsedMilliseconds(run) > serverMilliseconds) return limitExceeded(run, step.state);
+      // The limit stops a run before more server work. A run that already committed a change and
+      // now waits for the person still shows them what it did; any later task is refused.
+      const answersCommitted = step.kind === "interface" && step.state.committedEffects > 0;
+      if (!answersCommitted && elapsedMilliseconds(run) > serverMilliseconds)
+        return limitExceeded(run, step.state);
       if (step.kind === "interface")
         return run.authority.kind === "person" ? suspend(run, step) : refused;
       const result = await runProtectedTask(run, step.state, step.call);

@@ -338,7 +338,9 @@ export const createFirstInstallCoordinator = (
       expectedReleaseSet,
       (prepared) => { preparedRegistration = prepared; },
     ),
-    preparedRuntimeSource: createPreparedInstallationRuntimeSourceReader(environment.catalogue),
+    preparedRuntimeSource: createPreparedInstallationRuntimeSourceReader(environment.catalogue, [
+      expectedReleaseSet,
+    ]),
   });
 };
 

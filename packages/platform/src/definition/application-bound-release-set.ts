@@ -5,14 +5,12 @@ import {
   isRecord,
   sameId,
   applicationBoundReleaseSetCommandSchema,
-  applicationBoundReleaseSetResultSchema,
   applicationRootIdSchema,
   correlationIdSchema,
   revisionSchema,
   protectedOperationChannelSchema,
   sessionContextSchema,
   systemApplicationBoundReleaseSetCommandSchema,
-  systemApplicationBoundReleaseSetResultSchema,
   type ApplicationBoundReleaseSetCommand,
   type ApplicationBoundReleaseSetResult,
   type DefinitionConsumerReadResult,
@@ -213,12 +211,18 @@ const projectBoundReleaseSet = async (
     );
   }
 
-  const schema = expectation.allowEmptyModules
-    ? systemApplicationBoundReleaseSetResultSchema
-    : applicationBoundReleaseSetResultSchema;
-  const result = schema.safeParse({ application, modules });
-  if (!result.success) throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
-  return result.data;
+  // Each release above is already parsed against its consumer result schema; the set adds only
+  // its own rules: an Application, Modules, at least one unless the system set allows none, and
+  // one exact release per Module root.
+  const roots = new Set(modules.map((module) => module.rootId.toLowerCase()));
+  if (
+    application.kind !== "application" ||
+    modules.some((module) => module.kind !== "module") ||
+    (!expectation.allowEmptyModules && modules.length === 0) ||
+    roots.size !== modules.length
+  )
+    throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+  return { application, modules };
 };
 
 const exactFirstInstallModuleClosure = (
@@ -447,8 +451,8 @@ export const createDatabaseFirstInstallApplicationReleaseSetService = (
         },
         catalogue,
       );
-      const result = systemApplicationBoundReleaseSetResultSchema.safeParse(projected);
-      if (!result.success || !exactFirstInstallModuleClosure(result.data))
+      const result = projected as SystemApplicationBoundReleaseSetResult;
+      if (!exactFirstInstallModuleClosure(result))
         throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
       const current = await readFirstInstallReleaseSet(transaction, command.data);
@@ -462,7 +466,7 @@ export const createDatabaseFirstInstallApplicationReleaseSetService = (
       if (canonicalJson(initialSet.data) !== canonicalJson(currentSet.data))
         throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
-      return result.data;
+      return result;
     },
   });
 };
