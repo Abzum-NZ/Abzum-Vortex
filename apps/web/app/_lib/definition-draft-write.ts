@@ -8,6 +8,7 @@ import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
 import { mapWebError } from "./web-error-mapper";
 import { platformPermissionSource } from "./platform-permission-source";
+import { prepareStudioPreview } from "./studio-application-preview";
 
 const writeApplicationDraft = async (
   organizationId: string,
@@ -26,9 +27,11 @@ const writeApplicationDraft = async (
       requests: humanOrganizationRequests(),
       permissions: platformPermissionSource,
     });
-    return mode === "create"
+    const result = mode === "create"
       ? await writer.createRoot(resolved.session, organizationId, candidate)
       : await writer.saveDraft(resolved.session, organizationId, candidate);
+    if (result.kind === "available") prepareStudioPreview(resolved.session, result.draft.organizationId, result.draft);
+    return result;
   } catch (error) {
     return mapWebError(error, {
       route: "definition-draft-write",

@@ -31,7 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@vortex/ui/components/table";
-import { readStudioDataRecords } from "../actions";
+import { readStudioDataRecords } from "../_lib/studio-reads";
 import type { StudioDataRecordsResult, StudioDataTotal } from "../../_lib/studio-data-records";
 import {
   fieldTypeLabel,

@@ -43,6 +43,7 @@ import { humanOrganizationRequests } from "./server-composition";
 import { platformPermissionSource } from "./platform-permission-source";
 import { studioCanvasFramesFor, type StudioApplicationCanvasFrames } from "./studio-canvas-frames";
 import { rememberCompiledDraft } from "./studio-compiled-drafts";
+import { prepareStudioPreview } from "./studio-application-preview";
 
 export type { StudioApplicationCanvasFrames } from "./studio-canvas-frames";
 
@@ -426,6 +427,8 @@ export const loadStudioApplicationDraft = async (
         return { kind: "available", value: { organizationId: scope.organizationId, draft, compiledFields, borrowedChoices, usedModules, published, peopleDirectory, pageCompiledSlots, canvasFrames, compileFailure } };
       },
     );
+    if (result.kind === "available" && result.value.kind === "available" && options.compile !== false)
+      prepareStudioPreview(resolved.session, result.value.value.organizationId, result.value.value.draft);
     if (result.kind === "available")
       return result.value.kind === "available"
         ? { kind: "available", ...result.value.value }

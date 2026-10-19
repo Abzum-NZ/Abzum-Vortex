@@ -51,6 +51,8 @@ export type StudioPreviewRead =
   | Readonly<{ kind: "refused" }>
   /** The saved draft moved on from the revision the request names. */
   | Readonly<{ kind: "conflict" }>
+  | Readonly<{ kind: "following" }>
+  | Readonly<{ kind: "following" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 /** Opens the builder's preview of the saved draft at this revision for reading records. */
@@ -60,15 +62,12 @@ export const openStudioPreviewRead = async (
   rootId: ApplicationRootId,
   draftRevision: number,
 ): Promise<StudioPreviewRead> => {
-  const started = performance.now();
   const state = await readStudioPreviewState(session, organizationId, rootId, draftRevision);
-  console.log("[profile] state", Math.round(performance.now()-started));
   if (state.kind === "refused") return { kind: "refused" };
   if (state.kind !== "read") return state;
   const preview = await currentStudioPreview(session, organizationId, state.draft, state.preview, "read");
   if (preview.kind === "refused") return { kind: "refused" };
   if (preview.kind !== "available") return preview;
-  console.log("[profile] plan", Math.round(performance.now()-started));
   const dependencies = requestDependencies();
   const application = { organizationId, applicationRootId: rootId };
   // Copied live records are read only once they are decided again by the builder's current live
@@ -92,7 +91,6 @@ export const openStudioPreviewRead = async (
     loadInstalledContext(session, dependencies, selection),
     loadOrganizationLauncher(session),
   ]);
-  console.log("[profile] context-launcher", Math.round(performance.now()-started));
   if (installed.kind !== "available") {
     console.error(`[studio] preview context unavailable: STUDIO_PREVIEW_CONTEXT_UNAVAILABLE kind=${installed.kind}`);
     return installed.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };

@@ -17,7 +17,7 @@ import { Spinner } from "@vortex/ui/components/spinner";
 import { Button } from "@vortex/ui/components/button";
 import type { StudioCanvasAddRequest, StudioCanvasBreakpoint, StudioCanvasFrame } from "@vortex/ui/studio/page-puck-editor";
 import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-empty-state";
-import { readStudioCanvasRecords, readStudioDataRecords } from "../actions";
+import { readStudioCanvasRecords, readStudioDataRecords } from "../_lib/studio-reads";
 import { applyStudioItemLabels } from "@vortex/ui/studio";
 import { studioDraftNavigation } from "../_lib/studio-draft-navigation";
 import { studioUseTargetOf } from "../_lib/studio-places";
@@ -257,7 +257,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
         ...(result.sample === undefined ? {} : { sample: result.sample }) };
     if (result.kind === "refused") return { state: "refused" as const, records: {} };
     // A conflict means a newer save replaced this revision, whose own read follows; anything else is a failure.
-    if (result.kind !== "conflict")
+    if (result.kind !== "conflict" && result.kind !== "following")
       console.error(`[studio] the canvas records were not read: STUDIO_CANVAS_RECORDS_${result.kind.toUpperCase()}`);
     // A newer save or the preview moving under this read: the canvas reads again shortly.
     return { state: "unavailable" as const, records: {}, behind: true };

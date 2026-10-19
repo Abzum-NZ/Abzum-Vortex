@@ -1,4 +1,5 @@
 import "server-only";
+import { after } from "next/server";
 
 import {
   BuilderAuthorityError,
@@ -70,6 +71,7 @@ export type StudioPreviewResult =
        */
       behind: boolean;
     }>
+  | Readonly<{ kind: "following" }>
   | PreviewFailure;
 
 /** The saved draft at one revision and the builder's current preview of its Application. */
@@ -158,9 +160,10 @@ export const readStudioPreviewState = async (
   draftRevision: number,
 ): Promise<StudioPreviewState> => {
   try {
-    const inApplication = await readPreviewStateIn(session, { organizationId, applicationRootId: rootId },
-      organizationId, rootId, draftRevision);
-    const read = inApplication.kind === "available" && inApplication.value.kind !== "refused" ? inApplication
+    const selection = { organizationId, applicationRootId: rootId };
+    const inApplication = await readPreviewStateIn(session, selection, organizationId, rootId, draftRevision);
+    const read = inApplication.kind === "temporarily_unavailable" ||
+      (inApplication.kind === "available" && inApplication.value.kind !== "refused") ? inApplication
       : await readPreviewStateIn(session, { organizationId }, organizationId, rootId, draftRevision);
     if (read.kind === "available") return read.value;
     return read.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" }
@@ -189,8 +192,15 @@ const readPreviewStateIn = (
           if (error instanceof BuilderAuthorityError) return { kind: "refused", reason: "permission_refused" } as const;
           throw error;
         }
-        const draft = await readApplicationDefinitionDraft(transaction, scope,
-          { rootId, expectedDraftRevision: draftRevision });
+        let draft: StoredApplicationDefinitionDraft;
+        try {
+          draft = await readApplicationDefinitionDraft(transaction, scope,
+            { rootId, expectedDraftRevision: draftRevision });
+        } catch (error) {
+          if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING")
+            return { kind: "conflict" } as const;
+          throw error;
+        }
         const preview = await createPreviewInstallationRepository(transaction).readBuilderPreview(rootId);
         if (preview !== undefined && (!sameId(preview.applicationRootId, rootId) || !sameId(preview.organizationId, organizationId)))
           throw new Error("STUDIO_PREVIEW_LOOKUP_MISMATCH");
@@ -259,25 +269,26 @@ const follow = (target: Target, previewInstallationId: string): Promise<StudioPr
         ? provision(target) : failure(error)));
 
 /**
- * Reads never wait for the preview to move: after a data-shape edit it moves to the draft in the
- * background after a short pause, so a burst of saves moves it once, to the newest revision, and
- * reads meanwhile run on the preview as it is until the move commits.
+ * A read can request a follow if the save's background preparation has not completed. Coalesce
+ * those requests to the latest revision, and keep the response independent of the move.
  */
-const scheduled = new Map<string, Readonly<{ timer: ReturnType<typeof setTimeout>; draftRevision: number }>>();
+const scheduled = new Map<string, Target>();
 const followLater = (target: Target, previewInstallationId: string, pauseMs: number): void => {
   const key = `${target.session.identityId}|${target.organizationId}|${target.rootId}`.toLowerCase();
   const waiting = scheduled.get(key);
   if (waiting !== undefined && waiting.draftRevision >= target.draftRevision) return;
-  if (waiting !== undefined) clearTimeout(waiting.timer);
-  const timer = setTimeout(() => {
+  scheduled.set(key, target);
+  if (waiting !== undefined) return;
+  after(async () => {
+    await new Promise((resolve) => setTimeout(resolve, pauseMs));
+    const latest = scheduled.get(key)!;
     scheduled.delete(key);
-    void follow(target, previewInstallationId).then((result) => {
+    await follow(latest, previewInstallationId).then((result) => {
       // A newer save already moved the draft on; its own read follows it.
       if (result.kind !== "available" && result.kind !== "conflict")
         console.error(`[studio] the preview did not follow the draft: STUDIO_PREVIEW_FOLLOW_${result.kind.toUpperCase()}`);
     });
-  }, pauseMs);
-  scheduled.set(key, { timer, draftRevision: target.draftRevision });
+  });
 };
 
 /**
@@ -290,25 +301,39 @@ const followLater = (target: Target, previewInstallationId: string, pauseMs: num
  * - and a new preview when they have none or its records cannot take the change.
  * Studio's canvas, its Data tab and its Preview button all run on this one preview.
  */
-export const currentStudioPreview = async (
+export function currentStudioPreview(
+  session: IdentitySession, organizationId: OrganizationId, draft: StoredApplicationDefinitionDraft,
+  preview: BuilderPreviewInstallation | undefined, purpose: "open" | "prepare",
+): Promise<Exclude<StudioPreviewResult, { kind: "following" }>>;
+export function currentStudioPreview(
+  session: IdentitySession, organizationId: OrganizationId, draft: StoredApplicationDefinitionDraft,
+  preview: BuilderPreviewInstallation | undefined, purpose: "read",
+): Promise<StudioPreviewResult>;
+export async function currentStudioPreview(
   session: IdentitySession,
   organizationId: OrganizationId,
   draft: StoredApplicationDefinitionDraft,
   preview: BuilderPreviewInstallation | undefined,
-  purpose: "read" | "open",
-): Promise<StudioPreviewResult> => {
+  purpose: "read" | "open" | "prepare",
+): Promise<StudioPreviewResult> {
   const target: Target = { session, organizationId, rootId: draft.rootId as ApplicationRootId,
     draftRevision: draft.draftRevision, shapeFingerprint: studioPreviewShapeFingerprint(draft.source) };
-  if (preview === undefined) return provision(target);
+  if (preview === undefined) {
+    if (purpose !== "read") return provision(target);
+    after(async () => { await provision(target); });
+    return { kind: "following" };
+  }
   // A preview of a newer saved revision means this request's draft revision is no longer current.
   if (preview.draftRevision > draft.draftRevision) return { kind: "conflict" };
   const lasting = Date.parse(preview.expiresAt) - Date.now() > reuseMarginMs;
   if (lasting && preview.draftRevision === draft.draftRevision) return available(preview, preview.reconcileDue);
+  if (purpose === "prepare" && lasting && preview.shapeFingerprint === target.shapeFingerprint)
+    return available(preview, preview.reconcileDue);
   if (purpose === "read") {
     // A presentation-only edit leaves the preview's records, queries and access the draft's: its
     // pages follow when the preview is opened. Moving it means rehearsing a publication, whose
     // transaction holds the organisation's access lock, so it is not repeated for every such save.
-    if (preview.shapeFingerprint === target.shapeFingerprint) return available(preview, preview.reconcileDue);
+    if (lasting && preview.shapeFingerprint === target.shapeFingerprint) return available(preview, preview.reconcileDue);
     followLater(target, preview.previewInstallationId, 1000);
     return available(preview, preview.reconcileDue, true);
   }
@@ -316,6 +341,19 @@ export const currentStudioPreview = async (
   // A followed preview keeps its copied records, which are due to be decided again as before.
   return followed.kind === "available" && sameId(followed.previewInstallationId, preview.previewInstallationId)
     ? { ...followed, reconcileDue: preview.reconcileDue } : followed;
+}
+
+/** Prepare the one preview after opening or saving a draft; reads keep using its last good revision. */
+export const prepareStudioPreview = (
+  session: IdentitySession, organizationId: OrganizationId, draft: StoredApplicationDefinitionDraft,
+): void => {
+  after(async () => {
+    const state = await readStudioPreviewState(session, organizationId, draft.rootId as ApplicationRootId, draft.draftRevision);
+    if (state.kind !== "read") return;
+    const result = await currentStudioPreview(session, organizationId, state.draft, state.preview, "prepare");
+    if (result.kind !== "available" && result.kind !== "conflict")
+      console.error(`[studio] preview preparation failed: STUDIO_PREVIEW_PREPARE_${result.kind.toUpperCase()}`);
+  });
 };
 
 /**
