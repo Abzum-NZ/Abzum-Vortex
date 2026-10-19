@@ -97,7 +97,10 @@ const coordinator = () =>
     // requires `custom_code.manage` and a recent sign-in.
     containsCustomComponents: releaseSetContainsCustomComponents,
     humanDefinitionAccess: humanDefinitionAccess(),
-    preparedRuntimeSource: createPreparedInstallationRuntimeSourceReader(installedReleaseCatalogue),
+    preparedRuntimeSource: createPreparedInstallationRuntimeSourceReader(
+      installedReleaseCatalogue,
+      [],
+    ),
   });
 
 /**

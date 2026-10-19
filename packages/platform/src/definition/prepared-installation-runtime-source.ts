@@ -13,7 +13,7 @@ import {
   type PermissionDeclaration,
   recordTypeIdSchema,
   revisionSchema,
-  systemApplicationBoundReleaseSetResultSchema,
+  sameId,
   type InstallationRuntimeBundleSourceManifest,
   type PreparedInstallationRuntimeSource,
   type SystemApplicationBoundReleaseSetResult,
@@ -55,6 +55,39 @@ const preparedSourceSchema = z.object({
 }).strict();
 
 type PreparedSourceRow = DatabaseRow & { readonly prepared_source: unknown };
+
+type VerifiedRelease =
+  | SystemApplicationBoundReleaseSetResult["application"]
+  | SystemApplicationBoundReleaseSetResult["modules"][number];
+
+/**
+ * The release this call already read and verified that the stored evidence names exactly: the same
+ * kind, organisation, root, revision, version, contract and fingerprints. Release contents are
+ * immutable and their fingerprints bind them, so that verified projection stands for the evidence
+ * instead of being projected again.
+ */
+const verifiedReleaseFor = (
+  verified: readonly VerifiedRelease[],
+  candidate: unknown,
+): VerifiedRelease | undefined => {
+  if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate))
+    return undefined;
+  const evidence = candidate as Record<string, unknown>;
+  return verified.find(
+    (release) =>
+      release.kind === evidence.kind &&
+      typeof evidence.organizationId === "string" &&
+      sameId(release.organizationId, evidence.organizationId) &&
+      typeof evidence.rootId === "string" &&
+      sameId(release.rootId, evidence.rootId) &&
+      release.definitionKey === evidence.key &&
+      release.releaseRevision === evidence.releaseRevision &&
+      release.releaseVersion === evidence.releaseVersion &&
+      release.validationContractVersion === evidence.validationContractVersion &&
+      release.contentFingerprint === evidence.contentFingerprint &&
+      release.resolutionFingerprint === evidence.resolutionFingerprint,
+  );
+};
 
 const requirePreparedPlanMatchesReleaseSet = (
   planCandidate: PreparedInstallationRuntimeSource["preparedRecordAccessPlan"],
@@ -182,7 +215,12 @@ export type PreparedInstallationRuntimeSourceCommand = Readonly<{
 export const createDatabasePreparedInstallationRuntimeSourceService = (
   catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
   transaction: RequestDatabaseTransaction,
+  verifiedReleaseSets: readonly SystemApplicationBoundReleaseSetResult[],
 ) => {
+  const verified = verifiedReleaseSets.flatMap((releaseSet) => [
+    releaseSet.application,
+    ...releaseSet.modules,
+  ]);
   const catalogue = createImmutableDefinitionPublicationCatalogue(catalogueDefinition);
 
   return Object.freeze({
@@ -224,27 +262,45 @@ export const createDatabasePreparedInstallationRuntimeSourceService = (
       )
         throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
 
-      const applicationEvidence = storedConsumerReleaseEvidenceSchema.safeParse(
-        parsed.data.application,
-      );
-      if (!applicationEvidence.success)
-        throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
-      const application = await projectStoredConsumerRelease(
-        applicationEvidence.data,
-        {
-          kind: "application",
-          rootId: applicationRootId,
-          releaseRevision: applicationReleaseRevision,
-          organizationId,
-        },
-        parsed.data.correlationId,
-        catalogue,
-      );
-      if (application.kind !== "application")
+      const correlationId = parsed.data.correlationId;
+      const knownApplication = verifiedReleaseFor(verified, parsed.data.application);
+      let application;
+      if (knownApplication !== undefined) application = { ...knownApplication, correlationId };
+      else {
+        const applicationEvidence = storedConsumerReleaseEvidenceSchema.safeParse(
+          parsed.data.application,
+        );
+        if (!applicationEvidence.success)
+          throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
+        application = await projectStoredConsumerRelease(
+          applicationEvidence.data,
+          {
+            kind: "application",
+            rootId: applicationRootId,
+            releaseRevision: applicationReleaseRevision,
+            organizationId,
+          },
+          correlationId,
+          catalogue,
+        );
+      }
+      if (
+        application.kind !== "application" ||
+        !sameId(application.rootId, applicationRootId) ||
+        application.releaseRevision !== applicationReleaseRevision ||
+        !sameId(application.organizationId, organizationId)
+      )
         throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
 
       const modules = [];
       for (const candidate of parsed.data.modules) {
+        const known = verifiedReleaseFor(verified, candidate);
+        if (known !== undefined) {
+          if (known.kind !== "module" || !sameId(known.organizationId, organizationId))
+            throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
+          modules.push({ ...known, correlationId });
+          continue;
+        }
         const evidence = storedConsumerReleaseEvidenceSchema.safeParse(candidate);
         if (!evidence.success || evidence.data.kind !== "module")
           throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
@@ -256,14 +312,17 @@ export const createDatabasePreparedInstallationRuntimeSourceService = (
             releaseRevision: evidence.data.releaseRevision,
             organizationId,
           },
-          parsed.data.correlationId,
+          correlationId,
           catalogue,
         ));
       }
-      const releaseSet = systemApplicationBoundReleaseSetResultSchema.parse({
-        application,
-        modules,
-      }) as SystemApplicationBoundReleaseSetResult;
+      // Each release is a parsed consumer result; the set adds one exact release per Module root.
+      if (
+        new Set(modules.map((module) => module.rootId.toLowerCase())).size !== modules.length ||
+        modules.some((module) => module.kind !== "module")
+      )
+        throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
+      const releaseSet = { application, modules } as SystemApplicationBoundReleaseSetResult;
       const expectedModuleIdentities = expectedBindings.map((binding) =>
         `${binding.moduleRootId}:${binding.moduleReleaseRevision}`,
       ).sort();
@@ -320,13 +379,10 @@ export const createDatabasePreparedInstallationRuntimeSourceService = (
   });
 };
 
-
-
-
-
 /** The reader the installation coordinator uses to build or check a release's runtime bundle. */
 export const createPreparedInstallationRuntimeSourceReader = (
   catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
+  verifiedReleaseSets: readonly SystemApplicationBoundReleaseSetResult[],
 ): PreparedInstallationRuntimeSourceReader =>
   (transaction, input) => {
     const moduleBindings = input.moduleBindings.map((binding) => {
@@ -337,5 +393,6 @@ export const createPreparedInstallationRuntimeSourceReader = (
     return createDatabasePreparedInstallationRuntimeSourceService(
       catalogueDefinition,
       transaction,
+      verifiedReleaseSets,
     ).read({ ...input, moduleBindings });
   };
