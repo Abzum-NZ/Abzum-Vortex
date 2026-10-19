@@ -29,8 +29,8 @@ export type StudioPreviewSelection = Readonly<{
 /**
  * Where Studio's canvas and Data tab read the records of the saved draft: the builder's own preview
  * installation of that draft, with its runtime context and the running application's own readers.
- * The preview follows the draft: it moves to each saved revision in the background, keeping its
- * records, and reads meanwhile run on it as it is. Every read in it runs under
+ * The visible reader moves the preview to the saved data shape before reading its records.
+ * Presentation-only edits reuse the existing records. Every read in it runs under
  * the builder's preview access, as the preview itself decides it: the draft's roles for the
  * Application's own permissions, the builder's own live access for people and every other system
  * projection, and no record-share authority.
@@ -51,6 +51,7 @@ export type StudioPreviewRead =
   | Readonly<{ kind: "refused" }>
   /** The saved draft moved on from the revision the request names. */
   | Readonly<{ kind: "conflict" }>
+  | Readonly<{ kind: "following" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 /** Opens the builder's preview of the saved draft at this revision for reading records. */
@@ -59,11 +60,22 @@ export const openStudioPreviewRead = async (
   organizationId: OrganizationId,
   rootId: ApplicationRootId,
   draftRevision: number,
+  signal?: AbortSignal,
 ): Promise<StudioPreviewRead> => {
+  signal?.throwIfAborted();
   const state = await readStudioPreviewState(session, organizationId, rootId, draftRevision);
+  signal?.throwIfAborted();
   if (state.kind === "refused") return { kind: "refused" };
   if (state.kind !== "read") return state;
-  const preview = await currentStudioPreview(session, organizationId, state.draft, state.preview, "read");
+  const preview = await currentStudioPreview(
+    session,
+    organizationId,
+    state.draft,
+    state.preview,
+    "read",
+    signal,
+  );
+  signal?.throwIfAborted();
   if (preview.kind === "refused") return { kind: "refused" };
   if (preview.kind !== "available") return preview;
   const dependencies = requestDependencies();
@@ -71,33 +83,84 @@ export const openStudioPreviewRead = async (
   // Copied live records are read only once they are decided again by the builder's current live
   // access in the installed Application, at most every five minutes, as opening the preview does.
   if (preview.reconcileDue) {
-    const reconciled = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
-      session,
-      application,
-      async (transaction) => {
-        await createPreviewInstallationRepository(transaction).reconcile(preview.previewInstallationId);
-        return true;
-      },
-    );
+    const reconcile = () =>
+      humanOrganizationRequests(dependencies.identityAuthorityId).run(
+        session,
+        application,
+        async (transaction) => {
+          await createPreviewInstallationRepository(transaction).reconcile(
+            preview.previewInstallationId,
+          );
+          return true;
+        },
+      );
+    let reconciled = await reconcile();
+    signal?.throwIfAborted();
+    if (reconciled.kind === "temporarily_unavailable" && reconciled.databaseCode === "40001") {
+      console.info(
+        "[studio] retrying preview reconcile after serialization conflict: STUDIO_PREVIEW_RECONCILE_RETRY",
+      );
+      reconciled = await reconcile();
+    }
     if (reconciled.kind !== "available") {
-      console.error(`[studio] preview records unchecked: STUDIO_PREVIEW_RECORDS_UNCHECKED kind=${reconciled.kind}`);
-      return reconciled.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };
+      console.error(
+        `[studio] preview records unchecked: STUDIO_PREVIEW_RECORDS_UNCHECKED kind=${reconciled.kind}`,
+      );
+      return reconciled.kind === "temporarily_unavailable"
+        ? { kind: "temporarily_unavailable" }
+        : { kind: "refused" };
     }
   }
-  const selection: StudioPreviewSelection = { ...application, previewInstallationId: preview.previewInstallationId };
-  const [installed, launcher] = await Promise.all([
+  const selection: StudioPreviewSelection = {
+    ...application,
+    previewInstallationId: preview.previewInstallationId,
+  };
+  signal?.throwIfAborted();
+  const [firstInstalled, launcher] = await Promise.all([
     loadInstalledContext(session, dependencies, selection),
     loadOrganizationLauncher(session),
   ]);
+  signal?.throwIfAborted();
+  const installed =
+    firstInstalled.kind === "temporarily_unavailable" && firstInstalled.databaseCode === "40001"
+      ? await loadInstalledContext(session, dependencies, selection)
+      : firstInstalled;
+  if (installed !== firstInstalled)
+    console.info(
+      "[studio] retried preview context after serialization conflict: STUDIO_PREVIEW_CONTEXT_RETRY",
+    );
   if (installed.kind !== "available") {
-    console.error(`[studio] preview context unavailable: STUDIO_PREVIEW_CONTEXT_UNAVAILABLE kind=${installed.kind}`);
-    return installed.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };
+    console.error(
+      `[studio] preview context unavailable: STUDIO_PREVIEW_CONTEXT_UNAVAILABLE kind=${installed.kind}`,
+    );
+    return installed.kind === "temporarily_unavailable"
+      ? { kind: "temporarily_unavailable" }
+      : { kind: "refused" };
   }
-  const entry = launcher.kind === "available"
-    ? launcher.entries.find((candidate) => sameId(candidate.organizationId, organizationId)) : undefined;
-  if (entry === undefined) return launcher.kind === "available" ? { kind: "refused" } : { kind: "temporarily_unavailable" };
-  const services = createPlacementReadServices({ session, selection, dependencies,
-    continuationKey: getQueryContinuationKey(), tenantShortName: entry.tenantShortName,
-    organizationShortName: entry.organizationShortName });
-  return { kind: "available", draft: state.draft, behind: preview.behind, selection, context: installed.value, dependencies, services };
+  const entry =
+    launcher.kind === "available"
+      ? launcher.entries.find((candidate) => sameId(candidate.organizationId, organizationId))
+      : undefined;
+  if (entry === undefined)
+    return launcher.kind === "available"
+      ? { kind: "refused" }
+      : { kind: "temporarily_unavailable" };
+  signal?.throwIfAborted();
+  const services = createPlacementReadServices({
+    session,
+    selection,
+    dependencies,
+    continuationKey: getQueryContinuationKey(),
+    tenantShortName: entry.tenantShortName,
+    organizationShortName: entry.organizationShortName,
+  });
+  return {
+    kind: "available",
+    draft: state.draft,
+    behind: preview.behind,
+    selection,
+    context: installed.value,
+    dependencies,
+    services,
+  };
 };
