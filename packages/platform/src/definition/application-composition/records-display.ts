@@ -246,20 +246,23 @@ export const readRecordsTableContract = (
     ];
   });
   // Default visibility is explicit on every column; a column that does not declare it is not read.
-  if (
-    columnItems.some((item) => settingGroup(item)?.["visible"]?.kind !== "boolean")
-  )
+  if (columnItems.some((item) => settingGroup(item)?.["visible"]?.kind !== "boolean"))
     return undefined;
-  const defaultSort = (settingItems(settings["default_sort"]) ?? []).flatMap(
-    (item): RecordsTableSortContract[] => {
-      const key = settingGroup(item);
-      const field = key === undefined ? undefined : settingField(key["field"]);
-      if (key === undefined || field === undefined) return [];
-      return [
-        { field, direction: settingChoice(key["direction"], recordsTableSortDirections, "ascending") },
-      ];
-    },
-  );
+  // Every default sort key declares its field and direction; a key missing either is not read, so
+  // the table never runs an order other than the authored one.
+  const defaultSort: RecordsTableSortContract[] = [];
+  for (const item of settingItems(settings["default_sort"]) ?? []) {
+    const key = settingGroup(item);
+    const field = key === undefined ? undefined : settingField(key["field"]);
+    const direction = key?.["direction"];
+    if (
+      field === undefined ||
+      direction?.kind !== "choice" ||
+      !recordsTableSortDirections.some((candidate) => candidate === direction.value)
+    )
+      return undefined;
+    defaultSort.push({ field, direction: direction.value as RecordsTableSortDirection });
+  }
   const pageSize = settings["page_size"];
   // The catalogue default is the only source of the page size; a table without one is not read.
   if (pageSize?.kind !== "number") return undefined;
@@ -302,8 +305,10 @@ export const readRecordDetailContract = (
   const items = settingItems(settings["detail_fields"]);
   if (items === undefined) return undefined;
   const headingSource = settings["heading_source"];
-  if (headingSource?.kind !== "choice" || !["title", "field"].includes(headingSource.value)) return undefined;
-  const headingField = headingSource.value === "field" ? settingField(settings["heading_field"]) : undefined;
+  if (headingSource?.kind !== "choice" || !["title", "field"].includes(headingSource.value))
+    return undefined;
+  const headingField =
+    headingSource.value === "field" ? settingField(settings["heading_field"]) : undefined;
   if (headingSource.value === "field" && headingField === undefined) return undefined;
   const fields = items.flatMap((item): RecordDetailFieldContract[] => {
     const entry = settingGroup(item);
@@ -318,5 +323,9 @@ export const readRecordDetailContract = (
       },
     ];
   });
-  return { fields, ...(headingField === undefined ? {} : { headingField }), messages: displayMessages(settings) };
+  return {
+    fields,
+    ...(headingField === undefined ? {} : { headingField }),
+    messages: displayMessages(settings),
+  };
 };
