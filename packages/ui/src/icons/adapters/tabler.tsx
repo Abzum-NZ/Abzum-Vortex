@@ -1,4 +1,6 @@
 import {
+  IconSun,
+  IconMoon,
   IconSitemap,
   IconListTree,
   IconBlocks,
@@ -52,6 +54,8 @@ const tablerIcon = (Glyph: TablerIcon): ComponentType<VortexIconProps> => {
 
 /** The semantic icon set drawn with Tabler Icons, the names the shadcn registry uses for it. */
 export const icons: VortexIconAdapter = {
+  sun: tablerIcon(IconSun),
+  moon: tablerIcon(IconMoon),
   "arrow-down": tablerIcon(IconArrowDown),
   "arrow-up": tablerIcon(IconArrowUp),
   calendar: tablerIcon(IconCalendar),

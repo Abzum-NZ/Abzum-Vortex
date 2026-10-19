@@ -38,7 +38,10 @@ begin
     and organization.tenant_id = (initial_context ->> 'tenantId')::uuid
     and organization.state = 'active'
     and tenant.state = 'active'
-  for share of version;
+  -- This entry is used by ownership transfers. Upgrade the request's shared
+  -- scope before taking a record lock. NOWAIT turns competing shared readers
+  -- or upgrades into a retry instead of a lock-upgrade deadlock.
+  for update of version nowait;
 
   if not found then
     raise exception using errcode = '42501',
@@ -55,6 +58,11 @@ begin
       message = 'Human ownership transfer context changed while acquiring access lock';
   end if;
 
+  perform pg_catalog.set_config(
+    'vortex_access.exclusive_organization_id',
+    initial_context ->> 'organizationId', true
+  );
+
   return initial_context;
 end
 $function$;
@@ -66,6 +74,6 @@ revoke all on function vortex_access.lock_human_request_access_version_internal(
 grant execute on function vortex_access.lock_human_request_access_version_internal()
   to vortex_record_adapter;
 comment on function vortex_access.lock_human_request_access_version_internal() is
-  'Locks the exact active Human organization access version with a shared row lock and revalidates the full original request context.';
+  'Locks the exact active Human organization access version exclusively before an ownership transfer takes record locks, and revalidates the full original request context.';
 
 grant execute on function vortex_access.lock_human_request_access_version_internal() to postgres;
