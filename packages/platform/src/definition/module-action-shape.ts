@@ -7,6 +7,7 @@ import {
 import { changeableByPeople } from "./module-field-shape";
 import { applicationUses, type ApplicationUsePlace } from "./application-uses";
 import { fullRecordAccessRoleKeys } from "./module-permission-shape";
+import { actionValueCompatible } from "./validation/action-values";
 
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
@@ -138,8 +139,13 @@ const ownedOption = (
   const choices = effects.filter(
     (effect) => record.fields.find((field) => field.key === effect.field)?.type === "choice",
   );
-  const option = choices.length === 1 ? fixedText(choices[0]!.value) : undefined;
-  return option === undefined ? undefined : { field: choices[0]!.field, option };
+  const first = choices[0];
+  const option = first === undefined ? undefined : fixedText(first.value);
+  return first === undefined ||
+    option === undefined ||
+    !choices.every((effect) => effect.field === first.field && fixedText(effect.value) === option)
+    ? undefined
+    : { field: first.field, option };
 };
 
 const parsed = (source: ApplicationSourceDocument, actionKey: string): InlineModuleActionResult => {
@@ -209,6 +215,31 @@ export const saveInlineModuleAction = (
     if (value.kind === "map") Object.values(value.entries).forEach(checkValue);
     if (value.kind === "array") value.items.forEach(checkValue);
   };
+  const checkMappings = (target: RecordType, values: Record<string, FlowValue>): void => {
+    issues.push(
+      ...effectProblems(
+        target,
+        Object.entries(values).map(([field, value]) => ({ field, value })),
+      ),
+    );
+    const fields = new Map(record.fields.map((field) => [field.key, field]));
+    const inputs = new Map(change.inputs.map((input) => [input.key, input]));
+    for (const [key, value] of Object.entries(values)) {
+      const field = target.fields.find((entry) => entry.key === key);
+      if (
+        field !== undefined &&
+        !actionValueCompatible(
+          value,
+          field,
+          fields,
+          inputs,
+          `${module.key}:${record.key}`,
+          "source",
+        )
+      )
+        issues.push(`${target.name}: choose a compatible value for ${field.label}.`);
+    }
+  };
   for (const input of change.inputs)
     if (input.type === "record_reference")
       for (const reference of input.record_types) {
@@ -232,21 +263,9 @@ export const saveInlineModuleAction = (
         ?.record_types.find((entry) => entry.key === key);
       if (target === undefined)
         issues.push("Create record: choose a record type in this application.");
-      else
-        issues.push(
-          ...effectProblems(
-            target,
-            Object.entries(task.properties.values).map(([field, value]) => ({ field, value })),
-          ),
-        );
+      else checkMappings(target, task.properties.values);
     }
-    if (task.type === "record.set_fields")
-      issues.push(
-        ...effectProblems(
-          record,
-          Object.entries(task.properties.values).map(([field, value]) => ({ field, value })),
-        ),
-      );
+    if (task.type === "record.set_fields") checkMappings(record, task.properties.values);
     if (
       task.type === "event.announce" &&
       !module.events.some(

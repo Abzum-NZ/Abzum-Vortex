@@ -5,6 +5,7 @@ import {
   type FlowReference,
   type FlowValue,
 } from "@vortex/platform/schema";
+import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Label } from "@vortex/ui/components/label";
@@ -12,6 +13,7 @@ import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-s
 import {
   StudioOptionControl,
   studioFieldValueType,
+  studioFixedLiteralType,
   studioFlowReferenceToken,
   studioFlowValueOf,
   studioFlowValueSourceOf,
@@ -63,40 +65,44 @@ function ActionValues({
             ? (field.settings as { options: { value: string; label: string }[] }).options
             : [];
         return (
-          <div key={key} className="space-y-1 rounded-md border p-2">
-            <StudioFlowValueControl
-              id={`${id}-${key}`}
-              label={field?.label ?? key}
-              disabled={false}
-              valueType={field === undefined ? undefined : studioFieldValueType(field.type)}
-              options={options}
-              value={studioFlowValueSourceOf(value)}
-              references={references}
-              referenceCompatible={(reference) =>
-                actionValueCompatible(
-                  { kind: "reference", reference },
-                  field,
-                  new Map(subject.fields.map((entry) => [entry.key, entry])),
-                  new Map(inputs.map((entry) => [entry.key, entry])),
-                  subjectType,
-                  "source",
-                )
-              }
-              onChange={(next) => {
-                if (next !== null) onChange({ ...values, [key]: studioFlowValueOf(next) });
-              }}
-            />
+          <div key={key} className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <StudioFlowValueControl
+                id={`${id}-${key}`}
+                label={field?.label ?? key}
+                disabled={false}
+                valueType={field === undefined ? undefined : studioFieldValueType(field.type)}
+                options={options}
+                value={studioFlowValueSourceOf(value)}
+                references={references}
+                referenceCompatible={(reference) =>
+                  actionValueCompatible(
+                    { kind: "reference", reference },
+                    field,
+                    new Map(subject.fields.map((entry) => [entry.key, entry])),
+                    new Map(inputs.map((entry) => [entry.key, entry])),
+                    subjectType,
+                    "source",
+                  )
+                }
+                onChange={(next) => {
+                  if (next !== null) onChange({ ...values, [key]: studioFlowValueOf(next) });
+                }}
+              />
+            </div>
             <Button
               type="button"
-              size="sm"
-              variant="outline"
+              size="icon-sm"
+              variant="ghost"
+              aria-label={`Remove ${field?.label ?? key} mapping`}
+              title="Remove field mapping"
               onClick={() =>
                 onChange(
                   Object.fromEntries(Object.entries(values).filter(([name]) => name !== key)),
                 )
               }
             >
-              Remove field
+              <Icon name="minus" />
             </Button>
           </div>
         );
@@ -116,14 +122,31 @@ function ActionValues({
             field?.type === "choice"
               ? (field.settings as { options: { value: string }[] }).options[0]
               : undefined;
+          const type = studioFixedLiteralType(
+            field === undefined ? undefined : studioFieldValueType(field.type),
+          );
+          const reference = references.find((entry) =>
+            actionValueCompatible(
+              { kind: "reference", reference: entry.reference },
+              field,
+              new Map(subject.fields.map((entry) => [entry.key, entry])),
+              new Map(inputs.map((entry) => [entry.key, entry])),
+              subjectType,
+              "source",
+            ),
+          );
           const value: FlowValue =
             option !== undefined
               ? { kind: "literal", literal: { type: "choice", value: option.value } }
-              : field?.type === "yes_no"
-                ? { kind: "literal", literal: { type: "yes_no", value: false } }
-                : field?.type === "whole_number"
-                  ? { kind: "literal", literal: { type: "whole_number", value: 0 } }
-                  : { kind: "literal", literal: { type: "text", value: "" } };
+              : type === undefined && reference !== undefined
+                ? { kind: "reference", reference: reference.reference }
+                : type === "several_choices"
+                  ? { kind: "literal", literal: { type, value: [] } }
+                  : type === "yes_no"
+                    ? { kind: "literal", literal: { type: "yes_no", value: false } }
+                    : type === "whole_number"
+                      ? { kind: "literal", literal: { type: "whole_number", value: 0 } }
+                      : { kind: "literal", literal: { type: type ?? "text", value: "" } };
           onChange({ ...values, [key]: value });
         }}
       />
@@ -263,29 +286,35 @@ export function StudioActionTasks({
             </span>
             <Button
               type="button"
-              size="sm"
-              variant="outline"
+              size="icon-sm"
+              variant="ghost"
+              aria-label={`Move task ${index + 1} up`}
+              title="Move task up"
               disabled={index === 0}
               onClick={() => move(index, -1)}
             >
-              Move up
+              <Icon name="arrow-up" />
             </Button>
             <Button
               type="button"
-              size="sm"
-              variant="outline"
+              size="icon-sm"
+              variant="ghost"
+              aria-label={`Move task ${index + 1} down`}
+              title="Move task down"
               disabled={index === tasks.length - 1}
               onClick={() => move(index, 1)}
             >
-              Move down
+              <Icon name="arrow-down" />
             </Button>
             <Button
               type="button"
-              size="sm"
-              variant="outline"
+              size="icon-sm"
+              variant="ghost"
+              aria-label={`Remove task ${index + 1}`}
+              title="Remove task"
               onClick={() => onChange(tasks.filter((_, at) => at !== index))}
             >
-              Remove task
+              <Icon name="minus" />
             </Button>
           </div>
           {task.type === "record.create" && (
@@ -361,7 +390,27 @@ export function StudioActionTasks({
                   });
                 return (
                   <div className="space-y-2" key={at}>
-                    <Label htmlFor={`${task.id}-target-${at}`}>Copy relationships to input</Label>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor={`${task.id}-target-${at}`}>Copy relationships to input</Label>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={`Remove copy group ${at + 1}`}
+                        title="Remove copy group"
+                        disabled={task.properties.changes.length === 1}
+                        onClick={() =>
+                          replace(index, {
+                            ...task,
+                            properties: {
+                              changes: task.properties.changes.filter((_, place) => place !== at),
+                            },
+                          })
+                        }
+                      >
+                        <Icon name="minus" />
+                      </Button>
+                    </div>
                     <NativeSelect
                       id={`${task.id}-target-${at}`}
                       className="w-full"
@@ -398,6 +447,35 @@ export function StudioActionTasks({
                   </div>
                 );
               })}
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                aria-label="Add copy group"
+                title="Add copy group"
+                disabled={
+                  task.properties.changes.length >= 10 ||
+                  targets.length === 0 ||
+                  record.relationships.length === 0
+                }
+                onClick={() =>
+                  replace(index, {
+                    ...task,
+                    properties: {
+                      changes: [
+                        ...task.properties.changes,
+                        {
+                          kind: "copy_relationships",
+                          target_input: targets[0]!.key,
+                          relationships: [record.relationships[0]!.key],
+                        },
+                      ],
+                    },
+                  })
+                }
+              >
+                <Icon name="plus" />
+              </Button>
             </div>
           )}
           {task.type === "record.delete" && (
