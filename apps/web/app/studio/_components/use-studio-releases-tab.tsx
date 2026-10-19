@@ -54,11 +54,15 @@ const publicationProblemText = (
   reason: string | undefined,
   blockAlias?: string,
   compileProblem?: string,
+  sentence?: string,
 ): string => {
   // A compilation refusal names what it is about (the field, query or block) so it can be fixed.
   if (reason?.startsWith("compilation_") === true) {
     if (compileProblem !== undefined)
       return `This draft does not compile, so it cannot be published. ${compileProblem} Then try again.`;
+    // A rule with its own business sentence (a Records table feature check) says it as Studio does.
+    if (sentence !== undefined)
+      return `This draft cannot be published: ${sentence} Change it and try again.`;
     const rule = reason
       .slice("compilation_".length)
       .replace(/^vortex.definition./u, "")
@@ -231,6 +235,7 @@ export function useStudioReleasesTab({
             result.reason,
             "blockAlias" in result ? result.blockAlias : undefined,
             compileProblemOf(snapshot.draftRevision),
+            "sentence" in result ? result.sentence : undefined,
           ),
         );
         return { kind: "declined", result: result.kind, reason: result.reason };
@@ -274,6 +279,7 @@ export function useStudioReleasesTab({
           result.reason,
           "blockAlias" in result ? result.blockAlias : undefined,
           compileProblemOf(snapshot.draftRevision),
+          "sentence" in result ? result.sentence : undefined,
         ),
       );
       // A transient failure of the append may still have completed.
