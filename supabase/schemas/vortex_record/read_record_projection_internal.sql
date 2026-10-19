@@ -10,6 +10,19 @@ security invoker
 set search_path = ''
 as $function$
 begin
+  if p_requested_field_ids is not null then
+    if pg_catalog.jsonb_typeof(p_requested_field_ids) is distinct from 'array'
+      or exists (
+        select 1 from pg_catalog.jsonb_array_elements(p_requested_field_ids) as item(value)
+        where pg_catalog.jsonb_typeof(item.value) <> 'string'
+          or not pg_catalog.pg_input_is_valid(item.value #>> '{}', 'uuid')
+      ) then
+      raise exception using errcode = '22023', message = 'Requested record fields are invalid';
+    end if;
+    select coalesce(pg_catalog.jsonb_agg(distinct pg_catalog.lower(item.value)), '[]'::jsonb)
+    into p_requested_field_ids
+    from pg_catalog.jsonb_array_elements_text(p_requested_field_ids) as item(value);
+  end if;
   -- One read path: the exact access decision is unchanged; only requested values are projected.
   return query
   select row_read.projection, row_read.read_facts, row_read.read_bounds
