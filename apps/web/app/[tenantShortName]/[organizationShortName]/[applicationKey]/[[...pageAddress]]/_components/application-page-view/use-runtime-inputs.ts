@@ -371,8 +371,26 @@ export function useRuntimeInputs({
             changeTableQuery(placementId, {
               kind: "filter",
               fieldId: event.field,
-              value: event.value,
+              filter: event.value,
             });
+          };
+        // A link filter's picker reads one bounded page of the field's target records under the
+        // person's access, only when it opens or is searched; nothing is preloaded.
+        if (supportsEvent("filter_changed"))
+          events.filter_records_requested = (event: DisplaySemanticEvent) => {
+            if (event.event !== "filter_records_requested") return;
+            return requestRecordChoices(
+              model,
+              placementId,
+              {
+                fieldId: event.field,
+                ...(event.search === undefined ? {} : { search: event.search }),
+                ...(event.continuationToken === undefined
+                  ? {}
+                  : { continuationToken: event.continuationToken }),
+              },
+              () => router.refresh(),
+            );
           };
         if (supportsEvent("search_changed"))
           events.search_changed = (event: DisplaySemanticEvent) => {

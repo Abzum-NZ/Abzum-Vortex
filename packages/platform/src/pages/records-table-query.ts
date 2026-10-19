@@ -12,7 +12,10 @@ import {
   type ModuleRootId,
   type OrganizationSelectionCandidate,
   type QueryId,
-  type RecordsDisplayFormat,
+  readRecordsTableFieldFilter,
+  recordsTableFilterKindOf,
+  type RecordsTableFieldFilter,
+  type RecordsTableFilterField,
   type RecordsTableFilterValue,
   type RecordsTableQueryState,
   type RecordsTableSortKey,
@@ -42,6 +45,8 @@ import {
   type ConditionalFormattingContext,
   type RecordsTableRequestRefusal,
 } from "./records-table-features";
+import { calendarAddDays, calendarStartOfDay } from "./calendar-query";
+import { recordLinkLabelKey } from "../definition/app-index";
 
 /**
  * The one Query engine entry point a Records table reads through. The composition root supplies
@@ -79,6 +84,16 @@ export type RecordsTableQueryRequest = Readonly<{
    * requests exactly the columns it shows, and the page carries it back to the grid.
    */
   layout: GridLayoutState;
+  /**
+   * The installed facts of every field of the bound record type a filter may name (field identity
+   * to type, options, currency and link target); a filter on a field without one is refused.
+   */
+  filterTargets?: Readonly<Record<string, RecordsTableFilterTarget>>;
+  /**
+   * The organisation's time zone, read only when a date-and-time field is filterable: its days
+   * are taken in this zone. A date-and-time filter without it is refused.
+   */
+  timeZone?: string;
   /** Headings from the installed definition for declared columns that set no label (field identity to label). */
   fieldLabels?: Readonly<Record<string, string>>;
   /** Labels of the choices each choice field offers (field identity to options). */
@@ -134,108 +149,139 @@ const lowerUnique = (values: readonly string[]): string[] => [
 ];
 
 /**
- * A number filter value as the engine compares it: a safe integer as a JSON number, which matches
- * whole-number and decimal fields alike, and any other plain decimal as canonical decimal text (no
- * exponent, no leading or trailing zeros), which is how the engine carries a decimal field's value.
- * Anything else is undefined, so the command is refused rather than filtered loosely.
+ * What the installed definition says about one field a filter may name: its canonical type, its
+ * business name, a choice field's options, a money field's fixed currency and a link field's
+ * target record type. The server builds every condition from this, never from the browser.
  */
-const numberFilterValue = (raw: string): number | string | undefined => {
-  const match = /^(-?)([0-9]+)(?:\.([0-9]+))?$/.exec(raw.trim());
-  if (match === null) return undefined;
-  const sign = match[1] ?? "";
-  const whole = (match[2] ?? "").replace(/^0+(?=[0-9])/, "");
-  const fraction = (match[3] ?? "").replace(/0+$/, "");
-  if (fraction !== "") return `${sign}${whole}.${fraction}`;
-  const value = Number(whole);
-  if (!Number.isSafeInteger(value)) return undefined;
-  return sign === "-" && value !== 0 ? -value : value;
-};
-
-const ISO_CALENDAR_DAY = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/;
-
-/** The UTC start of a calendar day and of the next one, or undefined for an invalid date. */
-const utcDayBounds = (raw: string): readonly [string, string] | undefined => {
-  const match = ISO_CALENDAR_DAY.exec(raw);
-  if (match === null) return undefined;
-  const year = Number(match[1]);
-  const month = Number(match[2]) - 1;
-  const day = Number(match[3]);
-  const start = new Date(Date.UTC(year, month, day));
-  if (
-    start.getUTCFullYear() !== year ||
-    start.getUTCMonth() !== month ||
-    start.getUTCDate() !== day
-  )
-    return undefined;
-  const end = new Date(Date.UTC(year, month, day + 1));
-  return [start.toISOString(), end.toISOString()];
-};
+export type RecordsTableFilterTarget = Readonly<{
+  type: string;
+  label: string;
+  options?: readonly Readonly<{ value: string; label: string }>[];
+  currency?: string;
+  recordTypeId?: string;
+}>;
 
 /**
- * One `filter_changed` value as a typed condition over its field, chosen by the column's declared
- * format, which is also what picks the filter control. A text-like field matches a substring; a
- * number, date or yes/no field must equal the value the control reports; a date-and-time field
- * matches the whole reported calendar day, taken in UTC. An unparsable value yields undefined so the
- * command is refused rather than filtered loosely. The condition is plain JSON: the Query command
- * schema parses it into a typed condition, so a malformed one refuses the command.
+ * A number bound as the engine compares it: a safe integer as a JSON number, which matches
+ * whole-number and decimal fields alike, and any other exact decimal as its canonical text, which is
+ * how the engine carries a decimal value. The bound is already canonical, so nothing is rounded.
  */
-const filterConditionFor = (
-  format: RecordsDisplayFormat,
+const exactNumberOperand = (bound: string): number | string => {
+  if (bound.includes(".")) return bound;
+  const value = Number(bound);
+  return Number.isSafeInteger(value) ? value : bound;
+};
+
+const comparison = (
+  operator:
+    "contains" | "equals" | "in" | "greater_than_or_equal" | "less_than_or_equal" | "less_than",
   fieldId: string,
-  raw: string,
+  value: JsonValue,
+): JsonValue => ({
+  kind: "comparison",
+  operator,
+  left: { source: "field", fieldId },
+  right: { source: "value", value },
+});
+
+const allOf = (conditions: readonly JsonValue[]): JsonValue =>
+  conditions.length === 1 ? conditions[0]! : { kind: "all", conditions: [...conditions] };
+
+/**
+ * One typed filter as a Query condition over its field, chosen by the field's canonical type. The
+ * filter's kind must be the one that type takes; a choice must name the field's own options, a
+ * money range the field's fixed currency, and a link filter records of the field's target type. A
+ * date-and-time range takes whole days in the organisation's time zone: from the first instant of
+ * its start day (inclusive) to the first instant after its end day (exclusive). Returns undefined
+ * for anything else, so the request is refused rather than filtered loosely.
+ */
+const typedFilterCondition = (
+  target: RecordsTableFilterTarget,
+  fieldId: string,
+  filter: RecordsTableFieldFilter,
+  timeZone: string | undefined,
 ): JsonValue | undefined => {
-  const left = { source: "field" as const, fieldId: fieldId.toLowerCase() };
-  switch (format) {
-    case "number":
-    case "currency":
-    case "percent": {
-      const value = numberFilterValue(raw);
-      return value === undefined
-        ? undefined
-        : { kind: "comparison", operator: "equals", left, right: { source: "value", value } };
-    }
-    case "boolean":
-      return raw === "true" || raw === "false"
+  if (recordsTableFilterKindOf(target.type) !== filter.kind) return undefined;
+  switch (filter.kind) {
+    case "text":
+      return comparison("contains", fieldId, filter.text);
+    case "choice": {
+      const offered = target.options ?? [];
+      if (!filter.values.every((value) => offered.some((option) => option.value === value)))
+        return undefined;
+      return target.type === "several_choices"
         ? {
-            kind: "comparison",
-            operator: "equals",
-            left,
-            right: { source: "value", value: raw === "true" },
+            kind: "any",
+            conditions: filter.values.map((value) => comparison("contains", fieldId, value)),
           }
-        : undefined;
-    case "date":
-      return utcDayBounds(raw) === undefined
-        ? undefined
-        : { kind: "comparison", operator: "equals", left, right: { source: "value", value: raw } };
-    case "date_time": {
-      const bounds = utcDayBounds(raw);
-      return bounds === undefined
-        ? undefined
-        : {
-            kind: "all",
-            conditions: [
-              {
-                kind: "comparison",
-                operator: "greater_than_or_equal",
-                left,
-                right: { source: "value", value: bounds[0] },
-              },
-              {
-                kind: "comparison",
-                operator: "less_than",
-                left,
-                right: { source: "value", value: bounds[1] },
-              },
-            ],
-          };
+        : comparison("in", fieldId, [...filter.values]);
     }
-    default:
-      return {
-        kind: "comparison",
-        operator: "contains",
-        left,
-        right: { source: "value", value: raw },
-      };
+    case "number":
+      return allOf([
+        ...(filter.from === undefined
+          ? []
+          : [comparison("greater_than_or_equal", fieldId, exactNumberOperand(filter.from))]),
+        ...(filter.to === undefined
+          ? []
+          : [comparison("less_than_or_equal", fieldId, exactNumberOperand(filter.to))]),
+      ]);
+    case "money": {
+      if (target.currency !== undefined && target.currency !== filter.currency) return undefined;
+      const money = (amount: string): JsonValue => ({ amount, currency: filter.currency });
+      return allOf([
+        ...(filter.from === undefined
+          ? []
+          : [comparison("greater_than_or_equal", fieldId, money(filter.from))]),
+        ...(filter.to === undefined
+          ? []
+          : [comparison("less_than_or_equal", fieldId, money(filter.to))]),
+      ]);
+    }
+    case "date": {
+      if (target.type === "date")
+        return allOf([
+          ...(filter.from === undefined
+            ? []
+            : [comparison("greater_than_or_equal", fieldId, filter.from)]),
+          ...(filter.to === undefined
+            ? []
+            : [comparison("less_than_or_equal", fieldId, filter.to)]),
+        ]);
+      if (timeZone === undefined) return undefined;
+      return allOf([
+        ...(filter.from === undefined
+          ? []
+          : [
+              comparison(
+                "greater_than_or_equal",
+                fieldId,
+                calendarStartOfDay(filter.from, timeZone),
+              ),
+            ]),
+        ...(filter.to === undefined
+          ? []
+          : [
+              comparison(
+                "less_than",
+                fieldId,
+                calendarStartOfDay(calendarAddDays(filter.to, 1), timeZone),
+              ),
+            ]),
+      ]);
+    }
+    case "link":
+      return target.recordTypeId === undefined
+        ? undefined
+        : comparison(
+            "in",
+            fieldId,
+            filter.recordIds.map((recordId) => ({
+              recordTypeId: target.recordTypeId!.toLowerCase(),
+              recordId,
+            })),
+          );
+    case "yes_no":
+      return comparison("equals", fieldId, filter.value);
   }
 };
 
@@ -249,6 +295,8 @@ export type RecordsTableQueryCommand = Readonly<{
   sort?: RecordsTableSortState;
   /** The search and filters the command applies. */
   narrowing: RecordsTableNarrowing;
+  /** The declared filter fields the installed definition describes, for their filter controls. */
+  filterFields: Readonly<Record<string, RecordsTableFilterField>>;
 }>;
 
 /**
@@ -305,22 +353,50 @@ export const buildRecordsTableQueryCommand = (
     fieldId: key.fieldId.toLowerCase(),
     direction: key.direction,
   }));
+  const filterFields = Object.fromEntries(
+    filterableFieldIds.flatMap((fieldId): [string, RecordsTableFilterField][] => {
+      const target = request.filterTargets?.[fieldId];
+      const kind = target === undefined ? undefined : recordsTableFilterKindOf(target.type);
+      if (target === undefined || kind === undefined) return [];
+      if (target.type === "date_time" && request.timeZone === undefined) return [];
+      return [
+        [
+          fieldId,
+          {
+            fieldId,
+            label: request.fieldLabels?.[fieldId] ?? target.label,
+            type: target.type,
+            kind,
+            ...(target.options === undefined ? {} : { options: target.options }),
+            ...(target.currency === undefined ? {} : { currency: target.currency }),
+            ...(target.type === "date_time" && request.timeZone !== undefined
+              ? { timeZone: request.timeZone }
+              : {}),
+          },
+        ],
+      ];
+    }),
+  );
   const conditions: JsonValue[] = [];
   const appliedFilters: RecordsTableFilterValue[] = [];
-  for (const filter of state.filters) {
-    if (filter.value === "") continue;
-    const fieldId = filter.fieldId.toLowerCase();
+  for (const requested of state.filters) {
+    const fieldId = requested.fieldId.toLowerCase();
     if (!filterableFieldIds.includes(fieldId))
       return recordsTableRequestRefusal(
         "filter",
         columnFilters.enabled ? "field_not_filterable" : "feature_off",
       );
-    const column = contract.columns.find((candidate) => candidate.field.toLowerCase() === fieldId);
-    if (column === undefined) return recordsTableRequestRefusal("filter", "field_not_a_column");
-    const condition = filterConditionFor(column.format, filter.fieldId, filter.value);
-    if (condition === undefined) return recordsTableRequestRefusal("filter", "value_unparsable");
+    if (appliedFilters.some((held) => held.fieldId === fieldId))
+      return recordsTableRequestRefusal("filter", "field_filtered_twice");
+    // The address is never trusted: the filter is validated again and built from the installed field.
+    const filter = readRecordsTableFieldFilter(requested.filter);
+    const target = request.filterTargets?.[fieldId];
+    if (filter === undefined) return recordsTableRequestRefusal("filter", "value_malformed");
+    if (target === undefined) return recordsTableRequestRefusal("filter", "field_not_installed");
+    const condition = typedFilterCondition(target, fieldId, filter, request.timeZone);
+    if (condition === undefined) return recordsTableRequestRefusal("filter", "value_not_for_field");
     conditions.push(condition);
-    appliedFilters.push({ fieldId, value: filter.value });
+    appliedFilters.push({ fieldId, filter });
   }
   const filter: JsonValue | undefined =
     conditions.length === 0
@@ -366,6 +442,7 @@ export const buildRecordsTableQueryCommand = (
         command: command.data,
         ...(sort.length === 0 ? {} : { sort: { keys: sort, explicit } }),
         narrowing: { search: search ?? null, filters: appliedFilters },
+        filterFields,
       }
     : recordsTableRequestRefusal("command", "query_command_invalid");
 };
@@ -392,16 +469,39 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
       if (result.value.outcome === "refused")
         return { kind: "refused", reasonCode: result.value.reasonCode };
       const projectedRows = visibleRows(result.value.rows, built.fieldIds);
-      const links = collectRecordLinks(projectedRows);
+      // The records a link filter names are titled in the same batched read as the page's links.
+      const filterLinks = built.narrowing.filters.flatMap(({ fieldId, filter }) => {
+        const recordTypeId = request.filterTargets?.[fieldId]?.recordTypeId;
+        return filter.kind !== "link" || recordTypeId === undefined
+          ? []
+          : filter.recordIds.map((recordId) => ({ recordTypeId, recordId }));
+      });
+      const links = [...collectRecordLinks(projectedRows), ...filterLinks];
       const recordLinks =
         links.length === 0 || request.resolveRecordLinks === undefined
           ? undefined
           : await request.resolveRecordLinks(links);
+      const narrowing: RecordsTableNarrowing =
+        filterLinks.length === 0
+          ? built.narrowing
+          : {
+              ...built.narrowing,
+              recordTitles: Object.fromEntries(
+                filterLinks.map((link) => {
+                  const label = recordLinks?.get(recordLinkLabelKey(link));
+                  return [
+                    link.recordId,
+                    label?.kind === "record_link" ? label.label : "Restricted record",
+                  ];
+                }),
+              ),
+            };
       const page = request.state.page?.page ?? 1;
       const projected = projectRecordsTableData(
         request.layout,
         {
           settings: request.settings,
+          filterFields: built.filterFields,
           ...(recordLinks === undefined ? {} : { recordLinks }),
           ...(request.fieldLabels === undefined ? {} : { fieldLabels: request.fieldLabels }),
           ...(request.fieldChoiceLabels === undefined
@@ -431,7 +531,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
               values: {
                 ...projected.values,
                 ...(built.sort === undefined ? {} : { sort: built.sort }),
-                narrowing: built.narrowing,
+                narrowing,
                 page,
                 hasNextPage: nextContinuationToken !== undefined,
                 hasPreviousPage: previousContinuationToken !== undefined,

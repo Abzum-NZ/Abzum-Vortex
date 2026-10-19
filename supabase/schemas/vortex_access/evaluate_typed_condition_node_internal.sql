@@ -286,7 +286,8 @@ begin
     and operator_value in ('greater_than', 'greater_than_or_equal', 'less_than', 'less_than_or_equal')
     and operand_values[1] <> 'null'::jsonb and operand_values[2] <> 'null'::jsonb
     and operand_values[1] ->> 'currency' <> operand_values[2] ->> 'currency' then
-    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+    -- Ordering never crosses currencies. Keep candidate pushdown and row evaluation identical.
+    return p_validate_only;
   end if;
 
   if p_validate_only then return true; end if;

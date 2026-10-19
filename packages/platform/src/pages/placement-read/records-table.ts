@@ -1,6 +1,6 @@
 import "server-only";
 
-import { sameId, type JsonValue, type RecordsTableContract } from "../../schema";
+import { describeFailure, sameId, type JsonValue, type RecordsTableContract } from "../../schema";
 import { readRecordsTableQueryState, type RecordsTablePageRequest } from "../records-table-state";
 import { authoredGridLayout, resolveGridLayout, type GridLayoutState } from "../grid-view-state";
 import {
@@ -11,9 +11,9 @@ import {
 import {
   fieldChoiceLabelsOf,
   fieldDateTypesOf,
+  fieldFilterTargetsOf,
   fieldLabelsOf,
   fieldLinkTypesOf,
-  firstParameter,
   logPlacementFailure,
   placementSettingsOf,
   type PlacementModule,
@@ -21,6 +21,28 @@ import {
   type PlacementReadEntry,
 } from "./shared";
 import type { PlacementReadInput } from "./types";
+
+/**
+ * The organisation's time zone when a filterable field holds a date and time, read under the same
+ * access version the page was projected with; undefined when no such field is filterable.
+ */
+const filterTimeZone = async (
+  read: PlacementReadInput,
+  needed: boolean,
+): Promise<string | "unavailable" | undefined> => {
+  if (!needed) return undefined;
+  try {
+    const settings = await read.services.readCalendarSettings();
+    return settings.kind !== "available" ||
+      (read.accessVersion !== undefined && settings.value.accessVersion !== read.accessVersion) ||
+      settings.value.settings === undefined
+      ? "unavailable"
+      : settings.value.settings.timeZone;
+  } catch (error) {
+    console.error(`[page] table time zone unavailable cause=${describeFailure(error)}`);
+    return "unavailable";
+  }
+};
 
 /**
  * A Records table placement: one page of its bound query for its resolved inputs, the viewer's
@@ -42,8 +64,7 @@ export const readRecordsTable = async (
   const addressed = readRecordsTableQueryState(
     placementId,
     Object.entries(read.parameters).flatMap(([name, value]): [string, string][] => {
-      const text = firstParameter(value);
-      return text === undefined ? [] : [[name, text]];
+      return (typeof value === "string" ? [value] : (value ?? [])).map((text) => [name, text]);
     }),
   );
   if (addressed.kind === "malformed") {
@@ -53,14 +74,13 @@ export const readRecordsTable = async (
   }
   const queryId = String(bound.query.queryId).toLowerCase();
   const recordType = bound.query.recordType;
-  const authored = authoredGridLayout(
-    contract,
+  const readable =
     gridLayouts.readable === undefined
       ? undefined
       : (gridLayouts.readable.get(
           recordType.state === "resolved" ? String(recordType.recordTypeId).toLowerCase() : "",
-        ) ?? new Set()),
-  );
+        ) ?? new Set<string>());
+  const authored = authoredGridLayout(contract, readable);
   if (authored === undefined) {
     logPlacementFailure(address, placementId, "table_columns_withheld");
     data[placementId] = { status: "refused", reason: "not_permitted" };
@@ -80,6 +100,26 @@ export const readRecordsTable = async (
     authored,
     reset: resolvedLayout.reset,
   };
+  // A date-and-time filter takes whole days in the organisation's time zone, so the zone is read
+  // only when the table offers a filter on such a field.
+  const filterTargets = Object.fromEntries(
+    Object.entries(fieldFilterTargetsOf(bound.module)).filter(
+      ([fieldId]) => readable === undefined || readable.has(fieldId),
+    ),
+  );
+  const timeZone = contract.features.columnFilters.enabled
+    ? await filterTimeZone(
+        read,
+        contract.features.columnFilters.fields.some(
+          (field) => filterTargets[field.toLowerCase()]?.type === "date_time",
+        ),
+      )
+    : undefined;
+  if (timeZone === "unavailable") {
+    logPlacementFailure(address, placementId, "table_time_zone_unavailable");
+    data[placementId] = { status: "error" };
+    return;
+  }
   // Formatting rules are evaluated with the bound record type's declared fields and, when a rule
   // compares with a relative date, the dates counted in the organisation's time zone.
   let formatting: ConditionalFormattingContext | undefined;
@@ -115,6 +155,8 @@ export const readRecordsTable = async (
       fieldChoiceLabels: fieldChoiceLabelsOf(bound.module),
       fieldDateTypes: fieldDateTypesOf(bound.module),
       fieldLinkTypes: fieldLinkTypesOf(bound.module),
+      filterTargets,
+      ...(timeZone === undefined ? {} : { timeZone }),
       resolveRecordLinks: read.services.resolveRecordLinks,
       state: { ...addressed.state, page },
       layout,

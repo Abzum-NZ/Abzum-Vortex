@@ -120,8 +120,10 @@ export const loadHumanPreviewRuntimeContext = async (
   transaction: RequestDatabaseTransaction,
   scope: HumanInstalledRuntimeContextDependencies["scope"],
 ): Promise<InstalledRuntimeContext> => {
-  const held = scope.previewInstallationId === undefined
-    ? undefined : cachedPreviewRelease(scope.previewInstallationId);
+  const held =
+    scope.previewInstallationId === undefined
+      ? undefined
+      : cachedPreviewRelease(scope.previewInstallationId);
   const rows = await transaction.query<DatabaseRow & { readonly source: unknown }>`
     select vortex_definition.read_preview_runtime_source(
       ${held?.draftRevision ?? null}::bigint
@@ -144,7 +146,10 @@ export const loadHumanPreviewRuntimeContext = async (
   )
     throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
   // The set left out is the cached one of exactly this revision; one evicted meanwhile is read again.
-  const kept = source.data.releaseSet === null ? cachedPreviewRelease(installation.previewInstallationId) : undefined;
+  const kept =
+    source.data.releaseSet === null
+      ? cachedPreviewRelease(installation.previewInstallationId)
+      : undefined;
   if (source.data.releaseSet === null && kept?.draftRevision !== source.data.draftRevision) {
     previewReleaseSets.delete(installation.previewInstallationId.toLowerCase());
     return loadHumanPreviewRuntimeContext(transaction, scope);
@@ -208,6 +213,21 @@ const previewReleaseEvidenceSchema = z
   .strict();
 
 /**
+ * Addresses the rest of a builder request's transaction to one preview. The database validates
+ * the address on every read and change, for the same builder, organisation account and Application.
+ */
+export const addressPreviewInstallation = async (
+  transaction: RequestDatabaseTransaction,
+  previewInstallationId: string,
+): Promise<void> => {
+  await transaction.query`
+    select pg_catalog.set_config(
+      'vortex_record.preview_installation_id', ${previewInstallationId}, true
+    )
+  `;
+};
+
+/**
  * Projects the release set a new preview runs from its exact release evidence, through the same
  * projection an installation's runtime source uses, and stores it with the preview. It runs in
  * the transaction that provisioned the preview, addressed to that preview.
@@ -217,11 +237,7 @@ export const writePreviewRuntimeReleaseSet = async (
   catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
   previewInstallationId: string,
 ): Promise<void> => {
-  await transaction.query`
-    select pg_catalog.set_config(
-      'vortex_record.preview_installation_id', ${previewInstallationId}, true
-    )
-  `;
+  await addressPreviewInstallation(transaction, previewInstallationId);
   const rows = await transaction.query<DatabaseRow & { readonly evidence: unknown }>`
     select vortex_definition.read_preview_release_evidence() as evidence
   `;
