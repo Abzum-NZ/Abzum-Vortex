@@ -1,10 +1,11 @@
-begin;
-set local role vortex_owner;
+set local role vortex_record_adapter;
 
 drop function vortex_record.read_record_with_action_previews(uuid,uuid,jsonb);
 drop function vortex_record.read_record_projection_internal(uuid,uuid);
 drop function vortex_record.load_record_access_facts_internal(uuid,text,uuid,bigint,jsonb);
 drop function vortex_record.load_record_access_facts_from_installation_internal(uuid,text,uuid,bigint,jsonb,jsonb);
+
+set local role vortex_record_adapter;
 
 create or replace function vortex_record.load_record_access_facts_from_installation_internal(
   p_record_type_id uuid,
@@ -274,7 +275,7 @@ begin
     from (
       select value from pg_catalog.jsonb_array_elements_text(p_requested_field_ids)
       union all
-      select value #>> '{}' from pg_catalog.jsonb_path_query(condition_list, 'strict $.**.declaredFieldIds[*]')
+      select value #>> '{}' from pg_catalog.jsonb_path_query(condition_list, 'lax $.**.declaredFieldIds[*]')
       union all
       select dependency.value #>> '{}'
       from pg_catalog.jsonb_array_elements(target_meta -> 'fields') as field(value)
@@ -603,6 +604,8 @@ revoke all on function vortex_record.load_record_access_facts_from_installation_
 
 grant execute on function vortex_record.load_record_access_facts_from_installation_internal(uuid,text,uuid,bigint,jsonb,jsonb,jsonb) to vortex_owner;
 
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.load_record_access_facts_internal(
   p_record_type_id uuid,
   p_action_kind text,
@@ -680,6 +683,8 @@ revoke all on function vortex_record.load_record_access_facts_internal(
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_record.load_record_access_facts_internal(uuid,text,uuid,bigint,jsonb,jsonb) to vortex_owner;
+
+set local role vortex_owner;
 
 create or replace function vortex_record.read_record_projection_with_validated_types_internal(
   p_record_type_id uuid,
@@ -941,6 +946,8 @@ revoke all on function vortex_record.read_record_projection_with_validated_types
 grant execute on function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb)
   to vortex_record_adapter;
 
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.read_record_projection_internal(
   p_record_type_id uuid,
   p_record_id uuid,
@@ -972,6 +979,8 @@ comment on function vortex_record.read_record_projection_internal(uuid, uuid, js
   'Private record read: returns the readable field projection of one record together with the read facts and field bounds it was decided over, so the capabilities of the same row reuse them.';
 
 grant execute on function vortex_record.read_record_projection_internal(uuid,uuid,jsonb) to vortex_owner;
+
+set local role vortex_record_adapter;
 
 create or replace function vortex_record.read_record_with_action_previews(
   p_record_type_id uuid,
@@ -1052,4 +1061,3 @@ comment on function vortex_record.read_record_with_action_previews(uuid, uuid, j
   'Fixed record adapter for a page subject and the named actions its placements are bound to: from one read decision under the caller''s current authority, the readable projection (record) and capabilities vortex_record.read_record_with_capabilities returns, and, only when the record is readable, each action''s preview exactly as vortex_record.preview_named_action_set_announce returns it for the record''s current concurrency number and no inputs (previews, in the order given), writing nothing.';
 
 reset role;
-commit;

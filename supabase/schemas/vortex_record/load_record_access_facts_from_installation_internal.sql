@@ -266,7 +266,7 @@ begin
     from (
       select value from pg_catalog.jsonb_array_elements_text(p_requested_field_ids)
       union all
-      select value #>> '{}' from pg_catalog.jsonb_path_query(condition_list, 'strict $.**.declaredFieldIds[*]')
+      select value #>> '{}' from pg_catalog.jsonb_path_query(condition_list, 'lax $.**.declaredFieldIds[*]')
       union all
       select dependency.value #>> '{}'
       from pg_catalog.jsonb_array_elements(target_meta -> 'fields') as field(value)
