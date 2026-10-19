@@ -38,6 +38,13 @@ declare
   due_value jsonb;
   status_value jsonb;
   batched boolean := false;
+  requested_field_ids jsonb := nullif(p_page -> 'requestedFieldIds', 'null'::jsonb);
+  projected_field_ids jsonb;
+  stored_field_ids jsonb;
+  selected_fields jsonb;
+  selected_value_expression text;
+  selected_values jsonb;
+  selected_loaded jsonb;
 begin
   if p_record_type_id is null or p_record_id is null
     or p_record_type_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -59,11 +66,13 @@ begin
     if p_page ? 'installation' then
       -- The active installation this invocation read and validated once.
       loaded := vortex_record.load_record_access_facts_from_installation_internal(
-        p_record_type_id, 'read', p_record_id, null, p_page -> 'installation', p_projection_row
+        p_record_type_id, 'read', p_record_id, null, p_page -> 'installation', p_projection_row,
+        case when requested_field_ids is null then null else '[]'::jsonb end
       );
     else
       loaded := vortex_record.load_record_access_facts_internal(
-        p_record_type_id, 'read', p_record_id, null, p_projection_row
+        p_record_type_id, 'read', p_record_id, null, p_projection_row,
+        case when requested_field_ids is null then null else '[]'::jsonb end
       );
     end if;
   end if;
@@ -153,6 +162,64 @@ begin
     bounds := coalesce(case when batched then p_bounds end,
       vortex_record.decide_record_field_bounds_internal(decision));
   end if;
+  -- Keep full access bounds for capabilities; intersect only the values requested by the screen.
+  projected_field_ids := bounds -> 'readableFieldIds';
+  if requested_field_ids is not null then
+    select coalesce(pg_catalog.jsonb_agg(item.value order by item.ordinality), '[]'::jsonb)
+    into projected_field_ids
+    from pg_catalog.jsonb_array_elements(projected_field_ids) with ordinality as item(value, ordinality)
+    where requested_field_ids ? (item.value #>> '{}');
+  end if;
+  if requested_field_ids is not null and not compact then
+    if (loaded ->> 'isSystemProjection')::boolean then
+      -- Protected projections keep their bounded reader; never scan their composite view.
+      selected_loaded := vortex_record.load_record_access_facts_internal(
+        p_record_type_id, 'read', p_record_id, null, p_projection_row, projected_field_ids
+      );
+      if selected_loaded ->> 'concurrencyNumber' is distinct from loaded ->> 'concurrencyNumber' then
+        projection := pg_catalog.jsonb_build_object('outcome', 'refused');
+        return next;
+        return;
+      end if;
+      selected_values := selected_loaded -> 'fieldValues';
+    else
+      -- Decide access from condition operands first, then fetch only requested readable values.
+      -- A concurrent record change cannot splice new values into the earlier access decision.
+      select coalesce(pg_catalog.jsonb_agg(distinct item.value), '[]'::jsonb)
+      into stored_field_ids
+      from (
+        select value from pg_catalog.jsonb_array_elements(projected_field_ids)
+        union all
+        select dependency.value
+        from pg_catalog.jsonb_array_elements(loaded #> '{recordTypeMeta,fields}') as field(value)
+        cross join lateral (values
+          (field.value #> '{settings,expression,dueFieldId}'),
+          (field.value #> '{settings,expression,statusFieldId}')
+        ) as dependency(value)
+        where projected_field_ids ? pg_catalog.lower(field.value ->> 'fieldId')
+          and field.value ->> 'type' = 'calculation' and dependency.value is not null
+      ) as item(value);
+      select coalesce(pg_catalog.jsonb_agg(field.value), '[]'::jsonb) into selected_fields
+      from pg_catalog.jsonb_array_elements(loaded #> '{recordTypeMeta,fields}') as field(value)
+      where stored_field_ids ? pg_catalog.lower(field.value ->> 'fieldId');
+      selected_value_expression := coalesce(vortex_record.named_action_storage_columns_internal(
+        (loaded #>> '{recordTypeMeta,storageContractId}')::uuid, selected_fields
+      ) ->> 'valueExpression', '');
+      execute pg_catalog.format(
+        'select pg_catalog.jsonb_build_object(%s) from record_data.%I as stored
+         where stored.organisation_id = $1 and stored.record_id = $2
+           and stored.concurrency_number = $3',
+        selected_value_expression, loaded ->> 'table'
+      ) into selected_values using (loaded #>> '{context,organizationId}')::uuid,
+        p_record_id, (loaded ->> 'concurrencyNumber')::bigint;
+      if selected_values is null then
+        projection := pg_catalog.jsonb_build_object('outcome', 'refused');
+        return next;
+        return;
+      end if;
+    end if;
+    loaded := pg_catalog.jsonb_set(loaded, '{fieldValues}', selected_values);
+  end if;
   field_values := case when compact then p_loaded -> 'record' -> 'fieldValues'
     else loaded -> 'fieldValues' end;
   -- Read-time calculations are worked out here, at one statement timestamp in
@@ -181,11 +248,11 @@ begin
     select coalesce(pg_catalog.jsonb_object_agg(item.value #>> '{}', field_values -> (item.value #>> '{}')
         order by item.ordinality), '{}'::jsonb)
     into values_value
-    from pg_catalog.jsonb_array_elements(bounds -> 'readableFieldIds') with ordinality as item(value, ordinality)
+    from pg_catalog.jsonb_array_elements(projected_field_ids) with ordinality as item(value, ordinality)
     where shared -> 'columns' ? (item.value #>> '{}');
   end if;
   for field_id in
-    select item.value #>> '{}' from pg_catalog.jsonb_array_elements(bounds -> 'readableFieldIds') as item(value)
+    select item.value #>> '{}' from pg_catalog.jsonb_array_elements(projected_field_ids) as item(value)
     where read_time_fields <> '{}'::jsonb
   loop
     if not (shared -> 'columns' ? field_id) then
