@@ -872,7 +872,8 @@ for (const file of files.filter(
 
 // A Records table grid feature exists in exactly three registries: the platform contract (with its
 // one capability check), Studio's Features panel and the UI's lazy chunks. All three name the same
-// features, and only the UI registry imports a feature's chunk, so there is no second gating path.
+// features, and only the UI registry imports a feature's chunk, so there is no second gating path
+// (the core header menu and toolbar beside it are imported directly; auto-size is their own chunk).
 {
   const registries: Array<[string, RegExp]> = [
     [
@@ -911,7 +912,11 @@ for (const file of files.filter(
   for (const file of codeFiles.filter((candidate) => candidate.startsWith("packages/ui/src/")))
     if (file !== `${chunkDirectory}registry.tsx` && !file.startsWith(chunkDirectory)) {
       const content = read(file);
-      for (const match of content.matchAll(/from\s+"[^"]*grid-features\/(?!registry")[^"]+"/g))
+      // The registry, the header menu and the toolbar are the table's core shell; every other module
+      // there is a feature chunk only the registry (or the core shell) loads.
+      for (const match of content.matchAll(
+        /from\s+"[^"]*grid-features\/(?!(?:registry|column-menu|toolbar)")[^"]+"/g,
+      ))
         add("grid-feature-registry", file, lineAt(content, match.index ?? 0), match[0]);
     }
 }
