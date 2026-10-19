@@ -3377,6 +3377,20 @@
     padding: 0px;
   }
 }
+/* Compact selectable navigation rows share one component shape across Studio panes. */
+:scope .cn-item.cn-item-variant-navigation {
+  border-color: transparent;
+  height: calc(var(--spacing) * 8);
+  gap: calc(var(--spacing) * 2);
+  border-radius: calc(var(--radius) * 0.8);
+  padding-inline: calc(var(--spacing) * 2);
+  padding-block: 0;
+  &[data-two-line="true"] {
+    height: auto;
+    min-height: calc(var(--spacing) * 12);
+    padding-block: var(--spacing);
+  }
+}
 :scope .cn-item-media {
   gap: calc(var(--spacing, 0.25rem) * 2);
   &:is(:where(.group\/item):has(*[data-slot="item-description"]) *) {

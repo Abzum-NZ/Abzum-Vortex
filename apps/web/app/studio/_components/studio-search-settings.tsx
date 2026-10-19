@@ -315,7 +315,7 @@ export function StudioSearchOverview({
               Search is on
             </Label>
           </div>
-          <ul className="list-none space-y-2" aria-label="Found in search">
+          <ul className="m-0 list-none space-y-2 p-0" aria-label="Found in search">
             {found.map(({ reference, module, record }) => (
               <li key={reference}>
                 {module === undefined || record === undefined ? (

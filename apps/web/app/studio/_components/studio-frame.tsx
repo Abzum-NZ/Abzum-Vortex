@@ -25,6 +25,13 @@ import {
   SheetTitle,
 } from "@vortex/ui/components/sheet";
 import { Icon, type VortexIconName } from "@vortex/ui";
+import { Badge } from "@vortex/ui/components/badge";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@vortex/ui/components/collapsible";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import { Separator } from "@vortex/ui/components/separator";
 import { cn } from "@vortex/ui/lib/utils";
 
@@ -355,7 +362,11 @@ export function StudioFrame<Key extends string>({
   }, [dockInspector, hasInspector]);
   useEffect(() => {
     const shortcut = (event: globalThis.KeyboardEvent) => {
-      if (event.target instanceof Element && event.target.closest('[role="dialog"], [role="alertdialog"]')) return;
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[role="dialog"], [role="alertdialog"]')
+      )
+        return;
       if ((!event.ctrlKey && !event.metaKey) || event.altKey || event.shiftKey) return;
       if (event.key === ".") {
         event.preventDefault();
@@ -371,7 +382,13 @@ export function StudioFrame<Key extends string>({
   }, [focusCanvas, toggleInspector]);
   const previousSelection = useRef(selectionKey);
   useEffect(() => {
-    if (hasInspector && previousSelection.current !== selectionKey && wide && !dockInspector && !focused)
+    if (
+      hasInspector &&
+      previousSelection.current !== selectionKey &&
+      wide &&
+      !dockInspector &&
+      !focused
+    )
       setNarrowInspectorOpen(true);
     previousSelection.current = selectionKey;
   }, [selectionKey, wide, dockInspector, focused, hasInspector]);
@@ -476,7 +493,10 @@ export function StudioFrame<Key extends string>({
           </div>
         </SheetContent>
       </Sheet>
-      <Sheet open={hasInspector && !dockInspector && narrowInspectorOpen} onOpenChange={setNarrowInspectorOpen}>
+      <Sheet
+        open={hasInspector && !dockInspector && narrowInspectorOpen}
+        onOpenChange={setNarrowInspectorOpen}
+      >
         <SheetContent side="right" className="w-96 max-w-full p-0">
           <SheetHeader className="sr-only">
             <SheetTitle>{inspectorLabel}</SheetTitle>
@@ -499,28 +519,119 @@ export function StudioPanelShell({
   description,
   action,
   hidden,
+  search,
   children,
 }: Readonly<{
   title: string;
   description?: string | undefined;
   action?: ReactNode;
+  search?: ReactNode;
   /** A panel of another rail tab stays mounted (keeping its state) but is not shown. */
   hidden?: boolean | undefined;
   children: ReactNode;
 }>) {
   return (
     <div hidden={hidden} className={cn("min-h-0 flex-1 flex-col", hidden ? "hidden" : "flex")}>
-      <div className="flex shrink-0 items-start justify-between gap-2 border-b border-border px-3 py-2">
-        <div className="flex min-w-0 flex-col">
-          <h2 className="text-sm font-medium text-foreground">{title}</h2>
-          {description === undefined ? null : (
-            <p className="text-xs text-muted-foreground">{description}</p>
+      <div className="flex shrink-0 items-center justify-between gap-2 px-4 pt-4 pb-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <h2 className="text-base font-semibold text-foreground">{title}</h2>
+          {description !== undefined && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={`About ${title.toLowerCase()}`}
+                    className="flex size-6 items-center justify-center text-muted-foreground"
+                  />
+                }
+              >
+                <Icon name="info" className="size-4" />
+              </TooltipTrigger>
+              <TooltipContent>{description}</TooltipContent>
+            </Tooltip>
           )}
         </div>
         {action}
       </div>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">{children}</div>
+      {search !== undefined && <div className="shrink-0 px-4 pb-3">{search}</div>}
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-3">{children}</div>
     </div>
+  );
+}
+
+/** Sentence-case navigator groups; collapsible sections remember their state on this device. */
+export function StudioSection({
+  title,
+  count,
+  action,
+  storageKey,
+  children,
+}: Readonly<{
+  title: string;
+  count?: number;
+  action?: ReactNode;
+  storageKey?: string;
+  children: ReactNode;
+}>) {
+  const [closedKeys, setClosedKeys] = useState<ReadonlySet<string>>(() => new Set());
+  useEffect(() => {
+    if (storageKey === undefined) return;
+    try {
+      if (localStorage.getItem(`vortex:studio:section:${storageKey}`) === "closed")
+        setClosedKeys((keys) => new Set([...keys, storageKey]));
+    } catch {
+      /* Storage can be disabled. */
+    }
+  }, [storageKey]);
+  const open = storageKey === undefined || !closedKeys.has(storageKey);
+  const heading = (
+    <>
+      <span className="min-w-0 truncate">{title}</span>
+      {count !== undefined && (
+        <Badge variant="secondary" className="tabular-nums">
+          {count}
+        </Badge>
+      )}
+    </>
+  );
+  if (storageKey === undefined)
+    return (
+      <section aria-label={title} className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="flex items-center gap-2 text-sm font-medium">{heading}</h3>
+          {action}
+        </div>
+        {children}
+      </section>
+    );
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={(next) => {
+        setClosedKeys((keys) => {
+          const updated = new Set(keys);
+          if (next) updated.delete(storageKey);
+          else updated.add(storageKey);
+          return updated;
+        });
+        try {
+          localStorage.setItem(`vortex:studio:section:${storageKey}`, next ? "open" : "closed");
+        } catch {
+          /* Storage can be disabled. */
+        }
+      }}
+      className="space-y-2"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <CollapsibleTrigger className="flex min-h-8 items-center gap-2 rounded-md text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Icon name={open ? "chevron-down" : "chevron-right"} className="size-4" />
+          {heading}
+        </CollapsibleTrigger>
+        {action}
+      </div>
+      <CollapsibleContent>{children}</CollapsibleContent>
+    </Collapsible>
   );
 }
 
