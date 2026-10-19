@@ -1,28 +1,44 @@
 "use client";
-import { Item, ItemContent, ItemDescription, ItemTitle } from "@vortex/ui/components/item";
-import { StudioPanelShell } from "./studio-frame";
+import { Badge } from "@vortex/ui/components/badge";
+import { StudioNavItem } from "./studio-nav-tree";
+import { StudioPanelShell, StudioSection } from "./studio-frame";
 import { studioReleasesSections, type StudioReleasesSection } from "./studio-rail-tabs";
 
 /** The Releases tab's panel: what it can open in the centre. Publishing itself is the top bar's Publish button. */
-export function StudioReleasesPanel({ hidden, section, onSection, savedStateLabel }: Readonly<{
+export function StudioReleasesPanel({
+  hidden,
+  section,
+  onSection,
+  savedStateLabel,
+}: Readonly<{
   hidden: boolean;
   section: StudioReleasesSection;
   onSection: (section: StudioReleasesSection) => void;
   savedStateLabel: string;
 }>) {
-  return <StudioPanelShell title="Releases" hidden={hidden}
-    description="Published versions of this application. Organisations install and upgrade them from the App Store.">
-    <ul className="list-none space-y-1" aria-label="Release tools">
-      {studioReleasesSections.map((entry) => <li key={entry.value}>
-        <Item size="sm" variant={section === entry.value ? "muted" : "default"}
-          render={<button type="button" aria-pressed={section === entry.value} onClick={() => onSection(entry.value)} />}>
-          <ItemContent>
-            <ItemTitle>{entry.label}</ItemTitle>
-            <ItemDescription>{entry.description}</ItemDescription>
-          </ItemContent>
-        </Item>
-      </li>)}
-    </ul>
-    <p className="text-sm text-muted-foreground">Draft: {savedStateLabel}. Publish a new version with Publish… at the top.</p>
-  </StudioPanelShell>;
+  return (
+    <StudioPanelShell title="Releases" hidden={hidden}>
+      <StudioSection title="Release tools">
+        <ul className="m-0 list-none space-y-1 p-0" aria-label="Release tools">
+          {studioReleasesSections.map((entry) => (
+            <li key={entry.value}>
+              <StudioNavItem
+                label={entry.label}
+                description={entry.description}
+                icon={entry.value === "history" ? "history" : "panel-left"}
+                selected={section === entry.value}
+                onClick={() => onSection(entry.value)}
+                meta={
+                  entry.value === "import" ? <Badge variant="outline">Advanced</Badge> : undefined
+                }
+              />
+            </li>
+          ))}
+        </ul>
+      </StudioSection>
+      <Badge variant="outline" role="status">
+        {savedStateLabel}
+      </Badge>
+    </StudioPanelShell>
+  );
 }

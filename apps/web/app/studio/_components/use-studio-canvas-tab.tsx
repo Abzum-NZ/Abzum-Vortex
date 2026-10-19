@@ -325,7 +325,6 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
   </>;
 
   const inspectorPanel = <StudioInspector inspector={inspector} labelsKey={selectionKey}
-    title={inspector.status === "resolved" ? selectedName ?? inspector.descriptor.label : ""}
     labels={editable ? {
       isApplication: selected?.kind === "application",
       label: selected?.kind === "application" ? source.body.name : selectedPage?.name ?? "",
