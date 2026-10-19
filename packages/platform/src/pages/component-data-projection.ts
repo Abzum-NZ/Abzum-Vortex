@@ -11,6 +11,7 @@ import {
   type GridLayoutState,
   type JsonValue,
   type RecordsDisplayFormat,
+  type RecordsTableFilterField,
   type RecordsTableFilterValue,
   type RecordsTableSortState,
   type tableCellTypeKeys,
@@ -172,6 +173,12 @@ export type ProjectedTableValues = Readonly<{
 export type RecordsTableNarrowing = Readonly<{
   search: string | null;
   filters: readonly RecordsTableFilterValue[];
+  /**
+   * The titles of the records the link filters name, read under the viewer's access in the page's
+   * one batched link read (record identity to title); a record the viewer may not read is
+   * "Restricted record".
+   */
+  recordTitles?: Readonly<Record<string, string>>;
 }>;
 
 export type ProjectedRecordDetailValues = Readonly<{
@@ -210,6 +217,8 @@ export type ComponentDataProjectionInput = Readonly<{
   fieldLinkTypes?: Readonly<Record<string, LinkFieldType>>;
   /** The labels of the linked records the rows carry; absent when they could not be read. */
   recordLinks?: ProjectedRecordLinks;
+  /** The filterable fields of a table, described for their filter controls (field identity to field). */
+  filterFields?: Readonly<Record<string, RecordsTableFilterField>>;
   /** The declared columns of every table field of the installed definition (field identity to columns), so a record detail shows its rows. */
   fieldTableColumns?: Readonly<Record<string, readonly TableFieldColumn[]>>;
   /** What a Records table's formatting rules are evaluated with; supplied only when they are on. */
@@ -525,6 +534,7 @@ export const projectRecordsTableData = (
     contract,
     visibleFieldIds,
     completeRows,
+    input.filterFields,
     formatting?.projection,
   );
 
