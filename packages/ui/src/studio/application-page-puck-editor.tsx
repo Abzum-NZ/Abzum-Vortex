@@ -18,7 +18,11 @@ import {
 } from "@vortex/platform/schema";
 import type { CompiledItem, SourceItem, SourcePageZone } from "@vortex/platform/schema";
 import type { FieldInputControlReleaseMap } from "../registry";
-import { createAppearanceRootProps, type PlatformThemeTokens } from "../theme";
+import {
+  createAppearanceRootProps,
+  createThemeRootProps,
+  type PlatformThemeTokens,
+} from "../theme";
 import { createPlatformComponentRegistryForReleases } from "../combined-registry";
 import { getVortexPuckConfig } from "../puck-config";
 import { contentConfigFor } from "../shell-outlet";
@@ -651,11 +655,13 @@ function ApplicationPageSlotPuckEditor({
         className="min-h-96 overflow-x-auto bg-muted/40 px-4 py-4"
       >
         <div
+          {...createThemeRootProps(frame?.theme, platformThemeTokens)}
           {...createAppearanceRootProps(appearance)}
           data-vortex-studio-page-frame=""
-          className="mx-auto overflow-clip rounded-xl bg-background shadow-lg ring-1 ring-border"
+          className="mx-auto overflow-clip rounded-xl bg-background text-foreground shadow-lg ring-1 ring-border"
           style={
             {
+              ...createThemeRootProps(frame?.theme, platformThemeTokens).style,
               ...createAppearanceRootProps(appearance).style,
               width,
               zoom: scale > 0 ? scale : 1,
