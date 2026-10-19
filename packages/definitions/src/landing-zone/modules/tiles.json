@@ -1676,6 +1676,7 @@
     {
       "id": "qry_landing_zone_tiles",
       "key": "landing_zone_tiles",
+      "exposure": "private",
       "label": "Tiles",
       "record_type": "tile",
       "inputs": [],
@@ -1717,6 +1718,7 @@
     {
       "id": "qry_landing_zone_favourites",
       "key": "landing_zone_favourites",
+      "exposure": "private",
       "label": "Favourites",
       "record_type": "tile",
       "inputs": [],
@@ -1762,6 +1764,7 @@
     {
       "id": "qry_landing_zone_applications",
       "key": "landing_zone_applications",
+      "exposure": "private",
       "label": "Applications",
       "record_type": "application",
       "inputs": [],

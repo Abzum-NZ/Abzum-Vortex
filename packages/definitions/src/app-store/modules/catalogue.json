@@ -290,6 +290,7 @@
     {
       "id": "qry_store_applications",
       "key": "store_applications",
+      "exposure": "private",
       "record_type": "store_application",
       "inputs": [],
       "select": [

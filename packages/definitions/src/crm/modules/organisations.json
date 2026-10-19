@@ -672,6 +672,7 @@
     {
       "id": "qry_crm_companies",
       "key": "crm_companies",
+      "exposure": "private",
       "label": "Companies",
       "record_type": "company",
       "inputs": [],

@@ -507,6 +507,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
     {
       id: "qry_iam_access_requests",
       key: "iam_access_requests",
+      exposure: "private",
       label: "Access requests",
       record_type: "access_request",
       inputs: [],
