@@ -5,6 +5,11 @@
  * installed field before it builds a Query condition from it.
  */
 import type { RecordsTableFilterKind } from "../definition/application-composition/records-table-features/column-filters";
+import {
+  compareExactDecimals,
+  normalizeExactDecimal,
+  parseExactDecimal,
+} from "../records/exact-decimal";
 
 /** The longest text filter, and the most values a choice filter and records a link filter name. */
 export const RECORDS_TABLE_MAXIMUM_FILTER_TEXT_LENGTH = 200;
@@ -58,30 +63,19 @@ export const canonicalRecordsTableDecimal = (raw: string): string | undefined =>
   const match = DECIMAL_PATTERN.exec(raw.trim());
   if (match === null) return undefined;
   const whole = (match[2] ?? "").replace(/^0+(?=[0-9])/, "");
-  const fraction = (match[3] ?? "").replace(/0+$/, "");
-  const sign = match[1] === "-" && (whole !== "0" || fraction !== "") ? "-" : "";
-  return `${sign}${whole}${fraction === "" ? "" : `.${fraction}`}`;
+  const fraction = match[3];
+  return normalizeExactDecimal(
+    `${match[1]}${whole}${fraction === undefined ? "" : `.${fraction}`}`,
+  );
 };
 
 /** Compares two canonical decimals exactly: negative, zero or positive. */
 export const compareRecordsTableDecimals = (left: string, right: string): number => {
-  const negativeLeft = left.startsWith("-");
-  const negativeRight = right.startsWith("-");
-  if (negativeLeft !== negativeRight) return negativeLeft ? -1 : 1;
-  const [leftWhole = "", leftFraction = ""] = left.replace("-", "").split(".");
-  const [rightWhole = "", rightFraction = ""] = right.replace("-", "").split(".");
-  const width = Math.max(leftFraction.length, rightFraction.length);
-  const leftDigits = `${leftWhole}${leftFraction.padEnd(width, "0")}`;
-  const rightDigits = `${rightWhole}${rightFraction.padEnd(width, "0")}`;
-  const magnitude =
-    leftWhole.length !== rightWhole.length
-      ? leftWhole.length - rightWhole.length
-      : leftDigits < rightDigits
-        ? -1
-        : leftDigits > rightDigits
-          ? 1
-          : 0;
-  return negativeLeft ? -magnitude : magnitude;
+  const first = parseExactDecimal(left);
+  const second = parseExactDecimal(right);
+  if (first === undefined || second === undefined)
+    throw new Error("A filter comparison requires canonical decimal bounds");
+  return compareExactDecimals(first, second);
 };
 
 /** Whether text is a real calendar day, `YYYY-MM-DD`. */
@@ -91,9 +85,14 @@ export const isRecordsTableCalendarDay = (raw: string): boolean => {
   const year = Number(match[1]);
   const month = Number(match[2]) - 1;
   const day = Number(match[3]);
-  const date = new Date(Date.UTC(year, month, day));
+  const date = new Date(0);
+  date.setUTCFullYear(year, month, day);
+  date.setUTCHours(0, 0, 0, 0);
   return (
-    date.getUTCFullYear() === year && date.getUTCMonth() === month && date.getUTCDate() === day
+    year >= 1 &&
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month &&
+    date.getUTCDate() === day
   );
 };
 
@@ -135,7 +134,8 @@ export const readRecordsTableFieldFilter = (
     held.length > 0 &&
     held.length <= maximum &&
     held.every((entry) => typeof entry === "string" && item(entry)) &&
-    new Set(held.map((entry: string) => entry.toLowerCase())).size === held.length
+    new Set(held.map((entry: string) => (record.kind === "link" ? entry.toLowerCase() : entry)))
+      .size === held.length
       ? (held as string[])
       : undefined;
   switch (record.kind) {

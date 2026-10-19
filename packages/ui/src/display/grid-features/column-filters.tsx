@@ -6,6 +6,8 @@ import {
   compareRecordsTableDecimals,
   encodeRecordsTableFieldFilter,
   isRecordsTableCalendarDay,
+  RECORDS_TABLE_MAXIMUM_FILTER_CHOICES,
+  RECORDS_TABLE_MAXIMUM_FILTER_RECORDS,
   type RecordsTableFieldFilter,
   type RecordsTableFilterField,
 } from "@vortex/platform/schema";
@@ -135,6 +137,16 @@ function TextEditor({
   const id = useId();
   const [text, setText] = useState(applied?.text ?? "");
   const committed = useRef(applied?.text ?? "");
+  const [shown, setShown] = useState(applied?.text ?? "");
+  const incoming = applied?.text ?? "";
+  if (shown !== incoming) {
+    setShown(incoming);
+    // Acknowledging our own commit must not erase text typed while its read was pending.
+    if (incoming !== committed.current) {
+      setText(incoming);
+      committed.current = incoming;
+    }
+  }
   const commit = (next: string): void => {
     const trimmed = next.trim();
     if (trimmed === committed.current) return;
@@ -181,9 +193,16 @@ function ChoiceEditor({
   onCommit: (filter: RecordsTableFieldFilter | undefined) => void;
 }>): ReactElement {
   const baseId = useId();
-  const chosen = applied?.values ?? [];
+  const incoming = JSON.stringify(applied?.values ?? []);
+  const [shown, setShown] = useState(incoming);
+  const [chosen, setChosen] = useState<readonly string[]>(applied?.values ?? []);
+  if (shown !== incoming) {
+    setShown(incoming);
+    setChosen(applied?.values ?? []);
+  }
   const toggle = (value: string, on: boolean): void => {
     const next = on ? [...chosen, value] : chosen.filter((held) => held !== value);
+    setChosen(next);
     onCommit(next.length === 0 ? undefined : { kind: "choice", values: next });
   };
   return (
@@ -194,6 +213,10 @@ function ChoiceEditor({
           <Checkbox
             id={`${baseId}-${index}`}
             checked={chosen.includes(option.value)}
+            disabled={
+              !chosen.includes(option.value) &&
+              chosen.length >= RECORDS_TABLE_MAXIMUM_FILTER_CHOICES
+            }
             onCheckedChange={(on: boolean) => toggle(option.value, on)}
           />
           <Label htmlFor={`${baseId}-${index}`} className="font-normal">
@@ -317,7 +340,10 @@ function RangeEditor({
 const dayOf = (iso: string | undefined): Date | undefined => {
   if (iso === undefined || !isRecordsTableCalendarDay(iso)) return undefined;
   const [year, month, day] = iso.split("-").map(Number) as [number, number, number];
-  return new Date(year, month - 1, day);
+  const date = new Date(0);
+  date.setFullYear(year, month - 1, day);
+  date.setHours(0, 0, 0, 0);
+  return date;
 };
 
 /**
@@ -431,7 +457,13 @@ function LinkEditor({
   const [choices, setChoices] = useState<readonly RecordChoiceOption[]>([]);
   const [state, setState] = useState<"idle" | "loading" | "failed">("idle");
   const generation = useRef(0);
-  const chosen = applied?.recordIds ?? [];
+  const incoming = JSON.stringify(applied?.recordIds ?? []);
+  const [shown, setShown] = useState(incoming);
+  const [chosen, setChosen] = useState<readonly string[]>(applied?.recordIds ?? []);
+  if (shown !== incoming) {
+    setShown(incoming);
+    setChosen(applied?.recordIds ?? []);
+  }
   const latestEvents = useRef(events);
   latestEvents.current = events;
   useEffect(() => {
@@ -473,6 +505,7 @@ function LinkEditor({
   }, [open, search, field.fieldId]);
   const remove = (recordId: string): void => {
     const next = chosen.filter((held) => held !== recordId);
+    setChosen(next);
     onCommit(next.length === 0 ? undefined : { kind: "link", recordIds: next });
   };
   return (
@@ -509,8 +542,15 @@ function LinkEditor({
         }}
         onInputValueChange={(next: string) => setSearch(next)}
         onValueChange={(item: RecordChoiceOption | null) => {
-          if (item === null || chosen.includes(item.recordId.toLowerCase())) return;
-          onCommit({ kind: "link", recordIds: [...chosen, item.recordId.toLowerCase()] });
+          if (
+            item === null ||
+            chosen.includes(item.recordId.toLowerCase()) ||
+            chosen.length >= RECORDS_TABLE_MAXIMUM_FILTER_RECORDS
+          )
+            return;
+          const next = [...chosen, item.recordId.toLowerCase()];
+          setChosen(next);
+          onCommit({ kind: "link", recordIds: next });
         }}
         itemToStringLabel={(item: RecordChoiceOption) => item.title}
         itemToStringValue={(item: RecordChoiceOption) => item.recordId}
@@ -520,6 +560,7 @@ function LinkEditor({
         <ComboboxInput
           placeholder={`Find ${field.label}`}
           aria-label={`Find ${field.label} records`}
+          disabled={chosen.length >= RECORDS_TABLE_MAXIMUM_FILTER_RECORDS}
           onKeyDown={(event) => event.stopPropagation()}
         />
         <ComboboxContent>
@@ -584,6 +625,7 @@ function FilterEditor({
   events: DisplayEventHandlers | undefined;
 }>): ReactElement {
   const applied = appliedFilter(narrowing, field.fieldId);
+  const rangeKey = applied === undefined ? "" : encodeRecordsTableFieldFilter(applied);
   const onCommit = (filter: RecordsTableFieldFilter | undefined): void =>
     commitFilter(events, field.fieldId, filter);
   const of = <Kind extends RecordsTableFieldFilter["kind"]>(kind: Kind) =>
@@ -596,11 +638,13 @@ function FilterEditor({
     case "choice":
       return <ChoiceEditor field={field} applied={of("choice")} onCommit={onCommit} />;
     case "number":
-      return <RangeEditor field={field} applied={of("number")} onCommit={onCommit} />;
+      return (
+        <RangeEditor key={rangeKey} field={field} applied={of("number")} onCommit={onCommit} />
+      );
     case "money":
-      return <RangeEditor field={field} applied={of("money")} onCommit={onCommit} />;
+      return <RangeEditor key={rangeKey} field={field} applied={of("money")} onCommit={onCommit} />;
     case "date":
-      return <DateEditor field={field} applied={of("date")} onCommit={onCommit} />;
+      return <DateEditor key={rangeKey} field={field} applied={of("date")} onCommit={onCommit} />;
     case "link":
       return (
         <LinkEditor
