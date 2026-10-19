@@ -341,7 +341,8 @@ export const logPlacementFailure = (
     | "create_field_default_unprojected"
     | BoardPlacementFailureCause
     | "board_payload_invalid"
-    | "table_state_malformed",
+    | "table_state_malformed"
+    | "table_columns_withheld",
   detail?: string,
 ): void => {
   console.error(

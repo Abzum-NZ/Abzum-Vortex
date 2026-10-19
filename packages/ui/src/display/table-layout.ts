@@ -111,20 +111,13 @@ export const useGridLayout = ({
   stored: GridLayoutState | undefined;
   events: DisplayEventHandlers | undefined;
 }>): GridLayoutControls => {
-  const fallback = useMemo(
-    (): GridLayoutState | undefined =>
-      contract === undefined
-        ? undefined
-        : {
-            // Before the page is read there is nothing to store; the authored layout shows.
-            persisted: false,
-            queryId: "",
-            revision: null,
-            layout: authoredGridLayout(contract),
-            reset: false,
-          },
-    [contract],
-  );
+  const fallback = useMemo((): GridLayoutState | undefined => {
+    const authored = contract === undefined ? undefined : authoredGridLayout(contract);
+    // Before the page is read there is nothing to store; the authored layout shows.
+    return authored === undefined
+      ? undefined
+      : { persisted: false, queryId: "", revision: null, layout: authored, authored, reset: false };
+  }, [contract]);
   const source = stored ?? fallback;
   const [local, setLocal] = useState<Local | undefined>(() =>
     source === undefined ? undefined : startFrom(source),
@@ -143,8 +136,8 @@ export const useGridLayout = ({
     setLocal(current);
   }
   const layout = current?.layout ?? { columns: [] };
-  const latest = useRef({ current, carried, contract, events });
-  latest.current = { current, carried, contract, events };
+  const latest = useRef({ current, carried, events });
+  latest.current = { current, carried, events };
   const updateLocal = useCallback((update: (held: Local | undefined) => Local | undefined) => {
     const next = update(latest.current.current);
     latest.current.current = next;
@@ -285,15 +278,15 @@ export const useGridLayout = ({
       }, true),
     [change, contract],
   );
-  const reset = useCallback(() => {
-    if (contract === undefined) return;
-    const authored = authoredGridLayout(contract);
-    updateLocal((held) =>
-      held === undefined
-        ? held
-        : { ...held, layout: authored, commits: held.commits + 1, resetting: true },
-    );
-  }, [contract, updateLocal]);
+  const reset = useCallback(
+    () =>
+      updateLocal((held) =>
+        held === undefined
+          ? held
+          : { ...held, layout: held.base.authored, commits: held.commits + 1, resetting: true },
+      ),
+    [updateLocal],
+  );
 
   // Stores committed changes: one write at a time, the latest layout after the person pauses.
   const writer = useRef<{
@@ -308,20 +301,9 @@ export const useGridLayout = ({
     if (held.busy) {
       return;
     }
-    const {
-      current: snapshot,
-      carried: loaded,
-      contract: declaredContract,
-      events: handlers,
-    } = latest.current;
+    const { current: snapshot, carried: loaded, events: handlers } = latest.current;
     const onColumns = handlers?.columns_changed;
-    if (
-      snapshot === undefined ||
-      !snapshot.base.persisted ||
-      declaredContract === undefined ||
-      onColumns === undefined
-    )
-      return;
+    if (snapshot === undefined || !snapshot.base.persisted || onColumns === undefined) return;
     const loadedKeys = new Set(loaded.map((column) => column.key.toLowerCase()));
     held.busy = true;
     let result: GridLayoutCommitResult = { outcome: "unavailable" };
@@ -353,7 +335,7 @@ export const useGridLayout = ({
     } else if (result.outcome === "conflict") {
       // Another tab stored a newer layout first: show it, from its revision.
       const adopted = resolveGridLayout(
-        declaredContract,
+        snapshot.base.authored,
         result.stored ?? undefined,
         snapshot.base.queryId,
       ).layout;
@@ -405,10 +387,7 @@ export const useGridLayout = ({
     [],
   );
 
-  const authored = useMemo(
-    () => (contract === undefined ? undefined : authoredGridLayout(contract)),
-    [contract],
-  );
+  const authored = current?.base.authored;
   const arranged = authored !== undefined && !sameLayout(layout, authored);
   return {
     columns,

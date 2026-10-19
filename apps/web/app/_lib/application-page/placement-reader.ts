@@ -53,6 +53,7 @@ import {
   isRecord,
   describeFailure,
   readRecordsTableQueryState,
+  authoredGridLayout,
   resolveGridLayout,
   type GridLayoutState,
   type RecordsTablePageRequest,
@@ -895,12 +896,27 @@ export const readPlacement = async (
       data[placementId] = { status: "refused", reason: "not_permitted" };
       return;
     }
-    // Which columns show is the person's stored layout, checked against the declared columns; the
-    // read requests exactly those columns and the page carries the layout back to the grid.
+    // Which columns show is the person's stored layout, checked against the declared columns and
+    // their current field policy; the read requests exactly those columns and the page carries
+    // the layout back to the grid. A column the person can read on no record is never listed.
     const queryId = String(bound.query.queryId).toLowerCase();
+    const recordType = bound.query.recordType;
+    const authored = authoredGridLayout(
+      tableContract,
+      gridLayouts.readable === undefined
+        ? undefined
+        : (gridLayouts.readable.get(
+            recordType.state === "resolved" ? String(recordType.recordTypeId).toLowerCase() : "",
+          ) ?? new Set()),
+    );
+    if (authored === undefined) {
+      logPlacementFailure(address, placementId, "table_columns_withheld");
+      data[placementId] = { status: "refused", reason: "not_permitted" };
+      return;
+    }
     const stored = gridLayouts.stored.get(placementId.toLowerCase());
     const resolvedLayout = resolveGridLayout(
-      tableContract,
+      authored,
       stored?.layout === undefined ? undefined : { queryId: stored.queryId, layout: stored.layout },
       queryId,
     );
@@ -909,6 +925,7 @@ export const readPlacement = async (
       queryId,
       revision: stored?.revision ?? null,
       layout: resolvedLayout.layout,
+      authored,
       reset: resolvedLayout.reset,
     };
     const explicitRequest =

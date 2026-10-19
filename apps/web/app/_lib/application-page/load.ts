@@ -80,7 +80,11 @@ import {
   isEditFieldPlacement,
   isLinkInputPlacement,
 } from "./placement-helpers";
-import { isApplicationLauncherPlacement, logPlacementFailure } from "./query-helpers";
+import {
+  isApplicationLauncherPlacement,
+  logPlacementFailure,
+  resolvedQueryRecordTypeId,
+} from "./query-helpers";
 import { projectAttachmentInputs } from "./attachment-inputs";
 import { projectEditField } from "./reference-choice";
 import { projectInitialLinkInputs, titleLinkInputs } from "./link-input";
@@ -605,14 +609,21 @@ const loadApplicationPageJoined = async (
     selectedForProjection === undefined
       ? allPlacements
       : allPlacements.filter((entry) => selectedForProjection.has(entry.placementId.toLowerCase()));
-  // The person's grid layouts decide which columns each grid reads, so they are read (once, for
-  // every grid of the page) before any grid reads its rows.
+  // The person's grid layouts and field policy decide which columns each grid reads, so they are
+  // read (once, for every grid of the page) before any grid reads its rows.
   const gridLayoutsRead = readPageGridLayouts(
     session,
     dependencies,
     selection,
+    context,
     String(pageDefinition.pageId),
-    placements.filter(isTablePlacement).map((entry) => entry.placementId),
+    placements.filter(isTablePlacement).flatMap(({ placementId, vortex }) => {
+      const recordTypeId =
+        typeof vortex.queryId === "string"
+          ? resolvedQueryRecordTypeId(context, vortex.queryId)
+          : undefined;
+      return recordTypeId === undefined ? [] : [{ placementId, recordTypeId }];
+    }),
   );
   startedReads.push(gridLayoutsRead);
   const hasQueryBoundLauncher = placements.some(
