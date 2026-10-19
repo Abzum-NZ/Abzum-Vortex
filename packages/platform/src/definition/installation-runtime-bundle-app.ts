@@ -224,7 +224,10 @@ export const writePreparedInstallationRuntimeBundle = async (
   sourceCandidate: PreparedInstallationRuntimeSource,
 ): Promise<InstallationRuntimeBundleIndex> => {
   const command = buildInstallationRuntimeBundleWriteCommand(sourceCandidate);
-  const index = await createInstallationRuntimeBundleRepository(transaction).write(command);
+  const index = await createInstallationRuntimeBundleRepository(transaction).write(
+    command,
+    sourceCandidate.releaseEvidence,
+  );
   if (
     canonicalJson(index.sourceManifest) !== canonicalJson(sourceCandidate.sourceManifest) ||
     index.pinFingerprint !== command.pinFingerprint

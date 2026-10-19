@@ -371,6 +371,7 @@ export const createDatabasePreparedInstallationRuntimeSourceService = (
         },
       }) as InstallationRuntimeBundleSourceManifest;
       return {
+        releaseEvidence: { application: parsed.data.application, modules: parsed.data.modules },
         releaseSet,
         sourceManifest,
         preparedRecordAccessPlan: parsed.data.preparedRecordAccessPlan,

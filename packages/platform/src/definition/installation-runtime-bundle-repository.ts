@@ -18,6 +18,7 @@ import {
   type InstallationRuntimeBundleSection,
   type InstallationRuntimeBundleWriteCommand,
   type JsonValue,
+  type PreparedInstallationRuntimeSource,
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
@@ -134,7 +135,10 @@ const sortParts = (
   );
 
 export interface InstallationRuntimeBundleRepository {
-  write(command: InstallationRuntimeBundleWriteCommand): Promise<InstallationRuntimeBundleIndex>;
+  write(
+    command: InstallationRuntimeBundleWriteCommand,
+    releaseEvidence: PreparedInstallationRuntimeSource["releaseEvidence"],
+  ): Promise<InstallationRuntimeBundleIndex>;
   readIndex(key: InstallationRuntimeBundleKey): Promise<InstallationRuntimeBundleIndex>;
   readParts(
     key: InstallationRuntimeBundleKey,
@@ -236,7 +240,10 @@ export const createInstallationRuntimeBundleRepository = (
   };
 
   return Object.freeze({
-    async write(commandCandidate: InstallationRuntimeBundleWriteCommand) {
+    async write(
+      commandCandidate: InstallationRuntimeBundleWriteCommand,
+      releaseEvidence: PreparedInstallationRuntimeSource["releaseEvidence"],
+    ) {
       const parsedCommand = installationRuntimeBundleWriteCommandSchema.safeParse(commandCandidate);
       if (!parsedCommand.success) throw new DefinitionError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
       const command = parsedCommand.data;
@@ -254,7 +261,8 @@ export const createInstallationRuntimeBundleRepository = (
             ${command.applicationReleaseRevision}::bigint,
             ${command.bundleFormatVersion}::integer,
             ${command.pinFingerprint}::text,
-            ${JSON.stringify(parts)}::text::jsonb
+            ${JSON.stringify(parts)}::text::jsonb,
+            ${JSON.stringify(releaseEvidence)}::text::jsonb
           ) as bundle_index
         `;
         if (rows.length !== 1 || rows[0] === undefined)

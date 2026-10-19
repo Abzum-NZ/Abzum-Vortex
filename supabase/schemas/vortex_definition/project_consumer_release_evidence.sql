@@ -22,46 +22,9 @@ as $function$
     'resolutionFingerprint', release.resolution_fingerprint,
     'compilationOutput', release.compilation_output,
     'resolutionSnapshot', release.resolution_snapshot,
-    'dependencyManifest', coalesce((
-      select pg_catalog.jsonb_agg(
-        case dependency.dependency_kind
-          when 'module' then pg_catalog.jsonb_build_object(
-            'kind', 'module',
-            'key', dependency.dependency_reference,
-            'rootId', dependency.target_root_id,
-            'releaseRevision', dependency.target_release_revision,
-            'releaseVersion', dependency.dependency_version,
-            'contentFingerprint', dependency.dependency_content_fingerprint
-          )
-          when 'connection_type' then pg_catalog.jsonb_build_object(
-            'kind', 'connection_type',
-            'key', dependency.dependency_reference,
-            'rootId', dependency.catalogue_item_id,
-            'releaseVersion', dependency.dependency_version,
-            'contentFingerprint', dependency.dependency_content_fingerprint
-          )
-          when 'platform_block' then pg_catalog.jsonb_build_object(
-            'kind', 'platform_block',
-            'blockId', dependency.catalogue_item_id,
-            'releaseVersion', dependency.dependency_version,
-            'contentFingerprint', dependency.dependency_content_fingerprint
-          )
-          when 'platform_theme' then pg_catalog.jsonb_build_object(
-            'kind', 'platform_theme',
-            'catalogueThemeId', dependency.dependency_reference,
-            'releaseVersion', dependency.dependency_version,
-            'contentFingerprint', dependency.dependency_content_fingerprint
-          )
-          else dependency.dependency_entry
-        end
-        order by dependency.dependency_kind collate "C",
-          dependency.dependency_reference collate "C",
-          dependency.dependency_version collate "C"
-      )
-      from vortex_definition.runtime_release_dependencies as dependency
-      where dependency.root_id = release.root_id
-        and dependency.release_revision = release.release_revision
-    ), '[]'::jsonb),
+    'dependencyManifest', vortex_definition.consumer_release_dependency_manifest_internal(
+      release.root_id, release.release_revision
+    ),
     'moduleDependencyTargets', coalesce((
       select pg_catalog.jsonb_agg(
         pg_catalog.jsonb_build_object(

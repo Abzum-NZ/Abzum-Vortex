@@ -492,6 +492,10 @@ export type InstallationPreparedRecordAccessPlan = z.infer<
   typeof installationPreparedRecordAccessPlanSchema
 >;
 export type PreparedInstallationRuntimeSource = Readonly<{
+  releaseEvidence: Readonly<{
+    application: unknown;
+    modules: readonly unknown[];
+  }>;
   releaseSet: SystemApplicationBoundReleaseSetResult;
   sourceManifest: InstallationRuntimeBundleSourceManifest;
   preparedRecordAccessPlan: InstallationPreparedRecordAccessPlan;
