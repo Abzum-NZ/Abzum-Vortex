@@ -1,7 +1,8 @@
 create or replace function vortex_record.read_record_with_action_previews(
   p_record_type_id uuid,
   p_record_id uuid,
-  p_actions jsonb
+  p_actions jsonb,
+  p_requested_field_ids jsonb
 )
 returns jsonb
 language plpgsql
@@ -33,7 +34,11 @@ begin
   -- facts its named loader would build. Each action is still decided against
   -- its own declaration; a subject the viewer cannot read previews nothing.
   select row_read.* into read_row
-  from vortex_record.read_record_projection_internal(p_record_type_id, p_record_id) as row_read;
+  from vortex_record.read_record_projection_internal(
+    p_record_type_id, p_record_id,
+    -- A preview validates the complete proposed record, including unchanged required values.
+    case when pg_catalog.jsonb_array_length(p_actions) > 0 then null else p_requested_field_ids end
+  ) as row_read;
   if read_row.projection ->> 'outcome' = 'allowed' then
     for action_item in
       select item.value from pg_catalog.jsonb_array_elements(p_actions) with ordinality as item(value, ordinality)
@@ -62,11 +67,11 @@ begin
 end
 $function$;
 
-alter function vortex_record.read_record_with_action_previews(uuid,uuid,jsonb) owner to vortex_record_adapter;
+alter function vortex_record.read_record_with_action_previews(uuid,uuid,jsonb,jsonb) owner to vortex_record_adapter;
 
-revoke all on function vortex_record.read_record_with_action_previews(uuid, uuid, jsonb)
+revoke all on function vortex_record.read_record_with_action_previews(uuid, uuid, jsonb, jsonb)
   from public, anon, authenticated, service_role, vortex_request;
-grant execute on function vortex_record.read_record_with_action_previews(uuid, uuid, jsonb) to vortex_runtime;
+grant execute on function vortex_record.read_record_with_action_previews(uuid, uuid, jsonb, jsonb) to vortex_runtime;
 
-comment on function vortex_record.read_record_with_action_previews(uuid, uuid, jsonb) is
+comment on function vortex_record.read_record_with_action_previews(uuid, uuid, jsonb, jsonb) is
   'Fixed record adapter for a page subject and the named actions its placements are bound to: from one read decision under the caller''s current authority, the readable projection (record) and capabilities vortex_record.read_record_with_capabilities returns, and, only when the record is readable, each action''s preview exactly as vortex_record.preview_named_action_set_announce returns it for the record''s current concurrency number and no inputs (previews, in the order given), writing nothing.';

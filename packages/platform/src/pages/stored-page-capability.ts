@@ -584,6 +584,28 @@ export const createStoredPageCapabilityService = (
           read: Promise<SubjectWithAvailability>;
         }>
       | undefined;
+    const conditionSubjectFieldIds: string[] = [];
+    const collectConditionFields = (candidate: unknown): void => {
+      const parsed = conditionNodeSchema.safeParse(candidate);
+      if (!parsed.success) return;
+      const visit = (node: ConditionNode): void => {
+        if (node.kind === "comparison") {
+          for (const operand of [node.left, node.right])
+            if (operand?.source === "field") conditionSubjectFieldIds.push(operand.fieldId);
+        } else if (node.kind === "not") visit(node.condition);
+        else node.conditions.forEach(visit);
+      };
+      visit(parsed.data);
+    };
+    const resolved =
+      stored.resolvedComposition ?? resolvePageComposition(stored.page, stored.applicationShells);
+    const conditionLayouts =
+      resolved.roots.kind === "page"
+        ? [resolved.roots.main]
+        : Object.values(resolved.roots.stepContent);
+    for (const layout of conditionLayouts)
+      for (const item of compiledItemTree(layout.content))
+        collectConditionFields(item.props.vortex.visibilityCondition);
     // The page subject, read once, together with the preview of every named action the page's
     // placements are bound to on it: one read decision for the record serves them all.
     const readSubject = (
@@ -612,7 +634,13 @@ export const createStoredPageCapabilityService = (
         try {
           const combined = await readSubjectWithNamedActionAvailability(
             transaction,
-            { recordTypeId, recordId },
+            {
+              recordTypeId,
+              recordId,
+              // Action preparation validates a complete proposed record, not only changed fields.
+              // Conditions alone consume only their declared field operands.
+              requestedFieldIds: actions.size > 0 ? null : conditionSubjectFieldIds,
+            },
             [...actions.values()],
             (dependencies.clock ?? (() => new Date()))().toISOString(),
             (action) => (seed) =>
