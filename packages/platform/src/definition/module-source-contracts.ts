@@ -466,8 +466,12 @@ const moduleSourceRecordTypeSchema = z
   .superRefine((value, context) => {
     const title = value.fields.find((field) => field.key === value.title_field);
     if (title === undefined || !recordTitleFieldEligible(title))
-      context.addIssue({ code: "custom", path: ["title_field"],
-        message: "Title field must be an existing text, number, choice or date field, or a stored calculation with one of those results" });
+      context.addIssue({
+        code: "custom",
+        path: ["title_field"],
+        message:
+          "Title field must be an existing text, number, choice or date field, or a stored calculation with one of those results",
+      });
     const pipelineKeys = new Set<string>();
     const stageFields = new Set<string>();
     for (const [index, pipeline] of value.pipelines.entries()) {
@@ -506,13 +510,28 @@ const moduleSourceRecordTypeSchema = z
       !value.fields.some(
         (field) =>
           field.key === value.ownership_relationship &&
+          field.required &&
           (field.type === "link" || field.type === "link_to_one_of_several"),
       )
     )
       context.addIssue({
         code: "custom",
         path: ["ownership_relationship"],
-        message: "The ownership relationship must resolve to a link field on this record type",
+        message: "The owner link must be a required link to one record on this record type",
+      });
+    if (
+      value.ownership_relationship !== undefined &&
+      !value.relationships.some(
+        (relationship) =>
+          relationship.key === value.ownership_relationship &&
+          relationship.from_field === value.ownership_relationship &&
+          relationship.cardinality !== "many_to_many",
+      )
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["ownership_relationship"],
+        message: "The owner link must have a relationship to one record",
       });
     const projection = value.system_projection;
     if (projection === undefined) return;
