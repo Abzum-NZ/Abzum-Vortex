@@ -4014,6 +4014,7 @@
       {
         "id": "form_submit_crm_company_merge",
         "key": "vortex.app.events.vortex_app_crm_form_submit_company_merge",
+        "label": "Form submit company merge",
         "record_type": "vortex.crm.organisations:company",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4021,6 +4022,7 @@
       {
         "id": "form_submit_3",
         "key": "vortex.app.events.vortex_app_crm_form_submit_3",
+        "label": "Form submitted",
         "record_type": "vortex.crm.people:lead",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4028,6 +4030,7 @@
       {
         "id": "form_submit_4",
         "key": "vortex.app.events.vortex_app_crm_form_submit_4",
+        "label": "Form submitted",
         "record_type": "vortex.crm.organisations:company",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4035,6 +4038,7 @@
       {
         "id": "form_submit_5",
         "key": "vortex.app.events.vortex_app_crm_form_submit_5",
+        "label": "Form submitted",
         "record_type": "vortex.crm.organisations:company",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4042,6 +4046,7 @@
       {
         "id": "form_submit_6",
         "key": "vortex.app.events.vortex_app_crm_form_submit_6",
+        "label": "Form submitted",
         "record_type": "vortex.crm.people:contact",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4049,6 +4054,7 @@
       {
         "id": "form_submit_7",
         "key": "vortex.app.events.vortex_app_crm_form_submit_7",
+        "label": "Form submitted",
         "record_type": "vortex.crm.people:contact",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4056,6 +4062,7 @@
       {
         "id": "form_submit_8",
         "key": "vortex.app.events.vortex_app_crm_form_submit_8",
+        "label": "Form submitted",
         "record_type": "vortex.crm.people:lead",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4063,6 +4070,7 @@
       {
         "id": "form_submit_9",
         "key": "vortex.app.events.vortex_app_crm_form_submit_9",
+        "label": "Form submitted",
         "record_type": "vortex.crm.people:lead",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4070,6 +4078,7 @@
       {
         "id": "event_crm_opportunity_mark_won",
         "key": "vortex.app.events.vortex_app_crm_action_mark_won",
+        "label": "Action mark won",
         "record_type": "vortex.crm.opportunities:opportunity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4077,6 +4086,7 @@
       {
         "id": "event_crm_activity_complete",
         "key": "vortex.app.events.vortex_app_crm_action_complete_activity",
+        "label": "Action complete activity",
         "record_type": "vortex.crm.activities:activity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4084,6 +4094,7 @@
       {
         "id": "event_crm_open_company",
         "key": "vortex.app.events.vortex_app_crm_open_company",
+        "label": "Open company",
         "record_type": "vortex.crm.organisations:company",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4091,6 +4102,7 @@
       {
         "id": "event_crm_open_contact",
         "key": "vortex.app.events.vortex_app_crm_open_contact",
+        "label": "Open contact",
         "record_type": "vortex.crm.people:contact",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4098,6 +4110,7 @@
       {
         "id": "event_crm_open_lead",
         "key": "vortex.app.events.vortex_app_crm_open_lead",
+        "label": "Open lead",
         "record_type": "vortex.crm.people:lead",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4105,6 +4118,7 @@
       {
         "id": "event_crm_open_opportunity",
         "key": "vortex.app.events.vortex_app_crm_open_opportunity",
+        "label": "Open opportunity",
         "record_type": "vortex.crm.opportunities:opportunity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4112,6 +4126,7 @@
       {
         "id": "event_crm_pipeline_open_opportunity",
         "key": "vortex.app.events.vortex_app_crm_pipeline_open_opportunity",
+        "label": "Pipeline open opportunity",
         "record_type": "vortex.crm.opportunities:opportunity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4119,6 +4134,7 @@
       {
         "id": "event_crm_pipeline_move_opportunity",
         "key": "vortex.app.events.vortex_app_crm_pipeline_move_opportunity",
+        "label": "Pipeline move opportunity",
         "record_type": "vortex.crm.opportunities:opportunity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4126,6 +4142,7 @@
       {
         "id": "event_crm_open_activity",
         "key": "vortex.app.events.vortex_app_crm_open_activity",
+        "label": "Open activity",
         "record_type": "vortex.crm.activities:activity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4133,6 +4150,7 @@
       {
         "id": "event_new_company",
         "key": "vortex.app.events.vortex_app_crm_new_company",
+        "label": "New company",
         "record_type": "vortex.crm.organisations:company",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4140,6 +4158,7 @@
       {
         "id": "event_new_contact",
         "key": "vortex.app.events.vortex_app_crm_new_contact",
+        "label": "New contact",
         "record_type": "vortex.crm.people:contact",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4147,6 +4166,7 @@
       {
         "id": "event_new_lead",
         "key": "vortex.app.events.vortex_app_crm_new_lead",
+        "label": "New lead",
         "record_type": "vortex.crm.people:lead",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4154,6 +4174,7 @@
       {
         "id": "event_new_contact_company",
         "key": "vortex.app.events.vortex_app_crm_new_contact_company",
+        "label": "New contact company",
         "record_type": "vortex.crm.organisations:company",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4161,6 +4182,7 @@
       {
         "id": "event_edit_company",
         "key": "vortex.app.events.vortex_app_crm_edit_company",
+        "label": "Edit company",
         "record_type": "vortex.crm.organisations:company",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4168,6 +4190,7 @@
       {
         "id": "event_edit_contact",
         "key": "vortex.app.events.vortex_app_crm_edit_contact",
+        "label": "Edit contact",
         "record_type": "vortex.crm.people:contact",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4175,6 +4198,7 @@
       {
         "id": "event_edit_lead",
         "key": "vortex.app.events.vortex_app_crm_edit_lead",
+        "label": "Edit lead",
         "record_type": "vortex.crm.people:lead",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4182,6 +4206,7 @@
       {
         "id": "event_qualify_lead",
         "key": "vortex.app.events.vortex_app_crm_qualify_lead",
+        "label": "Qualify lead",
         "record_type": "vortex.crm.people:lead",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4189,6 +4214,7 @@
       {
         "id": "form_submit_10",
         "key": "vortex.app.events.vortex_app_crm_form_submit_10",
+        "label": "Form submitted",
         "record_type": "vortex.crm.opportunities:opportunity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4196,6 +4222,7 @@
       {
         "id": "event_edit_opportunity",
         "key": "vortex.app.events.vortex_app_crm_edit_opportunity",
+        "label": "Edit opportunity",
         "record_type": "vortex.crm.opportunities:opportunity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4203,6 +4230,7 @@
       {
         "id": "form_submit_11",
         "key": "vortex.app.events.vortex_app_crm_form_submit_11",
+        "label": "Form submitted",
         "record_type": "vortex.crm.opportunities:opportunity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4210,6 +4238,7 @@
       {
         "id": "event_new_opportunity",
         "key": "vortex.app.events.vortex_app_crm_new_opportunity",
+        "label": "New opportunity",
         "record_type": "vortex.crm.opportunities:opportunity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false

@@ -479,6 +479,7 @@
       {
         "id": "event_iam_administration_action",
         "key": "vortex.app.iam.administration_action",
+        "label": "Administration action",
         "record_type": "vortex.iam.core:access_request",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -486,6 +487,7 @@
       {
         "id": "event_iam_access_request_create_submit",
         "key": "vortex.app.iam.access_request_create_submit",
+        "label": "Access request create submit",
         "record_type": "vortex.iam.core:access_request",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -493,6 +495,7 @@
       {
         "id": "event_iam_access_request_edit_submit",
         "key": "vortex.app.iam.access_request_edit_submit",
+        "label": "Access request edit submit",
         "record_type": "vortex.iam.core:access_request",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -500,6 +503,7 @@
       {
         "id": "event_iam_open_access_request",
         "key": "vortex.app.iam.open_access_request",
+        "label": "Open access request",
         "record_type": "vortex.iam.core:access_request",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -507,6 +511,7 @@
       {
         "id": "event_iam_open_person",
         "key": "vortex.app.iam.open_person",
+        "label": "Open person",
         "record_type": "vortex.system_directory:person",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -514,6 +519,7 @@
       {
         "id": "event_retire_role",
         "key": "vortex.app.iam.retire_role",
+        "label": "Retire role",
         "record_type": "vortex.system_directory:role",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -521,6 +527,7 @@
       {
         "id": "event_retire_group",
         "key": "vortex.app.iam.retire_group",
+        "label": "Retire group",
         "record_type": "vortex.system_directory:group",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -528,6 +535,7 @@
       {
         "id": "event_remove_group_membership",
         "key": "vortex.app.iam.remove_group_membership",
+        "label": "Remove group membership",
         "record_type": "vortex.system_directory:group_membership",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -535,6 +543,7 @@
       {
         "id": "event_make_steward",
         "key": "vortex.app.iam.make_steward",
+        "label": "Make steward",
         "record_type": "vortex.system_directory:person",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -542,6 +551,7 @@
       {
         "id": "event_revoke_role_assignment",
         "key": "vortex.app.iam.revoke_role_assignment",
+        "label": "Revoke role assignment",
         "record_type": "vortex.system_directory:role_assignment",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -549,6 +559,7 @@
       {
         "id": "event_deactivate_role_activation",
         "key": "vortex.app.iam.deactivate_role_activation",
+        "label": "Deactivate role activation",
         "record_type": "vortex.system_directory:role_activation",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -556,6 +567,7 @@
       {
         "id": "event_revoke_delegation_authority",
         "key": "vortex.app.iam.revoke_delegation_authority",
+        "label": "Revoke delegation authority",
         "record_type": "vortex.system_directory:delegation",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -563,6 +575,7 @@
       {
         "id": "event_revise_role_metadata",
         "key": "vortex.app.iam.revise_role_metadata",
+        "label": "Revise role metadata",
         "record_type": "vortex.system_directory:role",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -570,6 +583,7 @@
       {
         "id": "event_rename_group",
         "key": "vortex.app.iam.rename_group",
+        "label": "Rename group",
         "record_type": "vortex.system_directory:group",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -577,6 +591,7 @@
       {
         "id": "event_new_access_request",
         "key": "vortex.app.events.vortex_app_iam_new_access_request",
+        "label": "New access request",
         "record_type": "vortex.iam.core:access_request",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -584,6 +599,7 @@
       {
         "id": "event_edit_access_request",
         "key": "vortex.app.events.vortex_app_iam_edit_access_request",
+        "label": "Edit access request",
         "record_type": "vortex.iam.core:access_request",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -591,6 +607,7 @@
       {
         "id": "event_add_group_membership",
         "key": "vortex.app.iam.add_group_membership",
+        "label": "Add group membership",
         "record_type": "vortex.system_directory:group",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -598,6 +615,7 @@
       {
         "id": "event_assign_role_assignment",
         "key": "vortex.app.iam.assign_role_assignment",
+        "label": "Assign role assignment",
         "record_type": "vortex.system_directory:role",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -605,6 +623,7 @@
       {
         "id": "event_grant_install_authority_person",
         "key": "vortex.app.iam.grant_install_authority_person",
+        "label": "Grant install authority person",
         "record_type": "vortex.system_directory:person",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -612,6 +631,7 @@
       {
         "id": "event_grant_install_authority_group",
         "key": "vortex.app.iam.grant_install_authority_group",
+        "label": "Grant install authority group",
         "record_type": "vortex.system_directory:group",
         "carries": [],
         "personal_or_sensitive_values_allowed": false

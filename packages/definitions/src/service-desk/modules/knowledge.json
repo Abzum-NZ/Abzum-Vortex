@@ -605,6 +605,7 @@
     {
       "id": "evt_article_published",
       "key": "vortex.service_desk.knowledge.article.published",
+      "label": "Article published",
       "record_type": "article",
       "carries": ["article_number", "title", "public"],
       "personal_or_sensitive_values_allowed": false
