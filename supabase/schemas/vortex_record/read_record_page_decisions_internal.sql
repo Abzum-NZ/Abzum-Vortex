@@ -28,13 +28,15 @@ declare
   bounds_by_route jsonb := '{}'::jsonb;
   bounds_key text;
   row_position integer;
+  preview_mode boolean := p_first_loaded ? 'previewInstallationId';
 begin
   -- The page's read decisions in one pass. The first record's facts, loaded by
   -- the exact loader in this invocation, supply the installation-wide part of
   -- every record's facts; each record contributes only its own stored row. A
   -- record type whose read facts can reach other records (an inherited owner
   -- or a relationship route) is not decided here at all, and neither is a
-  -- preview, a protected projection or an expired page eligibility. Each
+  -- protected projection or an expired installed page eligibility. A preview
+  -- reuses its validated owner authority over the same isolated storage. Each
   -- decided record is returned as its compact record scope (its own stored
   -- fact, concurrency number and definition revision); with the page envelope
   -- the caller built once from the first record's facts
@@ -48,7 +50,9 @@ begin
     or pg_catalog.cardinality(p_record_ids) is null
     or pg_catalog.cardinality(p_record_ids) > 201
     or p_first_loaded ->> 'outcome' is distinct from 'loaded'
-    or p_first_loaded ? 'previewInstallationId'
+    or (preview_mode and (
+      p_envelope -> 'previewInstallationId' is distinct from p_first_loaded -> 'previewInstallationId'
+      or p_page_declaration #>> '{authority,kind}' is distinct from 'preview_owner'))
     or (p_first_loaded ->> 'isSystemProjection')::boolean is distinct from false
     or p_first_loaded -> 'declaration' is distinct from p_page_declaration
     or pg_catalog.lower(p_first_loaded #>> '{facts,binding,recordTypeId}')
@@ -58,8 +62,9 @@ begin
     or coalesce(type_meta ->> 'ownershipMode', '') = 'inherited'
     or pg_catalog.jsonb_array_length(p_first_loaded #> '{facts,records}') is distinct from 1
     or p_first_loaded #> '{facts,edges}' is distinct from '[]'::jsonb
-    or p_page_eligibility ->> 'outcome' is distinct from 'eligible'
-    or (p_page_eligibility ->> 'validUntil')::timestamptz <= pg_catalog.clock_timestamp()
+    or (not preview_mode and (
+      p_page_eligibility ->> 'outcome' is distinct from 'eligible'
+      or (p_page_eligibility ->> 'validUntil')::timestamptz <= pg_catalog.clock_timestamp()))
     or exists (
       select 1
       from pg_catalog.jsonb_array_elements(p_page_declaration -> 'requiredPermissions') as required(value)
@@ -120,10 +125,21 @@ begin
   end if;
 
   checked_at := pg_catalog.clock_timestamp();
-  decisions := vortex_access.decide_record_page_scope_internal(
-    context_value, checked_at, p_page_declaration, p_page_eligibility,
-    p_first_loaded #> '{facts,recordTypes}', page_records, true
-  );
+  if preview_mode then
+    -- These rows have the same owner-only preview authority as the first
+    -- exact load. RLS still scopes the stored scan to this organisation and
+    -- Application; no caller-writable state supplies an access decision.
+    select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'outcome', 'allowed', 'recordId', item.value #> '{recordScope,recordId}')
+      order by item.ordinality)
+    into decisions
+    from pg_catalog.jsonb_array_elements(page_records) with ordinality as item(value, ordinality);
+  else
+    decisions := vortex_access.decide_record_page_scope_internal(
+      context_value, checked_at, p_page_declaration, p_page_eligibility,
+      p_first_loaded #> '{facts,recordTypes}', page_records, true
+    );
+  end if;
   if decisions is null then
     return;
   end if;
@@ -146,7 +162,7 @@ begin
       'record', facts_item,
       'concurrencyNumber', page_concurrency[row_position],
       'definitionRevision', page_definition_revisions[row_position]);
-    if decision_item ->> 'outcome' = 'allowed' then
+    if not preview_mode and decision_item ->> 'outcome' = 'allowed' then
       -- The same contributions have the same field policy: resolve each
       -- distinct contribution set once for the page.
       bounds_key := pg_catalog.jsonb_build_array(
