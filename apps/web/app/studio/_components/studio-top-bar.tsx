@@ -86,7 +86,8 @@ export function StudioTopBar({
 }>) {
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-3">
-      <Button
+      <ToolbarButton
+        tip="All applications"
         variant="ghost"
         size="icon-sm"
         nativeButton={false}
@@ -94,7 +95,7 @@ export function StudioTopBar({
         render={<Link href="/studio" prefetch={false} />}
       >
         <Icon name="grid" />
-      </Button>
+      </ToolbarButton>
       <Breadcrumb className="min-w-0">
         <BreadcrumbList className="flex-nowrap">
           <BreadcrumbItem className="min-w-0">
@@ -117,6 +118,7 @@ export function StudioTopBar({
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 <DropdownMenuItem onClick={location.onApplication}>
+                  <Icon name="sliders-horizontal" />
                   Application settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

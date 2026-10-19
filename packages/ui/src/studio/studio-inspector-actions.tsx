@@ -10,14 +10,13 @@ import {
 import { MoreHorizontal } from "lucide-react";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
+import { StudioIconButton } from "./studio-entry-list";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 
 export function StudioCopyButton({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-xs"
-      aria-label={label}
+    <StudioIconButton
+      label={label}
       onClick={() => {
         void navigator.clipboard.writeText(value).catch((cause: unknown) => {
           console.error("[studio] could not copy details", cause);
@@ -26,7 +25,7 @@ export function StudioCopyButton({ label, value }: Readonly<{ label: string; val
       }}
     >
       <Copy />
-    </Button>
+    </StudioIconButton>
   );
 }
 
@@ -42,11 +41,18 @@ export function StudioInspectorActions({
 }: Readonly<{ actions: readonly StudioInspectorAction[] }>) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={<Button type="button" variant="ghost" size="icon-sm" aria-label="More" />}
-      >
-        <MoreHorizontal />
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={<Button type="button" variant="ghost" size="icon-sm" aria-label="More" />}
+            />
+          }
+        >
+          <MoreHorizontal />
+        </TooltipTrigger>
+        <TooltipContent>More actions</TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="end" className="min-w-40">
         {actions.map((action, index) => (
           <span key={action.label}>

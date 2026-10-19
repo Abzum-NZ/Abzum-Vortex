@@ -3,12 +3,7 @@
 import type { DefinitionPublicationConfirmation } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
 import { Badge } from "@vortex/ui/components/badge";
-import { Button } from "@vortex/ui/components/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@vortex/ui/components/collapsible";
+import { StudioInspectorGroup } from "@vortex/ui/studio";
 
 const impactLabels = {
   patch: "Small change",
@@ -167,52 +162,44 @@ export function PublicationSummary({
           ))}
         </ul>
       )}
-      <Collapsible>
-        <CollapsibleTrigger render={<Button variant="ghost" size="sm" />}>
-          <Icon name="chevron-down" />
-          Details
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <dl className="space-y-2 font-mono text-xs">
-            {confirmation.reasons.some((reason) => reason.location.componentId !== undefined) && (
-              <div>
-                <dt className="font-semibold">Changed item identities</dt>
-                <dd className="break-all">
-                  {confirmation.reasons
-                    .flatMap((reason) =>
-                      reason.location.componentId === undefined
-                        ? []
-                        : [reason.location.componentId],
-                    )
-                    .join(", ")}
-                </dd>
-              </div>
-            )}
+      <StudioInspectorGroup title="Details" defaultOpen={false}>
+        <dl className="space-y-2 font-mono text-xs">
+          {confirmation.reasons.some((reason) => reason.location.componentId !== undefined) && (
             <div>
-              <dt className="font-semibold">Draft revision</dt>
-              <dd>{confirmation.expectedDraftRevision}</dd>
-            </div>
-            <div>
-              <dt className="font-semibold">Source fingerprint</dt>
+              <dt className="font-semibold">Changed item identities</dt>
               <dd className="break-all">
-                <code>{confirmation.sourceFingerprint}</code>
+                {confirmation.reasons
+                  .flatMap((reason) =>
+                    reason.location.componentId === undefined ? [] : [reason.location.componentId],
+                  )
+                  .join(", ")}
               </dd>
             </div>
-            <div>
-              <dt className="font-semibold">Content fingerprint</dt>
-              <dd className="break-all">
-                <code>{confirmation.contentFingerprint}</code>
-              </dd>
-            </div>
-            <div>
-              <dt className="font-semibold">Resolution fingerprint</dt>
-              <dd className="break-all">
-                <code>{confirmation.resolutionFingerprint}</code>
-              </dd>
-            </div>
-          </dl>
-        </CollapsibleContent>
-      </Collapsible>
+          )}
+          <div>
+            <dt className="font-semibold">Draft revision</dt>
+            <dd>{confirmation.expectedDraftRevision}</dd>
+          </div>
+          <div>
+            <dt className="font-semibold">Source fingerprint</dt>
+            <dd className="break-all">
+              <code>{confirmation.sourceFingerprint}</code>
+            </dd>
+          </div>
+          <div>
+            <dt className="font-semibold">Content fingerprint</dt>
+            <dd className="break-all">
+              <code>{confirmation.contentFingerprint}</code>
+            </dd>
+          </div>
+          <div>
+            <dt className="font-semibold">Resolution fingerprint</dt>
+            <dd className="break-all">
+              <code>{confirmation.resolutionFingerprint}</code>
+            </dd>
+          </div>
+        </dl>
+      </StudioInspectorGroup>
     </div>
   );
 }

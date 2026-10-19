@@ -2,8 +2,24 @@ import {
   applicationSourceDocumentSchema,
   type ApplicationSourceDocument,
 } from "./application-source-contracts";
+import type { SourceFlowTask } from "../workflows/flow-source-contracts";
 
 type ModuleEvent = ApplicationSourceDocument["body"]["modules"][number]["events"][number];
+
+/** Only declaration references count; ordinary text may contain the same event key. */
+const tasksAnnounce = (tasks: readonly SourceFlowTask[], key: string): boolean =>
+  tasks.some((task) => {
+    if (task.type === "event.announce" && "properties" in task) {
+      const event = task.properties.event;
+      if (event?.kind === "literal" && event.literal.value === key) return true;
+    }
+    if ("then" in task && tasksAnnounce(task.then, key)) return true;
+    if ("else" in task && tasksAnnounce(task.else ?? [], key)) return true;
+    if ("tasks" in task && tasksAnnounce(task.tasks, key)) return true;
+    if ("cases" in task && task.cases.some((entry) => tasksAnnounce(entry.tasks, key))) return true;
+    if ("default" in task && tasksAnnounce(task.default ?? [], key)) return true;
+    return "branches" in task && task.branches.some((branch) => tasksAnnounce(branch, key));
+  });
 
 /** Edits a declared module event without changing its identity or announcement references. */
 export const saveInlineModuleEvent = (
@@ -30,13 +46,33 @@ export const saveInlineModuleEvent = (
   if (change.eventId !== undefined && existing === undefined)
     return { kind: "invalid", issues: ["The event is no longer in this module."] };
   const issues: string[] = [];
-  if (
-    existing !== undefined &&
-    (existing.key !== change.key || existing.record_type !== record.key)
-  )
-    issues.push(
-      "An existing event keeps its key and record type so its announcements remain valid.",
-    );
+  if (existing !== undefined && existing.key !== change.key)
+    issues.push("An existing event keeps its key so its references remain valid.");
+  if (existing !== undefined && existing.record_type !== record.key) {
+    const referenced =
+      source.body.modules.some((owner) =>
+        owner.actions.some((action) =>
+          action.tasks.some(
+            (task) => task.type === "event.announce" && task.properties.event === existing.key,
+          ),
+        ),
+      ) ||
+      [source.body, ...source.body.modules].some((owner) =>
+        owner.flows.some(
+          (flow) =>
+            flow.triggers.some(
+              (trigger) =>
+                trigger.type === "Event" &&
+                trigger.event.kind === "declared" &&
+                trigger.event.eventKey === existing.key,
+            ) || tasksAnnounce([...flow.tasks, ...flow.errors, ...flow.finally], existing.key),
+        ),
+      );
+    if (referenced)
+      issues.push(
+        "Remove this event's announcements and flow references before changing its record type.",
+      );
+  }
   if (module.events.some((entry) => entry !== existing && entry.key === change.key))
     issues.push("This event key is already declared.");
   if (new Set(change.carries).size !== change.carries.length)

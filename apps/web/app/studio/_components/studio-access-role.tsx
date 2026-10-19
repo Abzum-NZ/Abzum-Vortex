@@ -46,6 +46,8 @@ import {
   type StudioAccessPermission,
 } from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
+import { StudioIconButton } from "@vortex/ui/studio";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 
 type Role = ApplicationSourceDocument["body"]["roles"][number];
 /** One Access edit; `merge` joins a run of edits to one value (typing a name) into one Undo step. */
@@ -245,7 +247,11 @@ export function StudioAccessRoleEditor({
                 setEditingName(false);
             }}
           >
-            <StudioField label="Role name" error={name.problem === "" ? undefined : name.problem} onUndo={name.reset}>
+            <StudioField
+              label="Role name"
+              error={name.problem === "" ? undefined : name.problem}
+              onUndo={name.reset}
+            >
               {(control) => (
                 <Input
                   {...control}
@@ -262,18 +268,16 @@ export function StudioAccessRoleEditor({
             </StudioField>
           </div>
         ) : (
-          <h2 className="text-xl font-semibold tracking-tight">
-            <Button
-              type="button"
-              variant="ghost"
-              className="text-xl font-semibold tracking-tight"
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="truncate text-xl font-semibold tracking-tight">{role.name}</h2>
+            <StudioIconButton
+              label={`Rename ${role.name}`}
               disabled={disabled}
-              aria-label={`Rename ${role.name}`}
               onClick={() => setEditingName(true)}
             >
-              {role.name}
-            </Button>
-          </h2>
+              <Icon name="sliders-horizontal" />
+            </StudioIconButton>
+          </div>
         )}
         <div className="flex items-center gap-2">
           <Button type="button" size="sm" variant="outline" onClick={onPreview}>
@@ -281,24 +285,31 @@ export function StudioAccessRoleEditor({
             Preview as {role.name}
           </Button>
           <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  aria-label={`More actions for ${role.name}`}
-                />
-              }
-            >
-              More
-              <Icon name="chevron-down" />
-            </DropdownMenuTrigger>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={`More actions for ${role.name}`}
+                      />
+                    }
+                  />
+                }
+              >
+                <Icon name="more-horizontal" />
+              </TooltipTrigger>
+              <TooltipContent>More actions for {role.name}</TooltipContent>
+            </Tooltip>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
                 disabled={disabled || role.default_member === true}
                 onClick={() => run({ kind: "set_default_member", roleKey: role.key })}
               >
+                <Icon name="users" />
                 Make default
               </DropdownMenuItem>
               <DropdownMenuSeparator />
@@ -309,6 +320,7 @@ export function StudioAccessRoleEditor({
                   void remove();
                 }}
               >
+                <Icon name="close" />
                 Remove role
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -316,7 +328,8 @@ export function StudioAccessRoleEditor({
         </div>
       </div>
       {role.default_member === true && (
-        <Alert variant="info">
+        <Alert variant="info" className="border-0 bg-transparent">
+          <Icon name="info" />
           <AlertDescription>
             Default member role: offered to the person who first installs the application.
           </AlertDescription>
@@ -515,17 +528,12 @@ export function StudioAccessRoleEditor({
                               </TableCell>
                             ))}
                             <TableCell>
-                              <Button
-                                type="button"
-                                size="xs"
-                                className="text-sm"
-                                variant="link"
-                                aria-haspopup="dialog"
-                                aria-label={`Fields of ${row.name}`}
+                              <StudioIconButton
+                                label={`Fields of ${row.name}`}
                                 onClick={() => setFieldsOf(id)}
                               >
-                                Fields
-                              </Button>
+                                <Icon name="sliders-horizontal" />
+                              </StudioIconButton>
                             </TableCell>
                           </TableRow>
                           {expanded.has(id) && (
@@ -704,10 +712,9 @@ export function StudioAccessRoleEditor({
                 {elsewhere.map((key) => (
                   <li key={key} className="flex items-center justify-between gap-2 text-sm">
                     <code className="break-all">{key}</code>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
+                    <StudioIconButton
+                      label={`Remove ${key} from ${role.name}`}
+                      destructive
                       disabled={disabled}
                       onClick={() =>
                         run({
@@ -718,8 +725,8 @@ export function StudioAccessRoleEditor({
                         })
                       }
                     >
-                      Remove
-                    </Button>
+                      <Icon name="close" />
+                    </StudioIconButton>
                   </li>
                 ))}
               </ul>

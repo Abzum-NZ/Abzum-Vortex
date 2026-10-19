@@ -551,7 +551,7 @@ export function StudioPanelShell({
                   <button
                     type="button"
                     aria-label={`About ${title.toLowerCase()}`}
-                    className="flex size-6 items-center justify-center text-muted-foreground"
+                    className="flex size-6 items-center justify-center rounded-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
                 }
               >

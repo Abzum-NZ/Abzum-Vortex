@@ -1,19 +1,7 @@
 "use client";
 import { Button } from "@vortex/ui/components/button";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
-import { Badge } from "@vortex/ui/components/badge";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@vortex/ui/components/collapsible";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@vortex/ui/components/dropdown-menu";
+import { StudioInspectorGroup, StudioEntryList, StudioIconButton } from "@vortex/ui/studio";
 import {
   Empty,
   EmptyHeader,
@@ -94,7 +82,6 @@ export function ApplicationReleaseHistory({
   currentRestoreBlocked.current = restoreBlocked;
   const [page, setPage] = useState<StudioApplicationHistoryPage | null>(initialPage);
   const [pending, setPending] = useState<Pending | null>(null);
-  const [expandedRelease, setExpandedRelease] = useState<number | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [message, setMessage] = useState("Versions loaded.");
   const mounted = useRef(false);
@@ -306,80 +293,53 @@ export function ApplicationReleaseHistory({
             </EmptyHeader>
           </Empty>
         ) : (
-          <ol className="m-0 list-none space-y-2 p-0" aria-busy={pending !== null}>
-            {page.entries.map((entry) => (
-              <li
-                key={entry.releaseRevision}
-                className="min-w-0 space-y-2 rounded-md py-3 hover:bg-muted/40"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline">Version {entry.releaseVersion}</Badge>
-                      {entry.isCurrent && <Badge variant="secondary">Current</Badge>}
-                    </div>
-                    <p className="m-0 text-sm text-muted-foreground">
+          <div aria-busy={pending !== null}>
+            <StudioEntryList
+              label="Published versions"
+              itemName="version"
+              items={page.entries.map((entry) => ({
+                key: String(entry.releaseRevision),
+                title: `Version ${entry.releaseVersion}${entry.isCurrent ? " (current version)" : ""}`,
+                summary: entry.releaseNote,
+                content: (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
                       Published <FormattedTime iso={entry.publishedAt} /> by {author(entry)}
                     </p>
+                    <div>
+                      <p className="text-sm font-medium">What changed</p>
+                      <p className="whitespace-pre-wrap break-words text-sm">{entry.releaseNote}</p>
+                    </div>
+                    <StudioIconButton
+                      label={`Restore version ${entry.releaseVersion} into the draft`}
+                      disabled={blocked || restoreBlocked !== undefined}
+                      onClick={() => void restore(entry)}
+                    >
+                      <Icon name="history" />
+                    </StudioIconButton>
+                    <StudioInspectorGroup title="Details" defaultOpen={false}>
+                      <dl className="space-y-3 font-mono text-xs">
+                        <div>
+                          <dt className="font-semibold">Release revision</dt>
+                          <dd>{entry.releaseRevision}</dd>
+                        </div>
+                        <div>
+                          <dt className="font-semibold">Published by (account id)</dt>
+                          <dd className="break-all">{entry.publishedBy}</dd>
+                        </div>
+                        <div>
+                          <dt className="font-semibold">Source fingerprint</dt>
+                          <dd className="break-all">
+                            <code>{entry.sourceFingerprint}</code>
+                          </dd>
+                        </div>
+                      </dl>
+                    </StudioInspectorGroup>
                   </div>
-                  <DropdownMenu>
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <DropdownMenuTrigger
-                            render={
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label={`More for version ${entry.releaseVersion}`}
-                              />
-                            }
-                          />
-                        }
-                      >
-                        <Icon name="more-horizontal" />
-                      </TooltipTrigger>
-                      <TooltipContent>More for version {entry.releaseVersion}</TooltipContent>
-                    </Tooltip>
-                    <DropdownMenuContent align="end" className="w-56">
-                      <DropdownMenuItem
-                        disabled={blocked || restoreBlocked !== undefined}
-                        onClick={() => void restore(entry)}
-                      >
-                        Restore into draft
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                <p className="m-0 whitespace-pre-wrap break-words text-sm">{entry.releaseNote}</p>
-                <Collapsible
-                  open={expandedRelease === entry.releaseRevision}
-                  onOpenChange={(open) => setExpandedRelease(open ? entry.releaseRevision : null)}
-                >
-                  <CollapsibleTrigger render={<Button variant="ghost" size="sm" />}>
-                    <Icon name="chevron-down" />
-                    Details
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <dl className="space-y-2 break-all font-mono text-xs">
-                      <div>
-                        <dt>Release revision</dt>
-                        <dd>{entry.releaseRevision}</dd>
-                      </div>
-                      <div>
-                        <dt>Published by (account id)</dt>
-                        <dd>{entry.publishedBy}</dd>
-                      </div>
-                      <div>
-                        <dt>Source fingerprint</dt>
-                        <dd>{entry.sourceFingerprint}</dd>
-                      </div>
-                    </dl>
-                  </CollapsibleContent>
-                </Collapsible>
-              </li>
-            ))}
-          </ol>
+                ),
+              }))}
+            />
+          </div>
         ))}
       {page !== null && page.entries.length > 0 && page.nextAfterReleaseRevision === null && (
         <p className="text-sm text-muted-foreground">End of release history.</p>
