@@ -4,6 +4,7 @@ import { logRefusal } from "@vortex/platform/schema";
 import {
   authenticateEventDispatcher,
   createEventDispatcherWakeup,
+  createDerivedFieldBackfillConsumer,
   createSearchEventConsumer,
   createSearchIndexDependencies,
   eventDispatcherWakeupLimits,
@@ -15,14 +16,18 @@ import { privateJsonResponse as privateResponse } from "../../../_lib/private-re
 // and a scheduled Kestra recovery tick. Both authenticate with the same
 // configured dispatcher bearer credential and run the same bounded dispatcher.
 const wakeup = createEventDispatcherWakeup({
-  consumers: [createSearchEventConsumer(createSearchIndexDependencies())],
+  consumers: [
+    createDerivedFieldBackfillConsumer(),
+    createSearchEventConsumer(createSearchIndexDependencies()),
+  ],
 });
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type ReadBodyResult =
-  Readonly<{ ok: true; body?: unknown }> | Readonly<{ ok: false; status: number; code: string; cause?: unknown }>;
+  | Readonly<{ ok: true; body?: unknown }>
+  | Readonly<{ ok: false; status: number; code: string; cause?: unknown }>;
 
 // A rejected caller credential is 401. A missing server configuration or a
 // missing, ambiguous or unavailable system actor grant is 503: no credential

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash, timingSafeEqual } from "node:crypto";
-import { actorIdSchema, type EventOccurrenceEnvelope } from "../schema";
+import { actorIdSchema, type DispatchOccurrence } from "../schema";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
@@ -71,8 +71,9 @@ export type EventConsumerDeliveryPolicy = Readonly<{
  */
 export type EventConsumerDelivery = Readonly<{
   consumerKey: string;
-  occurrence: EventOccurrenceEnvelope;
+  occurrence: DispatchOccurrence;
   causalDepth: number;
+  claimCursor: string;
   leaseExpiresAt: string;
   /**
    * Extends this delivery's claim by the consumer's lease policy. `false` means
@@ -85,6 +86,7 @@ export type EventConsumerDelivery = Readonly<{
 
 export type EventConsumerOutcome =
   | Readonly<{ outcome: "completed" }>
+  | Readonly<{ outcome: "continued" }>
   | Readonly<{ outcome: "retryable_failure"; failureCode: EventDeliveryFailureClassification }>
   | Readonly<{ outcome: "terminal_failure"; failureCode: EventDeliveryFailureClassification }>;
 
@@ -153,6 +155,7 @@ export type EventDispatchResult = Readonly<{
   status: EventDispatchStatus;
   claimedCount: number;
   acknowledgedCount: number;
+  continuedCount: number;
   retryScheduledCount: number;
   terminallyFailedCount: number;
   interruptedCount: number;
@@ -455,6 +458,7 @@ const validateDispatchInput = (candidate: unknown): ValidatedDispatch => {
 
 type ConsumerOutcome =
   | Readonly<{ kind: "completed" }>
+  | Readonly<{ kind: "continued" }>
   | Readonly<{
       kind: "failed";
       terminal: boolean;
@@ -471,6 +475,7 @@ const unsafeOutcome: ConsumerOutcome = Object.freeze({
 
 const parseConsumerOutcome = (candidate: unknown): ConsumerOutcome => {
   if (exactRecord(candidate, ["outcome"])?.outcome === "completed") return { kind: "completed" };
+  if (exactRecord(candidate, ["outcome"])?.outcome === "continued") return { kind: "continued" };
   const failed = exactRecord(candidate, ["outcome", "failureCode"]);
   if (
     (failed?.outcome === "retryable_failure" || failed?.outcome === "terminal_failure") &&
@@ -484,11 +489,13 @@ const parseConsumerOutcome = (candidate: unknown): ConsumerOutcome => {
   return unsafeOutcome;
 };
 
-type Settlement = "acknowledged" | "retry_scheduled" | "terminally_failed" | "interrupted";
+type Settlement =
+  "continued" | "acknowledged" | "retry_scheduled" | "terminally_failed" | "interrupted";
 
 type Tally = {
   claimedCount: number;
   acknowledgedCount: number;
+  continuedCount: number;
   retryScheduledCount: number;
   terminallyFailedCount: number;
   interruptedCount: number;
@@ -497,7 +504,8 @@ type Tally = {
 };
 
 const tallySettlement = (tally: Tally, settlement: Settlement): void => {
-  if (settlement === "acknowledged") tally.acknowledgedCount += 1;
+  if (settlement === "continued") tally.continuedCount += 1;
+  else if (settlement === "acknowledged") tally.acknowledgedCount += 1;
   else if (settlement === "retry_scheduled") tally.retryScheduledCount += 1;
   else if (settlement === "terminally_failed") tally.terminallyFailedCount += 1;
   else tally.interruptedCount += 1;
@@ -579,6 +587,8 @@ export const createEventDispatcher = (
     occurrenceId: string,
     outcome: ConsumerOutcome,
   ): Promise<Settlement> => {
+    // A paged consumer has committed its checkpoint and released this claim atomically.
+    if (outcome.kind === "continued") return "continued";
     try {
       if (outcome.kind === "completed") {
         const acknowledgement = await progress((repository) =>
@@ -631,6 +641,7 @@ export const createEventDispatcher = (
 
     const delivery: EventConsumerDelivery = Object.freeze({
       consumerKey: consumer.consumerKey,
+      claimCursor: ackCursor,
       occurrence: claimed.occurrence,
       causalDepth: claimed.causalDepth,
       leaseExpiresAt,
@@ -674,7 +685,11 @@ export const createEventDispatcher = (
     // only keeps that guarantee local if it were ever violated.
     const unsettledRecords = new Set<string>();
     for (const claimed of occurrences) {
-      const recordKey = `${claimed.occurrence.organizationId}:${claimed.occurrence.recordId}`;
+      const subject =
+        "recordId" in claimed.occurrence
+          ? claimed.occurrence.recordId
+          : claimed.occurrence.applicationRootId;
+      const recordKey = `${claimed.occurrence.organizationId}:${subject}`;
       const settlement = unsettledRecords.has(recordKey)
         ? "interrupted"
         : await deliver(consumer, ackCursor, claimed);
@@ -697,6 +712,7 @@ export const createEventDispatcher = (
       const tally: Tally = {
         claimedCount: 0,
         acknowledgedCount: 0,
+        continuedCount: 0,
         retryScheduledCount: 0,
         terminallyFailedCount: 0,
         interruptedCount: 0,
