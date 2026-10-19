@@ -13,7 +13,8 @@ import {
 } from "../components/combobox";
 import { InputGroup } from "../components/input-group";
 import type { StudioFlowDraftChoices } from "./application-flow-step-form";
-import { NativeSelect, NativeSelectOption } from "../components/native-select";
+import { StudioReferencePicker } from "./studio-reference-picker";
+import { Plus } from "lucide-react";
 import { Label } from "../components/label";
 
 export type StudioFlowStepChoice = Readonly<{ type: string; title: string; summary: string }>;
@@ -82,10 +83,8 @@ export function StudioFlowStepPicker({
       )}
       {needsForm && <div className="space-y-1">
         <Label htmlFor={`${id}-form`}>Form to show</Label>
-        <NativeSelect id={`${id}-form`} disabled={disabled} value={formAlias} onChange={(event) => setFormAlias(event.target.value)}>
-          <NativeSelectOption value="">Choose a form before adding the step</NativeSelectOption>
-          {forms.map((form) => <NativeSelectOption key={form.alias} value={form.alias}>{form.label}</NativeSelectOption>)}
-        </NativeSelect>
+        <StudioReferencePicker id={`${id}-form`} disabled={disabled} value={formAlias} unset="Choose a form before adding the step"
+          options={forms.map((form) => ({ value: form.alias, label: form.label }))} onChange={setFormAlias} />
       </div>}
       <Button
         type="button"
@@ -100,6 +99,7 @@ export function StudioFlowStepPicker({
           }
         }}
       >
+        <Plus />
         {action}
       </Button>
     </div>

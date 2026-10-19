@@ -260,7 +260,11 @@ export function StudioStructureEditor({
               <span className="text-muted-foreground"> · home page</span>
             )}
           </p>
-          <StudioField label="Name" error={rename.problem === "" ? undefined : rename.problem}>
+          <StudioField
+            label="Name"
+            error={rename.problem === "" ? undefined : rename.problem}
+            onUndo={rename.reset}
+          >
             {(control) => (
               <Input
                 {...control}

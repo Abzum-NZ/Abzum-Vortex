@@ -665,6 +665,7 @@ export function ModuleFieldsEditor({
         <StudioField
           label="Label"
           error={problemOf(label.problem)}
+          onUndo={label.reset}
           hint={
             adding
               ? nextKey === undefined
@@ -812,6 +813,7 @@ export function ModuleFieldsEditor({
           label="Help text"
           hint="Shown under the field on forms. Optional."
           error={problemOf(helpText.problem)}
+          onUndo={helpText.reset}
         >
           {(control) => (
             <Textarea
