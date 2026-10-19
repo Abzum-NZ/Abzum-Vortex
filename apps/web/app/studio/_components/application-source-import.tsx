@@ -1,6 +1,6 @@
 "use client";
 import { Button } from "@vortex/ui/components/button";
-import { TechnicalDetails, ViewSource } from "@vortex/ui/components/technical-details";
+import { StudioInspectorGroup, StudioSourceView } from "@vortex/ui/studio";
 import { Icon } from "@vortex/ui";
 import { Card, CardContent } from "@vortex/ui/components/card";
 import {
@@ -83,7 +83,7 @@ function SourceChangeTable({
   if (rows.length === 0) return <p>The file matches your draft. Nothing would change.</p>;
   return (
     <div className="overflow-hidden rounded-xl border">
-      <Table>
+      <Table containerClassName="border-0">
         <TableHeader className="bg-muted/50 text-xs">
           <TableRow>
             <TableHead className="text-foreground normal-case">Area</TableHead>
@@ -557,13 +557,6 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
             pages and flows. Checking the file does not decide whether it can be published.
           </p>
           <SourceChangeTable current={reviewed.snapshot.source} next={reviewed.source} />
-          <TechnicalDetails title="View source">
-            <p className="break-all">
-              Fingerprint of the file: <code>{reviewed.fingerprint}</code>
-            </p>
-            <ViewSource value={reviewed.snapshot.source} title="Current draft" />
-            <ViewSource value={reviewed.source} title="Imported file" />
-          </TechnicalDetails>
         </div>
       )}
       {diagnosticsCurrent && diagnostics !== null && (
@@ -574,7 +567,7 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
               <li key={`${error.code}:${index}`}>
                 <p className="font-medium">{error.message}</p>
                 <p>{error.guidance}</p>
-                <TechnicalDetails>
+                <StudioInspectorGroup title="Details" defaultOpen={false}>
                   <p className="break-all">
                     Where: {error.location?.documentKey ?? diagnostics.snapshot.key}
                     {error.location?.segments.map((segment, segmentIndex) => (
@@ -587,7 +580,7 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
                   <p>
                     Code: <code>{error.code}</code>
                   </p>
-                </TechnicalDetails>
+                </StudioInspectorGroup>
               </li>
             ))}
           </ul>
@@ -621,6 +614,15 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
             ? "Checking file"
             : ""}
       </p>
+      {reviewedCurrent && reviewed !== null && (
+        <StudioInspectorGroup title="Details" defaultOpen={false}>
+          <p className="break-all">
+            Fingerprint of the file: <code>{reviewed.fingerprint}</code>
+          </p>
+          <StudioSourceView value={reviewed.snapshot.source} title="Current draft" />
+          <StudioSourceView value={reviewed.source} title="Imported file" />
+        </StudioInspectorGroup>
+      )}
       {confirmDialog}
     </section>
   );
