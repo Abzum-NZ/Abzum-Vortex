@@ -233,6 +233,26 @@ begin
         and mapping.field_id = mapping_row.field_id;
     end loop;
 
+    -- A seeded record type whose totals or stored calculations changed has them worked out again
+    -- before it is read.
+    if (
+      select coalesce(pg_catalog.jsonb_agg(field.value order by field.value ->> 'fieldId'), '[]'::jsonb)
+      from pg_catalog.jsonb_array_elements(catalogue_row.record_type_definition -> 'fields') as field(value)
+      where field.value ->> 'type' = 'total'
+        or (field.value ->> 'type' = 'calculation'
+          and field.value #>> '{settings,evaluation}' is distinct from 'read_time')
+    ) is distinct from (
+      select coalesce(pg_catalog.jsonb_agg(field.value order by field.value ->> 'fieldId'), '[]'::jsonb)
+      from pg_catalog.jsonb_array_elements(evolved_definition -> 'fields') as field(value)
+      where field.value ->> 'type' = 'total'
+        or (field.value ->> 'type' = 'calculation'
+          and field.value #>> '{settings,evaluation}' is distinct from 'read_time')
+    ) then
+      update vortex_definition.preview_installation_seeds as seed
+      set derived_ready_at = null
+      where seed.preview_installation_id = p_preview_installation_id
+        and seed.record_type_id = record_type_id_value;
+    end if;
     update vortex_record.storage_catalogue as catalogue
     set record_type_definition = evolved_definition,
         content_fingerprint = vortex_record.storage_meaning_fingerprint(evolved_definition),
@@ -270,4 +290,4 @@ revoke all on function vortex_record.evolve_preview_module_storage(uuid, uuid, b
 grant execute on function vortex_record.evolve_preview_module_storage(uuid, uuid, bigint)
   to vortex_owner;
 comment on function vortex_record.evolve_preview_module_storage(uuid, uuid, bigint) is
-  'Moves a preview''s isolated Record storage to a newer exact Module release in place, keeping its records: new record types get empty storage, new fields new empty columns, changed fields their new definition and uniqueness, and removed fields are retired. A change the stored records cannot take (another database type, storage scope or ownership, or a uniqueness they break) raises V3201.';
+  'Moves a preview''s isolated Record storage to a newer exact Module release in place, keeping its records: new record types get empty storage, new fields new empty columns, changed fields their new definition and uniqueness, and removed fields are retired; a seeded record type whose totals or stored calculations changed has them worked out again. A change the stored records cannot take (another database type, storage scope or ownership, or a uniqueness they break) raises V3201.';
