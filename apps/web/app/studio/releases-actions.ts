@@ -1,8 +1,34 @@
 "use server";
 
-import { pageAdoptionCommandSchema } from "../../../../_lib/studio-standard-page-adoption-plan";
-import { loadStudioStandardPageAdoption, saveStudioStandardPageAdoption,
-  type StudioStandardPageAdoptionLoadResult } from "../../../../_lib/studio-standard-page-adoption";
+import {
+  listStudioApplicationReleaseHistory,
+  type StudioApplicationHistoryListResult,
+} from "../_lib/studio-application-history";
+import { restoreStudioApplicationDraft } from "../_lib/studio-application-restore";
+import type { StudioApplicationRestoreCommandResult } from "../_lib/studio-application-restore-contracts";
+
+import { pageAdoptionCommandSchema } from "../_lib/studio-standard-page-adoption-plan";
+import {
+  loadStudioStandardPageAdoption,
+  saveStudioStandardPageAdoption,
+  type StudioStandardPageAdoptionLoadResult,
+} from "../_lib/studio-standard-page-adoption";
+
+/** Each command resolves its own actor, organization, root and saved revision on the server. */
+export async function listApplicationReleaseHistory(
+  organizationId: string,
+  candidate: unknown,
+): Promise<StudioApplicationHistoryListResult> {
+  return listStudioApplicationReleaseHistory(organizationId, candidate);
+}
+
+/** Restores one published version into the draft as a new saved draft revision; nothing is published or installed. */
+export async function restoreApplicationRelease(
+  organizationId: string,
+  command: unknown,
+): Promise<StudioApplicationRestoreCommandResult> {
+  return restoreStudioApplicationDraft(organizationId, command);
+}
 
 const textField = (formData: FormData, key: string): string | undefined => {
   const value = formData.get(key);
@@ -18,7 +44,8 @@ const numberField = (formData: FormData, key: string): number | undefined => {
 
 /** Reads the comparison for Page adoption in the Releases tab; the server resolves access afresh. */
 export async function readStandardPageAdoption(
-  organizationId: string, rootId: string,
+  organizationId: string,
+  rootId: string,
 ): Promise<StudioStandardPageAdoptionLoadResult> {
   return loadStudioStandardPageAdoption(organizationId, rootId);
 }
@@ -40,8 +67,7 @@ export async function submitStandardPageAdoption(formData: FormData): Promise<st
     decision: textField(formData, "decision"),
     target: { kind: targetKind, id: targetId },
   });
-  if (organizationId === undefined || rootId === undefined || !parsed.success)
-    return "refused";
+  if (organizationId === undefined || rootId === undefined || !parsed.success) return "refused";
   const result = await saveStudioStandardPageAdoption(organizationId, parsed.data);
   return result.kind === "available" ? "saved" : result.kind;
 }

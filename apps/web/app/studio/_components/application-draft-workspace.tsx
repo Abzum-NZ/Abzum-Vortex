@@ -294,7 +294,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                   organizationName: place.organizationName,
                   organizationHref: `/studio/${encodeURIComponent(organizationId)}`,
                   applicationName: source.body.name,
-                  item: canvas.breadcrumbItem,
+                  item: tab === "releases" ? releases.title : canvas.breadcrumbItem,
                   applications: applications.map((app) => ({
                     name: app.name,
                     href: `/studio/${encodeURIComponent(organizationId)}/${encodeURIComponent(app.rootId)}`,
@@ -329,7 +329,13 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                 {releases.panel}
               </>
             }
-            inspector={tab === "access" ? null : tab === "data" ? data.inspector : canvas.inspector}
+            inspector={
+              tab === "access" || tab === "releases"
+                ? null
+                : tab === "data"
+                  ? data.inspector
+                  : canvas.inspector
+            }
             canvas={({ inspectorOpen, toggleInspector, focused, focusCanvas }) => (
               <>
                 {canvas.toolbar(
