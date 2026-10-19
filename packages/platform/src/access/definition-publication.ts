@@ -154,6 +154,12 @@ const compilationRefusal = (error: unknown): DefinitionCompilationError | undefi
 };
 
 const classifyFailure = (error: unknown): Failure => {
+  if (error instanceof DefinitionError && error.code === "DEFINITION_IDENTITY_RETIRED")
+    return {
+      kind: "refused",
+      reason: "identity_retired",
+      ...(error.sentence === undefined ? {} : { sentence: error.sentence }),
+    };
   if (error instanceof DefinitionError && error.code === "DEFINITION_NO_CHANGE")
     return { kind: "no_change", reason: "no_change" };
   if (error instanceof DefinitionError && dependencyCodes.includes(error.code))

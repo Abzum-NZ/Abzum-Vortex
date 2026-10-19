@@ -12,6 +12,7 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { requireBuilderAuthority, type BuilderAuthority } from "./builder-authority";
 import { fingerprintCanonicalJson } from "./canonical-json-definition";
 import { extractStoredSourceIdentityRequirements } from "./source-identities";
+import { identityRetiredFailure } from "./identity-retired";
 import { validateDefinitionSource } from "./validation";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import {
@@ -28,6 +29,7 @@ export const definitionStoreErrorCodes = [
   "DEFINITION_ROOT_ALREADY_EXISTS",
   "DEFINITION_ROOT_MISSING",
   "DEFINITION_IDENTITY_ALIAS_CONFLICT",
+  "DEFINITION_IDENTITY_RETIRED",
   "DEFINITION_CONTEXT_REFUSED",
   "DEFINITION_STORAGE_VALIDATION_FAILED",
   "DEFINITION_STORAGE_FAILED",
@@ -184,6 +186,8 @@ const safeStoreOperation = async <Result>(
     return await operation();
   } catch (error) {
     if (error instanceof DefinitionError) throw error;
+    const retired = identityRetiredFailure(error);
+    if (retired !== undefined) throw retired;
     const cause = { cause: error };
     switch (classifyDatabaseError(error)) {
       case "conflict":

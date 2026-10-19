@@ -99,6 +99,7 @@ export default async function StudioApplicationPage({
       mode="existing"
       organizationId={result.organizationId}
       draft={result.draft}
+      identityReservations={result.identityReservations}
       place={place}
       initialTab={tab}
       initialSection={section}

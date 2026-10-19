@@ -8,6 +8,7 @@ import {
   standardPermissionKey,
   type ApplicationSourceDocument,
   type ApplicationUsePlace,
+  type SourceIdentityReservation,
 } from "@vortex/platform/schema";
 import { tokenName } from "./studio-words";
 
@@ -819,10 +820,7 @@ const removePermission = (candidate: Source, key: string): StudioAccessResult =>
 };
 
 /** Applies one Access edit to the draft, or refuses it with a reason and, when something uses it, where. */
-export const applyStudioAccessCommand = (
-  source: Source,
-  command: StudioAccessCommand,
-): StudioAccessResult => {
+const applyAccessCommand = (source: Source, command: StudioAccessCommand): StudioAccessResult => {
   try {
     const candidate = applicationSourceDocumentSchema.parse(structuredClone(source));
     const body = candidate.body;
@@ -956,4 +954,64 @@ export const applyStudioAccessCommand = (
       };
     throw error;
   }
+};
+
+const accessIdentityItems = (source: Source) => [
+  ...source.body.roles.map((item) => ({ item, kind: "role", definitionKey: source.key })),
+  ...source.body.permissions.map((item) => ({
+    item,
+    kind: "permission",
+    definitionKey: source.key,
+  })),
+  ...source.body.modules.flatMap((module) =>
+    module.permissions.map((item) => ({ item, kind: "permission", definitionKey: module.key })),
+  ),
+];
+
+/** Keep removed names reserved during this editing session, including before the next reload. */
+export const studioAccessIdentityReservations = (source: Source): SourceIdentityReservation[] =>
+  accessIdentityItems(source).flatMap(({ item, kind, definitionKey }) =>
+    [item.id, item.key].map((alias) => ({
+      definitionKey,
+      scope: "content",
+      kind: kind as "role" | "permission",
+      componentOwner: item.id,
+      alias,
+    })),
+  );
+
+/** Access edits allocate against both the current draft and the protected historical names. */
+export const applyStudioAccessCommand = (
+  source: Source,
+  command: StudioAccessCommand,
+  reservations: readonly SourceIdentityReservation[],
+): StudioAccessResult => {
+  const result = applyAccessCommand(source, command);
+  if (result.kind !== "applied") return result;
+  const before = accessIdentityItems(source);
+  const taken = new Set([
+    ...takenAliases(result.source.body),
+    ...reservations.map((entry) => entry.alias),
+  ]);
+  for (const { item, kind, definitionKey } of accessIdentityItems(result.source)) {
+    if (
+      before.some(
+        (entry) =>
+          entry.definitionKey === definitionKey && entry.kind === kind && entry.item.id === item.id,
+      )
+    )
+      continue;
+    const historical = reservations.filter(
+      (entry) =>
+        entry.definitionKey === definitionKey && entry.kind === kind && entry.scope === "content",
+    );
+    if (historical.some((entry) => entry.alias === item.key))
+      return {
+        kind: "refused",
+        message: `${quoted("name" in item ? item.name : item.label)} was used before under this name. Restore it from Releases, or give the new item a different name.`,
+      };
+    if (historical.some((entry) => entry.alias === item.id))
+      (item as { id: string }).id = uniqueAlias(item.id, taken);
+  }
+  return { ...result, source: judged(result.source) };
 };

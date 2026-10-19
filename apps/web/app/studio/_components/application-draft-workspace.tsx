@@ -1,6 +1,9 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import type { ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type {
+  ImmutablePlatformBlockCatalogue,
+  SourceIdentityReservation,
+} from "@vortex/platform/schema";
 import {
   StudioFieldProblemsProvider,
   projectStudioSemanticOutline,
@@ -37,6 +40,7 @@ import { useStudioReleasesTab } from "./use-studio-releases-tab";
 import { useStudioStructureTab } from "./use-studio-structure-tab";
 import {
   applyStudioAccessCommand,
+  studioAccessIdentityReservations,
   type StudioAccessCommand,
   type StudioAccessResult,
 } from "@vortex/ui/studio";
@@ -64,6 +68,7 @@ type WorkspaceProps =
       mode: "existing";
       organizationId: string;
       draft: StudioStoredApplicationDraft;
+      identityReservations: readonly SourceIdentityReservation[];
       place: StudioWorkspacePlace;
       initialTab?: string | undefined;
       initialSection?: string | undefined;
@@ -121,13 +126,17 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     return () => window.removeEventListener("popstate", restoreTab);
   }, []);
   const { source, state } = draft;
+  const accessReservations = useRef<SourceIdentityReservation[]>([...props.identityReservations]);
   const openIn = (nextTab: StudioRailKey, next: StudioSemanticSelection) => {
     setTab(nextTab);
     draft.select(next);
   };
 
   // The one outline of the draft: Structure, Outline and every label Studio shows are views of it.
-  const describePlacement = useMemo(() => createStudioPlacementDescriber(catalogue, source), [catalogue, source]);
+  const describePlacement = useMemo(
+    () => createStudioPlacementDescriber(catalogue, source),
+    [catalogue, source],
+  );
   const outline = useMemo(
     () =>
       projectStudioSemanticOutline({ rootId: state.rootId, source, catalogue }, describePlacement),
@@ -183,7 +192,17 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   const commandAccess = (command: StudioAccessCommand, merge?: string): StudioAccessResult => {
     const outcome = draft.run<StudioAccessResult>(
       (current) => {
-        const result = applyStudioAccessCommand(current, command);
+        const known = new Set(
+          accessReservations.current.map(
+            (entry) => `${entry.definitionKey}:${entry.kind}:${entry.alias}`,
+          ),
+        );
+        accessReservations.current.push(
+          ...studioAccessIdentityReservations(current).filter(
+            (entry) => !known.has(`${entry.definitionKey}:${entry.kind}:${entry.alias}`),
+          ),
+        );
+        const result = applyStudioAccessCommand(current, command, accessReservations.current);
         return result.kind === "applied"
           ? { kind: "edit", source: result.source, result }
           : { kind: "keep", result };
