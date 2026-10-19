@@ -243,7 +243,7 @@ overrides:
   motion-utils: 13.3.0
 
 patchedDependencies:
-  postgres@3.4.9: 9ff91a52eb8b36218b3f2780e6be9d5ea3a6f62c8e8e9b81f9324e970ac2bed1
+  postgres@3.4.9: 9d2bd2ed284b630a68d4e65eb6669ac72e880b227732c4f9b259331d1c5a3b4e
 
 importers:
 
@@ -354,7 +354,7 @@ importers:
         version: 22.2.0(supports-color@7.2.0)
       postgres:
         specifier: 'catalog:'
-        version: 3.4.9(patch_hash=9ff91a52eb8b36218b3f2780e6be9d5ea3a6f62c8e8e9b81f9324e970ac2bed1)
+        version: 3.4.9(patch_hash=9d2bd2ed284b630a68d4e65eb6669ac72e880b227732c4f9b259331d1c5a3b4e)
       re2js:
         specifier: 'catalog:'
         version: 2.8.6
@@ -6602,7 +6602,7 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  postgres@3.4.9(patch_hash=9ff91a52eb8b36218b3f2780e6be9d5ea3a6f62c8e8e9b81f9324e970ac2bed1): {}
+  postgres@3.4.9(patch_hash=9d2bd2ed284b630a68d4e65eb6669ac72e880b227732c4f9b259331d1c5a3b4e): {}
 
   powershell-utils@0.1.0: {}
 
