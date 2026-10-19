@@ -157,6 +157,24 @@ export const eventOccurrenceEnvelopeSchema = z
       });
   });
 
+/** Installation work shares the durable outbox and delivery protocol with record events. */
+export const installationActivatedOccurrenceSchema = z
+  .object({
+    kind: z.literal("installation_activated"),
+    occurrenceId: eventOccurrenceIdSchema,
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    applicationReleaseRevision: revisionSchema,
+    occurredAt: timestampSchema,
+  })
+  .strict();
+
+export const dispatchOccurrenceSchema = z.union([
+  eventOccurrenceEnvelopeSchema,
+  installationActivatedOccurrenceSchema,
+]);
+export type DispatchOccurrence = z.infer<typeof dispatchOccurrenceSchema>;
+
 export const liveInvalidationSchema = z
   .object({
     contractVersion: semanticVersionSchema,

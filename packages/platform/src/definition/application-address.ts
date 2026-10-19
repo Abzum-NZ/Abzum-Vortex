@@ -357,12 +357,12 @@ const addressedActiveApplicationIdentitySchema = z.object({
 type AddressedActiveApplicationIdentity =
   | (z.infer<typeof addressedActiveApplicationIdentitySchema> & {
       previewInstallationId?: never;
-      seeded?: never;
+      holdsLiveRecords?: never;
     })
   | (Omit<z.infer<typeof addressedActiveApplicationIdentitySchema>, "applicationReleaseRevision"> & {
       previewInstallationId: string;
-      /** Whether the preview holds copies of live records. */
-      seeded: boolean;
+      /** Whether the preview was seeded with copies of live records. */
+      holdsLiveRecords: boolean;
       applicationReleaseRevision?: never;
     });
 
@@ -847,7 +847,7 @@ const readAddressedActiveApplicationIdentity = async (
           applicationRootId: preview.applicationRootId,
           definitionKey: preview.definitionKey,
           previewInstallationId: preview.previewInstallationId,
-          seeded: preview.seeded,
+          holdsLiveRecords: preview.seededRecordTypeIds.length > 0,
         };
       }
       const rows = await transaction.query<AddressedIdentityRow>`
@@ -868,7 +868,7 @@ const readAddressedActiveApplicationIdentity = async (
   const identity: AddressedActiveApplicationIdentity = result.value;
   // A preview holding copies of live records opens only once they are decided again by the
   // builder's current live access in the installed Application; a refusal refuses the preview.
-  if (identity.previewInstallationId !== undefined && identity.seeded) {
+  if (identity.previewInstallationId !== undefined && identity.holdsLiveRecords) {
     const previewInstallationId = identity.previewInstallationId;
     const reconciled = await requests.run(
       session.data,

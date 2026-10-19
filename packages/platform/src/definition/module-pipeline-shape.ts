@@ -160,7 +160,8 @@ const parsed = (source: ApplicationSourceDocument, pipelineKey: string): InlineP
 /**
  * Creates or changes one pipeline of an owned Module's record type, its gates and, when asked, the
  * removal of options from its choice field. A removed option is refused while anything uses it and
- * while its field is in a published version (records already stored may hold it).
+ * while its field is in a published version (records already stored may hold it). Creating a
+ * pipeline enables filtering on its stage field so a Board can use it, keeping published shapes fixed.
  */
 export const saveInlinePipeline = (
   current: ApplicationSourceDocument,
@@ -203,6 +204,14 @@ export const saveInlinePipeline = (
   )
     issues.push(
       `Field: ${field.label} already has a pipeline. A choice field follows one pipeline.`,
+    );
+  if (
+    existing === undefined &&
+    !field.filterable &&
+    publication.fields.has(`${module.key}:${record.key}.${field.key}`)
+  )
+    issues.push(
+      `Field: ${field.label} is published without filtering, so it can't be used for a new pipeline. Add a choice field for its stages.`,
     );
   const labelOf = (value: string) =>
     options.find((option) => option.value === value)?.label ?? value;
@@ -315,8 +324,10 @@ export const saveInlinePipeline = (
     transitions: transitions.map((move) => ({ from: move.from, to: move.to })),
   } as Pipeline;
   const pipelines = record.pipelines as Pipeline[];
-  if (existing === undefined) pipelines.push(pipeline);
-  else pipelines[pipelines.indexOf(existing)] = pipeline;
+  if (existing === undefined) {
+    Object.assign(field, { filterable: true });
+    pipelines.push(pipeline);
+  } else pipelines[pipelines.indexOf(existing)] = pipeline;
   return parsed(source, key);
 };
 
@@ -330,7 +341,12 @@ export const deleteInlinePipeline = (
   recordKey: string,
   pipelineKey: string,
 ): InlinePipelineResult => {
-  const references = applicationUses(current, { kind: "pipeline", moduleKey, recordKey, pipelineKey });
+  const references = applicationUses(current, {
+    kind: "pipeline",
+    moduleKey,
+    recordKey,
+    pipelineKey,
+  });
   if (references.length > 0)
     return {
       kind: "referenced",

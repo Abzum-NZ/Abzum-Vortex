@@ -25,16 +25,33 @@ begin
     'definitionKey', root.key,
     'draftRevision', preview.draft_revision,
     'expiresAt', preview.expires_at,
-    'seeded', preview.seeded_at is not null,
+    'seedable', preview.seedable,
+    'seededRecordTypeIds', coalesce(seeds.seeded_ids, '[]'::jsonb),
+    'derivedReadyRecordTypeIds', coalesce(seeds.ready_ids, '[]'::jsonb),
+    -- Every record type it has storage for: the record types a demand may name.
+    'recordTypeIds', (
+      select coalesce(pg_catalog.jsonb_agg(pg_catalog.lower(identity.value ->> 'recordTypeId')
+          order by identity.value ->> 'previewStorageContractId'), '[]'::jsonb)
+      from pg_catalog.jsonb_array_elements(preview.storage_identities) as identity(value)
+    ),
     'shapeFingerprint', preview.draft_shape_fingerprint,
     -- Copied live records are decided again by the builder's live access at most every five
-    -- minutes, counting from the seed; reconcile_preview_installation keeps the same interval.
-    'reconcileDue', preview.seeded_at is not null
-      and coalesce(preview.reconciled_at, preview.seeded_at)
+    -- minutes, counting from the first seed; reconcile_preview_installation keeps the same interval.
+    'reconcileDue', seeds.first_seeded_at is not null
+      and coalesce(preview.reconciled_at, seeds.first_seeded_at)
         <= pg_catalog.statement_timestamp() - interval '5 minutes'
   ) into identity_value
   from vortex_definition.preview_installations as preview
   join vortex_definition.roots as root on root.root_id = preview.application_root_id
+  left join lateral (
+    select pg_catalog.min(seed.seeded_at) as first_seeded_at,
+      pg_catalog.jsonb_agg(pg_catalog.lower(seed.record_type_id::text)
+        order by seed.record_type_id) as seeded_ids,
+      pg_catalog.jsonb_agg(pg_catalog.lower(seed.record_type_id::text)
+        order by seed.record_type_id) filter (where seed.derived_ready_at is not null) as ready_ids
+    from vortex_definition.preview_installation_seeds as seed
+    where seed.preview_installation_id = preview.preview_installation_id
+  ) as seeds on true
   where preview.application_root_id = p_application_root_id
     and preview.organization_id = (checked_context ->> 'organizationId')::uuid
     and preview.previewer_organization_account_id =
@@ -56,4 +73,4 @@ revoke all on function vortex_definition.read_builder_preview_installation(uuid)
 grant execute on function vortex_definition.read_builder_preview_installation(uuid)
   to vortex_request;
 comment on function vortex_definition.read_builder_preview_installation(uuid) is
-  'The current runnable, unexpired preview of one Application that the builder of the validated human organisation context opened: its draft revision, the fingerprint of the draft data shape it runs, and whether it holds copied live records that are due to be decided again; null when they have none. Studio reads the canvas and Data tab records through it.';
+  'The current runnable, unexpired preview of one Application that the builder of the validated human organisation context opened: its draft revision, the fingerprint of the draft data shape it runs, whether it can be seeded, the record types it has storage for, those it was seeded with and those whose derived fields are worked out, and whether its copied live records are due to be decided again; null when they have none. Studio reads the canvas and Data tab records through it.';
