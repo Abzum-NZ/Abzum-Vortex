@@ -3,26 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import {
   readRecordsTableContract,
-  recordsTableDensities,
   type RecordsTableActionContract,
-  type RecordsTableDensity,
   type RecordsTableContract,
 } from "@vortex/platform/schema";
 import { Button } from "../components/button";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "../components/dropdown-menu";
 import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "../components/empty";
-import { Icon } from "../icons/icon";
+import { cn } from "../lib/utils";
 import { cellValueToText, DisplayCellView } from "./cell";
 import {
   DisplayHeader,
@@ -33,6 +19,7 @@ import {
   SelectionControl,
 } from "./controls";
 import { useGridFeatures, type GridFeatureContext } from "./grid-features/registry";
+import { FULL_SCREEN_CLASS, GridToolbar, useGridFullScreen } from "./grid-features/toolbar";
 import { resolveDisplayContext, rowName, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
 import type {
@@ -45,7 +32,7 @@ import type {
 import { RecordsCards, type CardRenderers } from "./table-cards";
 import { columnWidth, useTablePresentation } from "./table-geometry";
 import { RecordsGrid, type GridRenderers } from "./table-grid";
-import { useGridLayout, type GridColumn, type GridLayoutControls } from "./table-layout";
+import { useGridLayout, type GridColumn } from "./table-layout";
 import { TableLoadingState, useLoadingReveal } from "./table-loading";
 
 /** Field identities compare without regard to case, as the Query engine keys them. */
@@ -103,96 +90,6 @@ const useAnnouncer = (): [string, (message: string) => void] => {
   );
   return [message, announce];
 };
-
-/**
- * Show and hide the declared columns, choose the row density, and reset the layout. Every choice
- * changes the grid at once and is stored as the person's own layout; none of them reads records,
- * except showing a column the page was read without, which reads the same page again with it. A
- * hidden column's values are never sent: the next read leaves it out.
- */
-function ColumnsMenu({
-  accessibleName,
-  layout,
-  loadedKeys,
-  canRead,
-  announce,
-}: Readonly<{
-  accessibleName: string;
-  layout: GridLayoutControls;
-  /** The columns the shown page carries values for, lower-cased. */
-  loadedKeys: ReadonlySet<string>;
-  /** Whether the host can read the page again, so a column it was read without can be shown. */
-  canRead: boolean;
-  announce: (message: string) => void;
-}>): ReactElement {
-  const shownCount = layout.entries.filter((entry) => entry.visible).length;
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={<Button variant="outline" size="sm" aria-label={`Columns of ${accessibleName}`} />}
-      >
-        <Icon name="sliders-horizontal" data-icon="inline-start" aria-hidden="true" />
-        Columns
-      </DropdownMenuTrigger>
-      <DropdownMenuContent>
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Columns</DropdownMenuLabel>
-          {layout.entries.map((entry) => (
-            <DropdownMenuCheckboxItem
-              key={entry.key}
-              checked={entry.visible}
-              // One column always stays shown; a column the page was read without needs a read.
-              disabled={
-                (entry.visible && shownCount <= 1) ||
-                (!entry.visible && !loadedKeys.has(entry.key) && !canRead)
-              }
-              onCheckedChange={(checked: boolean) => {
-                layout.setVisible(entry.key, checked);
-                announce(`${entry.label} ${checked ? "shown" : "hidden"}`);
-              }}
-            >
-              {entry.label}
-            </DropdownMenuCheckboxItem>
-          ))}
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Row density</DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={layout.density}
-            onValueChange={(value: unknown) => {
-              const density = recordsTableDensities.find((candidate) => candidate === value);
-              if (density === undefined) return;
-              layout.setDensity(density);
-              announce(`${DENSITY_LABELS[density]} rows`);
-            }}
-          >
-            {recordsTableDensities.map((density) => (
-              <DropdownMenuRadioItem key={density} value={density}>
-                {DENSITY_LABELS[density]}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          disabled={!layout.arranged}
-          onClick={() => {
-            layout.reset();
-            announce("Layout reset");
-          }}
-        >
-          Reset layout
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-const DENSITY_LABELS: Readonly<Record<RecordsTableDensity, string>> = Object.freeze({
-  comfortable: "Comfortable",
-  compact: "Compact",
-});
 
 /**
  * Shared browser-safe display component for tabular data: the one Records table block. It shows
@@ -281,7 +178,11 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     [accessibleName, features, layout.shown, rows, selectedRecordIds, narrowing, events],
   );
   const gridFeatures = useGridFeatures(featureContext);
-  const { cell: featureCell, cellClassName, headerAdornment } = gridFeatures;
+  const { cell: featureCell, cellClassName, headerAdornment, columnMenuItems } = gridFeatures;
+  // Full screen keeps this same tree and changes only the container's classes, so scroll,
+  // selection and an open editor survive entering and leaving it.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const fullScreen = useGridFullScreen(containerRef, contract?.allowFullScreen === true, announce);
 
   // Configured row behaviours: a row click and named row actions. Each declared control carries
   // the stable identity of its own flow binding, so one table placement can run several flows.
@@ -326,6 +227,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         );
       },
       headerAdornment,
+      columnMenuItems,
       select: (row, selected) => (
         <SelectionControl
           row={row}
@@ -347,7 +249,16 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         />
       ),
     };
-  }, [behaviours, events, headingKey, placementId, featureCell, cellClassName, headerAdornment]);
+  }, [
+    behaviours,
+    events,
+    headingKey,
+    placementId,
+    featureCell,
+    cellClassName,
+    headerAdornment,
+    columnMenuItems,
+  ]);
 
   const pageRecordIds = rows.map((row) => row.recordId);
   const allSelected =
@@ -437,23 +348,28 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   // The search and filter controls start from what the first shown page was read with, and start
   // again when the person clears them; their own commits keep the controls (and their focus).
   const controlsKey = `${clearCount}:${values === undefined ? "reading" : "read"}`;
+  const layoutControls =
+    !ready || rows.length === 0
+      ? undefined
+      : {
+          layout,
+          loadedKeys,
+          canRead: layout.persisted && events?.columns_changed !== undefined,
+          announce,
+        };
+  const allowFullScreen = contract.allowFullScreen;
   const toolbar =
-    gridFeatures.keys.length === 0 && !(ready && rows.length > 0) ? null : (
-      <div className="mb-2 flex flex-wrap items-end gap-2" key={controlsKey}>
-        {state.status === "empty" ? null : gridFeatures.toolbarItems()}
-        {!ready || rows.length === 0 ? null : (
-          <div className="ms-auto flex flex-wrap items-center gap-2">
-            {selectable ? gridFeatures.selectionBanner() : null}
-            <ColumnsMenu
-              accessibleName={accessibleName}
-              layout={layout}
-              loadedKeys={loadedKeys}
-              canRead={layout.persisted && events?.columns_changed !== undefined}
-              announce={announce}
-            />
-          </div>
-        )}
-      </div>
+    gridFeatures.keys.length === 0 && layoutControls === undefined && !allowFullScreen ? null : (
+      <GridToolbar
+        key={controlsKey}
+        accessibleName={accessibleName}
+        featureItems={state.status === "empty" ? null : gridFeatures.toolbarItems()}
+        selectionBanner={
+          layoutControls !== undefined && selectable ? gridFeatures.selectionBanner() : null
+        }
+        layoutControls={layoutControls}
+        fullScreen={allowFullScreen ? fullScreen : undefined}
+      />
     );
   const clearNarrowing = (): void => {
     setClearCount((count) => count + 1);
@@ -538,6 +454,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         showActions={showActions}
         activateRow={activateRow}
         renderers={renderers}
+        fill={fullScreen.active}
       />
     ) : (
       <RecordsGrid
@@ -553,15 +470,19 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         activateRow={activateRow}
         renderers={gridRenderers}
         announce={announce}
+        fill={fullScreen.active}
       />
     );
   })();
 
   return (
     <div
+      ref={containerRef}
       data-vortex-display="table"
       data-vortex-placement-id={placementId}
       data-vortex-table-density={layout.density}
+      {...(fullScreen.active ? { "data-vortex-full-screen": "" } : {})}
+      className={cn(fullScreen.active && FULL_SCREEN_CLASS)}
       {...(revealed ? { "data-vortex-display-revealed": "" } : {})}
     >
       <DisplayHeader
@@ -588,7 +509,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         body
       )}
       {!ready || values === undefined ? null : (
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
           <p className="m-0 text-xs text-muted-foreground tabular-nums">
             {values.page === undefined ? "" : `Page ${values.page} · `}
             {rows.length === 1 ? "1 row" : `${rows.length} rows`}
