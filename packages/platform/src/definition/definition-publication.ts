@@ -46,6 +46,7 @@ import {
   type DefinitionPublicationRepository,
   type PreparedDefinitionPublication,
   type DefinitionDraftCandidate,
+  type DefinitionPublicationCandidate,
   type DefinitionPublicationTransaction,
 } from "./definition-publication-contracts";
 import type { ResolvedDependencies } from "./definition-dependency-resolution";
@@ -56,6 +57,9 @@ import {
   releasedUnchangedModules,
   compileApplicationWithInlineModules,
   planApplicationPublication,
+  latestReleaseVersion,
+  stagedOwnedModuleRoots,
+  type ApplicationReleasePlan,
 } from "./application-publication";
 
 /** A preparation labels its in-memory Module plans with this note. */
@@ -63,6 +67,11 @@ const preparationReleaseNote = "Planned by publication preparation";
 
 export type ApplicationDraftCompilation = Readonly<{
   compilation: ApplicationCompilationOutput;
+  /**
+   * The one compile of this revision as a release plan: the Application with its request and
+   * dependency outputs, and each inline Module release. Preview planning releases exactly this.
+   */
+  releasePlan: ApplicationReleasePlan;
   /** The exact Module releases the draft compiled against, its own inline Modules held in memory. */
   moduleReleases: readonly ResolvableModuleRelease[];
   conditionContexts: readonly ApplicationDraftConditionContext[];
@@ -268,16 +277,19 @@ const authorize = async (
   await requireBuilderAuthority(authority, operation);
 };
 
+/**
+ * The one compile of a saved Application revision, shared by the builder's canvas, the preview
+ * plan and its retention. It is a pure function of the draft and the stored definitions it reads:
+ * its own inline Modules' roots as staging leaves them and the current release of every Module it
+ * uses. The same draft revision over the same of those is compiled once, whichever of the builder
+ * or preview planning asks first; authorisation and the candidate validation run on every call.
+ */
 const compileDraftSnapshot = async (
   context: SessionContext,
   overlay: DefinitionPublicationTransaction,
   catalogue: DefinitionPublicationCatalogue,
-  candidate: DefinitionDraftCandidate,
+  candidate: DefinitionDraftCandidate | DefinitionPublicationCandidate,
 ): Promise<ApplicationDraftCompilation> => {
-  // The compile is a pure function of the draft and the stored definitions it reads: its own
-  // inline Modules' roots and the current release of every Module it uses. The same draft
-  // revision over the same of those is compiled once; authorisation and the candidate
-  // validation above run on every call.
   const source = candidate.draft.source;
   if (source.kind !== "application") return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
   const inlineKeys = new Set(applicationModuleSources(source).map((module) => module.key));
@@ -302,14 +314,8 @@ const compileDraftSnapshot = async (
     candidate.draft.draftRevision,
     candidate.draft.sourceFingerprint,
     candidate.draft.publishedRevision ?? null,
-    candidate.currentReleaseVersion,
-    ownedRoots.map((root) => [
-      root.key,
-      root.rootId,
-      root.draftRevision,
-      root.currentReleaseRevision,
-      root.sourceFingerprint,
-    ]),
+    latestReleaseVersion(candidate),
+    stagedOwnedModuleRoots(candidate, ownedRoots),
     usedAnchors,
     directoryPage === undefined
       ? null
@@ -344,6 +350,7 @@ const compileDraftSnapshot = async (
   }
   return retainApplicationDraftCompilation(cacheKey, {
     compilation,
+    releasePlan: compiled,
     moduleReleases: compiled.dependencies.modules,
     conditionContexts: projectDraftConditionContexts(
       source,
@@ -550,7 +557,16 @@ export const createDefinitionPublicationService = (
         await reader.readCandidate(command.data.rootId),
         command.data,
       );
-      return planApplicationPreview(context, reader, catalogue, candidate);
+      const overlay = createDraftModuleOverlay(reader, context, candidate.draft);
+      // The revision the builder already compiled is released as it was compiled.
+      return planApplicationPreview(
+        context,
+        overlay,
+        candidate,
+        catalogue.permissions,
+        async () =>
+          (await compileDraftSnapshot(context, overlay, catalogue, candidate)).releasePlan,
+      );
     });
   },
 

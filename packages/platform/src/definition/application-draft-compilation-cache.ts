@@ -41,7 +41,14 @@ export const retainApplicationDraftCompilation = (
     if (applicationDraftCompilations.size < applicationDraftCompilationCacheLimit) break;
     applicationDraftCompilations.delete(oldest);
   }
-  const frozen = deepFreeze(compilation);
+  // The release plan holds this compile's own inputs (request, catalogue snapshot, dependency
+  // outputs) by reference; nothing writes to them, so only the plan object itself is frozen
+  // rather than walking those large trees again on every compile.
+  const { releasePlan, ...projections } = compilation;
+  const frozen = Object.freeze({
+    ...deepFreeze(projections),
+    releasePlan: Object.freeze(releasePlan),
+  });
   applicationDraftCompilations.set(key, frozen);
   return frozen;
 };
