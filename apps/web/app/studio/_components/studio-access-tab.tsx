@@ -210,7 +210,7 @@ export function useStudioAccessTab({
   );
 
   const centre = (
-    <div className="mx-auto w-full max-w-4xl space-y-6 px-4 py-2">
+    <div className="mx-auto w-full max-w-4xl space-y-6 px-8 py-6">
       <AccessFeedback feedback={feedback} />
       {view === "role" && role !== undefined && (
         <StudioAccessRoleEditor
