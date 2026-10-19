@@ -124,6 +124,8 @@ export const builderPreviewInstallationSchema = previewApplicationIdentitySchema
   .extend({
     /** The data shape of the draft revision it runs; absent for a preview made before shapes. */
     shapeFingerprint: shapeFingerprintSchema.nullable(),
+    /** Every record type it has storage for: the record types a demand may name. */
+    recordTypeIds: z.array(recordTypeIdSchema),
     /** Whether its copied live records are due to be decided again before a read. */
     reconcileDue: z.boolean(),
   })

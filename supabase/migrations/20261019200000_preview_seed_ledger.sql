@@ -852,6 +852,12 @@ begin
     'seedable', preview.seedable,
     'seededRecordTypeIds', coalesce(seeds.seeded_ids, '[]'::jsonb),
     'derivedReadyRecordTypeIds', coalesce(seeds.ready_ids, '[]'::jsonb),
+    -- Every record type it has storage for: the record types a demand may name.
+    'recordTypeIds', (
+      select coalesce(pg_catalog.jsonb_agg(pg_catalog.lower(identity.value ->> 'recordTypeId')
+          order by identity.value ->> 'previewStorageContractId'), '[]'::jsonb)
+      from pg_catalog.jsonb_array_elements(preview.storage_identities) as identity(value)
+    ),
     'shapeFingerprint', preview.draft_shape_fingerprint,
     -- Copied live records are decided again by the builder's live access at most every five
     -- minutes, counting from the first seed; reconcile_preview_installation keeps the same interval.
@@ -891,7 +897,7 @@ revoke all on function vortex_definition.read_builder_preview_installation(uuid)
 grant execute on function vortex_definition.read_builder_preview_installation(uuid)
   to vortex_request;
 comment on function vortex_definition.read_builder_preview_installation(uuid) is
-  'The current runnable, unexpired preview of one Application that the builder of the validated human organisation context opened: its draft revision, the fingerprint of the draft data shape it runs, whether it can be seeded, the record types it was seeded with and those whose derived fields are worked out, and whether its copied live records are due to be decided again; null when they have none. Studio reads the canvas and Data tab records through it.';
+  'The current runnable, unexpired preview of one Application that the builder of the validated human organisation context opened: its draft revision, the fingerprint of the draft data shape it runs, whether it can be seeded, the record types it has storage for, those it was seeded with and those whose derived fields are worked out, and whether its copied live records are due to be decided again; null when they have none. Studio reads the canvas and Data tab records through it.';
 
 create or replace function vortex_definition.read_preview_application_identity(
   p_preview_installation_id uuid
