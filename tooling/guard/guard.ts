@@ -875,35 +875,45 @@ for (const file of files.filter(
 // features, and only the UI registry imports a feature's chunk, so there is no second gating path
 // (the core header menu and toolbar beside it are imported directly; auto-size is their own chunk).
 {
-  const registries: Array<[string, RegExp]> = [
+  const registries: Array<[string, string]> = [
     [
       "packages/platform/src/definition/application-composition/records-table-features/index.ts",
-      /export const recordsTableFeatureKeys = \[([^\]]*)\]/,
+      "recordsTableFeatureKeys",
     ],
-    [
-      "packages/ui/src/studio/grid-features/index.ts",
-      /export const studioGridFeatureEditors[^=]*= \{([^;]*)\};/,
-    ],
-    ["packages/ui/src/display/grid-features/registry.tsx", /const loaders[\s\S]*?> = \{([^;]*)\};/],
-    [
-      "packages/ui/src/display/grid-features/registry.tsx",
-      /const featurePoints[^=]*= \{([^;]*)\};/,
-    ],
+    ["packages/ui/src/studio/grid-features/index.ts", "studioGridFeatureEditors"],
+    ["packages/ui/src/display/grid-features/registry.tsx", "loaders"],
+    ["packages/ui/src/display/grid-features/registry.tsx", "featurePoints"],
   ];
-  const keySets = registries.map(([file, pattern]): [string, string[]] => {
-    const body = existsSync(resolve(root, file)) ? pattern.exec(read(file))?.[1] : undefined;
-    if (body === undefined) {
+  const keySets = registries.map(([file, name]): [string, string[]] => {
+    const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+    let initializer: ts.Expression | undefined;
+    for (const statement of source.statements) {
+      if (!ts.isVariableStatement(statement)) continue;
+      for (const declaration of statement.declarationList.declarations)
+        if (ts.isIdentifier(declaration.name) && declaration.name.text === name)
+          initializer = declaration.initializer;
+    }
+    while (initializer && (ts.isAsExpression(initializer) || ts.isSatisfiesExpression(initializer)))
+      initializer = initializer.expression;
+    // Read only direct properties/elements: nested settings and comments are not feature keys.
+    const entries =
+      initializer && ts.isArrayLiteralExpression(initializer)
+        ? initializer.elements.map((element) =>
+            ts.isStringLiteral(element) ? element.text : undefined,
+          )
+        : initializer && ts.isObjectLiteralExpression(initializer)
+          ? initializer.properties.map((property) =>
+              ts.isPropertyAssignment(property) &&
+              (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+                ? property.name.text
+                : undefined,
+            )
+          : undefined;
+    if (entries === undefined || entries.some((entry) => entry === undefined)) {
       add("grid-feature-registry", file, 1, "the grid feature registry could not be read");
       return [file, []];
     }
-    const keys = [...body.matchAll(/(?:^|[\s,{])"?([a-z_]+)"?\s*[:,\]]?/g)]
-      .map((match) => match[1]!)
-      .filter(
-        (key) =>
-          /^[a-z]+(?:_[a-z]+)*$/.test(key) &&
-          !["kind", "settings", "custom", "import"].includes(key),
-      );
-    return [file, [...new Set(keys)].sort()];
+    return [file, [...new Set(entries as string[])].sort()];
   });
   const [platformFile, platformKeys] = keySets[0]!;
   for (const [file, keys] of keySets.slice(1))

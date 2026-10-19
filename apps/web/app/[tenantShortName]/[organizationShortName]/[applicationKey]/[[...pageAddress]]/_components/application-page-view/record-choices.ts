@@ -3,14 +3,21 @@ import type { ControlSemanticEvent, RecordChoicePage } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 
 /**
- * Reads one page of the records a link field on this page may point at, for the picker that asked.
+ * Reads one page of the records a link field (or a Records table's link filter) on this page may
+ * point at, for the picker that asked.
  * The server projects the page again under the person, so only a link input they can use is read
  * for. A changed release reloads the page; any other failure rejects, and the picker says so.
  */
 export const requestRecordChoices = async (
   model: ApplicationPageModel,
   placementId: string,
-  event: Extract<ControlSemanticEvent, { event: "records_requested" }>,
+  event: Pick<
+    Extract<ControlSemanticEvent, { event: "records_requested" }>,
+    "search" | "continuationToken"
+  > & {
+    /** For a Records table's link filter: the filter field whose target records are offered. */
+    fieldId?: string;
+  },
   reload: () => void,
 ): Promise<RecordChoicePage> => {
   const application = model.invocation;
@@ -25,6 +32,7 @@ export const requestRecordChoices = async (
       applicationKey: application.applicationKey,
       pageKey: application.pageKey,
       placementId,
+      ...(event.fieldId === undefined ? {} : { fieldId: event.fieldId }),
       installationRevision: application.installationRevision,
       releaseKey: application.releaseKey,
       ...(model.subject === undefined ? {} : { subjectRecordId: model.subject.recordId }),

@@ -116,12 +116,6 @@ export const evaluateResolvedTypedCondition = <TSourceOperand>(
     if (left.missing || binaryRight.missing) refuse("input_refused");
     if (!operatorAcceptsOperands(operator, operandInfo(left), operandInfo(binaryRight)))
       refuse("operator_refused");
-    const type = sharedType(left, binaryRight);
-    if (type === "money" && left.value !== null && binaryRight.value !== null) {
-      const leftMoney = moneyParts(left.value)!;
-      const rightMoney = moneyParts(binaryRight.value)!;
-      if (leftMoney.currency !== rightMoney.currency) refuse("operator_refused");
-    }
   };
   validate(condition);
 
@@ -245,6 +239,13 @@ export const evaluateResolvedTypedCondition = <TSourceOperand>(
       return node.operator === "not_in" ? { op: "not", arg: membership } : membership;
     }
     const comparisonType = sharedType(left, right);
+    if (
+      comparisonType === "money" &&
+      left.value !== null &&
+      right.value !== null &&
+      moneyParts(left.value)!.currency !== moneyParts(right.value)!.currency
+    )
+      return { op: "literal", type: "yes_no", value: node.operator === "not_equals" };
     if (comparisonType !== undefined) {
       leftFormula = formulaLiteral(left, comparisonType);
       rightFormula = formulaLiteral(right, comparisonType);

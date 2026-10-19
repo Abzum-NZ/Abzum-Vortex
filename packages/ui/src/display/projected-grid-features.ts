@@ -1,18 +1,74 @@
 import {
-  recordsTableActionCapabilities,
   type RecordsTableActionContract,
   type RecordsTableFeatureProjection,
+  type RecordsTableFilterField,
+  type RecordsTableFilterValue,
+  readRecordsTableFieldFilter,
+  recordsTableActionCapabilities,
+  recordsTableFilterKinds,
+  RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
 } from "@vortex/platform/schema";
+import { parseConditionalFormatting } from "./projected-format";
 import type { DefinitionRenderErrorLocation } from "../definition-error";
 import {
   fail,
-  requireArray,
+  requireRecord,
   requireExactKeys,
+  requireArray,
   requireFieldKey,
   requireNonEmptyString,
-  requireRecord,
+  type TableNarrowing,
 } from "./projected-data";
-import { parseConditionalFormatting } from "./projected-format";
+
+/** The search and filters a table page was read with: a bounded search and one value per field. */
+export const parseTableNarrowing = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): TableNarrowing => {
+  const record = requireRecord(value, "Projected table narrowing is invalid", location);
+  requireExactKeys(record, ["search", "filters", "recordTitles"], location);
+  if (
+    record.search !== null &&
+    (typeof record.search !== "string" ||
+      record.search.trim() === "" ||
+      record.search.length > RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH)
+  )
+    fail("A projected table search must be null or non-empty bounded text", location);
+  const items = requireArray(record.filters, "Projected table filters must be an array", location);
+  const filters = items.map((item): RecordsTableFilterValue => {
+    const filter = requireRecord(item, "A projected table filter must be an object", location);
+    requireExactKeys(filter, ["fieldId", "filter"], location);
+    const fieldId = requireFieldKey(
+      filter.fieldId,
+      "A projected table filter requires a field",
+      location,
+    );
+    const typed = readRecordsTableFieldFilter(filter.filter);
+    if (typed === undefined) fail("A projected table filter is not a valid typed filter", location);
+    return Object.freeze({ fieldId, filter: typed! });
+  });
+  if (new Set(filters.map((filter) => filter.fieldId.toLowerCase())).size !== filters.length)
+    fail("A projected table narrowing names each filtered field once", location);
+  let recordTitles: Record<string, string> | undefined;
+  if (record.recordTitles !== undefined) {
+    const titles = requireRecord(
+      record.recordTitles,
+      "Projected filter titles are invalid",
+      location,
+    );
+    recordTitles = Object.fromEntries(
+      Object.entries(titles).map(([recordId, title]) => [
+        recordId,
+        requireNonEmptyString(title, "A projected filter title must be text", location),
+      ]),
+    );
+  }
+  return Object.freeze({
+    search: record.search as string | null,
+    filters: Object.freeze(filters),
+    ...(recordTitles === undefined ? {} : { recordTitles: Object.freeze(recordTitles) }),
+  });
+};
 
 /** One projected bulk command: its flow binding's event identity, label and optional capability. */
 const parseTableAction = (
@@ -53,6 +109,47 @@ const parseFieldKeys = (
   return Object.freeze(fields);
 };
 
+/** One projected filterable field: its identity, label, canonical type, filter kind and control facts. */
+const parseFilterField = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): RecordsTableFilterField => {
+  const message = "A projected filter field is invalid";
+  const field = requireRecord(value, message, location);
+  requireExactKeys(
+    field,
+    ["fieldId", "label", "type", "kind", "options", "currency", "timeZone"],
+    location,
+  );
+  if (!(recordsTableFilterKinds as readonly unknown[]).includes(field.kind))
+    fail(message, location);
+  const options =
+    field.options === undefined
+      ? undefined
+      : requireArray(field.options, message, location).map((option) => {
+          const held = requireRecord(option, message, location);
+          requireExactKeys(held, ["value", "label"], location);
+          return Object.freeze({
+            value: requireNonEmptyString(held.value, message, location),
+            label: requireNonEmptyString(held.label, message, location),
+          });
+        });
+  if ((field.kind === "choice") !== (options !== undefined)) fail(message, location);
+  return Object.freeze({
+    fieldId: requireFieldKey(field.fieldId, message, location),
+    label: requireNonEmptyString(field.label, message, location),
+    type: requireNonEmptyString(field.type, message, location),
+    kind: field.kind as RecordsTableFilterField["kind"],
+    ...(options === undefined ? {} : { options: Object.freeze(options) }),
+    ...(field.currency === undefined
+      ? {}
+      : { currency: requireNonEmptyString(field.currency, message, location) }),
+    ...(field.timeZone === undefined
+      ? {}
+      : { timeZone: requireNonEmptyString(field.timeZone, message, location) }),
+  });
+};
+
 /** The grid features the server projected for the viewer: each present feature is on. */
 export const parseTableFeatures = (
   value: unknown,
@@ -82,7 +179,18 @@ export const parseTableFeatures = (
   const columnFilters =
     record.columnFilters === undefined
       ? undefined
-      : parseFieldKeys(record.columnFilters, "Projected filter fields are invalid", location);
+      : Object.freeze(
+          requireArray(record.columnFilters, "Projected filter fields are invalid", location).map(
+            (field) => parseFilterField(field, location),
+          ),
+        );
+  if (
+    columnFilters !== undefined &&
+    (columnFilters.length === 0 ||
+      new Set(columnFilters.map((field) => field.fieldId.toLowerCase())).size !==
+        columnFilters.length)
+  )
+    fail("Projected filter fields are invalid", location);
   const bulkActions =
     record.bulkActions === undefined
       ? undefined

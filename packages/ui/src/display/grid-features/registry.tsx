@@ -163,7 +163,7 @@ const lazyPoint = <Props,>(
 const featurePoints: Readonly<Record<RecordsTableFeatureKey, readonly ComponentPoint[]>> = {
   pinning: ["ColumnMenuItems"],
   search: ["ToolbarItems"],
-  column_filters: ["ToolbarItems"],
+  column_filters: ["ToolbarItems", "HeaderAdornment"],
   // Saved views add their toolbar menu with the views store (#3020); the switch already gates them.
   saved_views: [],
   bulk_actions: ["SelectionBanner"],
