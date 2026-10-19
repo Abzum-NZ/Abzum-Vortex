@@ -427,6 +427,7 @@
     {
       "id": "evt_activity_due",
       "key": "vortex.crm.activities.activity.due",
+      "label": "Activity due",
       "record_type": "activity",
       "carries": ["subject", "due_at", "owner", "regarding"],
       "personal_or_sensitive_values_allowed": false
@@ -434,6 +435,7 @@
     {
       "id": "evt_activity_completed",
       "key": "vortex.crm.activities.activity.completed",
+      "label": "Activity completed",
       "record_type": "activity",
       "carries": ["subject", "owner", "regarding"],
       "personal_or_sensitive_values_allowed": false

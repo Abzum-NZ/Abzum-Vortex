@@ -223,23 +223,16 @@ export const isDefinitionContextFailure = (error: unknown): boolean => {
 /**
  * Applies the existing immutable-release integrity boundary to evidence selected
  * by either protected Definition reader. This helper does not authorize or
- * select a release; its caller supplies evidence from one fixed database read.
+ * select a release; its caller supplies evidence from one fixed database read,
+ * already parsed against `storedConsumerReleaseEvidenceSchema`.
  */
 export const projectStoredConsumerRelease = async (
-  candidate: unknown,
+  release: StoredConsumerReleaseEvidence,
   expectation: StoredConsumerReleaseExpectation,
   correlationId: string,
   catalogue: DefinitionPublicationCatalogue,
 ): Promise<DefinitionConsumerReadResult> => {
-  selectReleaseContract(candidate);
-  const parsed = storedConsumerReleaseEvidenceSchema.safeParse(candidate);
-  if (!parsed.success)
-    throw unexpectedDefinitionFailure(
-      "DEFINITION_RELEASE_INTEGRITY_FAILED",
-      parsed.error,
-      "definition-consumer-read-definition",
-    );
-  const release = parsed.data;
+  selectReleaseContract(release);
   const output = release.compilationOutput;
   if (
     output.kind === "connection_type" ||

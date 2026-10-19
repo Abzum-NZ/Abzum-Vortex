@@ -278,8 +278,9 @@ export function useRuntimeInputs({
               return { ...current, [placementId]: [...held] };
             });
           };
-        // Sort, filter and search change the table's query state in the address; that table alone
-        // is read again from page one, on the server, and nothing is applied to the shown rows.
+        // Sort, filter, search and the shown columns change the table's query state in the address;
+        // that table alone is read again from page one, on the server, and nothing is applied to
+        // the shown rows. A hidden column is not read, so its values never reach the browser.
         if (supportsEvent("sort_changed"))
           events.sort_changed = (event: DisplaySemanticEvent) => {
             if (event.event !== "sort_changed") return;
@@ -298,6 +299,11 @@ export function useRuntimeInputs({
           events.search_changed = (event: DisplaySemanticEvent) => {
             if (event.event !== "search_changed") return;
             changeTableQuery(placementId, { kind: "search", text: event.query });
+          };
+        if (supportsEvent("columns_changed"))
+          events.columns_changed = (event: DisplaySemanticEvent) => {
+            if (event.event !== "columns_changed") return;
+            changeTableQuery(placementId, { kind: "visible_fields", fieldIds: event.fields });
           };
       }
       if (model.referenceChoiceInputs.some((field) => field.placementId === placementId))

@@ -7,7 +7,6 @@ import {
   logRefusal,
   projectLiveApplicationRolePermissions,
   sessionContextSchema,
-  systemApplicationBoundReleaseSetResultSchema,
   type ApplicationRootId,
   type IdentitySession,
   type ModuleRootId,
@@ -277,9 +276,8 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     target: ReleaseTarget,
     candidate: SystemApplicationBoundReleaseSetResult,
   ): ExactStorageRelease => {
-    const parsed = systemApplicationBoundReleaseSetResultSchema.safeParse(candidate);
-    if (!parsed.success) throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
-    const releaseSet = parsed.data;
+    // Every reader returns a release set already parsed against its result schema.
+    const releaseSet = candidate;
     const application = releaseSet.application;
     if (
       !sameId(application.organizationId, target.organizationId) ||

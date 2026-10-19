@@ -8,8 +8,10 @@ import {
   type BlockPropertyValueContract,
   type ComponentSemanticEventKind,
   type PipelineStageTone,
+  type RecordsTableFilterValue,
   type RecordsTableSortKey,
   type RecordsTableSortState,
+  RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
   RECORDS_TABLE_MAXIMUM_SORT_KEYS,
   isRecord,
 } from "@vortex/platform/schema";
@@ -124,10 +126,21 @@ export type ListPayload = Readonly<{
   pageCount?: number;
 }>;
 
+/** The viewer's search and filters one table page was read with. */
+export type TableNarrowing = Readonly<{
+  search: string | null;
+  filters: readonly RecordsTableFilterValue[];
+}>;
+
 /** The ready values a table block renders. */
 export type TablePayload = Readonly<{
   kind: "table";
   columns: readonly DisplayColumn[];
+  /**
+   * The declared columns the page was read without, in declared order: headings only. Showing one
+   * reads the page again with it; hiding a shown column narrows the next read.
+   */
+  hiddenColumns: readonly DisplayColumn[];
   rows: readonly DisplayRow[];
   selectedRecordIds?: readonly string[];
   /**
@@ -136,6 +149,11 @@ export type TablePayload = Readonly<{
    * visible column.
    */
   sort?: RecordsTableSortState;
+  /**
+   * The search and filters the page was read with; the table shows them in its controls and tells
+   * a page that matched nothing apart from a table with no records.
+   */
+  narrowing?: TableNarrowing;
   page?: number;
   pageCount?: number;
   hasNextPage?: boolean;
@@ -272,6 +290,7 @@ export type DisplaySemanticEventName = Extract<
   | "filter_changed"
   | "search_changed"
   | "sort_changed"
+  | "columns_changed"
   | "page_changed"
   | "bulk_action"
   | "inline_edit"
@@ -314,6 +333,14 @@ export type DisplaySemanticEvent =
       /** The whole ordered sort a header asked for; an empty list asks for the default order. */
       event: "sort_changed";
       sort: readonly RecordsTableSortKey[];
+    }>
+  | Readonly<{
+      /**
+       * The declared columns a person asked to see, as field identities; null asks for the authored
+       * default columns. The page is read again with exactly these columns.
+       */
+      event: "columns_changed";
+      fields: readonly string[] | null;
     }>
   | Readonly<{
       event: "page_changed";
@@ -372,6 +399,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "filter_changed",
   "search_changed",
   "sort_changed",
+  "columns_changed",
   "page_changed",
   "bulk_action",
   "inline_edit",
@@ -706,12 +734,13 @@ const parseRows = (
 const parseColumns = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
+  property = "columns",
+  seen = new Set<string>(),
 ): readonly DisplayColumn[] => {
   const items = requireArray(value, "Projected columns must be an array", location);
-  const seen = new Set<string>();
   return Object.freeze(
     items.map((item, index) => {
-      const columnLocation = { ...location, propertyPath: [`columns[${index}]`] };
+      const columnLocation = { ...location, propertyPath: [`${property}[${index}]`] };
       const record = requireRecord(item, "A projected column must be an object", columnLocation);
       requireExactKeys(record, ["key", "label"], columnLocation);
       const key = requireFieldKey(
@@ -987,6 +1016,38 @@ export const parseListPayload = (
   });
 };
 
+/** The search and filters a table page was read with: a bounded search and one value per field. */
+const parseTableNarrowing = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): TableNarrowing => {
+  const record = requireRecord(value, "Projected table narrowing is invalid", location);
+  requireExactKeys(record, ["search", "filters"], location);
+  if (
+    record.search !== null &&
+    (typeof record.search !== "string" ||
+      record.search.trim() === "" ||
+      record.search.length > RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH)
+  )
+    fail("A projected table search must be null or non-empty bounded text", location);
+  const items = requireArray(record.filters, "Projected table filters must be an array", location);
+  const filters = items.map((item): RecordsTableFilterValue => {
+    const filter = requireRecord(item, "A projected table filter must be an object", location);
+    requireExactKeys(filter, ["fieldId", "value"], location);
+    const fieldId = requireFieldKey(
+      filter.fieldId,
+      "A projected table filter requires a field",
+      location,
+    );
+    if (typeof filter.value !== "string" || filter.value === "")
+      fail("A projected table filter value must be non-empty text", location);
+    return Object.freeze({ fieldId, value: filter.value as string });
+  });
+  if (new Set(filters.map((filter) => filter.fieldId.toLowerCase())).size !== filters.length)
+    fail("A projected table narrowing names each filtered field once", location);
+  return Object.freeze({ search: record.search as string | null, filters: Object.freeze(filters) });
+};
+
 /** The ready values a table block accepts. */
 export const parseTablePayload = (
   value: unknown,
@@ -1000,9 +1061,11 @@ export const parseTablePayload = (
     [
       "kind",
       "columns",
+      "hiddenColumns",
       "rows",
       "selectedRecordIds",
       "sort",
+      "narrowing",
       "page",
       "pageCount",
       "hasNextPage",
@@ -1012,7 +1075,10 @@ export const parseTablePayload = (
     ],
     location,
   );
-  const columns = parseColumns(record.columns, location);
+  // A column is either shown or hidden, never both.
+  const seenColumns = new Set<string>();
+  const columns = parseColumns(record.columns, location, "columns", seenColumns);
+  const hiddenColumns = parseColumns(record.hiddenColumns, location, "hiddenColumns", seenColumns);
   const rows = parseRows(record.rows, location);
   const selection = parseSelection(record.selectedRecordIds, rows, location);
   const page =
@@ -1087,12 +1153,16 @@ export const parseTablePayload = (
       fail("A projected sort names each field once", location);
     sort = Object.freeze({ keys: Object.freeze(keys), explicit: sortRecord.explicit });
   }
+  const narrowing =
+    record.narrowing === undefined ? undefined : parseTableNarrowing(record.narrowing, location);
   return Object.freeze({
     kind: "table",
     columns,
+    hiddenColumns,
     rows,
     ...(selection === undefined ? {} : { selectedRecordIds: selection }),
     ...(sort === undefined ? {} : { sort }),
+    ...(narrowing === undefined ? {} : { narrowing }),
     ...(page === undefined ? {} : { page }),
     ...(pageCount === undefined ? {} : { pageCount }),
     ...(hasNextPage === undefined ? {} : { hasNextPage }),

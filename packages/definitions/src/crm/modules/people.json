@@ -904,6 +904,7 @@
     {
       "id": "evt_contact_created",
       "key": "vortex.crm.people.contact.created",
+      "label": "Contact created",
       "record_type": "contact",
       "carries": ["contact_number", "company"],
       "personal_or_sensitive_values_allowed": false
@@ -911,6 +912,7 @@
     {
       "id": "evt_lead_received",
       "key": "vortex.crm.people.lead.received",
+      "label": "Lead received",
       "record_type": "lead",
       "carries": ["lead_number", "source"],
       "personal_or_sensitive_values_allowed": false
@@ -918,6 +920,7 @@
     {
       "id": "evt_lead_converted",
       "key": "vortex.crm.people.lead.converted",
+      "label": "Lead converted",
       "record_type": "lead",
       "carries": ["lead_number"],
       "personal_or_sensitive_values_allowed": false

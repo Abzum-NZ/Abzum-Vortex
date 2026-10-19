@@ -1047,6 +1047,7 @@
     {
       "id": "evt_opp_created",
       "key": "vortex.crm.opportunities.opportunity.created",
+      "label": "Opportunity created",
       "record_type": "opportunity",
       "carries": [
         "opportunity_number",
@@ -1059,6 +1060,7 @@
     {
       "id": "evt_opp_stage",
       "key": "vortex.crm.opportunities.opportunity.stage_changed",
+      "label": "Opportunity stage changed",
       "record_type": "opportunity",
       "carries": [
         "opportunity_number",
@@ -1070,6 +1072,7 @@
     {
       "id": "evt_opp_won",
       "key": "vortex.crm.opportunities.opportunity.won",
+      "label": "Opportunity won",
       "record_type": "opportunity",
       "carries": [
         "opportunity_number",
