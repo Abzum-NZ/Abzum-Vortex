@@ -480,6 +480,7 @@ export function StudioQueryEditor({
         label="Name"
         hint={`Key: ${query.key}. It does not change when the name does. Lists ${record.plural_name}.`}
         error={name.problem === "" ? undefined : name.problem}
+        onUndo={name.reset}
       >
         {(control) => (
           <Input
@@ -495,6 +496,7 @@ export function StudioQueryEditor({
         label="Description"
         hint="What the query lists, for other builders. Optional."
         error={description.problem === "" ? undefined : description.problem}
+        onUndo={description.reset}
       >
         {(control) => (
           <Textarea
