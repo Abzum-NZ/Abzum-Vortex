@@ -43,7 +43,8 @@ type Selection =
       readSubject: boolean;
       placements: ReturnType<typeof collectPlacements>;
     }>
-  | Extract<StudioPreviewReader, { kind: "records" }>;
+  | Extract<StudioPreviewReader, { kind: "records" }>
+  | Readonly<{ kind: "choices"; recordTypeIds: readonly string[] }>;
 
 /**
  * The one pure demand derivation for canvas areas, Records and runtime preview pages. A demand
@@ -95,7 +96,15 @@ export const studioPreviewDemand = (
     if (query.filter != null) condition(query.filter);
     add(query.recordType.recordTypeId, [...fields]);
   };
-  if (selection.kind === "records") {
+  if (selection.kind === "choices") {
+    for (const id of selection.recordTypeIds) {
+      const record = modules
+        .flatMap((module) => module.content.recordTypes)
+        .find((candidate) => sameId(candidate.recordTypeId, id));
+      if (record === undefined) throw new Error("STUDIO_PREVIEW_DEMAND_CHOICE_TYPE_MISSING");
+      add(record.recordTypeId, [record.titleFieldId]);
+    }
+  } else if (selection.kind === "records") {
     const module = modules.find((candidate) => candidate.key === selection.moduleKey);
     const record = module?.content.recordTypes.find(
       (candidate) => candidate.key === selection.recordKey,

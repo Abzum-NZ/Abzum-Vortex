@@ -729,42 +729,77 @@ export const prepareRuntimePreviewPage = cache(
               ),
       },
     );
-    if (demand === undefined) return true;
-    const before = await readStudioDemandReadiness(
-      session,
-      context.organizationId,
-      context.applicationRootId,
-      preview,
-      demand,
-    );
-    if (before.kind !== "checked") return false;
-    if (before.ready) return true;
-    const seeded = await materializeStudioPreviewDemand(
-      session,
-      context.organizationId,
-      context.applicationRootId,
-      {
-        kind: "available",
-        previewInstallationId: preview.previewInstallationId,
-        organizationId: context.organizationId,
-        draftRevision: preview.draftRevision,
-        expiresAt: preview.expiresAt,
-        reconcileDue: false,
-      },
-      demand,
-      signal ?? undefined,
-    );
-    if (seeded.kind !== "available") return false;
-    const after = await readStudioDemandReadiness(
-      session,
-      context.organizationId,
-      context.applicationRootId,
-      preview,
-      demand,
-    );
-    return after.kind === "checked" && after.ready;
+    return prepareRuntimeDemand(session, context, demand, signal ?? undefined);
   },
 );
+
+/** Link choices are demanded only when the picker or an initial link value is actually read. */
+export const prepareRuntimePreviewChoices = (
+  session: IdentitySession,
+  context: InstalledRuntimeContext,
+  recordTypeIds: readonly string[],
+  signal?: AbortSignal,
+): Promise<boolean> => {
+  if (runtimePreviewOf(context) === undefined) return Promise.resolve(true);
+  const demand = studioPreviewDemand(
+    context.releaseSet.application.content,
+    context.releaseSet.modules.map((module) => ({
+      key: module.definitionKey,
+      content: module.content,
+    })),
+    { kind: "choices", recordTypeIds },
+  );
+  return prepareRuntimeDemand(
+    session,
+    context,
+    demand,
+    signal ?? (cacheSignal() as AbortSignal | null) ?? undefined,
+  );
+};
+
+const prepareRuntimeDemand = async (
+  session: IdentitySession,
+  context: InstalledRuntimeContext,
+  demand: PreviewDemand | undefined,
+  signal?: AbortSignal,
+): Promise<boolean> => {
+  const preview = runtimePreviewOf(context);
+  if (preview === undefined) return true;
+  if (demand === undefined) return true;
+  const before = await readStudioDemandReadiness(
+    session,
+    context.organizationId,
+    context.applicationRootId,
+    preview,
+    demand,
+  );
+  if (before.kind !== "checked") return false;
+  if (before.ready) return true;
+  const seeded = await materializeStudioPreviewDemand(
+    session,
+    context.organizationId,
+    context.applicationRootId,
+    {
+      kind: "available",
+      previewInstallationId: preview.previewInstallationId,
+      organizationId: context.organizationId,
+      draftRevision: preview.draftRevision,
+      expiresAt: preview.expiresAt,
+      reconcileDue: false,
+    },
+    demand,
+    signal ?? undefined,
+  );
+  if (seeded.kind !== "available") return false;
+  const after = await readStudioDemandReadiness(
+    session,
+    context.organizationId,
+    context.applicationRootId,
+    preview,
+    demand,
+  );
+  return after.kind === "checked" && after.ready;
+};
 
 /** A visible reader owns preparation and materialization; its last consumer leaving cancels work. */
 export const prepareStudioPreview = async (

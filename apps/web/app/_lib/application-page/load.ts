@@ -1005,6 +1005,8 @@ const loadApplicationPageJoined = async (
   // A new record's link field may start with the record its page address names.
   if (pageDefinition.type !== "guided_form")
     await projectInitialLinkInputs({
+      session,
+      context,
       placements: linkInputs.filter(
         (entry) => entry.formId === undefined || !Object.hasOwn(editFormBaselines, entry.formId),
       ),
