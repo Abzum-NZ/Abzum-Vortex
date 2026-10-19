@@ -5,6 +5,7 @@ import {
   changeableByPeople,
   maximumApplicationRoles,
   standardPermissionKeys,
+  standardPermissionKey,
   type ApplicationSourceDocument,
   type ApplicationUsePlace,
 } from "@vortex/platform/schema";
@@ -60,6 +61,17 @@ export type StudioPermissionDeclaration = Readonly<{
   label: string;
   description: string;
   administrative: boolean;
+  target:
+    | Readonly<{ kind: "application" }>
+    | Readonly<{
+        kind: "record";
+        moduleKey: string;
+        recordKey: string;
+        actionKind: "read" | "named";
+        namedAction?: string | undefined;
+        recordScope: NonNullable<ModulePermission["record_scope"]>;
+        fieldPolicy: NonNullable<ModulePermission["field_policy"]>;
+      }>;
 }>;
 
 export type StudioAccessCommand =
@@ -80,6 +92,7 @@ export type StudioAccessCommand =
       fieldKey: string;
       readable: boolean;
       changeable: boolean;
+      readPermissionKey: string;
     }>
   | (Readonly<{ kind: "add_permission" }> & StudioPermissionDeclaration)
   | (Readonly<{ kind: "edit_permission"; permissionKey: string }> & StudioPermissionDeclaration)
@@ -281,6 +294,7 @@ export type StudioFieldAccess =
         producedByPlatform: boolean;
       }>[];
       canChange: boolean;
+      readPermissionKey: string;
     }>
   | Readonly<{ kind: "unavailable"; message: string }>;
 
@@ -299,6 +313,7 @@ export const studioRoleFieldAccess = (
   roleKey: string,
   moduleKey: string,
   recordKey: string,
+  readPermissionKey?: string,
 ): StudioFieldAccess => {
   const role = source.body.roles.find((candidate) => candidate.key === roleKey);
   const record = recordOf(source.body, moduleKey, recordKey);
@@ -310,6 +325,13 @@ export const studioRoleFieldAccess = (
       message: "This role holds every permission. List them one by one first.",
     };
   const reads = heldOn(source.body, role, moduleKey, recordKey, "read");
+  const read =
+    reads.find((held) => held.permission.key === readPermissionKey) ??
+    (readPermissionKey === undefined
+      ? (reads.find(
+          (held) => held.permission.key === standardPermissionKey(moduleKey, recordKey, "read"),
+        ) ?? (reads.length === 1 ? reads[0] : undefined))
+      : undefined);
   const creates = heldOn(source.body, role, moduleKey, recordKey, "create");
   const updates = heldOn(source.body, role, moduleKey, recordKey, "update");
   if (reads.length === 0)
@@ -317,17 +339,18 @@ export const studioRoleFieldAccess = (
       kind: "unavailable",
       message: `Give ${quoted(role.name)} Read on ${record.plural_name} to choose its fields.`,
     };
-  if (reads.length > 1 || creates.length > 1 || updates.length > 1)
+  if (read === undefined || creates.length > 1 || updates.length > 1)
     return {
       kind: "unavailable",
-      message: `${quoted(role.name)} holds more than one read, create or update permission on ${record.plural_name}. Keep one of each to choose fields here.`,
+      message: `Choose one Read permission. Field editing also needs at most one Create and one Update permission on ${record.plural_name}.`,
     };
-  const readable = reads[0]!.permission.field_policy?.readable_fields;
+  const readable = read.permission.field_policy?.readable_fields;
   const changer = (updates[0] ?? creates[0])?.permission;
   const changeable = changer === undefined ? [] : changer.field_policy?.changeable_fields;
   return {
     kind: "available",
     canChange: changer !== undefined,
+    readPermissionKey: read.permission.key,
     fields: record.fields.map((field) => ({
       key: field.key,
       label: field.label,
@@ -380,6 +403,7 @@ const setFieldAccess = (
     command.roleKey,
     command.moduleKey,
     command.recordKey,
+    command.readPermissionKey,
   );
   if (access.kind === "unavailable") return refuse(access.message);
   const body = candidate.body;
@@ -394,15 +418,10 @@ const setFieldAccess = (
   const readable = new Set(
     access.fields.filter((entry) => entry.readable).map((entry) => entry.key),
   );
-  const changeable = new Set(
-    access.fields.filter((entry) => entry.changeable).map((entry) => entry.key),
-  );
   // A field that is changed is read too; one that is not read is not changed.
   const reads = command.readable || command.changeable;
   if (reads) readable.add(field.key);
   else readable.delete(field.key);
-  if (command.changeable) changeable.add(field.key);
-  else changeable.delete(field.key);
   if (readable.size === 0)
     refuse(
       `${quoted(role.name)} reads ${record.plural_name}, so it reads at least one of their fields.`,
@@ -417,7 +436,9 @@ const setFieldAccess = (
     const read = ownedBy(
       body,
       role,
-      heldOn(body, role, command.moduleKey, command.recordKey, "read")[0]!,
+      heldOn(body, role, command.moduleKey, command.recordKey, "read").find(
+        (held) => held.permission.key === command.readPermissionKey,
+      )!,
       taken,
       notes,
     );
@@ -428,14 +449,25 @@ const setFieldAccess = (
   } else if (field.changeable === command.changeable)
     refuse(`Nothing changes for ${quoted(field.label)}.`);
   // Create and update carry the same fields: what the role changes it may also set at creation.
-  if (readChanged || field.changeable !== command.changeable)
+  if (field.changeable !== command.changeable)
     for (const kind of ["create", "update"] as const) {
       const held = heldOn(body, role, command.moduleKey, command.recordKey, kind)[0];
       if (held === undefined) continue;
       const owned = ownedBy(body, role, held, taken, notes);
+      const writeReads = new Set(
+        owned.field_policy?.readable_fields ?? record.fields.map((entry) => entry.key),
+      );
+      const writeChanges = new Set(
+        owned.field_policy?.changeable_fields ??
+          record.fields.filter(changeableByPeople).map((entry) => entry.key),
+      );
+      if (command.changeable) {
+        writeReads.add(field.key);
+        writeChanges.add(field.key);
+      } else writeChanges.delete(field.key);
       (owned as { field_policy?: unknown }).field_policy = {
-        readable_fields: order(readable),
-        changeable_fields: order(new Set([...changeable].filter((key) => readable.has(key)))),
+        readable_fields: order(writeReads),
+        changeable_fields: order(writeChanges),
       };
     }
   const what = !reads
@@ -489,7 +521,7 @@ const pageOf = (body: Body, key: string) => body.pages.find((page) => page.key =
 
 const permissionDeclaration = (
   declaration: StudioPermissionDeclaration,
-): StudioPermissionDeclaration => {
+): Pick<StudioPermissionDeclaration, "label" | "description" | "administrative"> => {
   const label = cleanLabel(declaration.label, "permission");
   const description = declaration.description.trim();
   if (description.length === 0) refuse("Give the permission a description.");
@@ -498,31 +530,115 @@ const permissionDeclaration = (
   return { label, description, administrative: declaration.administrative };
 };
 
-/** The one constructor for an application permission, including ordinary page/menu permissions. */
+/** Validates the owned record target before the existing source schema judges its policy. */
+const recordDeclaration = (
+  body: Body,
+  target: Extract<StudioPermissionDeclaration["target"], { kind: "record" }>,
+) => {
+  const module =
+    body.modules.find((entry) => entry.key === target.moduleKey) ??
+    refuse("Choose a module this application owns. Borrowed modules are read-only.");
+  const record =
+    module.record_types.find((entry) => entry.key === target.recordKey) ??
+    refuse("Choose a record type in the selected module.");
+  if (target.actionKind !== "read" && target.actionKind !== "named")
+    refuse("Choose Read or Named for this record permission.");
+  if (target.actionKind === "named" && !builderKeySchema.safeParse(target.namedAction).success)
+    refuse("Give the named permission an action name using lowercase words joined by underscores.");
+  if (target.actionKind === "read" && target.namedAction !== undefined)
+    refuse("A Read permission has no named action.");
+  const fields = new Set(record.fields.map((entry) => entry.key));
+  if (
+    [...target.fieldPolicy.readable_fields, ...target.fieldPolicy.changeable_fields].some(
+      (field) => !fields.has(field),
+    )
+  )
+    refuse("Choose fields from this record type only.");
+  if (target.actionKind === "read" && target.fieldPolicy.changeable_fields.length > 0)
+    refuse("Read permissions cannot allow field changes.");
+  if (
+    target.fieldPolicy.changeable_fields.some(
+      (field) => !target.fieldPolicy.readable_fields.includes(field),
+    )
+  )
+    refuse("A changeable field must also be readable.");
+  if (
+    target.fieldPolicy.changeable_fields.some(
+      (key) => !changeableByPeople(record.fields.find((field) => field.key === key)!),
+    )
+  )
+    refuse("Fields filled by the platform cannot be changed.");
+  if (
+    target.recordScope.routes.some((route) => route.kind === "ownership") &&
+    record.ownership_mode === "none"
+  )
+    refuse("This record type has no ownership. Choose another record scope.");
+  // Relationship routes and saved conditions need their own authoring controls; never flatten them.
+  if (
+    target.recordScope.saved_condition !== undefined ||
+    target.recordScope.routes.some((route) => route.kind === "relationship")
+  )
+    refuse(
+      "This scope uses a relationship or saved condition. Its declaration cannot be changed here.",
+    );
+  return { module, record };
+};
+
+/** The one constructor for declarations, including ordinary page/menu permissions. */
 const addPermission = (
   candidate: Source,
   declaration: StudioPermissionDeclaration,
-): ApplicationPermission => {
+): ApplicationPermission | ModulePermission => {
   const values = permissionDeclaration(declaration);
   const name = values.label;
   const body = candidate.body;
-  if (body.permissions.length >= 100)
-    refuse("An application can declare at most 100 permissions of its own.");
+  const target = declaration.target;
+  const owned = target.kind === "record" ? recordDeclaration(body, target) : undefined;
+  const permissions = owned?.module.permissions ?? body.permissions;
+  if (permissions.length >= 100) refuse("This owner can declare at most 100 permissions.");
   const keys = new Set(studioAccessPermissions(candidate).map((permission) => permission.key));
-  const action = uniqueKey(
-    name,
-    new Set(body.permissions.flatMap((permission) => permission.named_action ?? [])),
-  );
-  let key = `${candidate.key}.${action}`;
+  const action =
+    target.kind === "record"
+      ? target.actionKind === "named"
+        ? target.namedAction!
+        : uniqueKey(name, new Set())
+      : uniqueKey(
+          name,
+          new Set(body.permissions.flatMap((permission) => permission.named_action ?? [])),
+        );
+  let key =
+    owned === undefined
+      ? `${candidate.key}.${action}`
+      : `${owned.module.key}.${owned.record.key}.${action}`;
+  if (
+    owned !== undefined &&
+    (keys.has(key) ||
+      permissions.some(
+        (permission) =>
+          permission.record_type === owned.record.key &&
+          permission.action_kind === "named" &&
+          permission.named_action === action,
+      ))
+  )
+    refuse("This record type already has a permission with that identity. Choose another name.");
   for (let suffix = 2; keys.has(key); suffix += 1) key = `${candidate.key}.${action}_${suffix}`;
   const permission = {
     id: uniqueAlias(`permission_${action}`, takenAliases(body)),
     key,
     ...values,
-    action_kind: "named",
-    named_action: action,
+    action_kind: target.kind === "record" ? target.actionKind : "named",
+    ...(target.kind === "application" || target.actionKind === "named"
+      ? { named_action: action }
+      : {}),
+    ...(target.kind === "record"
+      ? {
+          record_type: target.recordKey,
+          record_scope: target.recordScope,
+          field_policy: target.fieldPolicy,
+        }
+      : {}),
   } as ApplicationPermission;
-  body.permissions.push(permission);
+  permissions.push(permission);
   return permission;
 };
 
@@ -536,6 +652,7 @@ const gateKey = (
       label,
       description: `People who hold this permission can ${label.charAt(0).toLowerCase()}${label.slice(1)}.`,
       administrative: false,
+      target: { kind: "application" },
     });
     return { key: permission.key, label: permission.label, created: true };
   }
@@ -784,13 +901,38 @@ export const applyStudioAccessCommand = (
         );
       }
       case "edit_permission": {
-        const permission = body.permissions.find((entry) => entry.key === command.permissionKey);
-        if (
-          permission === undefined ||
-          permission.record_type !== undefined ||
-          permission.action_kind !== "named"
+        const summary = permissionOf(candidate, command.permissionKey);
+        if (summary.standard) refuse("Use Fields to change a standard record permission.");
+        const permission =
+          summary.moduleKey === undefined
+            ? body.permissions.find((entry) => entry.key === command.permissionKey)
+            : body.modules
+                .find((module) => module.key === summary.moduleKey)
+                ?.permissions.find((entry) => entry.key === command.permissionKey);
+        if (permission === undefined) refuse("Borrowed permissions are read-only.");
+        const target = command.target;
+        if (target.kind === "record") {
+          recordDeclaration(body, target);
+          if (
+            target.moduleKey !== summary.moduleKey ||
+            target.recordKey !== summary.recordKey ||
+            target.actionKind !== summary.actionKind ||
+            target.namedAction !== permission!.named_action
+          )
+            refuse(
+              "A permission's owner, kind and action name stay fixed. Create a separate permission instead.",
+              applicationUses(candidate, { kind: "permission", permissionKey: summary.key }),
+            );
+          Object.assign(permission!, {
+            record_scope: target.recordScope,
+            field_policy: target.fieldPolicy,
+          });
+        } else if (
+          summary.moduleKey !== undefined ||
+          summary.recordKey !== undefined ||
+          summary.actionKind !== "named"
         )
-          refuse("Only this application's named permissions can be edited here.");
+          refuse("A record permission stays with its record type.");
         // Update the declaration in place: identity, references and explicit role grants stay fixed.
         Object.assign(permission!, permissionDeclaration(command));
         return applied(
