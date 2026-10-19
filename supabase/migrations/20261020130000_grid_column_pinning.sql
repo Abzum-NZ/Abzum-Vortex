@@ -1,5 +1,3 @@
-begin;
-
 set local role vortex_owner;
 
 create or replace function vortex_platform.write_grid_view(
@@ -140,5 +138,3 @@ alter function vortex_platform.write_grid_view(uuid, uuid, uuid, bigint, jsonb)
   owner to vortex_owner;
 
 reset role;
-
-commit;
