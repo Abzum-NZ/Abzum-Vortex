@@ -93,7 +93,10 @@ begin
           when installed.release_revision is null then 'not_required'
           when backfill.occurrence_id is null then 'up_to_date'
           when backfill.terminally_failed_at is not null then 'failed'
-          when backfill.acknowledged_at is not null or (backfill.checkpoint ->> 'complete')::boolean then 'up_to_date'
+          when backfill.acknowledged_at is not null or (
+            (backfill.checkpoint ->> 'complete')::boolean
+            and (backfill.checkpoint ->> 'releaseRevision')::bigint = installed.release_revision
+          ) then 'up_to_date'
           when backfill.last_failure_code is not null then 'retrying'
           when backfill.claimed_at is null then 'pending'
           else 'updating' end,
@@ -140,7 +143,12 @@ begin
       where occurrence.organization_id = root.organization_id
         and occurrence.sequence_application_root_id = root.root_id
         and occurrence.occurrence_kind = 'installation_activated'
-        and occurrence.record_sequence = installed.release_revision
+        and occurrence.record_sequence <= installed.release_revision
+      -- Surface the work that blocks this installation, including an older failed
+      -- activation in front of the current one. Once caught up, show the latest result.
+      order by (progress.acknowledged_at is null) desc,
+        case when progress.acknowledged_at is null then occurrence.record_sequence end asc,
+        occurrence.record_sequence desc
       limit 1
     ) as backfill on true
     where root.organization_id = $1

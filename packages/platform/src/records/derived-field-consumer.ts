@@ -45,8 +45,11 @@ export const createDerivedFieldBackfillConsumer = (): EventConsumerAdapter => ({
         `;
           if (rows.length !== 1) throw new Error("INSTALLATION_BACKFILL_PROGRESS_INVALID");
           const opened = openedSchema.parse(rows[0]!.progress);
-          // A detached installation has no remaining records to update.
-          if (opened.releaseRevision === null) return { outcome: "completed" };
+          // The latest activation covers every stored derived field, including fields from
+          // superseded releases. Let it catch up from its own cursor rather than scanning
+          // all records again for each older activation that was queued while we waited.
+          if (opened.releaseRevision !== occurrence.applicationReleaseRevision)
+            return { outcome: "completed" };
           const checkpoint =
             opened.checkpoint?.releaseRevision === opened.releaseRevision
               ? opened.checkpoint
