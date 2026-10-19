@@ -598,7 +598,7 @@ begin
     predicate_sql := case when operator_value = 'in' then in_sql
       else '(not (' || in_sql || '))' end;
   else
-    if shared_type not in ('text', 'whole_number', 'decimal_number', 'date', 'date_time') then
+    if shared_type not in ('text', 'whole_number', 'decimal_number', 'money', 'date', 'date_time') then
       return pg_catalog.jsonb_build_object('predicate', null, 'parameters', parameter_values);
     end if;
     operator_sql := case operator_value
@@ -607,7 +607,13 @@ begin
       when 'less_than' then '<'
       else '<='
     end;
+    -- A money range orders amounts of one currency only: a value in another
+    -- currency (or none) is outside every range, never compared across currencies.
     ordering_sql := case shared_type
+      when 'money' then pg_catalog.format(
+        '((%s ->> ''currency'') = (%s ->> ''currency'') and (%s ->> ''amount'')::numeric %s (%s ->> ''amount'')::numeric)',
+        left_sql, right_sql, left_sql, operator_sql, right_sql
+      )
       when 'text' then pg_catalog.format(
         '(%s collate "C" %s %s collate "C")', left_sql, operator_sql, right_sql
       )

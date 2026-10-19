@@ -109,11 +109,28 @@ The Records table grid itself (columns, sorting, density, sticky headings, resiz
 
 One gate decides every feature, in three places that cannot disagree:
 
-1. **Capability check.** Each feature has one check over the bound query's facts: its selected fields with their type and sortable, filterable and searchable flags, choice sizes, relationships and the record type's named actions. It answers "Available" or "Not possible" with one business sentence, for example "Column filters need fields the bound query can filter by." Studio runs it on the draft beside each feature's switch; publication runs the same check on the compiled release and refuses with the same sentence.
+1. **Capability check.** Each feature has one check over the bound query's facts: its selected fields with their type and sortable, filterable and searchable flags, choice sizes, relationships and the record type's named actions. It answers "Available" or "Not possible" with one business sentence, for example "Column filters need a field the query can filter by." or "Stage cannot be filtered: it is not selected by the query." Studio runs it on the draft beside each feature's switch; publication runs the same check on the compiled release and refuses with the same sentence.
 2. **Server projection.** Every table read projects the features this viewer may use now: authored on, published, and permitted under the viewer's current access and field policy (a filter on a field the viewer may not read, a bulk command no row allows, or an inline edit of a field no row lets the viewer change is not projected). The projection travels in the table payload; it adds no request, and a table with every feature off carries none. Any feature request that is not projected on (a search, a filter, a bulk command or an inline edit, including one sent to the flow route) is refused with the neutral refusal and its cause is logged.
 3. **Lazy code.** The browser downloads a feature's code only when the projection turns it on; a table with every feature off loads none of it.
 
 A feature that is off holds only its switch, so it compiles to nothing: its flow bindings are not compiled and its controls never render.
+
+### Column filter semantics
+
+A column filter is typed by the field's **canonical type**, never by its display format, and each filterable field holds at most one filter:
+
+| Field type | Filter |
+| --- | --- |
+| Text, long text, email, phone, web address, reference number | Contains the text (at most 200 characters). |
+| Choice, several choices | Any of the chosen options (OR within the field); choosing none clears the filter. |
+| Whole number, decimal number | An inclusive range of exact decimals; either end may be open. Values are exact decimal text, never floating point. |
+| Money | An inclusive amount range in one named currency (the field's fixed currency when it has one); a value in another currency is outside every range. |
+| Date | An inclusive range of calendar days; either end may be open. |
+| Date and time | Whole days in the organisation's time zone: from the first instant of the start day (inclusive) to the first instant after the end day (exclusive). |
+| Link | Any of the chosen records, picked through the protected bounded record picker under the viewer's access; their titles are read in the page's one batched link read. |
+| Yes/no | Equals yes or no. |
+
+Calculated fields, totals and other types take no filter. The filters of different fields AND together and AND the published query filter, so a filter only ever narrows the query. The page address carries each filter as `filter.<placement>.<field>=<kind>:<operand>` (one codec for the runtime, the address, saved layouts and Studio preview); a malformed, inverted, open-on-both-ends or repeated filter refuses the read rather than being dropped. The server rebuilds every condition from the installed field (type, options, currency and link target) and refuses a filter on a field the feature does not declare, a field whose filter kind does not match its type, or a feature that is not projected on. A field the viewer's current field policy withholds is not offered, and a forged filter on it is refused by the Query engine. A committed filter is one bounded read of that table only, from page one with the selection cleared; text commits after a 300 ms pause, and a reply for an earlier state is discarded. Every supported filter, money ranges included, is pushed into the indexed candidate scan when its field is readable for the whole record type.
 
 ### Column menu and toolbar
 
