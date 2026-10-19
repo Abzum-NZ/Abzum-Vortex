@@ -1,5 +1,4 @@
 import "server-only";
-import { cache, cacheSignal } from "react";
 
 import {
   BuilderAuthorityError,
@@ -15,9 +14,6 @@ import {
   type BuilderTargetFactsReader,
   type DatabaseRow,
   type StoredApplicationDefinitionDraft,
-  type ApplicationDraftCompilation,
-  type InstalledRuntimeContext,
-  runtimePreviewOf,
 } from "@vortex/platform/server";
 import {
   applicationRootIdSchema,
@@ -29,8 +25,7 @@ import {
   type BuilderPreviewInstallation,
   type IdentitySession,
   type OrganizationId,
-  type PreviewDemand,
-  type PageDefinition,
+  type PreviewInstallation,
 } from "@vortex/platform/schema";
 import { z } from "zod";
 import { installedReleaseCatalogue } from "./definition-catalogue";
@@ -38,14 +33,7 @@ import { humanOrganizationRequests } from "./server-composition";
 import { platformPermissionSource } from "./platform-permission-source";
 import { loadOrganizationLauncher } from "./organization-context";
 import { organizationAddressPath } from "./address-paths";
-import {
-  studioDraftTargetFacts,
-  studioPreviewShapeFingerprint,
-  pageCompiledSlotsFor,
-} from "./studio-application-draft";
-
-import { collectPlacements } from "./application-page/placement-helpers";
-import { studioPreviewDemand, type StudioPreviewReader } from "./studio-preview-demand";
+import { studioDraftTargetFacts, studioPreviewShapeFingerprint } from "./studio-application-draft";
 
 const previewRequestSchema = z
   .object({
@@ -127,7 +115,6 @@ const coordinator = () =>
   });
 
 const failure = (error: unknown): PreviewFailure => {
-  console.error("[studio] preview provisioning failed", error);
   const code = error instanceof DefinitionError ? error.code : undefined;
   switch (code) {
     case "PREVIEW_INSTALLATION_STALE":
@@ -140,6 +127,7 @@ const failure = (error: unknown): PreviewFailure => {
     case "PREVIEW_INSTALLATION_TEMPORARILY_UNAVAILABLE":
       return { kind: "temporarily_unavailable" };
   }
+  console.error("[studio] preview provisioning failed", error);
   return { kind: "temporarily_unavailable" };
 };
 
@@ -268,7 +256,7 @@ const available = (
 type PendingPreview = {
   controller: AbortController;
   consumers: number;
-  result: Promise<unknown>;
+  result: Promise<StudioPreviewResult>;
 };
 // Explicit Preview actions and canvas routes must join the same pending operation even though
 // Next loads them in separate module runtimes. Completed results are never kept here.
@@ -278,11 +266,11 @@ const processPreviews = globalThis as typeof globalThis & {
 };
 const pending = (processPreviews[pendingPreviewsKey] ??= new Map<string, PendingPreview>());
 
-const once = async <Result>(
+const once = async (
   key: string,
   signal: AbortSignal | undefined,
-  run: (signal: AbortSignal) => Promise<Result>,
-): Promise<Result> => {
+  run: (signal: AbortSignal) => Promise<StudioPreviewResult>,
+): Promise<StudioPreviewResult> => {
   signal?.throwIfAborted();
   let operation = pending.get(key);
   if (operation === undefined || operation.controller.signal.aborted) {
@@ -308,8 +296,7 @@ const once = async <Result>(
     signal?.addEventListener("abort", release, { once: true });
   });
   try {
-    // Each operation kind owns its key and result type; completed results are never retained.
-    return (await Promise.race([current.result, cancelled])) as Result;
+    return await Promise.race([current.result, cancelled]);
   } finally {
     if (release !== undefined) signal?.removeEventListener("abort", release);
     current.consumers -= 1;
@@ -329,6 +316,79 @@ type Target = Readonly<{
 const keyOf = (target: Target): string =>
   `${target.session.identityId}|${target.organizationId}|${target.rootId}|${target.draftRevision}`.toLowerCase();
 
+/** The most record types one demand names. */
+const demandRecordTypeLimit = 201;
+
+type Seedable = Pick<
+  PreviewInstallation,
+  | "previewInstallationId"
+  | "draftRevision"
+  | "seedable"
+  | "recordTypeIds"
+  | "derivedReadyRecordTypeIds"
+>;
+
+/**
+ * Whether the preview holds what its builder reads live: every record type seeded and its derived
+ * fields worked out. A preview whose seeding stopped (its last reader left, or the request failed)
+ * runs, but is not read until it is seeded.
+ */
+const materialized = (preview: Seedable): boolean => {
+  if (!preview.seedable) return true;
+  const ready = new Set(preview.derivedReadyRecordTypeIds);
+  return preview.recordTypeIds.every((recordTypeId) => ready.has(recordTypeId));
+};
+
+/**
+ * Seeds the preview with every record type it has storage for, so it holds what its builder reads
+ * live; an Application with no installation has nothing to seed. Seeded record types are not
+ * seeded again, and a pending backfill of derived fields is finished.
+ */
+const materializeEveryRecordType = async <Preview extends Seedable>(
+  target: Target,
+  preview: Preview,
+  signal: AbortSignal,
+): Promise<Preview> => {
+  if (materialized(preview)) return preview;
+  for (let start = 0; start < preview.recordTypeIds.length; start += demandRecordTypeLimit)
+    await coordinator().materialize(
+      target.session,
+      {
+        organizationId: target.organizationId,
+        applicationRootId: target.rootId,
+        previewInstallationId: preview.previewInstallationId,
+        expectedDraftRevision: preview.draftRevision,
+        demand: {
+          recordTypes: preview.recordTypeIds
+            .slice(start, start + demandRecordTypeLimit)
+            .map((recordTypeId) => ({ recordTypeId, fieldIds: [], relationshipPaths: [] })),
+        },
+      },
+      signal,
+    );
+  return preview;
+};
+
+/** Seeds a current preview that is not seeded yet, joining a provision or move under way. */
+const complete = (
+  target: Target,
+  preview: BuilderPreviewInstallation,
+  signal?: AbortSignal,
+): Promise<StudioPreviewResult> =>
+  once(
+    [`${keyOf(target)}|create`, `${keyOf(target)}|follow`].find((key) => pending.has(key)) ??
+      `${keyOf(target)}|create`,
+    signal,
+    (demand) =>
+      materializeEveryRecordType(target, preview, demand).then(
+        (seeded) => available(seeded, seeded.reconcileDue),
+        (error: unknown) => {
+          demand.throwIfAborted();
+          return failure(error);
+        },
+      ),
+  );
+
 /** A new preview of the draft, replacing the builder's previous one and its records. */
 const provision = (target: Target, signal?: AbortSignal): Promise<StudioPreviewResult> =>
   once(`${keyOf(target)}|create`, signal, (demand) =>
@@ -343,6 +403,7 @@ const provision = (target: Target, signal?: AbortSignal): Promise<StudioPreviewR
         },
         demand,
       )
+      .then((preview) => materializeEveryRecordType(target, preview, demand))
       .then(
         (preview) => {
           // Retired storage is dropped in short background transactions after provisioning commits.
@@ -380,6 +441,7 @@ const follow = (
         },
         demand,
       )
+      .then((preview) => materializeEveryRecordType(target, preview, demand))
       .then(
         (preview) => available(preview, false),
         (error: unknown) => {
@@ -409,7 +471,7 @@ const lasting = (preview: BuilderPreviewInstallation): boolean =>
 
 /**
  * Whether the builder's preview already runs this saved revision's data shape, so its records are
- * this revision's: it is not newer than the revision, has the same shape and does not expire soon. Demand readiness is checked separately.
+ * this revision's: it is not newer than the revision, has the same shape, is seeded and does not expire soon.
  */
 export const studioPreviewRunsDraft = (
   draft: StoredApplicationDefinitionDraft,
@@ -420,6 +482,7 @@ export const studioPreviewRunsDraft = (
     : preview.draftRevision > draft.draftRevision
       ? "newer"
       : lasting(preview) &&
+          materialized(preview) &&
           (preview.draftRevision === draft.draftRevision ||
             preview.shapeFingerprint === studioPreviewShapeFingerprint(draft.source))
         ? "ready"
@@ -447,7 +510,9 @@ export async function currentStudioPreview(
     (preview.draftRevision === draft.draftRevision ||
       (purpose === "prepare" && preview.shapeFingerprint === target.shapeFingerprint))
   )
-    return available(preview, preview.reconcileDue);
+    return materialized(preview)
+      ? available(preview, preview.reconcileDue)
+      : complete(target, preview, signal);
   const followed = await follow(target, preview.previewInstallationId, signal);
   return followed.kind === "available" &&
     sameId(followed.previewInstallationId, preview.previewInstallationId)
@@ -553,213 +618,6 @@ export type StudioPreviewReadiness =
   | Readonly<{ kind: "following" }>
   | PreviewFailure;
 
-/**
- * The demand of one visible Studio reader, resolved from its authored address against the saved
- * revision's retained compilation. The browser names only the page and areas or the record type.
- */
-export const studioReaderDemand = (
-  draft: StoredApplicationDefinitionDraft,
-  compiled: ApplicationDraftCompilation,
-  reader: StudioPreviewReader,
-):
-  | Readonly<{ kind: "derived"; demand: PreviewDemand | undefined }>
-  | Readonly<{ kind: "refused" }> => {
-  const content = compiled.compilation.canonical.content;
-  const modules = compiled.moduleReleases.map((release) => ({
-    key: release.key,
-    content: release.compilationOutput.canonical.content,
-  }));
-  try {
-    if (reader.kind === "records")
-      return { kind: "derived", demand: studioPreviewDemand(content, modules, reader) };
-    const pageIndex = draft.source.body.pages.findIndex((page) => page.id === reader.pageAlias);
-    const page = content.pages[pageIndex];
-    const slots = pageCompiledSlotsFor(draft.source, content, reader.pageAlias)[reader.pageAlias];
-    if (
-      page === undefined ||
-      slots === undefined ||
-      reader.areas.some((area) => slots[area] === undefined)
-    )
-      return { kind: "refused" };
-    const placements = collectPlacements({
-      ...page,
-      composition: {
-        root: { props: {} },
-        content: [...new Set(reader.areas)].flatMap((area) => slots[area]!),
-      },
-    });
-    return {
-      kind: "derived",
-      demand: studioPreviewDemand(content, modules, {
-        kind: "placements",
-        page,
-        readSubject: page.type === "detail",
-        placements,
-      }),
-    };
-  } catch (error) {
-    if (error instanceof Error && error.message === "STUDIO_PREVIEW_READER_INVALID")
-      return { kind: "refused" };
-    throw error;
-  }
-};
-
-type PreviewOfDemand = Readonly<{ previewInstallationId: string; draftRevision: number }>;
-
-/** A fresh authority-checked closure read. It never seeds or creates a preview. */
-const readDemandReadiness = async (
-  session: IdentitySession,
-  organizationId: OrganizationId,
-  rootId: ApplicationRootId,
-  preview: PreviewOfDemand,
-  demand: PreviewDemand,
-) => {
-  const readIn = (
-    selection: Readonly<{ organizationId: OrganizationId; applicationRootId?: ApplicationRootId }>,
-  ) =>
-    humanOrganizationRequests().run(session, selection, (transaction) =>
-      createPreviewInstallationRepository(transaction).readDemand(
-        preview.previewInstallationId,
-        demand,
-      ),
-    );
-  const installed = await readIn({ organizationId, applicationRootId: rootId });
-  const result =
-    installed.kind === "available" || installed.kind === "temporarily_unavailable"
-      ? installed
-      : await readIn({ organizationId });
-  if (result.kind !== "available")
-    return result.kind === "temporarily_unavailable"
-      ? ({ kind: "temporarily_unavailable" } as const)
-      : ({ kind: "refused", reason: "permission_refused" } as const);
-  if (result.value.draftRevision !== preview.draftRevision) return { kind: "conflict" } as const;
-  const ready = new Set(result.value.readyRecordTypeIds);
-  return { kind: "checked", ready: result.value.closure.every((id) => ready.has(id)) } as const;
-};
-
-/**
- * The one materialization of a visible reader's demand, shared by Studio's record reads and the
- * runtime pages of an opened preview. A ready demand costs one read of its closure; otherwise the
- * coordinator seeds the closure and finishes its derived fields under the reader's request, inside
- * the shared pending-operation map, so the last departing reader cancels what has not started.
- * `conflict` means the preview moved to another revision while the demand was read.
- */
-export const materializePreviewDemand = async (
-  session: IdentitySession,
-  organizationId: OrganizationId,
-  rootId: ApplicationRootId,
-  preview: PreviewOfDemand,
-  demand: PreviewDemand | undefined,
-  signal?: AbortSignal,
-): Promise<Readonly<{ kind: "ready" }> | PreviewFailure> => {
-  // Text-only areas and live system projections have no copied-record demand.
-  if (demand === undefined) return { kind: "ready" };
-  const checked = await readDemandReadiness(session, organizationId, rootId, preview, demand);
-  if (checked.kind !== "checked") return checked;
-  if (checked.ready) return { kind: "ready" };
-  signal?.throwIfAborted();
-  return once(
-    `${session.identityId}|${organizationId}|${rootId}|${preview.draftRevision}|${preview.previewInstallationId}|${JSON.stringify(demand)}`.toLowerCase(),
-    signal,
-    async (pendingSignal): Promise<Readonly<{ kind: "ready" }> | PreviewFailure> => {
-      try {
-        // Materialization commits the SQL-derived closure, then finishes its pending backfill.
-        await coordinator().materialize(
-          session,
-          {
-            organizationId,
-            applicationRootId: rootId,
-            previewInstallationId: preview.previewInstallationId,
-            expectedDraftRevision: preview.draftRevision,
-            demand,
-          },
-          pendingSignal,
-        );
-        return { kind: "ready" };
-      } catch (error) {
-        if (pendingSignal.aborted)
-          console.info("[studio] preview demand cancelled: STUDIO_PREVIEW_DEMAND_CANCELLED");
-        pendingSignal.throwIfAborted();
-        return failure(error);
-      }
-    },
-  );
-};
-
-/** The frame and page share this request-owned preparation of the opened preview page. */
-export const prepareRuntimePreviewPage = cache(
-  async (
-    session: IdentitySession,
-    context: InstalledRuntimeContext,
-    page: PageDefinition,
-    readSubject: boolean,
-    projected: Readonly<Record<string, unknown>> | undefined,
-    selectedPlacementIds: ReadonlySet<string> | undefined,
-  ): Promise<boolean> => {
-    const preview = runtimePreviewOf(context);
-    if (preview === undefined) return true;
-    const signal = cacheSignal() as AbortSignal | null;
-    const content = context.releaseSet.application.content;
-    const demand = studioPreviewDemand(
-      content,
-      context.releaseSet.modules.map((module) => ({
-        key: module.definitionKey,
-        content: module.content,
-      })),
-      {
-        kind: "placements",
-        page,
-        readSubject,
-        placements:
-          projected === undefined
-            ? []
-            : collectPlacements(projected).filter(
-                (placement) =>
-                  selectedPlacementIds === undefined ||
-                  selectedPlacementIds.has(placement.placementId.toLowerCase()),
-              ),
-      },
-    );
-    const prepared = await materializePreviewDemand(
-      session,
-      context.organizationId,
-      context.applicationRootId,
-      preview,
-      demand,
-      signal ?? undefined,
-    );
-    return prepared.kind === "ready";
-  },
-);
-
-/** Link choices are demanded only when the picker or an initial link value is actually read. */
-export const prepareRuntimePreviewChoices = async (
-  session: IdentitySession,
-  context: InstalledRuntimeContext,
-  recordTypeIds: readonly string[],
-  signal?: AbortSignal,
-): Promise<boolean> => {
-  const preview = runtimePreviewOf(context);
-  if (preview === undefined) return true;
-  const demand = studioPreviewDemand(
-    context.releaseSet.application.content,
-    context.releaseSet.modules.map((module) => ({
-      key: module.definitionKey,
-      content: module.content,
-    })),
-    { kind: "choices", recordTypeIds },
-  );
-  const prepared = await materializePreviewDemand(
-    session,
-    context.organizationId,
-    context.applicationRootId,
-    preview,
-    demand,
-    signal ?? (cacheSignal() as AbortSignal | null) ?? undefined,
-  );
-  return prepared.kind === "ready";
-};
-
 /** How long one readiness request waits for a move under way before it answers `following`. */
 const readinessWaitMs = 20_000;
 
@@ -785,11 +643,11 @@ const waitFor = (idle: Promise<void>, signal: AbortSignal | undefined): Promise<
   });
 
 /**
- * The one readiness request of Studio's visible record readers for a saved revision's data shape.
- * It waits for the move a save started; when nothing is moving the preview (the builder's first
- * preview, one about to expire, or one a failed move left behind) it prepares the preview itself,
- * without records, under this request's signal. Each visible record read then materializes only
- * its own demand; record reads never prepare or move a preview.
+ * The one readiness request of Studio's visible record readers for a saved revision. It waits for
+ * the move a save started; when nothing is moving the preview (the builder's first preview, one
+ * about to expire, or one a failed move left behind) it prepares the preview itself, under this
+ * request's demand, so leaving the last reader cancels what has not started. Record reads
+ * themselves never prepare or move a preview.
  */
 export const prepareStudioPreview = async (
   session: IdentitySession,

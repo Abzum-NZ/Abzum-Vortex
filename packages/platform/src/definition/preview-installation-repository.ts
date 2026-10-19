@@ -1,13 +1,10 @@
 import "server-only";
-import { z } from "zod";
 
 import {
   builderPreviewInstallationSchema,
   previewApplicationIdentitySchema,
   previewInstallationSchema,
   previewSeedResultSchema,
-  recordTypeIdSchema,
-  revisionSchema,
   type BuilderPreviewInstallation,
   type PreviewApplicationIdentity,
   type PreviewDemand,
@@ -41,14 +38,6 @@ type PreviewRow = DatabaseRow & { readonly preview_installation: unknown };
 type IdentityRow = DatabaseRow & { readonly preview_identity: unknown };
 type SeedRow = DatabaseRow & { readonly seeded: unknown };
 
-const demandStateSchema = z
-  .object({
-    draftRevision: revisionSchema,
-    closure: z.array(recordTypeIdSchema),
-    readyRecordTypeIds: z.array(recordTypeIdSchema),
-  })
-  .strict();
-
 export type PreviewInstallationRepository = Readonly<{
   /** In the organisation's context: the preview, its registration and its empty storage. */
   create(
@@ -69,11 +58,6 @@ export type PreviewInstallationRepository = Readonly<{
    * reads there. The database decides what the demand needs.
    */
   seed(previewInstallationId: string, demand: PreviewDemand): Promise<PreviewSeedResult>;
-  /** In the installed Application context: checks the closure without doing seed work. */
-  readDemand(
-    previewInstallationId: string,
-    demand: PreviewDemand,
-  ): Promise<z.infer<typeof demandStateSchema>>;
   /**
    * In the installed Application's own context: decides the preview's copied records again by
    * the builder's current live access, removing what they can no longer read.
@@ -135,18 +119,6 @@ export const createPreviewInstallationRepository = (
   transaction: RequestDatabaseTransaction,
 ): PreviewInstallationRepository =>
   Object.freeze({
-    async readDemand(previewInstallationId, demand) {
-      try {
-        const rows = await transaction.query<DatabaseRow & { demand_state: unknown }>`
-          select vortex_definition.read_preview_demand(
-            ${previewInstallationId}::uuid, ${JSON.stringify(demand)}::text::jsonb
-          ) as demand_state
-        `;
-        return demandStateSchema.parse(rows.length === 1 ? rows[0]?.demand_state : undefined);
-      } catch (error) {
-        throw mapFailure(error);
-      }
-    },
     async create(request, releases) {
       try {
         const rows = await transaction.query<PreviewRow>`

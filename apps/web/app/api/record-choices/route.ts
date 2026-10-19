@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from "next/server";
+import type { NextRequest, NextResponse } from "next/server";
 import {
   containedComponentIdSchema,
   logRefusal,
@@ -87,22 +87,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return privateResponse({ kind: "temporarily_unavailable" }, 503);
     if (address.kind !== "application_page") return refusedResponse(`address_${address.kind}`);
 
-    const result = await loadRecordChoicePage(
-      identity.session,
-      address,
-      {
-        placementId: body.placementId,
-        installationRevision: body.installationRevision,
-        releaseKey: body.releaseKey,
-        ...(body.subjectRecordId === undefined ? {} : { subjectRecordId: body.subjectRecordId }),
-        ...(body.search === undefined ? {} : { search: body.search }),
-        ...(body.pageSize === undefined ? {} : { pageSize: body.pageSize }),
-        ...(body.continuationToken === undefined
-          ? {}
-          : { continuationToken: body.continuationToken }),
-      },
-      request.signal,
-    );
+    const result = await loadRecordChoicePage(identity.session, address, {
+      placementId: body.placementId,
+      installationRevision: body.installationRevision,
+      releaseKey: body.releaseKey,
+      ...(body.subjectRecordId === undefined ? {} : { subjectRecordId: body.subjectRecordId }),
+      ...(body.search === undefined ? {} : { search: body.search }),
+      ...(body.pageSize === undefined ? {} : { pageSize: body.pageSize }),
+      ...(body.continuationToken === undefined
+        ? {}
+        : { continuationToken: body.continuationToken }),
+    });
     switch (result.kind) {
       case "completed":
         return privateResponse(
@@ -124,7 +119,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         return refusedResponse(`record_choices_${result.cause}`);
     }
   } catch (error) {
-    if (request.signal.aborted) return new NextResponse(null, { status: 499 });
     logRefusal("record-choices", "record choice page", "record_choices_failed", error);
     return privateResponse({ kind: "temporarily_unavailable" }, 503);
   }

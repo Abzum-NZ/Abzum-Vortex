@@ -187,12 +187,6 @@ export const readStudioDataRecords = async (
       organization.data,
       request.rootId,
       request.draftRevision,
-      {
-        kind: "records",
-        moduleKey: request.moduleKey,
-        recordKey: request.recordKey,
-        ...(request.queryKey === undefined ? {} : { queryKey: request.queryKey }),
-      },
       signal,
     );
     signal?.throwIfAborted();

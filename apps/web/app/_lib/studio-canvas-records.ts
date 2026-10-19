@@ -22,6 +22,7 @@ import {
 } from "@vortex/platform/schema";
 import { z } from "zod";
 import { pageCompiledSlotsFor } from "./studio-application-draft";
+import { compiledDraftContent } from "./studio-compiled-drafts";
 import { collectPlacements, pageSubjectParameter } from "./application-page/placement-helpers";
 import { findModuleQuery } from "./application-page/query-helpers";
 import { isStreamablePlacement, readPlacement } from "./application-page/placement-reader";
@@ -168,19 +169,25 @@ export const readStudioCanvasRecords = async (
   if (!organization.success || !parsed.success) return { kind: "refused" };
   const request = parsed.data;
   try {
-    const preview = await openStudioPreviewRead(
-      session,
-      organization.data,
-      request.rootId,
-      request.draftRevision,
-      { kind: "canvas", pageAlias: request.pageAlias, areas: [request.area] },
-      signal,
-    );
+    // The retained compilation is looked up by revision while the preview read opens.
+    const [preview, content] = await Promise.all([
+      openStudioPreviewRead(
+        session,
+        organization.data,
+        request.rootId,
+        request.draftRevision,
+        signal,
+      ),
+      compiledDraftContent(session, organization.data, {
+        rootId: request.rootId,
+        draftRevision: request.draftRevision,
+      }),
+    ]);
     if (preview.kind !== "available") return preview;
     const { draft, context, services, selection, dependencies } = preview;
     if (draft.sourceFingerprint !== request.sourceFingerprint) return { kind: "conflict" };
     signal?.throwIfAborted();
-    const content = preview.compiled.compilation.canonical.content;
+    if (typeof content === "string") return { kind: content };
     const pageIndex = draft.source.body.pages.findIndex((page) => page.id === request.pageAlias);
     const page = draft.source.body.pages[pageIndex];
     const compiledPage = content.pages[pageIndex] as PageDefinition | undefined;

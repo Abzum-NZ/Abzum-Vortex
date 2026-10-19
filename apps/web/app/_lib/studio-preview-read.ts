@@ -5,7 +5,6 @@ import {
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
   type StoredApplicationDefinitionDraft,
-  type ApplicationDraftCompilation,
 } from "@vortex/platform/server";
 import {
   sameId,
@@ -14,19 +13,11 @@ import {
   type OrganizationId,
 } from "@vortex/platform/schema";
 import { humanOrganizationRequests } from "./server-composition";
-import {
-  materializePreviewDemand,
-  readStudioPreviewState,
-  studioPreviewRunsDraft,
-  studioReaderDemand,
-} from "./studio-application-preview";
-import { compiledStudioDraft } from "./studio-compiled-drafts";
+import { readStudioPreviewState, studioPreviewRunsDraft } from "./studio-application-preview";
 import { loadInstalledContext, requestDependencies } from "./application-page/load";
 import { createPlacementReadServices } from "./application-page/placement-services";
 import { loadOrganizationLauncher } from "./organization-context";
 import { getQueryContinuationKey } from "./query-continuation-key";
-
-import type { StudioPreviewReader } from "./studio-preview-demand";
 
 /** The selection every read of a Studio preview runs under: the Application and the builder's preview of it. */
 export type StudioPreviewSelection = Readonly<{
@@ -40,8 +31,7 @@ export type StudioPreviewSelection = Readonly<{
  * installation of that draft, with its runtime context and the running application's own readers.
  * It reads only a preview that already runs the saved revision's data shape: a save moves the
  * preview on the server and Studio's readers wait for it to be ready before they read, so a read
- * never prepares or moves a preview; it materializes only its own reader's demand. Presentation-only
- * edits reuse the existing records. Every read in it runs under
+ * never prepares or moves a preview. Presentation-only edits reuse the existing records. Every read in it runs under
  * the builder's preview access, as the preview itself decides it: the draft's roles for the
  * Application's own permissions, the builder's own live access for people and every other system
  * projection, and no record-share authority.
@@ -51,7 +41,6 @@ export type StudioPreviewRead =
       kind: "available";
       /** The saved draft at exactly the requested revision. */
       draft: StoredApplicationDefinitionDraft;
-      compiled: ApplicationDraftCompilation;
       selection: StudioPreviewSelection;
       context: InstalledRuntimeContext;
       dependencies: HumanOrganizationRequestDependencies;
@@ -71,15 +60,10 @@ export const openStudioPreviewRead = async (
   organizationId: OrganizationId,
   rootId: ApplicationRootId,
   draftRevision: number,
-  reader: StudioPreviewReader,
   signal?: AbortSignal,
 ): Promise<StudioPreviewRead> => {
   signal?.throwIfAborted();
-  // The retained compilation is looked up by revision, beside the draft and preview state.
-  const [state, compiled] = await Promise.all([
-    readStudioPreviewState(session, organizationId, rootId, draftRevision),
-    compiledStudioDraft(session, organizationId, { rootId, draftRevision }),
-  ]);
+  const state = await readStudioPreviewState(session, organizationId, rootId, draftRevision);
   signal?.throwIfAborted();
   if (state.kind === "refused") return { kind: "refused" };
   if (state.kind !== "read") return state;
@@ -87,9 +71,6 @@ export const openStudioPreviewRead = async (
   if (runs === "newer") return { kind: "conflict" };
   const preview = state.preview;
   if (runs !== "ready" || preview === undefined) return { kind: "following" };
-  if (typeof compiled === "string") return { kind: compiled };
-  const derived = studioReaderDemand(state.draft, compiled, reader);
-  if (derived.kind !== "derived") return derived;
   const dependencies = requestDependencies();
   const application = { organizationId, applicationRootId: rootId };
   // Copied live records are read only once they are decided again by the builder's current live
@@ -128,19 +109,11 @@ export const openStudioPreviewRead = async (
     previewInstallationId: preview.previewInstallationId,
   };
   signal?.throwIfAborted();
-  // This reader's own demand is materialized while the preview's context loads.
-  const [materialized, firstInstalled, launcher] = await Promise.all([
-    materializePreviewDemand(session, organizationId, rootId, preview, derived.demand, signal),
+  const [firstInstalled, launcher] = await Promise.all([
     loadInstalledContext(session, dependencies, selection),
     loadOrganizationLauncher(session),
   ]);
   signal?.throwIfAborted();
-  if (materialized.kind !== "ready")
-    return materialized.kind === "conflict"
-      ? { kind: "following" }
-      : materialized.kind === "refused"
-        ? { kind: "refused" }
-        : { kind: "temporarily_unavailable" };
   const installed =
     firstInstalled.kind === "temporarily_unavailable" && firstInstalled.databaseCode === "40001"
       ? await loadInstalledContext(session, dependencies, selection)
@@ -177,7 +150,6 @@ export const openStudioPreviewRead = async (
   return {
     kind: "available",
     draft: state.draft,
-    compiled,
     selection,
     context: installed.value,
     dependencies,

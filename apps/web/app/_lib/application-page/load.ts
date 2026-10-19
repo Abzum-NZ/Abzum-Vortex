@@ -32,7 +32,6 @@ import {
   recordsTableParameterPlacement,
 } from "@vortex/platform/schema";
 import { createPlacementReadServices } from "./placement-services";
-import { prepareRuntimePreviewPage } from "../studio-application-preview";
 import { readApplicationReleaseAdoption } from "../application-release-adoption";
 import { getQueryContinuationKey } from "../query-continuation-key";
 import { loadPermittedApplicationsAtAddress } from "../organization-context";
@@ -140,48 +139,15 @@ export const readPageProjections = cache(
     context: InstalledRuntimeContext,
     pageId: string,
     subjectRecordId: string | undefined,
-    selectedPlacementIds?: ReadonlySet<string>,
   ) => {
     const dependencies = requestDependencies();
     const selection: OrganizationSelectionCandidate = runtimeContextSelection(context);
-    const projectedPageRead = (async () => {
-      const page = context.releaseSet.application.content.pages.find((candidate) =>
-        sameId(candidate.pageId, pageId),
-      );
-      if (page === undefined) throw new Error("PREVIEW_PAGE_DEFINITION_MISSING");
-      // A detail subject is read by visibility conditions during projection. Prepare that subject
-      // first; query readers are prepared only after projection has removed invisible placements.
-      if (
-        !(await prepareRuntimePreviewPage(
-          session,
-          context,
-          page,
-          subjectRecordId !== undefined,
-          undefined,
-          selectedPlacementIds,
-        ))
-      )
-        return { kind: "temporarily_unavailable" } as const;
-      const projected = await createStoredPageCapabilityService({
-        ...dependencies,
-        context,
-        permissions: platformPermissionSource,
-        selection: { pageId, ...(subjectRecordId === undefined ? {} : { subjectRecordId }) },
-      }).project(session, selection);
-      if (projected.kind !== "available" || projected.value === undefined) return projected;
-      if (
-        !(await prepareRuntimePreviewPage(
-          session,
-          context,
-          page,
-          subjectRecordId !== undefined,
-          projected.value,
-          selectedPlacementIds,
-        ))
-      )
-        return { kind: "temporarily_unavailable" } as const;
-      return projected;
-    })();
+    const projectedPageRead = createStoredPageCapabilityService({
+      ...dependencies,
+      context,
+      permissions: platformPermissionSource,
+      selection: { pageId, ...(subjectRecordId === undefined ? {} : { subjectRecordId }) },
+    }).project(session, selection);
     const navigationRead = createStoredNavigationProjectionService({
       ...dependencies,
       context,
@@ -303,7 +269,6 @@ const loadApplicationPageJoined = async (
     context,
     pageDefinition.pageId,
     conditionSubjectId,
-    selectedPlacementIds,
   );
   startedReads.push(projectedPageRead, navigationRead);
   const adoptionTarget = await adoptionRead;
@@ -1005,8 +970,6 @@ const loadApplicationPageJoined = async (
   // A new record's link field may start with the record its page address names.
   if (pageDefinition.type !== "guided_form")
     await projectInitialLinkInputs({
-      session,
-      context,
       placements: linkInputs.filter(
         (entry) => entry.formId === undefined || !Object.hasOwn(editFormBaselines, entry.formId),
       ),
