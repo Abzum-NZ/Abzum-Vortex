@@ -253,9 +253,10 @@ export const createPreviewInstallationCoordinator = (
     },
 
     /**
-     * Seeds the builder's preview with what a demand needs, then works out the derived fields of
-     * the record types still pending. The database decides what the demand needs and seeds each
-     * record type once; demanding seeded record types again only finishes a pending backfill.
+     * Seeds the builder's preview with what a demand needs and works out the derived fields of
+     * the record types still pending, in one transaction. The database decides what the demand
+     * needs and seeds each record type once; demanding seeded record types again only finishes a
+     * pending backfill.
      */
     async materialize(
       sessionCandidate: IdentitySession,
@@ -268,33 +269,33 @@ export const createPreviewInstallationCoordinator = (
         throw new DefinitionError("INVALID_PREVIEW_INSTALLATION_COMMAND");
       const { organizationId, applicationRootId, previewInstallationId, expectedDraftRevision } =
         request.data;
-      // The builder's live records are read as the builder reads them in the installed Application.
-      const seeded = await builderRequest(
+      // One short write per demand: the builder's live records are read as the builder reads them
+      // in the installed Application, then, in the same transaction, the copies are addressed in
+      // the preview, which the database validates again for the same builder and Application.
+      return builderRequest(
         session.data,
         { organizationId, applicationRootId },
         applicationRootId,
-        async (transaction) => {
-          const result = await createPreviewInstallationRepository(transaction).seed(
+        async (transaction, _authority, context) => {
+          const seeded = await createPreviewInstallationRepository(transaction).seed(
             previewInstallationId,
             request.data.demand,
           );
-          if (result.draftRevision !== expectedDraftRevision)
+          if (seeded.draftRevision !== expectedDraftRevision)
             throw new DefinitionError("PREVIEW_INSTALLATION_STALE");
-          return result;
+          if (seeded.pendingDerived.length === 0) return seeded;
+          // The copied records hold the live values only: their totals and stored calculations
+          // are worked out afresh for the draft's definitions, in the preview's own storage.
+          await transaction.query`
+            select pg_catalog.set_config(
+              'vortex_record.preview_installation_id', ${previewInstallationId}, true
+            )
+          `;
+          await backfillDerivedFields(transaction, context.issuedAt);
+          return seeded;
         },
         signal,
       );
-      if (seeded.pendingDerived.length === 0) return seeded;
-      // The copied records hold the live values only: their totals and stored calculations are
-      // worked out afresh for the draft's definitions, in the preview itself.
-      await builderRequest(
-        session.data,
-        { organizationId, applicationRootId, previewInstallationId },
-        applicationRootId,
-        (transaction) => backfillDerivedFields(transaction, new Date().toISOString()),
-        signal,
-      );
-      return seeded;
     },
 
     async refresh(
