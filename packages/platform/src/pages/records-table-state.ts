@@ -43,15 +43,13 @@ export type RecordsTableQueryState = Readonly<{
   sort: readonly RecordsTableSortKey[];
   filters: readonly RecordsTableFilterValue[];
   search: string | null;
-  /** The person's visible columns, as field identities; null shows the authored default columns. */
-  visibleFieldIds: readonly string[] | null;
   /** Undefined requests page one. */
   page: RecordsTablePageRequest | undefined;
 }>;
 
 export type RecordsTableQueryStateRead =
   | Readonly<{ kind: "valid"; state: RecordsTableQueryState }>
-  | Readonly<{ kind: "malformed"; part: "sort" | "fields" | "search" }>;
+  | Readonly<{ kind: "malformed"; part: "sort" | "search" }>;
 
 const FIELD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PAGE_PATTERN = /^[1-9][0-9]{0,4}$/;
@@ -60,10 +58,9 @@ const TOKEN_PATTERN = /^[A-Za-z0-9_-]{1,65536}$/;
 const sortParameter = (placementId: string): string => `sort.${placementId}`;
 const filterPrefix = (placementId: string): string => `filter.${placementId}.`;
 const searchParameter = (placementId: string): string => `search.${placementId}`;
-const fieldsParameter = (placementId: string): string => `fields.${placementId}`;
 const pageParameter = (placementId: string): string => `page.${placementId}`;
 
-const QUERY_STATE_PREFIXES = ["sort.", "filter.", "search.", "fields.", "page."] as const;
+const QUERY_STATE_PREFIXES = ["sort.", "filter.", "search.", "page."] as const;
 
 /**
  * The placement whose table state an address parameter holds, lower-cased, or undefined for a
@@ -148,20 +145,11 @@ const parseSort = (value: string): RecordsTableSortKey[] | undefined => {
   return keys.length === 0 || keys.length > RECORDS_TABLE_MAXIMUM_SORT_KEYS ? undefined : keys;
 };
 
-const parseFieldList = (value: string): string[] | undefined => {
-  const fieldIds: string[] = [];
-  for (const fieldId of value.split(",")) {
-    if (!FIELD_ID_PATTERN.test(fieldId) || fieldIds.some((held) => sameId(held, fieldId)))
-      return undefined;
-    fieldIds.push(fieldId.toLowerCase());
-  }
-  return fieldIds.length === 0 ? undefined : fieldIds;
-};
-
 /**
- * Reads one placement's query state from the page address. A malformed sort, visible-column list
- * or search is reported rather than dropped, so the server refuses the read instead of showing a
- * different order or projection than the address names. An unreadable page position reads page one.
+ * Reads one placement's query state from the page address. A malformed sort or search is reported
+ * rather than dropped, so the server refuses the read instead of showing a different order than the
+ * address names. An unreadable page position reads page one. Which columns show is not query state:
+ * it is the person's stored grid layout (`GridLayout`).
  */
 export const readRecordsTableQueryState = (
   placementId: string,
@@ -171,9 +159,6 @@ export const readRecordsTableQueryState = (
   const sortText = owned.get(sortParameter(placementId));
   const sort = sortText === undefined ? [] : parseSort(sortText);
   if (sort === undefined) return { kind: "malformed", part: "sort" };
-  const fieldsText = owned.get(fieldsParameter(placementId));
-  const visibleFieldIds = fieldsText === undefined ? null : parseFieldList(fieldsText);
-  if (visibleFieldIds === undefined) return { kind: "malformed", part: "fields" };
   const searchText = owned.get(searchParameter(placementId))?.trim();
   if (searchText !== undefined && searchText.length > RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH)
     return { kind: "malformed", part: "search" };
@@ -187,7 +172,6 @@ export const readRecordsTableQueryState = (
       sort,
       filters,
       search: searchText === undefined || searchText === "" ? null : searchText,
-      visibleFieldIds,
       page: parseRecordsTablePagePosition(owned.get(pageParameter(placementId))),
     },
   };
@@ -198,7 +182,6 @@ export type RecordsTableQueryChange =
   | Readonly<{ kind: "sort"; keys: readonly RecordsTableSortKey[] }>
   | Readonly<{ kind: "filter"; fieldId: string; value: string }>
   | Readonly<{ kind: "search"; text: string }>
-  | Readonly<{ kind: "visible_fields"; fieldIds: readonly string[] | null }>
   | Readonly<{ kind: "page"; request: RecordsTablePageRequest }>;
 
 /**
@@ -237,12 +220,6 @@ export const applyRecordsTableQueryChange = (
     case "search":
       set(searchParameter(placementId), change.text.trim() === "" ? undefined : change.text);
       return;
-    case "visible_fields":
-      set(
-        fieldsParameter(placementId),
-        change.fieldIds === null ? undefined : change.fieldIds.join(","),
-      );
-      return;
   }
 };
 
@@ -261,7 +238,7 @@ export const recordsTableAddressKey = (
 
 /**
  * The address query without any table query state: what identifies the page itself. A table's
- * sort, filter, search, columns and page change only that table, never the page around it.
+ * sort, filter, search and page change only that table, never the page around it.
  */
 export const searchWithoutRecordsTableState = (search: string): string => {
   const parameters = new URLSearchParams(search);

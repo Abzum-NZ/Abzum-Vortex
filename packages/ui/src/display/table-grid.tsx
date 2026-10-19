@@ -247,7 +247,7 @@ export function RecordsGrid({
   renderers,
   announce,
 }: RecordsGridProps): ReactElement {
-  const rowHeight = GRID_ROW_HEIGHT[contract.density];
+  const rowHeight = GRID_ROW_HEIGHT[layout.density];
   const virtual = virtualizesRows(rows.length);
   const bounded = contract.viewport === "bounded";
   const { columns } = layout;
@@ -526,6 +526,7 @@ export function RecordsGrid({
     const current = layout.state.widths[columnId] ?? column.width;
     const next = Math.max(GRID_COLUMN_MIN_WIDTH, Math.min(GRID_COLUMN_MAX_WIDTH, current + delta));
     setWidths((widths) => ({ ...widths, [columnId]: next }));
+    layout.commit();
     announce(`${column.label} is ${next} pixels wide`);
   };
   const moveColumnBy = (columnId: string, offset: number): void => {
@@ -764,12 +765,23 @@ export function RecordsGrid({
               <div
                 aria-hidden="true"
                 className={cn(
-                  "absolute top-0 right-0 h-full w-1.5 cursor-col-resize touch-none select-none hover:bg-primary/40",
-                  header.column.getIsResizing() && "bg-primary/60",
+                  "absolute top-0 right-0 h-full w-1.5 cursor-col-resize touch-none border-e border-border select-none hover:bg-ring/50",
+                  header.column.getIsResizing() && "bg-ring",
                 )}
-                onMouseDown={header.getResizeHandler()}
-                onTouchStart={header.getResizeHandler()}
-                onDoubleClick={() => header.column.resetSize()}
+                // The width changes on screen while the pointer moves; it is stored once, when
+                // the pointer is released.
+                onMouseDown={(event) => {
+                  header.getResizeHandler()(event);
+                  document.addEventListener("mouseup", layout.commit, { once: true });
+                }}
+                onTouchStart={(event) => {
+                  header.getResizeHandler()(event);
+                  document.addEventListener("touchend", layout.commit, { once: true });
+                }}
+                onDoubleClick={() => {
+                  header.column.resetSize();
+                  layout.commit();
+                }}
                 onClick={(event) => event.stopPropagation()}
               />
             )}

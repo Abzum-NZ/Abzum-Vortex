@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import {
   readRecordsTableContract,
+  recordsTableDensities,
   type RecordsTableActionContract,
+  type RecordsTableDensity,
   type RecordsTableContract,
 } from "@vortex/platform/schema";
 import { Button } from "../components/button";
@@ -11,7 +13,11 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/dropdown-menu";
@@ -32,7 +38,6 @@ import { DisplayStateContainer } from "./display-state-container";
 import type {
   DisplayCellValue,
   DisplayColumn,
-  DisplayEventHandlers,
   DisplayRow,
   TableNarrowing,
   TablePayload,
@@ -100,42 +105,27 @@ const useAnnouncer = (): [string, (message: string) => void] => {
 };
 
 /**
- * Show, hide and reset the declared columns. Which columns are shown is query state: showing or
- * hiding one reads the page again on the server with exactly the shown columns, so a hidden
- * column's values are never sent. Moving and resizing columns read nothing; reset returns both
- * the authored columns and their authored order and widths.
+ * Show and hide the declared columns, choose the row density, and reset the layout. Every choice
+ * changes the grid at once and is stored as the person's own layout; none of them reads records,
+ * except showing a column the page was read without, which reads the same page again with it. A
+ * hidden column's values are never sent: the next read leaves it out.
  */
 function ColumnsMenu({
   accessibleName,
-  contract,
   layout,
-  hiddenColumns,
-  events,
+  loadedKeys,
+  canRead,
   announce,
 }: Readonly<{
   accessibleName: string;
-  contract: RecordsTableContract;
   layout: GridLayoutControls;
-  hiddenColumns: readonly DisplayColumn[];
-  events: DisplayEventHandlers | undefined;
+  /** The columns the shown page carries values for, lower-cased. */
+  loadedKeys: ReadonlySet<string>;
+  /** Whether the host can read the page again, so a column it was read without can be shown. */
+  canRead: boolean;
   announce: (message: string) => void;
-}>): ReactElement | null {
-  const onColumns = events?.columns_changed;
-  if (layout.columns.length + hiddenColumns.length < 2) return null;
-  const shownKeys = layout.shown.map((column) => column.key);
-  const authoredKeys = contract.columns
-    .filter((column) => column.visible)
-    .map((column) => column.field.toLowerCase());
-  const authoredColumns =
-    shownKeys.length === authoredKeys.length &&
-    shownKeys.every((key) => authoredKeys.includes(key.toLowerCase()));
-  const choose = (fields: readonly string[] | null): void => {
-    if (onColumns !== undefined) void onColumns({ event: "columns_changed", fields });
-  };
-  const entries = [
-    ...layout.shown.map((column) => ({ key: column.key, label: column.label, shown: true })),
-    ...hiddenColumns.map((column) => ({ key: column.key, label: column.label, shown: false })),
-  ];
+}>): ReactElement {
+  const shownCount = layout.entries.filter((entry) => entry.visible).length;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -145,37 +135,64 @@ function ColumnsMenu({
         Columns
       </DropdownMenuTrigger>
       <DropdownMenuContent>
-        {entries.map((entry) => (
-          <DropdownMenuCheckboxItem
-            key={entry.key}
-            checked={entry.shown}
-            // One column always stays shown; without the host's read nothing can change.
-            disabled={onColumns === undefined || (entry.shown && shownKeys.length <= 1)}
-            onCheckedChange={(checked: boolean) => {
-              choose(
-                checked ? [...shownKeys, entry.key] : shownKeys.filter((key) => key !== entry.key),
-              );
-              announce(`${entry.label} ${checked ? "shown" : "hidden"}`);
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Columns</DropdownMenuLabel>
+          {layout.entries.map((entry) => (
+            <DropdownMenuCheckboxItem
+              key={entry.key}
+              checked={entry.visible}
+              // One column always stays shown; a column the page was read without needs a read.
+              disabled={
+                (entry.visible && shownCount <= 1) ||
+                (!entry.visible && !loadedKeys.has(entry.key) && !canRead)
+              }
+              onCheckedChange={(checked: boolean) => {
+                layout.setVisible(entry.key, checked);
+                announce(`${entry.label} ${checked ? "shown" : "hidden"}`);
+              }}
+            >
+              {entry.label}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Row density</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={layout.density}
+            onValueChange={(value: unknown) => {
+              const density = recordsTableDensities.find((candidate) => candidate === value);
+              if (density === undefined) return;
+              layout.setDensity(density);
+              announce(`${DENSITY_LABELS[density]} rows`);
             }}
           >
-            {entry.label}
-          </DropdownMenuCheckboxItem>
-        ))}
+            {recordsTableDensities.map((density) => (
+              <DropdownMenuRadioItem key={density} value={density}>
+                {DENSITY_LABELS[density]}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          disabled={!layout.arranged && (authoredColumns || onColumns === undefined)}
+          disabled={!layout.arranged}
           onClick={() => {
             layout.reset();
-            if (!authoredColumns) choose(null);
-            announce("Columns reset");
+            announce("Layout reset");
           }}
         >
-          Reset columns
+          Reset layout
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
+
+const DENSITY_LABELS: Readonly<Record<RecordsTableDensity, string>> = Object.freeze({
+  comfortable: "Comfortable",
+  compact: "Compact",
+});
 
 /**
  * Shared browser-safe display component for tabular data: the one Records table block. It shows
@@ -207,6 +224,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   const contract = useMemo(() => readRecordsTableContract(settings), [settings]);
   const presentation = useTablePresentation(contract);
   const projectedColumns = values?.columns;
+  const projectedHidden = values?.hiddenColumns;
   const columns = useMemo(
     () =>
       contract === undefined || projectedColumns === undefined
@@ -214,7 +232,21 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         : carriedColumns(contract, projectedColumns),
     [contract, projectedColumns],
   );
-  const layout = useGridLayout(columns);
+  const declaredColumns = useMemo(
+    () => [...(projectedColumns ?? []), ...(projectedHidden ?? [])],
+    [projectedColumns, projectedHidden],
+  );
+  const layout = useGridLayout({
+    contract,
+    carried: columns,
+    declared: declaredColumns,
+    stored: values?.layout,
+    events,
+  });
+  const loadedKeys = useMemo(
+    () => new Set(columns.map((column) => column.key.toLowerCase())),
+    [columns],
+  );
   const rows = values?.rows ?? [];
   // The grid features this viewer may use on this read, as the server projected them. While the
   // next page is being read the last projection stays, so the search box and filters keep focus.
@@ -414,10 +446,9 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
             {selectable ? gridFeatures.selectionBanner() : null}
             <ColumnsMenu
               accessibleName={accessibleName}
-              contract={contract}
               layout={layout}
-              hiddenColumns={values?.hiddenColumns ?? []}
-              events={events}
+              loadedKeys={loadedKeys}
+              canRead={layout.persisted && events?.columns_changed !== undefined}
               announce={announce}
             />
           </div>
@@ -530,7 +561,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     <div
       data-vortex-display="table"
       data-vortex-placement-id={placementId}
-      data-vortex-table-density={contract.density}
+      data-vortex-table-density={layout.density}
       {...(revealed ? { "data-vortex-display-revealed": "" } : {})}
     >
       <DisplayHeader

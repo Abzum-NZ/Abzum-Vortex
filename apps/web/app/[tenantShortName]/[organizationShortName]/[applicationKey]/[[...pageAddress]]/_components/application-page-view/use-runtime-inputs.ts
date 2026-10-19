@@ -1,9 +1,6 @@
 import { useMemo, type Dispatch, type SetStateAction, type RefObject } from "react";
 import type { useRouter } from "next/navigation";
-import type {
-  createFormBlockRuntime,
-  parseTablePayload,
-  useUnsavedWorkGuard} from "@vortex/ui";
+import type { createFormBlockRuntime, parseTablePayload, useUnsavedWorkGuard } from "@vortex/ui";
 import {
   equalFormValue,
   type ControlSemanticEvent,
@@ -19,6 +16,7 @@ import {
   type RecordsTableQueryChange,
   type ReferenceChoiceSelectionEvidenceMap,
   type ComponentRequestGeneration,
+  type GridLayoutCommitResult,
 } from "@vortex/platform/schema";
 import type {
   ApplicationPageModel,
@@ -27,18 +25,10 @@ import type {
 import { rereadApplicationPlacements } from "../../placement-refresh-action";
 import type {
   placementEventNamesByPage,
-  applicationLauncherPlacementIds} from "./placement-helpers";
-import {
-  boardPayloadFor,
-  tablePayloadFor,
-  compatibleBoardRowAction,
+  applicationLauncherPlacementIds,
 } from "./placement-helpers";
-import type {
-  TableContinuationTarget,
-  Notice,
-  SubmittedForm,
-  EventHandlers,
-} from "./types";
+import { boardPayloadFor, tablePayloadFor, compatibleBoardRowAction } from "./placement-helpers";
+import type { TableContinuationTarget, Notice, SubmittedForm, EventHandlers } from "./types";
 import { bindingFor, suppliedValues, bindingOfEvent, asComponentBinding } from "./event-values";
 import { cancelledMoveNotice, unavailableNotice } from "./notices";
 import { requestRecordChoices } from "./record-choices";
@@ -62,6 +52,7 @@ export function useRuntimeInputs({
   refreshPlacements,
   setSelection,
   changeTableQuery,
+  commitLayout,
   requestChoicePageRef,
   changeChoiceField,
   subject,
@@ -104,43 +95,101 @@ export function useRuntimeInputs({
   busy: boolean;
   unsavedWork: ReturnType<typeof useUnsavedWorkGuard>["guard"];
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
-  runBinding: (placementId: string, binding: PlacementFlowBinding, supplied: Record<string, unknown>, selectedRecordId?: string, gestureSubject?: Readonly<{ recordId: string; revision: number }>, afterAccepted?: () => Promise<Notice | undefined>) => Promise<void>;
+  runBinding: (
+    placementId: string,
+    binding: PlacementFlowBinding,
+    supplied: Record<string, unknown>,
+    selectedRecordId?: string,
+    gestureSubject?: Readonly<{ recordId: string; revision: number }>,
+    afterAccepted?: () => Promise<Notice | undefined>,
+  ) => Promise<void>;
   continueBoardColumn: (placementId: string, event: DisplaySemanticEvent) => Promise<boolean>;
-  continueTablePage: (placementId: string, event: DisplaySemanticEvent, table: ReturnType<typeof parseTablePayload>) => Promise<void>;
-  refreshPlacements: (placementIds: readonly string[], tableContinuation?: TableContinuationTarget) => Promise<void>;
+  continueTablePage: (
+    placementId: string,
+    event: DisplaySemanticEvent,
+    table: ReturnType<typeof parseTablePayload>,
+  ) => Promise<void>;
+  refreshPlacements: (
+    placementIds: readonly string[],
+    tableContinuation?: TableContinuationTarget,
+  ) => Promise<void>;
   setSelection: Dispatch<SetStateAction<Readonly<Record<string, readonly string[]>>>>;
   changeTableQuery: (
     placementId: string,
     change: Exclude<RecordsTableQueryChange, { kind: "page" }>,
   ) => void;
-  requestChoicePageRef: RefObject<(placementId: string, event: Extract<ControlSemanticEvent, { event: "choices_requested" }>, formId?: string) => Promise<void>>;
-  changeChoiceField: (placementId: string, event: ControlSemanticEvent, dialogFormId?: string) => void;
+  commitLayout: (
+    placementId: string,
+    event: DisplaySemanticEvent,
+  ) => Promise<GridLayoutCommitResult>;
+  requestChoicePageRef: RefObject<
+    (
+      placementId: string,
+      event: Extract<ControlSemanticEvent, { event: "choices_requested" }>,
+      formId?: string,
+    ) => Promise<void>
+  >;
+  changeChoiceField: (
+    placementId: string,
+    event: ControlSemanticEvent,
+    dialogFormId?: string,
+  ) => void;
   subject: ApplicationPageModel["subject"];
   requestedStepId: RefObject<string | undefined>;
   guidedSummaryStepId: string | undefined;
   setNotice: Dispatch<SetStateAction<Notice | undefined>>;
-  submitGuidedSummary: (placementId: string, binding: PlacementFlowBinding, submittedValues: Readonly<Record<string, unknown>>, selectedOwnerGroupId?: string) => Promise<void>;
-  advanceGuidedStep: (stepId: string, values: Readonly<Record<string, unknown>>, requested?: string) => Promise<void>;
+  submitGuidedSummary: (
+    placementId: string,
+    binding: PlacementFlowBinding,
+    submittedValues: Readonly<Record<string, unknown>>,
+    selectedOwnerGroupId?: string,
+  ) => Promise<void>;
+  advanceGuidedStep: (
+    stepId: string,
+    values: Readonly<Record<string, unknown>>,
+    requested?: string,
+  ) => Promise<void>;
   currentEditFormBaselines: ApplicationPageModel["editFormBaselines"];
   setFormFeedback: Dispatch<SetStateAction<Readonly<Record<string, FormFlowFeedback>>>>;
-  choiceEvidenceFor: (formId: string, values: Readonly<Record<string, unknown>>, surface?: "page" | "dialog") => ReferenceChoiceSelectionEvidenceMap | undefined;
+  choiceEvidenceFor: (
+    formId: string,
+    values: Readonly<Record<string, unknown>>,
+    surface?: "page" | "dialog",
+  ) => ReferenceChoiceSelectionEvidenceMap | undefined;
   submittedFormsRef: RefObject<Map<string, SubmittedForm>>;
   formCancelledRef: RefObject<boolean>;
-  applyDispatch: (dispatch: Promise<FlowDispatchResult | undefined>, formPlacementId?: string, afterAccepted?: () => Promise<Notice | undefined>, sourceBindingId?: string) => Promise<void>;
+  applyDispatch: (
+    dispatch: Promise<FlowDispatchResult | undefined>,
+    formPlacementId?: string,
+    afterAccepted?: () => Promise<Notice | undefined>,
+    sourceBindingId?: string,
+  ) => Promise<void>;
   formBlock: ReturnType<typeof createFormBlockRuntime>;
-  initializeChoiceForm: (formId: string, dialogFormId?: string, defaults?: Readonly<Record<string, unknown>>) => void;
+  initializeChoiceForm: (
+    formId: string,
+    dialogFormId?: string,
+    defaults?: Readonly<Record<string, unknown>>,
+  ) => void;
   selection: Readonly<Record<string, readonly string[]>>;
   application: ApplicationPageModel["invocation"];
   activeChoicePages: Readonly<Record<string, ChoiceInputPayload>>;
   pinActivationInFlightRef: RefObject<boolean>;
-  placementRequestsRef: RefObject<{ base: string; key: string; generations: Map<string, ComponentRequestGeneration> }>;
+  placementRequestsRef: RefObject<{
+    base: string;
+    key: string;
+    generations: Map<string, ComponentRequestGeneration>;
+  }>;
   navigationKey: string;
   currentTileDataRef: RefObject<ApplicationPageModel["data"]>;
   currentPageKey: string | undefined;
   currentBusyRef: RefObject<boolean>;
   currentSearch: string;
   router: ReturnType<typeof useRouter>;
-  requestChoicePage: (placementId: string, event: Extract<ControlSemanticEvent, { event: "choices_requested" }>, formId?: string) => Promise<void>;
+  requestChoicePage: (
+    placementId: string,
+    event: Extract<ControlSemanticEvent, { event: "choices_requested" }>,
+    formId?: string,
+  ) => Promise<void>;
   runtimeInputsRef: RefObject<Readonly<Record<string, unknown>>>;
 }>) {
   const runtimeInputs = useMemo(() => {
@@ -152,7 +201,8 @@ export function useRuntimeInputs({
       ...Object.keys(model.bindings),
       ...Object.keys(formFeedback),
       ...guidedActiveFormIds,
-      ...model.referenceChoiceInputs.filter((field) => field.dependency !== undefined)
+      ...model.referenceChoiceInputs
+        .filter((field) => field.dependency !== undefined)
         .map((field) => field.formId),
       ...model.linkInputPlacementIds,
     ]);
@@ -171,8 +221,7 @@ export function useRuntimeInputs({
       const boardRowActionBinding =
         boardData === undefined ? undefined : compatibleBoardRowAction(bindings);
       const declaredEvents = placementEventNames[placementId];
-      const supportsEvent = (eventName: string): boolean =>
-        declaredEvents?.has(eventName) === true;
+      const supportsEvent = (eventName: string): boolean => declaredEvents?.has(eventName) === true;
       const flowFeedback =
         formOwners[placementId] === placementId ? formFeedback[placementId] : undefined;
       // Runtime data alone does not identify a display: forms can have projected owner-group data.
@@ -193,7 +242,11 @@ export function useRuntimeInputs({
             bindings.some((binding) => binding.event === kind)
           )
             events[kind] = (event: DisplaySemanticEvent) => {
-              if (tableData !== undefined && event.event === "row_action" && event.eventId === undefined)
+              if (
+                tableData !== undefined &&
+                event.event === "row_action" &&
+                event.eventId === undefined
+              )
                 return;
               const binding = bindingFor(bindings, event);
               if (binding !== undefined && !busy)
@@ -278,9 +331,8 @@ export function useRuntimeInputs({
               return { ...current, [placementId]: [...held] };
             });
           };
-        // Sort, filter, search and the shown columns change the table's query state in the address;
-        // that table alone is read again from page one, on the server, and nothing is applied to
-        // the shown rows. A hidden column is not read, so its values never reach the browser.
+        // Sort, filter and search change the table's query state in the address; that table alone
+        // is read again from page one, on the server, and nothing is applied to the shown rows.
         if (supportsEvent("sort_changed"))
           events.sort_changed = (event: DisplaySemanticEvent) => {
             if (event.event !== "sort_changed") return;
@@ -300,11 +352,11 @@ export function useRuntimeInputs({
             if (event.event !== "search_changed") return;
             changeTableQuery(placementId, { kind: "search", text: event.query });
           };
-        if (supportsEvent("columns_changed"))
-          events.columns_changed = (event: DisplaySemanticEvent) => {
-            if (event.event !== "columns_changed") return;
-            changeTableQuery(placementId, { kind: "visible_fields", fieldIds: event.fields });
-          };
+        // A layout change (order, shown columns, widths, density) is stored for the person; it
+        // reads no records unless it shows a column the page was read without.
+        if (supportsEvent("columns_changed") && tableData !== undefined)
+          events.columns_changed = (event: DisplaySemanticEvent) =>
+            commitLayout(placementId, event);
       }
       if (model.referenceChoiceInputs.some((field) => field.placementId === placementId))
         events.choices_requested = (event: ControlSemanticEvent) => {
@@ -312,7 +364,8 @@ export function useRuntimeInputs({
           return requestChoicePageRef.current(placementId, event);
         };
       if (model.referenceChoiceInputs.some((field) => field.placementId === placementId))
-        events.field_changed = (event: ControlSemanticEvent) => changeChoiceField(placementId, event);
+        events.field_changed = (event: ControlSemanticEvent) =>
+          changeChoiceField(placementId, event);
       // A link field's picker asks for its records; the page reads them under the person's access.
       if (model.linkInputPlacementIds.includes(placementId))
         events.records_requested = (event: ControlSemanticEvent) => {
@@ -376,9 +429,14 @@ export function useRuntimeInputs({
                       !Object.hasOwn(baseline, name) || !equalFormValue(value, baseline[name]),
                   ),
                 );
-          const recordSubmission = submitBinding.savesFormValues &&
+          const recordSubmission =
+            submitBinding.savesFormValues &&
             submitBinding.callerInputs.every((name) => name === "values" || name === "record");
-          if (baseline !== undefined && recordSubmission && Object.keys(recordValues).length === 0) {
+          if (
+            baseline !== undefined &&
+            recordSubmission &&
+            Object.keys(recordValues).length === 0
+          ) {
             setNotice(undefined);
             setFormFeedback((current) => ({
               ...current,
@@ -397,7 +455,9 @@ export function useRuntimeInputs({
               asComponentBinding(placementId, submitBinding),
               event.values,
               event.selectedOwnerGroupId,
-              baseline === undefined || !submitBinding.savesFormValues ? undefined : Object.keys(recordValues),
+              baseline === undefined || !submitBinding.savesFormValues
+                ? undefined
+                : Object.keys(recordValues),
             ),
             placementId,
             undefined,
@@ -432,9 +492,11 @@ export function useRuntimeInputs({
             resetBinding.bindingId,
           );
         };
-      if (model.referenceChoiceInputs.some((field) =>
-        field.formId === placementId && field.dependency !== undefined,
-      )) {
+      if (
+        model.referenceChoiceInputs.some(
+          (field) => field.formId === placementId && field.dependency !== undefined,
+        )
+      ) {
         const boundReset = events.form_reset;
         events.form_reset = (event: ControlSemanticEvent) => {
           if (event.event !== "form_reset") return;
@@ -452,13 +514,15 @@ export function useRuntimeInputs({
       }
       const held = selection[placementId];
       const ready = data as { status?: string; values?: Record<string, unknown> };
-      const pins = ready.status === "ready"
-        ? ready.values?.kind === "application_page_link_tiles"
-          ? projectedApplicationPageLinkTilesSchema.safeParse(ready.values)
-          : projectedRecordPinTilesSchema.safeParse(ready.values)
-        : undefined;
+      const pins =
+        ready.status === "ready"
+          ? ready.values?.kind === "application_page_link_tiles"
+            ? projectedApplicationPageLinkTilesSchema.safeParse(ready.values)
+            : projectedRecordPinTilesSchema.safeParse(ready.values)
+          : undefined;
       const pinFrame = mountedRecordPinFrameSchema.safeParse({
-        pageId: model.pageId, installationRevision: application.installationRevision,
+        pageId: model.pageId,
+        installationRevision: application.installationRevision,
         releaseKey: application.releaseKey,
       });
       inputs[placementId] = {
@@ -469,99 +533,168 @@ export function useRuntimeInputs({
               ? { ...ready, values: { ...ready.values, selectedRecordIds: held } }
               : data,
         events,
-        ...(pins?.success !== true || !pinFrame.success ? {} : {
-          pin_frame: pinFrame.data,
-          open_tile: async (sourceRecordId: string, sourceRevision: number, isVisible?: () => boolean): Promise<void> => {
-            if (busy || pinActivationInFlightRef.current || placementRequestsRef.current.key !== navigationKey ||
-                currentTileDataRef.current[placementId] !== data) return;
-            const rows = pins.data.rows.filter((row) => row.sourceRecordId.toLowerCase() === sourceRecordId.toLowerCase() &&
-              row.sourceRevision === sourceRevision);
-            const row = rows[0];
-            if (rows.length !== 1 || row === undefined || row.target.kind === "unavailable") return;
-            if (pins.data.kind === "application_page_link_tiles") {
-              if (currentPageKey === undefined || typeof isVisible !== "function") return;
-              const generation = placementRequestsRef.current.generations.get(placementId.toLowerCase());
-              const visible = isVisible;
-              const currentSource = () => {
-                try {
-                  return !currentBusyRef.current && placementRequestsRef.current.key === navigationKey &&
-                    placementRequestsRef.current.generations.get(placementId.toLowerCase()) === generation &&
-                    currentTileDataRef.current[placementId] === data && visible();
-                } catch { return false; }
-              };
-              if (!currentSource()) return;
-              pinActivationInFlightRef.current = true;
-              try {
-                // The unsaved-work wait precedes both source selection and target authority rereads.
-                if (row.target.openBehaviour === "replace" && unsavedWork.hasUnsavedWork() &&
-                    !(await unsavedWork.confirmDiscardUnsavedWork())) return;
-                if (!currentSource()) return;
-                const refreshed = await rereadApplicationPlacements({
-                  tenantShortName: application.tenantShortName,
-                  organizationShortName: application.organizationShortName,
-                  applicationKey: application.applicationKey,
-                  pageKey: currentPageKey,
-                  installationRevision: application.installationRevision,
-                  search: currentSearch,
-                }, [placementId]);
-                if (!currentSource()) return;
-                if (refreshed.kind === "reload") { router.refresh(); return; }
-                if (refreshed.kind !== "available") return;
-                const state = Object.entries(refreshed.data).find(([id]) =>
-                  id.toLowerCase() === placementId.toLowerCase())?.[1];
-                if (state?.status !== "ready") return;
-                const fresh = projectedApplicationPageLinkTilesSchema.safeParse(state.values);
-                if (!fresh.success) return;
-                const selected = fresh.data.rows.filter((entry) =>
-                  entry.sourceRecordId.toLowerCase() === sourceRecordId.toLowerCase() &&
-                  entry.sourceRevision === sourceRevision);
-                const current = selected[0];
-                if (selected.length !== 1 || current === undefined || current.target.kind === "unavailable" ||
-                    current.target.kind !== row.target.kind ||
-                    current.target.openBehaviour !== row.target.openBehaviour) return;
-                const target = current.target;
-                // Only the fresh protected tuple supplies an internal address; browser-held metadata is ignored.
-                const internal = target.kind !== "external";
-                if ((target.kind === "application" || target.kind === "page") &&
-                    (target.tenantShortName !== application.tenantShortName ||
-                      target.organizationShortName !== application.organizationShortName)) return;
-                const href = target.kind === "record"
-                  ? `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(target.detailAddress.applicationKey)}/${encodeURIComponent(target.detailAddress.pageKey)}?${new URLSearchParams({ record_id: target.detailAddress.recordId })}`
-                  : target.kind === "external" ? target.address
-                    : `/${encodeURIComponent(target.tenantShortName)}/${encodeURIComponent(target.organizationShortName)}/${encodeURIComponent(target.applicationKey)}/${encodeURIComponent(target.pageKey)}`;
+        ...(pins?.success !== true || !pinFrame.success
+          ? {}
+          : {
+              pin_frame: pinFrame.data,
+              open_tile: async (
+                sourceRecordId: string,
+                sourceRevision: number,
+                isVisible?: () => boolean,
+              ): Promise<void> => {
+                if (
+                  busy ||
+                  pinActivationInFlightRef.current ||
+                  placementRequestsRef.current.key !== navigationKey ||
+                  currentTileDataRef.current[placementId] !== data
+                )
+                  return;
+                const rows = pins.data.rows.filter(
+                  (row) =>
+                    row.sourceRecordId.toLowerCase() === sourceRecordId.toLowerCase() &&
+                    row.sourceRevision === sourceRevision,
+                );
+                const row = rows[0];
+                if (rows.length !== 1 || row === undefined || row.target.kind === "unavailable")
+                  return;
+                if (pins.data.kind === "application_page_link_tiles") {
+                  if (currentPageKey === undefined || typeof isVisible !== "function") return;
+                  const generation = placementRequestsRef.current.generations.get(
+                    placementId.toLowerCase(),
+                  );
+                  const visible = isVisible;
+                  const currentSource = () => {
+                    try {
+                      return (
+                        !currentBusyRef.current &&
+                        placementRequestsRef.current.key === navigationKey &&
+                        placementRequestsRef.current.generations.get(placementId.toLowerCase()) ===
+                          generation &&
+                        currentTileDataRef.current[placementId] === data &&
+                        visible()
+                      );
+                    } catch {
+                      return false;
+                    }
+                  };
+                  if (!currentSource()) return;
+                  pinActivationInFlightRef.current = true;
+                  try {
+                    // The unsaved-work wait precedes both source selection and target authority rereads.
+                    if (
+                      row.target.openBehaviour === "replace" &&
+                      unsavedWork.hasUnsavedWork() &&
+                      !(await unsavedWork.confirmDiscardUnsavedWork())
+                    )
+                      return;
+                    if (!currentSource()) return;
+                    const refreshed = await rereadApplicationPlacements(
+                      {
+                        tenantShortName: application.tenantShortName,
+                        organizationShortName: application.organizationShortName,
+                        applicationKey: application.applicationKey,
+                        pageKey: currentPageKey,
+                        installationRevision: application.installationRevision,
+                        search: currentSearch,
+                      },
+                      [placementId],
+                    );
+                    if (!currentSource()) return;
+                    if (refreshed.kind === "reload") {
+                      router.refresh();
+                      return;
+                    }
+                    if (refreshed.kind !== "available") return;
+                    const state = Object.entries(refreshed.data).find(
+                      ([id]) => id.toLowerCase() === placementId.toLowerCase(),
+                    )?.[1];
+                    if (state?.status !== "ready") return;
+                    const fresh = projectedApplicationPageLinkTilesSchema.safeParse(state.values);
+                    if (!fresh.success) return;
+                    const selected = fresh.data.rows.filter(
+                      (entry) =>
+                        entry.sourceRecordId.toLowerCase() === sourceRecordId.toLowerCase() &&
+                        entry.sourceRevision === sourceRevision,
+                    );
+                    const current = selected[0];
+                    if (
+                      selected.length !== 1 ||
+                      current === undefined ||
+                      current.target.kind === "unavailable" ||
+                      current.target.kind !== row.target.kind ||
+                      current.target.openBehaviour !== row.target.openBehaviour
+                    )
+                      return;
+                    const target = current.target;
+                    // Only the fresh protected tuple supplies an internal address; browser-held metadata is ignored.
+                    const internal = target.kind !== "external";
+                    if (
+                      (target.kind === "application" || target.kind === "page") &&
+                      (target.tenantShortName !== application.tenantShortName ||
+                        target.organizationShortName !== application.organizationShortName)
+                    )
+                      return;
+                    const href =
+                      target.kind === "record"
+                        ? `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(target.detailAddress.applicationKey)}/${encodeURIComponent(target.detailAddress.pageKey)}?${new URLSearchParams({ record_id: target.detailAddress.recordId })}`
+                        : target.kind === "external"
+                          ? target.address
+                          : `/${encodeURIComponent(target.tenantShortName)}/${encodeURIComponent(target.organizationShortName)}/${encodeURIComponent(target.applicationKey)}/${encodeURIComponent(target.pageKey)}`;
+                    const address = new URL(href, window.location.origin);
+                    if (
+                      (internal && address.origin !== window.location.origin) ||
+                      (!internal && address.protocol !== "https:") ||
+                      !currentSource()
+                    )
+                      return;
+                    if (target.openBehaviour === "new_page")
+                      window.open(address.href, "_blank", "noopener,noreferrer");
+                    else if (internal) router.push(`${address.pathname}${address.search}`);
+                    else window.location.assign(address.href);
+                  } catch {
+                    // No navigation or target metadata on a failed current protected reread.
+                  } finally {
+                    pinActivationInFlightRef.current = false;
+                  }
+                  return;
+                }
+                const target = row.target;
+                // The old1.1 payload is independently closed to Record/external targets.
+                if (target.kind !== "record" && target.kind !== "external") return;
+                const href =
+                  target.kind === "record"
+                    ? `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(target.detailAddress.applicationKey)}/${encodeURIComponent(target.detailAddress.pageKey)}?${new URLSearchParams({ record_id: target.detailAddress.recordId })}`
+                    : target.address;
                 const address = new URL(href, window.location.origin);
-                if ((internal && address.origin !== window.location.origin) ||
-                    (!internal && address.protocol !== "https:") || !currentSource()) return;
-                if (target.openBehaviour === "new_page") window.open(address.href, "_blank", "noopener,noreferrer");
-                else if (internal) router.push(`${address.pathname}${address.search}`);
-                else window.location.assign(address.href);
-              } catch {
-                // No navigation or target metadata on a failed current protected reread.
-              } finally { pinActivationInFlightRef.current = false; }
-              return;
-            }
-            const target = row.target;
-            // The old1.1 payload is independently closed to Record/external targets.
-            if (target.kind !== "record" && target.kind !== "external") return;
-            const href = target.kind === "record"
-              ? `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(target.detailAddress.applicationKey)}/${encodeURIComponent(target.detailAddress.pageKey)}?${new URLSearchParams({ record_id: target.detailAddress.recordId })}`
-              : target.address;
-            const address = new URL(href, window.location.origin);
-            if ((target.kind === "record" && address.origin !== window.location.origin) ||
-                (target.kind === "external" && address.protocol !== "https:")) return;
-            pinActivationInFlightRef.current = true;
-            try {
-              if (target.openBehaviour === "replace" && unsavedWork.hasUnsavedWork() &&
-                  !(await unsavedWork.confirmDiscardUnsavedWork())) return;
-              // Navigation and a partial reread can each invalidate the shown row while confirmation waits.
-              if (placementRequestsRef.current.key !== navigationKey ||
-                  currentTileDataRef.current[placementId] !== data) return;
-              if (target.openBehaviour === "new_page") window.open(address.href, "_blank", "noopener,noreferrer");
-              else if (target.kind === "record") router.push(`${address.pathname}${address.search}`);
-              else window.location.assign(address.href);
-            } finally { pinActivationInFlightRef.current = false; }
-          },
-        }),
+                if (
+                  (target.kind === "record" && address.origin !== window.location.origin) ||
+                  (target.kind === "external" && address.protocol !== "https:")
+                )
+                  return;
+                pinActivationInFlightRef.current = true;
+                try {
+                  if (
+                    target.openBehaviour === "replace" &&
+                    unsavedWork.hasUnsavedWork() &&
+                    !(await unsavedWork.confirmDiscardUnsavedWork())
+                  )
+                    return;
+                  // Navigation and a partial reread can each invalidate the shown row while confirmation waits.
+                  if (
+                    placementRequestsRef.current.key !== navigationKey ||
+                    currentTileDataRef.current[placementId] !== data
+                  )
+                    return;
+                  if (target.openBehaviour === "new_page")
+                    window.open(address.href, "_blank", "noopener,noreferrer");
+                  else if (target.kind === "record")
+                    router.push(`${address.pathname}${address.search}`);
+                  else window.location.assign(address.href);
+                } finally {
+                  pinActivationInFlightRef.current = false;
+                }
+              },
+            }),
         ...(flowFeedback === undefined ? {} : { flowFeedback }),
       };
     }
@@ -602,6 +735,7 @@ export function useRuntimeInputs({
     requestChoicePage,
     selection,
     changeTableQuery,
+    commitLayout,
     subject,
     onOpenApplication,
     unsavedWork,
