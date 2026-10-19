@@ -53,8 +53,11 @@ import {
   isRecord,
   describeFailure,
   readRecordsTableQueryState,
+  resolveGridLayout,
+  type GridLayoutState,
   type RecordsTablePageRequest,
 } from "@vortex/platform/schema";
+import type { PageGridLayouts } from "./grid-layouts";
 import { hasReferenceChoiceSource, projectedReferenceChoiceForm } from "../reference-choices";
 import type { collectPlacements } from "./placement-helpers";
 import { projectedUseAvailability, isBoardPlacement, first } from "./placement-helpers";
@@ -149,17 +152,24 @@ export const projectPlacementBindings = (
             : [];
         },
       );
-      const savesValues = (tasks: readonly FlowTask[]): boolean => tasks.some((task) => {
-        if (task.type === "record.save") {
-          const value = task.properties.values;
-          if (isRecord(value) && value.kind === "reference" && isRecord(value.reference) &&
-              value.reference.source === "input" && typeof value.reference.name === "string") {
-            const input = binding.flow.inputs[value.reference.name];
-            if (isRecord(input) && input.kind === "caller" && input.name === "values") return true;
+      const savesValues = (tasks: readonly FlowTask[]): boolean =>
+        tasks.some((task) => {
+          if (task.type === "record.save") {
+            const value = task.properties.values;
+            if (
+              isRecord(value) &&
+              value.kind === "reference" &&
+              isRecord(value.reference) &&
+              value.reference.source === "input" &&
+              typeof value.reference.name === "string"
+            ) {
+              const input = binding.flow.inputs[value.reference.name];
+              if (isRecord(input) && input.kind === "caller" && input.name === "values")
+                return true;
+            }
           }
-        }
-        return flowTaskChildLists(task).some((child) => savesValues(child.tasks));
-      });
+          return flowTaskChildLists(task).some((child) => savesValues(child.tasks));
+        });
       const flow = application.content.flows.find((entry) => sameId(entry.id, binding.flow.flowId));
       return {
         savesFormValues: flow !== undefined && savesValues(flow.tasks),
@@ -233,6 +243,7 @@ export const readPlacement = async (
     tables: ReturnType<typeof createRecordsTableQueryResolver>;
     resolveRecordLinks: RecordLinkResolver;
     tableContinuation: TableContinuationTarget | undefined;
+    gridLayouts: PageGridLayouts;
     adoptSubjectRead: (subject: PageSubjectReadResult) => void;
     markSubjectUnreadable: () => void;
   },
@@ -265,6 +276,7 @@ export const readPlacement = async (
     tables,
     resolveRecordLinks,
     tableContinuation,
+    gridLayouts,
     adoptSubjectRead,
     markSubjectUnreadable,
   } = input;
@@ -883,6 +895,22 @@ export const readPlacement = async (
       data[placementId] = { status: "refused", reason: "not_permitted" };
       return;
     }
+    // Which columns show is the person's stored layout, checked against the declared columns; the
+    // read requests exactly those columns and the page carries the layout back to the grid.
+    const queryId = String(bound.query.queryId).toLowerCase();
+    const stored = gridLayouts.stored.get(placementId.toLowerCase());
+    const resolvedLayout = resolveGridLayout(
+      tableContract,
+      stored?.layout === undefined ? undefined : { queryId: stored.queryId, layout: stored.layout },
+      queryId,
+    );
+    const layout: GridLayoutState = {
+      persisted: gridLayouts.persisted,
+      queryId,
+      revision: stored?.revision ?? null,
+      layout: resolvedLayout.layout,
+      reset: resolvedLayout.reset,
+    };
     const explicitRequest =
       tableContinuation !== undefined && sameId(tableContinuation.placementId, placementId)
         ? tableContinuation.request
@@ -900,6 +928,7 @@ export const readPlacement = async (
         fieldLinkTypes: fieldLinkTypesOf(bound.module),
         resolveRecordLinks,
         state: { ...addressed.state, page },
+        layout,
       });
     const fromAddress =
       (explicitRequest === undefined && addressed.state.page !== undefined) ||
@@ -950,8 +979,12 @@ export const readPlacement = async (
     const value = raw === undefined ? undefined : coerceInput(raw, declared);
     if (value !== undefined) inputValues[declared.key] = value;
   }
-  const fieldIds = [...new Set([...detailContract!.fields.map((field) => field.field),
-    ...(detailContract!.headingField === undefined ? [] : [detailContract!.headingField])])];
+  const fieldIds = [
+    ...new Set([
+      ...detailContract!.fields.map((field) => field.field),
+      ...(detailContract!.headingField === undefined ? [] : [detailContract!.headingField]),
+    ]),
+  ];
   const command = protectedQueryCommandSchema.safeParse({
     moduleRootId: bound.module.rootId,
     queryId: bound.query.queryId,

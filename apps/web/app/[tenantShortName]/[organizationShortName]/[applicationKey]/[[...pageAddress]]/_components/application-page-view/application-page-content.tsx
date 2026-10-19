@@ -52,6 +52,7 @@ import { usePlacementActions } from "./use-placement-actions";
 import { useTablePageAddress } from "./use-table-page-address";
 import { useTableNextPage, useTableNextPageReadAhead } from "./use-table-next-page";
 import { useRuntimeInputs } from "./use-runtime-inputs";
+import { useGridLayout } from "./use-grid-layout";
 import { WebMcpAdapter } from "../../../../../../_components/webmcp-adapter";
 import {
   useApplicationFrame,
@@ -468,6 +469,8 @@ export function ApplicationPageViewContent({
     tableQueryPending,
   });
 
+  const { commitLayout } = useGridLayout({ model, currentData, refreshPlacements });
+
   const { runtimeInputs } = useRuntimeInputs({
     currentData,
     model,
@@ -487,6 +490,7 @@ export function ApplicationPageViewContent({
     refreshPlacements,
     setSelection,
     changeTableQuery,
+    commitLayout,
     requestChoicePageRef,
     changeChoiceField,
     subject,

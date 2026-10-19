@@ -13,6 +13,9 @@ import {
   type RecordsTableSortState,
   RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
   RECORDS_TABLE_MAXIMUM_SORT_KEYS,
+  gridLayoutStateSchema,
+  type GridLayout,
+  type GridLayoutState,
   isRecord,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
@@ -157,6 +160,8 @@ export type TablePayload = Readonly<{
    * reads the page again with it; hiding a shown column narrows the next read.
    */
   hiddenColumns: readonly DisplayColumn[];
+  /** The person's layout of the grid: column order, shown columns, widths and density. */
+  layout: GridLayoutState;
   rows: readonly DisplayRow[];
   selectedRecordIds?: readonly string[];
   /**
@@ -352,11 +357,18 @@ export type DisplaySemanticEvent =
     }>
   | Readonly<{
       /**
-       * The declared columns a person asked to see, as field identities; null asks for the authored
-       * default columns. The page is read again with exactly these columns.
+       * A person committed a change to the grid's layout (order, shown columns, widths, density).
+       * The host stores it, reading no records; its handler resolves to a `GridLayoutCommitResult`.
        */
       event: "columns_changed";
-      fields: readonly string[] | null;
+      /** The layout to store, or null to remove the person's layout (Reset layout). */
+      layout: GridLayout | null;
+      /** The stored revision the change was made from; null when none is stored. */
+      expectedRevision: number | null;
+      /** The query the grid reads, as the page carried it. */
+      queryId: string;
+      /** The layout shows a column the page was read without: the grid is read again after it. */
+      read: boolean;
     }>
   | Readonly<{
       event: "page_changed";
@@ -1121,6 +1133,7 @@ export const parseTablePayload = (
       "kind",
       "columns",
       "hiddenColumns",
+      "layout",
       "rows",
       "selectedRecordIds",
       "sort",
@@ -1138,6 +1151,13 @@ export const parseTablePayload = (
   const seenColumns = new Set<string>();
   const columns = parseColumns(record.columns, location, "columns", seenColumns);
   const hiddenColumns = parseColumns(record.hiddenColumns, location, "hiddenColumns", seenColumns);
+  const layout = gridLayoutStateSchema.safeParse(record.layout);
+  if (!layout.success) fail("A projected table layout is invalid", location);
+  // The layout arranges exactly the declared columns the page carries, shown or hidden.
+  const layoutKeys = new Set(layout.data.layout.columns.map((column) => column.fieldId));
+  const carriedKeys = new Set([...seenColumns].map((key) => key.toLowerCase()));
+  if (layoutKeys.size !== carriedKeys.size || [...carriedKeys].some((key) => !layoutKeys.has(key)))
+    fail("A projected table layout must arrange exactly the declared columns", location);
   const rows = parseRows(record.rows, location);
   const selection = parseSelection(record.selectedRecordIds, rows, location);
   const page =
@@ -1218,6 +1238,7 @@ export const parseTablePayload = (
     kind: "table",
     columns,
     hiddenColumns,
+    layout: layout.data,
     rows,
     ...(selection === undefined ? {} : { selectedRecordIds: selection }),
     ...(sort === undefined ? {} : { sort }),

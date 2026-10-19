@@ -85,6 +85,7 @@ import { projectAttachmentInputs } from "./attachment-inputs";
 import { projectEditField } from "./reference-choice";
 import { projectInitialLinkInputs, titleLinkInputs } from "./link-input";
 import { projectPlacementRecordTypes, projectFlowBindingTargets } from "./flow-bindings";
+import { readPageGridLayouts } from "./grid-layouts";
 import { isStreamablePlacement, projectPlacementBindings, readPlacement } from "./placement-reader";
 import { projectPageWebMcpTools } from "./webmcp-projection";
 import { platformPermissionSource } from "../platform-permission-source";
@@ -604,6 +605,16 @@ const loadApplicationPageJoined = async (
     selectedForProjection === undefined
       ? allPlacements
       : allPlacements.filter((entry) => selectedForProjection.has(entry.placementId.toLowerCase()));
+  // The person's grid layouts decide which columns each grid reads, so they are read (once, for
+  // every grid of the page) before any grid reads its rows.
+  const gridLayoutsRead = readPageGridLayouts(
+    session,
+    dependencies,
+    selection,
+    String(pageDefinition.pageId),
+    placements.filter(isTablePlacement).map((entry) => entry.placementId),
+  );
+  startedReads.push(gridLayoutsRead);
   const hasQueryBoundLauncher = placements.some(
     (placement) =>
       isApplicationLauncherPlacement(placement) && typeof placement.vortex.queryId === "string",
@@ -664,6 +675,7 @@ const loadApplicationPageJoined = async (
     subjectRead ??= Promise.resolve(read);
   };
   const resolveRecordLinks: RecordLinkResolver = services.recordLinkResolver(context);
+  const gridLayouts = await gridLayoutsRead;
   const placementReaderInput = {
     application,
     recordTypeByPlacement,
@@ -694,6 +706,7 @@ const loadApplicationPageJoined = async (
     tables,
     resolveRecordLinks,
     tableContinuation,
+    gridLayouts,
     adoptSubjectRead,
     markSubjectUnreadable,
   };

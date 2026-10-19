@@ -14,6 +14,12 @@ export const recordsDisplayFormats = [
 export type RecordsDisplayFormat = (typeof recordsDisplayFormats)[number];
 
 export const recordsTableColumnWidths = ["auto", "narrow", "medium", "wide"] as const;
+/**
+ * The narrowest and widest a person may resize a column, in pixels. The authored width token is
+ * the column's starting width; a resize, and a stored layout, stays within these bounds.
+ */
+export const RECORDS_TABLE_COLUMN_MINIMUM_WIDTH = 64;
+export const RECORDS_TABLE_COLUMN_MAXIMUM_WIDTH = 640;
 export const recordsTableColumnAlignments = ["start", "center", "end"] as const;
 /** Low priority columns hide first on small screens; an essential column never hides. */
 export const recordsTableColumnPriorities = ["essential", "high", "medium", "low"] as const;
