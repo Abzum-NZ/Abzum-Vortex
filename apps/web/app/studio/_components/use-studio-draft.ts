@@ -198,12 +198,6 @@ type StudioViewCache = Readonly<{
   previewShape: string;
   views: Map<string, LoadedView>;
 }>;
-/**
- * After the visible view settles, the other rail tabs' views are read once the browser is idle: at
- * once after the workspace opens, and after a short pause later, so browsing selections reads once.
- */
-const idleReadDelayMs = 400;
-const idleReadTimeoutMs = 2000;
 
 /** Revision-bound metadata is replaced; immutable editor resources remain for this visit. */
 const viewOf = (
@@ -244,15 +238,12 @@ export function useStudioDraft({
   organizationId,
   draft,
   tab,
-  tabs,
   creation,
   initialView,
 }: Readonly<{
   organizationId: string;
   draft: StudioStoredApplicationDraft;
   tab: string;
-  /** Every tab one click away, whose views are read in the background once the visible one settles. */
-  tabs: readonly string[];
   creation: StudioViewRequest["creation"];
   initialView: Omit<
     StudioCompiledView,
@@ -379,11 +370,6 @@ export function useStudioDraft({
         ],
       ]),
     };
-  // The idle read of the other tabs' views, which a switch to one of them waits for instead of reading again.
-  const reading = useRef<Readonly<{
-    keys: ReadonlySet<string>;
-    done: Promise<void>;
-  }> | null>(null);
 
   /** Keeps every view a read returned for the saved revision it was read at. */
   const remember = useCallback(
@@ -468,16 +454,6 @@ export function useStudioDraft({
           // A view asked for while this read ran may have been read meanwhile, for this revision.
           if (again && adoptKnown(requested.key)) continue;
           again = true;
-          const background = reading.current;
-          if (background !== null && background.keys.has(requested.key)) {
-            await background.done;
-            if (!active.current) return;
-            if (requested.key !== requestRef.current.key) {
-              compileAgain.current = true;
-              continue;
-            }
-            if (adoptKnown(requested.key)) continue;
-          }
           const result = await reopenStudioApplication(
             organizationId,
             target.rootId,
@@ -748,116 +724,6 @@ export function useStudioDraft({
     if (JSON.stringify(view.request) !== requestKey && !state.isDirty && !state.isSaving)
       void refreshCompiled();
   }, [requestKey, view.request, state.isDirty, state.isSaving, refreshCompiled]);
-
-  // Every other tab's view of the saved revision, read in one request (one compile) once the
-  // visible view has settled and the browser is idle, so their first use needs no read of its own.
-  const others = useMemo(() => {
-    const current = parsed(state.source);
-    const seen = new Set([requestKey]);
-    const list: { request: StudioViewRequest; key: string }[] = [];
-    for (const other of tabs) {
-      const otherRequest = studioViewRequest(other, selected, current);
-      const key = JSON.stringify(otherRequest);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      list.push({ request: otherRequest, key });
-    }
-    return list;
-  }, [tabs, selected, state.source, parsed, requestKey]);
-  const othersRef = useRef(others);
-  othersRef.current = others;
-  const [readCount, setReadCount] = useState(0);
-  const viewSettled = JSON.stringify(view.request) === requestKey;
-  const otherKeys = others.map((other) => other.key).join("\n");
-  useEffect(() => {
-    if (
-      !viewSettled ||
-      state.isDirty ||
-      state.isSaving ||
-      lifetime === 0 ||
-      status.kind === "conflict" ||
-      reading.current !== null ||
-      otherKeys === ""
-    )
-      return;
-    let handle: number | undefined;
-    const read = () => {
-      const target = savedRef.current;
-      const known = viewCache.current;
-      const fresh =
-        known !== null &&
-        known.draftRevision === target.draftRevision &&
-        known.sourceFingerprint === target.sourceFingerprint;
-      const missing = othersRef.current.filter((other) => !(fresh && known.views.has(other.key)));
-      if (missing.length === 0 || document.visibilityState !== "visible" || !active.current) return;
-      const keys = missing.map((other) => other.key);
-      const done = (async () => {
-        try {
-          const result = await reopenStudioApplication(
-            organizationId,
-            target.rootId,
-            missing.map((other) => other.request),
-            target.draftRevision,
-          );
-          if (!active.current) return;
-          if (result.kind !== "available") {
-            console.error(
-              `[studio] the other tabs' views were not read: STUDIO_IDLE_VIEWS_${result.kind.toUpperCase()}`,
-            );
-            return;
-          }
-          // A newer saved revision is read by the visible view; this answer is for an older one.
-          if (
-            result.organizationId !== organizationId ||
-            result.draft.draftRevision !== savedRef.current.draftRevision ||
-            result.draft.sourceFingerprint !== savedRef.current.sourceFingerprint
-          )
-            return;
-          remember(result, missing);
-          // Immutable editor resources are taken now, so the first switch does not rebuild with them.
-          const controls = result.views.find((loaded) => loaded.fieldInputControlReleases !== null);
-          setView((previous) => ({
-            ...previous,
-            catalogue:
-              previous.catalogue.releases.length === 0 ? result.catalogue : previous.catalogue,
-            fieldInputControlReleases:
-              previous.fieldInputControlReleases ?? controls?.fieldInputControlReleases ?? null,
-          }));
-          setReadCount((count) => count + 1);
-        } catch (error) {
-          console.error("[studio] reading the other tabs' views failed", describeFailure(error));
-        } finally {
-          reading.current = null;
-        }
-      })();
-      reading.current = { keys: new Set(keys), done };
-    };
-    const timer = setTimeout(
-      () => {
-        if (typeof window.requestIdleCallback === "function")
-          handle = window.requestIdleCallback(read, {
-            timeout: idleReadTimeoutMs,
-          });
-        else read();
-      },
-      readCount === 0 ? 0 : idleReadDelayMs,
-    );
-    return () => {
-      clearTimeout(timer);
-      if (handle !== undefined) window.cancelIdleCallback(handle);
-    };
-  }, [
-    viewSettled,
-    state.isDirty,
-    state.isSaving,
-    lifetime,
-    status.kind,
-    otherKeys,
-    saved,
-    readCount,
-    organizationId,
-    remember,
-  ]);
 
   // Leaving the page while a batch is waiting to be saved is confirmed by the browser.
   const unsaved = state.isDirty || state.isSaving;
