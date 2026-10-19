@@ -10,6 +10,7 @@ import {
   parseExactDecimal,
   pipelineAllowsMove,
   pipelineMoveRefusalMessage,
+  pipelineStartStage,
   recordTypeDefinitionSchema,
   sourceExactDecimalTextSchema,
   sourceModuleFieldValueSchemas,
@@ -710,7 +711,7 @@ export const prepareInitialRecordFieldCandidate = (
     }
   }
 
-  if (input.operation === "create")
+  if (input.operation === "create") {
     for (const field of trustedRecordType.fields) {
       if (hasOwn(submittedValues, field.fieldId) || field.default === undefined) continue;
       const normalized = normalizeValue(
@@ -726,6 +727,14 @@ export const prepareInitialRecordFieldCandidate = (
         valueOrigins[field.fieldId] = "default";
       }
     }
+    // A record enters each pipeline at its start stage unless it was given a stage.
+    for (const pipeline of trustedRecordType.pipelines) {
+      const fieldId = String(pipeline.stageFieldId);
+      if (hasOwn(candidateValues, fieldId)) continue;
+      candidateValues[fieldId] = pipelineStartStage(pipeline);
+      valueOrigins[fieldId] = "default";
+    }
+  }
 
   return context.issues.length > 0
     ? { success: false, issues: context.issues }
@@ -861,18 +870,16 @@ const finalizeRecordFieldCandidateInternal = (
   }
 
   // A changed stage moves only along its pipeline's transitions, whoever or whatever changed it:
-  // a person's save, a rule's output or a named action.
+  // a person's save, a rule's output or a named action. A record with no stage yet moves as if it
+  // were at the start stage, and a stage once set is never cleared.
   if (input.initialCandidate.operation === "update")
     for (const pipeline of trustedRecordType.pipelines) {
       const fieldId = String(pipeline.stageFieldId);
-      const before = input.initialCandidate.originalValues[fieldId];
-      const after = normalizedCandidate[fieldId];
-      if (
-        typeof before !== "string" ||
-        typeof after !== "string" ||
-        pipelineAllowsMove(pipeline, before, after)
-      )
-        continue;
+      const original = input.initialCandidate.originalValues[fieldId];
+      const final = normalizedCandidate[fieldId];
+      const before = typeof original === "string" ? original : undefined;
+      const after = typeof final === "string" ? final : undefined;
+      if (pipelineAllowsMove(pipeline, before, after)) continue;
       const field = fieldsById.get(fieldId);
       const options = field?.type === "choice" ? field.settings.options : [];
       const optionLabel = (value: string): string =>
