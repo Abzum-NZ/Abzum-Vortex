@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   isStudioDataSelection,
+  StudioInspectorGroup,
   type StudioCompositionContext,
   type StudioDataSelection,
   type StudioRecordReader,
@@ -18,7 +19,6 @@ import {
   type ApplicationUsePlace,
 } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
-import { StudioDataGroup } from "./studio-data-group";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -208,7 +208,7 @@ function RecordTypeInspector({
   };
   return (
     <div className="space-y-4">
-      <StudioDataGroup title="General">
+      <StudioInspectorGroup title="General">
         <StudioField
           label="Name of one record"
           error={name.problem === "" ? undefined : name.problem}
@@ -270,8 +270,8 @@ function RecordTypeInspector({
             </NativeSelect>
           )}
         </StudioField>
-      </StudioDataGroup>
-      <StudioDataGroup title="Queries" defaultOpen={false}>
+      </StudioInspectorGroup>
+      <StudioInspectorGroup title="Queries" defaultOpen={false}>
         <Button
           type="button"
           size="sm"
@@ -298,8 +298,8 @@ function RecordTypeInspector({
             />
           </section>
         )}
-      </StudioDataGroup>
-      <StudioDataGroup title="Behaviour" defaultOpen={false}>
+      </StudioInspectorGroup>
+      <StudioInspectorGroup title="Behaviour" defaultOpen={false}>
         <StudioModuleEvents
           source={source}
           moduleKey={moduleKey}
@@ -314,7 +314,7 @@ function RecordTypeInspector({
           disabled={disabled}
           edit={edit}
         />
-      </StudioDataGroup>
+      </StudioInspectorGroup>
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="sm" />}>
           <Icon name="more-horizontal" />
@@ -341,12 +341,17 @@ function RecordTypeInspector({
         />
         <Problems issues={issues} />
       </section>
-      <StudioDataGroup title="Details" defaultOpen={false}>
+      <StudioUsedIn
+        source={source}
+        target={{ kind: "record_type", moduleKey, recordKey }}
+        name={record.name}
+      />
+      <StudioInspectorGroup title="Details" defaultOpen={false}>
         <dl className="text-xs font-mono">
           <dt>Key</dt>
           <dd>{record.key}</dd>
         </dl>
-      </StudioDataGroup>
+      </StudioInspectorGroup>
       {confirmDialog}
     </div>
   );
@@ -547,17 +552,19 @@ export function useStudioDataTab({
   // people directory, which the link then adds to the modules it uses.
   const usedRecordTypes = useMemo((): readonly StudioLinkTarget[] => {
     const targets: StudioLinkTarget[] = (used ?? []).flatMap((module) =>
-      module.recordTypes.filter((record) => record.linkable).map((record) => {
-        const key = `${module.key}:${record.key}`;
-        return {
-          key,
-          label:
-            key === directory.recordType
-              ? peopleDirectoryLabel
-              : `${record.name} (${module.name})`,
-          titleLabel: record.fields.find((field) => field.key === record.titleFieldKey)?.label,
-        };
-      }),
+      module.recordTypes
+        .filter((record) => record.linkable)
+        .map((record) => {
+          const key = `${module.key}:${record.key}`;
+          return {
+            key,
+            label:
+              key === directory.recordType
+                ? peopleDirectoryLabel
+                : `${record.name} (${module.name})`,
+            titleLabel: record.fields.find((field) => field.key === record.titleFieldKey)?.label,
+          };
+        }),
     );
     if (
       view.peopleDirectory !== null &&
@@ -860,7 +867,10 @@ export function useStudioDataTab({
         }
       />
     );
-  const usedIn = studioUseTargetOf(current);
+  const hasOwnUsedIn =
+    isOwned &&
+    (current?.kind === "field" || (current?.kind === "record_type" && adding?.scope !== scope));
+  const usedIn = hasOwnUsedIn ? null : studioUseTargetOf(current);
   const problemHere =
     compileProblem?.selection != null &&
     current !== null &&
@@ -926,7 +936,11 @@ export function useStudioDataTab({
     centre,
     inspector,
     dialog,
-    title: showingQueries && current === null ? "Queries"
-      : showingSearch ? "Search settings" : describeSelection(modules, current),
+    title:
+      showingQueries && current === null
+        ? "Queries"
+        : showingSearch
+          ? "Search settings"
+          : describeSelection(modules, current),
   };
 }

@@ -23,6 +23,7 @@ import {
 } from "@vortex/platform/schema";
 import {
   StudioConditionControls,
+  StudioInspectorGroup,
   StudioOptionControl,
   validateStudioCondition,
 } from "@vortex/ui/studio";
@@ -33,7 +34,6 @@ import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { Icon } from "@vortex/ui";
-import { StudioDataGroup } from "./studio-data-group";
 import { StudioField } from "./studio-field";
 import { StudioReferencesAlert } from "./studio-used-in";
 import { useStudioDraftText } from "./use-studio-draft-text";
@@ -171,10 +171,10 @@ function Section({
   children,
 }: Readonly<{ title: string; hint?: string; children: ReactNode }>) {
   return (
-    <StudioDataGroup title={title}>
+    <StudioInspectorGroup title={title}>
       {hint === undefined ? null : <p className="text-sm text-muted-foreground">{hint}</p>}
       {children}
-    </StudioDataGroup>
+    </StudioInspectorGroup>
   );
 }
 
