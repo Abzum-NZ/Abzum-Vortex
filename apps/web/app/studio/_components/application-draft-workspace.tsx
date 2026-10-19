@@ -73,7 +73,6 @@ type WorkspaceProps =
     }>;
 
 type ExistingProps = Extract<WorkspaceProps, { mode: "existing" }>;
-const studioRailKeys = studioRailTabs.map((railTab) => railTab.key);
 
 export function ApplicationDraftWorkspace(props: WorkspaceProps) {
   return props.mode === "new" ? (
@@ -101,7 +100,6 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     organizationId,
     draft: props.draft,
     tab,
-    tabs: studioRailKeys,
     creation:
       structureForm === "shell" ? "layout" : structureForm === "record" ? "record_page" : undefined,
     initialView: props.initialView,

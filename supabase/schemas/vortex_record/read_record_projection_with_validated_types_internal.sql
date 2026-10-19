@@ -87,14 +87,19 @@ begin
     return;
   end if;
   if shared ? 'previewInstallationId' then
-    loaded := coalesce(loaded, vortex_record.read_record_page_row_facts_internal(shared, p_loaded));
-    preview_meta := vortex_record.resolve_record_action_context_internal(
-      p_record_type_id, 'read'
-    );
-    preview_bounds := vortex_record.preview_record_field_bounds_internal(
-      p_record_type_id, (preview_meta ->> 'storageContractId')::uuid,
-      preview_meta -> 'recordType'
-    );
+    if p_page -> 'envelope' -> 'previewInstallationId' = shared -> 'previewInstallationId'
+      and pg_catalog.jsonb_typeof(p_page -> 'previewBounds') = 'object' then
+      preview_bounds := p_page -> 'previewBounds';
+    else
+      loaded := coalesce(loaded, vortex_record.read_record_page_row_facts_internal(shared, p_loaded));
+      preview_meta := vortex_record.resolve_record_action_context_internal(
+        p_record_type_id, 'read'
+      );
+      preview_bounds := vortex_record.preview_record_field_bounds_internal(
+        p_record_type_id, (preview_meta ->> 'storageContractId')::uuid,
+        preview_meta -> 'recordType'
+      );
+    end if;
     if preview_bounds is null then
       projection := pg_catalog.jsonb_build_object('outcome', 'refused');
       return next;
