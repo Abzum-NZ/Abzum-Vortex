@@ -276,6 +276,10 @@ const SHARED_COMPONENT_STYLES_CSS = `
   outline: var(--vortex-focus-width) solid var(--ring) !important;
   outline-offset: 0.125rem !important;
 }
+/* Keep row outlines inside collapsible and scroll boundaries. */
+[data-vortex-theme] [data-vortex-focus-group]:has(:focus-visible) {
+  outline-offset: calc(-1 * var(--vortex-focus-width)) !important;
+}
 `.trim();
 
 /**
