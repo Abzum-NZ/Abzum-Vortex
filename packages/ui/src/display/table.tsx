@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import {
+  nextRecordsTableSort,
   readRecordsTableContract,
   type RecordsTableActionContract,
   type RecordsTableColumnContract,
@@ -33,26 +34,19 @@ import type { DisplayCellValue, DisplayColumn, DisplayRow, TablePayload } from "
 type RenderedColumn = Readonly<{
   key: string;
   label: string;
-  declared: RecordsTableColumnContract | undefined;
+  declared: RecordsTableColumnContract;
 }>;
 
 /**
- * The columns to render. A placement that declares a data contract shows its declared columns in
- * declared order, but only those the permission projection supplies: a column whose field the
- * viewer cannot read is withheld from the projection and never rendered, not even as a heading.
- * The projected column supplies the label a declared column left unset. A placement without a
- * contract renders the projected columns as before.
+ * The columns to render: the declared columns in declared order, but only those the permission
+ * projection supplies. A column whose field the viewer cannot read is withheld from the projection
+ * and never rendered, not even as a heading. The projected column supplies the label a declared
+ * column left unset.
  */
 const renderedColumns = (
-  contract: RecordsTableContract | undefined,
+  contract: RecordsTableContract,
   projected: readonly DisplayColumn[],
 ): readonly RenderedColumn[] => {
-  if (contract === undefined)
-    return projected.map((column) => ({
-      key: column.key,
-      label: column.label,
-      declared: undefined,
-    }));
   const labels = new Map(projected.map((column) => [column.key, column.label]));
   return contract.columns.flatMap((column): RenderedColumn[] => {
     const projectedLabel = labels.get(column.field);
@@ -70,13 +64,11 @@ const columnAttributes = (
   "data-vortex-column-priority"?: string;
   style?: { textAlign: "start" | "center" | "end" };
 } =>
-  column.declared === undefined
-    ? {}
-    : {
-        "data-vortex-column-width": column.declared.width,
-        "data-vortex-column-priority": column.declared.priority,
-        style: { textAlign: column.declared.alignment },
-      };
+  ({
+    "data-vortex-column-width": column.declared.width,
+    "data-vortex-column-priority": column.declared.priority,
+    style: { textAlign: column.declared.alignment },
+  });
 
 /**
  * Declared column priority as a responsive utility: a low priority column hides first on a narrow
@@ -86,7 +78,7 @@ const columnAttributes = (
  */
 const priorityClass = (column: RenderedColumn, first: boolean): string | undefined => {
   if (first) return undefined;
-  switch (column.declared?.priority) {
+  switch (column.declared.priority) {
     case "low":
       return "max-lg:hidden";
     case "medium":
@@ -96,19 +88,13 @@ const priorityClass = (column: RenderedColumn, first: boolean): string | undefin
   }
 };
 
-/** The row's own record link: the first column's projected record link, when it has an address. */
-const rowOpenAddress = (row: DisplayRow, columnKey: string | undefined): string | undefined => {
-  const cell = columnKey === undefined ? undefined : row.cells[columnKey];
-  return cell?.kind === "record_link" ? cell.href : undefined;
-};
-
 /** Field identities compare without regard to case, as the Query engine keys them. */
 const sameFieldKey = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
 /** The filter control kind for a declared filterable field, from the column it is declared with. */
-const filterInputKind = (declared: RecordsTableColumnContract | undefined): FilterInputKind => {
-  switch (declared?.format) {
+const filterInputKind = (declared: RecordsTableColumnContract): FilterInputKind => {
+  switch (declared.format) {
     case "number":
     case "currency":
     case "percent":
@@ -159,13 +145,18 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     (table) => table.rows.length === 0,
     "No records to show",
   );
+  // Publication refuses a Records table without its contract, so a missing one is a definition
+  // error: it renders the error state below, never a second way of choosing columns or controls.
   const contract = readRecordsTableContract(props.settings);
-  const columns = values === undefined ? [] : renderedColumns(contract, values.columns);
+  const columns =
+    values === undefined || contract === undefined ? [] : renderedColumns(contract, values.columns);
   const rows = values?.rows ?? [];
   const sortable = (column: RenderedColumn): boolean =>
-    contract === undefined || contract.sortableFields.includes(column.key);
+    contract?.sortableFields.some((field) => sameFieldKey(field, column.key)) === true;
+  const sortKeys = values?.sort?.keys ?? [];
   const selectionMode = contract?.selectionMode ?? "none";
-  const selectable = events?.selection_changed !== undefined && contract?.selectionMode !== "none";
+  const selectable =
+    events?.selection_changed !== undefined && contract !== undefined && selectionMode !== "none";
 
   // Filter controls and the search box report their declared data events; sorting already does the
   // same. The host sends each to the Query engine and returns a new page, so the component never
@@ -238,6 +229,22 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   // and unavailable states of this placement.
   const revealed = useLoadingReveal(state.status === "loading");
   const rowsRef = useRowEntrance<HTMLDivElement>(pageRecordIds, "tbody > tr");
+  if (contract === undefined) {
+    console.error("[display] Records table settings do not declare a readable contract", {
+      placementId,
+    });
+    return (
+      <DisplayStateContainer
+        accessibleName={accessibleName}
+        availability={availability}
+        projectedData={{ status: "error" }}
+        emptyMessage={emptyMessage}
+        {...(errorMessage === undefined ? {} : { errorMessage })}
+      >
+        {null}
+      </DisplayStateContainer>
+    );
+  }
   if (state.status === "loading")
     return (
       <TableLoadingState
@@ -330,39 +337,64 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                   </TableHead>
                 )}
                 {columns.map((column) => {
-                  const direction =
-                    values.sort?.columnKey === column.key ? values.sort.direction : undefined;
+                  // The page's order is an ordered list of keys: the primary key sets aria-sort,
+                  // and every key states its direction and priority in the header's own text.
+                  const priority = sortKeys.findIndex((key) =>
+                    sameFieldKey(key.fieldId, column.key),
+                  );
+                  const direction = priority < 0 ? undefined : sortKeys[priority]?.direction;
                   const onSort = sortable(column) ? events?.sort_changed : undefined;
+                  const sortText =
+                    direction === undefined
+                      ? undefined
+                      : sortKeys.length === 1
+                        ? `sorted ${direction}`
+                        : `sorted ${direction}, sort priority ${priority + 1} of ${sortKeys.length}`;
                   return (
                     <TableHead
                       key={column.key}
                       scope="col"
-                      aria-sort={direction ?? "none"}
+                      aria-sort={priority === 0 && direction !== undefined ? direction : "none"}
                       className={cn(priorityClass(column, column.key === columns[0]?.key))}
                       {...columnAttributes(column)}
                     >
                       {onSort === undefined ? (
-                        column.label
+                        <>
+                          {column.label}
+                          {sortText === undefined ? null : (
+                            <span className="sr-only">, {sortText}</span>
+                          )}
+                        </>
                       ) : (
+                        // A click replaces the order with this column; Shift with a click adds,
+                        // turns or removes this column's key and keeps the others' priority.
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
-                          onClick={() =>
+                          title="Sort; hold Shift to add to the sort"
+                          onClick={(event) =>
                             onSort({
                               event: "sort_changed",
-                              columnKey: column.key,
-                              direction: direction === "ascending" ? "descending" : "ascending",
+                              sort: nextRecordsTableSort(values.sort, column.key, event.shiftKey),
                             })
                           }
                         >
                           {column.label}
+                          {sortText === undefined ? null : (
+                            <span className="sr-only">, {sortText}</span>
+                          )}
                           {direction === undefined ? null : (
                             <Icon
                               name={direction === "ascending" ? "arrow-up" : "arrow-down"}
                               aria-hidden="true"
                               className="size-3.5"
                             />
+                          )}
+                          {direction === undefined || sortKeys.length < 2 ? null : (
+                            <span aria-hidden="true" className="text-xs text-muted-foreground">
+                              {priority + 1}
+                            </span>
                           )}
                         </Button>
                       )}
@@ -383,18 +415,12 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                 const shownActions = declaredRowActions.filter((action) =>
                   rowShowsAction(row, action),
                 );
-                const activate = activateRow;
-                // A row with no declared click command opens the record its first column links to,
-                // through that column's own address, so the whole row acts as the link.
-                const openAddress =
-                  activate === undefined ? rowOpenAddress(row, columns[0]?.key) : undefined;
                 return (
                   <ClickableRow
                     key={row.recordId}
                     recordId={row.recordId}
                     selected={selected}
-                    activate={activate}
-                    openAddress={openAddress}
+                    activate={activateRow}
                   >
                     {!selectable ? null : (
                       <TableCell className="w-px">

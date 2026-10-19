@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   canonicalJson,
+  componentSettingApplies,
   validateComponentSettings,
   type ApplicationSourceDocument,
   type BlockPropertySchemaContract,
@@ -1200,11 +1201,6 @@ function SettingFields({
   choices,
   disabled,
 }: SettingFieldsProps): ReactElement {
-  const visible = (property: BlockPropertySchemaContract, settings: StudioSettingValues) => {
-    if (property.showWhen === undefined) return true;
-    const selected = settings[property.showWhen.property];
-    return selected?.kind === "choice" && property.showWhen.values.includes(selected.value);
-  };
   // A field's optional label is an override. Matching text follows the field when it changes;
   // other text stays authored, with an explicit way to return to the field's label.
   const fieldProperty = properties.find(
@@ -1243,14 +1239,14 @@ function SettingFields({
   return (
     <div className="space-y-4">
       {properties.map((property) => {
-        if (!visible(property, values)) return null;
+        if (!componentSettingApplies(property, values)) return null;
         const value = Object.hasOwn(values, property.key) ? values[property.key] : undefined;
         const set = (next: SettingValue) => {
           const result: Record<string, SourceBlockPropertyValueContract> = { ...values };
           if (next === undefined) delete result[property.key];
           else result[property.key] = next;
           for (const sibling of properties)
-            if (!visible(sibling, result)) delete result[sibling.key];
+            if (!componentSettingApplies(sibling, result)) delete result[sibling.key];
           onChange(result);
         };
         return (

@@ -51,17 +51,25 @@ export function TableLoadingState({
   title: string | undefined;
   accessibleName: string;
   events: DisplayEventHandlers | undefined;
-  contract: RecordsTableContract | undefined;
+  contract: RecordsTableContract;
 }>): ReactElement {
   const columns = Array.from(
-    { length: Math.max(1, Math.min(contract?.columns.length ?? 4, SKELETON_COLUMN_LIMIT)) },
+    {
+      length: Math.max(
+        1,
+        Math.min(
+          contract.columns.filter((column) => column.visible).length,
+          SKELETON_COLUMN_LIMIT,
+        ),
+      ),
+    },
     (_, index) => index,
   );
   const rowCount = Math.max(
     1,
-    Math.min(contract?.pageSize ?? SKELETON_ROW_LIMIT, SKELETON_ROW_LIMIT),
+    Math.min(contract.pageSize, SKELETON_ROW_LIMIT),
   );
-  const searchRow = contract?.search === true && events?.search_changed !== undefined;
+  const searchRow = contract.search && events?.search_changed !== undefined;
   return (
     <div
       role="status"
