@@ -1,4 +1,3 @@
-begin;
 set local role vortex_owner;
 
 -- The organisation's application catalogue: every ordinary Application it owns with a published
@@ -150,4 +149,3 @@ alter function vortex_access.list_application_store_entries_projection(
 ) owner to vortex_owner;
 
 reset role;
-commit;
