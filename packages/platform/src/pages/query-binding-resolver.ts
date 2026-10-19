@@ -65,7 +65,7 @@ const firstValue = (value: string | readonly string[] | undefined): string | und
   typeof value === "string" ? value : value?.[0];
 
 /** The calendar date an anchor names, counted in the time zone at `now`. */
-const anchorDate = (
+export const relativeAnchorDate = (
   now: Date,
   timeZone: string,
   anchor: RelativeDateAnchor,
@@ -174,7 +174,7 @@ const resolveOne = async (
     case "relative_date": {
       const timeZone = await context.timeZone();
       if (timeZone === undefined) return { kind: "refused", reason: "time_zone_unavailable" };
-      const date = anchorDate(context.now, timeZone, source.anchor).add({
+      const date = relativeAnchorDate(context.now, timeZone, source.anchor).add({
         days: source.offsetDays,
       });
       // A date and time input gets the instant the day starts in the organisation's time zone.

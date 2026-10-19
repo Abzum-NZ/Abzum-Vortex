@@ -96,6 +96,7 @@ const referenceSettingKinds: ReadonlySet<string> = new Set([
 const settingLeafTargets = (
   declaration: BlockPropertySchemaContract,
   rest: Path,
+  authored: unknown,
 ): { path: Path; kind: string }[] => {
   switch (declaration.kind) {
     case "group": {
@@ -103,19 +104,40 @@ const settingLeafTargets = (
       const property = declaration.properties.find((candidate) => candidate.key === key);
       if (property === undefined)
         return fail("vortex.definition.invalid_compilation_output", "invalid_value");
-      return settingLeafTargets(property, rest.slice(1)).map(({ path, kind }) => ({
-        path: [key, ...path],
-        kind,
-      }));
+      return settingLeafTargets(property, rest.slice(1), asObject(authored)[key]).map(
+        ({ path, kind }) => ({
+          path: [key, ...path],
+          kind,
+        }),
+      );
     }
     case "list": {
       const index = rest[0];
       if (typeof index !== "number")
         return fail("vortex.definition.invalid_compilation_output", "invalid_value");
-      return settingLeafTargets(declaration.item, rest.slice(1)).map(({ path, kind }) => ({
+      return settingLeafTargets(
+        declaration.item,
+        rest.slice(1),
+        Array.isArray(authored) ? (authored as unknown[])[index] : undefined,
+      ).map(({ path, kind }) => ({
         path: [index, ...path],
         kind,
       }));
+    }
+    case "condition": {
+      // An authored condition takes the query filter's short form; its leaves feed the canonical
+      // condition tree exactly as a placement's visibility condition does.
+      const targets = conditionSourceTargets(
+        { condition: authored } as JsonObject,
+        ["condition", ...rest],
+        {
+          sourceRoot: ["condition"],
+          canonicalRoot: ["condition"],
+        },
+      );
+      if (targets === undefined)
+        return fail("vortex.definition.invalid_compilation_output", "invalid_value");
+      return targets.map((path) => ({ path: path.slice(1), kind: declaration.kind }));
     }
     case "record_reference":
       return (
@@ -276,7 +298,11 @@ function itemTargets(
         : releaseSettingDeclarations(release).find((property) => property.key === prop);
     if (declaration === undefined)
       return fail("vortex.definition.invalid_compilation_output", "invalid_value");
-    return settingLeafTargets(declaration, suffix.slice(2)).map(({ path, kind }) => ({
+    return settingLeafTargets(
+      declaration,
+      suffix.slice(2),
+      valueAtPath(source, [...itemPath, "props", prop]),
+    ).map(({ path, kind }) => ({
       path: [...placement, "props", prop, ...path],
       setting: true,
       kind,
@@ -448,7 +474,9 @@ export function applicationCompositionProvenance(
         canonicalPath.at(-1) === "control_placement" &&
         canonicalValue ===
           resolution.id(source.key, "block_placement", String(sourceValue), "content");
+      // A condition's authored short form is reshaped into the canonical tree, and its fields resolve.
       const referenceLeaf =
+        leafKind === "condition" ||
         referenceSettingKinds.has(leafKind) ||
         leafKind === "record_reference" ||
         leafKind === "record_type_reference";
@@ -459,6 +487,7 @@ export function applicationCompositionProvenance(
         eventReference ||
         controlReference ||
         (resolvedSettingKinds.has(leafKind) && canonicalPath.at(-1) !== "recordId") ||
+        (leafKind === "condition" && canonicalPath.at(-1) === "fieldId") ||
         (leafKind === "record_reference" && canonicalPath.at(-2) === "recordType");
     } else {
       const last = sourcePath.at(-1);

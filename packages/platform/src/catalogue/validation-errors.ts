@@ -60,6 +60,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_saved_views",
   "definition_records_table_bulk_actions",
   "definition_records_table_inline_edit",
+  "definition_records_table_conditional_formatting",
   "definition_query_binding",
   "definition_unknown_property",
   "definition_too_few_items",
@@ -146,6 +147,12 @@ const definitionValidationErrorCatalogueSource = {
     message: "Inline editing needs fields people may change.",
     guidance:
       "Choose editable fields shown as columns and the flow that saves a change, or turn Inline editing off.",
+  },
+  definition_records_table_conditional_formatting: {
+    order: 39,
+    message: "Formatting needs rules over fields of the bound query.",
+    guidance:
+      "Build each rule's condition from fields of the bound query, give a status an icon or a label, or turn Formatting off.",
   },
   // A query binding refusal carries its own sentence (the input, the source and the types); the
   // catalogue message is what a reader without that sentence sees.

@@ -895,7 +895,9 @@ for (const file of files.filter(
     const keys = [...body.matchAll(/(?:^|[\s,{])"?([a-z_]+)"?\s*[:,\]]?/g)]
       .map((match) => match[1]!)
       .filter(
-        (key) => /^[a-z]+(?:_[a-z]+)*$/.test(key) && !["kind", "settings", "import"].includes(key),
+        (key) =>
+          /^[a-z]+(?:_[a-z]+)*$/.test(key) &&
+          !["kind", "settings", "custom", "import"].includes(key),
       );
     return [file, [...new Set(keys)].sort()];
   });
@@ -912,12 +914,14 @@ for (const file of files.filter(
   for (const file of codeFiles.filter((candidate) => candidate.startsWith("packages/ui/src/")))
     if (file !== `${chunkDirectory}registry.tsx` && !file.startsWith(chunkDirectory)) {
       const content = read(file);
-      // The registry, the header menu and the toolbar are the table's core shell; every other module
-      // there is a feature chunk only the registry (or the core shell) loads.
+      // Studio owns its feature editors; runtime feature chunks load through the registry.
       for (const match of content.matchAll(
-        /from\s+"[^"]*grid-features\/(?!(?:registry|column-menu|toolbar)")[^"]+"/g,
+        /from\s+"([^"]*grid-features\/(?!(?:registry|column-menu|toolbar)")[^"]+)"/g,
       ))
-        add("grid-feature-registry", file, lineAt(content, match.index ?? 0), match[0]);
+        if (!(
+          file.startsWith("packages/ui/src/studio/") && match[1]!.startsWith("./grid-features/")
+        ))
+          add("grid-feature-registry", file, lineAt(content, match.index ?? 0), match[0]);
     }
 }
 

@@ -1,4 +1,5 @@
 "use client";
+import type { StudioCompiledFields } from "../_lib/studio-data-model";
 import {
   StudioField,
   StudioInspectorActions,
@@ -47,6 +48,8 @@ type Props = Readonly<{
   disabled: boolean;
   /** What reference settings can point at, read from the draft being edited. */
   choices: StudioSettingChoices;
+  /** The saved draft's compiled fields by record type, for the typed condition controls. */
+  compiledFields: StudioCompiledFields | null;
   /**
    * Opens the query sheet; `use` chooses the query it made as this block's data. It runs after the
    * new query is in the draft, so the block's choices already offer it.
@@ -398,6 +401,14 @@ export function ApplicationCompositionEditor(props: Props) {
           property={featuresProperty}
           value={settingsInputs.settings[featuresProperty.key]}
           query={props.choices.queries.find((query) => query.reference === settingsInputs.query)}
+          compiledFields={(() => {
+            const query = props.choices.queries.find(
+              (candidate) => candidate.reference === settingsInputs.query,
+            );
+            return query === undefined
+              ? undefined
+              : props.compiledFields?.recordTypes[query.recordType];
+          })()}
           choices={choices}
           disabled={props.disabled}
           onChange={(features) =>

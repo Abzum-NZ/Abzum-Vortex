@@ -20,8 +20,11 @@ import { formatDecimal, formatMoney, isExactDecimal } from "./value-format";
 import { recordLinkLabelKey, type RecordLinkReference } from "../definition/app-index";
 import { defaultQueryPageSize } from "../definition/module-query-edit";
 import {
+  evaluateConditionalFormatting,
   projectRecordsTableFeatures,
+  type ConditionalFormattingContext,
   type RecordsTableFeatureProjection,
+  type RecordsTableRowFormat,
 } from "./records-table-features";
 
 /**
@@ -128,6 +131,8 @@ export type ProjectedTableRow = Readonly<{
   revision: number;
   capabilities: NonNullable<ProtectedQueryRow["capabilities"]>;
   cells: Readonly<Record<string, ProjectedScalarCellValue>>;
+  /** The style keys and measures the table's formatting gives this row; absent when none. */
+  format?: RecordsTableRowFormat;
 }>;
 
 /** A query row proven to carry the revision and capabilities the engine decided for a list row. */
@@ -207,6 +212,8 @@ export type ComponentDataProjectionInput = Readonly<{
   recordLinks?: ProjectedRecordLinks;
   /** The declared columns of every table field of the installed definition (field identity to columns), so a record detail shows its rows. */
   fieldTableColumns?: Readonly<Record<string, readonly TableFieldColumn[]>>;
+  /** What a Records table's formatting rules are evaluated with; supplied only when they are on. */
+  formatting?: ConditionalFormattingContext;
 }>;
 
 /** One declared column of a table field: its key, readable heading, cell type and, for a choice, its options. */
@@ -495,8 +502,31 @@ export const projectRecordsTableData = (
     else hiddenColumns.push({ key: column.field, label });
   }
   if (columns.length === 0) return { status: "empty" };
+  // Formatting rules read only the values the viewer may read on each row; the style keys they
+  // produce are all the page carries of them.
+  const formatting =
+    input.formatting === undefined
+      ? undefined
+      : evaluateConditionalFormatting(
+          contract,
+          columns.map((column) => column.key),
+          input.readableFieldIds === undefined
+            ? completeRows
+            : completeRows.map((row) => ({
+                ...row,
+                values: Object.fromEntries(
+                  Object.entries(row.values).filter(([key]) => isReadable(key, input)),
+                ),
+              })),
+          input.formatting,
+        );
   // The viewer's grid features, decided from the same rows and per-row capabilities as the page.
-  const features = projectRecordsTableFeatures(contract, visibleFieldIds, completeRows);
+  const features = projectRecordsTableFeatures(
+    contract,
+    visibleFieldIds,
+    completeRows,
+    formatting?.projection,
+  );
 
   return {
     status: "ready",
@@ -506,34 +536,38 @@ export const projectRecordsTableData = (
       hiddenColumns,
       layout,
       ...(features === undefined ? {} : { features }),
-      rows: completeRows.map((row) => ({
-        recordId: row.recordId,
-        revision: row.revision,
-        capabilities: {
-          ...row.capabilities,
-          changeableFieldIds: row.capabilities.changeableFieldIds.filter((fieldId) =>
-            columns.some((column) => sameField(column.key, fieldId)),
+      rows: completeRows.map((row) => {
+        const format = formatting?.rows.get(row.recordId);
+        return {
+          recordId: row.recordId,
+          revision: row.revision,
+          capabilities: {
+            ...row.capabilities,
+            changeableFieldIds: row.capabilities.changeableFieldIds.filter((fieldId) =>
+              columns.some((column) => sameField(column.key, fieldId)),
+            ),
+          },
+          cells: Object.fromEntries(
+            columns.map((column) => {
+              const stored = isReadable(column.key, input) ? valueOf(row, column.key) : undefined;
+              return [
+                column.key,
+                stored === undefined
+                  ? RESTRICTED_CELL
+                  : projectCell(
+                      stored.value,
+                      column.format,
+                      input.fieldChoiceLabels?.[column.key.toLowerCase()],
+                      input.fieldDateTypes?.[column.key.toLowerCase()],
+                      input.recordLinks,
+                      input.fieldLinkTypes?.[column.key.toLowerCase()],
+                    ),
+              ];
+            }),
           ),
-        },
-        cells: Object.fromEntries(
-          columns.map((column) => {
-            const stored = isReadable(column.key, input) ? valueOf(row, column.key) : undefined;
-            return [
-              column.key,
-              stored === undefined
-                ? RESTRICTED_CELL
-                : projectCell(
-                    stored.value,
-                    column.format,
-                    input.fieldChoiceLabels?.[column.key.toLowerCase()],
-                    input.fieldDateTypes?.[column.key.toLowerCase()],
-                    input.recordLinks,
-                    input.fieldLinkTypes?.[column.key.toLowerCase()],
-                  ),
-            ];
-          }),
-        ),
-      })),
+          ...(format === undefined ? {} : { format }),
+        };
+      }),
     },
   };
 };

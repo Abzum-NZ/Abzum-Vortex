@@ -46,12 +46,18 @@ export type GridFeatureCellProps = Readonly<{
   children: ReactNode;
 }>;
 
-/** The closed decoration tokens a feature may give a cell; each maps to theme-token classes. */
+/**
+ * The closed decoration tokens a feature may give a cell; each maps to semantic theme-token
+ * classes, so every app theme preset colours them and no feature names a colour of its own.
+ */
 export const gridCellDecorationClasses = {
-  positive: "bg-primary/10 text-foreground",
-  negative: "bg-destructive/10 text-destructive",
-  muted: "text-muted-foreground",
-  emphasis: "font-semibold",
+  text_success: "text-success",
+  text_warning: "text-warning",
+  text_info: "text-info",
+  text_destructive: "text-[color:color-mix(in_oklab,var(--destructive)_75%,var(--foreground))]",
+  text_muted: "text-[color:color-mix(in_oklab,var(--muted-foreground)_85%,var(--foreground))]",
+  bold: "font-semibold",
+  strike: "line-through",
 } as const;
 export type GridCellDecorationToken = keyof typeof gridCellDecorationClasses;
 
@@ -59,8 +65,9 @@ export type GridCellDecorationToken = keyof typeof gridCellDecorationClasses;
  * The extension points a grid feature fills. The table renders each point once for every feature
  * the projection turns on, so a later feature adds its module here and never edits the table:
  * `ToolbarItems` beside the search box, `ColumnMenuItems` in a column's menu, `HeaderAdornment`
- * after a column heading, `cellDecoration` as a token per cell, `CellEditor` in place of a value,
- * `RowExpansion` as a panel below a row and `SelectionBanner` over the selected rows.
+ * after a column heading, `cellDecoration` as tokens per cell, `CellAdornment` around a value (an
+ * icon, a badge or a bar), `CellEditor` in place of a value, `RowExpansion` as a panel below a row
+ * and `SelectionBanner` over the selected rows.
  */
 export type GridFeatureModule = Readonly<{
   ToolbarItems?: ComponentType<GridFeaturePointProps>;
@@ -70,7 +77,8 @@ export type GridFeatureModule = Readonly<{
     context: GridFeatureContext,
     row: DisplayRow,
     column: GridColumn,
-  ) => GridCellDecorationToken | undefined;
+  ) => readonly GridCellDecorationToken[] | undefined;
+  CellAdornment?: ComponentType<GridFeatureCellProps>;
   CellEditor?: ComponentType<GridFeatureCellProps>;
   RowExpansion?: ComponentType<GridFeatureRowProps>;
   SelectionBanner?: ComponentType<GridFeaturePointProps>;
@@ -90,6 +98,7 @@ const loaders: Readonly<
   saved_views: () => import("./saved-views"),
   bulk_actions: () => import("./bulk-actions"),
   inline_edit: () => import("./inline-edit"),
+  conditional_formatting: () => import("./conditional-format"),
 };
 
 const projectionKeys: Readonly<
@@ -100,6 +109,7 @@ const projectionKeys: Readonly<
   savedViews: "saved_views",
   bulkActions: "bulk_actions",
   inlineEdit: "inline_edit",
+  conditionalFormatting: "conditional_formatting",
 };
 
 /** The features a projection turns on, in the registry's order. */
@@ -137,7 +147,9 @@ const lazyPoint = <Props,>(
       const loaded = (await loaders[key]()).gridFeature[point];
       return {
         default: (loaded ??
-          (point === "CellEditor" ? PassThrough : Nothing)) as unknown as ComponentType<object>,
+          (point === "CellEditor" || point === "CellAdornment"
+            ? PassThrough
+            : Nothing)) as unknown as ComponentType<object>,
       };
     });
   if (held === undefined) lazyPoints.set(id, component);
@@ -152,6 +164,7 @@ const featurePoints: Readonly<Record<RecordsTableFeatureKey, readonly ComponentP
   saved_views: [],
   bulk_actions: ["SelectionBanner"],
   inline_edit: ["CellEditor"],
+  conditional_formatting: ["CellAdornment", "HeaderAdornment"],
 };
 
 const activeKeys = (signature: string): readonly RecordsTableFeatureKey[] =>
@@ -188,6 +201,8 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   columnMenuItems: (column: GridColumn) => ReactNode;
   rowExpansion: (row: DisplayRow) => ReactNode;
   cell: (row: DisplayRow, column: GridColumn, plain: ReactNode) => ReactNode;
+  /** A value with its decorations and adornments only, for surfaces that never edit (cards). */
+  decorate: (row: DisplayRow, column: GridColumn, plain: ReactNode) => ReactNode;
   cellClassName: (row: DisplayRow, column: GridColumn) => string | undefined;
 }> {
   const keys = projectedGridFeatures(context?.features);
@@ -235,6 +250,30 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   const cellPoints = useMemo(() => {
     const active = activeKeys(signature);
     const editors = active.filter((key) => featurePoints[key].includes("CellEditor"));
+    const adornments = active.filter((key) => featurePoints[key].includes("CellAdornment"));
+    // Adornments wrap the plain value inside any editor, so an edited cell keeps its icon or bar.
+    const adorn = (row: DisplayRow, column: GridColumn, plain: ReactNode): ReactNode => {
+      const current = latest.current;
+      if (current === undefined) return plain;
+      return adornments.reduce<ReactNode>((inner, key) => {
+        const Adornment = lazyPoint<GridFeatureCellProps>(key, "CellAdornment");
+        return (
+          <Suspense key={key} fallback={inner}>
+            <Adornment context={current} row={row} column={column}>
+              {inner}
+            </Adornment>
+          </Suspense>
+        );
+      }, plain);
+    };
+    const classNameOf = (row: DisplayRow, column: GridColumn): string | undefined => {
+      const current = latest.current;
+      if (current === undefined || decorators.length === 0) return undefined;
+      const classes = decorators.flatMap((decorate) =>
+        (decorate(current, row, column) ?? []).map((token) => gridCellDecorationClasses[token]),
+      );
+      return classes.length === 0 ? undefined : classes.join(" ");
+    };
     const drawAt = (point: ComponentPoint, props: Record<string, unknown>): ReactNode => {
       const current = latest.current;
       return current === undefined ? null : drawPoint(active, point, current, props);
@@ -243,29 +282,32 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
       headerAdornment: (column: GridColumn) => drawAt("HeaderAdornment", { column }),
       columnMenuItems: (column: GridColumn) => drawAt("ColumnMenuItems", { column }),
       rowExpansion: (row: DisplayRow) => drawAt("RowExpansion", { row }),
+      decorate: (row: DisplayRow, column: GridColumn, plain: ReactNode): ReactNode => {
+        const decoration = classNameOf(row, column);
+        return adorn(
+          row,
+          column,
+          decoration === undefined ? plain : <span className={decoration}>{plain}</span>,
+        );
+      },
       cell: (row: DisplayRow, column: GridColumn, plain: ReactNode): ReactNode => {
         const current = latest.current;
         if (current === undefined) return plain;
-        return editors.reduce<ReactNode>((inner, key) => {
-          const Editor = lazyPoint<GridFeatureCellProps>(key, "CellEditor");
-          return (
-            <Suspense key={key} fallback={inner}>
-              <Editor context={current} row={row} column={column}>
-                {inner}
-              </Editor>
-            </Suspense>
-          );
-        }, plain);
+        return editors.reduce<ReactNode>(
+          (inner, key) => {
+            const Editor = lazyPoint<GridFeatureCellProps>(key, "CellEditor");
+            return (
+              <Suspense key={key} fallback={inner}>
+                <Editor context={current} row={row} column={column}>
+                  {inner}
+                </Editor>
+              </Suspense>
+            );
+          },
+          adorn(row, column, plain),
+        );
       },
-      cellClassName: (row: DisplayRow, column: GridColumn): string | undefined => {
-        const current = latest.current;
-        if (current === undefined || decorators.length === 0) return undefined;
-        const classes = decorators.flatMap((decorate) => {
-          const token = decorate(current, row, column);
-          return token === undefined ? [] : [gridCellDecorationClasses[token]];
-        });
-        return classes.length === 0 ? undefined : classes.join(" ");
-      },
+      cellClassName: classNameOf,
     };
     // The cell points change with the projection, bindings and columns, not with rows or selection.
   }, [signature, decorators, features, events, columns, accessibleName]);

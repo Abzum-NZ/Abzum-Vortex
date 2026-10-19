@@ -21,8 +21,8 @@ const INTERACTIVE_IN_CARD =
 /** Content renderers the host supplies; the same ones the grid uses. */
 export type CardRenderers = Readonly<{
   value: (row: DisplayRow, column: GridColumn) => ReactNode;
-  /** Plain text of a value, for the heading that opens the row (a link cannot nest in it). */
-  text: (row: DisplayRow, column: GridColumn) => string;
+  /** Decorated plain text for the heading that opens the row; it cannot contain a nested link. */
+  heading: (row: DisplayRow, column: GridColumn) => ReactNode;
   select: (row: DisplayRow, selected: boolean) => ReactNode;
   actions: (row: DisplayRow) => ReactNode;
 }>;
@@ -125,7 +125,7 @@ export function RecordsCards({
                       className="max-w-full truncate text-start font-medium underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
                       onClick={() => activate(row.recordId)}
                     >
-                      {renderers.text(row, heading)}
+                      {renderers.heading(row, heading)}
                     </button>
                   )}
                 </h3>
