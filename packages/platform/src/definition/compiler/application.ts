@@ -413,6 +413,7 @@ function compileApplication(
         return {
           eventId: resolution.id(definitionKey, "event", String(event.id), "content"),
           key: event.key,
+          label: event.label,
           ...(record === undefined
             ? {}
             : { recordTypeId: resolution.recordType(record).recordTypeId }),

@@ -164,6 +164,7 @@
       {
         "id": "event_suspend_organization",
         "key": "vortex.app.tenant_administration.organization_suspend",
+        "label": "Organization suspend",
         "record_type": "vortex.system_directory:organization",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -171,6 +172,7 @@
       {
         "id": "event_restore_organization",
         "key": "vortex.app.tenant_administration.organization_restore",
+        "label": "Organization restore",
         "record_type": "vortex.system_directory:organization",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -178,6 +180,7 @@
       {
         "id": "event_rename_organization",
         "key": "vortex.app.tenant_administration.organization_rename",
+        "label": "Organization rename",
         "record_type": "vortex.system_directory:organization",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -185,6 +188,7 @@
       {
         "id": "event_move_organization",
         "key": "vortex.app.tenant_administration.organization_move",
+        "label": "Organization move",
         "record_type": "vortex.system_directory:organization",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -192,6 +196,7 @@
       {
         "id": "event_create_child_organization",
         "key": "vortex.app.tenant_administration.organization_create_child",
+        "label": "Organization create child",
         "record_type": "vortex.system_directory:organization",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -199,6 +204,7 @@
       {
         "id": "event_open_organization_detail",
         "key": "vortex.app.tenant_administration.organization_open_detail",
+        "label": "Organization open detail",
         "record_type": "vortex.system_directory:organization",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -206,6 +212,7 @@
       {
         "id": "event_open_tenant_administrator_detail",
         "key": "vortex.app.tenant_administration.tenant_administrator_open_detail",
+        "label": "Tenant administrator open detail",
         "record_type": "vortex.system_directory:tenant_administrator",
         "carries": [],
         "personal_or_sensitive_values_allowed": false

@@ -8,6 +8,12 @@ import {
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@vortex/ui/components/dropdown-menu";
 import { Label } from "@vortex/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import {
@@ -229,7 +235,9 @@ export function StudioActionTasks({
       case "record.delete":
         return `Move ${record.name.toLowerCase()} to the recycle bin`;
       case "event.announce":
-        return studioWords(task.properties.event);
+        return (
+          events.find((event) => event.key === task.properties.event)?.label ?? "Choose an event"
+        );
       case "record.changes":
         return task.properties.changes
           .map((change) => {
@@ -370,7 +378,7 @@ export function StudioActionTasks({
                   >
                     {events.map((entry) => (
                       <NativeSelectOption key={entry.key} value={entry.key}>
-                        {studioWords(entry.key)}
+                        {entry.label}
                       </NativeSelectOption>
                     ))}
                   </NativeSelect>
@@ -484,27 +492,30 @@ export function StudioActionTasks({
           ),
         }))}
       >
-        <div className="flex flex-wrap gap-2">
-          {(Object.keys(titles) as Task["type"][]).map((type) => (
-            <Button
-              key={type}
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={
-                tasks.length >= 10 ||
-                (type === "event.announce" && events.length === 0) ||
-                (type === "record.create" && records.length === 0) ||
-                (type === "record.changes" &&
-                  (record.relationships.length === 0 || targets.length === 0))
-              }
-              onClick={() => add(type)}
-            >
-              <Icon name="plus" />
-              Add {titles[type].toLowerCase()}
-            </Button>
-          ))}
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            disabled={tasks.length >= 10}
+            render={<Button type="button" variant="ghost" size="sm" />}
+          >
+            <Icon name="plus" /> Add task
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="min-w-48">
+            {(Object.keys(titles) as Task["type"][]).map((type) => (
+              <DropdownMenuItem
+                key={type}
+                disabled={
+                  (type === "event.announce" && events.length === 0) ||
+                  (type === "record.create" && records.length === 0) ||
+                  (type === "record.changes" &&
+                    (record.relationships.length === 0 || targets.length === 0))
+                }
+                onClick={() => add(type)}
+              >
+                {titles[type]}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </StudioEntryList>
       {events.length === 0 && (
         <p className="text-sm text-muted-foreground">

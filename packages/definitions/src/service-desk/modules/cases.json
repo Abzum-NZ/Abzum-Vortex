@@ -1090,6 +1090,7 @@
     {
       "id": "evt_case_created",
       "key": "vortex.service_desk.cases.case.created",
+      "label": "Case created",
       "record_type": "case",
       "carries": ["case_number", "subject", "customer_company", "priority"],
       "personal_or_sensitive_values_allowed": false
@@ -1097,6 +1098,7 @@
     {
       "id": "evt_case_assigned",
       "key": "vortex.service_desk.cases.case.assigned",
+      "label": "Case assigned",
       "record_type": "case",
       "carries": ["case_number", "owner"],
       "personal_or_sensitive_values_allowed": false
@@ -1104,6 +1106,7 @@
     {
       "id": "evt_case_resolved",
       "key": "vortex.service_desk.cases.case.resolved",
+      "label": "Case resolved",
       "record_type": "case",
       "carries": ["case_number", "subject", "resolved_at"],
       "personal_or_sensitive_values_allowed": false
@@ -1111,6 +1114,7 @@
     {
       "id": "evt_case_public_comment",
       "key": "vortex.service_desk.cases.case.public_comment_added",
+      "label": "Case public comment added",
       "record_type": "case",
       "carries": ["case_number"],
       "personal_or_sensitive_values_allowed": false
@@ -1118,6 +1122,7 @@
     {
       "id": "evt_case_first_response_overdue",
       "key": "vortex.service_desk.cases.case.first_response_overdue",
+      "label": "Case first response overdue",
       "record_type": "case",
       "carries": ["case_number", "first_response_due_at"],
       "personal_or_sensitive_values_allowed": false
@@ -1125,6 +1130,7 @@
     {
       "id": "evt_case_resolution_overdue",
       "key": "vortex.service_desk.cases.case.resolution_overdue",
+      "label": "Case resolution overdue",
       "record_type": "case",
       "carries": ["case_number", "resolution_due_at"],
       "personal_or_sensitive_values_allowed": false
