@@ -169,7 +169,12 @@ function RelatedRecords({ context, row }: GridFeatureRowProps): ReactElement {
     const shown = state.page;
     setState({ kind: "ready", page: shown, more: "reading" });
     const outcome = await readPage(shown.next);
-    if (!mounted.current || outcome === undefined) return;
+    if (!mounted.current) return;
+    // A dropped reply (a later read for this row started) leaves the shown page as it was.
+    if (outcome === undefined) {
+      setState({ kind: "ready", page: shown, more: "idle" });
+      return;
+    }
     setState(
       outcome.status === "ready"
         ? {
@@ -192,7 +197,7 @@ function RelatedRecords({ context, row }: GridFeatureRowProps): ReactElement {
   if (state.kind === "loading")
     return (
       <div role="status" aria-label="Reading related records" className="flex flex-col gap-2 py-1">
-        {Array.from({ length: pageSize }, (_, index) => (
+        {Array.from({ length: Math.min(pageSize, 5) }, (_, index) => (
           <Skeleton key={index} className="h-5 w-full" />
         ))}
       </div>
