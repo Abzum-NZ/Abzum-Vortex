@@ -22,6 +22,7 @@ declare
   created_at_value timestamptz;
   expires_at_value timestamptz;
   previous_preview record;
+  seedable_value boolean;
 begin
   if not vortex_platform.is_non_nil_uuid(p_application_root_id::text)
     or p_expected_draft_revision is null
@@ -72,6 +73,15 @@ begin
   end loop;
   perform vortex_definition.expire_preview_installations(100);
 
+  -- The builder's live records reach the preview only through the installed Application.
+  seedable_value := exists (
+    select 1
+    from vortex_access.permission_registrations as registration
+    where registration.organization_id = organization_id_value
+      and registration.registration_kind = 'application'
+      and registration.registration_owner_id = p_application_root_id
+      and registration.state = 'active'
+  );
   preview_installation_id_value := pg_catalog.gen_random_uuid();
   created_at_value := pg_catalog.statement_timestamp();
   expires_at_value := created_at_value + preview_lifetime;
@@ -79,12 +89,12 @@ begin
     preview_installation_id, organization_id, application_root_id,
     draft_revision, application_release_revision, previewer_identity_id,
     previewer_organization_account_id, resolved_modules, storage_identities,
-    created_at, expires_at, draft_shape_fingerprint
+    created_at, expires_at, draft_shape_fingerprint, seedable
   ) values (
     preview_installation_id_value, organization_id_value, p_application_root_id,
     p_expected_draft_revision, application_release_revision_value, identity_id_value,
     organization_account_id_value, '[]'::jsonb, '[]'::jsonb,
-    created_at_value, expires_at_value, p_shape_fingerprint
+    created_at_value, expires_at_value, p_shape_fingerprint, seedable_value
   );
   insert into vortex_definition.preview_releases (
     preview_installation_id, root_id, release_revision, release, dependencies
@@ -103,14 +113,23 @@ begin
     'applicationReleaseRevision', application_release_revision_value,
     'createdAt', created_at_value,
     'expiresAt', expires_at_value,
-    -- The builder's live records reach the preview only through the installed Application.
-    'seedable', exists (
-      select 1
-      from vortex_access.permission_registrations as registration
-      where registration.organization_id = organization_id_value
-        and registration.registration_kind = 'application'
-        and registration.registration_owner_id = p_application_root_id
-        and registration.state = 'active'
+    'seedable', seedable_value,
+    -- Every record type it has storage for: the record types a demand may name.
+    'recordTypeIds', (
+      select coalesce(pg_catalog.jsonb_agg(pg_catalog.lower(identity.value ->> 'recordTypeId')
+          order by identity.value ->> 'previewStorageContractId'), '[]'::jsonb)
+      from vortex_definition.preview_installations as preview
+      cross join lateral pg_catalog.jsonb_array_elements(preview.storage_identities)
+        as identity(value)
+      where preview.preview_installation_id = preview_installation_id_value
+    ),
+    -- The seeded record types whose derived fields are worked out.
+    'derivedReadyRecordTypeIds', (
+      select coalesce(pg_catalog.jsonb_agg(pg_catalog.lower(seed.record_type_id::text)
+          order by seed.record_type_id), '[]'::jsonb)
+      from vortex_definition.preview_installation_seeds as seed
+      where seed.preview_installation_id = preview_installation_id_value
+        and seed.derived_ready_at is not null
     )
   );
 end
@@ -123,4 +142,4 @@ revoke all on function vortex_definition.create_preview_installation(uuid, bigin
 grant execute on function vortex_definition.create_preview_installation(uuid, bigint, jsonb, text)
   to vortex_request;
 comment on function vortex_definition.create_preview_installation(uuid, bigint, jsonb, text) is
-  'Replaces the builder''s 24-hour preview of one Application with a preview of its current draft: the server-compiled release plan, the exact Module pins they and the used Module releases name, the preview''s own permission registration whose draft roles only its builder holds, empty isolated storage for every bound record type, and the fingerprint of the draft''s data shape.';
+  'Replaces the builder''s 24-hour preview of one Application with a preview of its current draft: the server-compiled release plan, the exact Module pins they and the used Module releases name, the preview''s own permission registration whose draft roles only its builder holds, empty isolated storage for every bound record type, whether the installed Application can seed it with its builder''s live records, and the fingerprint of the draft''s data shape.';
