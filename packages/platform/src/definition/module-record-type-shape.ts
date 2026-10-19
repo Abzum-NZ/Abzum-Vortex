@@ -4,8 +4,11 @@ import {
   type ApplicationSourceDocument,
 } from "./application-source-contracts";
 import {
-  changeableByPeople, deriveFieldKey, standardPermissionKey,
-  standardPermissionKeys, standardRecordActions as standardActions,
+  changeableByPeople,
+  deriveFieldKey,
+  standardPermissionKey,
+  standardPermissionKeys,
+  standardRecordActions as standardActions,
 } from "./module-field-shape";
 import { applicationUses, type ApplicationUsePlace } from "./application-uses";
 import { fullRecordAccessRoleKeys } from "./module-permission-shape";
@@ -19,14 +22,25 @@ type ModulePermission = InlineModule["permissions"][number];
 
 /** The changes a record type edit makes to an Application source, or why it was refused. */
 export type InlineRecordTypeResult =
-  | Readonly<{ kind: "changed"; source: ApplicationSourceDocument; moduleKey: string; recordKey: string }>
+  | Readonly<{
+      kind: "changed";
+      source: ApplicationSourceDocument;
+      moduleKey: string;
+      recordKey: string;
+    }>
   | Readonly<{ kind: "invalid"; issues: readonly string[] }>;
 
 const words = (label: string): string =>
-  label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 
 /** A permanent record type key from its name, unique in its module; it never changes after the first save. */
-export const deriveRecordTypeKey = (name: string, taken: ReadonlySet<string>): string | undefined => {
+export const deriveRecordTypeKey = (
+  name: string,
+  taken: ReadonlySet<string>,
+): string | undefined => {
   const base = words(name).slice(0, 40).replace(/_+$/, "");
   if (!builderKeySchema.safeParse(base).success) return undefined;
   for (let n = 1; n < 1_000; n += 1) {
@@ -39,7 +53,42 @@ export const deriveRecordTypeKey = (name: string, taken: ReadonlySet<string>): s
 
 /** Every Module key the Application owns or uses: a Module key is owned or used once. */
 const takenModuleKeys = (source: ApplicationSourceDocument): Set<string> =>
-  new Set([...source.body.modules.map((module) => module.key), ...source.body.uses.map((use) => use.module)]);
+  new Set([
+    ...source.body.modules.map((module) => module.key),
+    ...source.body.uses.map((use) => use.module),
+  ]);
+
+/** A module key derived from its business name within the application's namespace. */
+export const deriveOwnedModuleKey = (
+  source: ApplicationSourceDocument,
+  name: string,
+): string | undefined => {
+  const namespace = source.key.slice(0, 78).replace(/[._]+$/, "");
+  const taken = takenModuleKeys(source);
+  const segment = deriveRecordTypeKey(
+    name,
+    new Set(
+      [...taken]
+        .filter((key) => key.startsWith(`${namespace}.`))
+        .map((key) => key.slice(namespace.length + 1)),
+    ),
+  );
+  return segment === undefined ? undefined : `${namespace}.${segment}`;
+};
+
+const moduleNameIssues = (
+  source: ApplicationSourceDocument,
+  name: string,
+  exceptKey?: string,
+): string[] => {
+  if (name === "") return ["Enter the module's name."];
+  if (name.length > 120) return ["The module name must be at most 120 characters."];
+  return source.body.modules.some(
+    (module) => module.key !== exceptKey && module.name.trim().toLowerCase() === name.toLowerCase(),
+  )
+    ? ["This application already has a module with that name."]
+    : [];
+};
 
 /** The key of the first Module an Application owns, made from the Application key: `team.workspace.data`. */
 export const defaultOwnedModuleKey = (source: ApplicationSourceDocument): string => {
@@ -65,17 +114,20 @@ const uniqueAlias = (base: string, taken: Set<string>): string => {
 };
 
 /** Every local alias a Module holds, which a new alias in it must not repeat. */
-const moduleAliases = (module: InlineModule): Set<string> => new Set([
-  module.id,
-  ...module.record_types.flatMap((record) => [
-    record.id, record.storage_contract_id, ...record.fields.map((field) => field.id),
-    ...record.relationships.map((relationship) => relationship.id),
-  ]),
-  ...module.permissions.map((permission) => permission.id),
-  ...module.actions.map((action) => action.id),
-  ...module.events.map((event) => event.id),
-  ...module.queries.map((query) => query.id),
-]);
+const moduleAliases = (module: InlineModule): Set<string> =>
+  new Set([
+    module.id,
+    ...module.record_types.flatMap((record) => [
+      record.id,
+      record.storage_contract_id,
+      ...record.fields.map((field) => field.id),
+      ...record.relationships.map((relationship) => relationship.id),
+    ]),
+    ...module.permissions.map((permission) => permission.id),
+    ...module.actions.map((action) => action.id),
+    ...module.events.map((event) => event.id),
+    ...module.queries.map((query) => query.id),
+  ]);
 
 /**
  * Adds one empty Module the Application owns: no record types, permissions or queries yet. It is
@@ -85,33 +137,76 @@ const moduleAliases = (module: InlineModule): Set<string> => new Set([
 export const addOwnedInlineModule = (
   source: ApplicationSourceDocument,
   creation: Readonly<{ key: string; name: string }>,
-): Readonly<{ kind: "added"; module: InlineModule }> | Readonly<{ kind: "invalid"; issues: readonly string[] }> => {
+):
+  | Readonly<{ kind: "added"; module: InlineModule }>
+  | Readonly<{ kind: "invalid"; issues: readonly string[] }> => {
   const key = creation.key.trim();
   const name = creation.name.trim();
   const issues: string[] = [];
   if (!namespacedKeySchema.safeParse(key).success)
-    issues.push("The module key must be lowercase words separated by dots, for example team.workspace.data.");
-  else if (takenModuleKeys(source).has(key)) issues.push("This application already owns or uses a module with that key.");
-  if (name === "") issues.push("Enter the module's name.");
+    issues.push(
+      "The module key must be lowercase words separated by dots, for example team.workspace.data.",
+    );
+  else if (takenModuleKeys(source).has(key))
+    issues.push("This application already owns or uses a module with that key.");
+  issues.push(...moduleNameIssues(source, name));
   if (issues.length > 0) return { kind: "invalid", issues };
   const module = {
-    id: `mod_${aliasPart(key)}`.slice(0, 160), key, name,
+    id: uniqueAlias(
+      `mod_${aliasPart(key)}`,
+      new Set(source.body.modules.map((module) => module.id)),
+    ),
+    key,
+    name,
     description: `The records of ${source.body.name}.`.slice(0, 1_000),
-    record_types: [], permissions: [], actions: [], events: [], flows: [], extension_points: [],
-    sharing_conditions: [], queries: [],
+    record_types: [],
+    permissions: [],
+    actions: [],
+    events: [],
+    flows: [],
+    extension_points: [],
+    sharing_conditions: [],
+    queries: [],
   } as unknown as InlineModule;
   source.body.modules.push(module);
   return { kind: "added", module };
 };
 
-const permissionLabel = (verb: string, name: string): string => `${verb} ${name.toLowerCase()}`.slice(0, 60);
+/** Adds a module as one validated draft edit, leaving the original untouched on refusal. */
+export const createOwnedInlineModule = (
+  current: ApplicationSourceDocument,
+  creation: Readonly<{ key: string; name: string }>,
+):
+  | Readonly<{ kind: "changed"; source: ApplicationSourceDocument; moduleKey: string }>
+  | Readonly<{ kind: "invalid"; issues: readonly string[] }> => {
+  const source = structuredClone(current);
+  const added = addOwnedInlineModule(source, creation);
+  if (added.kind === "invalid") return added;
+  const parsed = applicationSourceDocumentSchema.safeParse(source);
+  if (!parsed.success)
+    return {
+      kind: "invalid",
+      issues: parsed.error.issues.map((issue) => `${issue.message} (${issue.path.join(" / ")})`),
+    };
+  return { kind: "changed", source: parsed.data, moduleKey: added.module.key };
+};
+
+const permissionLabel = (verb: string, name: string): string =>
+  `${verb} ${name.toLowerCase()}`.slice(0, 60);
 const permissionDescription = (action: string, plural: string): string =>
   `Allows the standard ${action.replaceAll("_", " ")} operation for ${plural.toLowerCase()}.`;
 
-const parsedResult = (source: ApplicationSourceDocument, moduleKey: string, recordKey: string): InlineRecordTypeResult => {
+const parsedResult = (
+  source: ApplicationSourceDocument,
+  moduleKey: string,
+  recordKey: string,
+): InlineRecordTypeResult => {
   const parsed = applicationSourceDocumentSchema.safeParse(source);
   if (!parsed.success)
-    return { kind: "invalid", issues: parsed.error.issues.map((issue) => `${issue.message} (${issue.path.join(" / ")})`) };
+    return {
+      kind: "invalid",
+      issues: parsed.error.issues.map((issue) => `${issue.message} (${issue.path.join(" / ")})`),
+    };
   return { kind: "changed", source: parsed.data, moduleKey, recordKey };
 };
 
@@ -150,9 +245,12 @@ export const createInlineRecordType = (
   const issues: string[] = [];
   if (name === "") issues.push("Enter the name of one record, for example Asset.");
   if (pluralName === "") issues.push("Enter the name of several records, for example Assets.");
-  if (titleLabel === "") issues.push("Enter the label of the field that names each record, for example Name.");
+  if (titleLabel === "")
+    issues.push("Enter the label of the field that names each record, for example Name.");
   if (!builderKeySchema.safeParse(key).success)
-    issues.push("The key must start with a letter and use lowercase letters, digits and single underscores, at most 40 characters.");
+    issues.push(
+      "The key must start with a letter and use lowercase letters, digits and single underscores, at most 40 characters.",
+    );
   let module: InlineModule | undefined;
   if (creation.moduleKey !== undefined) {
     module = source.body.modules.find((item) => item.key === creation.moduleKey);
@@ -176,22 +274,48 @@ export const createInlineRecordType = (
   const prefix = key.replace(/_/g, "").slice(0, 3).toUpperCase();
   const fields = [
     {
-      id: uniqueAlias(`fld_${key}_${numberKey}`, taken), key: numberKey, label: `${name} number`.slice(0, 60),
-      required: true, unique: true, filterable: true, sortable: true, search_priority: "normal",
-      personal_data: "none", public_display: "refused", type: "reference_number",
+      id: uniqueAlias(`fld_${key}_${numberKey}`, taken),
+      key: numberKey,
+      label: `${name} number`.slice(0, 60),
+      required: true,
+      unique: true,
+      filterable: true,
+      sortable: true,
+      search_priority: "normal",
+      personal_data: "none",
+      public_display: "refused",
+      type: "reference_number",
       settings: { prefix: `${prefix}-`, digits: 6 },
     },
     {
-      id: uniqueAlias(`fld_${key}_${titleKey}`, taken), key: titleKey, label: titleLabel,
-      required: true, unique: false, filterable: true, sortable: true, search_priority: "first",
-      personal_data: "none", public_display: "refused", type: "text", settings: { max_length: 255 },
+      id: uniqueAlias(`fld_${key}_${titleKey}`, taken),
+      key: titleKey,
+      label: titleLabel,
+      required: true,
+      unique: false,
+      filterable: true,
+      sortable: true,
+      search_priority: "first",
+      personal_data: "none",
+      public_display: "refused",
+      type: "text",
+      settings: { max_length: 255 },
     },
   ] as unknown as Field[];
   const record = {
-    id: uniqueAlias(`rt_${key}`, taken), key, name, plural_name: pluralName, title_field: titleKey,
+    id: uniqueAlias(`rt_${key}`, taken),
+    key,
+    name,
+    plural_name: pluralName,
+    title_field: titleKey,
     storage_contract_id: uniqueAlias(`srt_${aliasPart(module.key)}_${key}`, taken),
-    storage_scope: "organization_shared", ownership_mode: "organization_account",
-    standard_actions: standardActions.map((entry) => entry.action), custom_actions: [], fields, pipelines: [], relationships: [],
+    storage_scope: "organization_shared",
+    ownership_mode: "organization_account",
+    standard_actions: standardActions.map((entry) => entry.action),
+    custom_actions: [],
+    fields,
+    pipelines: [],
+    relationships: [],
   } as unknown as RecordType;
   module.record_types.push(record);
   const readable = fields.map((field) => field.key);
@@ -200,12 +324,16 @@ export const createInlineRecordType = (
     module.permissions.push({
       id: uniqueAlias(`perm_${key}_${entry.action}`, taken),
       key: standardPermissionKey(module.key, key, entry.action),
-      label: permissionLabel(entry.verb, name), description: permissionDescription(entry.action, pluralName),
-      record_type: key, action_kind: entry.kind, administrative: false,
+      label: permissionLabel(entry.verb, name),
+      description: permissionDescription(entry.action, pluralName),
+      record_type: key,
+      action_kind: entry.kind,
+      administrative: false,
       record_scope: { routes: [{ kind: "all_records" }] },
       field_policy: {
         readable_fields: [...readable],
-        changeable_fields: entry.kind === "create" || entry.kind === "update" ? [...changeableFields] : [],
+        changeable_fields:
+          entry.kind === "create" || entry.kind === "update" ? [...changeableFields] : [],
       },
     } as unknown as ModulePermission);
   }
@@ -228,17 +356,24 @@ export const renameInlineRecordType = (
   const module = source.body.modules.find((item) => item.key === change.moduleKey);
   const record = module?.record_types.find((item) => item.key === change.recordKey);
   if (module === undefined || record === undefined)
-    return { kind: "invalid", issues: ["The record type is not in this application's modules any more."] };
+    return {
+      kind: "invalid",
+      issues: ["The record type is not in this application's modules any more."],
+    };
   const name = change.name.trim();
   const pluralName = change.pluralName.trim();
-  if (name === "" || pluralName === "") return { kind: "invalid", issues: ["Enter both names of the record type."] };
+  if (name === "" || pluralName === "")
+    return { kind: "invalid", issues: ["Enter both names of the record type."] };
   const keys = standardPermissionKeys(module.key, record.key);
   for (const permission of module.permissions) {
     if (!keys.has(permission.key)) continue;
-    const entry = standardActions.find((item) => standardPermissionKey(module.key, record.key, item.action) === permission.key);
+    const entry = standardActions.find(
+      (item) => standardPermissionKey(module.key, record.key, item.action) === permission.key,
+    );
     if (entry === undefined) continue;
     const target = permission as { label: string; description: string };
-    if (target.label === permissionLabel(entry.verb, record.name)) target.label = permissionLabel(entry.verb, name);
+    if (target.label === permissionLabel(entry.verb, record.name))
+      target.label = permissionLabel(entry.verb, name);
     if (target.description === permissionDescription(entry.action, record.plural_name))
       target.description = permissionDescription(entry.action, pluralName);
   }
@@ -254,33 +389,54 @@ export const setInlineRecordTitleField = (
   change: Readonly<{ moduleKey: string; recordKey: string; fieldKey: string }>,
 ): InlineRecordTypeResult => {
   const source = structuredClone(current);
-  const record = source.body.modules.find((module) => module.key === change.moduleKey)?.record_types
-    .find((entry) => entry.key === change.recordKey);
+  const record = source.body.modules
+    .find((module) => module.key === change.moduleKey)
+    ?.record_types.find((entry) => entry.key === change.recordKey);
   const field = record?.fields.find((entry) => entry.key === change.fieldKey);
   if (record === undefined || field === undefined)
     return { kind: "invalid", issues: ["Choose an existing field of this record type."] };
   if (!recordTitleFieldEligible(field))
-    return { kind: "invalid", issues: ["Choose a text, number, choice or date field, or a stored calculation with one of those results."] };
+    return {
+      kind: "invalid",
+      issues: [
+        "Choose a text, number, choice or date field, or a stored calculation with one of those results.",
+      ],
+    };
   const previousTitle = record.title_field;
   (record as { title_field: string }).title_field = field.key;
   // Headings and search entries that followed the old title keep following its chosen title.
   const reference = `${change.moduleKey}:${record.key}`;
   for (const page of source.body.pages)
     for (const item of sourcePageItems(page.composition))
-      if (item.type === "platform.renderer.record_detail" && item.props.heading_source === "field" &&
-          item.props.heading_field === `${reference}.${previousTitle}`) {
+      if (
+        item.type === "platform.renderer.record_detail" &&
+        item.props.heading_source === "field" &&
+        item.props.heading_field === `${reference}.${previousTitle}`
+      ) {
         const queryReference = item.props.vortex.query;
         if (typeof queryReference === "string") {
           const separator = queryReference.indexOf(":");
-          const owner = source.body.modules.find((module) => module.key === queryReference.slice(0, separator));
-          const query = owner?.queries.find((entry) => entry.key === queryReference.slice(separator + 1));
+          const owner = source.body.modules.find(
+            (module) => module.key === queryReference.slice(0, separator),
+          );
+          const query = owner?.queries.find(
+            (entry) => entry.key === queryReference.slice(separator + 1),
+          );
           if (owner === undefined || query === undefined)
-            return { kind: "invalid", issues: [
-              `The heading on ${page.name} uses query ${queryReference}, which this application cannot edit. Change that query in its owning application before choosing this title.`,
-            ] };
-          const queryRecord = query.record_type.includes(":") ? query.record_type : `${owner.key}:${query.record_type}`;
+            return {
+              kind: "invalid",
+              issues: [
+                `The heading on ${page.name} uses query ${queryReference}, which this application cannot edit. Change that query in its owning application before choosing this title.`,
+              ],
+            };
+          const queryRecord = query.record_type.includes(":")
+            ? query.record_type
+            : `${owner.key}:${query.record_type}`;
           if (queryRecord !== reference)
-            return { kind: "invalid", issues: [`The heading on ${page.name} uses a query for a different record type.`] };
+            return {
+              kind: "invalid",
+              issues: [`The heading on ${page.name} uses a query for a different record type.`],
+            };
           // An empty selection means all fields; keep that meaning rather than narrowing it.
           if (query.select.length > 0 && !(query.select as string[]).includes(field.key))
             (query.select as string[]).push(field.key);
@@ -295,13 +451,17 @@ export const setInlineRecordTitleField = (
 
 /** Renames an owned Module: its name changes, its key stays. */
 export const renameInlineModule = (
-  current: ApplicationSourceDocument, change: Readonly<{ moduleKey: string; name: string }>,
+  current: ApplicationSourceDocument,
+  change: Readonly<{ moduleKey: string; name: string }>,
 ): InlineRecordTypeResult => {
   const source = structuredClone(current);
   const module = source.body.modules.find((item) => item.key === change.moduleKey);
-  if (module === undefined) return { kind: "invalid", issues: ["The module is not owned by this application any more."] };
-  if (change.name.trim() === "") return { kind: "invalid", issues: ["Enter the module's name."] };
-  (module as { name: string }).name = change.name.trim();
+  if (module === undefined)
+    return { kind: "invalid", issues: ["The module is not owned by this application any more."] };
+  const name = change.name.trim();
+  const issues = moduleNameIssues(source, name, module.key);
+  if (issues.length > 0) return { kind: "invalid", issues };
+  (module as { name: string }).name = name;
   return parsedResult(source, module.key, "");
 };
 
@@ -311,18 +471,27 @@ export const renameInlineModule = (
  * this was its last record type.
  */
 export const deleteInlineRecordType = (
-  current: ApplicationSourceDocument, moduleKey: string, recordKey: string,
-): InlineRecordTypeResult | Readonly<{ kind: "referenced"; references: readonly ApplicationUsePlace[] }> => {
+  current: ApplicationSourceDocument,
+  moduleKey: string,
+  recordKey: string,
+):
+  | InlineRecordTypeResult
+  | Readonly<{ kind: "referenced"; references: readonly ApplicationUsePlace[] }> => {
   const references = applicationUses(current, { kind: "record_type", moduleKey, recordKey });
   if (references.length > 0) return { kind: "referenced", references };
   const source = structuredClone(current);
   const module = source.body.modules.find((item) => item.key === moduleKey);
   if (module === undefined || !module.record_types.some((record) => record.key === recordKey))
-    return { kind: "invalid", issues: ["The record type is not in this application's modules any more."] };
+    return {
+      kind: "invalid",
+      issues: ["The record type is not in this application's modules any more."],
+    };
   const own = standardPermissionKeys(moduleKey, recordKey);
   module.record_types = module.record_types.filter((record) => record.key !== recordKey);
   module.permissions = module.permissions.filter((permission) => !own.has(permission.key));
   for (const role of source.body.roles)
-    (role as { permissions: string[] }).permissions = (role.permissions as string[]).filter((entry) => !own.has(entry));
+    (role as { permissions: string[] }).permissions = (role.permissions as string[]).filter(
+      (entry) => !own.has(entry),
+    );
   return parsedResult(source, moduleKey, recordKey);
 };
