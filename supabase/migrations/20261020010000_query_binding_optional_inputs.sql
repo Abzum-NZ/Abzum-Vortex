@@ -16,7 +16,8 @@ declare
   resolved jsonb;
 begin
   -- The caller has validated the full tree and refused every missing required input.
-  -- An omitted optional input removes its comparison, including beneath NOT or OR.
+  -- An omitted optional input removes its comparison, including beneath NOT or OR. An emptiness
+  -- check asks about the value itself, so it stays and sees the input as empty.
   if p_condition is null or p_condition = 'null'::jsonb then
     return null;
   end if;
@@ -33,6 +34,9 @@ begin
     resolved := vortex_record.omit_unbound_query_conditions_internal(p_condition -> 'condition', p_parameter_values);
     if resolved is null then return null; end if;
     return pg_catalog.jsonb_set(p_condition, '{condition}', resolved);
+  end if;
+  if p_condition ->> 'operator' in ('is_empty', 'is_not_empty') then
+    return p_condition;
   end if;
   if exists (
     select 1
@@ -752,7 +756,7 @@ begin
   loop
     input_key := input_item ->> 'key';
     input_value := coalesce(p_input_values -> input_key, 'null'::jsonb);
-    if input_value = 'null'::jsonb and (input_item ->> 'required')::boolean then
+    if input_value = 'null'::jsonb and coalesce((input_item ->> 'required')::boolean, true) then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'input_invalid');
     end if;
     if input_value <> 'null'::jsonb and input_item ->> 'type' = 'record_reference' then

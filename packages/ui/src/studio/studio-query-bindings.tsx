@@ -2,13 +2,13 @@
 import { useId } from "react";
 import {
   checkQueryBindings,
-  checkPageParameters,
   queryInputValueType,
   queryBindingTypeName,
   queryBindingTypesFit,
   readQueryBindings,
   relativeDateAnchors,
   type QueryBindingSourceKind,
+  type RelativeDateAnchor,
   type SourceBlockPropertyValueContract,
   type QueryBindingPageFacts,
 } from "@vortex/platform/schema";
@@ -34,9 +34,17 @@ const labels: Record<QueryBindingSourceKind, string> = {
   page_parameter: "Page parameter",
   record_field: "Record field",
   current_person: "Current person",
-  control: "Page control",
+  control: "Control on this page",
   relative_date: "Relative date",
   this_row: "This row",
+};
+const anchorLabels: Record<RelativeDateAnchor, string> = {
+  today: "Today",
+  start_of_week: "Start of this week",
+  start_of_month: "Start of this month",
+  start_of_quarter: "Start of this quarter",
+  start_of_year: "Start of this year",
+  end_of_month: "End of this month",
 };
 
 /** Each edit replaces one input binding through the inspector's ordinary undoable settings command. */
@@ -56,17 +64,20 @@ export function StudioQueryBindings({
   onChange: (value: Value) => void;
 }>) {
   const id = useId();
-  if (query === undefined || query.inputs.length === 0) return null;
+  if (query === undefined) return null;
   const items = value?.kind === "list" ? value.items : [];
+  if (query.inputs.length === 0 && items.length === 0) return null;
   const read = readQueryBindings(value === undefined ? {} : { query_parameters: value });
   const inputs = query.inputs.map((input) => ({ ...input, type: queryInputValueType(input) }));
-  const problems = read.kind === "read" ? checkQueryBindings(read.bindings, inputs, facts) : [];
+  const problems = checkQueryBindings(read, inputs, facts);
   return (
     <div className="space-y-4" aria-label="Query inputs">
-      {read.kind === "malformed" && (
-        <p role="alert" className="text-sm text-destructive">
-          {facts.blockLabel} has an input binding without its source.
-        </p>
+      {[...problems.filter((problem) => problem.input === undefined), ...facts.pageProblems].map(
+        (problem) => (
+          <p key={problem.sentence} role="alert" className="text-sm text-destructive">
+            {problem.sentence}
+          </p>
+        ),
       )}
       {inputs.map((input) => {
         const item = items.find(
@@ -79,12 +90,14 @@ export function StudioQueryBindings({
         const source = props.source?.kind === "choice" ? props.source.value : "";
         const fit = (type: NonNullable<typeof input.type>) =>
           input.type !== undefined && queryBindingTypesFit(input.type, type);
-        const parameters = facts.parameters.filter((parameter) => fit(parameter.type));
+        const fitting = facts.parameters.filter((parameter) => fit(parameter.type));
+        // A control's parameter is chosen through the control; the page offers its subject.
+        const parameters = fitting.filter((parameter) => parameter.control === undefined);
         const fields = (facts.recordFields ?? []).filter(
           (field) => field.type !== undefined && fit(field.type),
         );
         const controls = facts.controls.filter((control) =>
-          parameters.some((parameter) => parameter.name === control.parameter),
+          fitting.some((parameter) => parameter.name === control.parameter),
         );
         const sources: QueryBindingSourceKind[] = [
           "fixed",
@@ -153,7 +166,7 @@ export function StudioQueryBindings({
               : "";
         const options =
           source === "page_parameter"
-            ? parameters.map((parameter) => ({ value: parameter.name, label: parameter.name }))
+            ? parameters.map((parameter) => ({ value: parameter.name, label: parameter.label }))
             : source === "control"
               ? controls.map((control) => ({ value: control.placement, label: control.label }))
               : fields.map((field) => ({ value: field.field, label: field.label }));
@@ -162,11 +175,11 @@ export function StudioQueryBindings({
           <div key={input.key} className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-medium">{input.label}</span>
-              <Badge variant="secondary">
-                {input.type === undefined
-                  ? input.type
-                  : queryBindingTypeName(input.type, facts.recordTypeLabel)}
-              </Badge>
+              {input.type !== undefined && (
+                <Badge variant="secondary">
+                  {queryBindingTypeName(input.type, facts.recordTypeLabel)}
+                </Badge>
+              )}
               {input.required && <Badge variant="outline">Required</Badge>}
             </div>
             <Select value={source || "unset"} disabled={disabled} onValueChange={selectSource}>
@@ -258,16 +271,17 @@ export function StudioQueryBindings({
                 >
                   <SelectTrigger aria-label={`${input.label} date`}>
                     <SelectValue>
-                      {(props.anchor?.kind === "choice" ? props.anchor.value : "today").replaceAll(
-                        "_",
-                        " ",
-                      )}
+                      {anchorLabels[
+                        (props.anchor?.kind === "choice"
+                          ? props.anchor.value
+                          : "today") as RelativeDateAnchor
+                      ] ?? anchorLabels.today}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {relativeDateAnchors.map((anchor) => (
                       <SelectItem key={anchor} value={anchor}>
-                        {anchor.replaceAll("_", " ")}
+                        {anchorLabels[anchor]}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -295,11 +309,6 @@ export function StudioQueryBindings({
           </div>
         );
       })}
-      {checkPageParameters(facts.controls).map((problem) => (
-        <p key={problem.sentence} role="alert" className="text-sm text-destructive">
-          {problem.sentence}
-        </p>
-      ))}
     </div>
   );
 }

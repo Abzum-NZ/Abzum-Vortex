@@ -699,7 +699,7 @@ begin
   loop
     input_key := input_item ->> 'key';
     input_value := coalesce(p_input_values -> input_key, 'null'::jsonb);
-    if input_value = 'null'::jsonb and (input_item ->> 'required')::boolean then
+    if input_value = 'null'::jsonb and coalesce((input_item ->> 'required')::boolean, true) then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'input_invalid');
     end if;
     if input_value <> 'null'::jsonb and input_item ->> 'type' = 'record_reference' then

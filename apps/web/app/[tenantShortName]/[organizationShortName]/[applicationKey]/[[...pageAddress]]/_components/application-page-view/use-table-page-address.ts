@@ -118,11 +118,14 @@ export function useTablePageAddress({
     [clearSelection],
   );
 
-  const parameterSearch = useRef(currentSearch);
+  // The address the shown page parameters were read for; a new server model read its own address.
+  const parameterSearch = useRef({ owner: model, search: currentSearch });
   useEffect(() => {
-    const previousParameters = new URLSearchParams(parameterSearch.current);
+    const previousParameters = new URLSearchParams(
+      parameterSearch.current.owner === model ? parameterSearch.current.search : currentSearch,
+    );
     const parameters = new URLSearchParams(currentSearch);
-    parameterSearch.current = currentSearch;
+    parameterSearch.current = { owner: model, search: currentSearch };
     const rebound = new Set(
       Object.entries(model.pageParameters.dependents).flatMap(([name, ids]) =>
         previousParameters.get(name) === parameters.get(name)
@@ -166,7 +169,7 @@ export function useTablePageAddress({
         if (pending.get(placement) === read) pending.delete(placement);
       });
     }
-  }, [clearSelection, currentSearch, model.data, model.pageParameters, refreshPlacements]);
+  }, [clearSelection, currentSearch, model, refreshPlacements]);
 
   return { commitTablePage, changeTableQuery, tableQueryPending };
 }

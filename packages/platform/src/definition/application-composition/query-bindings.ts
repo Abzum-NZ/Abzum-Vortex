@@ -97,13 +97,9 @@ const sourceOf = (item: SettingsRecord): QueryBindingSource | undefined => {
     case "relative_date": {
       const anchor = choiceOf(item["anchor"], relativeDateAnchors);
       const offset = item["offset_days"];
-      if (anchor === undefined || (offset !== undefined && offset.kind !== "number"))
-        return undefined;
-      return {
-        kind: "relative_date",
-        anchor,
-        offsetDays: offset?.kind === "number" ? offset.value : 0,
-      };
+      return anchor === undefined || offset?.kind !== "number"
+        ? undefined
+        : { kind: "relative_date", anchor, offsetDays: offset.value };
     }
     case "this_row": {
       const field = settingField(item["field"]);

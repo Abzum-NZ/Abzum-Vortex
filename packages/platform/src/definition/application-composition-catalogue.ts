@@ -12,7 +12,31 @@ import {
 } from "./application-composition/platform-block-release";
 import { PLATFORM_BLOCK_RELEASE_IDENTITIES } from "./application-composition-release-identities";
 import { platformBlockReleaseContentHash } from "./catalogue-release-content-hashes";
-import sources from "../catalogue/catalogue/application-composition-catalogue.source.json";
+import catalogueSources from "../catalogue/catalogue/application-composition-catalogue.source.json";
+import sharedProperties from "../catalogue/catalogue/application-composition-shared-properties.source.json";
+
+/**
+ * A property several blocks declare identically (a query-bound block's input bindings and its
+ * waiting message) is written once in the shared properties file and named in each block's
+ * properties as `{ "shared": "<key>" }`; each release holds the expanded property.
+ */
+const sources = Object.fromEntries(
+  Object.entries(catalogueSources).map(([name, definition]) => [
+    name,
+    {
+      ...definition,
+      properties: (definition.properties as readonly object[]).map((property) => {
+        if (!("shared" in property)) return property;
+        const shared = sharedProperties[property.shared as keyof typeof sharedProperties];
+        if (shared === undefined)
+          throw new Error(
+            `Platform block catalogue names unknown shared property ${String(property.shared)}`,
+          );
+        return shared;
+      }),
+    },
+  ]),
+) as unknown as typeof catalogueSources;
 
 const deepFreeze = <Value>(value: Value): Value => {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;

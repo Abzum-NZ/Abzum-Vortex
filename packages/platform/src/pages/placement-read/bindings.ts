@@ -30,9 +30,9 @@ import {
 } from "./shared";
 import type { PlacementReadInput } from "./types";
 
-const blockKeyOf = (vortex: unknown): string | undefined => {
+const blockOf = (vortex: unknown): Readonly<{ key: string; name: string }> | undefined => {
   try {
-    return placementBlockRelease((vortex as { block?: unknown } | undefined)?.block).key;
+    return placementBlockRelease((vortex as { block?: unknown } | undefined)?.block);
   } catch {
     // A custom component publishes no page parameter.
     return undefined;
@@ -58,7 +58,7 @@ export const pageQueryBindingContext = (
 ): QueryBindingContext => {
   const entries: [string, { settings: unknown; vortex: unknown }][] = [];
   walkPageComposition(input.pageDefinition.composition, ({ placementId, props, vortex }) => {
-    if (blockKeyOf(vortex) !== undefined)
+    if (blockOf(vortex) !== undefined)
       entries.push([placementId, { settings: placementSettings(props), vortex }]);
     return undefined;
   });
@@ -68,7 +68,7 @@ export const pageQueryBindingContext = (
   );
   if (shell !== undefined)
     walkPlacementData(shell.layout, ({ placementId, props, vortex }) => {
-      if (blockKeyOf(vortex) !== undefined)
+      if (blockOf(vortex) !== undefined)
         entries.push([placementId, { settings: placementSettings(props), vortex }]);
       return undefined;
     });
@@ -80,7 +80,7 @@ export const pageQueryBindingContext = (
   const facts = compiledPageBindingFacts(
     input.pageDefinition as unknown as Readonly<Record<string, unknown>>,
     entries,
-    (placement) => blockKeyOf(placement.vortex),
+    (placement) => blockOf(placement.vortex),
     records,
     new Map(
       input.context.releaseSet.modules.flatMap((module) =>

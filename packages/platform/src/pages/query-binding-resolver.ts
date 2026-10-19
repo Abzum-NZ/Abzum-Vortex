@@ -132,8 +132,8 @@ const resolveOne = async (
     if (declared === undefined) return { kind: "refused", reason: "parameter_not_declared" };
     const raw = firstValue(context.address[name]);
     if (raw === undefined || raw === "") return { kind: "missing" };
-    // The address value is read as the declared parameter's own type; the Query engine then
-    // validates it against the input again.
+    // A record parameter is read as the record type it declares, any other value as the input's
+    // type (publication matched the two); the Query engine then validates it against the input.
     const value = parseQueryBindingText(raw, declared.kind === "record" ? declared : type);
     return value === undefined
       ? { kind: "refused", reason: "parameter_value_invalid" }
@@ -148,7 +148,10 @@ const resolveOne = async (
         : { kind: "value", value };
     }
     case "page_parameter":
-      return fromAddress(source.name);
+      // A control's value is bound through the control, as publication requires.
+      return [...context.controls.values()].includes(source.name)
+        ? { kind: "refused", reason: "parameter_published_by_control" }
+        : fromAddress(source.name);
     case "control": {
       const name = context.controls.get(source.placement.toLowerCase());
       return name === undefined

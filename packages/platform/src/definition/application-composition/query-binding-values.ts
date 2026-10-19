@@ -142,6 +142,8 @@ export const parseQueryBindingText = (
   text: string,
   type: QueryBindingValueType,
 ): JsonValue | undefined => {
+  // An empty value is no value: a binding gives one, or the input is left without it.
+  if (text === "") return undefined;
   switch (type.kind) {
     case "text":
       return text;

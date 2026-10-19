@@ -1,7 +1,8 @@
 import {
   isPageParameterName,
+  PAGE_SUBJECT_PARAMETER,
   type QueryBinding,
-  type QueryBindings,
+  type QueryBindingsRead,
   type QueryBindingSource,
 } from "./query-bindings";
 import {
@@ -32,6 +33,8 @@ export type QueryBindingField = Readonly<{
 /** One parameter the page declares: its subject, or the one a control publishes. */
 export type QueryBindingPageParameter = Readonly<{
   name: string;
+  /** The parameter in business words: "This Company", or the publishing control's label. */
+  label: string;
   type: QueryBindingValueType;
   /** The control that publishes it, as the binding names the control; absent for the subject. */
   control?: string;
@@ -61,6 +64,8 @@ export type QueryBindingPageFacts = Readonly<{
   /** The parent row's record type, inside a row's related records. */
   rowRecordType?: string;
   recordTypeLabel: (recordType: string) => string;
+  /** The page's own problems: a control that cannot publish, or a name two controls publish. */
+  pageProblems: readonly QueryBindingProblem[];
 }>;
 
 /** One binding problem: the business sentence, and the input it is about when there is one. */
@@ -82,20 +87,19 @@ const sourceFacts = (source: QueryBindingSource, facts: QueryBindingPageFacts): 
       return { kind: "fixed", value: source.value };
     case "page_parameter": {
       const parameter = facts.parameters.find((candidate) => candidate.name === source.name);
-      return parameter === undefined
-        ? { kind: "problem", sentence: `This page has no parameter called ${source.name}.` }
-        : {
-            kind: "typed",
-            type: parameter.type,
-            description: `the page parameter ${source.name}`,
-          };
+      if (parameter === undefined)
+        return { kind: "problem", sentence: `This page has no parameter called ${source.name}.` };
+      // A control's value is bound through the control: the one way to name it.
+      if (parameter.control !== undefined)
+        return { kind: "problem", sentence: `Choose ${parameter.label} as the source instead.` };
+      return { kind: "typed", type: parameter.type, description: parameter.label };
     }
     case "control": {
       const control = facts.controls.find(
         (candidate) => candidate.placement.toLowerCase() === source.placement.toLowerCase(),
       );
       if (control === undefined)
-        return { kind: "problem", sentence: `${source.placement} is not on this page.` };
+        return { kind: "problem", sentence: "The chosen control is not on this page." };
       const parameter = facts.parameters.find((candidate) => candidate.name === control.parameter);
       return control.parameter === undefined || parameter === undefined
         ? { kind: "problem", sentence: `${control.label} publishes no page parameter.` }
@@ -148,9 +152,11 @@ const bindingProblem = (
   const source = sourceFacts(binding.source, facts);
   if (source.kind === "problem") return source.sentence;
   if (source.kind === "fixed")
-    return parseQueryBindingText(source.value, input.type) === undefined
-      ? `${source.value} is not a valid ${name(input.type)} for ${input.label}.`
-      : undefined;
+    return source.value.trim() === ""
+      ? `Write a value for ${input.label}.`
+      : parseQueryBindingText(source.value, input.type) === undefined
+        ? `${source.value} is not a valid ${name(input.type)} for ${input.label}.`
+        : undefined;
   if (source.type === undefined)
     return `${input.label} needs ${withArticle(name(input.type))}; ${source.description} gives no value a query can use.`;
   if (queryBindingTypesFit(input.type, source.type, binding.source.kind === "relative_date"))
@@ -166,16 +172,20 @@ const bindingProblem = (
  * sentence beside its input; publication refuses with the same sentences.
  */
 export const checkQueryBindings = (
-  bindings: QueryBindings,
+  read: QueryBindingsRead,
   inputs: readonly QueryBindingInput[],
   facts: QueryBindingPageFacts,
 ): readonly QueryBindingProblem[] => {
+  if (read.kind === "malformed")
+    return [{ sentence: `${facts.blockLabel} has an input binding without its source.` }];
   const problems: QueryBindingProblem[] = [];
   const bound = new Set<string>();
-  for (const binding of bindings) {
+  for (const binding of read.bindings) {
     const input = inputs.find((candidate) => candidate.key === binding.input);
     if (input === undefined) {
-      problems.push({ sentence: `${facts.blockLabel} has no input called ${binding.input}.` });
+      problems.push({
+        sentence: `${facts.blockLabel} has a source for an input its query does not have.`,
+      });
       continue;
     }
     if (bound.has(input.key)) {
@@ -195,28 +205,118 @@ export const checkQueryBindings = (
   return problems;
 };
 
+/** One placement of a page as a binding sees it: its block, its name and what it may publish. */
+export type QueryBindingPlacement = Readonly<{
+  placement: string;
+  blockKey: string | undefined;
+  /** The authored label or title; the block's name stands in when there is none. */
+  label: string | undefined;
+  blockName: string;
+  parameter: string | undefined;
+  /** The record types a link input names. */
+  linkTargets: readonly string[];
+  /** The value type of a field input's field. */
+  fieldType: QueryBindingValueType | undefined;
+  /** The record type of a table that selects a record on click; undefined for any other table. */
+  selectedRecordType: string | undefined;
+}>;
+
+type Published =
+  | Readonly<{ kind: "none" }>
+  | Readonly<{ kind: "control"; type: QueryBindingValueType | undefined }>;
+
+/** Whether a placement is a control and the value it publishes: the one rule for both sides. */
+const publishedBy = (placement: QueryBindingPlacement): Published => {
+  switch (placement.blockKey) {
+    case "platform.form.link_input":
+      return { kind: "control", type: { kind: "record", recordTypes: placement.linkTargets } };
+    case "platform.form.field_input":
+      // A field input publishes the record its link field holds; its form owns any other value.
+      return {
+        kind: "control",
+        type: placement.fieldType?.kind === "record" ? placement.fieldType : undefined,
+      };
+    case "platform.form.text_input":
+    case "platform.form.choice_input":
+      return { kind: "control", type: { kind: "text" } };
+    case "platform.form.date_input":
+      return { kind: "control", type: { kind: "date" } };
+    case "platform.display.table":
+      return placement.selectedRecordType === undefined
+        ? { kind: "none" }
+        : {
+            kind: "control",
+            type: { kind: "record", recordTypes: [placement.selectedRecordType] },
+          };
+    default:
+      return { kind: "none" };
+  }
+};
+
 /**
- * The page-level check of declared parameters: each control's name is a valid parameter name and
- * no two controls publish the same one.
+ * What one page offers the bindings of its blocks, built by this one function from a Studio draft
+ * and from a compiled release: the subject parameter of a record page, each control's published
+ * parameter typed by the control, the subject record's fields, and the page's own problems (a block
+ * that cannot publish, a name that is not a parameter name, a name two controls publish).
  */
-export const checkPageParameters = (
-  controls: readonly QueryBindingControl[],
-): readonly QueryBindingProblem[] => {
-  const problems: QueryBindingProblem[] = [];
+export const pageBindingFacts = (
+  input: Readonly<{
+    /** The record type a record page is about, with its name; undefined on any other page. */
+    subject: Readonly<{ recordType: string; label: string }> | undefined;
+    placements: readonly QueryBindingPlacement[];
+    recordFields: readonly QueryBindingField[] | undefined;
+    recordTypeLabel: (recordType: string) => string;
+  }>,
+): Omit<QueryBindingPageFacts, "blockLabel"> => {
+  const parameters: QueryBindingPageParameter[] =
+    input.subject === undefined
+      ? []
+      : [
+          {
+            name: PAGE_SUBJECT_PARAMETER,
+            label: `This ${input.subject.label}`,
+            type: { kind: "record", recordTypes: [input.subject.recordType] },
+          },
+        ];
+  const controls: QueryBindingControl[] = [];
+  const pageProblems: QueryBindingProblem[] = [];
   const seen = new Set<string>();
-  const reported = new Set<string>();
-  for (const control of controls) {
-    const name = control.parameter;
-    if (name === undefined) continue;
-    if (!isPageParameterName(name)) {
-      problems.push({ sentence: `${name} cannot be a page parameter name.` });
+  for (const placement of input.placements) {
+    const label = placement.label ?? placement.blockName;
+    const name = placement.parameter;
+    const published = publishedBy(placement);
+    if (published.kind === "none") {
+      if (name !== undefined)
+        pageProblems.push({ sentence: `${label} cannot publish a page parameter.` });
       continue;
     }
-    if (seen.has(name) && !reported.has(name)) {
-      problems.push({ sentence: `Two controls on this page publish ${name}.` });
-      reported.add(name);
+    controls.push({
+      placement: placement.placement,
+      label,
+      ...(name === undefined ? {} : { parameter: name }),
+    });
+    if (name === undefined) continue;
+    if (published.type === undefined)
+      pageProblems.push({
+        sentence: `${label} can publish a page parameter only for a link field.`,
+      });
+    else if (!isPageParameterName(name))
+      pageProblems.push({ sentence: `${name} cannot be a page parameter name.` });
+    else if (seen.has(name)) {
+      if (!pageProblems.some((problem) => problem.sentence.endsWith(` publish ${name}.`)))
+        pageProblems.push({ sentence: `Two controls on this page publish ${name}.` });
+    } else {
+      seen.add(name);
+      parameters.push({ name, label, type: published.type, control: placement.placement });
     }
-    seen.add(name);
   }
-  return problems;
+  return {
+    parameters,
+    controls,
+    recordFields: input.recordFields,
+    // No page holds a row's related records yet, so This row is refused everywhere.
+    rowFields: undefined,
+    recordTypeLabel: input.recordTypeLabel,
+    pageProblems,
+  };
 };

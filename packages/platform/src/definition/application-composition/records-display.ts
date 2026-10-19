@@ -158,9 +158,10 @@ const displayMessages = (settings: SettingsRecord): RecordsDisplayMessages => {
  */
 const readRowBehaviours = (settings: SettingsRecord): RecordsTableRowBehaviourContract => {
   const click = settingGroup(settings["row_click"]);
-  const clickEventId = click === undefined ? undefined : settingText(click["event_id"]);
+  const mode = click?.["mode"]?.kind === "choice" ? click["mode"].value : undefined;
+  const clickEventId = mode === "flow" ? settingText(click?.["event_id"]) : undefined;
   return {
-    ...(click?.["mode"]?.kind === "choice" && click["mode"].value === "select"
+    ...(mode === "select"
       ? { rowClick: { eventId: "select", selectsRecord: true } }
       : clickEventId === undefined
         ? {}

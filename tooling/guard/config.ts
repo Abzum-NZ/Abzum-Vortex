@@ -29,7 +29,7 @@ export const packageAreas: Record<string, string> = {
 export const guardRules = {
   "query-input-name-matching": {
     tier: "blocking",
-    owner: "platform",
+    owner: "lead",
     reviewBy: "2027-01-15",
     description: "Query input values must come from explicit bindings through the shared resolver",
   },

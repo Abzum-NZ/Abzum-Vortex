@@ -17,7 +17,6 @@ import {
   recordsTableEditableFieldTypes,
   type BlockPropertySchemaContract,
   type RecordsTableQueryFacts,
-  checkPageParameters,
   compiledPageBindingFacts,
   compiledPlacementBindingProblems,
 } from "../../schema";
@@ -226,16 +225,16 @@ export function applicationPageRules(scope: ApplicationScope): void {
     const bindingFacts = compiledPageBindingFacts(
       page,
       placementEntries,
-      (placement) => releaseOf(placement)?.key,
+      releaseOf,
       records,
       moduleQueries,
     );
-    for (const problem of checkPageParameters(bindingFacts.controls))
+    for (const problem of bindingFacts.pageProblems)
       failures.push(
         failure(
           output,
           "vortex.definition.application_block_settings",
-          "duplicate_key",
+          "invalid_value",
           undefined,
           "definition_query_binding",
           problem.sentence,

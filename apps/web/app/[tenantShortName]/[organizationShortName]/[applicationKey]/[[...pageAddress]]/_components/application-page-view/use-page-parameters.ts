@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
 import { applyRecordsTableQueryChange } from "@vortex/platform/schema";
 import type { ControlSemanticEvent } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
@@ -103,5 +103,5 @@ export function usePageParameters({
     },
     [model.pageParameters.controlKinds, publish],
   );
-  return { change, publish };
+  return useMemo(() => ({ change, publish }), [change, publish]);
 }
