@@ -208,6 +208,20 @@ export const studioSettingProblems = (
     };
     for (const property of properties) visit(property, values[property.key], [property.key]);
   }
+  // A data grid shows at least one column before a person arranges it; publication refuses a
+  // grid whose columns are all hidden by default.
+  const columns = values["columns"];
+  if (
+    columns?.kind === "list" &&
+    columns.items.length > 0 &&
+    columns.items.every(
+      (item) =>
+        item.kind === "group" &&
+        item.properties["visible"]?.kind === "boolean" &&
+        !item.properties["visible"].value,
+    )
+  )
+    problems.push("Keep at least one column visible.");
   return [...new Set(problems)];
 };
 

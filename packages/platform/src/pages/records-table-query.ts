@@ -3,8 +3,10 @@ import "server-only";
 import {
   describeFailure,
   unavailableResult,
+  gridLayoutVisibleFieldIds,
   readRecordsTableContract,
   type BlockPropertyValueContract,
+  type GridLayoutState,
   type IdentitySession,
   type JsonValue,
   type ModuleRootId,
@@ -65,11 +67,16 @@ export type RecordsTableQueryRequest = Readonly<{
   settings: Readonly<Record<string, BlockPropertyValueContract>>;
   pageParameters?: Readonly<Record<string, JsonValue>>;
   /**
-   * The viewer's query state from the page address: ordered sort, filters, search, visible columns
-   * and the requested page. Every part is validated here against the installed placement's
-   * declared contract; nothing in it widens what the placement declares.
+   * The viewer's query state from the page address: ordered sort, filters, search and the requested
+   * page. Every part is validated here against the installed placement's declared contract;
+   * nothing in it widens what the placement declares.
    */
   state: RecordsTableQueryState;
+  /**
+   * The viewer's layout of this grid, already resolved against the declared columns: the read
+   * requests exactly the columns it shows, and the page carries it back to the grid.
+   */
+  layout: GridLayoutState;
   /** Headings from the installed definition for declared columns that set no label (field identity to label). */
   fieldLabels?: Readonly<Record<string, string>>;
   /** Labels of the choices each choice field offers (field identity to options). */
@@ -229,10 +236,10 @@ export type RecordsTableQueryCommand = Readonly<{
 }>;
 
 /**
- * Builds the Query engine command a declared Records table needs: exactly its visible columns,
- * its declared page size, its declared query inputs, and the viewer's current sort, filters,
- * search and page from the table's query state. The visible columns must be a nonempty subset of
- * the declared columns (the authored default visibility when the viewer chose none); a sort key
+ * Builds the Query engine command a declared Records table needs: exactly the columns the viewer's
+ * layout shows, its declared page size, its declared query inputs, and the viewer's current sort,
+ * filters, search and page from the table's query state. The shown columns must be a nonempty
+ * subset of the declared columns; a sort key
  * must be a declared sortable field and a filter a declared filterable field, so an unconfigured
  * field can neither sort, filter nor be returned. The effective order is the viewer's sort, else
  * the authored default sort, else the bound query's own sort; the engine appends the record
@@ -254,9 +261,7 @@ export const buildRecordsTableQueryCommand = (
   const declaredFieldIds = [
     ...new Set(contract.columns.map((column) => column.field.toLowerCase())),
   ];
-  const requestedVisible =
-    state.visibleFieldIds ??
-    contract.columns.filter((column) => column.visible).map((column) => column.field);
+  const requestedVisible = gridLayoutVisibleFieldIds(request.layout.layout);
   const visibleSet = new Set(requestedVisible.map((fieldId) => fieldId.toLowerCase()));
   if (
     visibleSet.size === 0 ||
@@ -381,7 +386,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
           : await request.resolveRecordLinks(links);
       const page = request.state.page?.page ?? 1;
       const projected = projectRecordsTableData(
-        built.fieldIds,
+        request.layout,
         {
           settings: request.settings,
           ...(recordLinks === undefined ? {} : { recordLinks }),

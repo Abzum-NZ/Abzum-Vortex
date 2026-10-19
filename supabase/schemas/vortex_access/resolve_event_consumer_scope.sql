@@ -1,4 +1,4 @@
-create or replace function vortex_access.resolve_search_index_scope(
+create or replace function vortex_access.resolve_event_consumer_scope(
   p_organization_id uuid,
   p_application_root_id uuid
 )
@@ -20,7 +20,7 @@ begin
   if p_organization_id is null or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
     or p_application_root_id is null
     or not vortex_platform.is_non_nil_uuid(p_application_root_id::text) then
-    raise exception using errcode = '22023', message = 'Search index scope selection is invalid';
+    raise exception using errcode = '22023', message = 'Event consumer scope selection is invalid';
   end if;
 
   -- The organisation and its access version are share-locked before the
@@ -45,14 +45,14 @@ begin
         and root.kind = 'application'
         and root.organization_id = p_organization_id
     ) then
-    raise exception using errcode = '42501', message = 'Search index scope is unavailable';
+    raise exception using errcode = '42501', message = 'Event consumer scope is unavailable';
   end if;
 
   -- Indexing runs inside event dispatch, so the actor is the dispatcher's own
   -- platform-wide system actor grant; nothing the caller supplies names it.
   dispatcher := vortex_access.resolve_event_dispatcher_actor();
   if dispatcher ->> 'outcome' is distinct from 'authorised' then
-    raise exception using errcode = '42501', message = 'Search index scope is unavailable';
+    raise exception using errcode = '42501', message = 'Event consumer scope is unavailable';
   end if;
 
   return query select (dispatcher ->> 'systemActorId')::uuid, resolved_tenant_id,
@@ -60,14 +60,14 @@ begin
 end
 $function$;
 
-revoke all on function vortex_access.resolve_search_index_scope(uuid, uuid)
+revoke all on function vortex_access.resolve_event_consumer_scope(uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-grant execute on function vortex_access.resolve_search_index_scope(uuid, uuid)
-  to vortex_runtime;
+grant execute on function vortex_access.resolve_event_consumer_scope(uuid, uuid)
+  to vortex_runtime, vortex_record_adapter;
 
-comment on function vortex_access.resolve_search_index_scope(uuid, uuid) is
-  'Resolves the tenant, access version and the event dispatcher''s system actor for one active organisation Application, so the search consumer can read a record under a system context. Refuses for an inactive organisation, a foreign Application or a missing or ambiguous dispatcher grant. Runtime-only.';
+comment on function vortex_access.resolve_event_consumer_scope(uuid, uuid) is
+  'Resolves the tenant, access version and the event dispatcher''s system actor for one active organisation Application, so the event consumer can read a record under a system context. Refuses for an inactive organisation, a foreign Application or a missing or ambiguous dispatcher grant. Runtime-only.';
 
-alter function vortex_access.resolve_search_index_scope(p_organization_id uuid, p_application_root_id uuid) owner to vortex_owner;
+alter function vortex_access.resolve_event_consumer_scope(p_organization_id uuid, p_application_root_id uuid) owner to vortex_owner;
 
-grant execute on function vortex_access.resolve_search_index_scope(p_organization_id uuid, p_application_root_id uuid) to postgres;
+grant execute on function vortex_access.resolve_event_consumer_scope(p_organization_id uuid, p_application_root_id uuid) to postgres;

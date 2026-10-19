@@ -1,12 +1,14 @@
 import "server-only";
 
 import {
+  gridLayoutVisibleFieldIds,
   isSafeLinkAddress,
   readRecordDetailContract,
   readRecordsTableContract,
   richTextDocumentSchema,
   timestampSchema,
   type BlockPropertyValueContract,
+  type GridLayoutState,
   type JsonValue,
   type RecordsDisplayFormat,
   type RecordsTableFilterValue,
@@ -142,6 +144,8 @@ export type ProjectedTableValues = Readonly<{
    * value, so the person can show one again (which reads the page again with that column).
    */
   hiddenColumns: readonly Readonly<{ key: string; label: string }>[];
+  /** The person's layout of this grid: order, shown columns, widths and density. */
+  layout: GridLayoutState;
   rows: readonly ProjectedTableRow[];
   /** The grid features this viewer may use on this read; absent when every feature is off. */
   features?: RecordsTableFeatureProjection;
@@ -448,8 +452,9 @@ const RESTRICTED_CELL: ProjectedScalarCellValue = Object.freeze({ kind: "restric
 
 /**
  * Projects a Records table's query rows into its display payload. Columns and headings come only
- * from the declared contract, narrowed to the visible columns the read requested (`visibleFieldIds`,
- * already validated as declared columns), so a hidden column carries only its heading, never a value. The Query engine omits a field the viewer cannot read, including a
+ * from the declared contract, narrowed to the columns the person's layout arranges (already
+ * resolved against the declared columns and their field policy) and shown by the columns it shows,
+ * so a hidden column carries only its heading, never a value. The Query engine omits a field the viewer cannot read, including a
  * calculation or total whose inputs the viewer cannot read, so a row without a declared field
  * shows it as Restricted, never blank and never inferred. Undeclared fields the engine
  * returned are dropped, and each row keeps only the record identity, revision and per-row
@@ -461,7 +466,7 @@ const RESTRICTED_CELL: ProjectedScalarCellValue = Object.freeze({ kind: "restric
  * can still page back; a first page with no rows is the plain empty state.
  */
 export const projectRecordsTableData = (
-  visibleFieldIds: readonly string[],
+  layout: GridLayoutState,
   input: ComponentDataProjectionInput,
   rows: readonly ProtectedQueryRow[],
   keepEmptyPage = false,
@@ -475,10 +480,14 @@ export const projectRecordsTableData = (
   const completeRows = rows.filter(isListRow);
   if (completeRows.length !== rows.length) return undefined;
 
+  const visibleFieldIds = gridLayoutVisibleFieldIds(layout.layout);
+  const arranged = layout.layout.columns.map((column) => column.fieldId);
   const columns: { key: string; label: string; format: RecordsDisplayFormat }[] = [];
   const hiddenColumns: { key: string; label: string }[] = [];
   for (const column of contract.columns) {
     if ([...columns, ...hiddenColumns].some((held) => sameField(held.key, column.field))) continue;
+    // A column the person's field policy leaves out of the layout is neither listed nor offered.
+    if (!arranged.some((fieldId) => sameField(fieldId, column.field))) continue;
     const label = headingFor(column.field, column.label, input.fieldLabels);
     if (label === undefined) return undefined;
     if (visibleFieldIds.some((fieldId) => sameField(fieldId, column.field)))
@@ -495,6 +504,7 @@ export const projectRecordsTableData = (
       kind: "table",
       columns: columns.map(({ key, label }) => ({ key, label })),
       hiddenColumns,
+      layout,
       ...(features === undefined ? {} : { features }),
       rows: completeRows.map((row) => ({
         recordId: row.recordId,
@@ -565,13 +575,13 @@ export const projectRecordDetailData = (
           : tableColumns !== undefined
             ? projectTableField(stored.value, tableColumns)
             : projectCell(
-              stored.value,
-              declared.format,
-              choiceLabels,
-              input.fieldDateTypes?.[declared.field.toLowerCase()],
-              input.recordLinks,
-              input.fieldLinkTypes?.[declared.field.toLowerCase()],
-            ),
+                stored.value,
+                declared.format,
+                choiceLabels,
+                input.fieldDateTypes?.[declared.field.toLowerCase()],
+                input.recordLinks,
+                input.fieldLinkTypes?.[declared.field.toLowerCase()],
+              ),
     });
   }
   const headingValue =
