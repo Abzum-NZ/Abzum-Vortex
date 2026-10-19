@@ -284,7 +284,9 @@ export function StudioAccessPermissionList({
                 .filter(
                   (role) =>
                     role.permissions.includes(permission.key) ||
-                    (!permission.administrative && role.permissions.includes("*")),
+                    (permission.moduleKey === undefined &&
+                      !permission.administrative &&
+                      role.permissions.includes("*")),
                 )
                 .map((role) => role.name);
               const places = applicationUses(source, {
