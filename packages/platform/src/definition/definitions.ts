@@ -96,7 +96,29 @@ export const recordTypeReferenceSchema = z.discriminatedUnion("state", [
   resolvedRecordTypeReferenceSchema,
 ]);
 
-const parsedOutputOptionMatches = (schema: z.core.$ZodType, value: unknown): boolean => {
+/**
+ * Whether a parsed value matches one union option, per object value and option schema. One walk
+ * asks the same question again for every nested union under a subtree it already matched, so
+ * each walk keeps its own answers; values are already parsed and nothing writes to them.
+ */
+type OptionMatches = WeakMap<object, Map<z.core.$ZodType, boolean>>;
+
+const parsedOutputOptionMatches = (
+  schema: z.core.$ZodType,
+  value: unknown,
+  known: OptionMatches,
+): boolean => {
+  if (value === null || typeof value !== "object") return optionMatches(schema, value, known);
+  let answers = known.get(value);
+  const answer = answers?.get(schema);
+  if (answer !== undefined) return answer;
+  const matches = optionMatches(schema, value, known);
+  if (answers === undefined) known.set(value, (answers = new Map()));
+  answers.set(schema, matches);
+  return matches;
+};
+
+const optionMatches = (schema: z.core.$ZodType, value: unknown, known: OptionMatches): boolean => {
   const definition = (schema as z.core.$ZodTypes)._zod.def;
   switch (definition.type) {
     case "object": {
@@ -104,12 +126,12 @@ const parsedOutputOptionMatches = (schema: z.core.$ZodType, value: unknown): boo
       const record = value as Record<string, unknown>;
       const shape = definition.shape as Record<string, z.core.$ZodType>;
       for (const [key, child] of Object.entries(shape))
-        if (!parsedOutputOptionMatches(child, record[key])) return false;
+        if (!parsedOutputOptionMatches(child, record[key], known)) return false;
       for (const [key, entry] of Object.entries(record)) {
         if (key in shape) continue;
         if (
           definition.catchall === undefined ||
-          !parsedOutputOptionMatches(definition.catchall, entry)
+          !parsedOutputOptionMatches(definition.catchall, entry, known)
         )
           return false;
       }
@@ -120,18 +142,20 @@ const parsedOutputOptionMatches = (schema: z.core.$ZodType, value: unknown): boo
       const bounds = (schema as z.core.$ZodTypes)._zod.bag;
       if (typeof bounds.minimum === "number" && value.length < bounds.minimum) return false;
       if (typeof bounds.maximum === "number" && value.length > bounds.maximum) return false;
-      return value.every((entry) => parsedOutputOptionMatches(definition.element, entry));
+      return value.every((entry) => parsedOutputOptionMatches(definition.element, entry, known));
     }
     case "tuple": {
       if (!Array.isArray(value)) return false;
       if (definition.rest === null && value.length > definition.items.length) return false;
       return (
-        definition.items.every((child, index) => parsedOutputOptionMatches(child, value[index])) &&
+        definition.items.every((child, index) =>
+          parsedOutputOptionMatches(child, value[index], known),
+        ) &&
         value
           .slice(definition.items.length)
           .every(
             (entry) =>
-              definition.rest !== null && parsedOutputOptionMatches(definition.rest, entry),
+              definition.rest !== null && parsedOutputOptionMatches(definition.rest, entry, known),
           )
       );
     }
@@ -142,23 +166,23 @@ const parsedOutputOptionMatches = (schema: z.core.$ZodType, value: unknown): boo
         !Array.isArray(value) &&
         Object.entries(value).every(
           ([key, entry]) =>
-            parsedOutputOptionMatches(definition.keyType, key) &&
-            parsedOutputOptionMatches(definition.valueType, entry),
+            parsedOutputOptionMatches(definition.keyType, key, known) &&
+            parsedOutputOptionMatches(definition.valueType, entry, known),
         )
       );
     case "pipe":
-      return parsedOutputOptionMatches(definition.out, value);
+      return parsedOutputOptionMatches(definition.out, value, known);
     case "lazy":
-      return parsedOutputOptionMatches(definition.getter(), value);
+      return parsedOutputOptionMatches((schema as z.core.$ZodLazy)._zod.innerType, value, known);
     case "optional":
-      return value === undefined || parsedOutputOptionMatches(definition.innerType, value);
+      return value === undefined || parsedOutputOptionMatches(definition.innerType, value, known);
     case "nullable":
-      return value === null || parsedOutputOptionMatches(definition.innerType, value);
+      return value === null || parsedOutputOptionMatches(definition.innerType, value, known);
     case "default":
     case "readonly":
-      return parsedOutputOptionMatches(definition.innerType, value);
+      return parsedOutputOptionMatches(definition.innerType, value, known);
     case "union":
-      return definition.options.some((option) => parsedOutputOptionMatches(option, value));
+      return definition.options.some((option) => parsedOutputOptionMatches(option, value, known));
     default:
       return z.core.safeParse(schema, value).success;
   }
@@ -174,13 +198,21 @@ export const walkDefinitionContract = (
   value: unknown,
   visit: (schema: z.core.$ZodType, value: unknown, path: PropertyKey[]) => void,
   path: PropertyKey[] = [],
+): void => walkContract(schema, value, visit, path, new WeakMap());
+
+const walkContract = (
+  schema: z.core.$ZodType,
+  value: unknown,
+  visit: (schema: z.core.$ZodType, value: unknown, path: PropertyKey[]) => void,
+  path: PropertyKey[],
+  known: OptionMatches,
 ): void => {
   visit(schema, value, path);
   if (schema === jsonValueSchema) return;
   if (value === null || value === undefined) return;
   const definition = (schema as z.core.$ZodTypes)._zod.def;
   const walk = (child: z.core.$ZodType, entry: unknown, childPath = path) =>
-    walkDefinitionContract(child, entry, visit, childPath);
+    walkContract(child, entry, visit, childPath, known);
   switch (definition.type) {
     case "object":
       for (const [key, child] of Object.entries(definition.shape))
@@ -219,7 +251,7 @@ export const walkDefinitionContract = (
             z.core.safeParse(tag, (value as Record<string, unknown>)[discriminator]).success
           );
         }
-        return parsedOutputOptionMatches(child, value);
+        return parsedOutputOptionMatches(child, value, known);
       });
       // The owning schema validator reports malformed branches. Never guess a
       // reference position from a value that does not match a declared branch.
@@ -228,7 +260,7 @@ export const walkDefinitionContract = (
       return;
     }
     case "lazy":
-      walk(definition.getter(), value);
+      walk((schema as z.core.$ZodLazy)._zod.innerType, value);
       return;
     case "pipe":
       // Values here are already parsed: traverse the declared output shape,

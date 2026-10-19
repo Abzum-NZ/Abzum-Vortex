@@ -3,7 +3,14 @@ import { useEffect, useRef } from "react";
 import type { DefinitionPublicationConfirmation } from "@vortex/platform/schema";
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@vortex/ui/components/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@vortex/ui/components/dialog";
 import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { Spinner } from "@vortex/ui/components/spinner";
@@ -32,65 +39,124 @@ export type StudioPublishDialogProps = Readonly<{
   onPublish: () => void;
 }>;
 
-/** What will be published, as a summary and a table of changed items, with one Publish button. */
+/** Reviews the saved draft and its changes before publishing one version. */
 export function StudioPublishDialog(props: StudioPublishDialogProps) {
   const { open, saving, notSaved, canPrepare, preparing, publishing, prepared, onPrepare } = props;
   const waiting = saving || notSaved !== "";
   const attempted = useRef<string>("");
   // Reading what will be published starts when the dialog opens on a saved draft; one read per opening.
   useEffect(() => {
-    if (!open) { attempted.current = ""; return; }
-    if (waiting || !canPrepare || prepared !== null || preparing || publishing ||
-      attempted.current === "tried") return;
+    if (!open) {
+      attempted.current = "";
+      return;
+    }
+    if (
+      waiting ||
+      !canPrepare ||
+      prepared !== null ||
+      preparing ||
+      publishing ||
+      attempted.current === "tried"
+    )
+      return;
     attempted.current = "tried";
     onPrepare();
   }, [open, waiting, canPrepare, prepared, preparing, publishing, onPrepare]);
   const noteValid = props.note.trim().length >= 1 && props.note.trim().length <= 2000;
   const preparingSummary = !waiting && !publishing && prepared === null && props.problem === "";
-  return <Dialog open={open} onOpenChange={(next) => { if (!publishing) props.onOpenChange(next); }}>
-    <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto" aria-label="Publish this application">
-      <DialogHeader>
-        <DialogTitle>Publish this application</DialogTitle>
-        <DialogDescription>
-          Publishing makes the saved draft a new version. Organisations install it, or upgrade to it, from the App Store.
-        </DialogDescription>
-      </DialogHeader>
-      {notSaved !== ""
-          ? <Alert variant="destructive" role="alert">
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!publishing) props.onOpenChange(next);
+      }}
+    >
+      <DialogContent className="min-w-0 max-h-dvh max-w-xl overflow-y-auto break-words">
+        <DialogHeader>
+          <DialogTitle className="text-xl tracking-tight">
+            {prepared === null
+              ? "Publish version"
+              : `Publish version ${prepared.confirmation.assignedVersion}`}
+          </DialogTitle>
+          <DialogDescription>
+            Publishing makes the saved draft a new version. Organisations install it, or upgrade to
+            it, from the App Store.
+          </DialogDescription>
+        </DialogHeader>
+        {notSaved !== "" ? (
+          <Alert variant="destructive" role="alert">
             <AlertTitle>Your latest change is not saved</AlertTitle>
             <AlertDescription>Only the saved draft is published. {notSaved}</AlertDescription>
           </Alert>
-          : saving
-          ? <p role="status" aria-live="polite">Saving your latest changes…</p>
-          : <div className="space-y-4">
-            {prepared === null
-              ? <p role="status" aria-live="polite">
-                {preparing ? "Checking what will be published…"
-                  : props.problem === "" ? "Preparing the summary…" : null}
+        ) : saving ? (
+          <p role="status" aria-live="polite">
+            Saving your latest changes…
+          </p>
+        ) : (
+          <div className="min-w-0 space-y-4">
+            {prepared === null ? (
+              <p role="status" aria-live="polite">
+                {preparing
+                  ? "Checking what will be published…"
+                  : props.problem === ""
+                    ? "Preparing the summary…"
+                    : null}
               </p>
-              : <PublicationSummary confirmation={prepared.confirmation} componentLabels={prepared.componentLabels} />}
-            {props.problem === "" ? null
-              : <Alert variant="destructive" role="alert">
+            ) : (
+              <PublicationSummary
+                confirmation={prepared.confirmation}
+                componentLabels={prepared.componentLabels}
+              />
+            )}
+            {props.problem === "" ? null : (
+              <Alert variant="destructive" role="alert">
                 <AlertTitle>This cannot be published yet</AlertTitle>
                 <AlertDescription>{props.problem}</AlertDescription>
-              </Alert>}
-            <div className="space-y-1">
+              </Alert>
+            )}
+            <div className="min-w-0 space-y-2">
               <Label htmlFor="studio-release-note">What changed in this version?</Label>
-              <Textarea id="studio-release-note" value={props.note} maxLength={2000} disabled={publishing || prepared === null}
+              <Textarea
+                id="studio-release-note"
+                value={props.note}
+                maxLength={2000}
+                disabled={publishing || prepared === null}
                 placeholder="A short note for the people who read the version history"
-                onChange={(event) => props.onNoteChange(event.target.value)} />
+                onChange={(event) => props.onNoteChange(event.target.value)}
+              />
             </div>
-          </div>}
-      <DialogFooter>
-        <Button type="button" variant="outline" disabled={publishing} onClick={() => props.onOpenChange(false)}>Cancel</Button>
-        {!waiting && prepared === null && !preparing && props.problem !== ""
-          ? <Button type="button" variant="outline" disabled={!canPrepare} onClick={onPrepare}>Check again</Button> : null}
-        <Button type="button" disabled={waiting || prepared === null || !noteValid || publishing}
-          onClick={props.onPublish}>
-          {(saving || preparingSummary || publishing) && <Spinner aria-hidden="true" />}
-          {publishing ? "Publishing…" : saving ? "Saving…" : preparingSummary ? "Preparing…" : "Publish"}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>;
+          </div>
+        )}
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={publishing}
+            onClick={() => props.onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          {!waiting && prepared === null && !preparing && props.problem !== "" ? (
+            <Button type="button" variant="outline" disabled={!canPrepare} onClick={onPrepare}>
+              Check again
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            disabled={waiting || prepared === null || !noteValid || publishing}
+            onClick={props.onPublish}
+          >
+            {(saving || preparingSummary || publishing) && <Spinner aria-hidden="true" />}
+            {publishing
+              ? "Publishing…"
+              : saving
+                ? "Saving…"
+                : preparingSummary
+                  ? "Preparing…"
+                  : "Publish"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }

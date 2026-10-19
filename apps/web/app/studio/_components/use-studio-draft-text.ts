@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 /**
  * A text control bound to one draft value: each change goes to the draft at once through `apply`,
@@ -8,19 +8,29 @@ import { useEffect, useState } from "react";
  * elsewhere (Undo, Redo, another edit) the control shows it, unless it is what the person is typing
  * (the same text up to surrounding spaces, which the draft does not keep).
  */
-export function useStudioDraftText(value: string, apply: (next: string) => string | true): Readonly<{
+export function useStudioDraftText(
+  value: string,
+  apply: (next: string) => string | true,
+): Readonly<{
   text: string;
   problem: string;
   change: (next: string) => void;
+  reset: () => void;
 }> {
   const [text, setText] = useState(value);
   const [problem, setProblem] = useState("");
+  const reset = useCallback(() => {
+    setText(value);
+    setProblem("");
+  }, [value]);
   useEffect(() => {
-    setText((current) => current.trim() === value.trim() ? current : value);
+    setText((current) => (current.trim() === value.trim() ? current : value));
     setProblem("");
   }, [value]);
   return {
-    text, problem,
+    text,
+    problem,
+    reset,
     change: (next) => {
       setText(next);
       const result = apply(next);

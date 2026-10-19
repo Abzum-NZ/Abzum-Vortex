@@ -106,7 +106,11 @@ function ModuleInspector({
   );
   return (
     <div className="space-y-3">
-      <StudioField label="Module name" error={name.problem === "" ? undefined : name.problem}>
+      <StudioField
+        label="Module name"
+        error={name.problem === "" ? undefined : name.problem}
+        onUndo={name.reset}
+      >
         {(control) => (
           <Input
             {...control}
@@ -205,6 +209,7 @@ function RecordTypeInspector({
         <StudioField
           label="Name of one record"
           error={name.problem === "" ? undefined : name.problem}
+          onUndo={name.reset}
         >
           {(control) => (
             <Input
@@ -219,6 +224,7 @@ function RecordTypeInspector({
         <StudioField
           label="Name of several records"
           error={plural.problem === "" ? undefined : plural.problem}
+          onUndo={plural.reset}
         >
           {(control) => (
             <Input

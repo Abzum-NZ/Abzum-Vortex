@@ -67,9 +67,15 @@ body {
     letter-spacing: inherit;
   }
 
-  /* A fieldset groups controls without the browser's own inset, as in shadcn's preflight. */
+  /* A fieldset groups controls without the browser's own inset or frame, as in shadcn's preflight. */
   :where([data-vortex-theme]) :where(fieldset) {
+    min-width: 0;
     margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  :where([data-vortex-theme]) :where(legend) {
     padding: 0;
   }
 }

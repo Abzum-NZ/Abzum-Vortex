@@ -1,5 +1,6 @@
 "use client";
 
+import { useStudioFieldProblems } from "@vortex/ui/studio";
 import { useState } from "react";
 import { FormattedTime, Icon } from "@vortex/ui";
 import { Badge } from "@vortex/ui/components/badge";
@@ -54,18 +55,23 @@ export function studioNotice(
 /** The one save chip and the two states that interrupt editing. Conflict never overwrites a newer revision. */
 export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
   const { status } = draft;
+  const fields = useStudioFieldProblems();
+  const hasFieldProblems = (fields?.problems.length ?? 0) > 0;
   const [loadFailed, setLoadFailed] = useState(false);
   const sessionEnded = draft.session.needsSignIn || isStudioSessionRefusal(status);
   const notSaved =
+    hasFieldProblems ||
     sessionEnded ||
     status.kind === "refused" ||
     status.kind === "conflict" ||
     status.kind === "failed";
   const busy =
     !sessionEnded &&
+    !hasFieldProblems &&
     (status.kind === "saving" || (status.kind === "saved" && draft.updatingCanvas));
-  const label =
-    status.kind === "failed"
+  const label = hasFieldProblems
+    ? "Not saved"
+    : status.kind === "failed"
       ? "Retrying…"
       : notSaved
         ? "Not saved"
@@ -81,7 +87,7 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
       variant="ghost"
       className={cn(
         "h-6 gap-1.5 px-2 text-xs font-medium",
-        status.kind === "failed"
+        status.kind === "failed" && !hasFieldProblems
           ? "bg-warning/10 text-warning"
           : notSaved
             ? "bg-destructive/10 text-destructive"
@@ -92,7 +98,13 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
         <Spinner className="size-3" aria-hidden="true" />
       ) : (
         <Icon
-          name={status.kind === "failed" ? "history" : notSaved ? "circle" : "check"}
+          name={
+            status.kind === "failed" && !hasFieldProblems
+              ? "history"
+              : notSaved
+                ? "circle"
+                : "check"
+          }
           className="size-3"
         />
       )}
@@ -121,20 +133,24 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
               <PopoverDescription>
                 {sessionEnded
                   ? "Your session ended, so your last change was not saved."
-                  : "message" in status
-                    ? status.message
-                    : ""}
+                  : hasFieldProblems
+                    ? fields?.problems[0]
+                    : "message" in status
+                      ? status.message
+                      : ""}
               </PopoverDescription>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={!draft.state.canUndo || draft.locked}
-                  onClick={draft.undo}
+                  disabled={
+                    (hasFieldProblems ? !fields?.canUndo : !draft.state.canUndo) || draft.locked
+                  }
+                  onClick={hasFieldProblems ? fields?.undo : draft.undo}
                 >
                   Undo my change
                 </Button>
-                {status.kind === "refused" && !sessionEnded && (
+                {status.kind === "refused" && !sessionEnded && !hasFieldProblems && (
                   <Button
                     size="sm"
                     onClick={() => {

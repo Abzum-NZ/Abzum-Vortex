@@ -1,14 +1,14 @@
 import "server-only";
 
 import type { ExactDefinitionDependency, SessionContext } from "../schema";
+import type { PlatformPermissionSource } from "../access/platform-permissions";
 import { applicationModuleKeys } from "./application-module-sources";
 import { applicationModuleSources } from "./application-module-lowering";
-import { compileApplicationWithInlineModules } from "./application-publication";
-import { createDraftModuleOverlay } from "./publication/draft-module-overlay";
+import type { ApplicationReleasePlan } from "./application-publication";
+import { assertReleasable } from "./definition-publication-compilation";
 import {
   refuse,
   type DefinitionPublicationCandidate,
-  type DefinitionPublicationCatalogue,
   type DefinitionPublicationReader,
   type DefinitionReleaseAppend,
   type OwnedModuleRoot,
@@ -152,14 +152,18 @@ const previewRows = (append: DefinitionReleaseAppend, context: SessionContext) =
   };
 };
 
-/** No release writes or write locks: preview consumes the publication compiler's in-memory plan. */
+/**
+ * No release writes or write locks: preview releases the revision's one compile, `compile`, which
+ * the builder has usually produced already, judged once more as a release against the published
+ * history.
+ */
 export const planApplicationPreview = async (
   context: SessionContext,
-  reader: DefinitionPublicationReader,
-  catalogue: DefinitionPublicationCatalogue,
+  snapshot: DefinitionPublicationReader,
   candidate: DefinitionPublicationCandidate,
+  permissions: PlatformPermissionSource,
+  compile: () => Promise<ApplicationReleasePlan>,
 ): Promise<PreviewReleasePlan> => {
-  const snapshot = createDraftModuleOverlay(reader, context, candidate.draft);
   const ownedRoots = await snapshot.readOwnedModuleRoots(String(candidate.draft.rootId));
   const source = candidate.draft.source;
   if (source.kind !== "application") return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
@@ -189,13 +193,8 @@ export const planApplicationPreview = async (
       return refuse("DEFINITION_DEPENDENCY_MISSING");
     return { rootId: page.rootId, currentReleaseRevision: page.anchorReleaseRevision };
   });
-  const compiled = await compileApplicationWithInlineModules(
-    context,
-    snapshot,
-    catalogue,
-    candidate,
-    { final: true },
-  );
+  const compiled = await compile();
+  assertReleasable(compiled, candidate.historyEvidence, permissions);
   return {
     accessVersion: context.accessVersion,
     application,
