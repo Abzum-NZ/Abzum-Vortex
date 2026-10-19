@@ -58,11 +58,11 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) return privateJsonResponse({ kind: "refused" }, 400);
     const { organizationId, operation, candidate } = parsed.data;
     const result =
-      operation === "canvas"
-        ? await readStudioCanvasRecords(identity.session, organizationId, candidate, request.signal)
-        : operation === "data"
-          ? await readStudioDataRecords(identity.session, organizationId, candidate, request.signal)
-          : await loadStudioApplicationDraft(organizationId, candidate);
+      operation === "compile"
+        ? await loadStudioApplicationDraft(organizationId, candidate)
+        : operation === "canvas"
+          ? await readStudioCanvasRecords(identity.session, organizationId, candidate, request.signal)
+          : await readStudioDataRecords(identity.session, organizationId, candidate, request.signal);
     return privateJsonResponse(result, 200);
   } catch (error) {
     if (request.signal.aborted) return new Response(null, { status: 499 });
