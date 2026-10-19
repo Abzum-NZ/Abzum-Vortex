@@ -268,6 +268,8 @@ export const prepareDefinitionPublicationResultSchema = z
     componentLabels: z
       .array(z.object({ componentId: platformIdSchema, label: z.string().min(1) }).strict())
       .max(10_000),
+    // Qualified source references of new fields, for reviewing their use on authored pages.
+    addedFields: z.array(z.string().min(1)).max(10_000),
   })
   .strict();
 
