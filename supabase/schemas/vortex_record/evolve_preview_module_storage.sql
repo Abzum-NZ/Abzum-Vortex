@@ -66,6 +66,7 @@ begin
     for update;
     if catalogue_row.record_type_definition ->> 'storageScope' is distinct from record_type ->> 'storageScope'
       or catalogue_row.record_type_definition ->> 'ownershipMode' is distinct from record_type ->> 'ownershipMode'
+      or catalogue_row.record_type_definition ->> 'ownershipRelationshipId' is distinct from record_type ->> 'ownershipRelationshipId'
       or pg_catalog.jsonb_typeof(record_type -> 'fields') is distinct from 'array'
       or pg_catalog.jsonb_array_length(record_type -> 'fields') < 1
       or pg_catalog.jsonb_typeof(record_type -> 'relationships') is distinct from 'array' then
