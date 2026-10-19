@@ -40,7 +40,7 @@ const headClass = "normal-case text-xs text-foreground";
 function Inputs({ inputs }: Readonly<{ inputs: readonly StudioQueryInput[] }>) {
   if (inputs.length === 0) return <span className="text-muted-foreground">None</span>;
   return (
-    <ul className="space-y-1">
+    <ul className="list-none space-y-1">
       {inputs.map((input) => (
         <li key={input.key}>
           {input.label}{" "}
@@ -111,7 +111,7 @@ function QueryTable({
             <TableHead className={headClass}>Records</TableHead>
             <TableHead className={headClass}>Inputs</TableHead>
             <TableHead className={`${headClass} w-20 text-center`}>Used in</TableHead>
-            <TableHead className={headClass}>{last.title}</TableHead>
+            <TableHead className={`${headClass} w-36`}>{last.title}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -155,7 +155,7 @@ function QueryTable({
                 <TableCell className="text-center tabular-nums">
                   <UsedIn source={source} moduleKey={module.key} query={query} />
                 </TableCell>
-                <TableCell>{last.cell({ module, query })}</TableCell>
+                <TableCell className="whitespace-nowrap">{last.cell({ module, query })}</TableCell>
               </TableRow>
             );
           })}
@@ -223,7 +223,7 @@ export function StudioQueryCatalogue({
     if (refused !== undefined) setProblem(refused);
   };
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6 px-8 py-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6 px-8 py-6">
       <header className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <h2 className="text-xl font-semibold tracking-tight">Queries</h2>
