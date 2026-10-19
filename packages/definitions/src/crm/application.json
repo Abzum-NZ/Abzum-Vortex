@@ -498,6 +498,7 @@
                 {
                   "type": "platform.renderer.summary_values",
                   "props": {
+                    "card_min_width": 192,
                     "id": "content_kpi",
                     "title": "Pipeline totals",
                     "empty_message": "No opportunities to show.",

@@ -507,6 +507,7 @@
                 {
                   "type": "platform.renderer.summary_values",
                   "props": {
+                    "card_min_width": 192,
                     "id": "content_kpi",
                     "title": "Workload totals",
                     "empty_message": "No open cases to show.",

@@ -205,6 +205,21 @@
     "rendererKey": "platform.renderer.summary_values",
     "properties": [
       {
+        "kind": "number",
+        "key": "card_min_width",
+        "integer": true,
+        "presentation": true,
+        "label": "Minimum card width",
+        "help": "Preferred minimum width in pixels; cards stack when the block is narrower",
+        "required": true,
+        "minimum": 120,
+        "maximum": 640,
+        "defaultValue": {
+          "kind": "number",
+          "value": 192
+        }
+      },
+      {
         "kind": "text",
         "key": "title",
         "presentation": true,
@@ -706,6 +721,21 @@
     "paletteGroup": "figures",
     "rendererKey": "platform.renderer.summary_values",
     "properties": [
+      {
+        "kind": "number",
+        "key": "card_min_width",
+        "integer": true,
+        "presentation": true,
+        "label": "Minimum card width",
+        "help": "Preferred minimum width in pixels; cards stack when the block is narrower",
+        "required": true,
+        "minimum": 120,
+        "maximum": 640,
+        "defaultValue": {
+          "kind": "number",
+          "value": 192
+        }
+      },
       {
         "kind": "text",
         "key": "title",
