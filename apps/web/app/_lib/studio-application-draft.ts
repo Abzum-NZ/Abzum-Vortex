@@ -801,7 +801,7 @@ export const loadStudioApplicationDraft = async (
                       const from = record.fields.find((field) =>
                         sameId(String(field.fieldId), String(relationship.fromFieldId)),
                       );
-                      // A link's targets in this same release, by the reference Studio spells.
+                      // Targets may belong to another installed module, as query inputs do.
                       const targets = [
                         ...(relationship.toRecordType === undefined
                           ? []
@@ -810,11 +810,9 @@ export const loadStudioApplicationDraft = async (
                       ].flatMap((target) => {
                         const linked =
                           target.state === "resolved"
-                            ? records.find((candidate) =>
-                                sameId(String(candidate.recordTypeId), String(target.recordTypeId)),
-                              )
+                            ? recordTypeKeys.get(String(target.recordTypeId))
                             : undefined;
-                        return linked === undefined ? [] : [`${release.key}:${linked.key}`];
+                        return linked === undefined ? [] : [linked];
                       });
                       borrowedRelationships.push({
                         reference: `${release.key}:${record.key}.${relationship.key}`,
