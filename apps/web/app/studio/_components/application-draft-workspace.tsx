@@ -127,7 +127,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   };
 
   // The one outline of the draft: Structure, Outline and every label Studio shows are views of it.
-  const describePlacement = useMemo(() => createStudioPlacementDescriber(catalogue), [catalogue]);
+  const describePlacement = useMemo(() => createStudioPlacementDescriber(catalogue, source), [catalogue, source]);
   const outline = useMemo(
     () =>
       projectStudioSemanticOutline({ rootId: state.rootId, source, catalogue }, describePlacement),

@@ -147,13 +147,14 @@ export const runCommand = async (
     if (error instanceof QueryInputRefusalError) return refusal("input_invalid");
     throw error;
   }
-  // The fingerprint binds the query inputs, the user's sort, filter and search, the requested
-  // projection and the page size alike, so a continuation issued under one view can never be
-  // replayed under another (a cursor read for other visible columns opens nothing).
+  // The fingerprint binds the query inputs, the user's sort, filter and search and the page size,
+  // so a continuation issued under one order or narrowing can never be replayed under another. The
+  // requested columns are not bound: a keyset position is the sort-key values and record identity
+  // of a row (run_module_query never reads the projection to place it), and every read
+  // re-authorises its own projection, so showing or hiding a column rereads the same page.
   const inputFingerprint = fingerprintQueryInputs({
     inputValues,
     user: userQueryInputs(command),
-    requestedFieldIds: command.requestedFieldIds.map((fieldId) => fieldId.toLowerCase()).sort(),
     requestedSystemFieldKeys: [...command.requestedSystemFieldKeys].sort(),
     pageSize: command.pageSize,
   });
