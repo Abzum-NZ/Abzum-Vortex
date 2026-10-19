@@ -38,10 +38,7 @@ import {
   type FirstInstallSelector,
 } from "./installation-first-install";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
-import {
-  releaseRoleTemplates,
-  type ApplicationRoleTemplate,
-} from "./installation-role-templates";
+import { releaseRoleTemplates, type ApplicationRoleTemplate } from "./installation-role-templates";
 
 /** What a first-install read needs from the application: the catalogue, the permissions, and the custom-component rule. */
 export type FirstInstallEnvironment = Readonly<{
@@ -65,11 +62,12 @@ const readFirstInstallCandidateInTransaction = async (
   environment: FirstInstallEnvironment,
   selector: FirstInstallSelector,
 ): Promise<
-  Readonly<{
-    latest: ApplicationLatestRelease;
-    releaseSet: SystemApplicationBoundReleaseSetResult;
-    bindings: InstallationBindings;
-  }>
+  | Readonly<{
+      latest: ApplicationLatestRelease;
+      releaseSet: SystemApplicationBoundReleaseSetResult;
+      bindings: InstallationBindings;
+    }>
+  | "already_installed"
 > => {
   const { permissions } = environment;
   const expected = { organizationId: selector.organizationId };
@@ -86,6 +84,14 @@ const readFirstInstallCandidateInTransaction = async (
   const latest = await readApplicationLatestRelease(transaction, selector.rootId);
   if (selector.releaseRevision > latest.releaseRevision)
     firstInstallUnavailable("release_not_published");
+  const bindings = await readInstallationBindings(transaction, selector.rootId);
+  // A different registered release needs the upgrade journey. Decide that from the protected
+  // binding read before fetching and projecting a release set a first install cannot use.
+  if (
+    bindings.registeredReleaseRevision !== null &&
+    bindings.registeredReleaseRevision !== selector.releaseRevision
+  )
+    return "already_installed";
   const releaseSet = await readFirstInstallReleaseSet(
     transaction,
     environment.catalogue,
@@ -101,7 +107,6 @@ const readFirstInstallCandidateInTransaction = async (
     permissions,
     installationOperation(selector.rootId, customComponents),
   );
-  const bindings = await readInstallationBindings(transaction, selector.rootId);
   await firstInstallLatestReleaseMatches(transaction, selector, latest);
   const finalContext = await readInstallationHumanContext(
     transaction,
@@ -249,7 +254,7 @@ export const readCurrentFirstInstallCandidate = async (
   selector: FirstInstallSelector,
   expected?: FirstInstallSnapshot,
 ): Promise<FirstInstallCandidate> => {
-  const { latest, releaseSet, bindings } = await runFirstInstallChange(
+  const current = await runFirstInstallChange(
     environment,
     session,
     { organizationId: selector.organizationId },
@@ -263,6 +268,8 @@ export const readCurrentFirstInstallCandidate = async (
         selector,
       ),
   );
+  if (current === "already_installed") return firstInstallUnavailable("already_installed");
+  const { latest, releaseSet, bindings } = current;
   const registrationState = firstInstallState(selector, releaseSet, bindings);
   const snapshot = firstInstallSnapshot(selector, latest, releaseSet, bindings, registrationState);
   if (expected !== undefined && !sameContent(expected, snapshot))

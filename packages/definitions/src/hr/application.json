@@ -137,6 +137,7 @@
       {
         "id": "event_hr_open_department",
         "key": "vortex.app.hr.hr_open_department",
+        "label": "Open department",
         "record_type": "vortex.hr:department",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -144,6 +145,7 @@
       {
         "id": "event_hr_new_department",
         "key": "vortex.app.hr.hr_new_department",
+        "label": "New department",
         "record_type": "vortex.hr:department",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -151,6 +153,7 @@
       {
         "id": "event_hr_edit_department",
         "key": "vortex.app.hr.hr_edit_department",
+        "label": "Edit department",
         "record_type": "vortex.hr:department",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -158,6 +161,7 @@
       {
         "id": "event_hr_create_department",
         "key": "vortex.app.hr.hr_create_department",
+        "label": "Create department",
         "record_type": "vortex.hr:department",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -165,6 +169,7 @@
       {
         "id": "event_hr_update_department",
         "key": "vortex.app.hr.hr_update_department",
+        "label": "Update department",
         "record_type": "vortex.hr:department",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -172,6 +177,7 @@
       {
         "id": "event_hr_open_position",
         "key": "vortex.app.hr.hr_open_position",
+        "label": "Open position",
         "record_type": "vortex.hr:position",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -179,6 +185,7 @@
       {
         "id": "event_hr_new_position",
         "key": "vortex.app.hr.hr_new_position",
+        "label": "New position",
         "record_type": "vortex.hr:position",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -186,6 +193,7 @@
       {
         "id": "event_hr_edit_position",
         "key": "vortex.app.hr.hr_edit_position",
+        "label": "Edit position",
         "record_type": "vortex.hr:position",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -193,6 +201,7 @@
       {
         "id": "event_hr_create_position",
         "key": "vortex.app.hr.hr_create_position",
+        "label": "Create position",
         "record_type": "vortex.hr:position",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -200,6 +209,7 @@
       {
         "id": "event_hr_update_position",
         "key": "vortex.app.hr.hr_update_position",
+        "label": "Update position",
         "record_type": "vortex.hr:position",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -207,6 +217,7 @@
       {
         "id": "event_hr_open_employee",
         "key": "vortex.app.hr.hr_open_employee",
+        "label": "Open employee",
         "record_type": "vortex.hr:employee",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -214,6 +225,7 @@
       {
         "id": "event_hr_new_employee",
         "key": "vortex.app.hr.hr_new_employee",
+        "label": "New employee",
         "record_type": "vortex.hr:employee",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -221,6 +233,7 @@
       {
         "id": "event_hr_edit_employee",
         "key": "vortex.app.hr.hr_edit_employee",
+        "label": "Edit employee",
         "record_type": "vortex.hr:employee",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -228,6 +241,7 @@
       {
         "id": "event_hr_create_employee",
         "key": "vortex.app.hr.hr_create_employee",
+        "label": "Create employee",
         "record_type": "vortex.hr:employee",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -235,6 +249,7 @@
       {
         "id": "event_hr_update_employee",
         "key": "vortex.app.hr.hr_update_employee",
+        "label": "Update employee",
         "record_type": "vortex.hr:employee",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -242,6 +257,7 @@
       {
         "id": "event_hr_open_leave_request",
         "key": "vortex.app.hr.hr_open_leave_request",
+        "label": "Open leave request",
         "record_type": "vortex.hr:leave_request",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -249,6 +265,7 @@
       {
         "id": "event_hr_new_leave_request",
         "key": "vortex.app.hr.hr_new_leave_request",
+        "label": "New leave request",
         "record_type": "vortex.hr:leave_request",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -256,6 +273,7 @@
       {
         "id": "event_hr_edit_leave_request",
         "key": "vortex.app.hr.hr_edit_leave_request",
+        "label": "Edit leave request",
         "record_type": "vortex.hr:leave_request",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -263,6 +281,7 @@
       {
         "id": "event_hr_create_leave_request",
         "key": "vortex.app.hr.hr_create_leave_request",
+        "label": "Create leave request",
         "record_type": "vortex.hr:leave_request",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -270,6 +289,7 @@
       {
         "id": "event_hr_update_leave_request",
         "key": "vortex.app.hr.hr_update_leave_request",
+        "label": "Update leave request",
         "record_type": "vortex.hr:leave_request",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -277,6 +297,7 @@
       {
         "id": "event_hr_open_leave_entitlement",
         "key": "vortex.app.hr.hr_open_leave_entitlement",
+        "label": "Open leave entitlement",
         "record_type": "vortex.hr:leave_entitlement",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -284,6 +305,7 @@
       {
         "id": "event_hr_new_leave_entitlement",
         "key": "vortex.app.hr.hr_new_leave_entitlement",
+        "label": "New leave entitlement",
         "record_type": "vortex.hr:leave_entitlement",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -291,6 +313,7 @@
       {
         "id": "event_hr_edit_leave_entitlement",
         "key": "vortex.app.hr.hr_edit_leave_entitlement",
+        "label": "Edit leave entitlement",
         "record_type": "vortex.hr:leave_entitlement",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -298,6 +321,7 @@
       {
         "id": "event_hr_create_leave_entitlement",
         "key": "vortex.app.hr.hr_create_leave_entitlement",
+        "label": "Create leave entitlement",
         "record_type": "vortex.hr:leave_entitlement",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -305,6 +329,7 @@
       {
         "id": "event_hr_update_leave_entitlement",
         "key": "vortex.app.hr.hr_update_leave_entitlement",
+        "label": "Update leave entitlement",
         "record_type": "vortex.hr:leave_entitlement",
         "carries": [],
         "personal_or_sensitive_values_allowed": false

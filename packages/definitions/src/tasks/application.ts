@@ -218,6 +218,7 @@ export const tasksApplication: ApplicationSourceDocument = loadApplicationSource
         {
           id: "event_task_create",
           key: "vortex.app.events.tasks_create",
+          label: "Create task",
           record_type: recordType,
           carries: [],
           personal_or_sensitive_values_allowed: false,

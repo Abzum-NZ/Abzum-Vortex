@@ -8,7 +8,6 @@ import {
   moduleInstallationBindingEvidenceSchema,
   organizationIdSchema,
   sameId,
-  systemApplicationBoundReleaseSetResultSchema,
   type ActiveApplicationInstallationErrorCode,
   type ActiveApplicationInstallationEvidence,
   type ModuleInstallationBindingEvidence,
@@ -179,9 +178,10 @@ export const readInstallationReleaseSet = async (
   organizationId: string,
   correlationId: string,
 ): Promise<SystemApplicationBoundReleaseSetResult> => {
-  let candidate: unknown;
+  let releaseSet: SystemApplicationBoundReleaseSetResult;
   try {
-    candidate = await createDatabaseApplicationReleaseAdoptionReleaseSetService(
+    // The read returns the release set already parsed against its result schema.
+    releaseSet = await createDatabaseApplicationReleaseAdoptionReleaseSetService(
       catalogue,
       transaction,
     ).read({ applicationRootId: rootId, applicationReleaseRevision: releaseRevision });
@@ -192,21 +192,17 @@ export const readInstallationReleaseSet = async (
       });
     installationProblem("release_set_refused", "refused", undefined, { cause: error });
   }
-  const parsed = systemApplicationBoundReleaseSetResultSchema.safeParse(candidate);
   if (
-    !parsed.success ||
-    parsed.data.modules.length === 0 ||
-    parsed.data.application.kind !== "application" ||
-    !sameId(parsed.data.application.organizationId, organizationId) ||
-    !sameId(parsed.data.application.rootId, rootId) ||
-    parsed.data.application.releaseRevision !== releaseRevision ||
-    !sameId(parsed.data.application.correlationId, correlationId)
+    releaseSet.modules.length === 0 ||
+    releaseSet.application.kind !== "application" ||
+    !sameId(releaseSet.application.organizationId, organizationId) ||
+    !sameId(releaseSet.application.rootId, rootId) ||
+    releaseSet.application.releaseRevision !== releaseRevision ||
+    !sameId(releaseSet.application.correlationId, correlationId)
   )
-    installationProblem("release_set_mismatch", "refused", undefined, {
-      cause: parsed.success ? undefined : parsed.error,
-    });
+    installationProblem("release_set_mismatch", "refused");
   const roots = new Set<string>();
-  for (const module of parsed.data.modules) {
+  for (const module of releaseSet.modules) {
     if (
       !sameId(module.organizationId, organizationId) ||
       !sameId(module.correlationId, correlationId) ||
@@ -215,5 +211,5 @@ export const readInstallationReleaseSet = async (
       installationProblem("release_set_module_mismatch", "refused");
     roots.add(module.rootId.toLowerCase());
   }
-  return parsed.data;
+  return releaseSet;
 };

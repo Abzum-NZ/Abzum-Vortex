@@ -3,6 +3,7 @@ import {
   conditionMaximumNestingDepth,
   conditionMaximumOperandCount,
   jsonValueSchema,
+  labelSchema,
 } from "../catalogue/common";
 import {
   applicationRootIdSchema,
@@ -223,6 +224,7 @@ export const eventDefinitionSchema = z
   .object({
     eventId: eventIdSchema,
     key: namespacedKeySchema,
+    label: labelSchema,
     recordTypeId: recordTypeIdSchema,
     carriedFieldIds: canonicalCarriedFieldIdsSchema,
     personalOrSensitiveValuesAllowed: z.literal(false),

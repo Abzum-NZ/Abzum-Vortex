@@ -11,7 +11,7 @@ import {
 import { studioQueryChoices, type StudioBorrowedChoices, type StudioQueryChoice } from "./contextual-palette";
 import { studioFlowCallerNames } from "./application-flow-start";
 import { projectStudioFlowDraftChoices } from "./application-flow-step-form";
-import { describeStudioFlowLocation } from "./application-flow-model";
+import { describeStudioFlowLocation, studioWords } from "./application-flow-model";
 import { traverseStudioSemanticSelectionDraft, type StudioSemanticSelection } from "./semantic-selection";
 
 /**
@@ -187,6 +187,7 @@ const bindControl = (source: ApplicationSourceDocument, controlAlias: string, ev
   if (shared === undefined) {
     if (body.events.length >= 100) refuse("An application can declare at most 100 events, so no more controls can be bound.");
     body.events.push({ id: eventId, key: `vortex.app.events.${eventId}`,
+      label: studioWords(event),
       ...(recordType === undefined ? {} : { record_type: recordType }), carries: [],
       personal_or_sensitive_values_allowed: false });
   }

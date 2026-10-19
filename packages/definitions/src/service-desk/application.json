@@ -3117,6 +3117,7 @@
       {
         "id": "form_submit_0",
         "key": "vortex.app.events.vortex_app_service_desk_form_submit_0",
+        "label": "Form submitted",
         "record_type": "vortex.service_desk.cases:case",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3124,6 +3125,7 @@
       {
         "id": "form_submit_1",
         "key": "vortex.app.events.vortex_app_service_desk_form_submit_1",
+        "label": "Form submitted",
         "record_type": "vortex.service_desk.cases:case",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3131,6 +3133,7 @@
       {
         "id": "form_submit_sd_case_resolve",
         "key": "vortex.app.events.vortex_app_service_desk_resolve_case",
+        "label": "Resolve case",
         "record_type": "vortex.service_desk.cases:case",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3138,6 +3141,7 @@
       {
         "id": "form_submit_sd_case_public_comment",
         "key": "vortex.app.events.vortex_app_service_desk_public_comment",
+        "label": "Public comment",
         "record_type": "vortex.service_desk.cases:case",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3145,6 +3149,7 @@
       {
         "id": "event_sd_article_publish",
         "key": "vortex.app.events.vortex_app_service_desk_publish_article",
+        "label": "Publish article",
         "record_type": "vortex.service_desk.knowledge:article",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3152,6 +3157,7 @@
       {
         "id": "event_sd_service_level_pause",
         "key": "vortex.app.events.vortex_app_service_desk_pause_sla",
+        "label": "Pause sla",
         "record_type": "vortex.service_desk.sla:service_level",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3159,6 +3165,7 @@
       {
         "id": "event_sd_open_case",
         "key": "vortex.app.events.vortex_app_service_desk_open_case",
+        "label": "Open case",
         "record_type": "vortex.service_desk.cases:case",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3166,6 +3173,7 @@
       {
         "id": "event_sd_case_board_open_case",
         "key": "vortex.app.events.vortex_app_service_desk_board_open_case",
+        "label": "Board open case",
         "record_type": "vortex.service_desk.cases:case",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3173,6 +3181,7 @@
       {
         "id": "event_sd_case_board_move_case",
         "key": "vortex.app.events.vortex_app_service_desk_board_move_case",
+        "label": "Board move case",
         "record_type": "vortex.service_desk.cases:case",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3180,6 +3189,7 @@
       {
         "id": "event_sd_open_article",
         "key": "vortex.app.events.vortex_app_service_desk_open_article",
+        "label": "Open article",
         "record_type": "vortex.service_desk.knowledge:article",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3187,6 +3197,7 @@
       {
         "id": "event_sd_open_service_level",
         "key": "vortex.app.events.vortex_app_service_desk_open_sla",
+        "label": "Open sla",
         "record_type": "vortex.service_desk.sla:service_level",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3194,6 +3205,7 @@
       {
         "id": "event_sd_open_customer",
         "key": "vortex.app.events.vortex_app_service_desk_open_customer",
+        "label": "Open customer",
         "record_type": "vortex.crm.organisations:company",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3201,6 +3213,7 @@
       {
         "id": "event_sd_open_requester",
         "key": "vortex.app.events.vortex_app_service_desk_open_requester",
+        "label": "Open requester",
         "record_type": "vortex.crm.people:contact",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3208,6 +3221,7 @@
       {
         "id": "event_new_case_customer",
         "key": "vortex.app.events.vortex_app_service_desk_customer_case",
+        "label": "Customer case",
         "record_type": "vortex.crm.organisations:company",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3215,6 +3229,7 @@
       {
         "id": "event_new_case",
         "key": "vortex.app.events.vortex_app_service_desk_new_case",
+        "label": "New case",
         "record_type": "vortex.service_desk.cases:case",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3222,6 +3237,7 @@
       {
         "id": "event_edit_case",
         "key": "vortex.app.events.vortex_app_service_desk_edit_case",
+        "label": "Edit case",
         "record_type": "vortex.service_desk.cases:case",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3229,6 +3245,7 @@
       {
         "id": "form_submit_sd_business_calendar_create",
         "key": "vortex.app.events.service_desk_calendar_submit",
+        "label": "Calendar submit",
         "record_type": "vortex.service_desk.sla:business_calendar",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3236,6 +3253,7 @@
       {
         "id": "form_submit_sd_service_level_create",
         "key": "vortex.app.events.service_desk_service_level_submit",
+        "label": "Service level submit",
         "record_type": "vortex.service_desk.sla:service_level",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3243,6 +3261,7 @@
       {
         "id": "event_sd_new_business_calendar",
         "key": "vortex.app.events.service_desk_new_calendar",
+        "label": "New calendar",
         "record_type": "vortex.service_desk.sla:business_calendar",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -3250,6 +3269,7 @@
       {
         "id": "event_sd_new_service_level",
         "key": "vortex.app.events.service_desk_new_service_level",
+        "label": "New service level",
         "record_type": "vortex.service_desk.sla:service_level",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
