@@ -59,7 +59,17 @@ export function useRowDetail({
         console.error("[page] related records could not be read", error);
         result = { kind: "temporarily_unavailable" };
       }
-      if (generations.current.get(key) !== generation) return undefined;
+      const latest = address.current;
+      if (
+        generations.current.get(key) !== generation ||
+        latest.currentPageKey !== current.currentPageKey ||
+        latest.currentSearch !== current.currentSearch ||
+        latest.application.tenantShortName !== current.application.tenantShortName ||
+        latest.application.organizationShortName !== current.application.organizationShortName ||
+        latest.application.applicationKey !== current.application.applicationKey ||
+        latest.application.installationRevision !== current.application.installationRevision
+      )
+        return undefined;
       switch (result.kind) {
         case "available":
           return result.detail;

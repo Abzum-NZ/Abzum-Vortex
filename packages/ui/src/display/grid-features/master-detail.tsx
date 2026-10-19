@@ -120,7 +120,8 @@ const cellOf = (row: RelatedRow, column: DisplayColumn): DisplayCellValue =>
  */
 function RelatedRecords({ context, row }: GridFeatureRowProps): ReactElement {
   const read = context.events?.row_expanded;
-  const pageSize = context.features.masterDetail?.pageSize ?? 1;
+  const pageSize = context.features.masterDetail?.pageSize;
+  if (pageSize === undefined) fail("Related records require their feature projection", location);
   const [state, setState] = useState<PanelState>({ kind: "loading" });
   const mounted = useRef(true);
   const recordId = row.recordId;
@@ -189,7 +190,7 @@ function RelatedRecords({ context, row }: GridFeatureRowProps): ReactElement {
   if (state.kind === "loading")
     return (
       <div role="status" aria-label="Reading related records" className="flex flex-col gap-2 py-1">
-        {Array.from({ length: Math.min(pageSize, 10) }, (_, index) => (
+        {Array.from({ length: pageSize }, (_, index) => (
           <Skeleton key={index} className="h-5 w-full" />
         ))}
       </div>
@@ -222,7 +223,7 @@ function RelatedRecords({ context, row }: GridFeatureRowProps): ReactElement {
   const { page, more } = state;
   return (
     <div className="flex flex-col items-start gap-1">
-      <Table className="text-sm">
+      <Table className="text-sm" containerClassName="border-0 bg-transparent">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             {page.columns.map((column) => (
