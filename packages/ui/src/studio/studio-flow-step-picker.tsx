@@ -53,11 +53,13 @@ export function StudioFlowStepPicker({
   const [field, setField] = useState("");
   const [condition, setCondition] = useState<ConditionNode | undefined>(undefined);
   const [formula, setFormula] = useState<FlowFormula | undefined>(undefined);
+  const [thenTaskType, setThenTaskType] = useState("");
   const needsForm = chosen?.type === "interface.show_form";
   const needsCondition = chosen?.type === "if";
   const needsField = chosen?.type === "rule.require";
   const definition = chosen === null ? undefined : flowTaskRegistry[chosen.type as keyof typeof flowTaskRegistry];
-  const needsMessage = needsCondition || definition?.properties.message?.required === true;
+  const branchTypes = types.filter((entry) => ["rule.warn", "interface.show_message", "stop"].includes(entry.type));
+  const needsMessage = (needsCondition && thenTaskType !== "" && thenTaskType !== "stop") || definition?.properties.message?.required === true;
   if (types.length === 0)
     return (
       <p className="text-sm text-muted-foreground">
@@ -71,7 +73,7 @@ export function StudioFlowStepPicker({
         items={types}
         value={chosen}
         onValueChange={(next) => {
-          setChosen(next); setMessage(""); setField(""); setCondition(undefined); setFormula(undefined);
+          setChosen(next); setMessage(""); setField(""); setCondition(undefined); setFormula(undefined); setThenTaskType("");
         }}
         disabled={disabled}
         itemToStringLabel={(entry) => entry.title}
@@ -113,6 +115,14 @@ export function StudioFlowStepPicker({
           setCondition(next);
           setFormula(next !== undefined && validation.isValid ? studioFlowConditionFormula(next, context.condition) : undefined);
         }} />}
+      {needsCondition && <div className="space-y-2">
+        <Label htmlFor={`${id}-then`}>First step in Then</Label>
+        <NativeSelect id={`${id}-then`} value={thenTaskType} disabled={disabled} onChange={(event) => setThenTaskType(event.target.value)}>
+          <NativeSelectOption value="">Choose a step</NativeSelectOption>
+          {branchTypes.map((entry) => <NativeSelectOption key={entry.type} value={entry.type}>{entry.title}</NativeSelectOption>)}
+        </NativeSelect>
+        {thenTaskType === "stop" && <p className="text-sm text-muted-foreground">Ends the flow when the condition matches.</p>}
+      </div>}
       {needsField && <div className="space-y-2">
         <Label htmlFor={`${id}-field`}>Field</Label>
         <NativeSelect id={`${id}-field`} value={field} disabled={disabled} onChange={(event) => setField(event.target.value)}>
@@ -123,7 +133,6 @@ export function StudioFlowStepPicker({
       {needsMessage && <div className="space-y-2">
         <Label htmlFor={`${id}-message`}>{needsCondition ? "Message in the Then branch" : "Message"}</Label>
         <Textarea id={`${id}-message`} value={message} disabled={disabled} onChange={(event) => setMessage(event.target.value)} />
-        {needsCondition && <p className="text-sm text-muted-foreground">Starts the branch with a warning or message. Add other steps after it.</p>}
       </div>}
       <Button
         type="button"
@@ -131,15 +140,15 @@ export function StudioFlowStepPicker({
         variant="secondary"
         disabled={disabled || chosen === null || (needsForm && !forms.some((form) => form.alias === formAlias)) ||
           (needsMessage && message.trim() === "") || (needsField && !context.fields.some((entry) => entry.value === field)) ||
-          (needsCondition && formula === undefined)}
+          (needsCondition && (formula === undefined || !branchTypes.some((entry) => entry.type === thenTaskType)))}
         onClick={() => {
           if (chosen !== null) {
             onAdd(chosen.type, {
               ...(needsForm ? { formAlias } : {}), ...(needsMessage ? { message: message.trim() } : {}),
-              ...(needsField ? { field } : {}), ...(needsCondition && formula !== undefined ? { condition: formula } : {}),
+              ...(needsField ? { field } : {}), ...(needsCondition && formula !== undefined ? { condition: formula, thenTaskType } : {}),
             });
             setFormAlias("");
-            setMessage(""); setField(""); setCondition(undefined); setFormula(undefined);
+            setMessage(""); setField(""); setCondition(undefined); setFormula(undefined); setThenTaskType("");
             setChosen(null);
           }
         }}

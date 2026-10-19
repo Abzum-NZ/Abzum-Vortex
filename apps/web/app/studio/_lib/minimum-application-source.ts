@@ -71,7 +71,7 @@ export const minimumApplicationSource = (
     });
   const applicationKey = inputs.key.trim() === "" ? applicationKeyFromName(name) : inputs.key.trim();
   if (applicationKey === "")
-    return invalid({ key: "The name has no letters to make a key from. Set the key under Advanced." });
+    return invalid({ key: "The name has no letters to make a key from. Enter a key." });
   const permissionKey = `${applicationKey}.home.view`;
   const candidate = {
     source_contract_version: applicationSourceContractVersion,

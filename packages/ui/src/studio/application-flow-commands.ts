@@ -80,6 +80,7 @@ export type StudioFlowNewStepSettings = Readonly<{
   message?: string;
   field?: string;
   condition?: FlowFormula;
+  thenTaskType?: string;
 }>;
 
 const staleEdit = (
@@ -283,7 +284,7 @@ const newStep = (
   };
   if (!stepTypes(flow, source, context).some((entry) => entry.type === taskType)) return refused;
   const definition = studioFlowDefinitionOf(taskType);
-  const needsMessage = taskType === "if" || definition?.properties.message?.required === true;
+  const needsMessage = definition?.properties.message?.required === true;
   if (needsMessage && !settings.message?.trim())
     return { kind: "invalid", reason: "Write the message before adding this step." };
   if (taskType === "rule.require" && !settings.field)
@@ -293,23 +294,15 @@ const newStep = (
   if (taskType === "if") {
     if (settings.condition === undefined || settings.condition.op === "literal")
       return { kind: "invalid", reason: "Set a comparison before adding an If step." };
-    const types = registeredTypes(flow, source, context);
-    const first =
-      types.find(
-        (definition) =>
-          definition.type === "interface.show_message" || definition.type === "rule.warn",
-      ) ?? types[0];
-    const inner =
-      first === undefined
-        ? undefined
-        : seededTask(first, uniqueTaskId(first.type, used), flow, source, context);
-    if (inner === undefined) return refused;
-    inner.properties.message = text(settings.message!.trim());
+    if (!["rule.warn", "interface.show_message", "stop"].includes(settings.thenTaskType ?? ""))
+      return { kind: "invalid", reason: "Choose the first step of the Then branch." };
+    const inner = newStep(flow, source, settings.thenTaskType!, used, context, settings);
+    if ("kind" in inner && !("id" in inner)) return inner;
     return {
       id: uniqueTaskId("decision", used),
       type: "if",
       condition: settings.condition,
-      then: [inner],
+      then: [inner as SourceFlowTask],
     };
   }
   const task =
