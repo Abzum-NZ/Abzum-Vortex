@@ -235,7 +235,20 @@ export function validateApplicationSourceCatalogue(
         "unsupported_choice",
       );
       checkFields("sortable_fields", table.sortableFields, orders, "unsupported_choice");
-      checkFields("filterable_fields", table.filterableFields, orders, "unsupported_choice");
+      const features = table.features;
+      if (features.columnFilters.enabled)
+        checkFields("features", features.columnFilters.fields, orders, "unsupported_choice");
+      // A feature that is off holds nothing but its switch, so it compiles to nothing.
+      const featureGroups = settings.features;
+      if (featureGroups?.kind === "group")
+        for (const feature of Object.values(featureGroups.properties))
+          if (
+            feature.kind === "group" &&
+            feature.properties.enabled?.kind === "boolean" &&
+            !feature.properties.enabled.value &&
+            Object.keys(feature.properties).some((key) => key !== "enabled")
+          )
+            report("vortex.definition.application_block_settings", "invalid_value", at("features"));
       const inputs = new Set<string>();
       for (const parameter of table.parameters) {
         // The exact bound Module query owns the input names and types. Publication checks them;
@@ -320,21 +333,27 @@ export function validateApplicationSourceCatalogue(
             "broken_reference",
             at("row_actions"),
           );
-      for (const action of behaviours.bulkActions)
-        checkRowBehaviour("bulk_actions", action.eventId, "bulk_action", "record_reference_list");
-      if (behaviours.inlineEdit !== undefined) {
-        checkRowBehaviour(
-          "inline_edit",
-          behaviours.inlineEdit.eventId,
-          "inline_edit",
-          "record_reference",
-        );
+      // An enabled bulk-action or inline-edit feature binds each of its commands to a flow; a
+      // feature that is off binds nothing, and the compiler drops any flow binding left for it.
+      if (features.bulkActions.enabled)
+        for (const action of features.bulkActions.actions)
+          checkRowBehaviour("features", action.eventId, "bulk_action", "record_reference_list");
+      // A draft may hold a feature that is not possible yet; publication refuses it with the
+      // feature's own sentence (an inline edit without its commit binding, for one).
+      if (features.inlineEdit.enabled) {
+        if (features.inlineEdit.eventId !== undefined)
+          checkRowBehaviour(
+            "features",
+            features.inlineEdit.eventId,
+            "inline_edit",
+            "record_reference",
+          );
         // An editable field must be one the bound query selects and one of the declared columns;
         // a field that is never shown could never be edited in place.
         const columnFields = new Set(table.columns.map((column) => column.field));
         checkFields(
-          "inline_edit",
-          behaviours.inlineEdit.fields,
+          "features",
+          features.inlineEdit.fields,
           (field) => columnFields.has(field),
           "invalid_value",
         );

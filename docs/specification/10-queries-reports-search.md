@@ -103,6 +103,18 @@ and its real storage path, not to a browser-only correction after rows are paged
 - A database-backed summary examines at most 100,000 candidate rows per request (`summary_candidate_limit`). Above that ceiling it returns the neutral `dataset_limit_exceeded` refusal without groups or totals.
 - Exports and workflow loops page through the same query contract rather than requesting an unlimited result.
 
+## Records table grid features
+
+The Records table grid itself (columns, sorting, density, sticky headings, resizing, reordering and showing or hiding columns) is always available. Everything else is an optional **grid feature**, authored in the table's one `features` setting group as `{ enabled, ...its settings }` and off by default: search, column filters, saved views, bulk actions and inline editing. Later features (grouping, totals, conditional formatting, row details, export) join the same gate.
+
+One gate decides every feature, in three places that cannot disagree:
+
+1. **Capability check.** Each feature has one check over the bound query's facts: its selected fields with their type and sortable, filterable and searchable flags, choice sizes, relationships and the record type's named actions. It answers "Available" or "Not possible" with one business sentence, for example "Column filters need fields the bound query can filter by." Studio runs it on the draft beside each feature's switch; publication runs the same check on the compiled release and refuses with the same sentence.
+2. **Server projection.** Every table read projects the features this viewer may use now: authored on, published, and permitted under the viewer's current access and field policy (a filter on a field the viewer may not read, a bulk command no row allows, or an inline edit of a field no row lets the viewer change is not projected). The projection travels in the table payload; it adds no request, and a table with every feature off carries none. Any feature request that is not projected on (a search, a filter, a bulk command or an inline edit, including one sent to the flow route) is refused with the neutral refusal and its cause is logged.
+3. **Lazy code.** The browser downloads a feature's code only when the projection turns it on; a table with every feature off loads none of it.
+
+A feature that is off holds only its switch, so it compiles to nothing: its flow bindings are not compiled and its controls never render.
+
 ## Saved views
 
 A saved view records the query, visible columns, arrangement, grouping, sort, and display choices. A personal view is visible only to its owner. A shared view belongs to an application and requires a permission to publish or change.

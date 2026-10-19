@@ -13,6 +13,10 @@ import {
   calendarMappingSchema,
   calendarBlockSourceIsSupported,
   moduleQueryDefinitionSchema,
+  checkRecordsTableFeatures,
+  recordsTableEditableFieldTypes,
+  type BlockPropertySchemaContract,
+  type RecordsTableQueryFacts,
 } from "../../schema";
 import { tableQueryParameterFailures } from "../table-query-parameters";
 import type { ApplicationScope } from "./application-scope";
@@ -30,10 +34,79 @@ export function applicationPageRules(scope: ApplicationScope): void {
     pageContentPlacementEntries,
     pageShellPlacementEntries,
     moduleQueries,
+    actions,
     output,
     failures,
     walkValues,
   } = scope;
+
+  /**
+   * What a Records table's bound query offers its grid features, read from the compiled release:
+   * each selected field (or grouping field of a grouped query) with its type and flags, the record
+   * type's relationships and the named actions whose subject it is.
+   */
+  const recordsTableQueryFacts = (bound: JsonObject): RecordsTableQueryFacts => {
+    const recordTypeId = String(object(bound.recordType).recordTypeId);
+    const record = records.get(recordTypeId);
+    const grouped = array(bound.groupByFieldIds).length > 0 || array(bound.aggregates).length > 0;
+    const offered = new Set(
+      array(grouped ? bound.groupByFieldIds : bound.selectedFieldIds).map((id) =>
+        String(id).toLowerCase(),
+      ),
+    );
+    return {
+      recordTypeLabel: String(record?.singularLabel ?? ""),
+      fields: array(record?.fields)
+        .filter((field) => offered.has(String(field.fieldId).toLowerCase()))
+        .map((field) => {
+          const options = object(field.settings ?? {}).options;
+          return {
+            field: String(field.fieldId),
+            label: String(field.label),
+            type: String(field.type),
+            sortable: field.sortable === true,
+            filterable: field.filterable === true,
+            searchable: field.searchPriority !== undefined,
+            editable: !grouped && recordsTableEditableFieldTypes.includes(String(field.type)),
+            ...(field.type === "choice" && Array.isArray(options)
+              ? { choiceCount: options.length }
+              : {}),
+          };
+        }),
+      relationships: array(record?.relationships).map((relationship) => ({
+        key: String(relationship.key),
+        label: String(relationship.key),
+      })),
+      actions: [...actions.values()]
+        .filter((action) => String(action.subjectRecordTypeId) === recordTypeId)
+        .map((action) => ({ key: String(action.key), label: String(action.label ?? action.key) })),
+      grouped,
+    };
+  };
+
+  /**
+   * A field reference whose declaration restricts its field types must name a field of one of
+   * those types: the Studio picker offers only those, and publication refuses any other.
+   */
+  const fieldTypesFit = (
+    value: JsonObject,
+    declaration: BlockPropertySchemaContract,
+    fieldType: (fieldId: string) => string | undefined,
+  ): boolean => {
+    if (value.kind === "field_reference" && declaration.kind === "field_reference")
+      return (
+        declaration.fieldTypes === undefined ||
+        (declaration.fieldTypes as readonly string[]).includes(fieldType(String(value.fieldId)) ?? "")
+      );
+    if (value.kind === "group" && declaration.kind === "group")
+      return declaration.properties.every((property) => {
+        const nested = object(value.properties)[property.key];
+        return nested === undefined || fieldTypesFit(object(nested), property, fieldType);
+      });
+    if (value.kind === "list" && declaration.kind === "list")
+      return array(value.items).every((item) => fieldTypesFit(item, declaration.item, fieldType));
+    return true;
+  };
 
   for (const page of pages.values()) {
     const pageRecordId = page.recordType ? String(object(page.recordType).recordTypeId) : undefined;
@@ -147,9 +220,10 @@ export function applicationPageRules(scope: ApplicationScope): void {
           ? undefined
           : moduleQueries.get(String(placement.vortex.queryId));
       const block = object(placement.vortex.block);
-      const blockKey = registeredBlockReleases.get(
+      const release = registeredBlockReleases.get(
         `${String(block.blockId)}:${String(block.releaseVersion)}`,
-      )?.key;
+      );
+      const blockKey = release?.key;
       if (bound === undefined) {
         if (blockKey === "platform.display.calendar" || blockKey === "platform.display.board")
           failures.push(
@@ -307,6 +381,38 @@ export function applicationPageRules(scope: ApplicationScope): void {
           : (["broken_reference"] as const);
         for (const family of families)
           failures.push(failure(output, "vortex.definition.application_block_settings", family));
+        // Every enabled grid feature must fit the bound query; publication reports the feature's
+        // own business sentence, the one Studio shows beside its switch.
+        for (const feature of checkRecordsTableFeatures(
+          table.features,
+          recordsTableQueryFacts(bound),
+        ))
+          if (feature.enabled && feature.check.kind === "not_possible")
+            failures.push(
+              failure(
+                output,
+                "vortex.definition.application_block_settings",
+                "unsupported_choice",
+                undefined,
+                feature.check.code,
+              ),
+            );
+      }
+      if (release !== undefined) {
+        const boundRecord = records.get(String(object(bound.recordType).recordTypeId));
+        const fieldType = (fieldId: string): string | undefined => {
+          const field = array(boundRecord?.fields).find(
+            (candidate) => String(candidate.fieldId).toLowerCase() === fieldId.toLowerCase(),
+          );
+          return field === undefined ? undefined : String(field.type);
+        };
+        for (const declaration of release.properties) {
+          const value = object(settings)[declaration.key];
+          if (value !== undefined && !fieldTypesFit(object(value), declaration, fieldType))
+            failures.push(
+              failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+            );
+        }
       }
       const lower = (ids: readonly unknown[]): Set<string> =>
         new Set(ids.map((id) => String(id).toLowerCase()));
@@ -324,7 +430,8 @@ export function applicationPageRules(scope: ApplicationScope): void {
             // A table never asks for a larger page than its bound query allows.
             table.pageSize > Number(bound.pageSize) ||
             !mapped(table.sortableFields, orderable) ||
-            !mapped(table.filterableFields, orderable) ||
+            (table.features.columnFilters.enabled &&
+              !mapped(table.features.columnFilters.fields, orderable)) ||
             // The authored default order uses only declared sortable fields the query selects.
             !mapped(
               table.defaultSort.map((key) => key.field),

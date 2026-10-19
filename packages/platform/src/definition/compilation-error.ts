@@ -1,4 +1,8 @@
-import type { DefinitionRuleFailureFamily, DefinitionValidationLocation } from "../schema";
+import type {
+  DefinitionRuleFailure,
+  DefinitionRuleFailureFamily,
+  DefinitionValidationLocation,
+} from "../schema";
 import { applicationRoleReviewVolumeMessage } from "./application-role-review-volume";
 
 export const definitionCompilerRefusalCodes = Object.freeze([
@@ -145,11 +149,14 @@ export class DefinitionCompilationError extends Error {
   readonly ruleCode: DefinitionCompilerRefusalCode;
   readonly family: DefinitionRuleFailureFamily;
   readonly location: DefinitionValidationLocation | undefined;
+  /** The catalogue code of a rule with its own business sentence; absent for a family refusal. */
+  readonly code: DefinitionRuleFailure["code"];
 
   constructor(
     ruleCode: string,
     family: DefinitionRuleFailureFamily,
     location?: DefinitionValidationLocation,
+    code?: DefinitionRuleFailure["code"],
   ) {
     assertDefinitionCompilerRefusalCode(ruleCode);
     super(
@@ -161,5 +168,6 @@ export class DefinitionCompilationError extends Error {
     this.ruleCode = ruleCode;
     this.family = family;
     this.location = location;
+    this.code = code;
   }
 }
