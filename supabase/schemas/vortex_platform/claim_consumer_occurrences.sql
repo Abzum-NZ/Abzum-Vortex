@@ -69,7 +69,9 @@ begin
     left join vortex_platform.consumer_occurrence_progress as progress
       on progress.consumer_key = p_consumer_key
       and progress.occurrence_id = occurrence.occurrence_id
-    where progress.acknowledged_at is null
+    where ((p_consumer_key = 'installation-derived-values') =
+      (occurrence.occurrence_kind = 'installation_activated'))
+      and progress.acknowledged_at is null
       and progress.terminally_failed_at is null
       and (progress.lease_expires_at is null or progress.lease_expires_at <= claim_time)
       and not exists (
@@ -79,10 +81,11 @@ begin
           on predecessor_progress.consumer_key = p_consumer_key
           and predecessor_progress.occurrence_id = predecessor.occurrence_id
         where predecessor.organization_id = occurrence.organization_id
-          and predecessor.storage_contract_id = occurrence.storage_contract_id
+          and predecessor.occurrence_kind = occurrence.occurrence_kind
+          and predecessor.storage_contract_id is not distinct from occurrence.storage_contract_id
           and predecessor.sequence_application_root_id is not distinct from
             occurrence.sequence_application_root_id
-          and predecessor.record_id = occurrence.record_id
+          and predecessor.record_id is not distinct from occurrence.record_id
           and predecessor.record_sequence < occurrence.record_sequence
           and predecessor_progress.acknowledged_at is null
       )

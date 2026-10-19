@@ -185,6 +185,61 @@
               }
             ]
           }
+        },
+        {
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "id": "fld_store_application_record_update_status",
+          "key": "record_update_status",
+          "label": "Existing records",
+          "type": "choice",
+          "settings": {
+            "options": [
+              {
+                "value": "not_required",
+                "label": "No update needed"
+              },
+              {
+                "value": "pending",
+                "label": "Update queued"
+              },
+              {
+                "value": "updating",
+                "label": "Updating"
+              },
+              {
+                "value": "retrying",
+                "label": "Update failed, retrying"
+              },
+              {
+                "value": "failed",
+                "label": "Update failed"
+              },
+              {
+                "value": "up_to_date",
+                "label": "Up to date"
+              }
+            ]
+          }
+        },
+        {
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "id": "fld_store_application_records_processed",
+          "key": "records_processed",
+          "label": "Records processed",
+          "type": "whole_number",
+          "settings": {
+            "minimum": 0
+          }
         }
       ],
       "pipelines": [],
@@ -218,7 +273,9 @@
           "latest_release_note",
           "published_at",
           "installed_version",
-          "status"
+          "status",
+          "record_update_status",
+          "records_processed"
         ],
         "changeable_fields": []
       }
@@ -245,7 +302,9 @@
         "latest_release_note",
         "published_at",
         "installed_version",
-        "status"
+        "status",
+        "record_update_status",
+        "records_processed"
       ],
       "filter": null,
       "group_by": [],
