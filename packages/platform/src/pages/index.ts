@@ -78,6 +78,12 @@ export {
   type RecordsTableQueryResolution,
   type RecordsTableQueryRunner,
 } from "./records-table-query";
+export {
+  logRecordsTableRequestRefusal,
+  projectRecordsTableFeatures,
+  type RecordsTableRequestPart,
+  type RecordsTableRequestRefusal,
+} from "./records-table-features";
 export { readPageSubjectInTransaction } from "./page-subject-read";
 export {
   createPageSubjectReader,
@@ -211,3 +217,12 @@ export {
   type GuidedFormStepFields,
   type GuidedFormStepRequest,
 } from "./guided-form-steps";
+export {
+  readGridViews,
+  resetGridView,
+  writeGridView,
+  type GridViewConflict,
+  type GridViewResetOutcome,
+  type GridViewWriteOutcome,
+  type StoredGridView,
+} from "./grid-views";

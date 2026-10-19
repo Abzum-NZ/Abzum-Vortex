@@ -34,6 +34,8 @@ export const describeStudioCompileFailure = (
 ): StudioCompileProblem => {
   if (failure.reasonCode === "vortex.definition.application_role_review_volume")
     return { message: applicationRoleReviewVolumeMessage, selection: null };
+  // A rule with its own business sentence says it as it is, exactly as Studio showed it beforehand.
+  if (failure.sentence !== undefined) return { message: failure.sentence, selection: null };
   if (failure.reasonCode === "vortex.definition.application_query_exposure") {
     const reference = failure.queryKey ?? "";
     const separator = reference.indexOf(":");

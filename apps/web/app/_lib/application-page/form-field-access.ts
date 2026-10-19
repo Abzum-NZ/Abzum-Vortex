@@ -1,6 +1,7 @@
 import {
   type InstalledRuntimeContext,
   type ProtectedQueryRow,
+  type RequestDatabaseTransaction,
   evaluateOrganizationRecordPermissionAvailability,
   runtimePreviewOf,
 } from "@vortex/platform/server";
@@ -9,6 +10,7 @@ import {
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
+  type SelectedOrganizationScope,
   organizationRecordAccessDeclarationSchema,
   flowTaskChildLists,
   isRecord,
@@ -100,9 +102,73 @@ export const flowCreatedRecordTypeIds = (
 };
 
 /**
- * The fields this viewer may set when they create a record of one type: the changeable fields of
- * every create permission on that type their roles hold now, as the record writer unions them. A
- * draft preview gives its builder every field, so it narrows nothing (`undefined`).
+ * The fields one kind of permission on a record type gives this viewer now: the changeable fields
+ * of every create permission (as the record writer unions them), or the readable fields of every
+ * read permission (the fields they can read on at least one record; a record's own route or share
+ * may still withhold one, which its read decides). Each permission is decided on its own, without
+ * a row, through the record permission availability the record decisions start from.
+ */
+export const decideRecordTypeFieldIds = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  context: InstalledRuntimeContext,
+  recordTypeId: string,
+  action: "create" | "read",
+): Promise<ReadonlySet<string>> => {
+  const entries = context.permissionRegistration.entries.filter(
+    (entry) =>
+      entry.permission.actionKind === action &&
+      entry.permission.namedAction === undefined &&
+      entry.permission.recordTypeId !== undefined &&
+      sameId(String(entry.permission.recordTypeId), recordTypeId),
+  );
+  const targets = context.releaseSet.modules.flatMap((module) =>
+    module.content.recordTypes
+      .filter((record) => sameId(String(record.recordTypeId), recordTypeId))
+      .map((record) => ({ module, record })),
+  );
+  const target = targets.length === 1 ? targets[0] : undefined;
+  const fieldIds = new Set<string>();
+  if (target === undefined) return fieldIds;
+  for (const entry of entries) {
+    const availability = await evaluateOrganizationRecordPermissionAvailability(
+      transaction,
+      scope,
+      organizationRecordAccessDeclarationSchema.parse({
+        operationKey: `application.page.record_fields.${action}`,
+        action: { actionKind: action },
+        target: { kind: "application", applicationRootId: context.applicationRootId },
+        requiredPermissions: [
+          {
+            applicationRootId: entry.applicationRootId,
+            ownerKind: entry.ownerKind,
+            ownerId: entry.ownerId,
+            permissionId: entry.permission.permissionId,
+          },
+        ],
+        recordBinding: {
+          moduleRootId: target.module.rootId,
+          recordTypeId: target.record.recordTypeId,
+          storageContractId: target.record.storageContractId,
+          storageScope: target.record.storageScope,
+        },
+        recentAuthentication: { kind: "none" },
+        authority: { kind: "permission" },
+      }),
+    );
+    if (availability.outcome !== "eligible") continue;
+    const policy = entry.permission.fieldPolicy;
+    for (const fieldId of (action === "create"
+      ? policy?.changeableFieldIds
+      : policy?.readableFieldIds) ?? [])
+      fieldIds.add(String(fieldId).toLowerCase());
+  }
+  return fieldIds;
+};
+
+/**
+ * The fields this viewer may set when they create a record of one type. A draft preview gives its
+ * builder every field, so it narrows nothing (`undefined`).
  */
 export const readCreatableFieldIds = async (
   session: IdentitySession,
@@ -115,67 +181,11 @@ export const readCreatableFieldIds = async (
   | Readonly<{ kind: "unavailable" }>
 > => {
   if (runtimePreviewOf(context) !== undefined) return { kind: "available", fieldIds: undefined };
-  const entries = context.permissionRegistration.entries.filter(
-    (entry) =>
-      entry.permission.actionKind === "create" &&
-      entry.permission.namedAction === undefined &&
-      entry.permission.recordTypeId !== undefined &&
-      sameId(String(entry.permission.recordTypeId), recordTypeId),
-  );
-  const targets = context.releaseSet.modules.flatMap((module) =>
-    module.content.recordTypes
-      .filter((record) => sameId(String(record.recordTypeId), recordTypeId))
-      .map((record) => ({ module, record })),
-  );
-  const target = targets.length === 1 ? targets[0] : undefined;
-  if (entries.length === 0 || target === undefined)
-    return { kind: "available", fieldIds: new Set() };
-  // Each create permission is decided on its own, without a row, through the record permission
-  // availability that the record writer's own decision starts from.
-  const decided = await humanOrganizationRequests().run(
-    session,
-    selection,
-    async (transaction, scope) => {
-      const eligible: boolean[] = [];
-      for (const entry of entries) {
-        const availability = await evaluateOrganizationRecordPermissionAvailability(
-          transaction,
-          scope,
-          organizationRecordAccessDeclarationSchema.parse({
-            operationKey: "application.page.form_field.create",
-            action: { actionKind: "create" },
-            target: { kind: "application", applicationRootId: context.applicationRootId },
-            requiredPermissions: [
-              {
-                applicationRootId: entry.applicationRootId,
-                ownerKind: entry.ownerKind,
-                ownerId: entry.ownerId,
-                permissionId: entry.permission.permissionId,
-              },
-            ],
-            recordBinding: {
-              moduleRootId: target.module.rootId,
-              recordTypeId: target.record.recordTypeId,
-              storageContractId: target.record.storageContractId,
-              storageScope: target.record.storageScope,
-            },
-            recentAuthentication: { kind: "none" },
-            authority: { kind: "permission" },
-          }),
-        );
-        eligible.push(availability.outcome === "eligible");
-      }
-      return eligible;
-    },
+  const decided = await humanOrganizationRequests().run(session, selection, (transaction, scope) =>
+    decideRecordTypeFieldIds(transaction, scope, context, recordTypeId, "create"),
   );
   if (decided.kind !== "available") return decided;
-  const fieldIds = new Set<string>();
-  entries.forEach((entry, index) => {
-    if (decided.value[index] !== true) return;
-    for (const fieldId of entry.permission.fieldPolicy?.changeableFieldIds ?? [])
-      fieldIds.add(String(fieldId).toLowerCase());
-  });
-  return { kind: "available", fieldIds };
+  return { kind: "available", fieldIds: decided.value };
 };
 
 const isEmptyValue = (value: JsonValue | undefined): boolean =>

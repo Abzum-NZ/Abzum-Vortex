@@ -281,6 +281,8 @@ export const readStudioCanvasRecords = async (
       tables: services.tables,
       resolveRecordLinks: services.recordLinkResolver(context),
       tableContinuation: undefined,
+      // The Studio canvas shows the authored layout; a person's layout belongs to the running app.
+      gridLayouts: { persisted: false, stored: new Map(), readable: undefined },
       adoptSubjectRead: () => {},
       markSubjectUnreadable: () => {},
     };

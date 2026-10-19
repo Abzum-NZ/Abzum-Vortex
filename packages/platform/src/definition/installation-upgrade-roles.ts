@@ -2,7 +2,6 @@ import "server-only";
 
 import type { createOrganizationAccessAdministrationService } from "../access/index";
 import { canonicalJson, type IdentitySession } from "../schema";
-import { backfillActivatedApplication } from "../records/derived-field-backfill";
 import { installationProblem } from "./installation-authority";
 import {
   acceptApplicationRoleChanges,
@@ -129,23 +128,13 @@ export const upgradeWithRoleChanges = async (
           installationProblem("upgrade_role_revision_changed", "conflict");
       },
     );
-  try {
-    return await acceptApplicationRoleChanges(
-      environment,
-      session,
-      selector,
-      state.selectedReleaseSet,
-      listed.map((change) =>
-        switching ? { ...change, liveRevision: change.registrationRevision } : change,
-      ),
-    );
-  } finally {
-    // Working out the derived values the new release brought comes after every commit of the
-    // upgrade, the role acceptances included; it never undoes them and logs its own failure.
-    if (switching)
-      await backfillActivatedApplication(environment.requests, session, {
-        organizationId: selector.organizationId,
-        applicationRootId: selector.rootId,
-      });
-  }
+  return acceptApplicationRoleChanges(
+    environment,
+    session,
+    selector,
+    state.selectedReleaseSet,
+    listed.map((change) =>
+      switching ? { ...change, liveRevision: change.registrationRevision } : change,
+    ),
+  );
 };

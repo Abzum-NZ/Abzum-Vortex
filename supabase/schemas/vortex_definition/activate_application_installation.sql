@@ -236,6 +236,9 @@ begin
         message = 'Application installation bindings changed';
     end if;
     sort_index_status := vortex_record.sync_published_sort_indexes_internal();
+    perform vortex_platform.enqueue_installation_backfill_internal(
+      initial_authority.organization_id, p_application_root_id, p_application_release_revision
+    );
   end if;
 
   select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(

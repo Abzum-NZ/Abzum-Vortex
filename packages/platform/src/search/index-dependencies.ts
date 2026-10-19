@@ -1,22 +1,8 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
-import {
-  applicationRootIdSchema,
-  actorIdSchema,
-  recordTypeDefinitionSchema,
-  revisionSchema,
-  sessionContextSchema,
-  tenantIdSchema,
-  type EventOccurrenceEnvelope,
-  type SessionContext,
-} from "../schema";
-import {
-  withResolvedRequestTransaction,
-  withRuntimeTransaction,
-  type DatabaseRow,
-  type RequestDatabaseTransaction,
-} from "../db/index";
+import { recordTypeDefinitionSchema, type EventOccurrenceEnvelope } from "../schema";
+import type { DatabaseRow } from "../db/index";
+import { inEventConsumerScope } from "../events/system-scope";
 import type { SearchIndexOccurrenceDependencies, SearchIndexRecordType } from "./event-consumer";
 import type {
   SearchDocumentStoreCommand,
@@ -30,7 +16,7 @@ import type {
  * Indexing runs inside event dispatch, which has no human caller. Each step
  * runs under a short-lived system context for the occurrence's organisation
  * and Application: the tenant, access version and system actor come from
- * `vortex_access.resolve_search_index_scope`, never from the occurrence.
+ * `vortex_access.resolve_event_consumer_scope`, never from the occurrence.
  * `vortex_record.read_search_snapshot` answers only to that system context, so
  * no request-bound read can reach it, and `vortex_record.put_document` writes
  * into the context organisation only.
@@ -39,8 +25,6 @@ import type {
  * created has no progress, so storage offers it every earlier occurrence in
  * order, and its own progress rows are the checkpoint.
  */
-
-const systemContextLifetimeMs = 60_000;
 
 /**
  * No organisation privacy policy is stored yet, so personal fields stay out of
@@ -60,42 +44,8 @@ const objectOf = (value: unknown, what: string): Readonly<Record<string, unknown
   return value as Readonly<Record<string, unknown>>;
 };
 
-const inSystemScope = async <Result>(
-  organizationId: string,
-  applicationRootId: string,
-  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
-): Promise<Result> => {
-  const scopes = await withRuntimeTransaction(
-    (transaction) =>
-      transaction.query<DatabaseRow>`
-      select system_actor_id, tenant_id, access_version
-      from vortex_access.resolve_search_index_scope(${organizationId}::uuid, ${applicationRootId}::uuid)
-    `,
-  );
-  const scope = scopes[0];
-  if (scopes.length !== 1 || scope === undefined) throw new Error("SEARCH_INDEX_SCOPE_UNAVAILABLE");
-  const now = Date.now();
-  const context: SessionContext = sessionContextSchema.parse({
-    callerKind: "system",
-    tenantId: tenantIdSchema.parse(scope.tenant_id),
-    organizationId,
-    applicationRootId: applicationRootIdSchema.parse(applicationRootId),
-    systemActorId: actorIdSchema.parse(scope.system_actor_id),
-    sessionId: randomUUID(),
-    authenticationStrength: "service",
-    issuedAt: new Date(now - 1_000).toISOString(),
-    expiresAt: new Date(now + systemContextLifetimeMs).toISOString(),
-    accessVersion: revisionSchema.parse(Number(scope.access_version)),
-    correlationId: randomUUID(),
-  });
-  return withResolvedRequestTransaction(
-    async () => ({ context, channel: "system" as const, scope: undefined }),
-    (transaction) => operation(transaction),
-  );
-};
-
 const readFacts = async (occurrence: EventOccurrenceEnvelope): Promise<IndexFacts | undefined> =>
-  inSystemScope(
+  inEventConsumerScope(
     occurrence.organizationId,
     occurrence.installation.applicationRootId,
     async (transaction) => {
@@ -162,7 +112,7 @@ export const createSearchIndexDependencies = (): SearchIndexOccurrenceDependenci
     loadPolicy: async () => indexPolicy,
     loadRecordSnapshot: async (occurrence) => (await factsFor(occurrence))?.snapshot,
     storeDocument: async (command: SearchDocumentStoreCommand, occurrence) => {
-      const rows = await inSystemScope(
+      const rows = await inEventConsumerScope(
         command.organizationId,
         occurrence.installation.applicationRootId,
         (transaction) =>

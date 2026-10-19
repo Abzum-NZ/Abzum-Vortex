@@ -4536,44 +4536,6 @@
         }
       },
       {
-        "kind": "list",
-        "key": "filterable_fields",
-        "label": "Filterable fields",
-        "help": "Fields a person may filter by; each must be filterable in the bound query",
-        "required": false,
-        "minimumItems": 0,
-        "maximumItems": 50,
-        "item": {
-          "kind": "field_reference",
-          "key": "field",
-          "label": "Field",
-          "help": "Field of the bound query",
-          "required": true
-        }
-      },
-      {
-        "kind": "boolean",
-        "key": "search",
-        "label": "Search",
-        "help": "Show a search box",
-        "required": false,
-        "defaultValue": {
-          "kind": "boolean",
-          "value": false
-        }
-      },
-      {
-        "kind": "boolean",
-        "key": "saved_views",
-        "label": "Saved views",
-        "help": "Let people save and reopen filter and sort combinations",
-        "required": false,
-        "defaultValue": {
-          "kind": "boolean",
-          "value": false
-        }
-      },
-      {
         "kind": "number",
         "key": "page_size",
         "label": "Page size",
@@ -4585,31 +4547,6 @@
         "defaultValue": {
           "kind": "number",
           "value": 40
-        }
-      },
-      {
-        "kind": "choice",
-        "key": "selection_mode",
-        "label": "Selection",
-        "help": "Whether rows can be selected",
-        "required": false,
-        "options": [
-          {
-            "key": "none",
-            "label": "None"
-          },
-          {
-            "key": "single",
-            "label": "Single"
-          },
-          {
-            "key": "multiple",
-            "label": "Multiple"
-          }
-        ],
-        "defaultValue": {
-          "kind": "choice",
-          "value": "none"
         }
       },
       {
@@ -4841,96 +4778,318 @@
         }
       },
       {
-        "kind": "list",
-        "key": "bulk_actions",
-        "label": "Bulk actions",
-        "help": "Named commands that run one flow over the selected rows",
-        "required": false,
-        "minimumItems": 0,
-        "maximumItems": 20,
-        "item": {
-          "kind": "group",
-          "key": "bulk_action",
-          "label": "Bulk action",
-          "help": "One named command over the selection",
-          "required": true,
-          "properties": [
-            {
-              "kind": "text",
-              "key": "event_id",
-              "label": "Event identity",
-              "help": "Stable identity of the flow binding this command runs",
-              "required": true,
-              "minLength": 1,
-              "maxLength": 60
-            },
-            {
-              "kind": "text",
-              "key": "label",
-              "presentation": true,
-              "label": "Label",
-              "help": "Text shown on the command",
-              "required": true,
-              "minLength": 1,
-              "maxLength": 60
-            },
-            {
-              "kind": "choice",
-              "key": "capability",
-              "label": "Required capability",
-              "help": "Record action the viewer must be permitted on a row for this command to appear; leave unset for an open or custom command",
-              "required": false,
-              "options": [
-                {
-                  "key": "update",
-                  "label": "Update"
-                },
-                {
-                  "key": "delete",
-                  "label": "Delete"
-                },
-                {
-                  "key": "restore",
-                  "label": "Restore"
-                }
-              ]
-            }
-          ]
-        }
-      },
-      {
         "kind": "group",
-        "key": "inline_edit",
-        "label": "Inline edit",
-        "help": "Fields a person may edit in place; a commit is held as a binding to a flow",
+        "key": "features",
+        "label": "Features",
+        "help": "Optional grid features; each is off until it is turned on",
         "required": false,
         "properties": [
           {
-            "kind": "text",
-            "key": "event_id",
-            "label": "Event identity",
-            "help": "Stable identity of the flow binding an inline-edit commit runs",
-            "required": true,
-            "minLength": 1,
-            "maxLength": 60
+            "kind": "group",
+            "key": "search",
+            "label": "Search",
+            "help": "A search box over the searchable fields of the bound query",
+            "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "properties": [
+              {
+                "kind": "boolean",
+                "key": "enabled",
+                "label": "On",
+                "help": "Show a search box",
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ]
           },
           {
-            "kind": "list",
-            "key": "fields",
-            "label": "Editable fields",
-            "help": "Fields a person may edit inline; each must be a field of the bound query",
-            "required": true,
-            "minimumItems": 1,
-            "maximumItems": 50,
-            "item": {
-              "kind": "field_reference",
-              "key": "field",
-              "label": "Field",
-              "help": "Field of the bound query edited in place",
-              "required": true
+            "kind": "group",
+            "key": "column_filters",
+            "label": "Column filters",
+            "help": "Filter controls for chosen fields of the bound query",
+            "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "properties": [
+              {
+                "kind": "boolean",
+                "key": "enabled",
+                "label": "On",
+                "help": "Show filter controls",
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              },
+              {
+                "kind": "list",
+                "key": "fields",
+                "label": "Filter fields",
+                "help": "Fields a person may filter by; each must be filterable in the bound query",
+                "required": false,
+                "minimumItems": 0,
+                "maximumItems": 50,
+                "item": {
+                  "kind": "field_reference",
+                  "key": "field",
+                  "label": "Field",
+                  "help": "Field of the bound query people filter by",
+                  "required": true
+                }
+              }
+            ]
+          },
+          {
+            "kind": "group",
+            "key": "saved_views",
+            "label": "Saved views",
+            "help": "Let people save and reopen sort and filter combinations",
+            "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "properties": [
+              {
+                "kind": "boolean",
+                "key": "enabled",
+                "label": "On",
+                "help": "Let people save views",
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ]
+          },
+          {
+            "kind": "group",
+            "key": "bulk_actions",
+            "label": "Bulk actions",
+            "help": "Select rows and run a named command over the selection",
+            "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "properties": [
+              {
+                "kind": "boolean",
+                "key": "enabled",
+                "label": "On",
+                "help": "Let people select rows and run commands over them",
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              },
+              {
+                "kind": "list",
+                "key": "actions",
+                "label": "Bulk actions",
+                "help": "Named commands that run one flow over the selected rows",
+                "required": false,
+                "minimumItems": 0,
+                "maximumItems": 20,
+                "item": {
+                  "kind": "group",
+                  "key": "bulk_action",
+                  "label": "Bulk action",
+                  "help": "One named command over the selection",
+                  "required": true,
+                  "properties": [
+                    {
+                      "kind": "text",
+                      "key": "event_id",
+                      "label": "Event identity",
+                      "help": "Stable identity of the flow binding this command runs",
+                      "required": true,
+                      "minLength": 1,
+                      "maxLength": 60
+                    },
+                    {
+                      "kind": "text",
+                      "key": "label",
+                      "presentation": true,
+                      "label": "Label",
+                      "help": "Text shown on the command",
+                      "required": true,
+                      "minLength": 1,
+                      "maxLength": 60
+                    },
+                    {
+                      "kind": "choice",
+                      "key": "capability",
+                      "label": "Required capability",
+                      "help": "Record action the viewer must be permitted on a row for this command to appear; leave unset for an open or custom command",
+                      "required": false,
+                      "options": [
+                        {
+                          "key": "update",
+                          "label": "Update"
+                        },
+                        {
+                          "key": "delete",
+                          "label": "Delete"
+                        },
+                        {
+                          "key": "restore",
+                          "label": "Restore"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "kind": "group",
+            "key": "inline_edit",
+            "label": "Inline editing",
+            "help": "Change chosen values in place; a commit is held as a binding to a flow",
+            "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "properties": [
+              {
+                "kind": "boolean",
+                "key": "enabled",
+                "label": "On",
+                "help": "Let people change values in place",
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              },
+              {
+                "kind": "text",
+                "key": "event_id",
+                "label": "Event identity",
+                "help": "Stable identity of the flow binding an inline-edit commit runs",
+                "required": false,
+                "minLength": 1,
+                "maxLength": 60
+              },
+              {
+                "kind": "list",
+                "key": "fields",
+                "label": "Editable fields",
+                "help": "Fields a person may change in place; each must be a column of the table",
+                "required": false,
+                "minimumItems": 0,
+                "maximumItems": 50,
+                "item": {
+                  "kind": "field_reference",
+                  "key": "field",
+                  "label": "Field",
+                  "help": "Field of the bound query edited in place",
+                  "required": true,
+                  "fieldTypes": [
+                    "text",
+                    "long_text",
+                    "whole_number",
+                    "decimal_number",
+                    "money",
+                    "yes_no",
+                    "email_address",
+                    "phone_number",
+                    "web_address"
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "defaultValue": {
+          "kind": "group",
+          "properties": {
+            "search": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "column_filters": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "saved_views": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "bulk_actions": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "inline_edit": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
             }
           }
-        ]
+        }
       }
     ],
     "slots": [],

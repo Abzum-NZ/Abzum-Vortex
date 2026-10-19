@@ -1,4 +1,4 @@
-import { applicationSourceDocumentSchema, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
+import { applicationSourceDocumentSchema, type ApplicationSourceDocument, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
 import {
   projectStudioSemanticOutline, studioSemanticSelectionKey,
   type StudioCompositionContext, type StudioPlacementDescriber, type StudioSemanticOutlineNode, type StudioSemanticSelection,
@@ -31,13 +31,19 @@ type Release = ImmutablePlatformBlockCatalogue["releases"][number];
 const textValue = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 
-/** The setting that names an item to a person: the block's accessible-name setting, else its first text setting. */
-const itemLabel = (release: Release | undefined, settings: Readonly<Record<string, unknown>>): string | undefined => {
+/** The item's accessible name, derived field label, or first text setting. */
+const itemLabel = (release: Release | undefined, settings: Readonly<Record<string, unknown>>, fieldLabels: ReadonlyMap<string, string>): string | undefined => {
   const capabilities = release?.capabilities as { accessibleNamePropertyPath?: readonly string[] } | undefined;
   const named = capabilities?.accessibleNamePropertyPath?.[0];
   const namedKind = release?.properties.find((property) => property.key === named)?.kind;
   if (named !== undefined && (namedKind === "text" || namedKind === "choice")) {
     const label = textValue(settings[named]);
+    if (label !== undefined) return label;
+  }
+  for (const property of release?.properties ?? []) {
+    if (property.kind !== "field_reference" || !property.derivesFieldInput) continue;
+    const reference = textValue(settings[property.key]);
+    const label = reference === undefined ? undefined : fieldLabels.get(reference);
     if (label !== undefined) return label;
   }
   for (const property of release?.properties ?? []) {
@@ -50,13 +56,19 @@ const itemLabel = (release: Release | undefined, settings: Readonly<Record<strin
 /** "Button: New company": the block's display name from its release, then the item's own label. */
 export const createStudioPlacementDescriber = (
   catalogue: ImmutablePlatformBlockCatalogue,
-): StudioPlacementDescriber => (placement) => {
-  const release = catalogue.releases.find((candidate) =>
-    String(candidate.blockId) === placement.block.block_id &&
-    String(candidate.releaseVersion) === placement.block.release_version);
-  const name = release?.name === undefined ? "Item" : String(release.name);
-  const label = itemLabel(release, placement.settings);
-  return label === undefined ? name : `${name}: ${label}`;
+  source: ApplicationSourceDocument,
+): StudioPlacementDescriber => {
+  const fieldLabels = new Map(source.body.modules.flatMap((module) =>
+    module.record_types.flatMap((record) => record.fields.map((field) =>
+      [`${module.key}:${record.key}.${field.key}`, field.label] as const))));
+  return (placement) => {
+    const release = catalogue.releases.find((candidate) =>
+      String(candidate.blockId) === placement.block.block_id &&
+      String(candidate.releaseVersion) === placement.block.release_version);
+    const name = release?.name === undefined ? "Item" : String(release.name);
+    const label = itemLabel(release, placement.settings, fieldLabels);
+    return label === undefined ? name : `${name}: ${label}`;
+  };
 };
 
 /** Selection key to business label for every item in the outline. */
@@ -68,9 +80,10 @@ export const studioOutlineLabels = (node: StudioSemanticOutlineNode, into = new 
 
 /** The business label of every placed item by its authored name, for editors that list or name sibling items. */
 export const studioPlacementLabels = (context: StudioCompositionContext): ReadonlyMap<string, string> => {
+  const source = applicationSourceDocumentSchema.parse(context.source);
   const labels = studioOutlineLabels(projectStudioSemanticOutline(
-    { rootId: context.rootId, source: applicationSourceDocumentSchema.parse(context.source), catalogue: context.catalogue },
-    createStudioPlacementDescriber(context.catalogue)));
+    { rootId: context.rootId, source, catalogue: context.catalogue },
+    createStudioPlacementDescriber(context.catalogue, source)));
   const byAlias = new Map<string, string>();
   for (const [key, label] of labels) if (key.startsWith("placement:")) byAlias.set(key.slice("placement:".length), label);
   return byAlias;

@@ -7,6 +7,7 @@ import {
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import { uniqueKey } from "./application-structure-common";
+import { studioFieldFacts } from "./contextual-palette";
 
 type PipelineStudioSetup = Extract<NonNullable<PlatformBlockRelease["studioSetup"]>, { kind: "pipeline" }>;
 
@@ -24,7 +25,7 @@ export const studioBoardPipelines = (source: ApplicationSourceDocument, setup: P
         selectable,
         ...(selectable ? {} : { unavailableReason: setup.stageFilterError }),
         fields: record.fields.map((field) => ({ reference: `${module.key}:${record.key}.${field.key}`,
-          label: field.label, type: field.type })),
+          label: field.label, type: field.type, ...studioFieldFacts(field) })),
       };
     })));
 
