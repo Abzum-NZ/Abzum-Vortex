@@ -68,6 +68,7 @@ export const loadApplicationSearch = async (
             transaction,
             scope: {
               organizationId: scope.organizationId,
+              organizationAccountId: scope.organizationAccountId,
               applicationRootId: scopedApplicationRootId,
             },
           }).load(),

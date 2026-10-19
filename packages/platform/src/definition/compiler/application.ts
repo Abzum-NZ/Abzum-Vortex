@@ -713,6 +713,7 @@ export function compileParsedApplicationRequest(
         catalogueFailure.family,
         catalogueFailure.location,
         catalogueFailure.code,
+        catalogueFailure.sentence,
       );
     const resolution = new Resolution(request.resolution, sourceObject);
     const flowSet = compileCheckedFlowSources(sourceObject, resolution, dependencyOutputs);
@@ -778,7 +779,10 @@ export function compileParsedApplicationRequest(
         dependencyOutputs,
       ),
     });
-    if (!output.success) fail("vortex.definition.invalid_compilation_output", "invalid_value");
+    if (!output.success) {
+      console.error("[definition] application compilation output invalid", output.error);
+      fail("vortex.definition.invalid_compilation_output", "invalid_value");
+    }
     return output.data;
   } catch (error) {
     if (error instanceof DefinitionCompilationError)
@@ -788,7 +792,10 @@ export function compileParsedApplicationRequest(
             error.ruleCode,
             error.family,
             compilerRootLocation(sourceObject),
+            error.code,
+            error.sentence,
           );
+    console.error("[definition] application compilation failed", error);
     return fail("vortex.definition.invalid_compilation_output", "invalid_value");
   }
 }

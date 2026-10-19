@@ -17,8 +17,9 @@ import {
   recordsTableEditableFieldTypes,
   type BlockPropertySchemaContract,
   type RecordsTableQueryFacts,
+  compiledPageBindingFacts,
+  compiledPlacementBindingProblems,
 } from "../../schema";
-import { tableQueryParameterFailures } from "../table-query-parameters";
 import type { ApplicationScope } from "./application-scope";
 
 export function applicationPageRules(scope: ApplicationScope): void {
@@ -96,7 +97,9 @@ export function applicationPageRules(scope: ApplicationScope): void {
     if (value.kind === "field_reference" && declaration.kind === "field_reference")
       return (
         declaration.fieldTypes === undefined ||
-        (declaration.fieldTypes as readonly string[]).includes(fieldType(String(value.fieldId)) ?? "")
+        (declaration.fieldTypes as readonly string[]).includes(
+          fieldType(String(value.fieldId)) ?? "",
+        )
       );
     if (value.kind === "group" && declaration.kind === "group")
       return declaration.properties.every((property) => {
@@ -206,10 +209,37 @@ export function applicationPageRules(scope: ApplicationScope): void {
           }),
         );
     }
-    const placements = [
-      ...pageContentPlacementEntries(page).map(([, placement]) => placement),
-      ...pageShellPlacementEntries(page).map(([, placement]) => placement),
+    const placementEntries = [
+      ...pageContentPlacementEntries(page),
+      ...pageShellPlacementEntries(page),
     ];
+    const placements = placementEntries.map(([, placement]) => placement);
+    const releaseOf = (placement: (typeof placements)[number]) => {
+      const block = object(placement.vortex.block);
+      return registeredBlockReleases.get(
+        `${String(block.blockId)}:${String(block.releaseVersion)}`,
+      );
+    };
+    // Every query-bound block binds each input of its query explicitly, from a source this page
+    // offers; publication refuses with the same sentence Studio shows beside the input.
+    const bindingFacts = compiledPageBindingFacts(
+      page,
+      placementEntries,
+      releaseOf,
+      records,
+      moduleQueries,
+    );
+    for (const problem of bindingFacts.pageProblems)
+      failures.push(
+        failure(
+          output,
+          "vortex.definition.application_block_settings",
+          "invalid_value",
+          undefined,
+          "definition_query_binding",
+          problem.sentence,
+        ),
+      );
     // A Records table or Record detail may map only fields its bound Module query selects, and
     // may order only by fields the query can order (a grouped or aggregating query orders by its
     // grouping fields). The default sort must be the query's leading sort, the order the Query
@@ -232,14 +262,38 @@ export function applicationPageRules(scope: ApplicationScope): void {
         continue;
       }
       const settings = object(placement.settings) as Parameters<typeof readRecordsTableContract>[0];
+      for (const problem of compiledPlacementBindingProblems(
+        placement,
+        release?.name ?? "This block",
+        bound,
+        bindingFacts,
+      ))
+        failures.push(
+          failure(
+            output,
+            "vortex.definition.application_block_settings",
+            "invalid_value",
+            undefined,
+            "definition_query_binding",
+            problem.sentence,
+          ),
+        );
       const table = readRecordsTableContract(settings);
       const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
-      if (blockKey === "platform.display.record_detail" && settings.detail_fields !== undefined && detail === undefined)
-        failures.push(failure(output, "vortex.definition.application_block_settings", "required_value"));
+      if (
+        blockKey === "platform.display.record_detail" &&
+        settings.detail_fields !== undefined &&
+        detail === undefined
+      )
+        failures.push(
+          failure(output, "vortex.definition.application_block_settings", "required_value"),
+        );
       // A Records table always declares a readable contract: columns with their default
       // visibility and a page size.
       if (blockKey === "platform.display.table" && table === undefined)
-        failures.push(failure(output, "vortex.definition.application_block_settings", "required_value"));
+        failures.push(
+          failure(output, "vortex.definition.application_block_settings", "required_value"),
+        );
       if (blockKey === "platform.display.board") {
         const board = readBoardPlacementContract(settings);
         const boardRecordType = records.get(String(object(bound.recordType).recordTypeId));
@@ -375,12 +429,10 @@ export function applicationPageRules(scope: ApplicationScope): void {
       }
       if (table === undefined && detail === undefined) continue;
       if (table !== undefined) {
-        const query = moduleQueryDefinitionSchema.safeParse(bound);
-        const families = query.success
-          ? tableQueryParameterFailures(table, query.data.inputs)
-          : (["broken_reference"] as const);
-        for (const family of families)
-          failures.push(failure(output, "vortex.definition.application_block_settings", family));
+        if (!moduleQueryDefinitionSchema.safeParse(bound).success)
+          failures.push(
+            failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+          );
         // Every enabled grid feature must fit the bound query; publication reports the feature's
         // own business sentence, the one Studio shows beside its switch.
         for (const feature of checkRecordsTableFeatures(
@@ -443,7 +495,10 @@ export function applicationPageRules(scope: ApplicationScope): void {
             ))) ||
         (detail !== undefined &&
           !mapped(
-            [...detail.fields.map((entry) => entry.field), ...(detail.headingField === undefined ? [] : [detail.headingField])],
+            [
+              ...detail.fields.map((entry) => entry.field),
+              ...(detail.headingField === undefined ? [] : [detail.headingField]),
+            ],
             selected,
           ))
       )

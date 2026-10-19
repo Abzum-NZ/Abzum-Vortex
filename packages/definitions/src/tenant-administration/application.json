@@ -400,7 +400,8 @@
                     "id": "overview_organizations_region",
                     "title": "Organisations in this tenant",
                     "row_click": {
-                      "event_id": "event_open_organization_detail"
+                      "event_id": "event_open_organization_detail",
+                      "mode": "flow"
                     },
                     "columns": [
                       {
@@ -466,7 +467,8 @@
                     "id": "structure_region",
                     "title": "Tenant structure",
                     "row_click": {
-                      "event_id": "event_open_organization_detail"
+                      "event_id": "event_open_organization_detail",
+                      "mode": "flow"
                     },
                     "columns": [
                       {
@@ -1064,7 +1066,8 @@
                     "id": "administrators_region",
                     "title": "Tenant administrators",
                     "row_click": {
-                      "event_id": "event_open_tenant_administrator_detail"
+                      "event_id": "event_open_tenant_administrator_detail",
+                      "mode": "flow"
                     },
                     "columns": [
                       {

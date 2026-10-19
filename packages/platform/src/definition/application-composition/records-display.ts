@@ -75,13 +75,6 @@ export type RecordsTableSortContract = Readonly<{
   direction: RecordsTableSortDirection;
 }>;
 
-export type RecordsTableParameterContract = Readonly<{
-  input: string;
-  source: "fixed" | "page";
-  fixedValue?: string;
-  pageParameter?: string;
-}>;
-
 /** Authored messages a Records table or Record detail shows in place of its fixed neutral text. */
 export type RecordsDisplayMessages = Readonly<{
   empty?: string;
@@ -92,6 +85,7 @@ export type RecordsDisplayMessages = Readonly<{
 /** A row click held as a binding to a flow; the bound flow decides what opening the row does. */
 export type RecordsTableRowClickContract = Readonly<{
   eventId: string;
+  selectsRecord: boolean;
 }>;
 
 /** The configured row behaviours of one Records table placement: a row click and named row actions. */
@@ -110,7 +104,6 @@ export type RecordsTableContract = Readonly<{
   defaultSort: readonly RecordsTableSortContract[];
   sortableFields: readonly string[];
   pageSize: number;
-  parameters: readonly RecordsTableParameterContract[];
   messages: RecordsDisplayMessages;
   /** Configured row behaviours; empty for a placement that declares none. */
   rowBehaviours: RecordsTableRowBehaviourContract;
@@ -165,9 +158,14 @@ const displayMessages = (settings: SettingsRecord): RecordsDisplayMessages => {
  */
 const readRowBehaviours = (settings: SettingsRecord): RecordsTableRowBehaviourContract => {
   const click = settingGroup(settings["row_click"]);
-  const clickEventId = click === undefined ? undefined : settingText(click["event_id"]);
+  const mode = click?.["mode"]?.kind === "choice" ? click["mode"].value : undefined;
+  const clickEventId = mode === "flow" ? settingText(click?.["event_id"]) : undefined;
   return {
-    ...(clickEventId === undefined ? {} : { rowClick: { eventId: clickEventId } }),
+    ...(mode === "select"
+      ? { rowClick: { eventId: "select", selectsRecord: true } }
+      : clickEventId === undefined
+        ? {}
+        : { rowClick: { eventId: clickEventId, selectsRecord: false } }),
     rowActions: readActionList(settings["row_actions"]),
   };
 };
@@ -244,29 +242,11 @@ export const readRecordsTableContract = (
     stickyFirstColumn?.kind !== "boolean"
   )
     return undefined;
-  const parameters = (settingItems(settings["query_parameters"]) ?? []).flatMap(
-    (item): RecordsTableParameterContract[] => {
-      const parameter = settingGroup(item);
-      const input = parameter === undefined ? undefined : settingText(parameter["input"]);
-      if (parameter === undefined || input === undefined) return [];
-      const fixed = parameter["fixed_value"];
-      const pageParameter = settingText(parameter["page_parameter"]);
-      return [
-        {
-          input,
-          source: settingChoice(parameter["source"], ["fixed", "page"] as const, "fixed"),
-          ...(fixed?.kind === "text" ? { fixedValue: fixed.value } : {}),
-          ...(pageParameter === undefined ? {} : { pageParameter }),
-        },
-      ];
-    },
-  );
   return {
     columns,
     defaultSort,
     sortableFields: fieldList(settings["sortable_fields"]),
     pageSize: pageSize.value,
-    parameters,
     messages: displayMessages(settings),
     rowBehaviours: readRowBehaviours(settings),
     density,

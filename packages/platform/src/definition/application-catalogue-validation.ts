@@ -2,6 +2,7 @@ import {
   builderKeySchema,
   readRecordDetailContract,
   readRecordsTableContract,
+  readQueryBindings,
   recordsTableContractRefusal,
   readSourceItem,
   sourceItemChildSlots,
@@ -249,28 +250,6 @@ export function validateApplicationSourceCatalogue(
             Object.keys(feature.properties).some((key) => key !== "enabled")
           )
             report("vortex.definition.application_block_settings", "invalid_value", at("features"));
-      const inputs = new Set<string>();
-      for (const parameter of table.parameters) {
-        // The exact bound Module query owns the input names and types. Publication checks them;
-        // draft save can check only the authored parameter structure here.
-        if (inputs.has(parameter.input))
-          report(
-            "vortex.definition.application_block_settings",
-            "duplicate_key",
-            at("query_parameters"),
-          );
-        inputs.add(parameter.input);
-        if (
-          (parameter.source === "fixed" && parameter.fixedValue === undefined) ||
-          (parameter.source === "page" && parameter.pageParameter === undefined)
-        )
-          report(
-            "vortex.definition.application_block_settings",
-            "required_value",
-            at("query_parameters"),
-          );
-      }
-
       /**
        * Every configured row behaviour must bind a flow: the placement and the behaviour's event
        * identity must resolve to exactly one flow binding of the expected kind, and the bound flow
@@ -312,7 +291,7 @@ export function validateApplicationSourceCatalogue(
           report("vortex.definition.application_block_settings", "invalid_value", at(key));
       };
       const behaviours = table.rowBehaviours;
-      if (behaviours.rowClick !== undefined)
+      if (behaviours.rowClick !== undefined && !behaviours.rowClick.selectsRecord)
         checkRowBehaviour(
           "row_click",
           behaviours.rowClick.eventId,
@@ -367,6 +346,31 @@ export function validateApplicationSourceCatalogue(
       );
       if (detail.headingField !== undefined)
         checkFields("heading_field", [detail.headingField], () => true, "invalid_value");
+    }
+  };
+
+  /**
+   * The structure of a block's query bindings: each item names an input once and carries its
+   * source's part. The bound query lives in a Module release this source-only check cannot read, so
+   * whether each input exists, is bound and gets a value of its type is the binding check that
+   * Studio shows and publication runs on the compiled release.
+   */
+  const validateQueryBindingStructure = (
+    settings: Readonly<Record<string, SourceValue>>,
+    location: readonly Segment[],
+  ): void => {
+    if (settings.query_parameters === undefined) return;
+    const at = [...location, ...keySegment("setting", "query_parameters")];
+    const read = readQueryBindings(settings);
+    if (read.kind === "malformed") {
+      report("vortex.definition.application_block_settings", "required_value", at);
+      return;
+    }
+    const inputs = new Set<string>();
+    for (const binding of read.bindings) {
+      if (inputs.has(binding.input))
+        report("vortex.definition.application_block_settings", "duplicate_key", at);
+      inputs.add(binding.input);
     }
   };
 
@@ -518,6 +522,7 @@ export function validateApplicationSourceCatalogue(
       const reading = readSourceItem(item, release);
       reportSettingFailures(reading.settingFailures, location);
       validateDataContract(placement, alias, reading.settings, location, release.key);
+      validateQueryBindingStructure(reading.settings, location);
       validateAccessibleName(reading.settings, release, location);
       validateResponsive(placement, release, location);
 

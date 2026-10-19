@@ -2,7 +2,7 @@ import { z } from "zod";
 import { correlationIdSchema } from "./common";
 import { builderKeySchema, namespacedKeySchema } from "./identifiers";
 
-export const definitionValidationCatalogueVersion = "1.3.0" as const;
+export const definitionValidationCatalogueVersion = "1.4.0" as const;
 
 export const definitionDocumentKindSchema = z.enum(["module", "application", "connection_type"]);
 
@@ -60,6 +60,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_saved_views",
   "definition_records_table_bulk_actions",
   "definition_records_table_inline_edit",
+  "definition_query_binding",
   "definition_unknown_property",
   "definition_too_few_items",
   "definition_too_many_items",
@@ -145,6 +146,14 @@ const definitionValidationErrorCatalogueSource = {
     message: "Inline editing needs fields people may change.",
     guidance:
       "Choose editable fields shown as columns and the flow that saves a change, or turn Inline editing off.",
+  },
+  // A query binding refusal carries its own sentence (the input, the source and the types); the
+  // catalogue message is what a reader without that sentence sees.
+  definition_query_binding: {
+    order: 39,
+    message: "A query input of a block has no valid source.",
+    guidance:
+      "Open the block's Query inputs and choose a source of the input's type for each input.",
   },
   definition_unknown_property: {
     order: 40,
@@ -293,6 +302,8 @@ export const definitionRuleFailureSchema = z
     family: definitionRuleFailureFamilySchema,
     /** A rule with its own business sentence names its catalogue code; others use the family's. */
     code: definitionValidationErrorCodeSchema.optional(),
+    /** The rule's own business sentence for this failure, when it names the parts involved. */
+    sentence: z.string().min(1).max(500).optional(),
     location: definitionValidationLocationSchema.optional(),
   })
   .strict();

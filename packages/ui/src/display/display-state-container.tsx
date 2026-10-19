@@ -31,7 +31,9 @@ export function getAccessibleName(
     const value = Object.hasOwn(current, key) ? current[key] : undefined;
     if (value === undefined) return undefined;
     if (index === path.length - 1)
-      return value.kind === "text" && value.value.trim().length > 0 ? value.value.trim() : undefined;
+      return value.kind === "text" && value.value.trim().length > 0
+        ? value.value.trim()
+        : undefined;
     if (value.kind !== "group") return undefined;
     current = value.properties;
   }
@@ -54,7 +56,7 @@ export type DisplayStateContainerProps<Values> = Readonly<{
 
 /**
  * Standard container for display component states, rendered with the shadcn Card, Skeleton,
- * Empty, Alert and Badge parts. Loading, empty, refused and error states render data-free text
+ * Empty, Alert and Badge parts. Loading, empty, awaiting, refused and error states render data-free text
  * (fixed, or authored for a block that declares it) announced at the component. A viewable
  * placement whose use is unavailable keeps its permitted content with a fixed unavailable note;
  * its components receive no semantic callbacks.
@@ -96,6 +98,22 @@ export function DisplayStateContainer<Values>({
       >
         <EmptyHeader>
           <EmptyDescription>{emptyMessage}</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+
+  // A block whose required query input has no value yet says what to choose; it read nothing.
+  if (projectedData.status === "awaiting_input") {
+    return (
+      <Empty
+        role="status"
+        data-vortex-display-state="awaiting_input"
+        className="border border-dashed"
+        aria-label={`${accessibleName}: waiting for a choice`}
+      >
+        <EmptyHeader>
+          <EmptyDescription>{projectedData.message}</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );

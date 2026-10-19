@@ -272,7 +272,7 @@ const pages = [
             label,
             visible: true,
           })),
-          row_click: { event_id: incidentRowClickEventId },
+          row_click: { mode: "flow", event_id: incidentRowClickEventId },
         },
         {},
         { query: openIncidentsQuery },

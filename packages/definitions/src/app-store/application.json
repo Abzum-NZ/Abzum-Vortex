@@ -266,7 +266,8 @@
                     "id": "store_applications_region",
                     "title": "Applications",
                     "row_click": {
-                      "event_id": "event_open_store_application"
+                      "event_id": "event_open_store_application",
+                      "mode": "flow"
                     },
                     "columns": [
                       {
