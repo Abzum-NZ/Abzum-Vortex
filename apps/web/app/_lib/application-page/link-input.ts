@@ -2,14 +2,23 @@ import "server-only";
 
 import {
   createProtectedQueryService,
+  createHumanOrganizationRequestService,
   createRecordChoiceReader,
   recordChoicePageSizes,
   recordLinkLabelKey,
   type RecordChoice,
   type RecordChoiceCommand,
   type RecordLinkResolver,
+  type InstalledRuntimeContext,
 } from "@vortex/platform/server";
-import { isRecord, recordIdSchema, sameId, type IdentitySession } from "@vortex/platform/schema";
+import {
+  isRecord,
+  readRecordsTableContract,
+  recordIdSchema,
+  sameId,
+  type BlockPropertyValueContract,
+  type IdentitySession,
+} from "@vortex/platform/schema";
 import { getQueryContinuationKey } from "../query-continuation-key";
 import {
   collectPlacements,
@@ -20,6 +29,7 @@ import {
 } from "./placement-helpers";
 import { projectReferenceChoicePage, type ReferenceChoiceAddress } from "./reference-choice";
 import type { PageDataState, SearchParameters } from "./types";
+import { decideRecordTypeFieldIds } from "./form-field-access";
 
 /** What a viewer may see of a linked record's title. */
 const titleOf = (
@@ -123,6 +133,41 @@ export const projectInitialLinkInputs = async (
   }
 };
 
+/**
+ * The record type a Records table's link filter on `fieldId` may name: the field must be one the
+ * table's Column filters feature declares, and a single-target link field of the installed release.
+ */
+const linkFilterTarget = (
+  context: InstalledRuntimeContext,
+  settings: Readonly<Record<string, unknown>>,
+  fieldId: string,
+):
+  | Readonly<{ moduleRootId: string; recordTypeId: string; sourceRecordTypeId: string }>
+  | undefined => {
+  const contract = readRecordsTableContract(
+    settings as Readonly<Record<string, BlockPropertyValueContract>>,
+  );
+  const columnFilters = contract?.features.columnFilters;
+  if (
+    columnFilters === undefined ||
+    !columnFilters.enabled ||
+    !columnFilters.fields.some((field) => sameId(field, fieldId))
+  )
+    return undefined;
+  for (const module of context.releaseSet.modules)
+    for (const recordType of module.content.recordTypes)
+      for (const field of recordType.fields)
+        if (sameId(String(field.fieldId), fieldId))
+          return field.type === "link" && field.settings.target.state === "resolved"
+            ? {
+                sourceRecordTypeId: String(recordType.recordTypeId),
+                moduleRootId: String(field.settings.target.moduleRootId),
+                recordTypeId: String(field.settings.target.recordTypeId),
+              }
+            : undefined;
+  return undefined;
+};
+
 export type RecordChoicePageResult =
   | Readonly<{
       kind: "completed";
@@ -143,6 +188,8 @@ export const loadRecordChoicePage = async (
   address: ReferenceChoiceAddress,
   request: Readonly<{
     placementId: string;
+    /** For a Records table's link filter: the declared filter field whose targets are offered. */
+    fieldId?: string;
     installationRevision: number;
     releaseKey: string;
     subjectRecordId?: string;
@@ -157,20 +204,41 @@ export const loadRecordChoicePage = async (
   const { context, selection, dependencies } = projected;
   const placements = collectPlacements(projected.page);
   const placement = placements.find((entry) => sameId(entry.placementId, request.placementId));
-  if (placement === undefined || !isLinkInputPlacement(placement))
-    return { kind: "refused", cause: "placement_not_link_input" };
-  const form =
-    placement.formId === undefined
-      ? undefined
-      : placements.find((entry) => sameId(entry.placementId, placement.formId!));
-  if (
-    projectedUseAvailability(placement) !== "available" ||
-    (form !== undefined && projectedUseAvailability(form) !== "available")
-  )
-    return { kind: "refused", cause: "placement_unavailable" };
+  if (placement === undefined) return { kind: "refused", cause: "placement_not_found" };
+  let declaredTargets: readonly Readonly<{ moduleRootId: string; recordTypeId: string }>[];
+  if (request.fieldId !== undefined) {
+    // A Records table's link filter offers the target records of one declared filter field.
+    const filtered = linkFilterTarget(context, placement.settings, request.fieldId);
+    if (filtered === undefined) return { kind: "refused", cause: "field_not_a_link_filter" };
+    if (projectedUseAvailability(placement) !== "available")
+      return { kind: "refused", cause: "placement_unavailable" };
+    const readable = await createHumanOrganizationRequestService(dependencies).run(
+      session,
+      selection,
+      (transaction, scope) =>
+        decideRecordTypeFieldIds(transaction, scope, context, filtered.sourceRecordTypeId, "read"),
+    );
+    if (readable.kind === "temporarily_unavailable") return readable;
+    if (readable.kind !== "available" || !readable.value.has(request.fieldId.toLowerCase()))
+      return { kind: "refused", cause: "filter_field_withheld" };
+    declaredTargets = [filtered];
+  } else {
+    if (!isLinkInputPlacement(placement))
+      return { kind: "refused", cause: "placement_not_link_input" };
+    const form =
+      placement.formId === undefined
+        ? undefined
+        : placements.find((entry) => sameId(entry.placementId, placement.formId!));
+    if (
+      projectedUseAvailability(placement) !== "available" ||
+      (form !== undefined && projectedUseAvailability(form) !== "available")
+    )
+      return { kind: "refused", cause: "placement_unavailable" };
+    declaredTargets = linkInputTargets(placement.settings);
+  }
 
   const targets: RecordChoiceCommand["targets"][number][] = [];
-  for (const target of linkInputTargets(placement.settings)) {
+  for (const target of declaredTargets) {
     const module = context.releaseSet.modules.find((candidate) =>
       sameId(String(candidate.rootId), target.moduleRootId),
     );

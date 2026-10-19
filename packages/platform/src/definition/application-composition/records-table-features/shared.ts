@@ -158,6 +158,8 @@ export type RecordsTableQueryFacts = Readonly<{
   /** The query groups or aggregates its rows, so rows are not records a person can act on. */
   grouped: boolean;
   relatedRecords: RecordsTableRelatedRecordsFacts;
+  /** The record type's fields the query does not select, so a check can name one a setting chose. */
+  unselectedFields?: readonly Readonly<{ field: string; label: string }>[];
 }>;
 
 /** The field types whose stored value people change directly. */
@@ -192,6 +194,7 @@ export type RecordsTableFeatureCheck =
 
 export const featureAvailable: RecordsTableFeatureCheck = Object.freeze({ kind: "available" });
 
+/** A feature that is not possible: the catalogue sentence, or one that names the field at fault. */
 export const featureNotPossible = (
   code: RecordsTableFeatureRefusalCode,
   /** The sentence naming the part that does not fit, for a feature whose sentence is not fixed. */

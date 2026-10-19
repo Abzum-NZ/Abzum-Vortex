@@ -314,22 +314,6 @@ export const operatorAcceptsOperands = (
     return elementType !== undefined && canBeType(left, elementType);
   }
   const type = conditionSharedType(left, right);
-  if (
-    type === "money" &&
-    left.source === "value" &&
-    right.source === "value" &&
-    left.literal !== null &&
-    right.literal !== null
-  ) {
-    const leftMoney = moneyValueSchema.safeParse(left.literal);
-    const rightMoney = moneyValueSchema.safeParse(right.literal);
-    if (
-      leftMoney.success &&
-      rightMoney.success &&
-      leftMoney.data.currency !== rightMoney.data.currency
-    )
-      return false;
-  }
   return (
     ["greater_than", "greater_than_or_equal", "less_than", "less_than_or_equal"].includes(
       operator,

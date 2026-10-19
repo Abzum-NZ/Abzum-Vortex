@@ -180,6 +180,7 @@ export function StudioGridFeatures({
               ? declaration.properties.filter((setting) => setting.key !== "enabled")
               : [];
           const current = featureValue(key);
+          const editor = studioGridFeatureEditors[key];
           const settingValues: StudioSettingValues = Object.fromEntries(
             Object.entries(current.properties).filter(([setting]) => setting !== "enabled"),
           );
@@ -245,9 +246,7 @@ export function StudioGridFeatures({
                   />
                 </div>
               ) : null}
-              {!enabled ||
-              settings.length === 0 ||
-              studioGridFeatureEditors[key].kind !== "settings" ? null : (
+              {!enabled || settings.length === 0 || editor.kind !== "settings" ? null : (
                 <div className="space-y-3 pb-2">
                   {(() => {
                     const own = key === "master_detail" ? relatedSettings(current) : undefined;
@@ -264,7 +263,12 @@ export function StudioGridFeatures({
                             (setting) => setting.key !== "query_parameters",
                           )}
                           values={settingValues}
-                          choices={own?.choices ?? choices}
+                          choices={
+                            own?.choices ??
+                            (editor.offers === undefined
+                              ? choices
+                              : { ...choices, fields: choices.fields.filter(editor.offers) })
+                          }
                           disabled={disabled}
                           onChange={(next) =>
                             commit({

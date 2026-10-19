@@ -1,6 +1,7 @@
 import {
   queryInputValueType,
   recordsTableEditableFieldTypes,
+  recordsTableFieldFilterable,
   type QueryBindingField,
   type QueryBindingPageFacts,
   type RecordsTableFeatureKey,
@@ -10,6 +11,7 @@ import {
 import type {
   StudioActionChoice,
   StudioQueryChoice,
+  StudioQueryField,
   StudioRelationshipChoice,
 } from "../contextual-palette";
 
@@ -21,13 +23,32 @@ import type {
  * Every feature of the Records table registry has exactly one entry, so the Features panel never
  * meets a feature it cannot show.
  */
-export type StudioGridFeatureEditor = Readonly<{ kind: "settings" }> | Readonly<{ kind: "custom" }>;
+export type StudioGridFeatureEditor =
+  | Readonly<{
+      kind: "settings";
+      /** The bound query's fields the feature's field pickers offer; every field when absent. */
+      offers?: (field: StudioQueryField) => boolean;
+    }>
+  | Readonly<{ kind: "custom" }>;
 
 export const studioGridFeatureEditors: Readonly<
   Record<RecordsTableFeatureKey, StudioGridFeatureEditor>
 > = {
   search: { kind: "settings" },
-  column_filters: { kind: "settings" },
+  // Only fields people can filter by: stored, filterable and of a type a filter fits.
+  column_filters: {
+    kind: "settings",
+    offers: (field) =>
+      recordsTableFieldFilterable({
+        field: field.reference,
+        label: field.label,
+        type: field.type,
+        sortable: field.sortable,
+        filterable: field.filterable,
+        searchable: field.searchable,
+        editable: false,
+      }),
+  },
   saved_views: { kind: "settings" },
   bulk_actions: { kind: "settings" },
   inline_edit: { kind: "settings" },

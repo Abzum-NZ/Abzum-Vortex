@@ -1,4 +1,10 @@
 import type { RecordsTableSortDirection } from "../definition/application-composition/records-display";
+import {
+  decodeRecordsTableFieldFilter,
+  type RecordsTableFilterValue,
+} from "./records-table-filters";
+
+export * from "./records-table-filters";
 
 /**
  * The query state of one Records table placement: the one contract the browser writes into the
@@ -25,9 +31,6 @@ export type RecordsTableSortState = Readonly<{
   explicit: boolean;
 }>;
 
-/** One active filter: the filterable field and the value its control reported. */
-export type RecordsTableFilterValue = Readonly<{ fieldId: string; value: string }>;
-
 /**
  * One requested table page. Page one has no token; a later page names the sealed continuation
  * token the table already holds, or no token with a backward direction for the last page.
@@ -49,7 +52,7 @@ export type RecordsTableQueryState = Readonly<{
 
 export type RecordsTableQueryStateRead =
   | Readonly<{ kind: "valid"; state: RecordsTableQueryState }>
-  | Readonly<{ kind: "malformed"; part: "sort" | "search" }>;
+  | Readonly<{ kind: "malformed"; part: "sort" | "filter" | "search" }>;
 
 const FIELD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PAGE_PATTERN = /^[1-9][0-9]{0,4}$/;
@@ -146,16 +149,28 @@ const parseSort = (value: string): RecordsTableSortKey[] | undefined => {
 };
 
 /**
- * Reads one placement's query state from the page address. A malformed sort or search is reported
- * rather than dropped, so the server refuses the read instead of showing a different order than the
- * address names. An unreadable page position reads page one. Which columns show is not query state:
+ * Reads one placement's query state from the page address. A malformed sort, filter or search is
+ * reported rather than dropped, so the server refuses the read instead of showing a different order
+ * or other rows than the address names. An unreadable page position reads page one. Which columns show is not query state:
  * it is the person's stored grid layout (`GridLayout`).
  */
 export const readRecordsTableQueryState = (
   placementId: string,
   entries: Iterable<readonly [string, string]>,
 ): RecordsTableQueryStateRead => {
-  const owned = placementEntries(placementId, entries);
+  const addressed = [...entries];
+  const filtersSeen = new Set<string>();
+  for (const [name] of addressed) {
+    if (
+      !name.startsWith("filter.") ||
+      recordsTableParameterPlacement(name) !== placementId.toLowerCase()
+    )
+      continue;
+    const key = name.toLowerCase();
+    if (filtersSeen.has(key)) return { kind: "malformed", part: "filter" };
+    filtersSeen.add(key);
+  }
+  const owned = placementEntries(placementId, addressed);
   const sortText = owned.get(sortParameter(placementId));
   const sort = sortText === undefined ? [] : parseSort(sortText);
   if (sort === undefined) return { kind: "malformed", part: "sort" };
@@ -163,9 +178,19 @@ export const readRecordsTableQueryState = (
   if (searchText !== undefined && searchText.length > RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH)
     return { kind: "malformed", part: "search" };
   const prefix = filterPrefix(placementId);
-  const filters = [...owned].flatMap(([name, value]): RecordsTableFilterValue[] =>
-    name.startsWith(prefix) && value !== "" ? [{ fieldId: name.slice(prefix.length), value }] : [],
-  );
+  const filters: RecordsTableFilterValue[] = [];
+  for (const [name, value] of owned) {
+    if (!name.startsWith(prefix) || value === "") continue;
+    const fieldId = name.slice(prefix.length);
+    const filter = decodeRecordsTableFieldFilter(value);
+    if (
+      !FIELD_ID_PATTERN.test(fieldId) ||
+      filter === undefined ||
+      filters.some((held) => sameId(held.fieldId, fieldId))
+    )
+      return { kind: "malformed", part: "filter" };
+    filters.push({ fieldId: fieldId.toLowerCase(), filter });
+  }
   return {
     kind: "valid",
     state: {
@@ -180,7 +205,8 @@ export const readRecordsTableQueryState = (
 /** One change a person makes to a table's query state from its controls. */
 export type RecordsTableQueryChange =
   | Readonly<{ kind: "sort"; keys: readonly RecordsTableSortKey[] }>
-  | Readonly<{ kind: "filter"; fieldId: string; value: string }>
+  /** `filter` is the address spelling of the field's typed filter; empty clears the field's filter. */
+  | Readonly<{ kind: "filter"; fieldId: string; filter: string }>
   | Readonly<{ kind: "search"; text: string }>
   | Readonly<{ kind: "page"; request: RecordsTablePageRequest }>;
 
@@ -214,7 +240,7 @@ export const applyRecordsTableQueryChange = (
     case "filter":
       set(
         `${filterPrefix(placementId)}${change.fieldId}`,
-        change.value === "" ? undefined : change.value,
+        change.filter === "" ? undefined : change.filter,
       );
       return;
     case "search":

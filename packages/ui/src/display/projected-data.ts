@@ -13,7 +13,6 @@ import {
   type RecordsTableFilterValue,
   type RecordsTableSortKey,
   type RecordsTableSortState,
-  RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
   RECORDS_TABLE_MAXIMUM_SORT_KEYS,
   gridLayoutStateSchema,
   type GridLayout,
@@ -22,7 +21,7 @@ import {
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import { parseRowFormat } from "./projected-format";
-import { parseTableFeatures } from "./projected-grid-features";
+import { parseTableFeatures, parseTableNarrowing } from "./projected-grid-features";
 
 /**
  * Validated structured rich-text document from the shared closed rich-text contract.
@@ -155,6 +154,8 @@ export type ListPayload = Readonly<{
 export type TableNarrowing = Readonly<{
   search: string | null;
   filters: readonly RecordsTableFilterValue[];
+  /** The titles of the records the link filters name (record identity to title). */
+  recordTitles?: Readonly<Record<string, string>>;
 }>;
 
 /** The ready values a table block renders. */
@@ -316,22 +317,28 @@ export type DisplayDataState<Values> =
   | Readonly<{ status: "ready"; values: Values }>;
 
 /** Declared semantic event names this display family can emit. */
-export type DisplaySemanticEventName = Extract<
-  ComponentSemanticEventKind,
-  | "refresh"
-  | "row_clicked"
-  | "row_action"
-  | "selection_changed"
-  | "filter_changed"
-  | "search_changed"
-  | "sort_changed"
-  | "columns_changed"
-  | "page_changed"
-  | "bulk_action"
-  | "inline_edit"
-  | "card_moved"
-  | "row_expanded"
->;
+export type DisplaySemanticEventName =
+  | Extract<
+      ComponentSemanticEventKind,
+      | "refresh"
+      | "row_clicked"
+      | "row_action"
+      | "selection_changed"
+      | "filter_changed"
+      | "search_changed"
+      | "sort_changed"
+      | "columns_changed"
+      | "page_changed"
+      | "bulk_action"
+      | "inline_edit"
+      | "card_moved"
+      | "row_expanded"
+    >
+  /**
+   * A Records table's link filter asks the page for one bounded page of the field's target
+   * records. It is the Column filters feature's own read, not a flow event.
+   */
+  | "filter_records_requested";
 
 /**
  * One declared semantic event. Row and item events always carry stable identity;
@@ -360,9 +367,17 @@ export type DisplaySemanticEvent =
   | Readonly<{ event: "selection_changed"; recordId: string; selected: boolean }>
   | Readonly<{
       event: "filter_changed";
-      /** The filterable field whose control changed; empty text clears that field's filter. */
+      /** The filterable field whose control changed. */
       field: string;
+      /** The address spelling of the field's typed filter; empty clears that field's filter. */
       value: string;
+    }>
+  | Readonly<{
+      event: "filter_records_requested";
+      /** The link filter field whose target records the picker offers. */
+      field: string;
+      search?: string;
+      continuationToken?: string;
     }>
   | Readonly<{ event: "search_changed"; query: string }>
   | Readonly<{
@@ -448,6 +463,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "row_action",
   "selection_changed",
   "filter_changed",
+  "filter_records_requested",
   "search_changed",
   "sort_changed",
   "columns_changed",
@@ -1121,38 +1137,6 @@ export const parseListPayload = (
     ...(selection === undefined ? {} : { selectedRecordIds: selection }),
     ...(pagination === undefined ? {} : pagination),
   });
-};
-
-/** The search and filters a table page was read with: a bounded search and one value per field. */
-const parseTableNarrowing = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): TableNarrowing => {
-  const record = requireRecord(value, "Projected table narrowing is invalid", location);
-  requireExactKeys(record, ["search", "filters"], location);
-  if (
-    record.search !== null &&
-    (typeof record.search !== "string" ||
-      record.search.trim() === "" ||
-      record.search.length > RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH)
-  )
-    fail("A projected table search must be null or non-empty bounded text", location);
-  const items = requireArray(record.filters, "Projected table filters must be an array", location);
-  const filters = items.map((item): RecordsTableFilterValue => {
-    const filter = requireRecord(item, "A projected table filter must be an object", location);
-    requireExactKeys(filter, ["fieldId", "value"], location);
-    const fieldId = requireFieldKey(
-      filter.fieldId,
-      "A projected table filter requires a field",
-      location,
-    );
-    if (typeof filter.value !== "string" || filter.value === "")
-      fail("A projected table filter value must be non-empty text", location);
-    return Object.freeze({ fieldId, value: filter.value as string });
-  });
-  if (new Set(filters.map((filter) => filter.fieldId.toLowerCase())).size !== filters.length)
-    fail("A projected table narrowing names each filtered field once", location);
-  return Object.freeze({ search: record.search as string | null, filters: Object.freeze(filters) });
 };
 
 /** The ready values a table block accepts. */
