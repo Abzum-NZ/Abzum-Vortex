@@ -1103,6 +1103,12 @@ comment on function vortex_record.transfer_record_ownership_for_offboarding_inte
 ) is
   'Private offboarding single-record ownership transfer: the public transfer contract, with the command receipt, Activity and Event, for a named source owner.';
 
+-- The protected entries revoke EXECUTE from their owner. Restore it only long
+-- enough for CREATE OR REPLACE; each canonical definition revokes it again.
+grant execute on function vortex_record.transfer_offboarding_active_owned_record(
+  uuid, uuid, uuid, bigint, text, uuid, uuid, uuid, bigint
+) to vortex_record_adapter;
+
 create or replace function vortex_record.transfer_offboarding_active_owned_record(
   p_command_id uuid,
   p_record_type_id uuid,
@@ -1168,7 +1174,11 @@ comment on function vortex_record.transfer_offboarding_active_owned_record(
 ) is
   'Protected request entry for one disclosed account-offboarding transfer of an ordinary active record; it rechecks accounts.manage scope and delegates all target, owner, lifecycle, authority and revision checks to the one record-change operation''s terminal ownership transfer.';
 
-CREATE FUNCTION vortex_record.transfer_offboarding_owned_record(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_target_kind text, p_target_id uuid, p_activity_id uuid, p_occurrence_id uuid, p_source_organization_account_id uuid, p_expected_access_version bigint) RETURNS jsonb
+grant execute on function vortex_record.transfer_offboarding_owned_record(
+  uuid, uuid, uuid, bigint, text, uuid, uuid, uuid, uuid, bigint
+) to vortex_record_adapter;
+
+CREATE OR REPLACE FUNCTION vortex_record.transfer_offboarding_owned_record(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_target_kind text, p_target_id uuid, p_activity_id uuid, p_occurrence_id uuid, p_source_organization_account_id uuid, p_expected_access_version bigint) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
