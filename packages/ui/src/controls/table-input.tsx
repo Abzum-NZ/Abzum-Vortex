@@ -5,6 +5,7 @@ import {
   builderKeySchema,
   normalizeExactDecimal,
   sourceModuleFieldValueSchemas,
+  tableColumnLabel,
 } from "@vortex/platform/schema";
 import { Button } from "../components/button";
 import { Field, FieldLabel } from "../components/field";
@@ -120,7 +121,7 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
       const missing = value === undefined || value === "";
       if (missing) {
         if (column.required)
-          invalid ??= `Row ${index + 1}: ${column.key.replaceAll("_", " ")} is required.`;
+          invalid ??= `Row ${index + 1}: ${tableColumnLabel(column.key)} is required.`;
         continue;
       }
       let candidate: unknown = value;
@@ -142,7 +143,7 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
         !parsed.success ||
         (column.type === "choice" && !column.options.some((option) => option.key === candidate))
       ) {
-        invalid ??= `Row ${index + 1}: enter a valid ${column.key.replaceAll("_", " ")}.`;
+        invalid ??= `Row ${index + 1}: enter a valid ${tableColumnLabel(column.key)}.`;
         continue;
       }
       result[column.key] = parsed.data;
@@ -218,7 +219,7 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
                 const cellId = `${ids.control}-${index}-${column.key}`;
                 const common = {
                   id: cellId,
-                  "aria-label": `${column.key.replaceAll("_", " ")}, row ${index + 1}`,
+                  "aria-label": `${tableColumnLabel(column.key)}, row ${index + 1}`,
                   disabled: locked,
                   required: column.required,
                 };
@@ -230,7 +231,7 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
                   <Field key={column.key}>
                     <FieldLabel htmlFor={cellId}>
                       <FieldLabelText
-                        label={`${column.key.replaceAll("_", " ")}${column.type === "date_time" ? " (UTC)" : ""}`}
+                        label={`${tableColumnLabel(column.key)}${column.type === "date_time" ? " (UTC)" : ""}`}
                         required={column.required}
                       />
                     </FieldLabel>

@@ -1,14 +1,67 @@
 import type { ReactElement } from "react";
 import { Badge } from "../components/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/table";
 import { DefinitionRenderError } from "../definition-error";
 import { formatIsoDate, INVALID_DATE_TEXT, type DateFormatOptions } from "./date-format";
 import { FormattedTime } from "./date-format-context";
 import { isSafeLinkAddress } from "@vortex/platform/schema";
-import { isInternalAddress, isWebLinkAddress, type DisplayCellValue } from "./projected-data";
+import {
+  isInternalAddress,
+  isWebLinkAddress,
+  type DisplayCellValue,
+  type DisplayTableFieldValue,
+} from "./projected-data";
 import { RichTextDocumentView, richTextToPlainText } from "./rich-text";
 
 const RESTRICTED_TEXT = "Restricted";
 const UNAVAILABLE_TEXT = "Unavailable";
+const NO_ROWS_TEXT = "No rows";
+
+const rowCountText = (count: number): string =>
+  count === 0 ? NO_ROWS_TEXT : count === 1 ? "1 row" : `${count} rows`;
+
+/**
+ * A table field's rows as a compact read-only table that scrolls sideways inside its own container,
+ * with the declared column headings; a table with no rows says so.
+ */
+function TableFieldView({ value }: Readonly<{ value: DisplayTableFieldValue }>): ReactElement {
+  if (value.rows.length === 0)
+    return <span className="vortex-cell-empty text-muted-foreground">{NO_ROWS_TEXT}</span>;
+  return (
+    <Table containerClassName="rounded-md">
+      <TableHeader>
+        <TableRow>
+          {value.columns.map((column) => (
+            <TableHead key={column.key} scope="col">
+              {column.label}
+            </TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {value.rows.map((row, index) => (
+          <TableRow key={index}>
+            {value.columns.map((column) => {
+              const cell = row[column.key];
+              return (
+                <TableCell key={column.key}>
+                  {cell === undefined ? null : <DisplayCellView value={cell} />}
+                </TableCell>
+              );
+            })}
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
 
 /**
  * Extracts a plain text representation from any display cell value.
@@ -38,6 +91,8 @@ export function cellValueToText(value: DisplayCellValue, options?: DateFormatOpt
       return UNAVAILABLE_TEXT;
     case "empty":
       return "";
+    case "field_table":
+      return rowCountText(value.rows.length);
   }
 }
 
@@ -129,5 +184,7 @@ export function DisplayCellView({
           <span className="vortex-sr-only">No value</span>
         </span>
       );
+    case "field_table":
+      return <TableFieldView value={value} />;
   }
 }

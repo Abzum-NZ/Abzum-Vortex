@@ -3,6 +3,7 @@ import { readRecordDetailContract } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { Card, CardContent, CardHeader } from "../components/card";
 import { Separator } from "../components/separator";
+import { cn } from "../lib/utils";
 import { cellValueToText, DisplayCellView } from "./cell";
 import { DisplayHeader, RowActionControl } from "./controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./context";
@@ -74,7 +75,11 @@ export function RecordDetailDisplay(
                 <div
                   key={field.key}
                   data-vortex-field-key={field.key}
-                  className="flex min-w-0 flex-col gap-1"
+                  className={cn(
+                    "flex min-w-0 flex-col gap-1",
+                    // A table field takes the full width so its columns have room on a phone.
+                    field.value.kind === "field_table" && "sm:col-span-2",
+                  )}
                 >
                   <dt className="text-sm font-medium text-muted-foreground">{field.label}</dt>
                   <dd className="break-words text-sm">

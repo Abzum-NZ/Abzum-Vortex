@@ -38,8 +38,22 @@ export type DisplayRichTextInline = Extract<
 /**
  * Closed projected display value rendered inside a cell, field, group or summary.
  * Every variant carries only a permitted presentation value; none can execute or fetch.
+ * A table field's rows are accepted only as a record-detail field value.
  */
-export type DisplayCellValue =
+export type DisplayCellValue = DisplayScalarCellValue | DisplayTableFieldValue;
+
+/**
+ * A table field's rows on a record detail: its declared columns with readable headings, and each
+ * row's scalar cells keyed by exactly those columns.
+ */
+export type DisplayTableFieldValue = Readonly<{
+  kind: "field_table";
+  columns: readonly DisplayColumn[];
+  rows: readonly Readonly<Record<string, DisplayScalarCellValue>>[];
+}>;
+
+/** One display value that is not itself a table. */
+export type DisplayScalarCellValue =
   | Readonly<{ kind: "text"; text: string }>
   | Readonly<{ kind: "number"; value: number; formatted?: string }>
   | Readonly<{ kind: "boolean"; value: boolean }>
@@ -410,9 +424,9 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
 const LOADING_STATE: DisplayDataState<never> = Object.freeze({ status: "loading" });
 const EMPTY_STATE: DisplayDataState<never> = Object.freeze({ status: "empty" });
 const ERROR_STATE: DisplayDataState<never> = Object.freeze({ status: "error" });
-const EMPTY_CELL: DisplayCellValue = Object.freeze({ kind: "empty" });
-const RESTRICTED_CELL: DisplayCellValue = Object.freeze({ kind: "restricted" });
-const UNAVAILABLE_CELL: DisplayCellValue = Object.freeze({ kind: "unavailable" });
+const EMPTY_CELL: DisplayScalarCellValue = Object.freeze({ kind: "empty" });
+const RESTRICTED_CELL: DisplayScalarCellValue = Object.freeze({ kind: "restricted" });
+const UNAVAILABLE_CELL: DisplayScalarCellValue = Object.freeze({ kind: "unavailable" });
 
 /** An address inside this application: an absolute path, never another origin or a script. */
 export const isInternalAddress = (value: unknown): value is string =>
@@ -539,7 +553,7 @@ const parseRichTextDocument = (
 const parseCellValue = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
-): DisplayCellValue => {
+): DisplayScalarCellValue => {
   const record = requireRecord(value, "A projected display value must be a closed value", location);
   switch (record.kind) {
     case "text":
@@ -642,6 +656,39 @@ const parseCellValue = (
     default:
       return fail(`Unknown projected display value kind '${String(record.kind)}'`, location);
   }
+};
+
+/**
+ * A record-detail field value: a scalar value, or a table field's rows. A table's columns are
+ * distinct and labelled, and every row carries exactly those column keys, each a scalar value; a
+ * nested table, an unknown row key and a missing cell are refused.
+ */
+const parseDetailFieldValue = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): DisplayCellValue => {
+  if (!isRecord(value) || value.kind !== "field_table") return parseCellValue(value, location);
+  requireExactKeys(value, ["kind", "columns", "rows"], location);
+  const columns = parseColumns(value.columns, location);
+  if (columns.length === 0) fail("A table field value requires its declared columns", location);
+  const keys = columns.map((column) => column.key);
+  const rows = requireArray(value.rows, "A table field value requires its rows", location).map(
+    (row, index) => {
+      const rowLocation = { ...location, propertyPath: [`rows[${index}]`] };
+      const cells = requireRecord(row, "A table field row must be an object", rowLocation);
+      requireExactKeys(cells, keys, rowLocation);
+      return Object.freeze(
+        Object.fromEntries(
+          keys.map((key) => {
+            if (!Object.prototype.hasOwnProperty.call(cells, key))
+              fail(`A table field row requires a cell for column '${key}'`, rowLocation);
+            return [key, parseCellValue(cells[key], { ...rowLocation, propertyPath: [key] })];
+          }),
+        ),
+      );
+    },
+  );
+  return Object.freeze({ kind: "field_table", columns, rows: Object.freeze(rows) });
 };
 
 /** @internal Shared with the board payload parser. */
@@ -864,10 +911,17 @@ const parseSummaryValues = (
   location: DefinitionRenderErrorLocation,
 ): readonly DisplaySummaryValue[] => parseSummaryEntries(value, location, parseCellValue);
 
-/** @internal Shared with the board payload parser. */
+/**
+ * @internal Shared with the board payload parser. A board card's fields are scalar; only a record
+ * detail passes the detail value parser that also accepts a table field's rows.
+ */
 export const parseFields = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
+  parseValue: (
+    value: unknown,
+    location: DefinitionRenderErrorLocation,
+  ) => DisplayCellValue = parseCellValue,
 ): readonly DisplayField[] => {
   const items = requireArray(value, "Projected detail fields must be an array", location);
   const seen = new Set<string>();
@@ -890,7 +944,7 @@ export const parseFields = (
           "A detail field requires a label",
           fieldLocation,
         ),
-        value: parseCellValue(record.value, fieldLocation),
+        value: parseValue(record.value, fieldLocation),
       });
     }),
   );
@@ -1286,7 +1340,7 @@ export const parseRecordDetailPayload = (
       "A projected record detail requires a stable record identity",
       location,
     ),
-    fields: parseFields(record.fields, location),
+    fields: parseFields(record.fields, location, parseDetailFieldValue),
     ...(record.heading === undefined ? {} : { heading: parseCellValue(record.heading, location) }),
   });
 };
