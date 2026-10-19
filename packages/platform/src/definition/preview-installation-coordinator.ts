@@ -25,7 +25,10 @@ import {
 import { readLiveHumanContext } from "../access/live-context";
 import { createPreviewInstallationRepository } from "./module-index";
 import type { PreviewReleasePlan } from "./preview-release-plan";
-import { writePreviewRuntimeReleaseSet } from "./preview-runtime-context";
+import {
+  addressPreviewInstallation,
+  writePreviewRuntimeReleaseSet,
+} from "./preview-runtime-context";
 import { backfillDerivedFields } from "../records/derived-field-backfill";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
 import type { RequestDatabaseTransaction } from "../db/index";
@@ -286,11 +289,7 @@ export const createPreviewInstallationCoordinator = (
           if (seeded.pendingDerived.length === 0) return seeded;
           // The copied records hold the live values only: their totals and stored calculations
           // are worked out afresh for the draft's definitions, in the preview's own storage.
-          await transaction.query`
-            select pg_catalog.set_config(
-              'vortex_record.preview_installation_id', ${previewInstallationId}, true
-            )
-          `;
+          await addressPreviewInstallation(transaction, previewInstallationId);
           await backfillDerivedFields(transaction, context.issuedAt);
           return seeded;
         },
