@@ -11,6 +11,7 @@ import {
   type OrganizationSelectionCandidate,
   type QueryId,
   type RecordsDisplayFormat,
+  type RecordsTableFilterValue,
   type RecordsTableQueryState,
   type RecordsTableSortKey,
   type RecordsTableSortState,
@@ -29,6 +30,7 @@ import {
   type ProjectedComponentData,
   type ProjectedTableValues,
   type RecordLinkResolver,
+  type RecordsTableNarrowing,
   type LinkFieldType,
 } from "./component-data-projection";
 
@@ -216,6 +218,8 @@ export type RecordsTableQueryCommand = Readonly<{
   fieldIds: readonly string[];
   /** The explicit or authored default order; undefined when the bound query's own sort applies. */
   sort?: RecordsTableSortState;
+  /** The search and filters the command applies. */
+  narrowing: RecordsTableNarrowing;
 }>;
 
 /**
@@ -280,6 +284,7 @@ export const buildRecordsTableQueryCommand = (
     direction: key.direction,
   }));
   const conditions: JsonValue[] = [];
+  const appliedFilters: RecordsTableFilterValue[] = [];
   for (const filter of state.filters) {
     if (filter.value === "") continue;
     const fieldId = filter.fieldId.toLowerCase();
@@ -289,6 +294,7 @@ export const buildRecordsTableQueryCommand = (
     const condition = filterConditionFor(column.format, filter.fieldId, filter.value);
     if (condition === undefined) return undefined;
     conditions.push(condition);
+    appliedFilters.push({ fieldId, value: filter.value });
   }
   const filter: JsonValue | undefined =
     conditions.length === 0
@@ -325,6 +331,7 @@ export const buildRecordsTableQueryCommand = (
         fieldIds,
         command: command.data,
         ...(sort.length === 0 ? {} : { sort: { keys: sort, explicit } }),
+        narrowing: { search: search ?? null, filters: appliedFilters },
       }
     : undefined;
 };
@@ -370,7 +377,9 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
             : { fieldLinkTypes: request.fieldLinkTypes }),
         },
         result.value.rows,
-        page > 1,
+        // A later page, or a narrowed first page, keeps its columns when nothing matched, so the
+        // viewer can page back or change the search and filters that matched nothing.
+        page > 1 || built.narrowing.search !== null || built.narrowing.filters.length > 0,
       );
       if (projected === undefined) return refused;
       const nextContinuationToken = result.value.nextContinuationToken;
@@ -383,6 +392,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
               values: {
                 ...projected.values,
                 ...(built.sort === undefined ? {} : { sort: built.sort }),
+                narrowing: built.narrowing,
                 page,
                 hasNextPage: nextContinuationToken !== undefined,
                 hasPreviousPage: previousContinuationToken !== undefined,

@@ -7,11 +7,11 @@ import {
   sourceModuleFieldValueSchemas,
 } from "@vortex/platform/schema";
 import { Button } from "../components/button";
-import { Card } from "../components/card";
 import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { NativeSelect, NativeSelectOption } from "../components/native-select";
 import { DefinitionRenderError } from "../definition-error";
+import { Icon } from "../icons/icon";
 import {
   readControlSettings,
   resolveControlContext,
@@ -206,141 +206,151 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
         className="space-y-3"
       >
         {rows.map((row, index) => (
-          <Card key={index} className="space-y-3 p-3" role="group" aria-label={`Row ${index + 1}`}>
-            {columns.map((column) => {
-              const value = row[column.key];
-              const cellId = `${ids.control}-${index}-${column.key}`;
-              const common = {
-                id: cellId,
-                "aria-label": `${column.key.replaceAll("_", " ")}, row ${index + 1}`,
-                disabled: locked,
-                required: column.required,
-              };
-              const money =
-                typeof value === "object" && value !== null
-                  ? value
-                  : { amount: "", currency: column.currency ?? "" };
-              return (
-                <Field key={column.key}>
-                  <FieldLabel htmlFor={cellId}>
-                    <FieldLabelText
-                      label={`${column.key.replaceAll("_", " ")}${column.type === "date_time" ? " (UTC)" : ""}`}
-                      required={column.required}
-                    />
-                  </FieldLabel>
-                  {column.type === "choice" || column.type === "yes_no" ? (
-                    <NativeSelect
-                      {...common}
-                      value={value === undefined ? "" : String(value)}
-                      onChange={(event) =>
-                        cell(
-                          index,
-                          column,
-                          event.target.value === ""
-                            ? undefined
-                            : column.type === "yes_no"
-                              ? event.target.value === "true"
-                              : event.target.value,
-                        )
-                      }
-                    >
-                      <NativeSelectOption value="">Choose…</NativeSelectOption>
-                      {(column.type === "yes_no"
-                        ? [
-                            { key: "true", label: "Yes" },
-                            { key: "false", label: "No" },
-                          ]
-                        : column.options
-                      ).map((option) => (
-                        <NativeSelectOption key={option.key} value={option.key}>
-                          {option.label}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
-                  ) : column.type === "money" ? (
-                    <div className="flex gap-2">
-                      <Input
+          <div
+            key={index}
+            className="flex items-start gap-2"
+            role="group"
+            aria-label={`Row ${index + 1}`}
+          >
+            <div className="grid min-w-0 flex-1 gap-3">
+              {columns.map((column) => {
+                const value = row[column.key];
+                const cellId = `${ids.control}-${index}-${column.key}`;
+                const common = {
+                  id: cellId,
+                  "aria-label": `${column.key.replaceAll("_", " ")}, row ${index + 1}`,
+                  disabled: locked,
+                  required: column.required,
+                };
+                const money =
+                  typeof value === "object" && value !== null
+                    ? value
+                    : { amount: "", currency: column.currency ?? "" };
+                return (
+                  <Field key={column.key}>
+                    <FieldLabel htmlFor={cellId}>
+                      <FieldLabelText
+                        label={`${column.key.replaceAll("_", " ")}${column.type === "date_time" ? " (UTC)" : ""}`}
+                        required={column.required}
+                      />
+                    </FieldLabel>
+                    {column.type === "choice" || column.type === "yes_no" ? (
+                      <NativeSelect
                         {...common}
-                        inputMode="decimal"
-                        value={money.amount}
+                        value={value === undefined ? "" : String(value)}
                         onChange={(event) =>
                           cell(
                             index,
                             column,
                             event.target.value === ""
                               ? undefined
-                              : { amount: event.target.value, currency: money.currency },
+                              : column.type === "yes_no"
+                                ? event.target.value === "true"
+                                : event.target.value,
+                          )
+                        }
+                      >
+                        <NativeSelectOption value="">Choose…</NativeSelectOption>
+                        {(column.type === "yes_no"
+                          ? [
+                              { key: "true", label: "Yes" },
+                              { key: "false", label: "No" },
+                            ]
+                          : column.options
+                        ).map((option) => (
+                          <NativeSelectOption key={option.key} value={option.key}>
+                            {option.label}
+                          </NativeSelectOption>
+                        ))}
+                      </NativeSelect>
+                    ) : column.type === "money" ? (
+                      <div className="flex gap-2">
+                        <Input
+                          {...common}
+                          inputMode="decimal"
+                          value={money.amount}
+                          onChange={(event) =>
+                            cell(
+                              index,
+                              column,
+                              event.target.value === ""
+                                ? undefined
+                                : { amount: event.target.value, currency: money.currency },
+                            )
+                          }
+                        />
+                        {column.currency === undefined ? (
+                          <Input
+                            aria-label={`Currency for ${column.key}, row ${index + 1}`}
+                            disabled={locked}
+                            value={money.currency}
+                            maxLength={3}
+                            placeholder="Currency"
+                            onChange={(event) =>
+                              cell(index, column, {
+                                amount: money.amount,
+                                currency: event.target.value.toUpperCase(),
+                              })
+                            }
+                          />
+                        ) : (
+                          <span>{column.currency}</span>
+                        )}
+                      </div>
+                    ) : (
+                      <Input
+                        {...common}
+                        type={
+                          column.type === "date"
+                            ? "date"
+                            : column.type === "date_time"
+                              ? "datetime-local"
+                              : "text"
+                        }
+                        inputMode={
+                          column.type === "whole_number"
+                            ? "numeric"
+                            : column.type === "decimal_number"
+                              ? "decimal"
+                              : undefined
+                        }
+                        step={column.type === "date_time" ? "any" : undefined}
+                        value={
+                          column.type === "date_time" && typeof value === "string"
+                            ? new Date(value).toISOString().slice(0, -1)
+                            : value === undefined
+                              ? ""
+                              : String(value)
+                        }
+                        onChange={(event) =>
+                          cell(
+                            index,
+                            column,
+                            event.target.value === ""
+                              ? undefined
+                              : column.type === "date_time"
+                                ? `${event.target.value}${event.target.value.length === 16 ? ":00" : ""}Z`
+                                : event.target.value,
                           )
                         }
                       />
-                      {column.currency === undefined ? (
-                        <Input
-                          aria-label={`Currency for ${column.key}, row ${index + 1}`}
-                          disabled={locked}
-                          value={money.currency}
-                          maxLength={3}
-                          placeholder="Currency"
-                          onChange={(event) =>
-                            cell(index, column, {
-                              amount: money.amount,
-                              currency: event.target.value.toUpperCase(),
-                            })
-                          }
-                        />
-                      ) : (
-                        <span>{column.currency}</span>
-                      )}
-                    </div>
-                  ) : (
-                    <Input
-                      {...common}
-                      type={
-                        column.type === "date"
-                          ? "date"
-                          : column.type === "date_time"
-                            ? "datetime-local"
-                            : "text"
-                      }
-                      inputMode={
-                        column.type === "whole_number"
-                          ? "numeric"
-                          : column.type === "decimal_number"
-                            ? "decimal"
-                            : undefined
-                      }
-                      step={column.type === "date_time" ? "any" : undefined}
-                      value={
-                        column.type === "date_time" && typeof value === "string"
-                          ? new Date(value).toISOString().slice(0, -1)
-                          : value === undefined
-                            ? ""
-                            : String(value)
-                      }
-                      onChange={(event) =>
-                        cell(
-                          index,
-                          column,
-                          event.target.value === ""
-                            ? undefined
-                            : column.type === "date_time"
-                              ? `${event.target.value}${event.target.value.length === 16 ? ":00" : ""}Z`
-                              : event.target.value,
-                        )
-                      }
-                    />
-                  )}
-                </Field>
-              );
-            })}
+                    )}
+                  </Field>
+                );
+              })}
+            </div>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
+              size="icon"
+              aria-label={`Remove row ${index + 1}`}
+              title={`Remove row ${index + 1}`}
               disabled={locked}
               onClick={() => change(rows.filter((_, rowIndex) => rowIndex !== index))}
             >
-              Remove row {index + 1}
+              <Icon name="close" aria-hidden="true" />
             </Button>
-          </Card>
+          </div>
         ))}
         <Button
           type="button"
@@ -348,6 +358,7 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
           disabled={locked || rows.length >= maximum!}
           onClick={() => change([...rows, {}])}
         >
+          <Icon name="plus" aria-hidden="true" />
           Add row
         </Button>
       </div>
