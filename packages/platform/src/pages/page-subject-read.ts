@@ -7,6 +7,9 @@ import {
   recordIdSchema,
   recordTypeIdSchema,
   revisionSchema,
+  isRecord,
+  readRecordDetailContract,
+  readQueryBindings,
   type IdentitySession,
   type OrganizationSelectionCandidate,
 } from "../schema";
@@ -21,6 +24,33 @@ import {
   protectedQueryRowSchema,
   type ProtectedQueryRow,
 } from "../queries/index";
+
+/** Subject values consumed by the projected placements, including headings and query inputs. */
+export const pageSubjectFieldIds = (
+  placements: readonly Readonly<{
+    settings: Readonly<Record<string, unknown>>;
+    vortex: Readonly<Record<string, unknown>>;
+  }>[],
+): readonly string[] => {
+  const fields = new Set<string>();
+  for (const { settings: candidate, vortex } of placements) {
+    const settings = candidate as Parameters<typeof readRecordDetailContract>[0];
+    if (vortex.queryId === undefined) {
+      const detail = readRecordDetailContract(settings);
+      for (const field of detail?.fields ?? []) fields.add(field.field.toLowerCase());
+      if (detail?.headingField !== undefined) fields.add(detail.headingField.toLowerCase());
+      const field = candidate.field;
+      if (isRecord(field) && field.kind === "field_reference" && typeof field.fieldId === "string")
+        fields.add(field.fieldId.toLowerCase());
+    }
+    const bindings = readQueryBindings(settings);
+    if (bindings.kind === "malformed") throw new Error("PAGE_SUBJECT_BINDINGS_INVALID");
+    if (bindings.kind === "read")
+      for (const binding of bindings.bindings)
+        if (binding.source.kind === "record_field") fields.add(binding.source.field.toLowerCase());
+  }
+  return [...fields];
+};
 
 /**
  * What a detail placement reads for its page subject: the one record the page is about, addressed
@@ -73,7 +103,11 @@ export const pageSubjectFromRead = (
 /** Reuses the fixed subject read only inside an already verified human request transaction. */
 export const readPageSubjectInTransaction = async (
   transaction: RequestDatabaseTransaction,
-  subject: Readonly<{ recordTypeId: string; recordId: string }>,
+  subject: Readonly<{
+    recordTypeId: string;
+    recordId: string;
+    requestedFieldIds?: readonly string[];
+  }>,
 ): Promise<PageSubjectReadResult> => {
   const recordTypeId = recordTypeIdSchema.safeParse(subject.recordTypeId);
   const recordId = recordIdSchema.safeParse(subject.recordId);
@@ -81,7 +115,11 @@ export const readPageSubjectInTransaction = async (
   try {
     const combined = await readSubjectWithNamedActionAvailability(
       transaction,
-      { recordTypeId: recordTypeId.data, recordId: recordId.data },
+      {
+        recordTypeId: recordTypeId.data,
+        recordId: recordId.data,
+        requestedFieldIds: subject.requestedFieldIds ?? null,
+      },
       [],
       new Date().toISOString(),
       () => {
@@ -101,7 +139,11 @@ export const createPageSubjectReader = (dependencies: HumanOrganizationRequestDe
     async read(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
-      subject: Readonly<{ recordTypeId: string; recordId: string }>,
+      subject: Readonly<{
+        recordTypeId: string;
+        recordId: string;
+        requestedFieldIds?: readonly string[];
+      }>,
     ): Promise<PageSubjectReadResult> {
       if (
         !recordTypeIdSchema.safeParse(subject.recordTypeId).success ||

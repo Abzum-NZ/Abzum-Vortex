@@ -3,7 +3,8 @@ create or replace function vortex_record.load_record_access_facts_internal(
   p_action_kind text,
   p_record_id uuid,
   p_expected_concurrency_number bigint,
-  p_projection_row jsonb
+  p_projection_row jsonb,
+  p_requested_field_ids jsonb default null
 )
 returns jsonb
 language plpgsql
@@ -55,7 +56,7 @@ begin
 
   return vortex_record.load_record_access_facts_from_installation_internal(
     p_record_type_id, p_action_kind, p_record_id, p_expected_concurrency_number,
-    installation, p_projection_row
+    installation, p_projection_row, p_requested_field_ids
   );
 exception
   when no_data_found then
@@ -67,8 +68,10 @@ exception
 end
 $function$;
 
-alter function vortex_record.load_record_access_facts_internal(uuid,text,uuid,bigint,jsonb) owner to vortex_record_adapter;
+alter function vortex_record.load_record_access_facts_internal(uuid,text,uuid,bigint,jsonb,jsonb) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.load_record_access_facts_internal(
-  uuid, text, uuid, bigint, jsonb
+  uuid, text, uuid, bigint, jsonb, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+grant execute on function vortex_record.load_record_access_facts_internal(uuid,text,uuid,bigint,jsonb,jsonb) to vortex_owner;
