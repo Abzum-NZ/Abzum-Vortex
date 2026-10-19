@@ -59,7 +59,7 @@ const relationshipTargets = (
  * Why records of the target cannot hand an owner down, or undefined when they can. An owner is
  * found by following inherited ownership until a record owned by a person or a group; a record
  * type without an owner, one the application cannot read, or a loop back to a record type already
- * on the way has none. `visiting` holds the record types already on the way.
+ * on the way has none. `visiting` holds the record types already on the way; `from` links to `target`.
  */
 const ownerProblem = (
   source: ApplicationSourceDocument,
@@ -67,9 +67,10 @@ const ownerProblem = (
   context: RecordSettingsContext,
   visiting: ReadonlySet<string>,
   name: (qualified: string) => string,
+  from: string,
 ): string | undefined => {
   if (visiting.has(target))
-    return `${name(target)} takes its owner from this record type, so the owners would go round in a loop.`;
+    return `${name(from)} takes its owner from ${name(target)}, so the owners would go round in a loop.`;
   const owned = findRecord(source, target);
   if (owned === undefined) {
     const mode = context.usedOwnership(target);
@@ -89,7 +90,7 @@ const ownerProblem = (
     return `${name(target)} takes its owner from a relationship it no longer has.`;
   const next = new Set([...visiting, target]);
   for (const further of relationshipTargets(module.key, relationship)) {
-    const problem = ownerProblem(source, further, context, next, name);
+    const problem = ownerProblem(source, further, context, next, name, target);
     if (problem !== undefined) return problem;
   }
   return undefined;
@@ -125,7 +126,9 @@ export const recordOwnershipSources = (
           : !field.required
             ? `Make ${label} required first: every record needs the record it takes its owner from.`
             : targets
-                .map((target) => ownerProblem(source, target, context, new Set([qualified]), name))
+                .map((target) =>
+                  ownerProblem(source, target, context, new Set([qualified]), name, qualified),
+                )
                 .find((item) => item !== undefined);
     return { key: relationship.key, label, targets, ...(problem === undefined ? {} : { problem }) };
   });
