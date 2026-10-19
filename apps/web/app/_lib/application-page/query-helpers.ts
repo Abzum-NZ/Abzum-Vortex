@@ -2,6 +2,7 @@ import type {
   ProtectedQuerySummaryAggregateResult,
   InstalledRuntimeContext,
   LinkFieldType,
+  TableFieldColumn,
 } from "@vortex/platform/server";
 
 /** Where a placement read is logged from: the application and the page, never a value. */
@@ -23,6 +24,7 @@ import {
   sameId,
   isRecord,
   recordIdSchema,
+  tableColumnLabel,
 } from "@vortex/platform/schema";
 import type { ModuleRelease, ModuleField } from "./types";
 
@@ -210,6 +212,42 @@ export const fieldLinkTypesOf = (module: ModuleRelease): Record<string, LinkFiel
         field.type === "phone_number"
           ? [[String(field.fieldId).toLowerCase(), field.type] as const]
           : [],
+      ),
+    ),
+  );
+
+/**
+ * The declared columns of every table field, in definition order, with the heading the form shows
+ * and, for a choice column, its options, so a record detail shows a table field's stored rows.
+ */
+export const fieldTableColumnsOf = (
+  module: ModuleRelease,
+): Record<string, readonly TableFieldColumn[]> =>
+  Object.fromEntries(
+    module.content.recordTypes.flatMap((recordType) =>
+      recordType.fields.flatMap((field) =>
+        field.type !== "table"
+          ? []
+          : [
+              [
+                String(field.fieldId).toLowerCase(),
+                field.settings.columns.map(
+                  (column): TableFieldColumn => ({
+                    key: column.key,
+                    label: tableColumnLabel(column.key),
+                    type: column.type,
+                    ...(column.type === "choice"
+                      ? {
+                          options: column.settings.options.map((option) => ({
+                            value: option.value,
+                            label: option.label,
+                          })),
+                        }
+                      : {}),
+                  }),
+                ),
+              ] as const,
+            ],
       ),
     ),
   );
