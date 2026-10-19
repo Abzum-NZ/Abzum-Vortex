@@ -44,4 +44,4 @@ $function$;
 alter function vortex_record.omit_unbound_query_conditions_internal(jsonb, jsonb) owner to vortex_owner;
 revoke all on function vortex_record.omit_unbound_query_conditions_internal(jsonb, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.omit_unbound_query_conditions_internal(jsonb, jsonb) to vortex_owner;
+grant execute on function vortex_record.omit_unbound_query_conditions_internal(jsonb, jsonb) to vortex_owner, vortex_record_adapter;

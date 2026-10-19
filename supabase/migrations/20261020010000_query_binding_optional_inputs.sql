@@ -46,7 +46,10 @@ $function$;
 alter function vortex_record.omit_unbound_query_conditions_internal(jsonb, jsonb) owner to vortex_owner;
 revoke all on function vortex_record.omit_unbound_query_conditions_internal(jsonb, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.omit_unbound_query_conditions_internal(jsonb, jsonb) to vortex_owner;
+grant execute on function vortex_record.omit_unbound_query_conditions_internal(jsonb, jsonb) to vortex_owner, vortex_record_adapter;
+
+-- Preserve the restricted record adapter owner and its RLS policies.
+set local role vortex_record_adapter;
 
 create or replace function vortex_record.prepare_module_query_internal(
   p_module_root_id uuid,
