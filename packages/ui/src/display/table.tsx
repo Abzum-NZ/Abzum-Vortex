@@ -249,6 +249,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     [accessibleName, features, layout.shown, rows, selectedRecordIds, narrowing, events],
   );
   const gridFeatures = useGridFeatures(featureContext);
+  const { cell: featureCell, cellClassName, headerAdornment } = gridFeatures;
 
   // Configured row behaviours: a row click and named row actions. Each declared control carries
   // the stable identity of its own flow binding, so one table placement can run several flows.
@@ -279,8 +280,8 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
       text: (row, column) => cellValueToText(row.cells[column.key] ?? { kind: "empty" }),
       cell: (row, column) => {
         const cell: DisplayCellValue = row.cells[column.key] ?? { kind: "empty" };
-        const decoration = gridFeatures.cellClassName(row, column);
-        return gridFeatures.cell(
+        const decoration = cellClassName(row, column);
+        return featureCell(
           row,
           column,
           <span
@@ -292,7 +293,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
           </span>,
         );
       },
-      headerAdornment: (column) => gridFeatures.headerAdornment(column),
+      headerAdornment,
       select: (row, selected) => (
         <SelectionControl
           row={row}
@@ -314,7 +315,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         />
       ),
     };
-  }, [behaviours, events, headingKey, placementId, gridFeatures]);
+  }, [behaviours, events, headingKey, placementId, featureCell, cellClassName, headerAdornment]);
 
   const pageRecordIds = rows.map((row) => row.recordId);
   const allSelected =

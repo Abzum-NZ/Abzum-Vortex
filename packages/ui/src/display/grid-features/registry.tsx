@@ -5,6 +5,7 @@ import {
   Suspense,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ComponentType,
   type LazyExoticComponent,
@@ -115,6 +116,7 @@ export const projectedGridFeatures = (
         ),
       );
 
+const noDecorators: readonly NonNullable<GridFeatureModule["cellDecoration"]>[] = [];
 const Nothing = (): null => null;
 const PassThrough = ({ children }: Readonly<{ children?: ReactNode }>): ReactElement => (
   <>{children}</>
@@ -152,6 +154,27 @@ const featurePoints: Readonly<Record<RecordsTableFeatureKey, readonly ComponentP
   inline_edit: ["CellEditor"],
 };
 
+const activeKeys = (signature: string): readonly RecordsTableFeatureKey[] =>
+  signature === "" ? [] : (signature.split(",") as RecordsTableFeatureKey[]);
+
+/** One Suspense boundary per active feature that fills the point. */
+const drawPoint = (
+  active: readonly RecordsTableFeatureKey[],
+  point: ComponentPoint,
+  context: GridFeatureContext,
+  props: Record<string, unknown>,
+): ReactNode =>
+  active
+    .filter((key) => featurePoints[key].includes(point))
+    .map((key) => {
+      const Point = lazyPoint<Record<string, unknown>>(key, point);
+      return (
+        <Suspense key={key} fallback={null}>
+          <Point context={context} {...props} />
+        </Suspense>
+      );
+    });
+
 /**
  * The one hook the Records table calls. It returns the renderers of every extension point for the
  * features the projection turns on; with no projection every renderer draws nothing and no feature
@@ -170,20 +193,27 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   const keys = projectedGridFeatures(context?.features);
   const signature = keys.join(",");
   // Cell decorations are plain functions, not components: their modules are read once loaded.
-  const [decorators, setDecorators] = useState<
-    readonly NonNullable<GridFeatureModule["cellDecoration"]>[]
-  >([]);
+  // They are held with the feature set they were loaded for, so another projection never uses them.
+  const [loadedDecorators, setLoadedDecorators] = useState<
+    Readonly<{
+      signature: string;
+      decorators: readonly NonNullable<GridFeatureModule["cellDecoration"]>[];
+    }>
+  >({ signature: "", decorators: [] });
+  const decorators =
+    loadedDecorators.signature === signature ? loadedDecorators.decorators : noDecorators;
   useEffect(() => {
     if (signature === "") return;
     let current = true;
     void Promise.all(
-      signature === ""
-        ? []
-        : signature.split(",").map((key) => loaders[key as RecordsTableFeatureKey]()),
+      signature.split(",").map((key) => loaders[key as RecordsTableFeatureKey]()),
     ).then(
       (modules) => {
         if (current)
-          setDecorators(modules.flatMap((module) => module.gridFeature.cellDecoration ?? []));
+          setLoadedDecorators({
+            signature,
+            decorators: modules.flatMap((module) => module.gridFeature.cellDecoration ?? []),
+          });
       },
       (error: unknown) => {
         console.error("[display] a grid feature could not be loaded", error);
@@ -193,54 +223,59 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
       current = false;
     };
   }, [signature]);
-  return useMemo(() => {
-    const active = signature === "" ? [] : (signature.split(",") as RecordsTableFeatureKey[]);
-    const draw = (
-      point: ComponentPoint,
-      props: Record<string, unknown>,
-      fallback: ReactNode = null,
-    ) =>
-      context === undefined
-        ? fallback
-        : active
-            .filter((key) => featurePoints[key].includes(point))
-            .map((key) => {
-              const Point = lazyPoint<Record<string, unknown>>(key, point);
-              return (
-                <Suspense key={key} fallback={fallback}>
-                  <Point context={context} {...props} />
-                </Suspense>
-              );
-            });
+  // The points drawn inside the grid's memoized rows and headers keep their identity while only
+  // the page's rows or the selection change, so a new selection never redraws every row; they read
+  // the latest context when they draw.
+  const latest = useRef(context);
+  latest.current = context;
+  const features = context?.features;
+  const events = context?.events;
+  const columns = context?.columns;
+  const accessibleName = context?.accessibleName;
+  const cellPoints = useMemo(() => {
+    const active = activeKeys(signature);
+    const editors = active.filter((key) => featurePoints[key].includes("CellEditor"));
+    const drawAt = (point: ComponentPoint, props: Record<string, unknown>): ReactNode => {
+      const current = latest.current;
+      return current === undefined ? null : drawPoint(active, point, current, props);
+    };
     return {
-      keys: active,
-      toolbarItems: () => draw("ToolbarItems", {}),
-      selectionBanner: () => draw("SelectionBanner", {}),
-      headerAdornment: (column) => draw("HeaderAdornment", { column }),
-      columnMenuItems: (column) => draw("ColumnMenuItems", { column }),
-      rowExpansion: (row) => draw("RowExpansion", { row }),
-      cell: (row, column, plain) => {
-        if (context === undefined) return plain;
-        const editors = active.filter((key) => featurePoints[key].includes("CellEditor"));
+      headerAdornment: (column: GridColumn) => drawAt("HeaderAdornment", { column }),
+      columnMenuItems: (column: GridColumn) => drawAt("ColumnMenuItems", { column }),
+      rowExpansion: (row: DisplayRow) => drawAt("RowExpansion", { row }),
+      cell: (row: DisplayRow, column: GridColumn, plain: ReactNode): ReactNode => {
+        const current = latest.current;
+        if (current === undefined) return plain;
         return editors.reduce<ReactNode>((inner, key) => {
           const Editor = lazyPoint<GridFeatureCellProps>(key, "CellEditor");
           return (
             <Suspense key={key} fallback={inner}>
-              <Editor context={context} row={row} column={column}>
+              <Editor context={current} row={row} column={column}>
                 {inner}
               </Editor>
             </Suspense>
           );
         }, plain);
       },
-      cellClassName: (row, column) => {
-        if (context === undefined || decorators.length === 0) return undefined;
+      cellClassName: (row: DisplayRow, column: GridColumn): string | undefined => {
+        const current = latest.current;
+        if (current === undefined || decorators.length === 0) return undefined;
         const classes = decorators.flatMap((decorate) => {
-          const token = decorate(context, row, column);
+          const token = decorate(current, row, column);
           return token === undefined ? [] : [gridCellDecorationClasses[token]];
         });
         return classes.length === 0 ? undefined : classes.join(" ");
       },
     };
-  }, [context, signature, decorators]);
+    // The cell points change with the projection, bindings and columns, not with rows or selection.
+  }, [signature, decorators, features, events, columns, accessibleName]);
+  const active = activeKeys(signature);
+  return {
+    keys: active,
+    toolbarItems: () =>
+      context === undefined ? null : drawPoint(active, "ToolbarItems", context, {}),
+    selectionBanner: () =>
+      context === undefined ? null : drawPoint(active, "SelectionBanner", context, {}),
+    ...cellPoints,
+  };
 }

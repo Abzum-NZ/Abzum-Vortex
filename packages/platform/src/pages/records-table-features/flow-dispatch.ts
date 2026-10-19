@@ -45,13 +45,14 @@ const installedPlacementProps = (
 /**
  * Re-project the requested row command under current access before starting any flow. All selected
  * rows are read in one database call; neither a browser projection nor a previous page read grants
- * authority. The protected writer still checks permission and revision at the actual write.
+ * authority. The rows come from the gesture's own inputs, never from the page subject: a table on a
+ * record's page lists other records. A supplied row revision must still be current; the protected
+ * writer checks permission and revision again at the actual write.
  */
 export const recordsTableBindingRefusal = async (
   installation: InstalledFlowBindings,
   binding: ComponentFlowBinding,
   inputs: Readonly<Record<string, unknown>>,
-  subject: Readonly<{ recordId: string; revision: number }> | undefined,
   run: <Result>(
     operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
   ) => Promise<HumanOrganizationRequestResult<Result>>,
@@ -115,8 +116,7 @@ export const recordsTableBindingRefusal = async (
   if (query?.recordType.state !== "resolved")
     return recordsTableRequestRefusal("contract", "query_not_installed");
   const recordTypeId = query.recordType.recordTypeId;
-  const candidates =
-    event === "bulk_action" ? inputs.record_ids : [inputs.record_id ?? subject?.recordId];
+  const candidates = event === "bulk_action" ? inputs.record_ids : [inputs.record_id];
   if (
     !Array.isArray(candidates) ||
     candidates.length === 0 ||
@@ -139,8 +139,9 @@ export const recordsTableBindingRefusal = async (
       return recordsTableRequestRefusal(event, "record_selection_invalid");
     recordIds.push(parsed.data);
   }
-  if (event !== "bulk_action" && subject !== undefined && !sameId(subject.recordId, recordIds[0]!))
-    return recordsTableRequestRefusal(event, "subject_mismatch");
+  const revision = inputs.revision;
+  if (revision !== undefined && (event === "bulk_action" || typeof revision !== "number"))
+    return recordsTableRequestRefusal(event, "revision_invalid");
   const read = await run(async (transaction) => {
     const rows = await transaction.query<{
       record_id: string;
@@ -157,6 +158,8 @@ export const recordsTableBindingRefusal = async (
       const current = pageSubjectFromRead(result.record, result.capabilities, result.record_id);
       if (current.kind !== "read") return recordsTableRequestRefusal(event, "record_not_readable");
       const row = current.row;
+      if (revision !== undefined && row.revision !== revision)
+        return recordsTableRequestRefusal(event, "revision_not_current");
       if (
         command?.capability !== undefined &&
         !row.capabilities?.actions.includes(command.capability)
@@ -170,8 +173,6 @@ export const recordsTableBindingRefusal = async (
         );
         if (!projection?.inlineEdit?.fields.some((field) => sameId(field, inputs.field as string)))
           return recordsTableRequestRefusal(event, "field_not_permitted");
-        if (subject === undefined || row.revision !== subject.revision)
-          return recordsTableRequestRefusal(event, "revision_not_current");
       }
     }
     return undefined;

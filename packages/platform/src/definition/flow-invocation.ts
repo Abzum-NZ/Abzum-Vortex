@@ -1174,8 +1174,8 @@ export async function invokeInstalledFlow(
       logFlowRefusal("BINDING_GUIDED_CONTROL_NOT_CONFIRMED");
       return { kind: "refused" };
     }
-    // A Records table bulk command or inline edit runs only while the installed placement turns
-    // that grid feature on for exactly this command and field; a forged request is refused here.
+    // A Records table row, bulk or inline-edit command runs only for a command the installed
+    // placement declares (a grid feature only while it is on) and rows the viewer may use now.
     const featureRefusal =
       binding === undefined
         ? undefined
@@ -1183,7 +1183,6 @@ export async function invokeInstalledFlow(
             bindingInstallation,
             binding,
             invocation.callerInputs ?? {},
-            invocation.subject,
             (operation) => requests.run(identity.session, selection, operation),
           );
     if (featureRefusal !== undefined) {

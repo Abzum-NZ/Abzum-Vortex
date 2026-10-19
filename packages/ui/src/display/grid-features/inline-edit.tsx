@@ -102,8 +102,8 @@ function InlineEditCell({
 
 /**
  * Inline editing: a cell becomes its editor only for a field the projection lets this viewer edit,
- * on a row whose own capabilities allow updating that field, and only for a text, link, number or
- * yes/no value the editor can commit without guessing. Every other cell keeps its plain value. The
+ * on a row whose own capabilities allow updating that field, and only for a text, number or yes/no
+ * value the editor can commit without guessing (a link shows a label, not the value it stores). Every other cell keeps its plain value. The
  * row revision travels with the commit so the server refuses a stale change.
  */
 function InlineEditor({ context, row, column, children }: GridFeatureCellProps): ReactElement {
@@ -118,10 +118,7 @@ function InlineEditor({ context, row, column, children }: GridFeatureCellProps):
     row.capabilities !== undefined &&
     row.capabilities.actions.includes("update") &&
     row.capabilities.changeableFieldIds.some((fieldId) => same(fieldId, column.key)) &&
-    (cell.kind === "text" ||
-      cell.kind === "link" ||
-      cell.kind === "number" ||
-      cell.kind === "boolean");
+    (cell.kind === "text" || cell.kind === "number" || cell.kind === "boolean");
   if (!editable || inlineEdit === undefined || onInlineEdit === undefined) return <>{children}</>;
   return (
     // Keyed by the projected value so a refreshed row resets the editor.
@@ -132,7 +129,7 @@ function InlineEditor({ context, row, column, children }: GridFeatureCellProps):
       {...(row.revision === undefined ? {} : { revision: row.revision })}
       field={column.key}
       label={column.label}
-      value={cell.kind === "link" ? { kind: "text", text: cell.label } : cell}
+      value={cell}
       handler={onInlineEdit}
     />
   );
