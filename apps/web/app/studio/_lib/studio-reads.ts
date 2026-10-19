@@ -1,6 +1,7 @@
 import type { readStudioCanvasRecords as canvasRead } from "../../_lib/studio-canvas-records";
 import type { readStudioDataRecords as dataRead } from "../../_lib/studio-data-records";
 import type { loadStudioApplicationDraft } from "../../_lib/studio-application-draft";
+import type { StudioViewRequest } from "./studio-view-request";
 
 const read = async <Result>(
   organizationId: string,
@@ -32,5 +33,15 @@ export const readStudioDataRecords = (
   signal?: AbortSignal,
 ) => read<Awaited<ReturnType<typeof dataRead>>>(organizationId, "data", candidate, signal);
 
-export const reopenStudioApplication = (organizationId: string, rootId: string) =>
-  read<Awaited<ReturnType<typeof loadStudioApplicationDraft>>>(organizationId, "compile", rootId);
+/** The saved draft's views for the requested editors, all projected from one compile of it. */
+export const reopenStudioApplication = (
+  organizationId: string,
+  rootId: string,
+  requests: readonly StudioViewRequest[],
+  expectedDraftRevision?: number,
+) =>
+  read<Awaited<ReturnType<typeof loadStudioApplicationDraft>>>(organizationId, "compile", {
+    rootId,
+    requests,
+    ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
+  });

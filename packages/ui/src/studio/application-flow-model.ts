@@ -293,7 +293,7 @@ export const validatedStudioFlowEdit = (candidate: ApplicationSourceDocument, be
 const eventWords: Readonly<Record<string, string>> = {
   action: "is used", row_clicked: "row is clicked", row_action: "row action is used", bulk_action: "bulk action is used",
   inline_edit: "value is edited", card_moved: "card is moved", load: "loads", refresh: "is refreshed",
-  filter_changed: "filter changes", search_changed: "search changes", sort_changed: "sort changes",
+  filter_changed: "filter changes", search_changed: "search changes", sort_changed: "sort changes", columns_changed: "columns change",
   page_changed: "page changes", selection_changed: "selection changes", field_changed: "field changes",
   form_ready: "form is ready", form_reset: "form is reset", form_submit: "is submitted", tab_changed: "tab changes",
   guided_step_changed: "step changes",

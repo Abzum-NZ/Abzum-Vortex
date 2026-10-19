@@ -1143,6 +1143,16 @@ export const compareEvent = (
   const id = candidate.eventId;
   pushChange(
     reasons,
+    previous.label,
+    candidate.label,
+    "patch",
+    "presentation_changed",
+    "event",
+    "name",
+    id,
+  );
+  pushChange(
+    reasons,
     previous.key,
     candidate.key,
     "major",

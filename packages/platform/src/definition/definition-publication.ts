@@ -482,7 +482,11 @@ export const createDefinitionPublicationService = (
   },
 
   /** Published field facts and compilation share one request-scoped definition snapshot. */
-  readApplicationDraftSnapshot: async (context: SessionContext, input: unknown) => {
+  readApplicationDraftSnapshot: async (
+    context: SessionContext,
+    input: unknown,
+    resources: Readonly<{ publication: boolean }>,
+  ) => {
     const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
     if (!command.success) return refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     await authorize(authority, context, { kind: "draft_change", rootId: command.data.rootId });
@@ -495,9 +499,9 @@ export const createDefinitionPublicationService = (
       if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
         return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
       const overlay = createDraftModuleOverlay(reader, context, candidate.draft);
-      const publication: ApplicationDraftPublication = await overlay.readOwnedModulePublication(
-        String(candidate.draft.rootId),
-      );
+      const publication: ApplicationDraftPublication | null = resources.publication
+        ? await overlay.readOwnedModulePublication(String(candidate.draft.rootId))
+        : null;
       try {
         return {
           publication,

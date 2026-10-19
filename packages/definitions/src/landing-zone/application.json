@@ -94,6 +94,7 @@
       {
         "id": "form_submit_landing_zone_bookmark_create",
         "key": "vortex.app.events.vortex_app_landing_zone_bookmark_create",
+        "label": "Bookmark create",
         "record_type": "vortex.landing_zone:tile",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -101,6 +102,7 @@
       {
         "id": "row_action_landing_zone_edit_favourite",
         "key": "vortex.app.events.vortex_app_landing_zone_edit_favourite",
+        "label": "Edit favourite",
         "record_type": "vortex.landing_zone:tile",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -108,6 +110,7 @@
       {
         "id": "form_submit_landing_zone_favourite_status",
         "key": "vortex.app.events.vortex_app_landing_zone_favourite_status",
+        "label": "Favourite status",
         "record_type": "vortex.landing_zone:tile",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -115,6 +118,7 @@
       {
         "id": "row_action_landing_zone_remove_tile",
         "key": "vortex.app.events.vortex_app_landing_zone_remove_tile",
+        "label": "Remove tile",
         "record_type": "vortex.landing_zone:tile",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -122,6 +126,7 @@
       {
         "id": "form_submit_landing_zone_remove_tile",
         "key": "vortex.app.events.vortex_app_landing_zone_remove_confirm",
+        "label": "Remove confirm",
         "record_type": "vortex.landing_zone:tile",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -129,6 +134,7 @@
       {
         "id": "row_action_home_favourites_remove_tile",
         "key": "vortex.app.events.home_favourites_remove_tile",
+        "label": "Home favourites remove tile",
         "record_type": "vortex.landing_zone:tile",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -136,6 +142,7 @@
       {
         "id": "row_action_favourites_tiles_remove_tile",
         "key": "vortex.app.events.favourites_tiles_remove_tile",
+        "label": "Favourites tiles remove tile",
         "record_type": "vortex.landing_zone:tile",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -143,6 +150,7 @@
       {
         "id": "row_action_bookmarks_tiles_remove_tile",
         "key": "vortex.app.events.bookmarks_tiles_remove_tile",
+        "label": "Bookmarks tiles remove tile",
         "record_type": "vortex.landing_zone:tile",
         "carries": [],
         "personal_or_sensitive_values_allowed": false

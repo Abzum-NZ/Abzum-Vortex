@@ -10,7 +10,6 @@ import {
   installationRuntimeBundleWriteCommandSchema,
   jsonValueSchema,
   resolvePageComposition,
-  systemApplicationBoundReleaseSetResultSchema,
   type InstallationRuntimeBundleIndex,
   type PreparedInstallationRuntimeSource,
   type InstallationRuntimeBundleWriteCommand,
@@ -57,9 +56,8 @@ const buildInstallationRuntimeBundleWriteCommand = (
   const sourceManifest = installationRuntimeBundleSourceManifestSchema.parse(
     sourceCandidate.sourceManifest,
   );
-  const releaseSet = systemApplicationBoundReleaseSetResultSchema.parse(
-    sourceCandidate.releaseSet,
-  );
+  // The prepared runtime source holds the release set already parsed and checked.
+  const releaseSet = sourceCandidate.releaseSet;
   const application = releaseSet.application;
   const content = application.content;
   const expectedApplicationIdentity = {

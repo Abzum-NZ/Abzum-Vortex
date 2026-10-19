@@ -2,6 +2,7 @@ import {
   builderKeySchema,
   readRecordDetailContract,
   readRecordsTableContract,
+  recordsTableContractRefusal,
   readSourceItem,
   sourceItemChildSlots,
   sourcePageDataOf,
@@ -9,6 +10,7 @@ import {
   type ApplicationSourceDocument,
   type BlockPropertySchemaContract,
   type DefinitionRuleFailure,
+  type DefinitionValidationErrorCode,
   type DefinitionValidationLocation,
   type PlatformBlockRelease,
   type ComponentSettingFailure,
@@ -107,11 +109,13 @@ export function validateApplicationSourceCatalogue(
     ruleCode: CatalogueRuleCode,
     family: DefinitionRuleFailure["family"],
     segments: readonly Segment[] = [],
+    code?: DefinitionValidationErrorCode,
   ): void => {
     const located: Segment[] = [{ kind: "application", key: source.key }, ...segments];
     failures.push({
       ruleCode,
       family,
+      ...(code === undefined ? {} : { code }),
       location: {
         documentKind: "application",
         documentKey: source.key,
@@ -123,9 +127,7 @@ export function validateApplicationSourceCatalogue(
   const manifest = new Map<string, Body["platform_block_dependencies"][number]>();
   for (const dependency of source.body.platform_block_dependencies) {
     manifest.set(`${dependency.block_id}@${dependency.release_version}`, dependency);
-    const release = registeredReleases.get(
-      `${dependency.block_id}:${dependency.release_version}`,
-    );
+    const release = registeredReleases.get(`${dependency.block_id}:${dependency.release_version}`);
     if (release === undefined)
       report("vortex.definition.application_dependency_manifest", "broken_reference");
   }
@@ -162,9 +164,15 @@ export function validateApplicationSourceCatalogue(
   ): void => {
     const table = readRecordsTableContract(settings);
     const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
-    if (blockKey === "platform.display.record_detail" &&
-        settings.detail_fields !== undefined && detail === undefined) {
-      report("vortex.definition.application_block_settings", "required_value", [...location, ...keySegment("setting", "heading_field")]);
+    if (
+      blockKey === "platform.display.record_detail" &&
+      settings.detail_fields !== undefined &&
+      detail === undefined
+    ) {
+      report("vortex.definition.application_block_settings", "required_value", [
+        ...location,
+        ...keySegment("setting", "heading_field"),
+      ]);
       return;
     }
     if (table === undefined && detail === undefined) return;
@@ -187,7 +195,8 @@ export function validateApplicationSourceCatalogue(
     ): void => {
       const seen = new Set<string>();
       for (const field of fields) {
-        if (seen.has(field)) report("vortex.definition.application_block_settings", "duplicate_key", at(key));
+        if (seen.has(field))
+          report("vortex.definition.application_block_settings", "duplicate_key", at(key));
         seen.add(field);
         if (!mapped(field))
           report("vortex.definition.application_block_settings", "broken_reference", at(key));
@@ -198,10 +207,25 @@ export function validateApplicationSourceCatalogue(
     const orders = (): boolean => true;
 
     if (table !== undefined) {
-      checkFields("columns", table.columns.map((column) => column.field), () => true, "invalid_value");
+      checkFields(
+        "columns",
+        table.columns.map((column) => column.field),
+        () => true,
+        "invalid_value",
+      );
       // A table always shows at least one column before a person chooses other columns.
       if (!table.columns.some((column) => column.visible))
         report("vortex.definition.application_block_settings", "required_value", at("columns"));
+      // A page that mounts only its visible window (more than 100 rows) scrolls in its own area;
+      // publication reports the refusal's own business sentence, not only the family.
+      const refusal = recordsTableContractRefusal(table);
+      if (refusal !== undefined)
+        report(
+          "vortex.definition.application_block_settings",
+          "unsupported_choice",
+          at("viewport"),
+          refusal,
+        );
       // The default order is a sort a person could choose: each key is a declared sortable field.
       const sortable = new Set(table.sortableFields.map((field) => field.toLowerCase()));
       checkFields(
@@ -217,13 +241,21 @@ export function validateApplicationSourceCatalogue(
         // The exact bound Module query owns the input names and types. Publication checks them;
         // draft save can check only the authored parameter structure here.
         if (inputs.has(parameter.input))
-          report("vortex.definition.application_block_settings", "duplicate_key", at("query_parameters"));
+          report(
+            "vortex.definition.application_block_settings",
+            "duplicate_key",
+            at("query_parameters"),
+          );
         inputs.add(parameter.input);
         if (
           (parameter.source === "fixed" && parameter.fixedValue === undefined) ||
           (parameter.source === "page" && parameter.pageParameter === undefined)
         )
-          report("vortex.definition.application_block_settings", "required_value", at("query_parameters"));
+          report(
+            "vortex.definition.application_block_settings",
+            "required_value",
+            at("query_parameters"),
+          );
       }
 
       /**
@@ -263,11 +295,17 @@ export function validateApplicationSourceCatalogue(
         const accepts = Object.values(flow.inputs).some(
           (input) => input.type === requiredInputType,
         );
-        if (!accepts) report("vortex.definition.application_block_settings", "invalid_value", at(key));
+        if (!accepts)
+          report("vortex.definition.application_block_settings", "invalid_value", at(key));
       };
       const behaviours = table.rowBehaviours;
       if (behaviours.rowClick !== undefined)
-        checkRowBehaviour("row_click", behaviours.rowClick.eventId, "row_clicked", "record_reference");
+        checkRowBehaviour(
+          "row_click",
+          behaviours.rowClick.eventId,
+          "row_clicked",
+          "record_reference",
+        );
       for (const action of behaviours.rowActions)
         checkRowBehaviour("row_actions", action.eventId, "row_action", "record_reference");
       const rowActionIds = new Set(behaviours.rowActions.map((action) => action.eventId));
@@ -285,7 +323,12 @@ export function validateApplicationSourceCatalogue(
       for (const action of behaviours.bulkActions)
         checkRowBehaviour("bulk_actions", action.eventId, "bulk_action", "record_reference_list");
       if (behaviours.inlineEdit !== undefined) {
-        checkRowBehaviour("inline_edit", behaviours.inlineEdit.eventId, "inline_edit", "record_reference");
+        checkRowBehaviour(
+          "inline_edit",
+          behaviours.inlineEdit.eventId,
+          "inline_edit",
+          "record_reference",
+        );
         // An editable field must be one the bound query selects and one of the declared columns;
         // a field that is never shown could never be edited in place.
         const columnFields = new Set(table.columns.map((column) => column.field));
@@ -297,7 +340,12 @@ export function validateApplicationSourceCatalogue(
         );
       }
     } else if (detail !== undefined) {
-      checkFields("detail_fields", detail.fields.map((entry) => entry.field), () => true, "invalid_value");
+      checkFields(
+        "detail_fields",
+        detail.fields.map((entry) => entry.field),
+        () => true,
+        "invalid_value",
+      );
       if (detail.headingField !== undefined)
         checkFields("heading_field", [detail.headingField], () => true, "invalid_value");
     }
@@ -311,11 +359,10 @@ export function validateApplicationSourceCatalogue(
     location: readonly Segment[],
   ): void => {
     for (const failure of settingFailures)
-      report(
-        "vortex.definition.application_block_settings",
-        failure.family,
-        [...location, ...settingPathSegments(failure.path)],
-      );
+      report("vortex.definition.application_block_settings", failure.family, [
+        ...location,
+        ...settingPathSegments(failure.path),
+      ]);
   };
 
   /** A required accessible name must exist after defaults; a supplied name must be real text. */
@@ -456,11 +503,10 @@ export function validateApplicationSourceCatalogue(
       validateResponsive(placement, release, location);
 
       for (const failure of reading.repeatableFailures)
-        report(
-          "vortex.definition.application_block_settings",
-          failure.family,
-          [...location, ...keySegment("setting", failure.declaration.repeats?.items ?? "")],
-        );
+        report("vortex.definition.application_block_settings", failure.family, [
+          ...location,
+          ...keySegment("setting", failure.declaration.repeats?.items ?? ""),
+        ]);
       if (reading.unknownKeys.length > 0)
         report("vortex.definition.application_block_references", "unknown_property", location);
       if (reading.malformedSlots.length > 0)

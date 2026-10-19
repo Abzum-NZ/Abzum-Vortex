@@ -378,6 +378,7 @@ function compileModule(
     return {
       eventId: resolution.id(definitionKey, "event", String(event.id), "content"),
       key: event.key,
+      label: event.label,
       recordTypeId: resolution.recordType(record).recordTypeId,
       carriedFieldIds: (event.carries as string[])
         .map((alias) => resolution.field(record, alias))

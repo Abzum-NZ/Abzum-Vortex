@@ -114,7 +114,7 @@ export const moduleDefinitionConsumerReadResultSchema = z
   })
   .strict();
 
-export const definitionConsumerReadResultSchema = z.union([
+export const definitionConsumerReadResultSchema = z.discriminatedUnion("kind", [
   moduleDefinitionConsumerReadResultSchema,
   applicationDefinitionConsumerReadResultSchema,
 ]);

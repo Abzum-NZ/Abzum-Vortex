@@ -407,11 +407,7 @@ export function StudioFrame<Key extends string>({
   }, []);
   const choose = (key: Key) => {
     setFocused(false);
-    if (key === activeTab) {
-      if (wide) setPanelOpen((open) => !open);
-      else setNarrowPanelOpen((open) => !open);
-      return;
-    }
+    // Selecting a tab always reveals its pane, including the tab restored from the URL on reload.
     onTabChange(key);
     if (wide) setPanelOpen(true);
     else setNarrowPanelOpen(true);
@@ -513,6 +509,13 @@ export function StudioFrame<Key extends string>({
   );
 }
 
+/** Mount a tab's content on its first visit, then keep its local input and selection state. */
+export function useStudioTabVisited(visible: boolean): boolean {
+  const [visited, setVisited] = useState(visible);
+  if (visible && !visited) setVisited(true);
+  return visible || visited;
+}
+
 /** The chrome every Studio panel is built from: a titled header with an optional action, over scrolling content. */
 export function StudioPanelShell({
   title,
@@ -526,10 +529,12 @@ export function StudioPanelShell({
   description?: string | undefined;
   action?: ReactNode;
   search?: ReactNode;
-  /** A panel of another rail tab stays mounted (keeping its state) but is not shown. */
+  /** After its first visit, a panel of another rail tab stays mounted to keep its state. */
   hidden?: boolean | undefined;
   children: ReactNode;
 }>) {
+  const visited = useStudioTabVisited(hidden !== true);
+  if (!visited) return null;
   return (
     <div hidden={hidden} className={cn("min-h-0 flex-1 flex-col", hidden ? "hidden" : "flex")}>
       <div className="flex shrink-0 items-center justify-between gap-2 px-4 pt-4 pb-3">
