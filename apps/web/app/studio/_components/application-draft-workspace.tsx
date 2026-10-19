@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import type { ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
 import {
   StudioFieldProblemsProvider,
-  StudioFieldProblemsProvider,
   projectStudioSemanticOutline,
   studioSemanticSelectionKey,
   type StudioSemanticSelection,
@@ -163,7 +162,6 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     placementWorkflows: flows.placementWorkflows,
     applications,
     openTab: setTab,
-    applications,
   });
 
   // The Access tab's one edit path, the same envelope as every other tab.
@@ -262,118 +260,110 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
 
   return (
     <StudioFieldProblemsProvider>
-      <StudioFieldProblemsProvider>
-        <StudioPlaceOpenerProvider opener={placeOpener}>
-          <div aria-busy={draft.isHeld("publication") || draft.isHeld("reopening")}>
-            <ApplicationDraftAgentTools
-              draft={draft}
-              catalogue={catalogue}
-              command={canvas.commandComposition}
-              readQueries={canvas.readQueries}
-              {...releases.agent}
-            />
-            <StudioFrame
-              tabs={studioRailTabs}
-              activeTab={tab}
-              onTabChange={setTab}
-              selectionKey={
-                draft.selected === null ? "" : studioSemanticSelectionKey(draft.selected)
-              }
-              topBar={
-                <StudioTopBar
-                  location={{
-                    organizationName: place.organizationName,
-                    organizationHref: `/studio/${encodeURIComponent(organizationId)}`,
-                    applicationName: source.body.name,
-                    item: canvas.breadcrumbItem,
-                    applications: applications.map((app) => ({
-                      name: app.name,
-                      href: `/studio/${encodeURIComponent(organizationId)}/${encodeURIComponent(app.rootId)}`,
-                    })),
-                    onApplication: () => {
-                      draft.select({ kind: "application", applicationRootId: state.rootId });
-                    },
-                  }}
-                  saveState={<StudioSaveState draft={draft} />}
-                  canUndo={state.canUndo}
-                  canRedo={state.canRedo}
-                  undoDisabled={draft.locked}
-                  onUndo={draft.undo}
-                  onRedo={draft.redo}
-                  backToAppHref={place.applicationHref}
-                  onPreview={releases.openPreview}
-                  previewPending={releases.previewPending}
-                  previewDisabled={draft.locked}
-                  onPublish={releases.openPublish}
-                  publishDisabled={draft.locked}
-                />
-              }
-              panel={
-                <>
-                  {structure.panel}
-                  {canvas.panels}
-                  {menuTheme.menuPanel}
-                  {data.panel}
-                  {flows.panel(tab !== "flows")}
-                  {menuTheme.themePanel}
-                  {access.panel}
-                  {releases.panel}
-                </>
-              }
-              inspector={
-                tab === "access" ? null : tab === "data" ? data.inspector : canvas.inspector
-              }
-              canvas={({ inspectorOpen, toggleInspector, focused, focusCanvas }) => (
-                <>
-                  {canvas.toolbar(
-                    inspectorOpen,
-                    toggleInspector,
-                    centreTitle,
-                    canvasShown,
-                    focused,
-                    focusCanvas,
-                  )}
-                  {draft.viewProblem !== "" ? (
-                    <div role="alert" className="px-4 py-2 text-sm">
-                      {draft.viewProblem}{" "}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          void draft.refreshView();
-                        }}
-                      >
-                        Try again
-                      </Button>
-                    </div>
-                  ) : draft.loadingView ? (
-                    <p role="status" className="px-4 py-2 text-sm">
-                      Loading this editor…
-                    </p>
-                  ) : null}
-                  <div
-                    className={
-                      canvasShown
-                        ? "min-h-0 flex-1 overflow-auto"
-                        : "min-h-0 flex-1 overflow-auto p-4"
-                    }
-                  >
-                    {canvasShown && canvas.centre}
-                    {tab === "flows" && flows.centre}
-                    {/* The Data tab's centre keeps its paging and reads while another tab is open. */}
-                    <div hidden={tab !== "data"}>{data.centre}</div>
-                    {tab === "access" && access.centre}
-                    <div hidden={tab !== "releases"}>{releases.centre}</div>
+      <StudioPlaceOpenerProvider opener={placeOpener}>
+        <div aria-busy={draft.isHeld("publication") || draft.isHeld("reopening")}>
+          <ApplicationDraftAgentTools
+            draft={draft}
+            command={canvas.commandComposition}
+            {...releases.agent}
+          />
+          <StudioFrame
+            tabs={studioRailTabs}
+            activeTab={tab}
+            onTabChange={setTab}
+            selectionKey={draft.selected === null ? "" : studioSemanticSelectionKey(draft.selected)}
+            topBar={
+              <StudioTopBar
+                location={{
+                  organizationName: place.organizationName,
+                  organizationHref: `/studio/${encodeURIComponent(organizationId)}`,
+                  applicationName: source.body.name,
+                  item: canvas.breadcrumbItem,
+                  applications: applications.map((app) => ({
+                    name: app.name,
+                    href: `/studio/${encodeURIComponent(organizationId)}/${encodeURIComponent(app.rootId)}`,
+                  })),
+                  onApplication: () => {
+                    draft.select({ kind: "application", applicationRootId: state.rootId });
+                  },
+                }}
+                saveState={<StudioSaveState draft={draft} />}
+                canUndo={state.canUndo}
+                canRedo={state.canRedo}
+                undoDisabled={draft.locked}
+                onUndo={draft.undo}
+                onRedo={draft.redo}
+                backToAppHref={place.applicationHref}
+                onPreview={releases.openPreview}
+                previewPending={releases.previewPending}
+                previewDisabled={draft.locked}
+                onPublish={releases.openPublish}
+                publishDisabled={draft.locked}
+              />
+            }
+            panel={
+              <>
+                {structure.panel}
+                {canvas.panels}
+                {menuTheme.menuPanel}
+                {data.panel}
+                {flows.panel(tab !== "flows")}
+                {menuTheme.themePanel}
+                {access.panel}
+                {releases.panel}
+              </>
+            }
+            inspector={tab === "access" ? null : tab === "data" ? data.inspector : canvas.inspector}
+            canvas={({ inspectorOpen, toggleInspector, focused, focusCanvas }) => (
+              <>
+                {canvas.toolbar(
+                  inspectorOpen,
+                  toggleInspector,
+                  centreTitle,
+                  canvasShown,
+                  focused,
+                  focusCanvas,
+                )}
+                {draft.viewProblem !== "" ? (
+                  <div role="alert" className="px-4 py-2 text-sm">
+                    {draft.viewProblem}{" "}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        void draft.refreshView();
+                      }}
+                    >
+                      Try again
+                    </Button>
                   </div>
-                </>
-              )}
-            />
-            {releases.dialog}
-            {canvas.dialog}
-            {data.dialog}
-          </div>
-        </StudioPlaceOpenerProvider>
-      </StudioFieldProblemsProvider>
+                ) : draft.loadingView ? (
+                  <p role="status" className="px-4 py-2 text-sm">
+                    Loading this editor…
+                  </p>
+                ) : null}
+                <div
+                  className={
+                    canvasShown
+                      ? "min-h-0 flex-1 overflow-auto"
+                      : "min-h-0 flex-1 overflow-auto p-4"
+                  }
+                >
+                  {canvasShown && canvas.centre}
+                  {tab === "flows" && flows.centre}
+                  {/* The Data tab's centre keeps its paging and reads while another tab is open. */}
+                  <div hidden={tab !== "data"}>{data.centre}</div>
+                  {tab === "access" && access.centre}
+                  <div hidden={tab !== "releases"}>{releases.centre}</div>
+                </div>
+              </>
+            )}
+          />
+          {releases.dialog}
+          {canvas.dialog}
+          {data.dialog}
+        </div>
+      </StudioPlaceOpenerProvider>
     </StudioFieldProblemsProvider>
   );
 }

@@ -11,7 +11,7 @@ import type { StudioSemanticSelection } from "@vortex/ui/studio";
 /** A read describes the visible editor, never the collection of previously visited tabs. */
 export const studioViewRequestSchema = z
   .object({
-    kind: z.enum(["source", "canvas", "data", "access", "flows", "theme"]),
+    kind: z.enum(["source", "canvas", "data", "access", "flows", "theme", "authoring"]),
     pageAlias: z.string().min(1).optional(),
     creation: z.enum(["layout", "record_page"]).optional(),
   })

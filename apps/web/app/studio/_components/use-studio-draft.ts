@@ -125,9 +125,16 @@ export type StudioDraft = Readonly<{
    */
   readSaved: () => StudioStoredApplicationDraft;
   view: StudioCompiledView;
+  /** Live immutable resources, including an agent read completed before the next render. */
+  readCatalogue: () => StudioCompiledView["catalogue"];
   loadingView: boolean;
   viewProblem: string;
   refreshView: () => Promise<void>;
+  /** Resources for an invoked agent tool, read at the saved revision through the same view loader. */
+  loadAuthoringResources: () => Promise<Pick<
+    StudioCompiledView,
+    "catalogue" | "borrowedChoices"
+  > | null>;
   /** The canvas draws an older revision than the saved one (or the draft is not saved yet). */
   updatingCanvas: boolean;
   status: StudioSaveStatus;
@@ -299,6 +306,8 @@ export function useStudioDraft({
   const requestRef = useRef({ request, key: requestKey });
   requestRef.current = { request, key: requestKey };
   const catalogue = view.catalogue;
+  const catalogueRef = useRef(catalogue);
+  catalogueRef.current = catalogue;
   const [viewProblem, setViewProblem] = useState("");
   const [lifetime, setLifetime] = useState(0);
   const lifetimeRef = useRef(0);
@@ -389,6 +398,41 @@ export function useStudioDraft({
       compiling.current = null;
     }
   }, [organizationId]);
+
+  const loadAuthoringResources = useCallback(async () => {
+    const target = savedRef.current;
+    const targetLifetime = lifetimeRef.current;
+    const result = await reopenStudioApplication(
+      organizationId,
+      target.rootId,
+      { kind: "authoring" },
+      target.draftRevision,
+    );
+    if (
+      !active.current ||
+      targetLifetime !== lifetimeRef.current ||
+      result.kind !== "available" ||
+      result.organizationId !== organizationId ||
+      result.draft.rootId !== target.rootId ||
+      result.draft.draftRevision !== savedRef.current.draftRevision ||
+      result.draft.sourceFingerprint !== savedRef.current.sourceFingerprint
+    ) {
+      console.error(
+        "[studio] agent authoring resources did not answer for the current saved draft",
+        result.kind,
+      );
+      return null;
+    }
+    // Only the immutable catalogue survives the call. Revision-bound choices belong to its caller.
+    catalogueRef.current = result.catalogue;
+    setView((previous) => ({ ...previous, catalogue: result.catalogue }));
+    selection.reconcile({
+      rootId: target.rootId,
+      source: parsed(history.getState().source),
+      catalogue: result.catalogue,
+    });
+    return { catalogue: result.catalogue, borrowedChoices: result.borrowedChoices };
+  }, [organizationId, selection, parsed, history]);
 
   const scheduleSave = useCallback((delay: number) => {
     clearTimeout(saveTimer.current);
@@ -505,8 +549,6 @@ export function useStudioDraft({
     }
   }, [history, refreshCompiled, scheduleSave]);
 
-  const catalogueRef = useRef(catalogue);
-  catalogueRef.current = catalogue;
   useEffect(() => {
     active.current = true;
     lifetimeRef.current += 1;
@@ -706,9 +748,11 @@ export function useStudioDraft({
       saved,
       readSaved: () => savedRef.current,
       view,
+      readCatalogue: () => catalogueRef.current,
       loadingView,
       viewProblem,
       refreshView: refreshCompiled,
+      loadAuthoringResources,
       updatingCanvas,
       status,
       chip,
@@ -744,6 +788,7 @@ export function useStudioDraft({
       loadingView,
       viewProblem,
       refreshCompiled,
+      loadAuthoringResources,
       updatingCanvas,
       status,
       chip,

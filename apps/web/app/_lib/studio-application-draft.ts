@@ -425,20 +425,20 @@ export const loadStudioApplicationDraft = async (
           return { kind: "refused", reason: "page_missing" };
         const canvas = request.kind === "canvas" || request.kind === "theme";
         const data = request.kind === "data";
-        const choices =
-          data || request.kind === "flows" || canvas || request.creation !== undefined;
+        const choices = data || request.kind === "flows" || request.kind === "authoring" || canvas;
         const themeRelease = canvas
           ? findPinnedPlatformThemeRelease(draft.source.body.theme.base)
           : undefined;
         if (canvas && themeRelease === undefined) throw new Error("STUDIO_THEME_RELEASE_MISSING");
         const resources: StudioViewResources = {
           request,
-          catalogue: choices
-            ? IMMUTABLE_PLATFORM_BLOCK_CATALOGUE
-            : {
-                compositionPolicy: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE.compositionPolicy,
-                releases: [],
-              },
+          catalogue:
+            choices || request.creation !== undefined
+              ? IMMUTABLE_PLATFORM_BLOCK_CATALOGUE
+              : {
+                  compositionPolicy: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE.compositionPolicy,
+                  releases: [],
+                },
           themeOptions: request.kind === "theme" ? studioThemeOptions : null,
           fieldInputControlReleases: canvas ? FIELD_INPUT_CONTROL_RELEASES : null,
           platformThemeTokens: themeRelease?.tokens ?? null,
@@ -452,7 +452,7 @@ export const loadStudioApplicationDraft = async (
         let published: StudioPublishedData | null = null;
         let peopleDirectory: PeopleDirectoryOwner | null = null;
         const context =
-          request.kind === "source"
+          request.kind === "source" && request.creation !== "record_page"
             ? null
             : await readLiveHumanContext(transaction, {
                 scope,
@@ -471,7 +471,8 @@ export const loadStudioApplicationDraft = async (
                 rootId: draft.rootId,
                 expectedDraftRevision: draft.draftRevision,
               });
-        if (snapshot !== null && data) published = snapshot.publication;
+        if (snapshot !== null && (data || request.creation === "record_page"))
+          published = snapshot.publication;
         if (context !== null && snapshot !== null)
           try {
             if (snapshot.compilation === null) throw snapshot.failure;

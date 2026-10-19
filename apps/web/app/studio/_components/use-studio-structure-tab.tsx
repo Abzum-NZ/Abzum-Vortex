@@ -56,6 +56,11 @@ export function useStudioStructureTab({
     structureCommand: StudioStructureCommand,
     merge?: string,
   ): StudioStructureResult => {
+    if (structureCommand.kind === "add_record_page" && draft.view.published === null)
+      return {
+        kind: "refused",
+        message: "Publication details are loading. Try again in a moment.",
+      };
     const after: { select?: StudioSemanticSelection | undefined } = {};
     const outcome = draft.run<StudioStructureResult>(
       (current) => {
@@ -78,15 +83,17 @@ export function useStudioStructureTab({
   };
   // What a Structure command would do to the current draft, for its preview; nothing is kept.
   const preview = (structureCommand: StudioStructureCommand): StudioStructureResult =>
-    applyStudioStructureCommand(
-      {
-        source: draft.parsed(draft.history.getState().source),
-        catalogue,
-        describePlacement,
-        publishedFields,
-      },
-      structureCommand,
-    );
+    structureCommand.kind === "add_record_page" && draft.view.published === null
+      ? { kind: "refused", message: "Publication details are loading. Try again in a moment." }
+      : applyStudioStructureCommand(
+          {
+            source: draft.parsed(draft.history.getState().source),
+            catalogue,
+            describePlacement,
+            publishedFields,
+          },
+          structureCommand,
+        );
   const homePage = source.body.pages.find((page) => page.key === source.body.home_page);
   const selectionKey = selected === null ? "" : studioSemanticSelectionKey(selected);
 
@@ -121,7 +128,7 @@ export function useStudioStructureTab({
             )
           }
           onOpenAccess={openAccessPages}
-          disabled={draft.locked}
+          disabled={draft.locked || (form === "record" && draft.view.published === null)}
         />
       }
     />
