@@ -78,7 +78,7 @@ grid-owned files were changed for this review.
 
 ## Screenshots
 
-The [draft proof release](https://github.com/Abzum-NZ/Abzum-Vortex/releases/tag/untagged-7d41a231c02a1b8cadc0)
+The [draft proof release](https://github.com/Abzum-NZ/Abzum-Vortex/releases/tag/untagged-e21dd79e668b5644a446)
 contains the matrix and supplementary screenshots. Its configured tag is
 `m2897-proof-20261019`; GitHub currently exposes draft assets under the temporary
 release URL above. Draft access requires repository access. Delete the draft
