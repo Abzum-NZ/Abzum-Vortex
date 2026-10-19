@@ -1,11 +1,14 @@
 import {
   applicationSourceDocumentSchema,
   changeableByPeople,
+  plainSourceSettingValue,
   sourceItemTree,
   sourcePageSlotAddresses,
   sourcePageSlotAt,
+  typedSourceSettingValue,
   type ApplicationSourceDocument,
   type BlockPropertySchemaContract,
+  type ComponentSettingFailure,
   type SourceBlockPropertyValueContract,
   type SourceItem,
 } from "@vortex/platform/schema";
@@ -87,8 +90,7 @@ const fieldListSettings = (
     property.kind === "list" &&
     property.item.kind === "group" &&
     property.item.properties.some(
-      (nested) =>
-        nested.kind === "field_reference" && nested.key === property.presentationIdentity,
+      (nested) => nested.kind === "field_reference" && nested.key === property.presentationIdentity,
     )
       ? [property]
       : [],
@@ -132,8 +134,16 @@ export const studioFieldPlacements = (
             kind: "list_entry",
             placementAlias: item.props.id,
             settingKey: setting.key,
-            shown: reference !== undefined && Array.isArray(entries) && entries.some((entry: unknown) =>
-              entry !== null && typeof entry === "object" && "field" in entry && entry.field === reference),
+            shown:
+              reference !== undefined &&
+              Array.isArray(entries) &&
+              entries.some(
+                (entry: unknown) =>
+                  entry !== null &&
+                  typeof entry === "object" &&
+                  "field" in entry &&
+                  entry.field === reference,
+              ),
             label: `${pageLabel}: ${blockTitle(item, release)}, ${setting.label}`,
           });
         }
@@ -142,7 +152,9 @@ export const studioFieldPlacements = (
             id: `${page.id}|${item.props.id}|input`,
             pageAlias: page.id,
             kind: "form_input",
-            shown: reference !== undefined && sourceItemTree([item]).some((child) => child.props.field === reference),
+            shown:
+              reference !== undefined &&
+              sourceItemTree([item]).some((child) => child.props.field === reference),
             placementAlias: item.props.id,
             label: `${pageLabel}: ${blockTitle(item, release)}, a new input`,
             ...(formInputTypes.has(fieldType) && changeableByPeople({ type: fieldType as never })
@@ -155,7 +167,7 @@ export const studioFieldPlacements = (
   return result;
 };
 
-/** The entry that shows the field in one list setting: its field, its label, and nothing else that is required. */
+/** A field entry with the list's declared defaults, ready for the one settings command. */
 const listEntry = (
   setting: Extract<BlockPropertySchemaContract, { kind: "list" }>,
   reference: string,
@@ -171,7 +183,16 @@ const listEntry = (
     else if (property.required && property.defaultValue === undefined)
       return `each entry of ${setting.label} also needs its ${property.label}, which you set on the page`;
   }
-  return { kind: "group", properties };
+  const failures: ComponentSettingFailure[] = [];
+  const entry = typedSourceSettingValue(
+    plainSourceSettingValue({ kind: "group", properties }),
+    setting.item,
+    [setting.key],
+    failures,
+  );
+  return entry === undefined || failures.length > 0
+    ? `the entry for ${setting.label} could not be prepared from its settings`
+    : entry;
 };
 
 /** The query a block reads gains the field among the fields it selects, when the query is this application's. */
@@ -186,7 +207,8 @@ const selectInQuery = (
   const target = owner?.queries.find((candidate) => candidate.key === query.slice(separator + 1));
   if (target === undefined)
     return "its data comes from a query of another application, which is changed there";
-  if (target.select.length > 0 && !(target.select as string[]).includes(fieldKey)) (target.select as string[]).push(fieldKey);
+  if (target.select.length > 0 && !(target.select as string[]).includes(fieldKey))
+    (target.select as string[]).push(fieldKey);
   return applicationSourceDocumentSchema.parse(next);
 };
 
