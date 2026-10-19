@@ -278,7 +278,7 @@
           ]
         },
         "field_policy": {
-          "readable_fields": ["key", "name", "release_revision", "is_default"],
+          "readable_fields": ["key", "release_revision", "is_default"],
           "changeable_fields": []
         }
       },
