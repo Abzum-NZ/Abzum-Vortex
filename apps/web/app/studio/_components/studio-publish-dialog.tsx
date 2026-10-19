@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import type { DefinitionPublicationConfirmation } from "@vortex/platform/schema";
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
@@ -31,6 +31,8 @@ export type StudioPublishDialogProps = Readonly<{
     confirmation: DefinitionPublicationConfirmation;
     componentLabels: readonly Readonly<{ componentId: string; label: string }>[];
   }> | null;
+  revision: number;
+  pageReview: ReactNode;
   note: string;
   onNoteChange: (note: string) => void;
   /** Why publishing cannot go ahead, in business words; empty when there is nothing to report. */
@@ -41,13 +43,23 @@ export type StudioPublishDialogProps = Readonly<{
 
 /** Reviews the saved draft and its changes before publishing one version. */
 export function StudioPublishDialog(props: StudioPublishDialogProps) {
-  const { open, saving, notSaved, canPrepare, preparing, publishing, prepared, onPrepare } = props;
+  const {
+    open,
+    saving,
+    notSaved,
+    canPrepare,
+    preparing,
+    publishing,
+    prepared,
+    onPrepare,
+    revision,
+  } = props;
   const waiting = saving || notSaved !== "";
-  const attempted = useRef<string>("");
-  // Reading what will be published starts when the dialog opens on a saved draft; one read per opening.
+  const attempted = useRef<number | null>(null);
+  // Check each saved revision once per opening, including page edits made from this dialog.
   useEffect(() => {
     if (!open) {
-      attempted.current = "";
+      attempted.current = null;
       return;
     }
     if (
@@ -56,12 +68,12 @@ export function StudioPublishDialog(props: StudioPublishDialogProps) {
       prepared !== null ||
       preparing ||
       publishing ||
-      attempted.current === "tried"
+      attempted.current === revision
     )
       return;
-    attempted.current = "tried";
+    attempted.current = revision;
     onPrepare();
-  }, [open, waiting, canPrepare, prepared, preparing, publishing, onPrepare]);
+  }, [open, waiting, canPrepare, prepared, preparing, publishing, onPrepare, revision]);
   const noteValid = props.note.trim().length >= 1 && props.note.trim().length <= 2000;
   const preparingSummary = !waiting && !publishing && prepared === null && props.problem === "";
   return (
@@ -108,6 +120,7 @@ export function StudioPublishDialog(props: StudioPublishDialogProps) {
                 componentLabels={prepared.componentLabels}
               />
             )}
+            {props.pageReview}
             {props.problem === "" ? null : (
               <Alert variant="destructive" role="alert">
                 <AlertTitle>This cannot be published yet</AlertTitle>
