@@ -61,6 +61,8 @@ export type InlineModuleFieldChange = Readonly<{
   unique: boolean;
   filterable: boolean;
   sortable: boolean;
+  personalData: Field["personal_data"];
+  publicDisplay: Field["public_display"];
   type: string;
   /** The complete plain settings the field contract stores for the type. */
   settings: Readonly<Record<string, unknown>>;
@@ -71,44 +73,93 @@ export type InlineModuleFieldChange = Readonly<{
 }>;
 
 export type InlineModuleFieldChangeResult =
-  | Readonly<{ kind: "changed"; source: ApplicationSourceDocument; fieldAlias: string; fieldKey: string }>
+  | Readonly<{
+      kind: "changed";
+      source: ApplicationSourceDocument;
+      fieldAlias: string;
+      fieldKey: string;
+    }>
   | Readonly<{ kind: "invalid"; issues: readonly string[] }>;
 
 const moduleAliases = (module: InlineModule): Set<string> =>
-  new Set(module.record_types.flatMap((item) => [item.id, ...item.fields.map((field) => field.id),
-    ...item.relationships.map((relationship) => relationship.id)]));
+  new Set(
+    module.record_types.flatMap((item) => [
+      item.id,
+      ...item.fields.map((field) => field.id),
+      ...item.relationships.map((relationship) => relationship.id),
+    ]),
+  );
 
 const settingWords = (path: readonly PropertyKey[]): string =>
-  path.map((segment) => typeof segment === "number" ? `entry ${segment + 1}` : String(segment).replaceAll("_", " ")).join(", ");
+  path
+    .map((segment) =>
+      typeof segment === "number" ? `entry ${segment + 1}` : String(segment).replaceAll("_", " "),
+    )
+    .join(", ");
 
 /**
  * The schema's refusals, each named by where it is: the field and the setting when it is about the
  * changed field, otherwise the place in the application.
  */
-const locatedIssues = (source: ApplicationSourceDocument, issues: readonly { message: string; path: readonly PropertyKey[] }[],
-  moduleIndex: number, recordIndex: number, fieldIndex: number, label: string): string[] =>
-  [...new Set(issues.map((issue) => {
-    const [, section, m, part, r, child, f, ...rest] = issue.path;
-    if (section === "modules" && m === moduleIndex && part === "record_types" && r === recordIndex && child === "fields" && f === fieldIndex)
-      return rest.length === 0 ? `${label}: ${issue.message}.` : `${label}, ${settingWords(rest)}: ${issue.message}.`;
-    const place = describeSourcePlace(source, issue.path.filter((segment): segment is string | number =>
-      typeof segment === "string" || typeof segment === "number"));
-    return `${place.label}: ${issue.message} (${settingWords(issue.path.slice(1))}).`;
-  }))];
+const locatedIssues = (
+  source: ApplicationSourceDocument,
+  issues: readonly { message: string; path: readonly PropertyKey[] }[],
+  moduleIndex: number,
+  recordIndex: number,
+  fieldIndex: number,
+  label: string,
+): string[] => [
+  ...new Set(
+    issues.map((issue) => {
+      const [, section, m, part, r, child, f, ...rest] = issue.path;
+      if (
+        section === "modules" &&
+        m === moduleIndex &&
+        part === "record_types" &&
+        r === recordIndex &&
+        child === "fields" &&
+        f === fieldIndex
+      )
+        return rest.length === 0
+          ? `${label}: ${issue.message}.`
+          : `${label}, ${settingWords(rest)}: ${issue.message}.`;
+      const place = describeSourcePlace(
+        source,
+        issue.path.filter(
+          (segment): segment is string | number =>
+            typeof segment === "string" || typeof segment === "number",
+        ),
+      );
+      return `${place.label}: ${issue.message} (${settingWords(issue.path.slice(1))}).`;
+    }),
+  ),
+];
 
 /**
  * The relationship a link field declares, kept in step with the field: its target, its delete rule
  * and its cardinality. A field that is no link declares none.
  */
-const syncLinkRelationship = (module: InlineModule, record: RecordType, field: Field, cardinality: LinkCardinality | undefined): void => {
+const syncLinkRelationship = (
+  module: InlineModule,
+  record: RecordType,
+  field: Field,
+  cardinality: LinkCardinality | undefined,
+): void => {
   const relationships = record.relationships as Relationship[];
   const at = relationships.findIndex((relationship) => relationship.from_field === field.key);
   if (field.type !== "link" && field.type !== "link_to_one_of_several") {
     if (at >= 0) relationships.splice(at, 1);
     return;
   }
-  const settings = field.settings as { target?: string; targets?: string[]; on_parent_delete: Relationship["on_parent_delete"] };
-  const target = field.type === "link" ? { to_record_type: settings.target } : { to_record_types: settings.targets };
+  const settings = field.settings as {
+    target?: string;
+    targets?: string[];
+    on_parent_delete: Relationship["on_parent_delete"];
+  };
+  const target =
+    field.type === "link"
+      ? { to_record_type: settings.target }
+      : { to_record_types: settings.targets };
   if (at >= 0) {
     const current = relationships[at] as Record<string, unknown>;
     delete current.to_record_type;
@@ -120,24 +171,40 @@ const syncLinkRelationship = (module: InlineModule, record: RecordType, field: F
   let key = field.key;
   for (let n = 2; keys.has(key); n += 1) key = `${field.key.slice(0, 36)}_${n}`;
   relationships.push({
-    id: deriveFieldAlias(record.key, `${field.key}_relationship`, moduleAliases(module)), key, from_field: field.key,
-    ...target, cardinality, on_parent_delete: settings.on_parent_delete,
+    id: deriveFieldAlias(record.key, `${field.key}_relationship`, moduleAliases(module)),
+    key,
+    from_field: field.key,
+    ...target,
+    cardinality,
+    on_parent_delete: settings.on_parent_delete,
   } as unknown as Relationship);
 };
 
 /** Why a link field's targets and cardinality can't be kept, or undefined when they can. */
-const linkProblem = (source: ApplicationSourceDocument, module: InlineModule, change: InlineModuleFieldChange,
-  label: string): string | undefined => {
+const linkProblem = (
+  source: ApplicationSourceDocument,
+  module: InlineModule,
+  change: InlineModuleFieldChange,
+  label: string,
+): string | undefined => {
   if (change.type !== "link" && change.type !== "link_to_one_of_several") return undefined;
   if (change.cardinality === undefined || !linkCardinalities.includes(change.cardinality))
     return `${label}: choose how many records may link to the same record.`;
   if (change.cardinality === "one_to_one" && !change.unique)
     return `${label}: when each linked record may have one link at most, tick "Each record has a different value".`;
   const settings = change.settings as { target?: unknown; targets?: unknown };
-  const targets = (change.type === "link" ? [settings.target] : Array.isArray(settings.targets) ? settings.targets : [])
-    .filter((target): target is string => typeof target === "string");
-  const reachable = new Set([...source.body.modules.map((item) => item.key), ...source.body.uses.map((use) => use.module),
-    peopleDirectory.module]);
+  const targets = (
+    change.type === "link"
+      ? [settings.target]
+      : Array.isArray(settings.targets)
+        ? settings.targets
+        : []
+  ).filter((target): target is string => typeof target === "string");
+  const reachable = new Set([
+    ...source.body.modules.map((item) => item.key),
+    ...source.body.uses.map((use) => use.module),
+    peopleDirectory.module,
+  ]);
   for (const target of targets) {
     const owner = linkTargetModule(target);
     if (owner !== undefined && !reachable.has(owner))
@@ -149,17 +216,30 @@ const linkProblem = (source: ApplicationSourceDocument, module: InlineModule, ch
   const reverseName = (change.settings as { reverse_name?: unknown }).reverse_name;
   if (change.type === "link" && typeof settings.target === "string" && reverse !== undefined) {
     const target = qualifiedLinkTarget(module.key, settings.target);
-    for (const other of source.body.modules) for (const linking of other.record_types) {
-      const twin = linking.fields.find((field) => field.type === "link" &&
-        !(other.key === module.key && linking.id === change.recordAlias && field.id === change.fieldAlias) &&
-        typeof (field.settings as { target?: unknown }).target === "string" &&
-        qualifiedLinkTarget(other.key, (field.settings as { target: string }).target) === target &&
-        ((field.settings as { reverse_key?: unknown }).reverse_key === reverse ||
-          (typeof reverseName === "string" && (field.settings as { reverse_name: string }).reverse_name.toLowerCase() === reverseName.toLowerCase())));
-      if (twin !== undefined)
-        return `${label}: ${linking.name}'s ${twin.label} already links to the same record type with the link back "${String(reverseName)}". ` +
-          "Give this link back another name.";
-    }
+    for (const other of source.body.modules)
+      for (const linking of other.record_types) {
+        const twin = linking.fields.find(
+          (field) =>
+            field.type === "link" &&
+            !(
+              other.key === module.key &&
+              linking.id === change.recordAlias &&
+              field.id === change.fieldAlias
+            ) &&
+            typeof (field.settings as { target?: unknown }).target === "string" &&
+            qualifiedLinkTarget(other.key, (field.settings as { target: string }).target) ===
+              target &&
+            ((field.settings as { reverse_key?: unknown }).reverse_key === reverse ||
+              (typeof reverseName === "string" &&
+                (field.settings as { reverse_name: string }).reverse_name.toLowerCase() ===
+                  reverseName.toLowerCase())),
+        );
+        if (twin !== undefined)
+          return (
+            `${label}: ${linking.name}'s ${twin.label} already links to the same record type with the link back "${String(reverseName)}". ` +
+            "Give this link back another name."
+          );
+      }
   }
   return undefined;
 };
@@ -180,7 +260,8 @@ export const changeInlineModuleField = (
   const source = structuredClone(current);
   const moduleIndex = source.body.modules.findIndex((item) => item.key === change.moduleKey);
   const module = source.body.modules[moduleIndex];
-  const recordIndex = module?.record_types.findIndex((item) => item.id === change.recordAlias) ?? -1;
+  const recordIndex =
+    module?.record_types.findIndex((item) => item.id === change.recordAlias) ?? -1;
   const record = module?.record_types[recordIndex];
   if (module === undefined || record === undefined)
     return { kind: "invalid", issues: ["The record type is not in this module any more."] };
@@ -190,7 +271,10 @@ export const changeInlineModuleField = (
   if (label === "") return { kind: "invalid", issues: ["Enter the field's label."] };
   const helpText = change.helpText.trim();
   const qualifiedRecord = `${module.key}:${record.key}`;
-  let fieldIndex = change.fieldAlias === undefined ? -1 : record.fields.findIndex((item) => item.id === change.fieldAlias);
+  let fieldIndex =
+    change.fieldAlias === undefined
+      ? -1
+      : record.fields.findIndex((item) => item.id === change.fieldAlias);
   if (change.fieldAlias !== undefined && fieldIndex < 0)
     return { kind: "invalid", issues: ["The field is not in this record type any more."] };
   // Names can change; the link back's identity is assigned once through the same derivation as fields.
@@ -198,30 +282,54 @@ export const changeInlineModuleField = (
   if (change.type === "link") {
     const name = settings.reverse_name;
     if (typeof name !== "string" || name.trim() === "")
-      return { kind: "invalid", issues: [`${label}: enter the name of the link back, for example Items.`] };
+      return {
+        kind: "invalid",
+        issues: [`${label}: enter the name of the link back, for example Items.`],
+      };
     const previous = record.fields[fieldIndex];
-    const key = previous?.type === "link" ? (previous.settings as { reverse_key: string }).reverse_key
-      : deriveFieldKey(name.trim(), new Set());
+    const key =
+      previous?.type === "link"
+        ? (previous.settings as { reverse_key: string }).reverse_key
+        : deriveFieldKey(name.trim(), new Set());
     if (key === undefined)
       return { kind: "invalid", issues: [`${label}: choose another name for the link back.`] };
     settings = { ...settings, reverse_name: name.trim(), reverse_key: key };
   }
   const refusedLink = linkProblem(source, module, { ...change, settings }, label);
   if (refusedLink !== undefined) return { kind: "invalid", issues: [refusedLink] };
-  const shape = { type: change.type, settings, required: change.required, unique: change.unique,
-    filterable: change.filterable, sortable: change.sortable };
+  const shape = {
+    type: change.type,
+    settings,
+    required: change.required,
+    unique: change.unique,
+    filterable: change.filterable,
+    sortable: change.sortable,
+    personal_data: change.personalData,
+    public_display: change.publicDisplay,
+  };
   let field: Field;
   let wasPersonLink = false;
   if (fieldIndex < 0) {
     if (change.required && publication.recordTypes.has(qualifiedRecord))
-      return { kind: "invalid", issues: [`${record.name} is in a published version, so a field added to it can't be required: ` +
-        "records already stored have no value for it. Add it as optional."] };
+      return {
+        kind: "invalid",
+        issues: [
+          `${record.name} is in a published version, so a field added to it can't be required: ` +
+            "records already stored have no value for it. Add it as optional.",
+        ],
+      };
     const key = deriveFieldKey(label, new Set(record.fields.map((item) => item.key)));
-    if (key === undefined) return { kind: "invalid", issues: ["The label must start with a letter so a key can be made from it."] };
+    if (key === undefined)
+      return {
+        kind: "invalid",
+        issues: ["The label must start with a letter so a key can be made from it."],
+      };
     field = {
-      id: deriveFieldAlias(record.key, key, moduleAliases(module)), key, label,
-      ...(helpText === "" ? {} : { help_text: helpText }), ...shape,
-      personal_data: "none", public_display: "refused",
+      id: deriveFieldAlias(record.key, key, moduleAliases(module)),
+      key,
+      label,
+      ...(helpText === "" ? {} : { help_text: helpText }),
+      ...shape,
       ...(change.defaultValue === undefined ? {} : { default: change.defaultValue }),
     } as unknown as Field;
     record.fields.push(field);
@@ -234,30 +342,66 @@ export const changeInlineModuleField = (
     if (publication.fields.has(`${qualifiedRecord}.${field.key}`)) {
       // The display name is editable even after publication; stored relationship settings are fixed.
       const storedSettings = (value: Readonly<Record<string, unknown>>) =>
-        Object.fromEntries(Object.entries(value).filter(([key]) => change.type !== "link" || key !== "reverse_name"));
+        Object.fromEntries(
+          Object.entries(value).filter(([key]) => change.type !== "link" || key !== "reverse_name"),
+        );
       const fixed = [
         ...(field.type === change.type ? [] : ["type"]),
-        ...(canonicalJson(storedSettings(field.settings as Readonly<Record<string, unknown>>)) === canonicalJson(storedSettings(settings)) || field.type !== change.type ? [] : ["settings"]),
-        ...(["required", "unique", "filterable", "sortable"] as const).filter((key) => field[key] !== change[key]),
-        ...(field.type === change.type && record.relationships.some((relationship) =>
-          relationship.from_field === field.key && relationship.cardinality !== change.cardinality) ? ["number of links"] : []),
+        ...(canonicalJson(storedSettings(field.settings as Readonly<Record<string, unknown>>)) ===
+          canonicalJson(storedSettings(settings)) || field.type !== change.type
+          ? []
+          : ["settings"]),
+        ...(["required", "unique", "filterable", "sortable"] as const).filter(
+          (key) => field[key] !== change[key],
+        ),
+        ...(field.type === change.type &&
+        record.relationships.some(
+          (relationship) =>
+            relationship.from_field === field.key &&
+            relationship.cardinality !== change.cardinality,
+        )
+          ? ["number of links"]
+          : []),
       ];
       if (fixed.length > 0)
-        return { kind: "invalid", issues: [`${field.label} is in a published version, so its ${fixed.join(", ")} can't change: ` +
-          `records already stored keep them, and values are never converted. ${field.type === change.type ? ""
-            : `To hold ${moduleFieldTypeLabels[change.type as ModuleFieldType].toLowerCase()} values, add a new field. `}` +
-          "Its label, help text and default can still change."] };
+        return {
+          kind: "invalid",
+          issues: [
+            `${field.label} is in a published version, so its ${fixed.join(", ")} can't change: ` +
+              `records already stored keep them, and values are never converted. ${
+                field.type === change.type
+                  ? ""
+                  : `To hold ${moduleFieldTypeLabels[change.type as ModuleFieldType].toLowerCase()} values, add a new field. `
+              }` +
+              "Its label, help text and default can still change.",
+          ],
+        };
     }
     // An option something still uses (an action, a flow step, a condition) is not removed.
     if (field.type === "choice") {
       const before = (field.settings as { options: { value: string; label: string }[] }).options;
-      const after = change.type === "choice" ? ((change.settings as { options?: { value: string }[] }).options ?? []) : [];
-      for (const option of before.filter((entry) => !after.some((kept) => kept.value === entry.value))) {
-        const references = applicationUses(current,
-          { kind: "choice_option", moduleKey: module.key, recordKey: record.key, fieldKey: field.key, option: option.value });
+      const after =
+        change.type === "choice"
+          ? ((change.settings as { options?: { value: string }[] }).options ?? [])
+          : [];
+      for (const option of before.filter(
+        (entry) => !after.some((kept) => kept.value === entry.value),
+      )) {
+        const references = applicationUses(current, {
+          kind: "choice_option",
+          moduleKey: module.key,
+          recordKey: record.key,
+          fieldKey: field.key,
+          option: option.value,
+        });
         if (references.length > 0)
-          return { kind: "invalid", issues: [`${label}: the option ${option.label} is used by ${references.map((reference) => reference.label).join(", ")}. ` +
-            "Remove those uses before removing it."] };
+          return {
+            kind: "invalid",
+            issues: [
+              `${label}: the option ${option.label} is used by ${references.map((reference) => reference.label).join(", ")}. ` +
+                "Remove those uses before removing it.",
+            ],
+          };
       }
     }
     const destination = field as Record<string, unknown>;
@@ -276,7 +420,17 @@ export const changeInlineModuleField = (
   } else if (wasPersonLink) retirePeopleDirectoryLinks(source);
   const parsed = applicationSourceDocumentSchema.safeParse(source);
   if (!parsed.success)
-    return { kind: "invalid", issues: locatedIssues(source, parsed.error.issues, moduleIndex, recordIndex, fieldIndex, label) };
+    return {
+      kind: "invalid",
+      issues: locatedIssues(
+        source,
+        parsed.error.issues,
+        moduleIndex,
+        recordIndex,
+        fieldIndex,
+        label,
+      ),
+    };
   return { kind: "changed", source: parsed.data, fieldAlias: field.id, fieldKey: field.key };
 };
 
@@ -286,9 +440,14 @@ export const changeInlineModuleField = (
  * relationship a link field declares and its place in the standard permissions go with it.
  */
 export const deleteInlineModuleField = (
-  current: ApplicationSourceDocument, moduleKey: string, recordKey: string, fieldKey: string,
+  current: ApplicationSourceDocument,
+  moduleKey: string,
+  recordKey: string,
+  fieldKey: string,
   publication: ModuleFieldPublication,
-): InlineModuleFieldChangeResult | Readonly<{ kind: "referenced"; references: readonly ApplicationUsePlace[] }> => {
+):
+  | InlineModuleFieldChangeResult
+  | Readonly<{ kind: "referenced"; references: readonly ApplicationUsePlace[] }> => {
   const source = structuredClone(current);
   const module = source.body.modules.find((item) => item.key === moduleKey);
   const record = module?.record_types.find((item) => item.key === recordKey);
@@ -298,39 +457,68 @@ export const deleteInlineModuleField = (
   const references = applicationUses(current, { kind: "field", moduleKey, recordKey, fieldKey });
   if (references.length > 0) return { kind: "referenced", references };
   if (publication.fields.has(`${moduleKey}:${recordKey}.${fieldKey}`))
-    return { kind: "invalid", issues: [`${field.label} is in a published version, so it can't be removed: ` +
-      "records already stored hold its values. Take it off the pages instead."] };
-  if (record.fields.length === 1) return { kind: "invalid", issues: ["A record type needs at least one field."] };
+    return {
+      kind: "invalid",
+      issues: [
+        `${field.label} is in a published version, so it can't be removed: ` +
+          "records already stored hold its values. Take it off the pages instead.",
+      ],
+    };
+  if (record.fields.length === 1)
+    return { kind: "invalid", issues: ["A record type needs at least one field."] };
   (record as { fields: Field[] }).fields = record.fields.filter((item) => item.key !== fieldKey);
-  (record as { relationships: Relationship[] }).relationships = record.relationships.filter((item) => item.from_field !== fieldKey);
+  (record as { relationships: Relationship[] }).relationships = record.relationships.filter(
+    (item) => item.from_field !== fieldKey,
+  );
   const standard = standardPermissionKeys(moduleKey, recordKey);
   for (const permission of module.permissions) {
     if (!standard.has(permission.key) || permission.field_policy === undefined) continue;
-    const policy = permission.field_policy as { readable_fields: string[]; changeable_fields: string[] };
+    const policy = permission.field_policy as {
+      readable_fields: string[];
+      changeable_fields: string[];
+    };
     policy.readable_fields = policy.readable_fields.filter((key) => key !== fieldKey);
     policy.changeable_fields = policy.changeable_fields.filter((key) => key !== fieldKey);
   }
   if (isPersonLink(field)) retirePeopleDirectoryLinks(source);
   const parsed = applicationSourceDocumentSchema.safeParse(source);
   if (!parsed.success)
-    return { kind: "invalid", issues: parsed.error.issues.map((issue) => `${issue.message} (${settingWords(issue.path.slice(1))})`) };
+    return {
+      kind: "invalid",
+      issues: parsed.error.issues.map(
+        (issue) => `${issue.message} (${settingWords(issue.path.slice(1))})`,
+      ),
+    };
   return { kind: "changed", source: parsed.data, fieldAlias: field.id, fieldKey };
 };
 
 /** The Application source with one field moved earlier or later among its record type's fields. */
 export const moveInlineModuleField = (
-  current: ApplicationSourceDocument, moduleKey: string, recordKey: string, fieldKey: string, by: -1 | 1,
+  current: ApplicationSourceDocument,
+  moduleKey: string,
+  recordKey: string,
+  fieldKey: string,
+  by: -1 | 1,
 ): InlineModuleFieldChangeResult => {
   const source = structuredClone(current);
-  const record = source.body.modules.find((item) => item.key === moduleKey)?.record_types.find((item) => item.key === recordKey);
+  const record = source.body.modules
+    .find((item) => item.key === moduleKey)
+    ?.record_types.find((item) => item.key === recordKey);
   const fields = record?.fields as Field[] | undefined;
   const at = fields?.findIndex((item) => item.key === fieldKey) ?? -1;
-  if (fields === undefined || at < 0) return { kind: "invalid", issues: ["The field is not in this record type any more."] };
-  if (at + by < 0 || at + by >= fields.length) return { kind: "invalid", issues: ["The field is already at that end."] };
+  if (fields === undefined || at < 0)
+    return { kind: "invalid", issues: ["The field is not in this record type any more."] };
+  if (at + by < 0 || at + by >= fields.length)
+    return { kind: "invalid", issues: ["The field is already at that end."] };
   const [moved] = fields.splice(at, 1);
   fields.splice(at + by, 0, moved!);
   const parsed = applicationSourceDocumentSchema.safeParse(source);
   if (!parsed.success)
-    return { kind: "invalid", issues: parsed.error.issues.map((issue) => `${issue.message} (${settingWords(issue.path.slice(1))})`) };
+    return {
+      kind: "invalid",
+      issues: parsed.error.issues.map(
+        (issue) => `${issue.message} (${settingWords(issue.path.slice(1))})`,
+      ),
+    };
   return { kind: "changed", source: parsed.data, fieldAlias: moved!.id, fieldKey };
 };
