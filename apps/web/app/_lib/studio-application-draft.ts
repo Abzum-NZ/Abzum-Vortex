@@ -80,8 +80,22 @@ const loadFailure = (operation: string, error: unknown): StudioApplicationFailur
   return declined(operation, { kind: "temporarily_unavailable", reason: "request_failed" }, error);
 };
 
+/**
+ * The parts of a saved Application draft a preview's records, queries and access depend on. A
+ * draft edit that leaves them as they are is presentation only (pages, layouts, the menu, the
+ * theme, names and blocks), so the preview's data and access are still the draft's.
+ */
+const presentationKeys: ReadonlySet<string> = new Set([
+  "name", "description", "icon", "home_page", "navigation", "shells", "pages", "theme", "platform_block_dependencies",
+]);
+export const studioPreviewShapeFingerprint = (source: StoredApplicationDefinitionDraft["source"]): string =>
+  fingerprintCanonicalValue({ key: source.key,
+    body: Object.fromEntries(Object.entries(source.body).filter(([key]) => !presentationKeys.has(key))) });
+
 type StudioApplicationLoadResult =
-  | Readonly<{ kind: "available"; organizationId: OrganizationId; draft: StoredApplicationDefinitionDraft; compiledFields: StudioCompiledFields | null; borrowedChoices: StudioBorrowedChoices | null; usedModules: readonly StudioDataModule[] | null; published: StudioPublishedData | null; peopleDirectory: PeopleDirectoryOwner | null; pageCompiledSlots: StudioApplicationCompiledPageSlots | null; canvasFrames: StudioApplicationCanvasFrames | null; compileFailure: StudioCompileFailure | null }>
+  | Readonly<{ kind: "available"; organizationId: OrganizationId; draft: StoredApplicationDefinitionDraft;
+      /** The draft's data shape: Studio reads its records once the builder's preview runs this shape. */
+      previewShape: string; compiledFields: StudioCompiledFields | null; borrowedChoices: StudioBorrowedChoices | null; usedModules: readonly StudioDataModule[] | null; published: StudioPublishedData | null; peopleDirectory: PeopleDirectoryOwner | null; pageCompiledSlots: StudioApplicationCompiledPageSlots | null; canvasFrames: StudioApplicationCanvasFrames | null; compileFailure: StudioCompileFailure | null }>
   | StudioApplicationFailure;
 
 type SourcePage = StoredApplicationDefinitionDraft["source"]["body"]["pages"][number];
@@ -286,6 +300,7 @@ export const loadStudioApplicationDraft = async (
       ): Promise<StudioAuthorityResult<Readonly<{
         organizationId: OrganizationId;
         draft: StoredApplicationDefinitionDraft;
+        previewShape: string;
         compiledFields: StudioCompiledFields | null;
         pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
         canvasFrames: StudioApplicationCanvasFrames | null;
@@ -438,7 +453,7 @@ export const loadStudioApplicationDraft = async (
           console.error("STUDIO_DRAFT_COMPILE_FAILED", compileFailure.reasonCode, compileFailure.family, error);
           compiledFields = null;
         }
-        return { kind: "available", value: { organizationId: scope.organizationId, draft, compiledFields, borrowedChoices, usedModules, published, peopleDirectory, pageCompiledSlots, canvasFrames, compileFailure } };
+        return { kind: "available", value: { organizationId: scope.organizationId, draft, previewShape: studioPreviewShapeFingerprint(draft.source), compiledFields, borrowedChoices, usedModules, published, peopleDirectory, pageCompiledSlots, canvasFrames, compileFailure } };
       },
     );
     if (result.kind === "available")

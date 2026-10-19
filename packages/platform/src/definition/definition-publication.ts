@@ -35,7 +35,7 @@ import {
 import { fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
   applicationDraftCompilationKey,
-  readCachedApplicationDraftCompilation,
+  compileApplicationDraftOnce,
   retainApplicationDraftCompilation,
 } from "./application-draft-compilation-cache";
 import {
@@ -321,45 +321,45 @@ const compileDraftSnapshot = async (
       ? null
       : [directoryPage.rootId, directoryPage.anchorReleaseRevision],
   ]);
-  const cached = readCachedApplicationDraftCompilation(cacheKey);
-  if (cached !== undefined) return cached;
-  // The draft's own inline Modules are compiled from the draft, in memory, by the
-  // publication's own steps; nothing is written.
-  const compiled = await compileApplicationWithInlineModules(
-    context,
-    overlay,
-    catalogue,
-    candidate,
-  );
-  const compilation = compiled.output;
-  if (
-    compilation.kind !== "application" ||
-    compilation.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION
-  )
-    return refuse("DEFINITION_COMPILATION_REFUSED");
-  let directory = compiled.dependencies.modules.find(
-    (release) => release.key === peopleDirectory.module,
-  );
-  if (directory === undefined && directoryPage !== undefined && directoryPage.rootId !== null) {
-    try {
-      directory = await selectCurrentModuleRelease(overlay, candidate, peopleDirectory.module);
-    } catch (error) {
-      if (!(error instanceof DefinitionError)) throw error;
-      console.error(`[definition] the people directory release could not be read: ${error.code}`);
+  return compileApplicationDraftOnce(cacheKey, async () => {
+    // The draft's own inline Modules are compiled from the draft, in memory, by the
+    // publication's own steps; nothing is written.
+    const compiled = await compileApplicationWithInlineModules(
+      context,
+      overlay,
+      catalogue,
+      candidate,
+    );
+    const compilation = compiled.output;
+    if (
+      compilation.kind !== "application" ||
+      compilation.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION
+    )
+      return refuse("DEFINITION_COMPILATION_REFUSED");
+    let directory = compiled.dependencies.modules.find(
+      (release) => release.key === peopleDirectory.module,
+    );
+    if (directory === undefined && directoryPage !== undefined && directoryPage.rootId !== null) {
+      try {
+        directory = await selectCurrentModuleRelease(overlay, candidate, peopleDirectory.module);
+      } catch (error) {
+        if (!(error instanceof DefinitionError)) throw error;
+        console.error(`[definition] the people directory release could not be read: ${error.code}`);
+      }
     }
-  }
-  return retainApplicationDraftCompilation(cacheKey, {
-    compilation,
-    releasePlan: compiled,
-    moduleReleases: compiled.dependencies.modules,
-    conditionContexts: projectDraftConditionContexts(
-      source,
-      candidate.draft.sourceFingerprint,
-      compiled.dependencies,
-      compiled.resolution,
-    ),
-    currentReleaseRevision: candidate.draft.publishedRevision ?? null,
-    peopleDirectory: directory === undefined ? null : peopleDirectoryOwnerOf(directory),
+    return retainApplicationDraftCompilation(cacheKey, {
+      compilation,
+      releasePlan: compiled,
+      moduleReleases: compiled.dependencies.modules,
+      conditionContexts: projectDraftConditionContexts(
+        source,
+        candidate.draft.sourceFingerprint,
+        compiled.dependencies,
+        compiled.resolution,
+      ),
+      currentReleaseRevision: candidate.draft.publishedRevision ?? null,
+      peopleDirectory: directory === undefined ? null : peopleDirectoryOwnerOf(directory),
+    });
   });
 };
 

@@ -76,6 +76,8 @@ type WorkspaceProps = Readonly<{
         mode: "existing";
         organizationId: string;
         draft: StudioStoredApplicationDraft;
+        /** The saved draft's data shape, which its records are read from the preview once it runs. */
+        previewShape: string;
         place: StudioWorkspacePlace;
         /** What the Theme tab offers, from the checked-in shadcn catalogue. */
         themeOptions: StudioThemeOptions;
@@ -125,6 +127,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     draft: props.draft,
     catalogue,
     initialView: {
+      previewShape: props.previewShape,
       slots: props.pageCompiledSlots ?? null,
       frames: props.canvasFrames ?? null,
       failure: props.compileFailure ?? null,

@@ -4,6 +4,7 @@ import { applicationRootIdSchema, organizationIdSchema, logRefusal } from "@vort
 import { readStudioCanvasRecords } from "../../../_lib/studio-canvas-records";
 import { readStudioDataRecords } from "../../../_lib/studio-data-records";
 import { loadStudioApplicationDraft } from "../../../_lib/studio-application-draft";
+import { prepareStudioPreview } from "../../../_lib/studio-application-preview";
 import { privateJsonResponse } from "../../../_lib/private-response";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { getIdentityJourneyConfiguration } from "../../../auth/_lib/authority-configuration";
@@ -16,7 +17,7 @@ const requestSchema = z.discriminatedUnion("operation", [
   z
     .object({
       organizationId: organizationIdSchema,
-      operation: z.enum(["canvas", "data"]),
+      operation: z.enum(["canvas", "data", "preview"]),
       candidate: z.unknown(),
     })
     .strict(),
@@ -62,7 +63,9 @@ export async function POST(request: NextRequest) {
         ? await loadStudioApplicationDraft(organizationId, candidate)
         : operation === "canvas"
           ? await readStudioCanvasRecords(identity.session, organizationId, candidate, request.signal)
-          : await readStudioDataRecords(identity.session, organizationId, candidate, request.signal);
+          : operation === "preview"
+            ? await prepareStudioPreview(identity.session, organizationId, candidate, request.signal)
+            : await readStudioDataRecords(identity.session, organizationId, candidate, request.signal);
     return privateJsonResponse(result, 200);
   } catch (error) {
     if (request.signal.aborted) return new Response(null, { status: 499 });

@@ -8,7 +8,6 @@ import {
   createPreviewInstallationRepository,
   DefinitionError,
   dropRetiredPreviewStorage,
-  fingerprintCanonicalValue,
   previewApplicationKey,
   readApplicationDefinitionDraft,
   requireBuilderAuthority,
@@ -33,7 +32,7 @@ import { humanOrganizationRequests } from "./server-composition";
 import { platformPermissionSource } from "./platform-permission-source";
 import { loadOrganizationLauncher } from "./organization-context";
 import { organizationAddressPath } from "./address-paths";
-import { studioDraftTargetFacts } from "./studio-application-draft";
+import { studioDraftTargetFacts, studioPreviewShapeFingerprint } from "./studio-application-draft";
 
 const previewRequestSchema = z
   .object({
@@ -64,11 +63,6 @@ export type StudioPreviewResult =
       expiresAt: string;
       /** Its copied live records are due to be decided again by the builder's live access. */
       reconcileDue: boolean;
-      /**
-       * It still runs an older saved revision whose records, queries or access differ from this
-       * one's; it is moving to this revision in the background, so read again shortly.
-       */
-      behind: boolean;
     }>
   | PreviewFailure;
 
@@ -135,32 +129,6 @@ const failure = (error: unknown): PreviewFailure => {
   console.error("[studio] preview provisioning failed", error);
   return { kind: "temporarily_unavailable" };
 };
-
-/**
- * The parts of a saved Application draft a preview's records, queries and access depend on. A
- * draft edit that leaves them as they are is presentation only (pages, layouts, the menu, the
- * theme, names and blocks), so the preview's data and access are still the draft's.
- */
-const presentationKeys: ReadonlySet<string> = new Set([
-  "name",
-  "description",
-  "icon",
-  "home_page",
-  "navigation",
-  "shells",
-  "pages",
-  "theme",
-  "platform_block_dependencies",
-]);
-export const studioPreviewShapeFingerprint = (
-  source: StoredApplicationDefinitionDraft["source"],
-): string =>
-  fingerprintCanonicalValue({
-    key: source.key,
-    body: Object.fromEntries(
-      Object.entries(source.body).filter(([key]) => !presentationKeys.has(key)),
-    ),
-  });
 
 /**
  * Reads, in one request under the builder's draft authority, the saved draft at exactly the
@@ -269,7 +237,6 @@ const available = (
     expiresAt: string;
   }>,
   reconcileDue: boolean,
-  behind = false,
 ): StudioPreviewResult => ({
   kind: "available",
   previewInstallationId: preview.previewInstallationId,
@@ -277,7 +244,6 @@ const available = (
   draftRevision: preview.draftRevision,
   expiresAt: preview.expiresAt,
   reconcileDue,
-  behind,
 });
 
 /**
@@ -412,34 +378,60 @@ const follow = (
       ),
   );
 
+const targetOf = (
+  session: IdentitySession,
+  organizationId: OrganizationId,
+  draft: StoredApplicationDefinitionDraft,
+): Target => ({
+  session,
+  organizationId,
+  rootId: draft.rootId as ApplicationRootId,
+  draftRevision: draft.draftRevision,
+  shapeFingerprint: studioPreviewShapeFingerprint(draft.source),
+});
+
+const lasting = (preview: BuilderPreviewInstallation): boolean =>
+  Date.parse(preview.expiresAt) - Date.now() > reuseMarginMs;
+
 /**
- * Preview preparation belongs to the visible reader's request, never a draft load or save.
- * Presentation edits reuse the current records without rehearsing a publication. A data-shape
- * change completes under this demand; navigation cancels any phases that have not started.
+ * Whether the builder's preview already runs this saved revision's data shape, so its records are
+ * this revision's: it is not newer than the revision, has the same shape and does not expire soon.
+ */
+export const studioPreviewRunsDraft = (
+  draft: StoredApplicationDefinitionDraft,
+  preview: BuilderPreviewInstallation | undefined,
+): "ready" | "behind" | "newer" =>
+  preview === undefined
+    ? "behind"
+    : preview.draftRevision > draft.draftRevision
+      ? "newer"
+      : lasting(preview) &&
+          (preview.draftRevision === draft.draftRevision ||
+            preview.shapeFingerprint === studioPreviewShapeFingerprint(draft.source))
+        ? "ready"
+        : "behind";
+
+/**
+ * The builder's preview moved to the saved draft, or a new one. `prepare` asks for the draft's data
+ * shape only: presentation edits reuse the current records without rehearsing a publication.
+ * `open` (the Preview button) asks for the exact revision, so its pages and menu are the draft's.
  */
 export async function currentStudioPreview(
   session: IdentitySession,
   organizationId: OrganizationId,
   draft: StoredApplicationDefinitionDraft,
   preview: BuilderPreviewInstallation | undefined,
-  purpose: "read" | "open",
+  purpose: "prepare" | "open",
   signal?: AbortSignal,
 ): Promise<StudioPreviewResult> {
   signal?.throwIfAborted();
-  const target: Target = {
-    session,
-    organizationId,
-    rootId: draft.rootId as ApplicationRootId,
-    draftRevision: draft.draftRevision,
-    shapeFingerprint: studioPreviewShapeFingerprint(draft.source),
-  };
+  const target = targetOf(session, organizationId, draft);
   if (preview === undefined) return provision(target, signal);
   if (preview.draftRevision > draft.draftRevision) return { kind: "conflict" };
-  const lasting = Date.parse(preview.expiresAt) - Date.now() > reuseMarginMs;
   if (
-    lasting &&
+    lasting(preview) &&
     (preview.draftRevision === draft.draftRevision ||
-      (purpose === "read" && preview.shapeFingerprint === target.shapeFingerprint))
+      (purpose === "prepare" && preview.shapeFingerprint === target.shapeFingerprint))
   )
     return available(preview, preview.reconcileDue);
   const followed = await follow(target, preview.previewInstallationId, signal);
@@ -448,6 +440,182 @@ export async function currentStudioPreview(
     ? { ...followed, reconcileDue: preview.reconcileDue }
     : followed;
 }
+
+/**
+ * Saves whose preview is being moved, by builder and Application: the newest saved revision a move
+ * is wanted for and the move under way. A save that arrives while a move runs only raises the
+ * wanted revision, so a burst of saves costs one move to the newest. It holds only pending work,
+ * never an access decision or a result.
+ */
+type ScheduledMove = { session: IdentitySession; wanted: number; idle: Promise<void> };
+const scheduledMovesKey = Symbol.for("vortex.web.studio-preview-moves");
+const processMoves = globalThis as typeof globalThis & {
+  [scheduledMovesKey]?: Map<string, ScheduledMove>;
+};
+const scheduled = (processMoves[scheduledMovesKey] ??= new Map<string, ScheduledMove>());
+
+const moveKeyOf = (
+  session: IdentitySession,
+  organizationId: OrganizationId,
+  rootId: ApplicationRootId,
+): string => `${session.identityId}|${organizationId}|${rootId}`.toLowerCase();
+
+/** One move of the builder's existing preview to a saved revision's data shape. */
+const moveToSaved = async (
+  session: IdentitySession,
+  organizationId: OrganizationId,
+  rootId: ApplicationRootId,
+  draftRevision: number,
+): Promise<void> => {
+  const state = await readStudioPreviewState(session, organizationId, rootId, draftRevision);
+  // A conflict is a newer save, whose own move follows; a refusal leaves the preview as it is.
+  if (state.kind !== "read") {
+    if (state.kind === "temporarily_unavailable")
+      console.error(
+        `[studio] preview move skipped: STUDIO_PREVIEW_MOVE_STATE_UNAVAILABLE revision=${draftRevision}`,
+      );
+    return;
+  }
+  // The first preview is created for a reader that shows records, never by a save.
+  if (
+    state.preview === undefined ||
+    studioPreviewRunsDraft(state.draft, state.preview) !== "behind"
+  )
+    return;
+  const moved = await follow(
+    targetOf(session, organizationId, state.draft),
+    state.preview.previewInstallationId,
+  );
+  if (moved.kind !== "available" && moved.kind !== "conflict")
+    console.error(
+      `[studio] preview move failed: STUDIO_PREVIEW_MOVE_FAILED kind=${moved.kind} revision=${draftRevision}`,
+    );
+};
+
+/**
+ * Moves the builder's preview to a committed save's data shape on the server, after the save has
+ * answered, so Studio's readers find the preview ready instead of moving it themselves. Only a
+ * preview the builder already has is moved, and only when the save changed its data shape.
+ */
+export const scheduleStudioPreviewMove = (
+  session: IdentitySession,
+  organizationId: OrganizationId,
+  rootId: ApplicationRootId,
+  draftRevision: number,
+): Promise<void> => {
+  const key = moveKeyOf(session, organizationId, rootId);
+  const current = scheduled.get(key);
+  if (current !== undefined) {
+    current.wanted = Math.max(current.wanted, draftRevision);
+    current.session = session;
+    return current.idle;
+  }
+  const move: ScheduledMove = { session, wanted: draftRevision, idle: Promise.resolve() };
+  move.idle = (async () => {
+    let moved = 0;
+    try {
+      while (move.wanted > moved) {
+        moved = move.wanted;
+        try {
+          await moveToSaved(move.session, organizationId, rootId, moved);
+        } catch (error) {
+          console.error(
+            `[studio] preview move failed: STUDIO_PREVIEW_MOVE_FAILED cause=${describeFailure(error)}`,
+          );
+        }
+      }
+    } finally {
+      if (scheduled.get(key) === move) scheduled.delete(key);
+    }
+  })();
+  scheduled.set(key, move);
+  return move.idle;
+};
+
+/** Whether the builder's preview runs a saved revision's data shape, so its records can be read. */
+export type StudioPreviewReadiness =
+  | Readonly<{ kind: "ready"; draftRevision: number; previewShape: string }>
+  /** A move to this revision is still under way: ask again. */
+  | Readonly<{ kind: "following" }>
+  | PreviewFailure;
+
+/** How long one readiness request waits for a move under way before it answers `following`. */
+const readinessWaitMs = 20_000;
+
+const waitFor = (idle: Promise<void>, signal: AbortSignal | undefined): Promise<void> =>
+  new Promise<void>((resolve, reject) => {
+    const settle = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+    };
+    const abort = () => {
+      settle();
+      reject(signal?.reason);
+    };
+    const timer = setTimeout(() => {
+      settle();
+      resolve();
+    }, readinessWaitMs);
+    signal?.addEventListener("abort", abort, { once: true });
+    void idle.finally(() => {
+      settle();
+      resolve();
+    });
+  });
+
+/**
+ * The one readiness request of Studio's visible record readers for a saved revision. It waits for
+ * the move a save started; when nothing is moving the preview (the builder's first preview, one
+ * about to expire, or one a failed move left behind) it prepares the preview itself, under this
+ * request's demand, so leaving the last reader cancels what has not started. Record reads
+ * themselves never prepare or move a preview.
+ */
+export const prepareStudioPreview = async (
+  session: IdentitySession,
+  candidateOrganizationId: string,
+  candidate: unknown,
+  signal?: AbortSignal,
+): Promise<StudioPreviewReadiness> => {
+  const organization = organizationIdSchema.safeParse(candidateOrganizationId);
+  const request = previewRequestSchema.safeParse(candidate);
+  if (!organization.success || !request.success)
+    return { kind: "refused", reason: "invalid_request" };
+  const { rootId, draftRevision } = request.data;
+  const read = () => readStudioPreviewState(session, organization.data, rootId, draftRevision);
+  const ready = (draft: StoredApplicationDefinitionDraft): StudioPreviewReadiness => ({
+    kind: "ready",
+    draftRevision: draft.draftRevision,
+    previewShape: studioPreviewShapeFingerprint(draft.source),
+  });
+  const state = await read();
+  signal?.throwIfAborted();
+  if (state.kind !== "read") return state;
+  const runs = studioPreviewRunsDraft(state.draft, state.preview);
+  if (runs === "ready") return ready(state.draft);
+  if (runs === "newer") return { kind: "conflict" };
+  const moving = scheduled.get(moveKeyOf(session, organization.data, rootId));
+  if (moving !== undefined) {
+    await waitFor(moving.idle, signal);
+    const again = await read();
+    signal?.throwIfAborted();
+    if (again.kind !== "read") return again;
+    const now = studioPreviewRunsDraft(again.draft, again.preview);
+    return now === "ready"
+      ? ready(again.draft)
+      : now === "newer"
+        ? { kind: "conflict" }
+        : { kind: "following" };
+  }
+  const prepared = await currentStudioPreview(
+    session,
+    organization.data,
+    state.draft,
+    state.preview,
+    "prepare",
+    signal,
+  );
+  return prepared.kind === "available" ? ready(state.draft) : prepared;
+};
 
 /**
  * The running preview of the saved Application draft at the given revision and its address: the

@@ -97,6 +97,7 @@ export default async function StudioApplicationPage({
       mode="existing"
       organizationId={result.organizationId}
       draft={result.draft}
+      previewShape={result.previewShape}
       place={place}
       themeOptions={studioThemeOptions}
       initialTab={tab}

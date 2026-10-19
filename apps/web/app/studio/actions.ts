@@ -1,9 +1,12 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+import { after } from "next/server";
 import { z } from "zod";
 import {
+  applicationRootIdSchema,
   canonicalJson,
+  organizationIdSchema,
   sameId,
   saveDefinitionDraftCommandSchema,
   sourceApplicationThemeSchema,
@@ -30,6 +33,7 @@ import { tokenName } from "@vortex/ui/studio";
 import type { StudioThemeResolution } from "./_lib/studio-theme-options";
 import type { StudioStoredApplicationDraft } from "@vortex/ui/studio";
 import { readStudioPersonLabel } from "../_lib/studio-person-labels";
+import { scheduleStudioPreviewMove } from "../_lib/studio-application-preview";
 import type { StudioPersonLabel } from "../_lib/studio-application-restore-contracts";
 
 const refuse = <Result>(operation: string, code: string, fallback: Result, cause?: unknown): Result =>
@@ -136,14 +140,26 @@ export type StudioDraftChangedElsewhere = Readonly<{
 }>;
 
 /**
- * Studio autosaves each batch through this one action; only a visible preview reader prepares a preview.
- * The draft is compiled for the canvas by the separate `reopenStudioApplication` request the
- * workspace sends once its saves are idle, so a save never waits for a compile. A save that no
- * longer extends the saved revision is refused as a conflict that names who wrote the newer
- * revision and carries it, so the workspace can say what changed.
+ * Studio autosaves each batch through this one action. The draft is compiled for the canvas by the
+ * separate `reopenStudioApplication` request the workspace sends once its saves are idle, so a save
+ * never waits for a compile. Once a save has answered, the server moves the builder's existing
+ * preview to the saved data shape when the save changed it, so the canvas and the Data tab read
+ * the new revision's records without moving the preview themselves. A save that no longer extends
+ * the saved revision is refused as a conflict that names who wrote the newer revision and carries
+ * it, so the workspace can say what changed.
  */
 export async function saveStudioApplication(organizationId: string, candidate: unknown): Promise<StudioSaveApplicationResult> {
   const saved = await saveHumanApplicationDraft(organizationId, candidate);
+  if (saved.kind === "available") {
+    const { draft } = saved;
+    after(async () => {
+      const resolved = await resolveIdentitySession();
+      if (resolved.kind !== "active") return;
+      await scheduleStudioPreviewMove(resolved.session, organizationIdSchema.parse(draft.organizationId),
+        applicationRootIdSchema.parse(draft.rootId), draft.draftRevision);
+    });
+    return saved;
+  }
   if (saved.kind !== "conflict" || saved.reason !== "draft_changed") return saved;
   const command = saveDefinitionDraftCommandSchema.pick({ rootId: true }).strip().parse(candidate);
   const latest = await loadStudioApplicationDraft(organizationId, command.rootId, { compile: false });

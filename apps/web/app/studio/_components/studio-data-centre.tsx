@@ -36,6 +36,7 @@ import {
   TableRow,
 } from "@vortex/ui/components/table";
 import { readStudioDataRecords } from "../_lib/studio-reads";
+import { readWhenPreviewReady, type StudioPreviewGate } from "../_lib/studio-preview-gate";
 import type { StudioDataRecordsResult, StudioDataTotal } from "../../_lib/studio-data-records";
 import {
   fieldTypeLabel,
@@ -205,7 +206,7 @@ const notReadable = (
     case "conflict":
       return "The saved draft changed. Its records follow in a moment.";
     case "following":
-      return "Your preview is catching up with the saved draft. Its records follow in a moment.";
+      return "Your preview did not catch up with the saved draft. Its records show after your next change, or reopen this record type.";
     case "no_query":
       return `No list of ${plural.toLowerCase()} exists yet. Add a query that lists ${plural.toLowerCase()} to see their records here.`;
     case "query_refused":
@@ -348,6 +349,8 @@ function PreviewResults({
   plural,
   queryKey,
   draftRevision,
+  previewShape,
+  preview,
 }: Readonly<{
   organizationId: string;
   rootId: string;
@@ -357,6 +360,9 @@ function PreviewResults({
   queryKey: string | undefined;
   /** The saved, compiled draft revision whose preview the records are read from. */
   draftRevision: number;
+  /** That revision's data shape, which the preview must run before its records are read. */
+  previewShape: string;
+  preview: StudioPreviewGate;
 }>) {
   const [pageSize, setPageSize] = useState<number>(40);
   // A page token belongs to one record type or query, page size and saved revision: any other
@@ -368,42 +374,34 @@ function PreviewResults({
   const [read, setRead] = useState<Read | null>(null);
   const latest = useRef("");
   const request = JSON.stringify({ scope, page });
-  // A preview still moving to this revision is read again shortly; what it showed stays meanwhile.
-  const [followed, setFollowed] = useState<Readonly<{ request: string; count: number }>>({
-    request: "",
-    count: 0,
-  });
-  const followUp = followed.request === request ? followed.count : 0;
-  useEffect(() => {
-    if (read?.request !== request) return;
-    const result = read.result;
-    const behind =
-      result.kind === "following" ||
-      ((result.kind === "available" || result.kind === "summary") && result.behind);
-    if (!behind || followUp >= 30) return;
-    const timer = setTimeout(() => setFollowed({ request, count: followUp + 1 }), 1500);
-    return () => clearTimeout(timer);
-  }, [read, request, followUp]);
+  // One read per page, sent once the preview runs this revision's data shape.
   useEffect(() => {
     latest.current = request;
     const controller = new AbortController();
     void (async () => {
       let result: StudioDataRecordsResult;
       try {
-        result = await readStudioDataRecords(
-          organizationId,
-          {
-            rootId,
-            draftRevision,
-            moduleKey,
-            recordKey,
-            ...(queryKey === undefined ? {} : { queryKey }),
-            pageSize,
-            ...(page.token === undefined
-              ? {}
-              : { continuationToken: page.token, pageDirection: page.direction }),
-          },
+        result = await readWhenPreviewReady(
+          preview,
+          draftRevision,
+          previewShape,
           controller.signal,
+          () =>
+            readStudioDataRecords(
+              organizationId,
+              {
+                rootId,
+                draftRevision,
+                moduleKey,
+                recordKey,
+                ...(queryKey === undefined ? {} : { queryKey }),
+                pageSize,
+                ...(page.token === undefined
+                  ? {}
+                  : { continuationToken: page.token, pageDirection: page.direction }),
+              },
+              controller.signal,
+            ),
         );
       } catch (error) {
         if (controller.signal.aborted) return;
@@ -417,6 +415,8 @@ function PreviewResults({
     organizationId,
     rootId,
     draftRevision,
+    previewShape,
+    preview,
     moduleKey,
     recordKey,
     queryKey,
@@ -424,7 +424,6 @@ function PreviewResults({
     page.token,
     page.direction,
     request,
-    followUp,
   ]);
   const current = read?.request === request ? read.result : null;
   const problem =
@@ -550,6 +549,8 @@ export function StudioDataCentre({
   selection,
   unsaved,
   draftRevision,
+  previewShape,
+  preview,
   onSelect,
   onCreate,
   onAddField,
@@ -567,6 +568,8 @@ export function StudioDataCentre({
   selection: StudioDataSelection | null;
   unsaved: boolean;
   draftRevision: number;
+  previewShape: string;
+  preview: StudioPreviewGate;
   onSelect: (selection: StudioDataSelection) => void;
   onCreate: () => void;
   onAddField: (() => void) | undefined;
@@ -649,6 +652,8 @@ export function StudioDataCentre({
       plural={record.pluralName}
       queryKey={query?.key}
       draftRevision={draftRevision}
+      previewShape={previewShape}
+      preview={preview}
     />
   );
   return (

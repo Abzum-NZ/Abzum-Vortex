@@ -11,6 +11,7 @@ import {
 } from "@vortex/ui/studio";
 import { saveStudioApplication, type StudioDraftChangedElsewhere } from "../actions";
 import { reopenStudioApplication } from "../_lib/studio-reads";
+import { createStudioPreviewGate, type StudioPreviewGate } from "../_lib/studio-preview-gate";
 import type { StudioApplicationCanvasFrames, StudioApplicationCompiledPageSlots } from "../../_lib/studio-application-draft";
 import type { StudioCompiledFields, StudioDataModule, StudioPublishedData } from "../_lib/studio-data-model";
 import { summarizeSourceChange, type SourceChangeRow } from "../_lib/source-change-summary";
@@ -18,7 +19,7 @@ import { conflictMessage, refusalMessage } from "./studio-refusal-messages";
 import { useStudioSession } from "./use-studio-session";
 
 /** How long Studio waits after the last edit of a batch before it saves the batch. */
-const autosaveDelayMs = 600;
+const autosaveDelayMs = 300;
 /** How long Studio waits before it tries again a save the platform did not confirm, doubling each time. */
 const retryDelayMs = 4000;
 /** After this many unconfirmed saves in a row, Studio waits for the next edit instead of trying again. */
@@ -32,6 +33,8 @@ export type StudioCompiledView = Readonly<{
   source: StudioStoredApplicationDraft["source"];
   draftRevision: number;
   sourceFingerprint: string;
+  /** The revision's data shape: its records are read once the builder's preview runs it. */
+  previewShape: string;
   slots: StudioApplicationCompiledPageSlots | null;
   frames: StudioApplicationCanvasFrames | null;
   failure: StudioCompileFailure | null;
@@ -98,6 +101,8 @@ export type StudioDraft = Readonly<{
    */
   readSaved: () => StudioStoredApplicationDraft;
   view: StudioCompiledView;
+  /** When the builder's preview runs a compiled revision's data shape, for every reader of its records. */
+  preview: StudioPreviewGate;
   /** The canvas draws an older revision than the saved one (or the draft is not saved yet). */
   updatingCanvas: boolean;
   status: StudioSaveStatus;
@@ -142,6 +147,7 @@ type LoadedResult = Extract<Awaited<ReturnType<typeof reopenStudioApplication>>,
  */
 const viewOf = (result: LoadedResult, generation: number, previous: StudioCompiledView): StudioCompiledView => ({
   source: result.draft.source, draftRevision: result.draft.draftRevision, sourceFingerprint: result.draft.sourceFingerprint,
+  previewShape: result.previewShape,
   slots: result.pageCompiledSlots, frames: result.canvasFrames, failure: result.compileFailure, generation,
   compiledFields: result.compiledFields, borrowedChoices: result.borrowedChoices ?? previous.borrowedChoices,
   usedModules: result.usedModules ?? previous.usedModules, published: result.published ?? previous.published,
@@ -194,6 +200,7 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
       result.kind === "conflict" || result.kind === "refused" ? result.reason : undefined);
     },
   }));
+  const [preview] = useState(() => createStudioPreviewGate(organizationId, draft.rootId));
   const [selection] = useState(() => createStudioSemanticSelectionStore({ rootId: draft.rootId, source: draft.source, catalogue }));
   const [state, setState] = useState(() => history.getState());
   const [selected, setSelected] = useState(() => selection.getSelection());
@@ -437,12 +444,12 @@ export function useStudioDraft({ organizationId, draft, catalogue, initialView }
   const locked = renderedHolds.size > 0 || status.kind === "conflict" || lifetime === 0;
 
   return useMemo<StudioDraft>(() => ({
-    session, organizationId, history, selection, state, source, selected, saved, readSaved: () => savedRef.current, view, updatingCanvas, status, chip, lifetime, locked,
+    session, organizationId, history, selection, state, source, selected, saved, readSaved: () => savedRef.current, view, preview, updatingCanvas, status, chip, lifetime, locked,
     isHeld: (key) => renderedHolds.has(key), hold, blockedReason, parsed, run,
     select: (next) => selection.select(next),
     undo: () => { if (blockedReason() === undefined) history.undo(); },
     redo: () => { if (blockedReason() === undefined) history.redo(); },
     flush, retry, reload, isActive: () => active.current,
-  }), [session, organizationId, history, selection, state, source, selected, saved, view, updatingCanvas, status, chip, lifetime, locked,
+  }), [session, organizationId, history, selection, state, source, selected, saved, view, preview, updatingCanvas, status, chip, lifetime, locked,
     renderedHolds, hold, blockedReason, parsed, run, flush, retry, reload]);
 }
