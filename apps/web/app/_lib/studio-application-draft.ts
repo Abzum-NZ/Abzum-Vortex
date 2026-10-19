@@ -44,7 +44,6 @@ import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
 import { platformPermissionSource } from "./platform-permission-source";
 import { studioCanvasFramesFor, type StudioApplicationCanvasFrames } from "./studio-canvas-frames";
-import { rememberCompiledDraft } from "./studio-compiled-drafts";
 
 export type { StudioApplicationCanvasFrames } from "./studio-canvas-frames";
 
@@ -338,7 +337,6 @@ export const loadStudioApplicationDraft = async (
             throw new Error("STUDIO_DRAFT_COMPILE_MISMATCH");
           pageCompiledSlots = pageCompiledSlotsFor(draft.source, compiled.compilation.canonical.content);
           // The canvas reads this revision's records against this same compile.
-          rememberCompiledDraft(scope.organizationId, draft, compiled.compilation.canonical.content);
           canvasFrames = studioCanvasFramesFor(draft.source.body.pages, compiled.compilation.canonical.content);
           const fieldsByRecord: Record<string, readonly ModuleField[]> = {};
           const borrowed: StudioQueryChoice[] = [];

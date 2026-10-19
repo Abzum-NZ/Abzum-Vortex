@@ -9,7 +9,8 @@ import {
   type StudioApplicationDraftHistoryController, type StudioApplicationDraftHistoryState, type StudioBorrowedChoices,
   type StudioCompileFailure, type StudioSemanticSelection, type StudioSemanticSelectionStore, type StudioStoredApplicationDraft,
 } from "@vortex/ui/studio";
-import { reopenStudioApplication, saveStudioApplication, type StudioDraftChangedElsewhere } from "../actions";
+import { saveStudioApplication, type StudioDraftChangedElsewhere } from "../actions";
+import { reopenStudioApplication } from "../_lib/studio-reads";
 import type { StudioApplicationCanvasFrames, StudioApplicationCompiledPageSlots } from "../../_lib/studio-application-draft";
 import type { StudioCompiledFields, StudioDataModule, StudioPublishedData } from "../_lib/studio-data-model";
 import { summarizeSourceChange, type SourceChangeRow } from "../_lib/source-change-summary";

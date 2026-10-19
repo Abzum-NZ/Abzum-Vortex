@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { ComponentRequestGeneration } from "@vortex/platform/schema";
-import { searchWithoutTablePages } from "../../../../../../_lib/table-page-position";
+import { searchWithoutRecordsTableState } from "@vortex/platform/schema";
 
 export function useNavigationScope({
   model,
@@ -24,8 +24,9 @@ export function useNavigationScope({
   }
   const navigationBase = JSON.stringify([
     pathname,
-    // A table page change is shallow: it keeps the frame and the data already read.
-    searchWithoutTablePages(currentSearch),
+    // A table's query state (sort, filter, search, columns, page) is shallow: it rereads only
+    // that table and keeps the frame and the data already read.
+    searchWithoutRecordsTableState(currentSearch),
     model.pageId,
     application.installationRevision,
     application.releaseKey,

@@ -142,7 +142,9 @@ export const createPreviewInstallationCoordinator = (
       authority: BuilderAuthority,
       context: SessionContext,
     ) => Promise<Result>,
+    signal?: AbortSignal,
   ): Promise<Result> => {
+    signal?.throwIfAborted();
     const captured: { failure?: DefinitionError<PreviewInstallationCoordinatorErrorCode> } = {};
     const result = await dependencies.installerRequests
       .runChange<Result>(session, selection, async (transaction, scope, issuedAt) => {
@@ -160,15 +162,21 @@ export const createPreviewInstallationCoordinator = (
             throw new DefinitionError("PREVIEW_INSTALLATION_REFUSED");
           await requireBuilderAuthority(authority, { kind: "publication", rootId });
           const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
-          return await operation(transaction, authority, context);
+          signal?.throwIfAborted();
+          const value = await operation(transaction, authority, context);
+          signal?.throwIfAborted();
+          return value;
         } catch (error) {
+          if (signal?.aborted) throw error;
           captured.failure = toCoordinatorError(error);
           throw error;
         }
       })
       .catch((error: unknown) => {
+        signal?.throwIfAborted();
         throw captured.failure ?? toCoordinatorError(error);
       });
+    signal?.throwIfAborted();
     if (result.kind === "available") return result.value;
     if (captured.failure !== undefined) throw captured.failure;
     throw new DefinitionError(
@@ -182,6 +190,7 @@ export const createPreviewInstallationCoordinator = (
     async create(
       sessionCandidate: IdentitySession,
       requestCandidate: PreviewInstallationCreateRequest,
+      signal?: AbortSignal,
     ): Promise<PreviewInstallation> {
       const session = identitySessionSchema.safeParse(sessionCandidate);
       const request = previewInstallationCreateRequestSchema.safeParse(requestCandidate);
@@ -193,12 +202,11 @@ export const createPreviewInstallationCoordinator = (
         { organizationId },
         applicationRootId,
         (transaction, authority, context) =>
-          dependencies
-            .draftPlanner(transaction, authority)
-            .prepareApplicationPreview(context, {
-              rootId: applicationRootId,
-              expectedDraftRevision,
-            }),
+          dependencies.draftPlanner(transaction, authority).prepareApplicationPreview(context, {
+            rootId: applicationRootId,
+            expectedDraftRevision,
+          }),
+        signal,
       );
       const releases = await builderRequest(
         session.data,
@@ -209,6 +217,7 @@ export const createPreviewInstallationCoordinator = (
             rootId: applicationRootId,
             expectedDraftRevision,
           }),
+        signal,
       );
       // The preview is created in the organisation's context, as its Application may not be
       // installed yet: its releases, Module pins, own permission registration and empty storage.
@@ -218,6 +227,7 @@ export const createPreviewInstallationCoordinator = (
         applicationRootId,
         (transaction) =>
           createPreviewInstallationRepository(transaction).create(request.data, releases),
+        signal,
       );
       const { previewInstallationId } = created.installation;
       // The builder's live records are read as the builder reads them in the installed
@@ -229,6 +239,7 @@ export const createPreviewInstallationCoordinator = (
           applicationRootId,
           (transaction) =>
             createPreviewInstallationRepository(transaction).seed(previewInstallationId),
+          signal,
         );
       // Last, in the preview itself: the release set it runs. A preview without it never runs.
       return builderRequest(
@@ -246,12 +257,14 @@ export const createPreviewInstallationCoordinator = (
           if (created.seedable) await backfillDerivedFields(transaction, new Date().toISOString());
           return created.installation;
         },
+        signal,
       );
     },
 
     async refresh(
       sessionCandidate: IdentitySession,
       requestCandidate: PreviewInstallationRefreshRequest,
+      signal?: AbortSignal,
     ): Promise<PreviewInstallation> {
       const session = identitySessionSchema.safeParse(sessionCandidate);
       const request = previewInstallationRefreshRequestSchema.safeParse(requestCandidate);
@@ -264,12 +277,11 @@ export const createPreviewInstallationCoordinator = (
         { organizationId },
         applicationRootId,
         (transaction, authority, context) =>
-          dependencies
-            .draftPlanner(transaction, authority)
-            .prepareApplicationPreview(context, {
-              rootId: applicationRootId,
-              expectedDraftRevision,
-            }),
+          dependencies.draftPlanner(transaction, authority).prepareApplicationPreview(context, {
+            rootId: applicationRootId,
+            expectedDraftRevision,
+          }),
+        signal,
       );
       const releases = await builderRequest(
         session.data,
@@ -280,6 +292,7 @@ export const createPreviewInstallationCoordinator = (
             rootId: applicationRootId,
             expectedDraftRevision,
           }),
+        signal,
       );
       const result = await builderRequest(
         session.data,
@@ -297,6 +310,7 @@ export const createPreviewInstallationCoordinator = (
           );
           return refreshed;
         },
+        signal,
       );
       return result;
     },

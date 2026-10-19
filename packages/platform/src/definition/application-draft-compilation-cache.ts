@@ -10,7 +10,17 @@ import type { ApplicationDraftCompilation } from "./definition-publication";
  * is never cached.
  */
 const applicationDraftCompilationCacheLimit = 16;
-const applicationDraftCompilations = new Map<string, ApplicationDraftCompilation>();
+// Page rendering, actions and API routes can load separate module runtimes in one process.
+// They share the same immutable compilations; every caller still checks live authority and
+// resolves the current dependency inputs before looking up this bounded cache.
+const applicationDraftCompilationsKey = Symbol.for(
+  "vortex.platform.application-draft-compilations",
+);
+const processCompilations = globalThis as typeof globalThis & {
+  [applicationDraftCompilationsKey]?: Map<string, ApplicationDraftCompilation>;
+};
+const applicationDraftCompilations = (processCompilations[applicationDraftCompilationsKey] ??=
+  new Map<string, ApplicationDraftCompilation>());
 
 const deepFreeze = <Value>(value: Value): Value => {
   if (typeof value !== "object" || value === null || Object.isFrozen(value)) return value;
