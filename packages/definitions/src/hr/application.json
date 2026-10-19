@@ -3221,6 +3221,7 @@
                 {
                   "type": "platform.renderer.summary_values",
                   "props": {
+                    "card_min_width": 192,
                     "id": "hr_leave_balance_taken",
                     "title": "Approved leave days taken (all employees you can see, all years)",
                     "empty_message": "No approved leave to show.",

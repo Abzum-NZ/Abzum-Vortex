@@ -71,7 +71,7 @@ export function StudioBlockSetupDialog({ request, source, choices: draftChoices,
       setProblem("Choose the data this block shows.");
       return;
     }
-    const problems = studioSettingProblems(values, choice.setup);
+    const problems = studioSettingProblems(values, choice.setup, choices);
     if (problems.length > 0) {
       setProblem(problems.join(" "));
       return;
