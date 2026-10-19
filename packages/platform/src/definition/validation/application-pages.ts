@@ -228,6 +228,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
       placementEntries,
       (placement) => releaseOf(placement)?.key,
       records,
+      moduleQueries,
     );
     for (const problem of checkPageParameters(bindingFacts.controls))
       failures.push(

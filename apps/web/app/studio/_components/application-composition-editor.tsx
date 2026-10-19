@@ -24,6 +24,8 @@ import {
   studioBlockChoices,
   studioSettingProblems,
   StudioQueryPicker,
+  StudioQueryBindings,
+  studioQueryBindingFacts,
   StudioSettingFields,
   StudioGridFeatures,
   studioGridFeaturesProperty,
@@ -233,7 +235,7 @@ export function ApplicationCompositionEditor(props: Props) {
         : []),
       ...studioSettingProblems(
         next.settings,
-        settingsModel.properties,
+        settingsModel.properties.filter((property) => property.key !== "query_parameters"),
         studioBlockChoices(props.choices, next.query),
       ),
     ];
@@ -344,10 +346,31 @@ export function ApplicationCompositionEditor(props: Props) {
                 }
               />
             )}
+            {settingsModel.readsQuery && (
+              <StudioQueryBindings
+                choices={choices}
+                query={props.choices.queries.find(
+                  (query) => query.reference === settingsInputs.query,
+                )}
+                value={settingsInputs.settings.query_parameters}
+                facts={studioQueryBindingFacts(
+                  props.context,
+                  settingsModel.placementAlias,
+                  props.choices.queries,
+                )}
+                disabled={props.disabled}
+                onChange={(value) =>
+                  changeSettings({
+                    ...settingsInputs,
+                    settings: { ...settingsInputs.settings, query_parameters: value },
+                  })
+                }
+              />
+            )}
             <StudioSettingFields
               idPrefix={settingsId}
               properties={settingsModel.properties.filter(
-                (property) => property !== featuresProperty,
+                (property) => property !== featuresProperty && property.key !== "query_parameters",
               )}
               values={settingsInputs.settings}
               choices={choices}

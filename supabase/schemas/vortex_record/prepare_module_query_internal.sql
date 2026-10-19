@@ -737,6 +737,11 @@ begin
     end;
   end if;
 
+  filter_condition := vortex_record.omit_unbound_query_conditions_internal(filter_condition, parameter_values);
+  select coalesce(pg_catalog.array_agg(distinct referenced.value #>> '{}'), array[]::text[])
+  into filter_ids
+  from pg_catalog.jsonb_path_query(filter_condition, 'lax $.**?(@.source == "field").fieldId') as referenced(value);
+
   -- The published filter is pushed into the candidate scan only when every
   -- field it reads is one the reader is guaranteed to see; otherwise it is
   -- evaluated per row, so which rows the budget examines can never depend on a

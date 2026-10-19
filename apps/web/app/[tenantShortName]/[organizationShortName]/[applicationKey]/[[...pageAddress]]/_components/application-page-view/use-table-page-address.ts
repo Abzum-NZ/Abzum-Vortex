@@ -118,14 +118,27 @@ export function useTablePageAddress({
     [clearSelection],
   );
 
+  const parameterSearch = useRef(currentSearch);
   useEffect(() => {
+    const previousParameters = new URLSearchParams(parameterSearch.current);
+    const parameters = new URLSearchParams(currentSearch);
+    parameterSearch.current = currentSearch;
+    const rebound = new Set(
+      Object.entries(model.pageParameters.dependents).flatMap(([name, ids]) =>
+        previousParameters.get(name) === parameters.get(name)
+          ? []
+          : ids
+              .filter((id) => model.pageParameters.tableIds.includes(id))
+              .map((id) => id.toLowerCase()),
+      ),
+    );
     const shown = shownRef.current.keys;
     const entries = searchEntries(currentSearch);
     const current = addressKeys(entries);
-    for (const placement of new Set([...current.keys(), ...shown.keys()])) {
+    for (const placement of new Set([...current.keys(), ...shown.keys(), ...rebound])) {
       const key = current.get(placement);
       const pending = pendingRef.current;
-      if ((shown.get(placement) ?? "") === (key ?? "")) {
+      if ((shown.get(placement) ?? "") === (key ?? "") && !rebound.has(placement)) {
         if (pending.get(placement) === CHANGED) pending.delete(placement);
         continue;
       }
@@ -145,16 +158,15 @@ export function useTablePageAddress({
       void refreshPlacements([placementId], {
         placementId,
         fromAddress: true,
-        request:
-          (state.kind === "valid" ? state.state.page : undefined) ?? {
-            page: 1,
-            pageDirection: "forward",
-          },
+        request: (state.kind === "valid" ? state.state.page : undefined) ?? {
+          page: 1,
+          pageDirection: "forward",
+        },
       }).finally(() => {
         if (pending.get(placement) === read) pending.delete(placement);
       });
     }
-  }, [clearSelection, currentSearch, model.data, refreshPlacements]);
+  }, [clearSelection, currentSearch, model.data, model.pageParameters, refreshPlacements]);
 
   return { commitTablePage, changeTableQuery, tableQueryPending };
 }

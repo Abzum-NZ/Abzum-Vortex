@@ -152,7 +152,8 @@ const definitionValidationErrorCatalogueSource = {
   definition_query_binding: {
     order: 39,
     message: "A query input of a block has no valid source.",
-    guidance: "Open the block's Query inputs and choose a source of the input's type for each input.",
+    guidance:
+      "Open the block's Query inputs and choose a source of the input's type for each input.",
   },
   definition_unknown_property: {
     order: 40,

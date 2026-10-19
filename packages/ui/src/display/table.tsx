@@ -476,7 +476,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     if (state.status === "loading") return loading;
     if (state.status === "empty")
       return <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />;
-    if (state.status === "error" || state.status === "refused")
+    if (state.status === "error" || state.status === "refused" || state.status === "awaiting_input")
       return (
         <div className="flex flex-col items-start gap-2">
           <DisplayStateContainer

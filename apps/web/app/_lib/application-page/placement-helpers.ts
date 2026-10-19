@@ -172,9 +172,7 @@ export const selectedReadInputTypes = (flow: InstalledFlow): ReadonlyMap<string,
         const reference =
           isRecord(record) && record.kind === "reference" ? record.reference : undefined;
         const inputName =
-          isRecord(reference) &&
-          reference.source === "input" &&
-          typeof reference.name === "string"
+          isRecord(reference) && reference.source === "input" && typeof reference.name === "string"
             ? reference.name
             : undefined;
         const declaration = inputName === undefined ? undefined : flow.inputs[inputName];
@@ -230,7 +228,8 @@ export const fieldControl = (placement: PlacedItemParts): string | undefined => 
   return isRecord(block) &&
     typeof block.blockId === "string" &&
     sameId(block.blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) &&
-    isRecord(settings.control) && settings.control.kind === "choice" &&
+    isRecord(settings.control) &&
+    settings.control.kind === "choice" &&
     typeof settings.control.value === "string"
     ? settings.control.value
     : undefined;

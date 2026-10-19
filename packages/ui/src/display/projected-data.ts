@@ -305,6 +305,8 @@ export type DisplayRefusalReason = "not_permitted" | "access_ended" | "not_found
 export type DisplayDataState<Values> =
   | Readonly<{ status: "loading" }>
   | Readonly<{ status: "empty" }>
+  /** A required query input has no value yet: the authored or fixed message, no query was run. */
+  | Readonly<{ status: "awaiting_input"; message: string }>
   | Readonly<{ status: "refused"; reason: DisplayRefusalReason }>
   | Readonly<{ status: "error" }>
   | Readonly<{ status: "ready"; values: Values }>;
@@ -1519,6 +1521,13 @@ export const parseDisplayData = <Values>(
     case "empty":
       requireExactKeys(record, ["status"], location);
       return EMPTY_STATE;
+    case "awaiting_input": {
+      requireExactKeys(record, ["status", "message"], location);
+      const message = record.message;
+      if (typeof message !== "string" || message.trim() === "" || message.length > 300)
+        return fail("An awaiting display state must carry its message", location);
+      return Object.freeze({ status: "awaiting_input", message });
+    }
     case "refused": {
       requireExactKeys(record, ["status", "reason"], location);
       const reason = record.reason;

@@ -779,7 +779,10 @@ export function compileParsedApplicationRequest(
         dependencyOutputs,
       ),
     });
-    if (!output.success) fail("vortex.definition.invalid_compilation_output", "invalid_value");
+    if (!output.success) {
+      console.error("[definition] application compilation output invalid", output.error);
+      fail("vortex.definition.invalid_compilation_output", "invalid_value");
+    }
     return output.data;
   } catch (error) {
     if (error instanceof DefinitionCompilationError)
@@ -792,6 +795,7 @@ export function compileParsedApplicationRequest(
             error.code,
             error.sentence,
           );
+    console.error("[definition] application compilation failed", error);
     return fail("vortex.definition.invalid_compilation_output", "invalid_value");
   }
 }

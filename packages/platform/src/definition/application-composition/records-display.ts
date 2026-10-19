@@ -85,6 +85,7 @@ export type RecordsDisplayMessages = Readonly<{
 /** A row click held as a binding to a flow; the bound flow decides what opening the row does. */
 export type RecordsTableRowClickContract = Readonly<{
   eventId: string;
+  selectsRecord: boolean;
 }>;
 
 /** The configured row behaviours of one Records table placement: a row click and named row actions. */
@@ -159,7 +160,11 @@ const readRowBehaviours = (settings: SettingsRecord): RecordsTableRowBehaviourCo
   const click = settingGroup(settings["row_click"]);
   const clickEventId = click === undefined ? undefined : settingText(click["event_id"]);
   return {
-    ...(clickEventId === undefined ? {} : { rowClick: { eventId: clickEventId } }),
+    ...(click?.["mode"]?.kind === "choice" && click["mode"].value === "select"
+      ? { rowClick: { eventId: "select", selectsRecord: true } }
+      : clickEventId === undefined
+        ? {}
+        : { rowClick: { eventId: clickEventId, selectsRecord: false } }),
     rowActions: readActionList(settings["row_actions"]),
   };
 };

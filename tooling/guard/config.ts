@@ -27,6 +27,12 @@ export const packageAreas: Record<string, string> = {
  * review-by date the guard prints a notice; the lead then keeps, changes or removes the rule.
  */
 export const guardRules = {
+  "query-input-name-matching": {
+    tier: "blocking",
+    owner: "platform",
+    reviewBy: "2027-01-15",
+    description: "Query input values must come from explicit bindings through the shared resolver",
+  },
   "business-name": {
     tier: "blocking",
     owner: "lead",

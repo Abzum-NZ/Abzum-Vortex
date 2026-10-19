@@ -587,7 +587,8 @@
                   "props": {
                     "id": "content_1",
                     "row_click": {
-                      "event_id": "event_sd_open_case"
+                      "event_id": "event_sd_open_case",
+                      "mode": "flow"
                     },
                     "columns": [
                       {
@@ -847,8 +848,8 @@
                     "query_parameters": [
                       {
                         "input": "case",
-                        "source": "page",
-                        "page_parameter": "record_id"
+                        "source": "page_parameter",
+                        "name": "record_id"
                       }
                     ],
                     "vortex": {
@@ -1207,7 +1208,6 @@
                               "props": {
                                 "id": "form_customer_company",
                                 "field": "vortex.service_desk.cases:case.customer_company",
-                                "initial_record_parameter": "customer_company",
                                 "vortex": {
                                   "block": {
                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
@@ -1224,7 +1224,8 @@
                                       }
                                     }
                                   }
-                                }
+                                },
+                                "publishes_parameter": "customer_company"
                               }
                             },
                             {
@@ -1367,7 +1368,8 @@
                   "props": {
                     "id": "content_4",
                     "row_click": {
-                      "event_id": "event_sd_open_article"
+                      "event_id": "event_sd_open_article",
+                      "mode": "flow"
                     },
                     "columns": [
                       {
@@ -1704,7 +1706,8 @@
                   "props": {
                     "id": "content_7",
                     "row_click": {
-                      "event_id": "event_sd_open_service_level"
+                      "event_id": "event_sd_open_service_level",
+                      "mode": "flow"
                     },
                     "columns": [
                       {
@@ -2026,7 +2029,8 @@
                   "props": {
                     "id": "list_sd_customers",
                     "row_click": {
-                      "event_id": "event_sd_open_customer"
+                      "event_id": "event_sd_open_customer",
+                      "mode": "flow"
                     },
                     "columns": [
                       {
@@ -2194,8 +2198,8 @@
                     "query_parameters": [
                       {
                         "input": "company",
-                        "source": "page",
-                        "page_parameter": "record_id"
+                        "source": "page_parameter",
+                        "name": "record_id"
                       }
                     ],
                     "vortex": {
@@ -2272,7 +2276,8 @@
                   "props": {
                     "id": "list_sd_requesters",
                     "row_click": {
-                      "event_id": "event_sd_open_requester"
+                      "event_id": "event_sd_open_requester",
+                      "mode": "flow"
                     },
                     "columns": [
                       {

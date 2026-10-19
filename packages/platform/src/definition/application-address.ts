@@ -46,13 +46,7 @@ import {
   previewInstallationIdOfApplicationKey,
 } from "./preview-application-key";
 
-const reservedTenantSegments = new Set([
-  "auth",
-  "health",
-  "signed-in",
-  "signin",
-  "api",
-]);
+const reservedTenantSegments = new Set(["auth", "health", "signed-in", "signin", "api"]);
 
 export const isReservedTenantSegment = (candidate: string): boolean =>
   reservedTenantSegments.has(candidate.toLowerCase());
@@ -184,9 +178,7 @@ const permittedApplicationsReadSchema = z.discriminatedUnion("kind", [
     .strict(),
   z.object({ kind: z.literal("suspended_super_administrator_account") }).strict(),
   z.object({ kind: z.literal("unavailable") }).strict(),
-  z
-    .object({ kind: z.literal("temporarily_unavailable"), cause: z.string().optional() })
-    .strict(),
+  z.object({ kind: z.literal("temporarily_unavailable"), cause: z.string().optional() }).strict(),
 ]);
 
 export type PermittedApplication = z.infer<typeof permittedApplicationSchema>;
@@ -283,14 +275,15 @@ const describeApplicationAddressFailure = (error: unknown): string => {
 };
 
 type AddressRow = Readonly<{ address: unknown }>;
-type OrganizationLauncherRow = DatabaseRow & Readonly<{
-  organization_id: unknown;
-  tenant_short_name: unknown;
-  tenant_display_name: unknown;
-  organization_short_name: unknown;
-  organization_display_name: unknown;
-  account_display_name: unknown;
-}>;
+type OrganizationLauncherRow = DatabaseRow &
+  Readonly<{
+    organization_id: unknown;
+    tenant_short_name: unknown;
+    tenant_display_name: unknown;
+    organization_short_name: unknown;
+    organization_display_name: unknown;
+    account_display_name: unknown;
+  }>;
 type SourceRoleRow = Readonly<{ source_role_id: unknown }>;
 type CurrentReleaseRow = Readonly<{ current_release: unknown }>;
 type AddressedIdentityRow = Readonly<{ addressed_identity: unknown }>;
@@ -346,12 +339,14 @@ const applicationCandidateFromInstalledContext = (
   });
 };
 
-const addressedActiveApplicationIdentitySchema = z.object({
-  organizationId: organizationIdSchema,
-  applicationRootId: applicationRootIdSchema,
-  definitionKey: namespacedKeySchema,
-  applicationReleaseRevision: revisionSchema,
-}).strict();
+const addressedActiveApplicationIdentitySchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    definitionKey: namespacedKeySchema,
+    applicationReleaseRevision: revisionSchema,
+  })
+  .strict();
 
 /** An addressed Application: its active installation, or the preview of its draft. */
 type AddressedActiveApplicationIdentity =
@@ -359,7 +354,10 @@ type AddressedActiveApplicationIdentity =
       previewInstallationId?: never;
       holdsLiveRecords?: never;
     })
-  | (Omit<z.infer<typeof addressedActiveApplicationIdentitySchema>, "applicationReleaseRevision"> & {
+  | (Omit<
+      z.infer<typeof addressedActiveApplicationIdentitySchema>,
+      "applicationReleaseRevision"
+    > & {
       previewInstallationId: string;
       /** Whether the preview was seeded with copies of live records. */
       holdsLiveRecords: boolean;
@@ -522,8 +520,9 @@ const projectPermittedApplication = async (
       pageDiscoveryDeclaration(
         permissions,
         candidate,
-        candidate.pages.find((page) => page.accessPermissionKey === requirementKey) as
-          ApplicationCandidate["pages"][number],
+        candidate.pages.find(
+          (page) => page.accessPermissionKey === requirementKey,
+        ) as ApplicationCandidate["pages"][number],
       ),
     ),
   );
@@ -533,7 +532,10 @@ const projectPermittedApplication = async (
     const decision = decisions[index];
     if (decision?.allowed !== true) return;
     allowedRequirementKeys.add(requirementKey);
-    if (decision.validUntil !== undefined && (validUntil === undefined || decision.validUntil < validUntil))
+    if (
+      decision.validUntil !== undefined &&
+      (validUntil === undefined || decision.validUntil < validUntil)
+    )
       validUntil = decision.validUntil;
   });
   const allowedPageKeys = new Set<string>();
@@ -737,8 +739,10 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
           : { previewInstallationId: addressedIdentity.identity.previewInstallationId }),
       },
       async (transaction, scope) => {
-        if (scope.applicationRootId === undefined ||
-          !sameId(scope.applicationRootId, addressedIdentity.identity.applicationRootId))
+        if (
+          scope.applicationRootId === undefined ||
+          !sameId(scope.applicationRootId, addressedIdentity.identity.applicationRootId)
+        )
           return undefined;
         const context = await createHumanInstalledPageBundleContextLoader({
           transaction,
@@ -753,12 +757,14 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
         }).load();
         const application = context.releaseSet.application;
         const identity = addressedIdentity.identity;
-        if (!sameId(context.organizationId, addressedIdentity.organizationId) ||
+        if (
+          !sameId(context.organizationId, addressedIdentity.organizationId) ||
           !sameId(context.applicationRootId, identity.applicationRootId) ||
           (identity.previewInstallationId === undefined &&
             application.releaseRevision !== identity.applicationReleaseRevision) ||
           application.definitionKey !== identity.definitionKey ||
-          application.releaseRevision !== context.applicationReleaseRevision)
+          application.releaseRevision !== context.applicationReleaseRevision
+        )
           return undefined;
         const permitted = await projectPermittedApplication(
           permissions,
@@ -820,7 +826,12 @@ const readAddressedActiveApplicationIdentity = async (
   const organizationId = organizationIdSchema.safeParse(organizationIdCandidate);
   const identityAuthorityId = identityAuthorityIdSchema.safeParse(identityAuthorityIdCandidate);
   const applicationKey = namespacedKeySchema.safeParse(applicationKeyCandidate);
-  if (!session.success || !organizationId.success || !identityAuthorityId.success || !applicationKey.success)
+  if (
+    !session.success ||
+    !organizationId.success ||
+    !identityAuthorityId.success ||
+    !applicationKey.success
+  )
     return undefined;
   const previewInstallationId = previewInstallationIdOfApplicationKey(applicationKey.data);
   const requests = createHumanOrganizationRequestService({
@@ -857,9 +868,14 @@ const readAddressedActiveApplicationIdentity = async (
       `;
       if (rows.length !== 1 || rows[0] === undefined)
         throw new Error("APPLICATION_ADDRESS_IDENTITY_UNAVAILABLE");
-      const identity = addressedActiveApplicationIdentitySchema.safeParse(rows[0].addressed_identity);
-      if (!identity.success || identity.data.organizationId !== organizationId.data ||
-        identity.data.definitionKey !== applicationKey.data)
+      const identity = addressedActiveApplicationIdentitySchema.safeParse(
+        rows[0].addressed_identity,
+      );
+      if (
+        !identity.success ||
+        identity.data.organizationId !== organizationId.data ||
+        identity.data.definitionKey !== applicationKey.data
+      )
         throw new Error("APPLICATION_ADDRESS_IDENTITY_UNAVAILABLE");
       return identity.data;
     },
@@ -893,48 +909,59 @@ const readAddressedApplicationIdentityAtAddress = async (
   organizationShortNameCandidate: string,
   identityAuthorityIdCandidate: IdentityAuthorityId,
   applicationKeyCandidate: string,
-): Promise<Readonly<{
-  organizationId: string;
-  tenantShortName: string;
-  organizationShortName: string;
-  accountDisplayName?: string;
-  identity: AddressedActiveApplicationIdentity;
-}> | undefined> => {
+): Promise<
+  | Readonly<{
+      organizationId: string;
+      tenantShortName: string;
+      organizationShortName: string;
+      accountDisplayName?: string;
+      identity: AddressedActiveApplicationIdentity;
+    }>
+  | undefined
+> => {
   const session = identitySessionSchema.safeParse(sessionCandidate);
   const tenantShortName = builderKeySchema.safeParse(tenantShortNameCandidate);
   const organizationShortName = builderKeySchema.safeParse(organizationShortNameCandidate);
   const identityAuthorityId = identityAuthorityIdSchema.safeParse(identityAuthorityIdCandidate);
   const applicationKey = namespacedKeySchema.safeParse(applicationKeyCandidate);
   if (
-    !session.success || !tenantShortName.success || !organizationShortName.success ||
-    !identityAuthorityId.success || !applicationKey.success ||
+    !session.success ||
+    !tenantShortName.success ||
+    !organizationShortName.success ||
+    !identityAuthorityId.success ||
+    !applicationKey.success ||
     isReservedTenantSegment(tenantShortNameCandidate) ||
     Date.parse(session.data.accessTokenExpiresAt) <= Date.now()
-  ) return undefined;
+  )
+    return undefined;
 
   try {
-    const rows = await withRuntimeTransaction(async (transaction) =>
-      transaction.query<OrganizationLauncherRow>`
+    const rows = await withRuntimeTransaction(
+      async (transaction) =>
+        transaction.query<OrganizationLauncherRow>`
         select *
         from vortex_identity.list_organization_launcher(
           ${session.data.identityId}::uuid
         )
       `,
     );
-    const entries = rows.map((row) => organizationLauncherEntrySchema.safeParse({
-      organizationId: row.organization_id,
-      tenantShortName: row.tenant_short_name,
-      tenantDisplayName: row.tenant_display_name,
-      organizationShortName: row.organization_short_name,
-      organizationDisplayName: row.organization_display_name,
-      ...(row.account_display_name === null || row.account_display_name === undefined
-        ? {}
-        : { accountDisplayName: row.account_display_name }),
-    }));
+    const entries = rows.map((row) =>
+      organizationLauncherEntrySchema.safeParse({
+        organizationId: row.organization_id,
+        tenantShortName: row.tenant_short_name,
+        tenantDisplayName: row.tenant_display_name,
+        organizationShortName: row.organization_short_name,
+        organizationDisplayName: row.organization_display_name,
+        ...(row.account_display_name === null || row.account_display_name === undefined
+          ? {}
+          : { accountDisplayName: row.account_display_name }),
+      }),
+    );
     if (entries.some((entry) => !entry.success)) return undefined;
     const matchedEntries = entries.flatMap((entry) =>
-      entry.success && entry.data.tenantShortName === tenantShortName.data &&
-        entry.data.organizationShortName === organizationShortName.data
+      entry.success &&
+      entry.data.tenantShortName === tenantShortName.data &&
+      entry.data.organizationShortName === organizationShortName.data
         ? [entry.data]
         : [],
     );
@@ -952,7 +979,8 @@ const readAddressedApplicationIdentityAtAddress = async (
       (identity.previewInstallationId === undefined
         ? identity.definitionKey !== applicationKey.data
         : previewApplicationKey(identity.previewInstallationId) !== applicationKey.data)
-    ) return undefined;
+    )
+      return undefined;
     return Object.freeze({
       organizationId: address.organizationId,
       tenantShortName: address.tenantShortName,
@@ -1083,7 +1111,8 @@ const readPermittedApplications = async (
       { organizationId: read.organizationId },
       async (transaction, scope) => ({
         scope,
-        configuredDefault: await readCurrentOrganizationDefaultApplicationAfterAuthorization(transaction),
+        configuredDefault:
+          await readCurrentOrganizationDefaultApplicationAfterAuthorization(transaction),
       }),
     );
     if (defaultRead.kind !== "available") return defaultRead;

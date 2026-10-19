@@ -442,7 +442,8 @@ export const projectCalendarPlacement = async (
           }),
         )
       : [];
-  const recordLinks = titleLinks.length === 0 ? undefined : await input.resolveRecordLinks(titleLinks);
+  const recordLinks =
+    titleLinks.length === 0 ? undefined : await input.resolveRecordLinks(titleLinks);
   const items = arranged.items.map((item) => {
     const titleValue = titleValueOf(item.values);
     return {

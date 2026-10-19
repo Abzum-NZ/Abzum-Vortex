@@ -9,9 +9,7 @@ import {
   type PreparedApplicationPermissionRegistration,
   type SystemApplicationBoundReleaseSetResult,
 } from "../schema";
-import {
-  prepareApplicationPermissionRegistrationForHumanRequest,
-} from "../access/index";
+import { prepareApplicationPermissionRegistrationForHumanRequest } from "../access/index";
 import {
   DefinitionError,
   databaseErrorCode,
@@ -113,7 +111,10 @@ export type HumanInstalledRuntimeContextDependencies = Readonly<{
 
 /** Reads the active installation and proves it belongs to the organisation and application the request resolved. */
 export const readHumanActiveInstallation = async (
-  dependencies: Pick<HumanInstalledRuntimeContextDependencies, "activeInstallationReader" | "scope">,
+  dependencies: Pick<
+    HumanInstalledRuntimeContextDependencies,
+    "activeInstallationReader" | "scope"
+  >,
 ): Promise<ActiveApplicationInstallationEvidence> => {
   let installationCandidate: unknown;
   try {
@@ -121,8 +122,7 @@ export const readHumanActiveInstallation = async (
   } catch (error) {
     throw installationFailure(error);
   }
-  const installation =
-    activeApplicationInstallationEvidenceSchema.safeParse(installationCandidate);
+  const installation = activeApplicationInstallationEvidenceSchema.safeParse(installationCandidate);
   if (!installation.success)
     throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
   if (
@@ -145,7 +145,9 @@ export const assembleHumanInstalledRuntimeContext = (
    */
   prepareRegistration: (
     validated: SystemApplicationBoundReleaseSetResult,
-    prepare: (validated: SystemApplicationBoundReleaseSetResult) => PreparedApplicationPermissionRegistration,
+    prepare: (
+      validated: SystemApplicationBoundReleaseSetResult,
+    ) => PreparedApplicationPermissionRegistration,
   ) => PreparedApplicationPermissionRegistration = (validated, prepare) => prepare(validated),
 ): InstalledRuntimeContext =>
   assembleContext(

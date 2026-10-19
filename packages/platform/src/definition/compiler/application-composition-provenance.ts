@@ -444,15 +444,20 @@ export function applicationCompositionProvenance(
       const eventReference =
         canonicalPath.at(-1) === "event_id" &&
         canonicalValue === resolution.id(source.key, "event", String(sourceValue), "content");
+      const controlReference =
+        canonicalPath.at(-1) === "control_placement" &&
+        canonicalValue ===
+          resolution.id(source.key, "block_placement", String(sourceValue), "content");
       const referenceLeaf =
         referenceSettingKinds.has(leafKind) ||
         leafKind === "record_reference" ||
         leafKind === "record_type_reference";
       // A text, number, choice or rich-text value never changes; only references resolve.
-      if (transformed && !eventReference && !referenceLeaf)
+      if (transformed && !eventReference && !controlReference && !referenceLeaf)
         fail("vortex.definition.invalid_compilation_output", "invalid_value");
       resolved =
         eventReference ||
+        controlReference ||
         (resolvedSettingKinds.has(leafKind) && canonicalPath.at(-1) !== "recordId") ||
         (leafKind === "record_reference" && canonicalPath.at(-2) === "recordType");
     } else {

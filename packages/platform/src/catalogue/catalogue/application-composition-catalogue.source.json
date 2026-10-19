@@ -213,7 +213,7 @@
               "label": "Value",
               "help": "The fixed value, written for the input's type",
               "required": true,
-              "minLength": 1,
+              "minLength": 0,
               "maxLength": 500,
               "showWhen": {
                 "property": "source",
@@ -488,7 +488,7 @@
               "label": "Value",
               "help": "The fixed value, written for the input's type",
               "required": true,
-              "minLength": 1,
+              "minLength": 0,
               "maxLength": 500,
               "showWhen": {
                 "property": "source",
@@ -904,7 +904,7 @@
               "label": "Value",
               "help": "The fixed value, written for the input's type",
               "required": true,
-              "minLength": 1,
+              "minLength": 0,
               "maxLength": 500,
               "showWhen": {
                 "property": "source",
@@ -1296,7 +1296,7 @@
               "label": "Value",
               "help": "The fixed value, written for the input's type",
               "required": true,
-              "minLength": 1,
+              "minLength": 0,
               "maxLength": 500,
               "showWhen": {
                 "property": "source",
@@ -1591,7 +1591,7 @@
               "label": "Value",
               "help": "The fixed value, written for the input's type",
               "required": true,
-              "minLength": 1,
+              "minLength": 0,
               "maxLength": 500,
               "showWhen": {
                 "property": "source",
@@ -1953,7 +1953,7 @@
               "label": "Value",
               "help": "The fixed value, written for the input's type",
               "required": true,
-              "minLength": 1,
+              "minLength": 0,
               "maxLength": 500,
               "showWhen": {
                 "property": "source",
@@ -4825,7 +4825,7 @@
         "key": "maximum_size_mb",
         "label": "Maximum size (MiB)",
         "required": true,
-        "minimum": 0.000001,
+        "minimum": 1e-6,
         "maximum": 5000,
         "integer": false
       },
@@ -4956,7 +4956,7 @@
               "label": "Value",
               "help": "The fixed value, written for the input's type",
               "required": true,
-              "minLength": 1,
+              "minLength": 0,
               "maxLength": 500,
               "showWhen": {
                 "property": "source",
@@ -5236,7 +5236,7 @@
               "label": "Value",
               "help": "The fixed value, written for the input's type",
               "required": true,
-              "minLength": 1,
+              "minLength": 0,
               "maxLength": 500,
               "showWhen": {
                 "property": "source",
@@ -5598,7 +5598,7 @@
               "label": "Value",
               "help": "The fixed value, written for the input's type",
               "required": true,
-              "minLength": 1,
+              "minLength": 0,
               "maxLength": 500,
               "showWhen": {
                 "property": "source",
@@ -5978,7 +5978,7 @@
               "label": "Value",
               "help": "The fixed value, written for the input's type",
               "required": true,
-              "minLength": 1,
+              "minLength": 0,
               "maxLength": 500,
               "showWhen": {
                 "property": "source",
@@ -6563,7 +6563,7 @@
               "label": "Value",
               "help": "The fixed value, written for the input's type",
               "required": true,
-              "minLength": 1,
+              "minLength": 0,
               "maxLength": 500,
               "showWhen": {
                 "property": "source",
@@ -6696,13 +6696,37 @@
         "required": false,
         "properties": [
           {
+            "kind": "choice",
+            "key": "mode",
+            "label": "On click",
+            "required": true,
+            "defaultValue": {
+              "kind": "choice",
+              "value": "flow"
+            },
+            "options": [
+              {
+                "key": "flow",
+                "label": "Run action"
+              },
+              {
+                "key": "select",
+                "label": "Select record"
+              }
+            ]
+          },
+          {
             "kind": "text",
             "key": "event_id",
             "label": "Event identity",
             "help": "Stable identity of the flow binding the row click runs",
-            "required": true,
+            "required": false,
             "minLength": 1,
-            "maxLength": 60
+            "maxLength": 60,
+            "showWhen": {
+              "property": "mode",
+              "values": ["flow"]
+            }
           }
         ]
       },
@@ -7077,6 +7101,14 @@
             }
           }
         }
+      },
+      {
+        "kind": "text",
+        "key": "publishes_parameter",
+        "label": "Page parameter",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 40
       }
     ],
     "slots": [],
@@ -7587,7 +7619,7 @@
               "label": "Value",
               "help": "The fixed value, written for the input's type",
               "required": true,
-              "minLength": 1,
+              "minLength": 0,
               "maxLength": 500,
               "showWhen": {
                 "property": "source",
@@ -7945,7 +7977,7 @@
               "label": "Value",
               "help": "The fixed value, written for the input's type",
               "required": true,
-              "minLength": 1,
+              "minLength": 0,
               "maxLength": 500,
               "showWhen": {
                 "property": "source",
@@ -8303,7 +8335,7 @@
               "label": "Value",
               "help": "The fixed value, written for the input's type",
               "required": true,
-              "minLength": 1,
+              "minLength": 0,
               "maxLength": 500,
               "showWhen": {
                 "property": "source",
@@ -8991,7 +9023,7 @@
               "label": "Value",
               "help": "The fixed value, written for the input's type",
               "required": true,
-              "minLength": 1,
+              "minLength": 0,
               "maxLength": 500,
               "showWhen": {
                 "property": "source",
@@ -9650,7 +9682,7 @@
         "key": "maximum_size_mb",
         "label": "Maximum size (MiB)",
         "required": true,
-        "minimum": 0.000001,
+        "minimum": 1e-6,
         "maximum": 5000,
         "integer": false
       },

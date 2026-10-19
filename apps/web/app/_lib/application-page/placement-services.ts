@@ -24,15 +24,17 @@ import { platformPermissionSource } from "../platform-permission-source";
  * requests. The running page and the Studio canvas both read their placements through these and
  * `readPlacement`, so a block shows the same records, with the same access, in both.
  */
-export const createPlacementReadServices = (input: Readonly<{
-  session: IdentitySession;
-  selection: OrganizationSelectionCandidate;
-  dependencies: HumanOrganizationRequestDependencies;
-  continuationKey: Parameters<typeof createProtectedQueryService>[0]["continuationKey"];
-  /** The organisation's address, for the links a placement shows. */
-  tenantShortName: string;
-  organizationShortName: string;
-}>) => {
+export const createPlacementReadServices = (
+  input: Readonly<{
+    session: IdentitySession;
+    selection: OrganizationSelectionCandidate;
+    dependencies: HumanOrganizationRequestDependencies;
+    continuationKey: Parameters<typeof createProtectedQueryService>[0]["continuationKey"];
+    /** The organisation's address, for the links a placement shows. */
+    tenantShortName: string;
+    organizationShortName: string;
+  }>,
+) => {
   const { session, selection, dependencies, continuationKey } = input;
   const queries = createProtectedQueryService({ ...dependencies, continuationKey });
   const referenceChoices = createReferenceChoiceService({ ...dependencies, continuationKey });
@@ -49,7 +51,9 @@ export const createPlacementReadServices = (input: Readonly<{
           organizationId: scope.organizationId,
           organizationAccountId: scope.organizationAccountId,
           applicationRootId: scope.applicationRootId,
-          ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
+          ...(scope.previewInstallationId === undefined
+            ? {}
+            : { previewInstallationId: scope.previewInstallationId }),
         },
       });
     },
@@ -111,28 +115,37 @@ export const createPlacementReadServices = (input: Readonly<{
   const subjects = createPageSubjectReader(dependencies);
   // One labelled read per page and link target: a link shows its target's name as the viewer may
   // read it, and a detail address only where the viewer may open that page.
-  const recordLinkResolver = (context: InstalledRuntimeContext): RecordLinkResolver => async (links) => {
-    const read = await recordLinks.readLabels(session, selection, context, links);
-    if (read.outcome !== "read") return undefined;
-    return new Map(
-      [...read.labels].map(([key, label]): [string, ProjectedRecordLink] => [
-        key,
-        label.outcome === "restricted"
-          ? { kind: "restricted" }
-          : {
-              kind: "record_link",
-              label: label.label,
-              ...(label.detail === undefined
-                ? {}
-                : {
-                    href: `/${encodeURIComponent(input.tenantShortName)}/${encodeURIComponent(input.organizationShortName)}/${encodeURIComponent(label.detail.applicationKey)}/${encodeURIComponent(label.detail.pageKey)}?${new URLSearchParams({ record_id: label.detail.recordId })}`,
-                  }),
-            },
-      ]),
-    );
-  };
+  const recordLinkResolver =
+    (context: InstalledRuntimeContext): RecordLinkResolver =>
+    async (links) => {
+      const read = await recordLinks.readLabels(session, selection, context, links);
+      if (read.outcome !== "read") return undefined;
+      return new Map(
+        [...read.labels].map(([key, label]): [string, ProjectedRecordLink] => [
+          key,
+          label.outcome === "restricted"
+            ? { kind: "restricted" }
+            : {
+                kind: "record_link",
+                label: label.label,
+                ...(label.detail === undefined
+                  ? {}
+                  : {
+                      href: `/${encodeURIComponent(input.tenantShortName)}/${encodeURIComponent(input.organizationShortName)}/${encodeURIComponent(label.detail.applicationKey)}/${encodeURIComponent(label.detail.pageKey)}?${new URLSearchParams({ record_id: label.detail.recordId })}`,
+                    }),
+              },
+        ]),
+      );
+    };
   return {
-    queries, referenceChoices, tables, queryNotices, linkTiles, readCalendarSettings, subjects,
-    recordLinkResolver, readConcurrently,
+    queries,
+    referenceChoices,
+    tables,
+    queryNotices,
+    linkTiles,
+    readCalendarSettings,
+    subjects,
+    recordLinkResolver,
+    readConcurrently,
   };
 };

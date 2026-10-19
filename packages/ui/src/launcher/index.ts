@@ -23,9 +23,7 @@ export { ApplicationLauncher } from "./application-launcher";
 export { LinkTiles } from "./link-tiles";
 
 // Launcher Registrations & Registry
-export {
-  LAUNCHER_COMPONENT_REGISTRATIONS,
-} from "./registrations";
+export { LAUNCHER_COMPONENT_REGISTRATIONS } from "./registrations";
 
 // Link Navigation and the Navigate task (#1013)
 export {

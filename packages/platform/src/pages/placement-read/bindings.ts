@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   compiledPageBindingFacts,
+  compiledPageShellId,
   readAwaitingMessage,
   readQueryBindings,
   type JsonValue,
@@ -13,7 +14,7 @@ import {
   placementSettings,
   type InstalledRuntimeContext,
 } from "../../definition/index";
-import { walkPageComposition } from "../placement-walk";
+import { walkPageComposition, walkPlacementData } from "../placement-walk";
 import {
   resolveQueryBindings,
   type QueryBindingContext,
@@ -61,6 +62,16 @@ export const pageQueryBindingContext = (
       entries.push([placementId, { settings: placementSettings(props), vortex }]);
     return undefined;
   });
+  const shellId = compiledPageShellId(input.pageDefinition.composition);
+  const shell = input.context.releaseSet.application.content.shells.find(
+    (candidate) => String(candidate.shellId) === shellId,
+  );
+  if (shell !== undefined)
+    walkPlacementData(shell.layout, ({ placementId, props, vortex }) => {
+      if (blockKeyOf(vortex) !== undefined)
+        entries.push([placementId, { settings: placementSettings(props), vortex }]);
+      return undefined;
+    });
   const records = new Map(
     input.context.releaseSet.modules.flatMap((module) =>
       module.content.recordTypes.map((recordType) => [String(recordType.recordTypeId), recordType]),
@@ -71,6 +82,11 @@ export const pageQueryBindingContext = (
     entries,
     (placement) => blockKeyOf(placement.vortex),
     records,
+    new Map(
+      input.context.releaseSet.modules.flatMap((module) =>
+        module.content.queries.map((query) => [String(query.queryId), query]),
+      ),
+    ),
   );
   const parameters = new Map<string, QueryBindingValueType>();
   for (const parameter of facts.parameters)

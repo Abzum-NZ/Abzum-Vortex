@@ -1,5 +1,6 @@
 import { cache } from "react";
 import {
+  placementBlockRelease,
   type InstalledRuntimeContext,
   type HumanOrganizationRequestDependencies,
   createHumanInstalledPageBundleContextLoader,
@@ -87,7 +88,11 @@ import {
   placementParameterDependencies,
   resolvedQueryRecordTypeId,
 } from "@vortex/platform/server";
-import { applicationLauncherQueryRowsToListValues, parseBoardPayload, parseDisplayData } from "@vortex/ui";
+import {
+  applicationLauncherQueryRowsToListValues,
+  parseBoardPayload,
+  parseDisplayData,
+} from "@vortex/ui";
 import { projectAttachmentInputs } from "./attachment-inputs";
 import { projectEditField } from "./reference-choice";
 import { projectInitialLinkInputs, titleLinkInputs } from "./link-input";
@@ -1140,6 +1145,15 @@ const loadApplicationPageJoined = async (
     bindings,
     refreshPlacementsByBinding,
     pageParameters: {
+      tableIds: allPlacements.filter(isTablePlacement).map((placement) => placement.placementId),
+      controlKinds: Object.fromEntries(
+        allPlacements
+          .filter(({ placementId }) => bindingContext.controls.has(placementId.toLowerCase()))
+          .map((placement) => [
+            placement.placementId,
+            placementBlockRelease(placement.vortex.block).key.split(".").at(-1)!,
+          ]),
+      ),
       dependents: placementParameterDependencies(allPlacements, bindingContext),
       controls: Object.fromEntries(
         allPlacements.flatMap(({ placementId }) => {

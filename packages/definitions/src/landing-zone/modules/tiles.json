@@ -13,15 +13,8 @@
       "storage_contract_id": "srt_landing_zone_tile",
       "storage_scope": "application_contained",
       "ownership_mode": "organization_account",
-      "standard_actions": [
-        "create",
-        "read",
-        "update",
-        "soft_delete"
-      ],
-      "custom_actions": [
-        "act_landing_zone_tile_remove"
-      ],
+      "standard_actions": ["create", "read", "update", "soft_delete"],
+      "custom_actions": ["act_landing_zone_tile_remove"],
       "fields": [
         {
           "id": "fld_landing_zone_tile_target_kind",
@@ -225,9 +218,7 @@
           "public_display": "refused",
           "type": "web_address",
           "settings": {
-            "allowed_schemes": [
-              "https"
-            ]
+            "allowed_schemes": ["https"]
           }
         },
         {
@@ -329,18 +320,14 @@
       "storage_contract_id": "srt_landing_zone_application",
       "storage_scope": "organization_shared",
       "ownership_mode": "none",
-      "standard_actions": [
-        "read"
-      ],
+      "standard_actions": ["read"],
       "custom_actions": [],
       "system_projection": {
         "protected_view": "installed_applications",
         "organization_field": "organization_id",
         "revision_field": "revision",
         "filterable_fields": [],
-        "sortable_fields": [
-          "name"
-        ]
+        "sortable_fields": ["name"]
       },
       "fields": [
         {
@@ -623,13 +610,7 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "organization_id",
-          "revision",
-          "key",
-          "name",
-          "icon"
-        ],
+        "readable_fields": ["organization_id", "revision", "key", "name", "icon"],
         "changeable_fields": []
       }
     }
@@ -1679,7 +1660,14 @@
       "exposure": "private",
       "label": "Tiles",
       "record_type": "tile",
-      "inputs": [],
+      "inputs": [
+        {
+          "key": "search",
+          "label": "Search",
+          "type": "text",
+          "required": false
+        }
+      ],
       "select": [
         "target_kind",
         "application_key",
@@ -1699,7 +1687,11 @@
         "target_record_type_id",
         "target_storage_contract_id"
       ],
-      "filter": null,
+      "filter": {
+        "field": "label",
+        "operator": "contains",
+        "parameter": "search"
+      },
       "group_by": [],
       "aggregates": [],
       "sort": [
@@ -1721,7 +1713,14 @@
       "exposure": "private",
       "label": "Favourites",
       "record_type": "tile",
-      "inputs": [],
+      "inputs": [
+        {
+          "key": "search",
+          "label": "Search",
+          "type": "text",
+          "required": false
+        }
+      ],
       "select": [
         "target_kind",
         "application_key",
@@ -1742,9 +1741,18 @@
         "target_storage_contract_id"
       ],
       "filter": {
-        "field": "is_favourite",
-        "operator": "equals",
-        "value": true
+        "all": [
+          {
+            "field": "is_favourite",
+            "operator": "equals",
+            "value": true
+          },
+          {
+            "field": "label",
+            "operator": "contains",
+            "parameter": "search"
+          }
+        ]
       },
       "group_by": [],
       "aggregates": [],
@@ -1767,13 +1775,20 @@
       "exposure": "private",
       "label": "Applications",
       "record_type": "application",
-      "inputs": [],
-      "select": [
-        "key",
-        "name",
-        "icon"
+      "inputs": [
+        {
+          "key": "search",
+          "label": "Search",
+          "type": "text",
+          "required": false
+        }
       ],
-      "filter": null,
+      "select": ["key", "name", "icon"],
+      "filter": {
+        "field": "name",
+        "operator": "contains",
+        "parameter": "search"
+      },
       "group_by": [],
       "aggregates": [],
       "sort": [

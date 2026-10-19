@@ -76,9 +76,7 @@ const sourceOf = (item: SettingsRecord): QueryBindingSource | undefined => {
   switch (choiceOf(item["source"], queryBindingSourceKinds)) {
     case "fixed": {
       const value = item["value"];
-      return value?.kind === "text" && value.value.length > 0
-        ? { kind: "fixed", value: value.value }
-        : undefined;
+      return value?.kind === "text" ? { kind: "fixed", value: value.value } : undefined;
     }
     case "page_parameter": {
       const name = settingText(item["name"]);

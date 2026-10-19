@@ -291,7 +291,7 @@ export function validateApplicationSourceCatalogue(
           report("vortex.definition.application_block_settings", "invalid_value", at(key));
       };
       const behaviours = table.rowBehaviours;
-      if (behaviours.rowClick !== undefined)
+      if (behaviours.rowClick !== undefined && !behaviours.rowClick.selectsRecord)
         checkRowBehaviour(
           "row_click",
           behaviours.rowClick.eventId,

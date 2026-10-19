@@ -24,7 +24,11 @@ import { pageCompiledSlotsFor } from "./studio-application-draft";
 import { compiledDraftContent } from "./studio-compiled-drafts";
 import { collectPlacements, pageSubjectParameter } from "./application-page/placement-helpers";
 import { findModuleQuery, pageQueryBindingContext } from "@vortex/platform/server";
-import { applicationLauncherQueryRowsToListValues, parseBoardPayload, parseDisplayData } from "@vortex/ui";
+import {
+  applicationLauncherQueryRowsToListValues,
+  parseBoardPayload,
+  parseDisplayData,
+} from "@vortex/ui";
 import {
   isStreamablePlacement,
   readPlacement,

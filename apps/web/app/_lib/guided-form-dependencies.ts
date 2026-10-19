@@ -19,7 +19,9 @@ export const guidedFormDependencies = (): GuidedFormDependencies => ({
         organizationId: scope.organizationId,
         organizationAccountId: scope.organizationAccountId,
         applicationRootId: scope.applicationRootId,
-        ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
+        ...(scope.previewInstallationId === undefined
+          ? {}
+          : { previewInstallationId: scope.previewInstallationId }),
       },
     }).load();
   },

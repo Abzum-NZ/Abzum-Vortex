@@ -79,6 +79,7 @@ export const compiledPageBindingFacts = <Entry extends Placement>(
   placements: readonly (readonly [string, Entry])[],
   blockKeyOf: (placement: Entry) => string | undefined,
   records: ReadonlyMap<string, unknown>,
+  queries: ReadonlyMap<string, unknown>,
 ): Omit<QueryBindingPageFacts, "blockLabel"> => {
   const recordById = new Map(
     [...records].map(([id, record]) => [id.toLowerCase(), object(record)]),
@@ -118,7 +119,16 @@ export const compiledPageBindingFacts = <Entry extends Placement>(
     } else if (blockKey === "platform.form.text_input" || blockKey === "platform.form.choice_input")
       type = { kind: "text" };
     else if (blockKey === "platform.form.date_input") type = { kind: "date" };
-    else continue;
+    else if (
+      blockKey === "platform.display.table" &&
+      object(object(settings.row_click).properties).mode !== undefined &&
+      object(object(object(settings.row_click).properties).mode).value === "select"
+    ) {
+      const query = object(queries.get(String(object(placement.vortex).queryId)));
+      const recordType = object(query.recordType);
+      if (recordType.state === "resolved")
+        type = { kind: "record", recordTypes: [String(recordType.recordTypeId)] };
+    } else continue;
     const label = text(settings.label) ?? text(settings.name) ?? placementId;
     controls.push({
       placement: placementId,
