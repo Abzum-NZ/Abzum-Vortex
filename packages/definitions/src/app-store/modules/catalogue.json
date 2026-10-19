@@ -201,27 +201,27 @@
             "options": [
               {
                 "value": "not_required",
-                "label": "No record update needed"
+                "label": "No update needed"
               },
               {
                 "value": "pending",
-                "label": "Record update queued"
+                "label": "Update queued"
               },
               {
                 "value": "updating",
-                "label": "Updating existing records"
+                "label": "Updating"
               },
               {
                 "value": "retrying",
-                "label": "Record update failed, retrying"
+                "label": "Update failed, retrying"
               },
               {
                 "value": "failed",
-                "label": "Record update failed"
+                "label": "Update failed"
               },
               {
                 "value": "up_to_date",
-                "label": "Records up to date"
+                "label": "Up to date"
               }
             ]
           }
