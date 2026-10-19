@@ -744,6 +744,7 @@ export function useStudioCanvasTab({
           selection={selected}
           disabled={draft.locked}
           choices={draftChoices}
+          compiledFields={view.compiledFields}
           onCommand={commandComposition}
           onNewQuery={(use) => setQuerySheet({ use })}
         />

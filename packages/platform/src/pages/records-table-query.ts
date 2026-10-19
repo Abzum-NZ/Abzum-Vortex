@@ -39,8 +39,10 @@ import {
   type LinkFieldType,
 } from "./component-data-projection";
 import {
+  conditionalFormattingFieldIds,
   logRecordsTableRequestRefusal,
   recordsTableRequestRefusal,
+  type ConditionalFormattingContext,
   type RecordsTableRequestRefusal,
 } from "./records-table-features";
 import { calendarAddDays, calendarStartOfDay } from "./calendar-query";
@@ -104,6 +106,8 @@ export type RecordsTableQueryRequest = Readonly<{
   fieldLinkTypes?: Readonly<Record<string, LinkFieldType>>;
   /** Reads the labels of the linked records the page's rows carry, once per page. */
   resolveRecordLinks?: RecordLinkResolver;
+  /** What the table's formatting rules are evaluated with; supplied only when they are on. */
+  formatting?: ConditionalFormattingContext;
 }>;
 
 /**
@@ -127,6 +131,18 @@ export type RecordsTableQueryResolution =
   | Readonly<{ kind: "unavailable" }>;
 
 const refused = Object.freeze({ kind: "refused" as const });
+
+/** The rows with only the visible columns' values: a value read only for formatting never leaves. */
+const visibleRows = (
+  rows: readonly ProtectedQueryRow[],
+  fieldIds: readonly string[],
+): readonly ProtectedQueryRow[] =>
+  rows.map((row) => ({
+    ...row,
+    values: Object.fromEntries(
+      Object.entries(row.values).filter(([key]) => fieldIds.includes(key.toLowerCase())),
+    ),
+  }));
 
 const lowerUnique = (values: readonly string[]): string[] => [
   ...new Set(values.map((value) => value.toLowerCase())),
@@ -273,7 +289,7 @@ const typedFilterCondition = (
 export type RecordsTableQueryCommand = Readonly<{
   kind: "built";
   command: ProtectedQueryCommand;
-  /** The visible columns, in declared order; exactly the fields the command requests. */
+  /** The visible columns, in declared order; the rows the page returns carry only these values. */
   fieldIds: readonly string[];
   /** The explicit or authored default order; undefined when the bound query's own sort applies. */
   sort?: RecordsTableSortState;
@@ -393,11 +409,17 @@ export const buildRecordsTableQueryCommand = (
   const search =
     state.search === null || state.search.trim() === "" ? undefined : state.search.trim();
 
+  // Fields only the formatting rules read are an optional projection: the engine returns each
+  // under the viewer's field policy (absent where withheld) and never filters or sorts by it, so
+  // the rules never change which rows the page holds. They are stripped after evaluation.
+  const formattingFieldIds = conditionalFormattingFieldIds(contract).filter(
+    (fieldId) => !fieldIds.includes(fieldId),
+  );
   const command = protectedQueryCommandSchema.safeParse({
     moduleRootId: request.moduleRootId,
     queryId: request.queryId,
     inputValues,
-    requestedFieldIds: fieldIds,
+    requestedFieldIds: [...fieldIds, ...formattingFieldIds],
     requestedSystemFieldKeys: [],
     sort,
     ...(filter === undefined ? {} : { filter }),
@@ -446,6 +468,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
       if (result.kind !== "available") return refused;
       if (result.value.outcome === "refused")
         return { kind: "refused", reasonCode: result.value.reasonCode };
+      const projectedRows = visibleRows(result.value.rows, built.fieldIds);
       // The records a link filter names are titled in the same batched read as the page's links.
       const filterLinks = built.narrowing.filters.flatMap(({ fieldId, filter }) => {
         const recordTypeId = request.filterTargets?.[fieldId]?.recordTypeId;
@@ -453,7 +476,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
           ? []
           : filter.recordIds.map((recordId) => ({ recordTypeId, recordId }));
       });
-      const links = [...collectRecordLinks(result.value.rows), ...filterLinks];
+      const links = [...collectRecordLinks(projectedRows), ...filterLinks];
       const recordLinks =
         links.length === 0 || request.resolveRecordLinks === undefined
           ? undefined
@@ -490,6 +513,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
           ...(request.fieldLinkTypes === undefined
             ? {}
             : { fieldLinkTypes: request.fieldLinkTypes }),
+          ...(request.formatting === undefined ? {} : { formatting: request.formatting }),
         },
         result.value.rows,
         // A later page, or a narrowed first page, keeps its columns when nothing matched, so the
@@ -520,7 +544,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         fieldIds: built.fieldIds,
         display,
         pageSize: built.command.pageSize,
-        rows: result.value.rows,
+        rows: projectedRows,
         ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
         ...(previousContinuationToken === undefined ? {} : { previousContinuationToken }),
       };

@@ -22,6 +22,7 @@ export {
   validateStudioCondition,
 } from "./condition-model";
 export * from "./condition-controls";
+export * from "./studio-query-filter";
 export * from "./application-composition-commands";
 export * from "./field-placement";
 export * from "./application-flow-model";

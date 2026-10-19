@@ -8,6 +8,7 @@ import {
   recordsTableFilterKinds,
   RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
 } from "@vortex/platform/schema";
+import { parseConditionalFormatting } from "./projected-format";
 import type { DefinitionRenderErrorLocation } from "../definition-error";
 import {
   fail,
@@ -157,7 +158,7 @@ export const parseTableFeatures = (
   const record = requireRecord(value, "Projected table features are invalid", location);
   requireExactKeys(
     record,
-    ["search", "columnFilters", "savedViews", "bulkActions", "inlineEdit"],
+    ["search", "columnFilters", "savedViews", "bulkActions", "inlineEdit", "conditionalFormatting"],
     location,
   );
   if (Object.keys(record).length === 0) fail("Projected table features name no feature", location);
@@ -207,5 +208,10 @@ export const parseTableFeatures = (
     ...(record.savedViews === true ? { savedViews: true as const } : {}),
     ...(bulkActions === undefined ? {} : { bulkActions: Object.freeze(bulkActions) }),
     ...(inlineEdit === undefined ? {} : { inlineEdit }),
+    ...(record.conditionalFormatting === undefined
+      ? {}
+      : {
+          conditionalFormatting: parseConditionalFormatting(record.conditionalFormatting, location),
+        }),
   });
 };

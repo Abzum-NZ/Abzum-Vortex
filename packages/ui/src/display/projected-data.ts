@@ -9,6 +9,7 @@ import {
   type ComponentSemanticEventKind,
   type PipelineStageTone,
   type RecordsTableFeatureProjection,
+  type RecordsTableRowFormat,
   type RecordsTableFilterValue,
   type RecordsTableSortKey,
   type RecordsTableSortState,
@@ -18,8 +19,9 @@ import {
   type GridLayoutState,
   isRecord,
 } from "@vortex/platform/schema";
-import { parseTableFeatures, parseTableNarrowing } from "./table-feature-payload";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
+import { parseRowFormat } from "./projected-format";
+import { parseTableFeatures, parseTableNarrowing } from "./projected-grid-features";
 
 /**
  * Validated structured rich-text document from the shared closed rich-text contract.
@@ -96,6 +98,8 @@ export type DisplayRow = Readonly<{
   revision?: number;
   capabilities?: DisplayRowCapabilities;
   cells: Readonly<Record<string, DisplayCellValue>>;
+  /** The style keys and measures the table's formatting gives the row, decided on the server. */
+  format?: RecordsTableRowFormat;
 }>;
 
 /** One declared table column; only declared columns are ever rendered. */
@@ -774,7 +778,11 @@ const parseRows = (
     items.map((item, index) => {
       const rowLocation = { ...location, propertyPath: [`rows[${index}]`] };
       const record = requireRecord(item, "A projected row must be an object", rowLocation);
-      requireExactKeys(record, ["recordId", "revision", "capabilities", "cells"], rowLocation);
+      requireExactKeys(
+        record,
+        ["recordId", "revision", "capabilities", "cells", "format"],
+        rowLocation,
+      );
       const recordId = requireNonEmptyString(
         record.recordId,
         "A projected row requires a stable record identity",
@@ -809,11 +817,19 @@ const parseRows = (
               ...rowLocation,
               propertyPath: [`rows[${index}]`, "capabilities"],
             });
+      const format =
+        record.format === undefined
+          ? undefined
+          : parseRowFormat(record.format, {
+              ...rowLocation,
+              propertyPath: [`rows[${index}]`, "format"],
+            });
       return Object.freeze({
         recordId,
         ...(revision === undefined ? {} : { revision }),
         ...(capabilities === undefined ? {} : { capabilities }),
         cells: Object.freeze(cells),
+        ...(format === undefined ? {} : { format }),
       });
     }),
   );

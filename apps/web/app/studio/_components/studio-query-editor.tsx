@@ -22,10 +22,13 @@ import {
   type ApplicationUsePlace,
 } from "@vortex/platform/schema";
 import {
+  readStudioQueryFilter,
   StudioConditionControls,
   StudioInspectorGroup,
   StudioOptionControl,
+  studioQueryFilterContext,
   validateStudioCondition,
+  writeStudioQueryFilter,
 } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
@@ -38,11 +41,6 @@ import { StudioField } from "./studio-field";
 import { StudioReferencesAlert } from "./studio-used-in";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
-import {
-  readStudioQueryFilter,
-  studioQueryFilterContext,
-  writeStudioQueryFilter,
-} from "../_lib/studio-query-filter";
 import {
   studioEditProblem,
   type StudioCompiledFields,

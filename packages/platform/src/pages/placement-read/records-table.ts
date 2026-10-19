@@ -4,6 +4,11 @@ import { describeFailure, sameId, type JsonValue, type RecordsTableContract } fr
 import { readRecordsTableQueryState, type RecordsTablePageRequest } from "../records-table-state";
 import { authoredGridLayout, resolveGridLayout, type GridLayoutState } from "../grid-view-state";
 import {
+  conditionalFormattingRelativeDates,
+  conditionalFormattingUsesRelativeDates,
+  type ConditionalFormattingContext,
+} from "../records-table-features";
+import {
   fieldChoiceLabelsOf,
   fieldDateTypesOf,
   fieldFilterTargetsOf,
@@ -115,6 +120,25 @@ export const readRecordsTable = async (
     data[placementId] = { status: "error" };
     return;
   }
+  // Formatting rules are evaluated with the bound record type's declared fields and, when a rule
+  // compares with a relative date, the dates counted in the organisation's time zone.
+  let formatting: ConditionalFormattingContext | undefined;
+  if (contract.features.conditionalFormatting.enabled) {
+    const recordTypeId =
+      recordType.state === "resolved" ? String(recordType.recordTypeId).toLowerCase() : undefined;
+    const recordFields =
+      bound.module.content.recordTypes.find(
+        (candidate) => String(candidate.recordTypeId).toLowerCase() === recordTypeId,
+      )?.fields ?? [];
+    let relativeDates: ConditionalFormattingContext["relativeDates"];
+    if (conditionalFormattingUsesRelativeDates(contract)) {
+      const timeZone = await read.bindings.timeZone();
+      if (timeZone === undefined)
+        logPlacementFailure(address, placementId, "table_formatting_time_zone_unavailable");
+      else relativeDates = conditionalFormattingRelativeDates(read.bindings.now, timeZone);
+    }
+    formatting = { recordFields, relativeDates };
+  }
   const continuation = read.tableContinuation;
   const explicitRequest =
     continuation !== undefined && sameId(continuation.placementId, placementId)
@@ -136,6 +160,7 @@ export const readRecordsTable = async (
       resolveRecordLinks: read.services.resolveRecordLinks,
       state: { ...addressed.state, page },
       layout,
+      ...(formatting === undefined ? {} : { formatting }),
     });
   const fromAddress =
     (explicitRequest === undefined && addressed.state.page !== undefined) ||
