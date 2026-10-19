@@ -110,6 +110,8 @@ type FormState = Readonly<{
   unique: boolean;
   filterable: boolean;
   sortable: boolean;
+  personalData: SourceField["personal_data"];
+  publicDisplay: SourceField["public_display"];
   settings: StudioSettingValues;
   defaultValue: StudioSettingValues;
   /** A calculation's or a total's settings, as its formula or total editor holds them; empty for other types. */
@@ -259,6 +261,8 @@ export function ModuleFieldsEditor({
       unique: existing?.unique ?? false,
       filterable: existing?.filterable ?? false,
       sortable: existing?.sortable ?? false,
+      personalData: existing === undefined ? "none" : existing.personal_data,
+      publicDisplay: existing === undefined ? "refused" : existing.public_display,
       settings: reading.reading.values,
       defaultValue: reading.defaultValue,
       computed: reading.computed,
@@ -327,6 +331,8 @@ export function ModuleFieldsEditor({
               unique: next.unique,
               filterable: next.filterable,
               sortable: next.sortable,
+              personalData: next.personalData,
+              publicDisplay: next.publicDisplay,
               type: next.type,
               settings,
               defaultValue:
@@ -496,6 +502,8 @@ export function ModuleFieldsEditor({
           unique: form.unique,
           filterable: form.filterable,
           sortable: form.sortable,
+          personalData: form.personalData,
+          publicDisplay: form.publicDisplay,
           type: form.type,
           settings,
           defaultValue:
@@ -590,7 +598,7 @@ export function ModuleFieldsEditor({
 
   const shapeLocked = published;
   const shapeHint = shapeLocked
-    ? "Published shape is fixed. Labels, help, defaults and link-back names can change."
+    ? "Published shape is fixed. Labels, help, defaults, privacy and link-back names can change."
     : undefined;
   const flag = (
     key: "required" | "unique" | "filterable" | "sortable",
@@ -608,6 +616,14 @@ export function ModuleFieldsEditor({
     </div>
   );
   const problemOf = (text: string) => (text === "" ? undefined : text);
+  const privacyEvents =
+    existing === undefined || form.personalData === "none"
+      ? []
+      : module.events.filter(
+          (event) =>
+            (event.record_type === record.key || event.record_type === qualifiedRecord) &&
+            event.carries.includes(existing.key),
+        );
 
   return (
     <form
@@ -876,6 +892,51 @@ export function ModuleFieldsEditor({
             </Button>
           )}
         </fieldset>
+      </StudioInspectorGroup>
+      <StudioInspectorGroup title="Privacy">
+        {privacyEvents.length === 0 ? null : (
+          <p role="alert" className="text-sm text-destructive">
+            {existing!.label} contains personal or sensitive data, but is still carried by{" "}
+            {privacyEvents.map((event) => event.label ?? event.key).join(", ")}. Publishing is
+            refused. Set Personal data to None to correct the event&apos;s carried fields, then
+            apply the privacy choice again.
+          </p>
+        )}
+        <StudioField
+          label="Personal data"
+          hint="Sensitive values never enter search. Personal values follow the organisation's search policy."
+        >
+          {(control) => (
+            <StudioOptionControl
+              {...control}
+              value={form.personalData}
+              disabled={disabled}
+              options={[
+                { value: "none", label: "None" },
+                { value: "personal", label: "Personal" },
+                { value: "sensitive", label: "Sensitive" },
+              ]}
+              onChange={(next) => change({ personalData: next as FormState["personalData"] })}
+            />
+          )}
+        </StudioField>
+        <StudioField
+          label="Public display"
+          hint="Eligibility for public pages only. Record and field permissions still control access."
+        >
+          {(control) => (
+            <StudioOptionControl
+              {...control}
+              value={form.publicDisplay}
+              disabled={disabled}
+              options={[
+                { value: "refused", label: "Refused" },
+                { value: "allowed", label: "Allowed" },
+              ]}
+              onChange={(next) => change({ publicDisplay: next as FormState["publicDisplay"] })}
+            />
+          )}
+        </StudioField>
       </StudioInspectorGroup>
       <StudioInspectorGroup title="Access" defaultOpen={false}>
         <p className="text-sm text-muted-foreground">Field permissions are managed in Access.</p>
