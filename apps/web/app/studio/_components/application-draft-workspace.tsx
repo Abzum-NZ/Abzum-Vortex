@@ -1,29 +1,14 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import type {
-  ImmutablePlatformBlockCatalogue,
-  PeopleDirectoryOwner,
-} from "@vortex/platform/schema";
+import type { ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
 import {
   StudioFieldProblemsProvider,
   projectStudioSemanticOutline,
   studioSemanticSelectionKey,
-  type StudioBorrowedChoices,
-  type StudioCompileFailure,
   type StudioSemanticSelection,
   type StudioStoredApplicationDraft,
 } from "@vortex/ui/studio";
 import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
-import type {
-  StudioApplicationCanvasFrames,
-  StudioApplicationCompiledPageSlots,
-} from "../../_lib/studio-application-draft";
-import type {
-  StudioCompiledFields,
-  StudioDataModule,
-  StudioPublishedData,
-} from "../_lib/studio-data-model";
-import type { StudioThemeOptions } from "../_lib/studio-theme-options";
 import { createStudioPlacementDescriber, studioOutlineLabels } from "../_lib/studio-labels";
 import { studioPlaceSelection, studioTabOfSelection } from "../_lib/studio-places";
 import { ApplicationDraftAgentTools } from "./application-draft-agent-tools";
@@ -55,6 +40,8 @@ import {
   type StudioAccessCommand,
   type StudioAccessResult,
 } from "@vortex/ui/studio";
+import { Button } from "@vortex/ui/components/button";
+import type { StudioStructureForm } from "./studio-structure-editor";
 
 /** Where the workspace sits: the organisation it belongs to and the running application it builds. */
 export type StudioWorkspacePlace = Readonly<{
@@ -65,42 +52,28 @@ export type StudioWorkspacePlace = Readonly<{
   appStoreHref: string | undefined;
 }>;
 
-type WorkspaceProps = Readonly<{
-  platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
-  fieldInputControlReleases: FieldInputControlReleaseMap;
-  platformThemeTokens: PlatformThemeTokens;
-}> &
-  (
-    | Readonly<{ mode: "new"; organizationId: string }>
-    | Readonly<{
-        mode: "existing";
-        organizationId: string;
-        draft: StudioStoredApplicationDraft;
-        place: StudioWorkspacePlace;
-        /** What the Theme tab offers, from the checked-in shadcn catalogue. */
-        themeOptions: StudioThemeOptions;
-        initialTab?: string | undefined;
-        initialSection?: string | undefined;
-        /** The key of a module to open in the Data tab. */
-        initialModule?: string | undefined;
-        /** The organisation's applications, to name and link the owner of a used module. */
-        applications: readonly StudioModuleOwnerApplication[];
-        /** The compiled fields of the saved draft, for a query filter's typed controls. */
-        compiledFields?: StudioCompiledFields | null;
-        borrowedChoices?: StudioBorrowedChoices | null;
-        /** The modules the application uses, read-only in the Data tab. */
-        usedModules?: readonly StudioDataModule[] | null;
-        /** What the published versions of its own modules hold, whose stored shape is fixed. */
-        published?: StudioPublishedData | null;
-        /** The organisation's people directory, which a Person link points at. */
-        peopleDirectory?: PeopleDirectoryOwner | null;
-        pageCompiledSlots?: StudioApplicationCompiledPageSlots | null;
-        canvasFrames?: StudioApplicationCanvasFrames | null;
-        compileFailure?: StudioCompileFailure | null;
-      }>
-  );
+type WorkspaceProps =
+  | Readonly<{
+      mode: "new";
+      organizationId: string;
+      platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
+      fieldInputControlReleases: FieldInputControlReleaseMap;
+      platformThemeTokens: PlatformThemeTokens;
+    }>
+  | Readonly<{
+      mode: "existing";
+      organizationId: string;
+      draft: StudioStoredApplicationDraft;
+      place: StudioWorkspacePlace;
+      initialTab?: string | undefined;
+      initialSection?: string | undefined;
+      initialModule?: string | undefined;
+      applications: readonly StudioModuleOwnerApplication[];
+      initialView: Parameters<typeof useStudioDraft>[0]["initialView"];
+    }>;
 
 type ExistingProps = Extract<WorkspaceProps, { mode: "existing" }>;
+const studioRailKeys = studioRailTabs.map((railTab) => railTab.key);
 
 export function ApplicationDraftWorkspace(props: WorkspaceProps) {
   return props.mode === "new" ? (
@@ -119,25 +92,21 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
  * draft through the store's single command envelope.
  */
 function ExistingApplicationWorkspace(props: ExistingProps) {
-  const { organizationId, place, platformBlockCatalogue: catalogue, applications } = props;
-  const draft = useStudioDraft({
-    organizationId,
-    draft: props.draft,
-    catalogue,
-    initialView: {
-      slots: props.pageCompiledSlots ?? null,
-      frames: props.canvasFrames ?? null,
-      failure: props.compileFailure ?? null,
-      compiledFields: props.compiledFields ?? null,
-      borrowedChoices: props.borrowedChoices ?? null,
-      usedModules: props.usedModules ?? null,
-      published: props.published ?? null,
-      peopleDirectory: props.peopleDirectory ?? null,
-    },
-  });
+  const { organizationId, place, applications } = props;
   const [tab, setTab] = useState<StudioRailKey>(
     isStudioRailKey(props.initialTab) ? props.initialTab : "structure",
   );
+  const [structureForm, setStructureForm] = useState<StudioStructureForm>("none");
+  const draft = useStudioDraft({
+    organizationId,
+    draft: props.draft,
+    tab,
+    tabs: studioRailKeys,
+    creation:
+      structureForm === "shell" ? "layout" : structureForm === "record" ? "record_page" : undefined,
+    initialView: props.initialView,
+  });
+  const catalogue = draft.view.catalogue;
   // Every way of opening a tab shares this state, including rule links and the rail.
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -187,6 +156,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     theme: source.body.theme,
     compiledTheme: draft.view.frames?.theme,
     compiledSourceTheme: draft.view.source.body.theme,
+    enabled: draft.view.request.kind === "canvas" || draft.view.request.kind === "theme",
   });
 
   const flows = useStudioFlowsTab({
@@ -200,15 +170,15 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     draft,
     tab,
     catalogue,
-    fieldInputControlReleases: props.fieldInputControlReleases,
-    platformThemeTokens: props.platformThemeTokens,
+    fieldInputControlReleases: draft.view.fieldInputControlReleases,
+    platformThemeTokens: draft.view.platformThemeTokens,
     outline,
     labels,
     theme,
     flowsInspector: flows.inspector,
     placementWorkflows: flows.placementWorkflows,
-    openTab: setTab,
     applications,
+    openTab: setTab,
   });
 
   // The Access tab's one edit path, the same envelope as every other tab.
@@ -247,12 +217,14 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     outline,
     hidden: tab !== "structure",
     openAccessPages,
+    form: structureForm,
+    onFormChange: setStructureForm,
   });
   const menuTheme = useStudioMenuThemeTabs({
     draft,
     menuHidden: tab !== "menu",
     themeHidden: tab !== "theme",
-    themeOptions: props.themeOptions,
+    themeOptions: draft.view.themeOptions,
     theme,
     openAccessPages,
   });
@@ -309,7 +281,6 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
         <div aria-busy={draft.isHeld("publication") || draft.isHeld("reopening")}>
           <ApplicationDraftAgentTools
             draft={draft}
-            catalogue={catalogue}
             command={canvas.commandComposition}
             readQueries={canvas.readQueries}
             {...releases.agent}
@@ -377,6 +348,24 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                   focused,
                   focusCanvas,
                 )}
+                {draft.viewProblem !== "" ? (
+                  <div role="alert" className="px-4 py-2 text-sm">
+                    {draft.viewProblem}{" "}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        void draft.refreshView();
+                      }}
+                    >
+                      Try again
+                    </Button>
+                  </div>
+                ) : draft.loadingView ? (
+                  <p role="status" className="px-4 py-2 text-sm">
+                    Loading this editor…
+                  </p>
+                ) : null}
                 <div
                   className={
                     canvasShown

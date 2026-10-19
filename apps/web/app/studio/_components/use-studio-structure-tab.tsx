@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
 import {
   studioSemanticSelectionKey,
@@ -34,17 +34,20 @@ export function useStudioStructureTab({
   outline,
   hidden,
   openAccessPages,
+  form,
+  onFormChange,
 }: Readonly<{
   draft: StudioDraft;
   catalogue: ImmutablePlatformBlockCatalogue;
   describePlacement: StudioPlacementDescriber;
   outline: StudioSemanticOutline;
   hidden: boolean;
+  form: StudioStructureForm;
+  onFormChange: (form: StudioStructureForm) => void;
   /** Opens Access on its Pages and menu view, where who can open a page is set. */
   openAccessPages: () => void;
 }>) {
   const { source, selected } = draft;
-  const [form, setForm] = useState<StudioStructureForm>("none");
   const publishedFields = useMemo(
     () => studioFieldPublication(draft.view.published, draft.parsed(draft.saved.source)).fields,
     [draft, draft.view.published, draft.saved.source],
@@ -53,6 +56,11 @@ export function useStudioStructureTab({
     structureCommand: StudioStructureCommand,
     merge?: string,
   ): StudioStructureResult => {
+    if (structureCommand.kind === "add_record_page" && draft.view.published === null)
+      return {
+        kind: "refused",
+        message: "Publication details are loading. Try again in a moment.",
+      };
     const after: { select?: StudioSemanticSelection | undefined } = {};
     const outcome = draft.run<StudioStructureResult>(
       (current) => {
@@ -75,15 +83,17 @@ export function useStudioStructureTab({
   };
   // What a Structure command would do to the current draft, for its preview; nothing is kept.
   const preview = (structureCommand: StudioStructureCommand): StudioStructureResult =>
-    applyStudioStructureCommand(
-      {
-        source: draft.parsed(draft.history.getState().source),
-        catalogue,
-        describePlacement,
-        publishedFields,
-      },
-      structureCommand,
-    );
+    structureCommand.kind === "add_record_page" && draft.view.published === null
+      ? { kind: "refused", message: "Publication details are loading. Try again in a moment." }
+      : applyStudioStructureCommand(
+          {
+            source: draft.parsed(draft.history.getState().source),
+            catalogue,
+            describePlacement,
+            publishedFields,
+          },
+          structureCommand,
+        );
   const homePage = source.body.pages.find((page) => page.key === source.body.home_page);
   const selectionKey = selected === null ? "" : studioSemanticSelectionKey(selected);
 
@@ -101,11 +111,11 @@ export function useStudioStructureTab({
           ? undefined
           : studioSemanticSelectionKey({ kind: "page", pageAlias: homePage.id })
       }
-      action={<StudioStructureAdd disabled={draft.locked} onAdd={setForm} />}
+      action={<StudioStructureAdd disabled={draft.locked} onAdd={onFormChange} />}
       editor={
         <StudioStructureEditor
           form={form}
-          onFormChange={setForm}
+          onFormChange={onFormChange}
           source={source}
           selected={selected}
           onCommand={command}
@@ -118,7 +128,7 @@ export function useStudioStructureTab({
             )
           }
           onOpenAccess={openAccessPages}
-          disabled={draft.locked}
+          disabled={draft.locked || (form === "record" && draft.view.published === null)}
         />
       }
     />
