@@ -30,6 +30,7 @@ import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-tool
 import { StudioPanelShell } from "./studio-frame";
 import { StudioInspector } from "./studio-inspector";
 import { StudioUsedIn } from "./studio-used-in";
+import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import { StudioBlockOutlinePanel } from "./studio-outline-panels";
 import type { StudioRailKey } from "./studio-rail-tabs";
 import type { StudioDraft } from "./use-studio-draft";
@@ -65,7 +66,7 @@ const sameDestination = (left: StudioCompositionDestination, right: StudioCompos
  * toolbar, and "Who can see this". Every edit is one command through the draft's envelope.
  */
 export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlReleases, platformThemeTokens, outline, labels,
-  theme, flowsInspector, placementWorkflows, openTab }: Readonly<{
+  theme, flowsInspector, placementWorkflows, openTab, applications }: Readonly<{
   draft: StudioDraft;
   tab: StudioRailKey;
   catalogue: ImmutablePlatformBlockCatalogue;
@@ -80,6 +81,8 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
   /** The selected block's workflows, from the Flows tab. */
   placementWorkflows: ReactNode;
   openTab: (tab: StudioRailKey) => void;
+  /** The organisation's applications, which name the owner of a choice from a used Module. */
+  applications: readonly StudioModuleOwnerApplication[];
 }>) {
   const { organizationId, source, selected, state, view } = draft;
   const rootId = state.rootId;
@@ -243,8 +246,10 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
       case "temporarily_unavailable": return { kind: "temporarily_unavailable" };
     }
   }, [organizationId, rootId, view.draftRevision]);
-  const draftChoices = useMemo(() => studioDraftChoices(source, view.borrowedChoices, readRecordChoices),
-    [source, view.borrowedChoices, readRecordChoices]);
+  const applicationName = useCallback((application: string) =>
+    applications.find((candidate) => candidate.key === application)?.name ?? "another application", [applications]);
+  const draftChoices = useMemo(() => studioDraftChoices(source, view.borrowedChoices, readRecordChoices, applicationName),
+    [source, view.borrowedChoices, readRecordChoices, applicationName]);
   // The records of the canvas's data blocks, read for the compiled saved revision only.
   const readCanvasRecords = useCallback(async (area: string) => {
     const pageAlias = canvasPageRef.current;
@@ -325,6 +330,7 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
   </>;
 
   const inspectorPanel = <StudioInspector inspector={inspector} labelsKey={selectionKey}
+    title={inspector.status === "resolved" ? selectedName ?? inspector.descriptor.label : ""}
     labels={editable ? {
       isApplication: selected?.kind === "application",
       label: selected?.kind === "application" ? source.body.name : selectedPage?.name ?? "",
@@ -400,6 +406,6 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
   return {
     panels, inspector: inspectorPanel, centre, toolbar, dialog, title, breadcrumbItem, compositionContext,
     commandComposition, readRecordChoices, previewAs,
-    readQueries: () => studioDraftChoices(draft.parsed(draft.history.getState().source), view.borrowedChoices, null).queries,
+    readQueries: () => studioDraftChoices(draft.parsed(draft.history.getState().source), view.borrowedChoices, null, applicationName).queries,
   };
 }
