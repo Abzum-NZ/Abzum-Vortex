@@ -327,6 +327,7 @@ export type DisplaySemanticEventName = Extract<
   | "bulk_action"
   | "inline_edit"
   | "card_moved"
+  | "row_expanded"
 >;
 
 /**
@@ -411,6 +412,16 @@ export type DisplaySemanticEvent =
       revision?: number;
       field: string;
       value: string;
+    }>
+  | Readonly<{
+      /**
+       * A person expanded a row (or asked for more of its related records). The host reads one page
+       * of that row's related records on the server; its handler resolves to that page.
+       */
+      event: "row_expanded";
+      recordId: string;
+      /** The token of the page before, to read the next page; absent for the first page. */
+      continuationToken?: string;
     }>;
 
 /** A handler may return the promise of the flow it started; the control stays busy until it settles. */
@@ -441,6 +452,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "bulk_action",
   "inline_edit",
   "card_moved",
+  "row_expanded",
 ]);
 
 // The data-free states carry no values, so one frozen instance serves every block's state type.
@@ -1175,7 +1187,7 @@ const parseTableFeatures = (
   const record = requireRecord(value, "Projected table features are invalid", location);
   requireExactKeys(
     record,
-    ["search", "columnFilters", "savedViews", "bulkActions", "inlineEdit"],
+    ["search", "columnFilters", "savedViews", "bulkActions", "inlineEdit", "masterDetail"],
     location,
   );
   if (Object.keys(record).length === 0) fail("Projected table features name no feature", location);
@@ -1208,12 +1220,29 @@ const parseTableFeatures = (
       fields: parseFieldKeys(inline.fields, "Projected editable fields are invalid", location),
     });
   }
+  let masterDetail: RecordsTableFeatureProjection["masterDetail"];
+  if (record.masterDetail !== undefined) {
+    const related = requireRecord(
+      record.masterDetail,
+      "Projected related records are invalid",
+      location,
+    );
+    requireExactKeys(related, ["pageSize"], location);
+    masterDetail = Object.freeze({
+      pageSize: requirePositiveInteger(
+        related.pageSize,
+        "Related records need their page size",
+        location,
+      ),
+    });
+  }
   return Object.freeze({
     ...(record.search === true ? { search: true as const } : {}),
     ...(columnFilters === undefined ? {} : { columnFilters }),
     ...(record.savedViews === true ? { savedViews: true as const } : {}),
     ...(bulkActions === undefined ? {} : { bulkActions: Object.freeze(bulkActions) }),
     ...(inlineEdit === undefined ? {} : { inlineEdit }),
+    ...(masterDetail === undefined ? {} : { masterDetail }),
   });
 };
 

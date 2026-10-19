@@ -17,8 +17,11 @@ import {
   recordsTableEditableFieldTypes,
   type BlockPropertySchemaContract,
   type RecordsTableQueryFacts,
+  type RecordsTableRelatedRecordsFacts,
   compiledPageBindingFacts,
   compiledPlacementBindingProblems,
+  compiledQueryInputs,
+  compiledRecordBindingFields,
 } from "../../schema";
 import type { ApplicationScope } from "./application-scope";
 
@@ -42,11 +45,74 @@ export function applicationPageRules(scope: ApplicationScope): void {
   } = scope;
 
   /**
+   * What the compiled release offers a row's related records: each link from another record type
+   * to the table's record type, every query with its record type, selected fields and inputs, the
+   * row's own fields and the page's binding facts, in canonical identities.
+   */
+  const relatedRecordsFacts = (
+    recordTypeId: string,
+    page: RecordsTableRelatedRecordsFacts["page"],
+  ): RecordsTableRelatedRecordsFacts => {
+    const same = (left: unknown, right: string): boolean =>
+      String(left).toLowerCase() === right.toLowerCase();
+    const recordList = [...records.values()];
+    return {
+      recordType: recordTypeId,
+      links: recordList.flatMap((record) =>
+        array(record.relationships)
+          .filter((relationship) =>
+            [
+              object(relationship.toRecordType ?? {}),
+              ...array(relationship.toRecordTypes ?? []),
+            ].some((target) => same(target.recordTypeId, recordTypeId)),
+          )
+          .map((relationship) => {
+            const from = array(record.fields).find((field) =>
+              same(field.fieldId, String(relationship.fromFieldId)),
+            );
+            return {
+              relationship: String(relationship.relationshipId),
+              label: `${String(record.singularLabel)}: ${String(from?.label ?? relationship.key)}`,
+              childRecordType: String(record.recordTypeId),
+              childRecordTypeLabel: String(record.singularLabel),
+            };
+          }),
+      ),
+      queries: [...moduleQueries.values()].map((query) => {
+        const queryRecordTypeId = String(object(query.recordType).recordTypeId);
+        const record = recordList.find((candidate) =>
+          same(candidate.recordTypeId, queryRecordTypeId),
+        );
+        const selected = new Set(
+          array(query.selectedFieldIds).map((id) => String(id).toLowerCase()),
+        );
+        return {
+          query: String(query.queryId),
+          label: String(query.label ?? query.key),
+          recordType: queryRecordTypeId,
+          fields: array(record?.fields)
+            .filter((field) => selected.has(String(field.fieldId).toLowerCase()))
+            .map((field) => ({ field: String(field.fieldId), label: String(field.label) })),
+          inputs: compiledQueryInputs(query),
+          grouped: array(query.groupByFieldIds).length > 0 || array(query.aggregates).length > 0,
+        };
+      }),
+      rowFields: compiledRecordBindingFields(
+        recordList.find((record) => same(record.recordTypeId, recordTypeId)),
+      ),
+      page,
+    };
+  };
+
+  /**
    * What a Records table's bound query offers its grid features, read from the compiled release:
    * each selected field (or grouping field of a grouped query) with its type and flags, the record
    * type's relationships and the named actions whose subject it is.
    */
-  const recordsTableQueryFacts = (bound: JsonObject): RecordsTableQueryFacts => {
+  const recordsTableQueryFacts = (
+    bound: JsonObject,
+    page: RecordsTableRelatedRecordsFacts["page"],
+  ): RecordsTableQueryFacts => {
     const recordTypeId = String(object(bound.recordType).recordTypeId);
     const record = records.get(recordTypeId);
     const grouped = array(bound.groupByFieldIds).length > 0 || array(bound.aggregates).length > 0;
@@ -82,6 +148,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
         .filter((action) => String(action.subjectRecordTypeId) === recordTypeId)
         .map((action) => ({ key: String(action.key), label: String(action.label ?? action.key) })),
       grouped,
+      relatedRecords: relatedRecordsFacts(recordTypeId, page),
     };
   };
 
@@ -437,7 +504,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
         // own business sentence, the one Studio shows beside its switch.
         for (const feature of checkRecordsTableFeatures(
           table.features,
-          recordsTableQueryFacts(bound),
+          recordsTableQueryFacts(bound, bindingFacts),
         ))
           if (feature.enabled && feature.check.kind === "not_possible")
             failures.push(
@@ -447,6 +514,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
                 "unsupported_choice",
                 undefined,
                 feature.check.code,
+                feature.check.reason,
               ),
             );
       }

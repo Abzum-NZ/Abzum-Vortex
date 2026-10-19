@@ -60,6 +60,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_saved_views",
   "definition_records_table_bulk_actions",
   "definition_records_table_inline_edit",
+  "definition_records_table_master_detail",
   "definition_query_binding",
   "definition_unknown_property",
   "definition_too_few_items",
@@ -146,6 +147,14 @@ const definitionValidationErrorCatalogueSource = {
     message: "Inline editing needs fields people may change.",
     guidance:
       "Choose editable fields shown as columns and the flow that saves a change, or turn Inline editing off.",
+  },
+  // Master/detail names its own part (the link, the query, a column or an input) in its sentence;
+  // the catalogue message is what a reader without that sentence sees.
+  definition_records_table_master_detail: {
+    order: 39,
+    message: "Related records need a link from another record type to this table's records.",
+    guidance:
+      "Choose a link to this record type, a query of the linked records with an input bound to This row, and its columns, or turn Related records off.",
   },
   // A query binding refusal carries its own sentence (the input, the source and the types); the
   // catalogue message is what a reader without that sentence sees.

@@ -69,4 +69,4 @@ export * from "./studio-inspector-actions";
 export * from "./studio-field-type-icon";
 
 export { StudioQueryBindings } from "./studio-query-bindings";
-export { studioQueryBindingFacts } from "./query-binding-facts";
+export { studioQueryBindingFacts, studioRecordBindingFields } from "./query-binding-facts";

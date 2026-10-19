@@ -800,10 +800,26 @@ export const loadStudioApplicationDraft = async (
                       const from = record.fields.find((field) =>
                         sameId(String(field.fieldId), String(relationship.fromFieldId)),
                       );
+                      // A link's targets in this same release, by the reference Studio spells.
+                      const targets = [
+                        ...(relationship.toRecordType === undefined
+                          ? []
+                          : [relationship.toRecordType]),
+                        ...(relationship.toRecordTypes ?? []),
+                      ].flatMap((target) => {
+                        const linked =
+                          target.state === "resolved"
+                            ? records.find((candidate) =>
+                                sameId(String(candidate.recordTypeId), String(target.recordTypeId)),
+                              )
+                            : undefined;
+                        return linked === undefined ? [] : [`${release.key}:${linked.key}`];
+                      });
                       borrowedRelationships.push({
                         reference: `${release.key}:${record.key}.${relationship.key}`,
                         label: `${record.singularLabel}: ${from?.label ?? relationship.key}`,
                         recordType: `${release.key}:${record.key}`,
+                        targets,
                         borrowedFrom: use.application,
                       });
                     }

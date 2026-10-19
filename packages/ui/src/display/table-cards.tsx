@@ -6,6 +6,8 @@ import { Card } from "../components/card";
 import { cn } from "../lib/utils";
 import type { DisplayRow } from "./projected-data";
 import { useRowEntrance } from "./row-entrance";
+import type { RowExpansionControls } from "./row-expansion";
+import { RowExpansionToggle } from "./row-expansion-toggle";
 import type { GridColumn } from "./table-layout";
 
 const PRIORITY_ORDER: Readonly<Record<RecordsTableColumnContract["priority"], number>> = {
@@ -31,7 +33,8 @@ export type CardRenderers = Readonly<{
  * The Records table on a phone: one card per record of the same page, built from the columns the
  * page carries. The first shown column is the card's heading; the others follow as labelled values,
  * essential and high priority first. A card opens through the same declared row click, and its
- * selection and row commands send the same events as the grid's. Only this presentation is mounted.
+ * selection and row commands send the same events as the grid's. A card that expands shows its
+ * related records below it. Only this presentation is mounted.
  */
 export function RecordsCards({
   accessibleName,
@@ -42,6 +45,7 @@ export function RecordsCards({
   showActions,
   activateRow,
   renderers,
+  expansion,
 }: Readonly<{
   accessibleName: string;
   columns: readonly GridColumn[];
@@ -51,6 +55,8 @@ export function RecordsCards({
   showActions: boolean;
   activateRow: ((recordId: string) => unknown) | undefined;
   renderers: CardRenderers;
+  /** Cards expand to a panel of related records; undefined when no projected feature draws one. */
+  expansion: RowExpansionControls | undefined;
 }>): ReactElement {
   const [heading, ...rest] = columns;
   const details = rest
@@ -84,6 +90,8 @@ export function RecordsCards({
       {rows.map((row) => {
         const selected = selectedRecordIds.includes(row.recordId);
         const headingId = `record-${row.recordId}-heading`;
+        const expanded = expansion?.isExpanded(row.recordId) === true;
+        const name = heading === undefined ? "this record" : renderers.text(row, heading);
         return (
           <li
             key={row.recordId}
@@ -98,7 +106,12 @@ export function RecordsCards({
             )}
             onClick={(event: MouseEvent<HTMLLIElement>) => {
               const target = event.target;
-              if (target instanceof Element && target.closest(INTERACTIVE_IN_CARD) !== null) return;
+              if (
+                target instanceof Element &&
+                (target.closest(INTERACTIVE_IN_CARD) !== null ||
+                  target.closest("[data-vortex-related-panel]") !== null)
+              )
+                return;
               activate(row.recordId);
             }}
           >
@@ -121,6 +134,14 @@ export function RecordsCards({
                   )}
                 </h3>
                 {showActions ? renderers.actions(row) : null}
+                {expansion === undefined ? null : (
+                  <RowExpansionToggle
+                    name={name}
+                    expanded={expanded}
+                    panelId={expansion.panelId(row.recordId)}
+                    onToggle={() => expansion.toggle(row.recordId)}
+                  />
+                )}
               </div>
               {details.length === 0 ? null : (
                 <dl className="m-0 grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-x-3 gap-y-1">
@@ -135,6 +156,17 @@ export function RecordsCards({
                 </dl>
               )}
             </Card>
+            {!expanded || expansion === undefined ? null : (
+              <div
+                id={expansion.panelId(row.recordId)}
+                role="region"
+                aria-label={`Related records of ${name}`}
+                data-vortex-related-panel=""
+                className="mt-1 rounded-lg bg-muted/40 px-3 py-2"
+              >
+                {expansion.panel(row)}
+              </div>
+            )}
           </li>
         );
       })}

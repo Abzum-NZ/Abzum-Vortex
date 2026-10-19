@@ -190,6 +190,9 @@ export const studioSettingProblems = (
       value: SettingValue,
       path: readonly (string | number)[],
     ) => {
+      // Binding fields belong to the page subject or parent row, and a row's related columns to
+      // the related records query; their own checks judge them, not the block's data.
+      if (property.key === "query_parameters" || property.key === "child_columns") return;
       if (
         property.kind === "field_reference" &&
         value?.kind === "field_reference" &&
@@ -206,11 +209,8 @@ export const studioSettingProblems = (
       else if (property.kind === "list" && value?.kind === "list")
         value.items.forEach((item, index) => visit(property.item, item, [...path, index]));
     };
-    // Binding fields belong to the page subject or parent row, not the query output.
-    // The shared binding check validates their scope and type in Studio and publication.
-    for (const property of properties)
-      if (property.key !== "query_parameters")
-        visit(property, values[property.key], [property.key]);
+    // The shared binding check validates binding fields' scope and type in Studio and publication.
+    for (const property of properties) visit(property, values[property.key], [property.key]);
   }
   // A data grid shows at least one column before a person arranges it; publication refuses a
   // grid whose columns are all hidden by default.

@@ -38,6 +38,8 @@ const labels: Record<QueryBindingSourceKind, string> = {
   relative_date: "Relative date",
   this_row: "This row",
 };
+/** The picker value that binds the row itself rather than one of its fields. */
+const ROW_ITSELF = "this-row";
 const anchorLabels: Record<RelativeDateAnchor, string> = {
   today: "Today",
   start_of_week: "Start of this week",
@@ -99,6 +101,13 @@ export function StudioQueryBindings({
         const controls = facts.controls.filter((control) =>
           fitting.some((parameter) => parameter.name === control.parameter),
         );
+        // Inside a row's related records an input may take the row itself or one of its fields.
+        const rowItself =
+          facts.rowRecordType !== undefined &&
+          fit({ kind: "record", recordTypes: [facts.rowRecordType] });
+        const rowFields = (facts.rowFields ?? []).filter(
+          (field) => field.type !== undefined && fit(field.type),
+        );
         const sources: QueryBindingSourceKind[] = [
           "fixed",
           ...(parameters.length ? ["page_parameter" as const] : []),
@@ -108,6 +117,7 @@ export function StudioQueryBindings({
           ...(input.type?.kind === "date" || input.type?.kind === "date_time"
             ? ["relative_date" as const]
             : []),
+          ...(rowItself || rowFields.length ? ["this_row" as const] : []),
         ];
         const change = (properties: Record<string, Value>) =>
           onChange({
@@ -148,7 +158,11 @@ export function StudioQueryBindings({
                     ? { control_placement: text(controls[0]!.placement) }
                     : kind === "current_person"
                       ? { part: choice("person") }
-                      : { anchor: choice("today"), offset_days: { kind: "number", value: 0 } };
+                      : kind === "this_row"
+                        ? rowItself
+                          ? {}
+                          : { field: { kind: "field_reference", field: rowFields[0]!.field } }
+                        : { anchor: choice("today"), offset_days: { kind: "number", value: 0 } };
           change({ source: choice(kind), ...details });
         };
         const valueKey =
@@ -212,6 +226,28 @@ export function StudioQueryBindings({
                         ? { kind: "field_reference", field: value }
                         : text(value),
                   })
+                }
+              />
+            )}
+            {source === "this_row" && rowFields.length > 0 && (
+              <StudioReferencePicker
+                id={`${id}-${input.key}-row`}
+                aria-label={`${input.label} value`}
+                value={props.field?.kind === "field_reference" ? props.field.field : ROW_ITSELF}
+                options={[
+                  ...(rowItself ? [{ value: ROW_ITSELF, label: "The row itself" }] : []),
+                  ...rowFields.map((field) => ({ value: field.field, label: field.label })),
+                ]}
+                disabled={disabled}
+                onChange={(value) =>
+                  change(
+                    Object.fromEntries([
+                      ...Object.entries(props).filter(([key]) => key !== "field"),
+                      ...(value === ROW_ITSELF || value === ""
+                        ? []
+                        : [["field", { kind: "field_reference", field: value } as Value]]),
+                    ]),
+                  )
                 }
               />
             )}

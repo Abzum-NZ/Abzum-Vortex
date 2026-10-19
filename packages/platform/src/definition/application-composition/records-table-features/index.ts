@@ -8,6 +8,10 @@ import {
   type RecordsTableColumnFiltersSettings,
 } from "./column-filters";
 import { recordsTableInlineEditFeature, type RecordsTableInlineEditSettings } from "./inline-edit";
+import {
+  recordsTableMasterDetailFeature,
+  type RecordsTableMasterDetailSettings,
+} from "./master-detail";
 import { recordsTableSavedViewsFeature, type RecordsTableSavedViewsSettings } from "./saved-views";
 import { recordsTableSearchFeature, type RecordsTableSearchSettings } from "./search";
 import {
@@ -28,11 +32,15 @@ export {
   type RecordsTableFeatureState,
   type RecordsTableFieldFacts,
   type RecordsTableQueryFacts,
+  type RecordsTableRelatedQueryFacts,
+  type RecordsTableRelatedRecordsFacts,
 } from "./shared";
+export { RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE } from "./master-detail";
 export type {
   RecordsTableBulkActionsSettings,
   RecordsTableColumnFiltersSettings,
   RecordsTableInlineEditSettings,
+  RecordsTableMasterDetailSettings,
   RecordsTableSavedViewsSettings,
   RecordsTableSearchSettings,
 };
@@ -51,6 +59,7 @@ export type RecordsTableFeatures = Readonly<{
   savedViews: RecordsTableFeatureState<RecordsTableSavedViewsSettings>;
   bulkActions: RecordsTableFeatureState<RecordsTableBulkActionsSettings>;
   inlineEdit: RecordsTableFeatureState<RecordsTableInlineEditSettings>;
+  masterDetail: RecordsTableFeatureState<RecordsTableMasterDetailSettings>;
 }>;
 
 const registry = {
@@ -59,6 +68,7 @@ const registry = {
   saved_views: { property: "savedViews", definition: recordsTableSavedViewsFeature },
   bulk_actions: { property: "bulkActions", definition: recordsTableBulkActionsFeature },
   inline_edit: { property: "inlineEdit", definition: recordsTableInlineEditFeature },
+  master_detail: { property: "masterDetail", definition: recordsTableMasterDetailFeature },
 } as const satisfies Record<
   string,
   Readonly<{
@@ -74,6 +84,7 @@ export const recordsTableFeatureKeys = [
   "saved_views",
   "bulk_actions",
   "inline_edit",
+  "master_detail",
 ] as const satisfies readonly (keyof typeof registry)[];
 export type RecordsTableFeatureKey = (typeof recordsTableFeatureKeys)[number];
 
@@ -112,12 +123,14 @@ export const readRecordsTableFeatures = (
   const savedViews = read("saved_views");
   const bulkActions = read("bulk_actions");
   const inlineEdit = read("inline_edit");
+  const masterDetail = read("master_detail");
   if (
     search === undefined ||
     columnFilters === undefined ||
     savedViews === undefined ||
     bulkActions === undefined ||
-    inlineEdit === undefined
+    inlineEdit === undefined ||
+    masterDetail === undefined
   )
     return undefined;
   return {
@@ -126,6 +139,7 @@ export const readRecordsTableFeatures = (
     savedViews,
     bulkActions: bulkActions as RecordsTableFeatures["bulkActions"],
     inlineEdit: inlineEdit as RecordsTableFeatures["inlineEdit"],
+    masterDetail: masterDetail as RecordsTableFeatures["masterDetail"],
   };
 };
 

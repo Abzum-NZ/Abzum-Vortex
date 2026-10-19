@@ -53,6 +53,10 @@ const fieldFacts = (field: JsonObject): QueryBindingField => {
   };
 };
 
+/** The fields of one compiled record type a binding may name, typed for the binding check. */
+export const compiledRecordBindingFields = (record: unknown): readonly QueryBindingField[] =>
+  array(object(record).fields).map(fieldFacts);
+
 /** The record types a compiled link input may name, from its `record_types` setting. */
 const linkInputTypes = (settings: JsonObject): readonly string[] =>
   array(object(settings.record_types ?? {}).items ?? []).flatMap((item) => {

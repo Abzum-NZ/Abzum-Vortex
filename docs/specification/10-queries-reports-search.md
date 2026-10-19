@@ -105,7 +105,7 @@ and its real storage path, not to a browser-only correction after rows are paged
 
 ## Records table grid features
 
-The Records table grid itself (columns, sorting, density, sticky headings, resizing, reordering and showing or hiding columns) is always available. Everything else is an optional **grid feature**, authored in the table's one `features` setting group as `{ enabled, ...its settings }` and off by default: search, column filters, saved views, bulk actions and inline editing. Later features (grouping, totals, conditional formatting, row details, export) join the same gate.
+The Records table grid itself (columns, sorting, density, sticky headings, resizing, reordering and showing or hiding columns) is always available. Everything else is an optional **grid feature**, authored in the table's one `features` setting group as `{ enabled, ...its settings }` and off by default: search, column filters, saved views, bulk actions, inline editing and related records (master/detail). Later features (grouping, totals, conditional formatting, export) join the same gate.
 
 One gate decides every feature, in three places that cannot disagree:
 
@@ -114,6 +114,12 @@ One gate decides every feature, in three places that cannot disagree:
 3. **Lazy code.** The browser downloads a feature's code only when the projection turns it on; a table with every feature off loads none of it.
 
 A feature that is off holds only its switch, so it compiles to nothing: its flow bindings are not compiled and its controls never render.
+
+### Related records (master/detail)
+
+A row expands to the records of another record type that link to it, for example a company's opportunities. The feature names the **link** from the related record type to the table's record type, the **related records query** of that record type, the query's **input bindings** and the **related columns** (fields that query selects), and reads **at most 40 related records at a time** (Studio starts at 10). The query's inputs bind through the one parameter-binding contract every data block uses; one input is bound to **This row** (the row's record, or one of its fields), which only a row's related records offer. The capability check refuses with the part that does not fit: "Related records need a link from another record type to Company", "Opportunities of one company does not read Contact", a column the query does not select, a page size above 40, a binding the binding check refuses, or a query with no input bound to This row.
+
+At run time a row expands only when the projection says rows expand. Each expand reads one page of that row's related records on the server, and each "Show more" reads the next page with the continuation token the Query engine sealed for that read; collapsing a row and drawing the page read nothing, and a hidden or collapsed row fetches nothing. The browser sends only the table's placement, the row's record identity and the token: the server projects the page again for the viewer (the table must still be on it and usable), reads the row again under the viewer's current access (a row the viewer cannot read is refused), resolves the query's inputs with This row set to that row, and runs the related records query through the protected Query engine with only the related columns, under the viewer's field policy (a withheld value shows as Restricted). Link titles, including each related record's own page address, are read in one batch. A refused read shows "You do not have access to these records" and logs the cause. At most three rows are expanded at once: opening a fourth collapses the oldest and says so. Related rows do not count towards the table's page budget.
 
 ## Saved views
 
