@@ -95,6 +95,7 @@ export type PlacementFailureReason =
   | BoardPlacementFailureCause
   | "board_payload_invalid"
   | "table_state_malformed"
+  | "table_formatting_time_zone_unavailable"
   | "table_columns_withheld";
 
 /**

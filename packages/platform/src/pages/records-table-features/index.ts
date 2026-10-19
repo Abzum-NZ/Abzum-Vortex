@@ -1,5 +1,17 @@
 import type { RecordsTableActionContract, RecordsTableContract } from "../../schema";
 import type { ProtectedQueryRow } from "../../queries/protected-query-contracts";
+import type { ConditionalFormattingProjection } from "./conditional-formatting";
+
+export {
+  conditionalFormattingFieldIds,
+  conditionalFormattingRelativeDates,
+  conditionalFormattingUsesRelativeDates,
+  evaluateConditionalFormatting,
+  type ConditionalColumnFormatProjection,
+  type ConditionalFormattingContext,
+  type ConditionalFormattingProjection,
+  type RecordsTableRowFormat,
+} from "./conditional-formatting";
 
 /**
  * The grid features one viewer may use on one Records table read: each feature the release turns
@@ -18,6 +30,8 @@ export type RecordsTableFeatureProjection = Readonly<{
   bulkActions?: readonly RecordsTableActionContract[];
   /** The fields the viewer may change on at least one row, and the flow binding that commits a change. */
   inlineEdit?: Readonly<{ eventId: string; fields: readonly string[] }>;
+  /** The styles the page's rows name and the numeric columns drawn as bars or scales. */
+  conditionalFormatting?: ConditionalFormattingProjection;
 }>;
 
 /** The part of a Records table request a refusal names, kept only in the server log. */
@@ -73,6 +87,7 @@ export const projectRecordsTableFeatures = (
   contract: RecordsTableContract,
   visibleFieldIds: readonly string[],
   rows: readonly ProtectedQueryRow[],
+  conditionalFormatting?: ConditionalFormattingProjection,
 ): RecordsTableFeatureProjection | undefined => {
   const { features } = contract;
   const withheld = (field: string): boolean =>
@@ -108,6 +123,9 @@ export const projectRecordsTableFeatures = (
     ...(editableFields.length === 0 || !inlineEdit.enabled || inlineEdit.eventId === undefined
       ? {}
       : { inlineEdit: { eventId: inlineEdit.eventId, fields: editableFields } }),
+    ...(conditionalFormatting === undefined || !features.conditionalFormatting.enabled
+      ? {}
+      : { conditionalFormatting }),
   };
   return Object.keys(projection).length === 0 ? undefined : projection;
 };
