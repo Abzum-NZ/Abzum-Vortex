@@ -950,7 +950,8 @@
                   "props": {
                     "id": "settings_region",
                     "row_click": {
-                      "event_id": "event_open_organization_settings"
+                      "event_id": "event_open_organization_settings",
+                      "mode": "flow"
                     },
                     "title": "Current runtime settings",
                     "columns": [

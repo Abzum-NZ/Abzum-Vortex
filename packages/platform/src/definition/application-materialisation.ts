@@ -234,10 +234,17 @@ const compilePropertyValue = (
     case "text":
       // Table behaviours name the same event as their flow bindings. Keep both in the release's
       // permanent identity space so a rendered row can dispatch its declared binding.
+      // A query binding names a control on its page by the control's alias; the release holds
+      // that control's permanent placement identity, exactly as the placement itself compiles.
       compiled =
         schema.key === "event_id"
           ? { kind: "text", value: resolution.identity("event", authored.value) }
-          : authored;
+          : schema.key === "control_placement"
+            ? {
+                kind: "text",
+                value: resolution.identity("block_placement", authored.value, "content"),
+              }
+            : authored;
       break;
     case "asset_reference":
       compiled = { kind: authored.kind, assetId: authored.asset_id };
