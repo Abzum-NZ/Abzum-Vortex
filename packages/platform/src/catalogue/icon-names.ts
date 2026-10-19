@@ -48,6 +48,10 @@ export const VORTEX_ICON_NAMES = [
   "minimize",
   "sun",
   "moon",
+  "triangle-alert",
+  "clock",
+  "flag",
+  "star",
 ] as const;
 
 export const vortexIconNameSchema = z.enum(VORTEX_ICON_NAMES);

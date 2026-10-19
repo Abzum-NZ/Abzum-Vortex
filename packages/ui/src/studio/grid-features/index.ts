@@ -12,11 +12,12 @@ import type {
 /**
  * How Studio edits one grid feature's settings once it is switched on. `settings` draws the feature's
  * declared settings with Studio's one set of typed setting controls (fields are picked from the bound
- * query by business name); a later feature with its own editor registers `{ kind: "custom" }` here.
+ * query by business name); a feature with its own editor registers `{ kind: "custom" }` here and the
+ * Features panel draws that editor.
  * Every feature of the Records table registry has exactly one entry, so the Features panel never
  * meets a feature it cannot show.
  */
-export type StudioGridFeatureEditor = Readonly<{ kind: "settings" }>;
+export type StudioGridFeatureEditor = Readonly<{ kind: "settings" }> | Readonly<{ kind: "custom" }>;
 
 export const studioGridFeatureEditors: Readonly<
   Record<RecordsTableFeatureKey, StudioGridFeatureEditor>
@@ -26,6 +27,7 @@ export const studioGridFeatureEditors: Readonly<
   saved_views: { kind: "settings" },
   bulk_actions: { kind: "settings" },
   inline_edit: { kind: "settings" },
+  conditional_formatting: { kind: "custom" },
 };
 
 /**
@@ -48,6 +50,7 @@ export const studioRecordsTableQueryFacts = (
     searchable: field.searchable,
     editable: query?.grouped !== true && recordsTableEditableFieldTypes.includes(field.type),
     ...(field.choiceCount === undefined ? {} : { choiceCount: field.choiceCount }),
+    ...(field.resultType === undefined ? {} : { resultType: field.resultType }),
   })),
   relationships: relationships
     .filter((relationship) => relationship.recordType === query?.recordType)

@@ -8,6 +8,10 @@ import {
   type RecordsTableColumnFiltersSettings,
 } from "./column-filters";
 import { recordsTableInlineEditFeature, type RecordsTableInlineEditSettings } from "./inline-edit";
+import {
+  recordsTableConditionalFormattingFeature,
+  type RecordsTableConditionalFormattingSettings,
+} from "./conditional-formatting";
 import { recordsTableSavedViewsFeature, type RecordsTableSavedViewsSettings } from "./saved-views";
 import { recordsTableSearchFeature, type RecordsTableSearchSettings } from "./search";
 import {
@@ -19,6 +23,7 @@ import {
 } from "./shared";
 
 export {
+  factsValueType,
   recordsTableActionCapabilities,
   recordsTableEditableFieldTypes,
   type RecordsTableActionCapability,
@@ -29,7 +34,27 @@ export {
   type RecordsTableFieldFacts,
   type RecordsTableQueryFacts,
 } from "./shared";
+export {
+  conditionalColumnFormatFieldTypes,
+  conditionalColumnFormatIssue,
+  conditionalFormatComparisons,
+  conditionalFormatIcons,
+  conditionalFormatRuleFields,
+  conditionalFormatRuleIssue,
+  conditionalFormatTokens,
+  conditionalFormattingDateParameters,
+  type ConditionalColumnFormat,
+  type ConditionalFormatComparison,
+  type ConditionalFormatCondition,
+  type ConditionalFormatIcon,
+  type ConditionalFormatOperand,
+  type ConditionalFormatRule,
+  type ConditionalFormatStyle,
+  type ConditionalFormatToken,
+  type ConditionalFormattingDateParameter,
+} from "./conditional-formatting";
 export type {
+  RecordsTableConditionalFormattingSettings,
   RecordsTableBulkActionsSettings,
   RecordsTableColumnFiltersSettings,
   RecordsTableInlineEditSettings,
@@ -51,6 +76,7 @@ export type RecordsTableFeatures = Readonly<{
   savedViews: RecordsTableFeatureState<RecordsTableSavedViewsSettings>;
   bulkActions: RecordsTableFeatureState<RecordsTableBulkActionsSettings>;
   inlineEdit: RecordsTableFeatureState<RecordsTableInlineEditSettings>;
+  conditionalFormatting: RecordsTableFeatureState<RecordsTableConditionalFormattingSettings>;
 }>;
 
 const registry = {
@@ -59,6 +85,10 @@ const registry = {
   saved_views: { property: "savedViews", definition: recordsTableSavedViewsFeature },
   bulk_actions: { property: "bulkActions", definition: recordsTableBulkActionsFeature },
   inline_edit: { property: "inlineEdit", definition: recordsTableInlineEditFeature },
+  conditional_formatting: {
+    property: "conditionalFormatting",
+    definition: recordsTableConditionalFormattingFeature,
+  },
 } as const satisfies Record<
   string,
   Readonly<{
@@ -74,6 +104,7 @@ export const recordsTableFeatureKeys = [
   "saved_views",
   "bulk_actions",
   "inline_edit",
+  "conditional_formatting",
 ] as const satisfies readonly (keyof typeof registry)[];
 export type RecordsTableFeatureKey = (typeof recordsTableFeatureKeys)[number];
 
@@ -112,12 +143,14 @@ export const readRecordsTableFeatures = (
   const savedViews = read("saved_views");
   const bulkActions = read("bulk_actions");
   const inlineEdit = read("inline_edit");
+  const conditionalFormatting = read("conditional_formatting");
   if (
     search === undefined ||
     columnFilters === undefined ||
     savedViews === undefined ||
     bulkActions === undefined ||
-    inlineEdit === undefined
+    inlineEdit === undefined ||
+    conditionalFormatting === undefined
   )
     return undefined;
   return {
@@ -126,6 +159,7 @@ export const readRecordsTableFeatures = (
     savedViews,
     bulkActions: bulkActions as RecordsTableFeatures["bulkActions"],
     inlineEdit: inlineEdit as RecordsTableFeatures["inlineEdit"],
+    conditionalFormatting: conditionalFormatting as RecordsTableFeatures["conditionalFormatting"],
   };
 };
 
