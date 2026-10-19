@@ -34,6 +34,7 @@ import {
   type RecordsTableContract,
   type RecordsTableSortState,
 } from "@vortex/platform/schema";
+import { Card } from "../components/card";
 import { Icon } from "../icons/icon";
 import { cn } from "../lib/utils";
 import type { DisplayEventHandlers, DisplayRow } from "./projected-data";
@@ -797,12 +798,13 @@ export function RecordsGrid({
   );
 
   return (
-    <div
+    // The frame is the theme's card (its radius, ring and surface); the grid scrolls inside it.
+    <Card
       ref={scrollRef}
       data-slot="grid-viewport"
       data-vortex-grid-virtualized={virtual ? "" : undefined}
       className={cn(
-        "relative max-w-full overflow-auto rounded-xl border bg-card text-card-foreground",
+        "relative max-w-full gap-0 overflow-auto py-0",
         bounded && BOUNDED_VIEWPORT_CLASS,
       )}
     >
@@ -859,6 +861,6 @@ export function RecordsGrid({
           </div>
         )}
       </div>
-    </div>
+    </Card>
   );
 }

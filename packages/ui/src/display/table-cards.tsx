@@ -2,6 +2,7 @@
 
 import { useState, type MouseEvent, type ReactElement, type ReactNode } from "react";
 import type { RecordsTableColumnContract } from "@vortex/platform/schema";
+import { Card } from "../components/card";
 import { cn } from "../lib/utils";
 import type { DisplayRow } from "./projected-data";
 import { useRowEntrance } from "./row-entrance";
@@ -92,7 +93,6 @@ export function RecordsCards({
             aria-labelledby={headingId}
             aria-busy={pending === row.recordId ? true : undefined}
             className={cn(
-              "flex flex-col gap-2 rounded-xl border bg-card p-3 text-sm text-card-foreground data-[state=selected]:border-primary",
               activateRow !== undefined && "cursor-pointer",
               pending === row.recordId && "cursor-progress opacity-60",
             )}
@@ -102,37 +102,39 @@ export function RecordsCards({
               activate(row.recordId);
             }}
           >
-            <div className="flex min-w-0 items-center gap-2">
-              {selectable ? renderers.select(row, selected) : null}
-              <h3 id={headingId} className="m-0 min-w-0 flex-1 truncate text-sm font-medium">
-                {activateRow === undefined || heading === undefined ? (
-                  heading === undefined ? null : (
-                    renderers.value(row, heading)
-                  )
-                ) : (
-                  <button
-                    type="button"
-                    className="max-w-full truncate text-start font-medium underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
-                    onClick={() => activate(row.recordId)}
-                  >
-                    {renderers.text(row, heading)}
-                  </button>
-                )}
-              </h3>
-              {showActions ? renderers.actions(row) : null}
-            </div>
-            {details.length === 0 ? null : (
-              <dl className="m-0 grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-x-3 gap-y-1">
-                {details.map((column) => (
-                  <div key={column.key} className="contents">
-                    <dt className="truncate text-muted-foreground">{column.label}</dt>
-                    <dd className="m-0 min-w-0 truncate text-end">
-                      {renderers.value(row, column)}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            )}
+            <Card size="sm" className={cn("gap-2 p-3", selected && "ring-2 ring-primary")}>
+              <div className="flex min-w-0 items-center gap-2">
+                {selectable ? renderers.select(row, selected) : null}
+                <h3 id={headingId} className="m-0 min-w-0 flex-1 truncate text-sm font-medium">
+                  {activateRow === undefined || heading === undefined ? (
+                    heading === undefined ? null : (
+                      renderers.value(row, heading)
+                    )
+                  ) : (
+                    <button
+                      type="button"
+                      className="max-w-full truncate text-start font-medium underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
+                      onClick={() => activate(row.recordId)}
+                    >
+                      {renderers.text(row, heading)}
+                    </button>
+                  )}
+                </h3>
+                {showActions ? renderers.actions(row) : null}
+              </div>
+              {details.length === 0 ? null : (
+                <dl className="m-0 grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-x-3 gap-y-1">
+                  {details.map((column) => (
+                    <div key={column.key} className="contents">
+                      <dt className="truncate text-muted-foreground">{column.label}</dt>
+                      <dd className="m-0 min-w-0 truncate text-end">
+                        {renderers.value(row, column)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+            </Card>
           </li>
         );
       })}

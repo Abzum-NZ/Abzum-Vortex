@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, useRef, useState, type ReactElement } from "react";
 import type { RecordsTableContract } from "@vortex/platform/schema";
+import { Card } from "../components/card";
 import { Skeleton } from "../components/skeleton";
 import { cn } from "../lib/utils";
 import {
@@ -76,7 +77,7 @@ export function TableLoadingState({
     return (
       <div {...state} className="flex flex-col gap-2">
         {Array.from({ length: drawnRows }, (_, card) => (
-          <div key={card} className="flex flex-col gap-2 rounded-xl border bg-card p-3">
+          <Card key={card} size="sm" className="gap-2 p-3">
             <Skeleton className="h-[0.875em] w-2/3" />
             {columns.slice(1).map((column) => (
               <div key={column.field} className="flex items-center justify-between gap-4">
@@ -84,7 +85,7 @@ export function TableLoadingState({
                 <Skeleton className="h-[0.75em] w-1/3" />
               </div>
             ))}
-          </div>
+          </Card>
         ))}
       </div>
     );
@@ -115,10 +116,10 @@ export function TableLoadingState({
     </div>
   );
   return (
-    <div
+    <Card
       {...state}
       className={cn(
-        "relative max-w-full overflow-hidden rounded-xl border bg-card",
+        "relative max-w-full gap-0 overflow-hidden py-0",
         contract.viewport === "bounded" && BOUNDED_VIEWPORT_CLASS,
       )}
     >
@@ -129,6 +130,6 @@ export function TableLoadingState({
           <div style={{ height: (contract.pageSize - drawnRows) * rowHeight }} />
         )}
       </div>
-    </div>
+    </Card>
   );
 }
