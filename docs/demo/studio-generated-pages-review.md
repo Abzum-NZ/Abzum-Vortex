@@ -158,8 +158,9 @@ by the UI package typecheck and CI, following the no-overlap re-walk rule.
 The [draft proof release](https://github.com/Abzum-NZ/Abzum-Vortex/releases/tag/untagged-e21dd79e668b5644a446)
 contains the matrix and supplementary screenshots. Its configured tag is
 `m2897-proof-20261019`; GitHub currently exposes draft assets under the temporary
-release URL above. Draft access requires repository access. Delete the draft
-release after the review PR merges.
+release URL above. Draft access requires repository access. Retain the baseline
+and reviewer releases for the post-merge visual audit and open defect #3080;
+they are still referenced evidence, rather than disposable build output.
 
 Matrix filenames use `<page>-<appearance>-<width>.png`, where page is `list`,
 `create`, `edit`, `detail` or `board`; appearance is `light` or `dark`; and width is
