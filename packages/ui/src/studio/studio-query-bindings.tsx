@@ -171,7 +171,9 @@ export function StudioQueryBindings({
             </div>
             <Select value={source || "unset"} disabled={disabled} onValueChange={selectSource}>
               <SelectTrigger aria-label={`${input.label} source`}>
-                <SelectValue />
+                <SelectValue>
+                  {labels[source as QueryBindingSourceKind] ?? "Choose a source"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="unset">Choose a source</SelectItem>
@@ -224,7 +226,9 @@ export function StudioQueryBindings({
                   onValueChange={(value) => change({ ...props, value: text(value ?? "") })}
                 >
                   <SelectTrigger aria-label={`${input.label} value`}>
-                    <SelectValue />
+                    <SelectValue>
+                      {props.value?.kind === "text" && props.value.value === "true" ? "Yes" : "No"}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="true">Yes</SelectItem>
@@ -253,7 +257,12 @@ export function StudioQueryBindings({
                   onValueChange={(value) => change({ ...props, anchor: choice(value ?? "today") })}
                 >
                   <SelectTrigger aria-label={`${input.label} date`}>
-                    <SelectValue />
+                    <SelectValue>
+                      {(props.anchor?.kind === "choice" ? props.anchor.value : "today").replaceAll(
+                        "_",
+                        " ",
+                      )}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {relativeDateAnchors.map((anchor) => (

@@ -74,6 +74,7 @@ export const readLauncher = async (
   const seenContinuationTokens = new Set<string>();
   let continuationToken: string | undefined;
   let failure: "unavailable" | "refused" | "too_many_rows" | undefined;
+  let failureCause: string | undefined;
   do {
     const result = await read.services.queries.run(read.session, read.selection, {
       ...command.data,
@@ -85,6 +86,10 @@ export const readLauncher = async (
     }
     if (result.kind !== "available" || result.value.outcome !== "completed") {
       failure = "refused";
+      failureCause =
+        result.kind === "available" && result.value.outcome === "refused"
+          ? result.value.reasonCode
+          : result.kind;
       break;
     }
     queryRows.push(...result.value.rows);
@@ -105,6 +110,7 @@ export const readLauncher = async (
       address,
       placementId,
       failure === "unavailable" ? "launcher_query_unavailable" : "launcher_query_refused",
+      failureCause,
     );
     data[placementId] =
       failure === "unavailable"

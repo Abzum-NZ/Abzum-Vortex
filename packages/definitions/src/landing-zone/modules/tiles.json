@@ -326,7 +326,7 @@
         "protected_view": "installed_applications",
         "organization_field": "organization_id",
         "revision_field": "revision",
-        "filterable_fields": [],
+        "filterable_fields": ["name"],
         "sortable_fields": ["name"]
       },
       "fields": [
@@ -379,7 +379,7 @@
           "label": "Name",
           "required": true,
           "unique": false,
-          "filterable": false,
+          "filterable": true,
           "sortable": true,
           "personal_data": "none",
           "public_display": "refused",
