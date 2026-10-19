@@ -35,6 +35,7 @@ const itemVariants = cva(
         default: "cn-item-variant-default",
         outline: "cn-item-variant-outline",
         muted: "cn-item-variant-muted",
+        navigation: "cn-item-variant-navigation",
       },
       size: {
         default: "cn-item-size-default",
