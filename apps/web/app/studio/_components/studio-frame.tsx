@@ -407,11 +407,7 @@ export function StudioFrame<Key extends string>({
   }, []);
   const choose = (key: Key) => {
     setFocused(false);
-    if (key === activeTab) {
-      if (wide) setPanelOpen((open) => !open);
-      else setNarrowPanelOpen((open) => !open);
-      return;
-    }
+    // Selecting a tab always reveals its pane, including the tab restored from the URL on reload.
     onTabChange(key);
     if (wide) setPanelOpen(true);
     else setNarrowPanelOpen(true);
