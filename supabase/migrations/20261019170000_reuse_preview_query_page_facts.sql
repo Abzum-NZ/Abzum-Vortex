@@ -1,6 +1,9 @@
 -- Reuse invocation-local preview facts in the existing protected page reader.
 set local role vortex_owner;
 
+-- Preserve the restricted owner and its record-data RLS policies.
+set local role vortex_record_adapter;
+
 create or replace function vortex_record.run_module_query(
   p_module_root_id uuid,
   p_query_id uuid,
@@ -1641,6 +1644,8 @@ revoke all on function vortex_record.read_record_page_decisions_internal(uuid,js
 
 comment on function vortex_record.read_record_page_decisions_internal(uuid,jsonb,jsonb,jsonb,uuid[],jsonb,boolean) is
   'Private page read pass for the fixed record adapter: loads the stored facts of every candidate record of one page in one statement, decides them together through the set-based exact decision with the page eligibility computed once in this invocation, and resolves field bounds once per distinct contribution set; each decided record is returned as its compact record scope, which with the page envelope built once for the page is the facts the exact loader would give it; returns only records it decided, so every other record keeps the exact single-record path.';
+
+set local role vortex_owner;
 
 create or replace function vortex_record.read_record_projection_with_validated_types_internal(
   p_record_type_id uuid,
