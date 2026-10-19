@@ -1,4 +1,4 @@
-create or replace function vortex_definition.list_organization_builder_roots()
+create or replace function vortex_definition.list_organization_builder_roots(p_after_key text)
 returns table (
   root_id uuid,
   kind text,
@@ -6,7 +6,11 @@ returns table (
   display_name text,
   draft_revision bigint,
   current_release_revision bigint,
-  application_origin_kind text
+  application_origin_kind text,
+  description text,
+  icon text,
+  edited_at timestamptz,
+  edited_by uuid
 )
 language plpgsql
 stable
@@ -34,7 +38,11 @@ begin
     ),
     draft.draft_revision,
     root.current_release_revision,
-    root.application_origin_kind
+    root.application_origin_kind,
+    coalesce(draft.draft_source, release.authored_source) -> 'body' ->> 'description',
+    coalesce(draft.draft_source, release.authored_source) -> 'body' ->> 'icon',
+    coalesce(draft.updated_at, root.created_at),
+    coalesce(draft.updated_by, root.created_by)
   from vortex_definition.roots as root
   left join vortex_definition.drafts as draft on draft.root_id = root.root_id
   left join vortex_definition.releases as release
@@ -42,21 +50,18 @@ begin
     and release.release_revision = root.current_release_revision
   where root.organization_id = (checked_context ->> 'organizationId')::uuid
     and root.kind = 'application'
-  order by coalesce(
-    nullif(pg_catalog.btrim(draft.draft_source -> 'body' ->> 'name'), ''),
-    nullif(pg_catalog.btrim(release.authored_source -> 'body' ->> 'name'), ''),
-    root.key
-  ), root.key, root.root_id
-  limit 200;
+    and (p_after_key is null or root.key > p_after_key)
+  order by root.key
+  limit 41;
 end
 $function$;
 
-revoke all on function vortex_definition.list_organization_builder_roots()
+revoke all on function vortex_definition.list_organization_builder_roots(text)
   from public, anon, authenticated, service_role, vortex_runtime;
-grant execute on function vortex_definition.list_organization_builder_roots()
+grant execute on function vortex_definition.list_organization_builder_roots(text)
   to vortex_request;
 
-comment on function vortex_definition.list_organization_builder_roots() is
-  'Lists at most 200 Application roots in the validated human request organization for a permitted builder; Modules are internal to the Application that owns them.';
+comment on function vortex_definition.list_organization_builder_roots(text) is
+  'Lists a keyset page of 40 Application roots plus one continuation row in the validated human request organization for a permitted builder; Modules are internal to the Application that owns them.';
 
-alter function vortex_definition.list_organization_builder_roots() owner to vortex_owner;
+alter function vortex_definition.list_organization_builder_roots(text) owner to vortex_owner;

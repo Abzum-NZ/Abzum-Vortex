@@ -17,6 +17,10 @@ const rowSchema = z
     display_name: z.string().nullable(),
     draft_revision: revisionSchema.nullable(),
     current_release_revision: revisionSchema.nullable(),
+    description: z.string().nullable(),
+    icon: z.string().nullable(),
+    edited_at: z.string().datetime({ offset: true }),
+    edited_by: z.string().uuid(),
     application_origin_kind: z.enum(["ordinary", "platform_system_application"]),
   })
   .strict();
@@ -28,23 +32,28 @@ export type OrganizationBuilderRoot = Readonly<{
   draftRevision: number | null;
   currentReleaseRevision: number | null;
   isSystemApplication: boolean;
+  description: string | null;
+  icon: string | null;
+  editedAt: string;
+  editedBy: string;
 }>;
 
 /** Reads one bounded organization listing through the protected Definition API. */
 export const listOrganizationBuilderRoots = async (
   transaction: RequestDatabaseTransaction,
-): Promise<readonly OrganizationBuilderRoot[]> => {
+  afterKey: string | null,
+): Promise<Readonly<{ roots: readonly OrganizationBuilderRoot[]; nextCursor: string | null }>> => {
   const rows = await transaction.query<DatabaseRow>`
     select root_id, kind, definition_key, display_name, draft_revision,
-      current_release_revision, application_origin_kind
-    from vortex_definition.list_organization_builder_roots()
+      current_release_revision, application_origin_kind, description, icon, edited_at, edited_by
+    from vortex_definition.list_organization_builder_roots(${afterKey}::text)
   `;
-  if (rows.length > 200) throw new Error("STUDIO_ROOT_LIST_STORAGE_INVALID");
-  return rows.map((row) => {
+  if (rows.length > 41) throw new Error("STUDIO_ROOT_LIST_STORAGE_INVALID");
+  const parsedRoots = rows.map((row) => {
     const parsed = rowSchema.parse({
       ...row,
-      draft_revision:
-        row.draft_revision === null ? null : databaseRevision(row.draft_revision),
+      edited_at: row.edited_at instanceof Date ? row.edited_at.toISOString() : row.edited_at,
+      draft_revision: row.draft_revision === null ? null : databaseRevision(row.draft_revision),
       current_release_revision:
         row.current_release_revision === null
           ? null
@@ -57,7 +66,13 @@ export const listOrganizationBuilderRoots = async (
       name: parsed.display_name ?? parsed.definition_key,
       draftRevision: parsed.draft_revision,
       currentReleaseRevision: parsed.current_release_revision,
+      description: parsed.description,
+      icon: parsed.icon,
+      editedAt: parsed.edited_at,
+      editedBy: parsed.edited_by,
       isSystemApplication: parsed.application_origin_kind === "platform_system_application",
     };
   });
+  const roots = parsedRoots.slice(0, 40);
+  return { roots, nextCursor: rows.length > 40 ? roots.at(-1)!.key : null };
 };
