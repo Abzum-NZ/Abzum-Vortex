@@ -1,4 +1,3 @@
-begin;
 set local role vortex_owner;
 
 create or replace function vortex_definition.read_owned_module_publication(
@@ -138,4 +137,3 @@ grant execute on function vortex_definition.read_application_draft_consistency(u
 alter function vortex_definition.read_application_draft_consistency(uuid, bigint, text, bigint) owner to vortex_owner;
 
 reset role;
-commit;
