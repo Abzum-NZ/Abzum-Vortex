@@ -302,7 +302,10 @@ export function StudioAccessPermissionList({
                 (entry) =>
                   entry.key === permission.key &&
                   !permission.standard &&
-                  (entry.action_kind === "read" || entry.action_kind === "named"),
+                  (permission.moduleKey === undefined
+                    ? entry.record_type === undefined && entry.action_kind === "named"
+                    : entry.record_type !== undefined &&
+                      (entry.action_kind === "read" || entry.action_kind === "named")),
               );
               return (
                 <Fragment key={permission.key}>
