@@ -216,7 +216,7 @@ export function StudioDataPanel({
       <StudioSection title="Application">
         <StudioNavItem
           label="Queries"
-          icon="panel-left"
+          icon="list-tree"
           selected={queriesSelected}
           onClick={onQueries}
         />

@@ -211,7 +211,7 @@ export function StudioQueryCatalogue({
       !(await confirm({
         title: `Make ${query.label} private?`,
         description:
-          "Applications that use this module and read this query stop reading it once you publish. Only this application reads a private query.",
+          "Only this application reads a private query. Applications that read it today keep reading it from the release they published; their next publish is refused until they choose another query.",
         confirmLabel: "Make private",
       }))
     )
@@ -302,7 +302,7 @@ export function StudioQueryCatalogue({
               title: "Owned by",
               cell: (row) => (
                 <span className="inline-flex items-center gap-2">
-                  <Icon name="shield" className="size-4 text-muted-foreground" />
+                  <Icon name="blocks" className="size-4 text-muted-foreground" />
                   {ownerName(row.module.ownerApplication)}
                 </span>
               ),

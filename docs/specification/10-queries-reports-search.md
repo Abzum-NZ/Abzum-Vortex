@@ -48,7 +48,11 @@ Module reads its exposed queries and nothing else. One rule decides it in every 
 data picker and its store-time check offer only exposed queries of used Modules, the draft compile
 and publication validation refuse a page, block or interface that names a private query of another
 Application (`vortex.definition.application_query_exposure`), and the database query preparation
-refuses to read it, so neither a hand-written request nor an older release can bypass it. A
+refuses to read it, so neither a hand-written request nor a release compiled before exposure
+existed can bypass it. A published Application release pins the exact Module release it was
+compiled against: when the owner makes a query private, a release that already reads it keeps
+reading that pinned, exposed revision, and the borrower's next publication is refused with the
+query named, so nothing breaks silently. A
 record type's own listing is not an authored query and follows record access. Studio's Data tab
 lists the Application's queries ("This app", with an Expose switch) and the exposed queries of the
 Applications it uses ("From other apps", read-only), each with its record type, inputs and uses.
