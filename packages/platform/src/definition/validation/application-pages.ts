@@ -72,6 +72,9 @@ export function applicationPageRules(scope: ApplicationScope): void {
             ...(field.type === "choice" && Array.isArray(options)
               ? { choiceCount: options.length }
               : {}),
+            ...(typeof object(field.settings ?? {}).resultType === "string"
+              ? { resultType: String(object(field.settings ?? {}).resultType) }
+              : {}),
           };
         }),
       relationships: array(record?.relationships).map((relationship) => ({
@@ -534,6 +537,11 @@ export function applicationPageRules(scope: ApplicationScope): void {
         const inspectPublicSetting = (setting: JsonObject) => {
           if (setting.kind === "field_reference" && !pagePublicFields.has(String(setting.fieldId)))
             publicBlockReferencesSafe = false;
+          if (setting.kind === "condition")
+            walkValues(setting.condition, (entry) => {
+              if (entry.source === "field" && !pagePublicFields.has(String(entry.fieldId)))
+                publicBlockReferencesSafe = false;
+            });
           if (setting.kind === "relationship_reference" || setting.kind === "record_reference")
             publicBlockReferencesSafe = false;
           if (

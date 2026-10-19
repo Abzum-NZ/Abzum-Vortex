@@ -925,6 +925,90 @@
                   "type": "platform.renderer.table",
                   "props": {
                     "id": "content_4",
+                    "features": {
+                      "conditional_formatting": {
+                        "enabled": true,
+                        "rules": [
+                          {
+                            "rule_id": "overdue",
+                            "condition": {
+                              "field": "vortex.crm.opportunities:opportunity.expected_close_date",
+                              "operator": "less_than",
+                              "parameter": "today"
+                            },
+                            "target": "row",
+                            "token": "warning",
+                            "tint": true,
+                            "icon": "alert",
+                            "badge_label": "Overdue"
+                          },
+                          {
+                            "rule_id": "due_this_week",
+                            "condition": {
+                              "all": [
+                                {
+                                  "field": "vortex.crm.opportunities:opportunity.expected_close_date",
+                                  "operator": "greater_than_or_equal",
+                                  "parameter": "start_of_week"
+                                },
+                                {
+                                  "field": "vortex.crm.opportunities:opportunity.expected_close_date",
+                                  "operator": "less_than_or_equal",
+                                  "parameter": "end_of_week"
+                                }
+                              ]
+                            },
+                            "target": "cells",
+                            "fields": ["vortex.crm.opportunities:opportunity.expected_close_date"],
+                            "token": "info",
+                            "tint": false,
+                            "text_colour": true,
+                            "icon": "clock"
+                          },
+                          {
+                            "rule_id": "discounted",
+                            "condition": {
+                              "operator": "greater_than",
+                              "left": {
+                                "source": "field",
+                                "field": "vortex.crm.opportunities:opportunity.value"
+                              },
+                              "right": {
+                                "source": "field",
+                                "field": "vortex.crm.opportunities:opportunity.net_value"
+                              }
+                            },
+                            "target": "cells",
+                            "fields": ["vortex.crm.opportunities:opportunity.net_value"],
+                            "token": "success",
+                            "tint": false,
+                            "text_colour": true,
+                            "icon": "arrow_down",
+                            "badge_label": "Discount"
+                          },
+                          {
+                            "rule_id": "negotiation",
+                            "condition": {
+                              "field": "vortex.crm.opportunities:opportunity.stage",
+                              "operator": "equals",
+                              "value": "negotiation"
+                            },
+                            "target": "cells",
+                            "fields": ["vortex.crm.opportunities:opportunity.stage"],
+                            "token": "info",
+                            "tint": false,
+                            "bold": true
+                          }
+                        ],
+                        "column_formats": [
+                          {
+                            "field": "vortex.crm.opportunities:opportunity.value",
+                            "kind": "data_bar",
+                            "token": "info"
+                          }
+                        ]
+                      }
+                    },
                     "row_click": {
                       "event_id": "event_crm_open_opportunity",
                       "mode": "flow"
