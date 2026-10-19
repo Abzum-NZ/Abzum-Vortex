@@ -280,6 +280,16 @@
                         "visible": true
                       },
                       {
+                        "field": "vortex.app_store:store_application.record_update_status",
+                        "label": "Existing records",
+                        "visible": true
+                      },
+                      {
+                        "field": "vortex.app_store:store_application.records_processed",
+                        "label": "Records processed",
+                        "visible": false
+                      },
+                      {
                         "field": "vortex.app_store:store_application.installed_version",
                         "label": "Installed version",
                         "visible": true
@@ -292,7 +302,7 @@
                       {
                         "field": "vortex.app_store:store_application.published_at",
                         "label": "Published",
-                        "visible": true
+                        "visible": false
                       }
                     ],
                     "row_actions": [
@@ -365,6 +375,14 @@
                       {
                         "field": "vortex.app_store:store_application.status",
                         "label": "Status"
+                      },
+                      {
+                        "field": "vortex.app_store:store_application.record_update_status",
+                        "label": "Existing records"
+                      },
+                      {
+                        "field": "vortex.app_store:store_application.records_processed",
+                        "label": "Records processed"
                       },
                       {
                         "field": "vortex.app_store:store_application.installed_version",

@@ -1,11 +1,11 @@
 import "server-only";
 
 import {
-  eventOccurrenceEnvelopeSchema,
+  dispatchOccurrenceSchema,
   eventOccurrenceIdSchema,
   isNonNilUuidText,
   timestampSchema,
-  type EventOccurrenceEnvelope,
+  type DispatchOccurrence,
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
@@ -53,7 +53,7 @@ export type EventConsumerAcknowledgementInput = Readonly<{
 }>;
 
 export type ClaimedEventOccurrence = Readonly<{
-  occurrence: EventOccurrenceEnvelope;
+  occurrence: DispatchOccurrence;
   causalDepth: number;
   leaseExpiresAt: string;
 }>;
@@ -182,7 +182,7 @@ const parseClaimResult = (
     throw new EventConsumerProgressError("EVENT_CONSUMER_PROGRESS_STORAGE_UNAVAILABLE");
   for (const item of occurrences) {
     const claimed = exactRecord(item, ["occurrence", "causalDepth", "leaseExpiresAt"]);
-    const occurrence = eventOccurrenceEnvelopeSchema.safeParse(claimed?.occurrence);
+    const occurrence = dispatchOccurrenceSchema.safeParse(claimed?.occurrence);
     if (
       claimed === undefined ||
       !occurrence.success ||

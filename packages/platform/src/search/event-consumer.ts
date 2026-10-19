@@ -248,7 +248,7 @@ export type SearchDeliveryFailureCode =
  * depend on a same-tier service package.
  */
 export type SearchEventDelivery = Readonly<{
-  occurrence: EventOccurrenceEnvelope;
+  occurrence: unknown;
   renewLease: () => Promise<boolean>;
 }>;
 
