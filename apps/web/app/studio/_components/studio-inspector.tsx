@@ -47,7 +47,11 @@ function LabelsForm({ labels }: Readonly<{ labels: StudioLabelsForm }>) {
         )}
       </StudioField>
       {labels.isApplication && (
-        <StudioField label="Description" error={description.problem || undefined} onUndo={description.reset}>
+        <StudioField
+          label="Description"
+          error={description.problem || undefined}
+          onUndo={description.reset}
+        >
           {(control) => (
             <Textarea
               {...control}
