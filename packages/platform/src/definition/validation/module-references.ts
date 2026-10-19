@@ -104,9 +104,16 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
       const targets = relationship?.toRecordType
         ? [relationship.toRecordType]
         : array(relationship?.toRecordTypes);
+      const ownerField = array(currentRecord.fields).find(
+        (field) => String(field.fieldId) === String(relationship?.fromFieldId),
+      );
       if (
         !relationship ||
         !current ||
+        !ownerField ||
+        ownerField.required !== true ||
+        !["link", "link_to_one_of_several"].includes(String(ownerField.type)) ||
+        relationship.cardinality === "many_to_many" ||
         String(relationship.fromRecordTypeId) !== String(currentRecord.recordTypeId) ||
         targets.length === 0
       )

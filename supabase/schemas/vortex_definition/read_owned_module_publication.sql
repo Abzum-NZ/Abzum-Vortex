@@ -41,7 +41,6 @@ begin
     select 1 from vortex_definition.roots as root
     join vortex_definition.releases as release
       on release.root_id = root.root_id
-      and release.release_revision = root.current_release_revision
     cross join lateral pg_catalog.jsonb_array_elements(
       release.compilation_output #> '{canonical,content,recordTypes}'
     ) as record(value)
@@ -56,12 +55,13 @@ begin
     raise exception using errcode = '23514', message = 'Owned Module publication record is inconsistent';
   end if;
 
+  -- Storage remains published even when a later release removes it. Preview plans
+  -- live on preview_installations, so only real publications contribute here.
   with records as materialized (
     select root.key as module_key, record.value as record, record.ordinality
     from vortex_definition.roots as root
     join vortex_definition.releases as release
       on release.root_id = root.root_id
-      and release.release_revision = root.current_release_revision
     cross join lateral pg_catalog.jsonb_array_elements(
       release.compilation_output #> '{canonical,content,recordTypes}'
     ) with ordinality as record(value, ordinality)
@@ -75,13 +75,12 @@ begin
       with ordinality as field(value, ordinality)
   )
   select pg_catalog.jsonb_build_object(
-    'recordTypes', coalesce((select pg_catalog.jsonb_agg(
-      module_key || ':' || (record ->> 'key') order by module_key collate "C", ordinality
-    ) from records), '[]'::jsonb),
-    'fields', coalesce((select pg_catalog.jsonb_agg(
-      module_key || ':' || record_key || '.' || (value ->> 'key')
-      order by module_key collate "C", record_ordinality, ordinality
-    ) from fields), '[]'::jsonb)
+    'recordTypes', coalesce((select pg_catalog.jsonb_agg(qualified_key order by qualified_key collate "C")
+      from (select distinct module_key || ':' || (record ->> 'key') as qualified_key from records) as names
+    ), '[]'::jsonb),
+    'fields', coalesce((select pg_catalog.jsonb_agg(qualified_key order by qualified_key collate "C")
+      from (select distinct module_key || ':' || record_key || '.' || (value ->> 'key') as qualified_key from fields) as names
+    ), '[]'::jsonb)
   ), exists (
     select 1 from fields
     where pg_catalog.jsonb_typeof(value -> 'key') is distinct from 'string'
