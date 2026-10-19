@@ -183,7 +183,9 @@ function RelatedRecords({ context, row }: GridFeatureRowProps): ReactElement {
           }
         : outcome.status === "empty"
           ? { kind: "ready", page: { columns: shown.columns, rows: shown.rows }, more: "idle" }
-          : { kind: "ready", page: shown, more: "failed" },
+          : outcome.status === "refused"
+            ? { kind: "refused" }
+            : { kind: "ready", page: shown, more: "failed" },
     );
   };
 

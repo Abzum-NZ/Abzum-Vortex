@@ -82,7 +82,14 @@ export function useRowDetail({
           return { status: "error" };
       }
     },
-    [],
+    [
+      application.tenantShortName,
+      application.organizationShortName,
+      application.applicationKey,
+      application.installationRevision,
+      currentPageKey,
+      currentSearch,
+    ],
   );
 
   return { readDetail };

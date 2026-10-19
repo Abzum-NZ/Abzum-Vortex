@@ -11,6 +11,7 @@ export const MAXIMUM_EXPANDED_ROWS = 3;
  * the same controls; only expanded rows draw a panel, and only a drawn panel reads anything.
  */
 export type RowExpansionControls = Readonly<{
+  expandedRecordIds: readonly string[];
   isExpanded: (recordId: string) => boolean;
   toggle: (recordId: string) => void;
   panel: (row: DisplayRow) => ReactNode;
@@ -75,6 +76,7 @@ export const useRowExpansion = (
     () =>
       enabled
         ? {
+            expandedRecordIds: expanded,
             isExpanded: (recordId: string) => expanded.includes(recordId),
             toggle,
             panel,

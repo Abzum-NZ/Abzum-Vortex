@@ -104,6 +104,19 @@ export function RecordsCards({
         return (
           <li
             key={row.recordId}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Escape" &&
+                !event.defaultPrevented &&
+                event.target instanceof Element &&
+                event.target.closest("[data-vortex-related-panel]") !== null
+              ) {
+                event.preventDefault();
+                event.currentTarget
+                  .querySelector<HTMLButtonElement>("button[aria-controls]")
+                  ?.focus();
+              }
+            }}
             id={`record-${row.recordId}`}
             data-vortex-record-id={row.recordId}
             data-state={selected ? "selected" : undefined}

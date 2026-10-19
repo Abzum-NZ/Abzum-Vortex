@@ -35,6 +35,15 @@ export function RowExpansionToggle({
             {...(expanded ? { "aria-controls": panelId } : {})}
             aria-label={label}
             onClick={onToggle}
+            onKeyDown={(event) => {
+              if (
+                (event.key === "ArrowRight" && !expanded) ||
+                (event.key === "ArrowLeft" && expanded)
+              ) {
+                event.preventDefault();
+                onToggle();
+              }
+            }}
           />
         }
       >

@@ -1091,6 +1091,7 @@ export function RecordsGrid({
             fallback={<div role="rowgroup" style={{ height: rows.length * rowHeight }} />}
           >
             <VirtualRows
+              expandedRecordIds={expansion?.expandedRecordIds}
               rows={rows}
               rowHeight={rowHeight}
               activeRow={activeRow}

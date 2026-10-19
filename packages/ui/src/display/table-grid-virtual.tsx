@@ -15,6 +15,7 @@ export default function VirtualRows({
   rows,
   rowHeight,
   activeRow,
+  expandedRecordIds,
   stickyHeader,
   scrollRef,
   drawRow,
@@ -23,19 +24,24 @@ export default function VirtualRows({
   rowHeight: number;
   /** The row holding the grid's tab stop, or -1 for the header. */
   activeRow: number;
+  expandedRecordIds: readonly string[] | undefined;
   stickyHeader: boolean;
   scrollRef: RefObject<HTMLDivElement | null>;
   drawRow: (row: DisplayRow, index: number) => ReactNode;
 }>): ReactElement {
-  // The active row is always mounted: it stays while the window scrolls away, so focus is never
-  // dropped, and a keyboard move to a row outside the window mounts it in the same render.
+  // Keep the active row and the at most three expanded rows mounted. Scrolling must neither
+  // discard a panel's pages nor repeat its read when the row returns to the window.
   const rangeExtractor = useCallback(
     (range: Range): number[] => {
-      const indexes = defaultRangeExtractor(range);
-      if (activeRow < 0 || activeRow >= range.count || indexes.includes(activeRow)) return indexes;
-      return [...indexes, activeRow].sort((left, right) => left - right);
+      const indexes = new Set(defaultRangeExtractor(range));
+      if (activeRow >= 0 && activeRow < range.count) indexes.add(activeRow);
+      for (const recordId of expandedRecordIds ?? []) {
+        const index = rows.findIndex((row) => row.recordId === recordId);
+        if (index >= 0) indexes.add(index);
+      }
+      return [...indexes].sort((left, right) => left - right);
     },
-    [activeRow],
+    [activeRow, expandedRecordIds, rows],
   );
   const virtualizer = useVirtualizer({
     count: rows.length,
