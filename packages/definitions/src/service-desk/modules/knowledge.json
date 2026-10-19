@@ -722,6 +722,7 @@
     {
       "id": "qry_sd_knowledge",
       "key": "service_desk_knowledge",
+      "exposure": "private",
       "label": "Knowledge articles",
       "record_type": "article",
       "inputs": [],

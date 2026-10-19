@@ -1008,41 +1008,62 @@ function ListControl({
   );
 }
 
+/** What a query asks for, in a picker row: its inputs by name, or nothing when it asks for none. */
+const queryInputsDescription = (query: StudioQueryChoice): string | undefined =>
+  query.inputs.length === 0
+    ? undefined
+    : `Asks for ${query.inputs.map((input) => (input.required ? input.label : `${input.label} (optional)`)).join(", ")}`;
+
 /**
- * The data a block reads: one of the queries the application already has, its own Modules' first
- * and then the borrowed ones of the Modules it uses, which are chosen as they are. Queries are
- * created in the Data tab.
+ * The data a block reads: one of the application's own queries or an exposed query of a Module it
+ * uses, which is chosen as it is. `onNewQuery` opens the query sheet, which creates a query in one
+ * of the application's own Modules and comes back with it chosen.
  */
 export function StudioQueryPicker({
   id,
   queries,
   value,
   onChange,
+  onNewQuery,
   disabled,
 }: Readonly<{
   id: string;
   queries: readonly StudioQueryChoice[];
   value: string;
   onChange: (reference: string) => void;
+  onNewQuery?: (() => void) | undefined;
   disabled: boolean;
 }>): ReactElement {
   return (
     <div className="space-y-2" data-vortex-setting="query">
-      <Label htmlFor={id}>Data</Label>
+      <div className="flex items-center justify-between gap-2">
+        <Label htmlFor={id}>Data</Label>
+        {onNewQuery === undefined ? null : (
+          <Button type="button" size="xs" variant="ghost" disabled={disabled} onClick={onNewQuery}>
+            <Plus />
+            New query
+          </Button>
+        )}
+      </div>
       <StudioReferencePicker
         id={id}
         value={value}
         disabled={disabled}
         unset="Choose data"
         onChange={onChange}
-        options={queries.map(borrowableOption)}
+        options={queries.map((query) => ({
+          ...borrowableOption(query),
+          description: queryInputsDescription(query),
+        }))}
       />
       {queries.length === 0 && (
         <p role="status" className="text-sm">
-          Add a query in the Data tab first.
+          {onNewQuery === undefined
+            ? "Add a query in the Data tab first."
+            : "Add a query with New query."}
         </p>
       )}
-      <StudioHelp hint="The records this block shows. Queries are created and changed in the Data tab." />
+      <StudioHelp hint="The records this block shows: a query of this application or one another application exposes." />
     </div>
   );
 }

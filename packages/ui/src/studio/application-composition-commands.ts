@@ -35,7 +35,7 @@ import { createStudioBoardQuery, studioBoardSourceProblem } from "./board-source
 import { studioStarterSlots } from "./composition-starters";
 import { applyStudioFlowCreate } from "./application-flow-create";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
-import { studioPaletteChoices, studioQueryOffered, studioReleaseReadsQuery, type StudioPaletteChoice } from "./contextual-palette";
+import { studioPaletteChoices, studioQueryOffered, studioReleaseReadsQuery, type StudioBorrowedChoices, type StudioPaletteChoice } from "./contextual-palette";
 import {
   adjustedSlotOrder,
   freshBlockName,
@@ -64,6 +64,8 @@ export type StudioCompositionContext = Readonly<{
   localLifetime: number;
   catalogue: ImmutablePlatformBlockCatalogue;
   source: Readonly<ApplicationSourceDocument>;
+  /** What the Modules the draft uses offer, from its last compile: the exposed queries a block may read. */
+  borrowed: StudioBorrowedChoices | null;
 }>;
 
 export type StudioCompositionCommand =
@@ -655,7 +657,7 @@ const applyAdd = (current: StudioCompositionContext, command: unknown): StudioCo
     : createStudioBoardQuery(source, settings, sourceNames(source), pipelineSetup) ?? null;
   if (pipelineSetup !== undefined && query === null)
     return { kind: "refused", reason: pipelineSetup.queryUnavailable };
-  if (choice.needsQuery !== (query !== null) || (query !== null && !studioQueryOffered(source, query)))
+  if (choice.needsQuery !== (query !== null) || (query !== null && !studioQueryOffered(source, current.borrowed, query)))
     return { kind: "invalid" };
 
   const boardProblem = pipelineSetup === undefined ? undefined
@@ -810,7 +812,7 @@ const applySettings = (current: StudioCompositionContext, selection: StudioSeman
   const { source, target, alias, release } = resolved;
   const settings = commandSettings(input.settings, release.properties);
   const query = input.query;
-  if (query !== null && (!readsQuery(release, target.item) || !studioQueryOffered(source, query)))
+  if (query !== null && (!readsQuery(release, target.item) || !studioQueryOffered(source, current.borrowed, query)))
     return { kind: "invalid" };
   const pipelineSetup = release.studioSetup?.kind === "pipeline" ? release.studioSetup : undefined;
   const boardProblem = pipelineSetup === undefined ? undefined

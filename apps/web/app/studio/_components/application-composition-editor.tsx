@@ -12,7 +12,7 @@ import { Switch } from "@vortex/ui/components/switch";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { studioPlacementLabels } from "../_lib/studio-labels";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import {
@@ -43,6 +43,11 @@ type Props = Readonly<{
   disabled: boolean;
   /** What reference settings can point at, read from the draft being edited. */
   choices: StudioSettingChoices;
+  /**
+   * Opens the query sheet; `use` chooses the query it made as this block's data. It runs after the
+   * new query is in the draft, so the block's choices already offer it.
+   */
+  onNewQuery?: ((use: (reference: string) => void) => void) | undefined;
   /** The one composition edit; `merge` joins a run of edits to one value into one Undo step. */
   onCommand: (
     expected: StudioCompositionContext,
@@ -194,6 +199,9 @@ export function ApplicationCompositionEditor(props: Props) {
     );
     return result.kind === "applied";
   };
+  // The query sheet answers after the draft changed: it chooses through the latest settings.
+  const chooseQuery = useRef<(reference: string) => void>(() => undefined);
+  chooseQuery.current = (reference) => changeSettings({ ...settingsInputs, query: reference });
   const changeLayout = (next: LayoutInputs) => {
     const described = layoutOf(next);
     if ("problem" in described) {
@@ -319,6 +327,11 @@ export function ApplicationCompositionEditor(props: Props) {
                 queries={props.choices.queries}
                 value={settingsInputs.query ?? ""}
                 disabled={props.disabled}
+                onNewQuery={
+                  props.onNewQuery === undefined
+                    ? undefined
+                    : () => props.onNewQuery?.((reference) => chooseQuery.current(reference))
+                }
                 onChange={(query) =>
                   changeSettings({ ...settingsInputs, query: query === "" ? null : query })
                 }

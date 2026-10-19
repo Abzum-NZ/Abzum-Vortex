@@ -51,6 +51,7 @@ import { studioMenuPosition } from "@vortex/ui/studio";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
 import { ApplicationVisibilityConditionEditor } from "./application-visibility-condition-editor";
 import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
+import { StudioQuerySheet } from "./studio-query-sheet";
 import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-toolbar";
 import { StudioPanelShell } from "./studio-frame";
 import { StudioInspector } from "./studio-inspector";
@@ -144,6 +145,10 @@ export function useStudioCanvasTab({
   const rootId = state.rootId;
   const key = draft.saved.key;
   const [fitZoom, setFitZoom] = useState(0);
+  // The query sheet a block's data picker opened, with how the block chooses the query it makes.
+  const [querySheet, setQuerySheet] = useState<Readonly<{
+    use: (reference: string) => void;
+  }> | null>(null);
   const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>(100);
   const [breakpoint, setBreakpoint] = useState<StudioCanvasBreakpoint>("desktop");
   // The canvas previews the application in light or dark; the running application keeps its own toggle.
@@ -225,8 +230,18 @@ export function useStudioCanvasTab({
       localLifetime: draft.lifetime,
       catalogue,
       source: state.source,
+      borrowed: view.borrowedChoices,
     }),
-    [organizationId, rootId, key, state.draftRevision, draft.lifetime, catalogue, state.source],
+    [
+      organizationId,
+      rootId,
+      key,
+      state.draftRevision,
+      draft.lifetime,
+      catalogue,
+      state.source,
+      view.borrowedChoices,
+    ],
   );
   const liveContext = (): StudioCompositionContext => {
     const current = draft.history.getState();
@@ -238,6 +253,7 @@ export function useStudioCanvasTab({
       localLifetime: draft.lifetime,
       catalogue: draft.readCatalogue(),
       source: current.source,
+      borrowed: draft.view.borrowedChoices,
     };
   };
 
@@ -707,6 +723,7 @@ export function useStudioCanvasTab({
           disabled={draft.locked}
           choices={draftChoices}
           onCommand={commandComposition}
+          onNewQuery={(use) => setQuerySheet({ use })}
         />
       )}
       {selected?.kind === "placement" && inspector.status === "resolved" && (
@@ -898,12 +915,25 @@ export function useStudioCanvasTab({
   );
 
   const dialog = (
-    <StudioBlockSetupDialog
-      request={blockSetup}
-      source={source}
-      choices={draftChoices}
-      onClose={() => setBlockSetup(null)}
-    />
+    <>
+      <StudioBlockSetupDialog
+        request={blockSetup}
+        source={source}
+        choices={draftChoices}
+        onClose={() => setBlockSetup(null)}
+      />
+      <StudioQuerySheet
+        key={querySheet === null ? "query-closed" : "query-open"}
+        open={querySheet !== null}
+        draft={draft}
+        doneLabel="Use this query"
+        onClose={() => setQuerySheet(null)}
+        onDone={(reference) => {
+          querySheet?.use(reference);
+          setQuerySheet(null);
+        }}
+      />
+    </>
   );
 
   return {

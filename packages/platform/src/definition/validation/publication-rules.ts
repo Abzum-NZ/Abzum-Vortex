@@ -53,6 +53,7 @@ export const applicationRuleCodes = [
   "vortex.definition.application_role_references",
   "vortex.definition.application_navigation_references",
   "vortex.definition.application_query_references",
+  "vortex.definition.application_query_exposure",
   "vortex.definition.application_page_permission",
   "vortex.definition.application_page_query",
   "vortex.definition.application_page_references",

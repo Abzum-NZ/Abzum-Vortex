@@ -88,6 +88,7 @@ export const activityReadPermission = {
 export const activityQuery = {
   id: "qry_activity_entries",
   key: "activity_entries",
+  exposure: "private",
   record_type: "activity_entry",
   inputs: [],
   select: ["occurred_at", "actor_kind", "actor", "action", "subject_count", "changed_field_count"],
