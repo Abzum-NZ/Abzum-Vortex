@@ -235,7 +235,7 @@ export function ApplicationCompositionEditor(props: Props) {
         : []),
       ...studioSettingProblems(
         next.settings,
-        settingsModel.properties.filter((property) => property.key !== "query_parameters"),
+        settingsModel.properties,
         studioBlockChoices(props.choices, next.query),
       ),
     ];
