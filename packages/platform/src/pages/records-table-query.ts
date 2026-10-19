@@ -391,7 +391,8 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
       if (result.kind !== "available") return refused;
       if (result.value.outcome === "refused")
         return { kind: "refused", reasonCode: result.value.reasonCode };
-      const links = collectRecordLinks(result.value.rows);
+      const projectedRows = visibleRows(result.value.rows, built.fieldIds);
+      const links = collectRecordLinks(projectedRows);
       const recordLinks =
         links.length === 0 || request.resolveRecordLinks === undefined
           ? undefined
@@ -443,7 +444,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         fieldIds: built.fieldIds,
         display,
         pageSize: built.command.pageSize,
-        rows: visibleRows(result.value.rows, built.fieldIds),
+        rows: projectedRows,
         ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
         ...(previousContinuationToken === undefined ? {} : { previousContinuationToken }),
       };

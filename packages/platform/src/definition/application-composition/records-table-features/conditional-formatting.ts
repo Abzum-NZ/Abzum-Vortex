@@ -2,7 +2,12 @@ import type { z } from "zod";
 import type { JsonValue } from "../../../catalogue/common";
 import type { sourceQualifiedConditionSchema } from "../../definition-source-common";
 import type { ConditionNode } from "../../module-foundation-contracts";
-import { conditionValueType } from "../../../rules/condition-types";
+import {
+  conditionValueType,
+  operatorAcceptsOperands,
+  semanticTypeForLiteral,
+  type OperandInfo,
+} from "../../../rules/condition-types";
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
   factsOf,
@@ -261,12 +266,6 @@ export const conditionalFormatRuleFields = (rule: ConditionalFormatRule): readon
   ]),
 ];
 
-const orderOperators = new Set([
-  "greater_than",
-  "greater_than_or_equal",
-  "less_than",
-  "less_than_or_equal",
-]);
 const operatorWords: Readonly<Record<string, string>> = {
   greater_than: "is after",
   greater_than_or_equal: "is on or after",
@@ -275,7 +274,7 @@ const operatorWords: Readonly<Record<string, string>> = {
   equals: "is",
   not_equals: "is not",
 };
-const dateTypes = new Set(["date", "date_time"]);
+const dateTypes = new Set(["date"]);
 
 /** A field's business name, or the last part of its reference when the query does not offer it. */
 const fieldName = (facts: RecordsTableQueryFacts, field: string): string =>
@@ -312,20 +311,39 @@ export const conditionalFormatRuleIssue = (
       if (left === undefined || !dateTypes.has(factsValueType(left)))
         return `'${operatorWords[comparison.operator] ?? "is"}' needs a date field.`;
     }
-    if (right?.source === "field" && left !== undefined) {
-      const other = factsOf(facts, right.field);
-      if (
-        other !== undefined &&
-        conditionValueType(factsValueType(other)) !== conditionValueType(factsValueType(left))
-      )
-        return `Compare ${left.label} with a field of the same type.`;
-    }
+    const operandInfo = (operand: ConditionalFormatOperand): OperandInfo => {
+      if (operand.source === "value")
+        return {
+          source: "value",
+          semanticType: semanticTypeForLiteral(operand.value),
+          literal: operand.value,
+        };
+      if (operand.source === "parameter")
+        return {
+          source: "reference",
+          semanticType: (conditionalFormattingDateParameters as readonly string[]).includes(
+            operand.key,
+          )
+            ? "date"
+            : undefined,
+        };
+      const field = factsOf(facts, operand.field);
+      return {
+        source: "reference",
+        semanticType: field === undefined ? undefined : conditionValueType(factsValueType(field)),
+      };
+    };
     if (
-      orderOperators.has(comparison.operator) &&
-      left !== undefined &&
-      ["yes_no", "choice", "several_choices", "link"].includes(factsValueType(left))
-    )
-      return `'${operatorWords[comparison.operator]}' does not compare ${left.label}.`;
+      !operatorAcceptsOperands(
+        comparison.operator,
+        operandInfo(comparison.left),
+        right === undefined ? undefined : operandInfo(right),
+      )
+    ) {
+      if (right?.source === "field" && left !== undefined)
+        return `Compare ${left.label} with a field of the same type.`;
+      return `Choose an operator and value that match ${left?.label ?? "the condition"}.`;
+    }
   }
   if (
     showsStatusByColour(rule.style) &&

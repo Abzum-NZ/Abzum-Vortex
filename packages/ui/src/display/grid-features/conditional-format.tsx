@@ -157,10 +157,7 @@ function ConditionalFormatCell({
       {format?.kind === "data_bar" && measure !== undefined ? (
         <span
           aria-hidden
-          className={cn(
-            "pointer-events-none absolute inset-y-1 left-0",
-            barClasses[format.token],
-          )}
+          className={cn("pointer-events-none absolute inset-y-1 left-0", barClasses[format.token])}
           style={{ width: `${Math.round(measure * 100)}%` }}
         />
       ) : null}
