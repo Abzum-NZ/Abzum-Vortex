@@ -113,7 +113,9 @@ begin
   meta := vortex_record.resolve_record_action_context_internal(
     p_record_type_id, p_operation
   );
+  -- Ordinary saves require the explicit operation; named actions use their own preparation.
   if pg_catalog.jsonb_typeof(meta -> 'recordType') is distinct from 'object'
+    or not coalesce((meta #> '{recordType,standardActions}') ? p_operation, false)
     or (preview_installation is not null and meta ? 'recordType'
       and meta -> 'recordType' ? 'systemProjection') then
     return pg_catalog.jsonb_build_object('outcome', 'refused');

@@ -804,7 +804,10 @@ begin
       p_record_type_id, p_operation
     );
   end if;
-  if pg_catalog.jsonb_typeof(meta -> 'recordType') <> 'object' then
+  -- Recheck the ordinary operation at persistence. A named action has its own authority.
+  if pg_catalog.jsonb_typeof(meta -> 'recordType') is distinct from 'object'
+    or (not action_mode
+      and not coalesce((meta #> '{recordType,standardActions}') ? p_operation, false)) then
     perform vortex_record.release_command_receipt_internal(receipt_kind, effective_command_id);
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'record_unavailable'
