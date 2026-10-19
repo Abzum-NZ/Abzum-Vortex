@@ -54,8 +54,8 @@ export const gridCellDecorationClasses = {
   text_success: "text-success",
   text_warning: "text-warning",
   text_info: "text-info",
-  text_destructive: "text-destructive",
-  text_muted: "text-muted-foreground",
+  text_destructive: "text-[color:color-mix(in_oklab,var(--destructive)_75%,var(--foreground))]",
+  text_muted: "text-[color:color-mix(in_oklab,var(--muted-foreground)_85%,var(--foreground))]",
   bold: "font-semibold",
   strike: "line-through",
 } as const;

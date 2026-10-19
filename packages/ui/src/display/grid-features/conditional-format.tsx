@@ -43,8 +43,8 @@ const iconTextClasses: Readonly<Record<ConditionalFormatToken, string>> = {
   success: "text-success",
   warning: "text-warning",
   info: "text-info",
-  destructive: "text-destructive",
-  muted: "text-muted-foreground",
+  destructive: "text-[color:color-mix(in_oklab,var(--destructive)_75%,var(--foreground))]",
+  muted: "text-[color:color-mix(in_oklab,var(--muted-foreground)_85%,var(--foreground))]",
 };
 
 const textTokens: Readonly<Record<ConditionalFormatToken, GridCellDecorationToken>> = {

@@ -216,7 +216,8 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     };
     return {
       value,
-      text: (row, column) => cellValueToText(row.cells[column.key] ?? { kind: "empty" }),
+      heading: (row, column) =>
+        decorate(row, column, cellValueToText(row.cells[column.key] ?? { kind: "empty" })),
       cell: (row, column) => {
         const cell: DisplayCellValue = row.cells[column.key] ?? { kind: "empty" };
         const decoration = cellClassName(row, column);
