@@ -127,12 +127,16 @@ export const readStudioCanvasRecords = async (
   const parsed = requestSchema.safeParse(candidate);
   if (!organization.success || !parsed.success) return { kind: "refused" };
   const request = parsed.data;
+  const started = performance.now();
   try {
     const preview = await openStudioPreviewRead(session, organization.data, request.rootId, request.draftRevision);
+    console.log("[profile] open-preview", Math.round(performance.now()-started));
     if (preview.kind !== "available") return preview;
     const { draft, context, services, selection, dependencies } = preview;
     if (draft.sourceFingerprint !== request.sourceFingerprint) return { kind: "conflict" };
+    const compiledAt = performance.now();
     const content = await compiledDraftContent(session, organization.data, draft);
+    console.log("[profile] compile", Math.round(performance.now()-compiledAt));
     if (typeof content === "string") return { kind: content };
     const pageIndex = draft.source.body.pages.findIndex((page) => page.id === request.pageAlias);
     const page = draft.source.body.pages[pageIndex];
@@ -185,7 +189,9 @@ export const readStudioCanvasRecords = async (
       resolveRecordLinks: services.recordLinkResolver(context), tableContinuation: undefined,
       adoptSubjectRead: () => {}, markSubjectUnreadable: () => {},
     };
+    const recordsAt = performance.now();
     await Promise.all(placements.map((placement) => readPlacement(input, placement)));
+    console.log("[profile] records", Math.round(performance.now()-recordsAt), "total", Math.round(performance.now()-started));
     const records: Record<string, PageDataState> = {};
     for (const [placementId, state] of Object.entries(data)) {
       const alias = aliases.get(placementId.toLowerCase());
