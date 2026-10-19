@@ -265,6 +265,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
           <ApplicationDraftAgentTools
             draft={draft}
             command={canvas.commandComposition}
+            readQueries={canvas.readQueries}
             {...releases.agent}
           />
           <StudioFrame

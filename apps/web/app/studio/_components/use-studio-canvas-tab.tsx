@@ -20,6 +20,7 @@ import {
   type StudioCompositionContext,
   type StudioCompositionDestination,
   type StudioCompositionOutcome,
+  type StudioBorrowedChoices,
   type StudioRecordReader,
   type StudioSemanticOutline,
   type StudioSemanticSelection,
@@ -885,5 +886,12 @@ export function useStudioCanvasTab({
     commandComposition,
     readRecordChoices,
     previewAs,
+    readQueries: (borrowed: StudioBorrowedChoices | null) =>
+      studioDraftChoices(
+        draft.parsed(draft.history.getState().source),
+        borrowed,
+        null,
+        applicationName,
+      ).queries,
   };
 }

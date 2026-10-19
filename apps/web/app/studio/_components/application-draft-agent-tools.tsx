@@ -9,12 +9,13 @@ import {
   type PublishDefinitionResult,
 } from "@vortex/platform/schema";
 import {
-  studioQueryChoices,
   describeStudioCompositionAddTargets,
   describeStudioCompositionRemoval,
   describeStudioCompositionSettings,
   projectStudioSemanticOutline,
   type StudioCompositionOutcome,
+  type StudioBorrowedChoices,
+  type StudioQueryChoice,
   type StudioCompositionCommand,
   type StudioCompositionSettings,
   type StudioCompositionContext,
@@ -329,6 +330,7 @@ const publicationFailure = (
 export function ApplicationDraftAgentTools({
   draft,
   command,
+  readQueries,
   readPreparedConfirmation,
   prepare,
   publish,
@@ -341,6 +343,8 @@ export function ApplicationDraftAgentTools({
     expectedSelection: StudioSemanticSelection,
     command: StudioCompositionCommand,
   ) => StudioCompositionOutcome;
+  /** The application's queries and the borrowed choices read for this invocation, with their display names. */
+  readQueries: (borrowed: StudioBorrowedChoices | null) => readonly StudioQueryChoice[];
   /** The confirmation the last successful Prepare publication produced for the current saved draft, if still valid. */
   readPreparedConfirmation: () => DefinitionPublicationConfirmation | undefined;
   prepare: () => Promise<StudioPublicationOutcome>;
@@ -354,8 +358,22 @@ export function ApplicationDraftAgentTools({
   const { history, organizationId } = draft;
   const latest = useRef(draft);
   latest.current = draft;
-  const actions = useRef({ command, readPreparedConfirmation, prepare, publish, readSavedDraft });
-  actions.current = { command, readPreparedConfirmation, prepare, publish, readSavedDraft };
+  const actions = useRef({
+    command,
+    readQueries,
+    readPreparedConfirmation,
+    prepare,
+    publish,
+    readSavedDraft,
+  });
+  actions.current = {
+    command,
+    readQueries,
+    readPreparedConfirmation,
+    prepare,
+    publish,
+    readSavedDraft,
+  };
   const authoring = useRef<Awaited<ReturnType<StudioDraft["loadAuthoringResources"]>>>(null);
   const readLifetime = useCallback(() => latest.current.lifetime, []);
   const blockedReason = useCallback(() => latest.current.blockedReason(), []);
@@ -420,10 +438,7 @@ export function ApplicationDraftAgentTools({
           },
         ];
       }),
-      queries: studioQueryChoices(
-        applicationSourceDocumentSchema.parse(state.source),
-        authoring.current?.borrowedChoices ?? null,
-      ),
+      queries: actions.current.readQueries(authoring.current?.borrowedChoices ?? null),
       placements: collect(outline, "placement").map((placement) => {
         const settings = describeStudioCompositionSettings(context, placement);
         const removal = describeStudioCompositionRemoval(context, placement);
