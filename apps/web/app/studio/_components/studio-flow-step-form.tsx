@@ -225,8 +225,7 @@ function ConditionControl({ id, condition, context, disabled, onChange }: Readon
       <p role="alert">This condition reads values this step can no longer read, or uses a calculation the condition controls do not show. It is kept as it is.</p>
       <Button type="button" variant="outline" size="sm" disabled={disabled}
         onClick={() => {
-          const fresh: FlowFormula = { op: "literal", type: "yes_no", value: true };
-          setReplaced(true); setTree(undefined); setShown(fresh); onChange(condition, "Set a condition before replacing this one.");
+          setReplaced(true); setTree(undefined); setShown(condition); onChange(condition, "Set a condition before replacing this one.");
         }}>Replace it with a new condition</Button>
     </div>;
   const change = (next: ConditionNode | undefined, validation: StudioConditionValidation) => {
