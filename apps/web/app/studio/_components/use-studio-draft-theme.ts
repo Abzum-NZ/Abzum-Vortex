@@ -95,5 +95,6 @@ export function useStudioDraftTheme({
     };
   }, [key, resolve, enabled, compiledTheme]);
 
-  return { theme: shown, problem, resolve };
+  // A theme already resolved is drawn in this render, not one effect later.
+  return { theme: (enabled ? resolved.current.get(key) : undefined) ?? shown, problem, resolve };
 }

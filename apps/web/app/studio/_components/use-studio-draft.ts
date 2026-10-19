@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applicationSourceDocumentSchema,
   canonicalJson,
@@ -368,38 +368,62 @@ export function useStudioDraft({
   const reading = useRef<Readonly<{ keys: ReadonlySet<string>; done: Promise<void> }> | null>(null);
 
   /** Keeps every view a read returned for the saved revision it was read at. */
-  const remember = useCallback((result: LoadedResult, keys: readonly string[]) => {
-    const { draftRevision, sourceFingerprint } = result.draft;
-    const known = viewCache.current;
-    const views =
-      known !== null &&
-      known.draftRevision === draftRevision &&
-      known.sourceFingerprint === sourceFingerprint
-        ? known.views
-        : new Map<string, LoadedView>();
-    keys.forEach((key, index) => {
-      const loaded = result.views[index];
-      if (loaded !== undefined) views.set(key, loaded);
-    });
-    viewCache.current = { draftRevision, sourceFingerprint, draft: result.draft, views };
-  }, []);
+  const remember = useCallback(
+    (
+      result: LoadedResult,
+      requested: readonly Readonly<{ request: StudioViewRequest; key: string }>[],
+    ) => {
+      const { draftRevision, sourceFingerprint } = result.draft;
+      const known = viewCache.current;
+      const views =
+        known !== null &&
+        known.draftRevision === draftRevision &&
+        known.sourceFingerprint === sourceFingerprint
+          ? known.views
+          : new Map<string, LoadedView>();
+      requested.forEach(({ request, key }, index) => {
+        const loaded = result.views[index];
+        // Kept under the request as it was sent, so a drawn view always matches its key.
+        if (loaded !== undefined) views.set(key, { ...loaded, request });
+      });
+      viewCache.current = { draftRevision, sourceFingerprint, draft: result.draft, views };
+    },
+    [],
+  );
 
-  /** Draws the visible view from a read already made for the saved revision, if there is one. */
-  const adoptKnown = useCallback((key: string): boolean => {
+  /** The view already read for this key at the saved revision, if there is one. */
+  const knownView = useCallback((key: string) => {
     const known = viewCache.current;
     const target = savedRef.current;
     const loaded = known?.views.get(key);
-    if (
-      known === null ||
+    return known === null ||
       loaded === undefined ||
       known.draftRevision !== target.draftRevision ||
       known.sourceFingerprint !== target.sourceFingerprint
-    )
-      return false;
-    generation.current += 1;
-    setView((previous) => viewOf(known.draft, loaded, generation.current, previous));
-    return true;
+      ? undefined
+      : { draft: known.draft, loaded };
   }, []);
+
+  /** Draws the visible view from a read already made for the saved revision, if there is one. */
+  const adoptKnown = useCallback(
+    (key: string): boolean => {
+      const known = knownView(key);
+      if (known === undefined) return false;
+      generation.current += 1;
+      setView((previous) => viewOf(known.draft, known.loaded, generation.current, previous));
+      return true;
+    },
+    [knownView],
+  );
+  // A switch to a view already read is drawn in this same render, so it costs no extra commit.
+  const switchedTo =
+    JSON.stringify(view.request) !== requestKey && !state.isDirty && !state.isSaving
+      ? knownView(requestKey)
+      : undefined;
+  if (switchedTo !== undefined)
+    setView((previous) =>
+      viewOf(switchedTo.draft, switchedTo.loaded, previous.generation + 1, previous),
+    );
 
   // The compile of the saved head, asked for only once no edit is waiting, so a batch costs one save and one compile.
   const refreshCompiled = useCallback(async (): Promise<void> => {
@@ -476,7 +500,7 @@ export function useStudioDraft({
             );
             continue;
           }
-          remember(result, [requested.key]);
+          remember(result, [requested]);
           generation.current += 1;
           const loaded = result.views[0]!;
           setView((previous) => viewOf(result.draft, loaded, generation.current, previous));
@@ -689,11 +713,10 @@ export function useStudioDraft({
     selection.reconcile({ rootId: state.rootId, source: parsed(state.source), catalogue });
   }, [selection, state.rootId, state.source, parsed, catalogue]);
 
-  // A view already read for the saved revision is drawn before the browser paints the switch.
-  useLayoutEffect(() => {
-    if (JSON.stringify(view.request) === requestKey || state.isDirty || state.isSaving) return;
-    if (!adoptKnown(requestKey)) void refreshCompiled();
-  }, [requestKey, view.request, state.isDirty, state.isSaving, adoptKnown, refreshCompiled]);
+  useEffect(() => {
+    if (JSON.stringify(view.request) !== requestKey && !state.isDirty && !state.isSaving)
+      void refreshCompiled();
+  }, [requestKey, view.request, state.isDirty, state.isSaving, refreshCompiled]);
 
   // Every other tab's view of the saved revision, read in one request (one compile) once the
   // visible view has settled and the browser is idle, so their first use needs no read of its own.
@@ -759,7 +782,7 @@ export function useStudioDraft({
             result.draft.sourceFingerprint !== savedRef.current.sourceFingerprint
           )
             return;
-          remember(result, keys);
+          remember(result, missing);
           setReadCount((count) => count + 1);
         } catch (error) {
           console.error("[studio] reading the other tabs' views failed", describeFailure(error));
@@ -901,7 +924,7 @@ export function useStudioDraft({
       }
       savedRef.current = result.draft;
       setSaved(result.draft);
-      remember(result, [requested.key]);
+      remember(result, [requested]);
       generation.current += 1;
       const loaded = result.views[0]!;
       setView((previous) => viewOf(result.draft, loaded, generation.current, previous));
