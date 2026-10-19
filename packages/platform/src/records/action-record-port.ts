@@ -1278,7 +1278,11 @@ export type SubjectWithNamedActionAvailability = Readonly<{
  */
 export const readSubjectWithNamedActionAvailability = async (
   transaction: RequestDatabaseTransaction,
-  subject: Readonly<{ recordTypeId: string; recordId: string }>,
+  subject: Readonly<{
+    recordTypeId: string;
+    recordId: string;
+    requestedFieldIds: readonly string[] | null;
+  }>,
   actions: readonly ExecuteNamedActionCommand["action"][],
   issuedAt: string,
   runFor: (action: ExecuteNamedActionCommand["action"]) => ActionFlowRunner,
@@ -1297,7 +1301,8 @@ export const readSubjectWithNamedActionAvailability = async (
     rows = await transaction.query<ResultRow>`
       select vortex_record.read_record_with_action_previews(
         ${subject.recordTypeId}::uuid, ${subject.recordId}::uuid,
-        ${JSON.stringify(requests)}::text::jsonb
+        ${JSON.stringify(requests)}::text::jsonb,
+        ${subject.requestedFieldIds === null ? null : JSON.stringify(subject.requestedFieldIds)}::text::jsonb
       ) as value
     `;
   } finally {

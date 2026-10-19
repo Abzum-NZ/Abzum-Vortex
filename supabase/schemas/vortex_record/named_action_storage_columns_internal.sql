@@ -92,3 +92,6 @@ grant execute on function vortex_record.named_action_storage_columns_internal(uu
 
 comment on function vortex_record.named_action_storage_columns_internal(uuid,jsonb) is
   'Private column map and row value expression of one record type storage, built only for the record types a named-action facts load reads.';
+
+-- Selected record projections can also run inside owner-owned query adapters.
+grant execute on function vortex_record.named_action_storage_columns_internal(uuid,jsonb) to vortex_owner;
