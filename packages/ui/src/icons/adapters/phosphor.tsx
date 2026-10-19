@@ -43,6 +43,9 @@ import {
   SpinnerIcon,
   XIcon,
   type Icon as PhosphorIcon,
+  EyeSlashIcon,
+  CornersOutIcon,
+  CornersInIcon,
 } from "@phosphor-icons/react";
 import type { ComponentType } from "react";
 
@@ -101,4 +104,7 @@ export const icons: VortexIconAdapter = {
   tablet: phosphorIcon(DeviceTabletIcon),
   smartphone: phosphorIcon(DeviceMobileIcon),
   eye: phosphorIcon(EyeIcon),
+  "eye-off": phosphorIcon(EyeSlashIcon),
+  maximize: phosphorIcon(CornersOutIcon),
+  minimize: phosphorIcon(CornersInIcon),
 };

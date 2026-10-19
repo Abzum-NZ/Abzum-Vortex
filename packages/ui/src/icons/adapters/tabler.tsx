@@ -43,6 +43,9 @@ import {
   IconSearch,
   IconX,
   type TablerIcon,
+  IconEyeOff,
+  IconMaximize,
+  IconMinimize,
 } from "@tabler/icons-react";
 import type { ComponentType } from "react";
 
@@ -101,4 +104,7 @@ export const icons: VortexIconAdapter = {
   tablet: tablerIcon(IconDeviceTablet),
   smartphone: tablerIcon(IconDeviceMobile),
   eye: tablerIcon(IconEye),
+  "eye-off": tablerIcon(IconEyeOff),
+  maximize: tablerIcon(IconMaximize),
+  minimize: tablerIcon(IconMinimize),
 };
