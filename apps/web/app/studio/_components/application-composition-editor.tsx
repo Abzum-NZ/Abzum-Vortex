@@ -150,7 +150,7 @@ export function ApplicationCompositionEditor(props: Props) {
   const changeSettings = (next: SettingsInputs) => {
     if (settingsModel.kind !== "available") return;
     const problems = [...(settingsModel.readsQuery && next.query === null ? ["Choose the data this block shows."] : []),
-      ...studioSettingProblems(next.settings, settingsModel.properties)];
+      ...studioSettingProblems(next.settings, settingsModel.properties, studioBlockChoices(props.choices, next.query))];
     if (problems.length > 0) { settings.hold(next, problems.join(" ")); return; }
     if (command({ kind: "settings", settings: next.settings, query: next.query }, `settings:${selectionKey}`, "Settings changed."))
       settings.applied(next);

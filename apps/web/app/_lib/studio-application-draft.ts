@@ -18,6 +18,7 @@ import {
   applicationRootIdSchema,
   organizationIdSchema,
   sameId,
+  peopleDirectory as directory,
   canonicalJson,
   describeFailure,
   compiledItemSlots,
@@ -520,6 +521,12 @@ export const loadStudioApplicationDraft = async (
             const borrowedActions: StudioActionChoice[] = [];
             const borrowedRelationships: StudioRelationshipChoice[] = [];
             const used: StudioDataModule[] = [];
+            // Explicit reads distinguish directory authoring from a Person link's name-only access.
+            const declaredReads = new Set(
+              draft.source.body.permissions
+                .filter((permission) => permission.action_kind === "read")
+                .map((permission) => permission.record_type),
+            );
             // The exact Module releases the draft compiled against, its own inline Modules included.
             {
               for (const binding of choices
@@ -552,6 +559,25 @@ export const loadStudioApplicationDraft = async (
                   (candidate) => candidate.module === release!.key,
                 );
                 const content = release.compilationOutput.canonical.content;
+                const linkable = (record: (typeof content.recordTypes)[number]) =>
+                  record.systemProjection === undefined ||
+                  `${release.key}:${record.key}` === directory.recordType;
+                // A Person link does not expose unrelated administration projections. Explicit
+                // read declarations keep deliberately authored administrative data available.
+                const records =
+                  use === undefined
+                    ? content.recordTypes
+                    : content.recordTypes.filter(
+                        (record) =>
+                          linkable(record) || declaredReads.has(`${release.key}:${record.key}`),
+                      );
+                const person = records.find(
+                  (record) => `${release.key}:${record.key}` === directory.recordType,
+                );
+                if (release.key === directory.module && person === undefined)
+                  throw new Error("STUDIO_DRAFT_COMPILE_MISMATCH");
+                const moduleName =
+                  records.length === 1 && person !== undefined ? person.pluralLabel : content.name;
                 // A used Module is shown read-only in the Data tab, as its installed release defines it.
                 if (
                   data &&
@@ -560,12 +586,13 @@ export const loadStudioApplicationDraft = async (
                 )
                   used.push({
                     key: release.key,
-                    name: content.name,
+                    name: moduleName,
                     ownerApplication: use.application,
-                    recordTypes: content.recordTypes.map((record) => ({
+                    recordTypes: records.map((record) => ({
                       key: record.key,
                       name: record.singularLabel,
                       pluralName: record.pluralLabel,
+                      linkable: linkable(record),
                       titleFieldKey:
                         record.fields.find((field) =>
                           sameId(String(field.fieldId), String(record.titleFieldId)),
@@ -588,7 +615,7 @@ export const loadStudioApplicationDraft = async (
                     queries: content.queries.flatMap((query) => {
                       const recordType =
                         query.recordType.state === "resolved"
-                          ? content.recordTypes.find((candidate) =>
+                          ? records.find((candidate) =>
                               sameId(
                                 String(candidate.recordTypeId),
                                 String((query.recordType as { recordTypeId: string }).recordTypeId),
@@ -620,7 +647,7 @@ export const loadStudioApplicationDraft = async (
                   for (const query of content.queries) {
                     const recordType =
                       query.recordType.state === "resolved"
-                        ? content.recordTypes.find((candidate) =>
+                        ? records.find((candidate) =>
                             sameId(
                               String(candidate.recordTypeId),
                               String((query.recordType as { recordTypeId: string }).recordTypeId),
@@ -630,10 +657,12 @@ export const loadStudioApplicationDraft = async (
                     if (recordType === undefined) continue;
                     borrowed.push({
                       reference: `${release.key}:${query.key}`,
-                      borrowedFrom: use.application,
-                      label: query.key
-                        .replaceAll("_", " ")
-                        .replace(/^./u, (first) => first.toUpperCase()),
+                      borrowedFrom: moduleName,
+                      label:
+                        query.label ??
+                        query.key
+                          .replaceAll("_", " ")
+                          .replace(/^./u, (first) => first.toUpperCase()),
                       recordType: `${release.key}:${recordType.key}`,
                       fields: query.selectedFieldIds.flatMap((fieldId) => {
                         const field = recordType.fields.find((candidate) =>
@@ -652,13 +681,17 @@ export const loadStudioApplicationDraft = async (
                     });
                   }
                   // Its actions and relationships are chosen as they are too: they belong to its own application.
-                  for (const action of content.actions)
+                  for (const action of content.actions.filter((action) =>
+                    records.some((record) =>
+                      sameId(String(record.recordTypeId), String(action.subjectRecordTypeId)),
+                    ),
+                  ))
                     borrowedActions.push({
                       reference: action.key,
                       label: action.label,
                       borrowedFrom: use.application,
                     });
-                  for (const record of content.recordTypes)
+                  for (const record of records)
                     for (const relationship of record.relationships) {
                       const from = record.fields.find((field) =>
                         sameId(String(field.fieldId), String(relationship.fromFieldId)),
@@ -673,7 +706,7 @@ export const loadStudioApplicationDraft = async (
                 }
                 // The compiled fields of every record type the draft binds, for the query filter's typed controls.
                 if (data)
-                  for (const record of content.recordTypes)
+                  for (const record of records)
                     fieldsByRecord[`${release.key}:${record.key}`] = record.fields;
               }
             }
