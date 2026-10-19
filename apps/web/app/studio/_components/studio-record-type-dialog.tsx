@@ -5,6 +5,8 @@ import {
   defaultOwnedModuleKey,
   deriveRecordTypeKey,
   type ApplicationSourceDocument,
+  type ModuleFieldPublication,
+  type RecordStorageScope,
 } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import {
@@ -16,9 +18,18 @@ import {
   DialogTitle,
 } from "@vortex/ui/components/dialog";
 import { Input } from "@vortex/ui/components/input";
-import { StudioReferencePicker } from "@vortex/ui/studio";
+import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
+import { StudioReferencePicker, StudioSegmentedControl } from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
+import { recordOwnershipLabels, recordStorageLabels } from "./studio-record-storage-ownership";
 import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
+
+type CreatedOwnership = "none" | "organization_account" | "group";
+const createdOwnerships: readonly CreatedOwnership[] = ["organization_account", "group", "none"];
+const storageScopes: readonly RecordStorageScope[] = [
+  "organization_shared",
+  "application_contained",
+];
 
 /** The plural a builder most likely means; they can change it. */
 const pluralOf = (name: string): string => {
@@ -30,14 +41,15 @@ const pluralOf = (name: string): string => {
 };
 
 /**
- * The new record type form: its names, its key (made from the name; it does not change later)
- * and the label of its title field. An application that owns no module yet gets its
+ * The new record type form: its names, its key (made from the name; it does not change later),
+ * the label of its title field, where its records are kept and who owns them. An application that owns no module yet gets its
  * first module with it; the module's key is made from the application key.
  */
 export function StudioRecordTypeDialog({
   open,
   source,
   initialModuleKey,
+  publication,
   edit,
   onClose,
   onCreated,
@@ -45,6 +57,7 @@ export function StudioRecordTypeDialog({
   open: boolean;
   source: ApplicationSourceDocument;
   initialModuleKey: string | undefined;
+  publication: ModuleFieldPublication;
   edit: StudioDataEdit;
   onClose: () => void;
   /** Called with the record type the form added. */
@@ -55,18 +68,28 @@ export function StudioRecordTypeDialog({
   const [plural, setPlural] = useState<string | null>(null);
   const [key, setKey] = useState<string | null>(null);
   const [titleLabel, setTitleLabel] = useState("Name");
+  const [storageScope, setStorageScope] = useState<RecordStorageScope>("organization_shared");
+  const [ownershipMode, setOwnershipMode] = useState<CreatedOwnership>("organization_account");
   const [moduleKey, setModuleKey] = useState(initialModuleKey ?? modules[0]?.key ?? "");
   const [newModuleKey, setNewModuleKey] = useState<string | null>(null);
   const [newModuleName, setNewModuleName] = useState<string | null>(null);
   const [issues, setIssues] = useState<readonly string[]>([]);
   const target = modules.find((module) => module.key === moduleKey) ?? modules[0];
+  const effectiveModuleKey = newModuleKey ?? defaultOwnedModuleKey(source);
+  const targetKey = target?.key ?? effectiveModuleKey;
   const derivedKey =
-    deriveRecordTypeKey(name, new Set(target?.record_types.map((record) => record.key) ?? [])) ??
-    "";
+    deriveRecordTypeKey(
+      name,
+      new Set([
+        ...(target?.record_types.map((record) => record.key) ?? []),
+        ...[...publication.recordTypes]
+          .filter((reference) => reference.startsWith(`${targetKey}:`))
+          .map((reference) => reference.slice(targetKey.length + 1)),
+      ]),
+    ) ?? "";
   const effectiveKey = key ?? derivedKey;
   const effectivePlural = plural ?? pluralOf(name);
   const firstModule = modules.length === 0;
-  const effectiveModuleKey = newModuleKey ?? defaultOwnedModuleKey(source);
   const effectiveModuleName = newModuleName ?? `${source.body.name} data`.slice(0, 120);
 
   const reset = () => {
@@ -74,6 +97,8 @@ export function StudioRecordTypeDialog({
     setPlural(null);
     setKey(null);
     setTitleLabel("Name");
+    setStorageScope("organization_shared");
+    setOwnershipMode("organization_account");
     setNewModuleKey(null);
     setNewModuleName(null);
     setIssues([]);
@@ -81,15 +106,21 @@ export function StudioRecordTypeDialog({
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const result = edit((current) =>
-      createInlineRecordType(current, {
-        ...(firstModule
-          ? { newModule: { key: effectiveModuleKey, name: effectiveModuleName } }
-          : { moduleKey: target!.key }),
-        name,
-        pluralName: effectivePlural,
-        key: effectiveKey,
-        titleLabel,
-      }),
+      createInlineRecordType(
+        current,
+        {
+          ...(firstModule
+            ? { newModule: { key: effectiveModuleKey, name: effectiveModuleName } }
+            : { moduleKey: target!.key }),
+          name,
+          pluralName: effectivePlural,
+          key: effectiveKey,
+          titleLabel,
+          storageScope,
+          ownershipMode,
+        },
+        publication,
+      ),
     );
     if (result.kind !== "changed") {
       setIssues([studioEditProblem(result) ?? "The record type was not added."]);
@@ -174,6 +205,38 @@ export function StudioRecordTypeDialog({
                   setIssues([]);
                 }}
               />
+            )}
+          </StudioField>
+          <StudioField label="Records are kept" hint="Fixed once the record type is published.">
+            {() => (
+              <StudioSegmentedControl
+                label="Records are kept"
+                value={storageScope}
+                options={storageScopes.map((value) => ({
+                  value,
+                  label: recordStorageLabels[value],
+                }))}
+                onChange={setStorageScope}
+              />
+            )}
+          </StudioField>
+          <StudioField
+            label="Owner"
+            hint="To take the owner from a linked record, add the link first, then choose it."
+          >
+            {(control) => (
+              <NativeSelect
+                {...control}
+                className="w-full"
+                value={ownershipMode}
+                onChange={(event) => setOwnershipMode(event.target.value as CreatedOwnership)}
+              >
+                {createdOwnerships.map((value) => (
+                  <NativeSelectOption key={value} value={value}>
+                    {recordOwnershipLabels[value]}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
             )}
           </StudioField>
           {firstModule ? (

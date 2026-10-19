@@ -327,6 +327,12 @@ begin
       );
       any_change := true;
     else
+      if stored_catalogue.record_type_definition ->> 'ownershipMode'
+          is distinct from ownership_mode_value
+        or stored_catalogue.record_type_definition ->> 'ownershipRelationshipId'
+          is distinct from record_type ->> 'ownershipRelationshipId' then
+        raise exception using errcode = '55000', message = 'Record storage lineage is incompatible';
+      end if;
       if is_projection then
         if stored_catalogue.module_root_id <> p_module_root_id
           or stored_catalogue.record_type_id <> record_type_id_value

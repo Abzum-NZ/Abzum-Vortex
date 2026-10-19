@@ -685,6 +685,7 @@ export const loadStudioApplicationDraft = async (
                       name: record.singularLabel,
                       pluralName: record.pluralLabel,
                       linkable: linkable(record),
+                      ownershipMode: record.ownershipMode,
                       titleFieldKey:
                         record.fields.find((field) =>
                           sameId(String(field.fieldId), String(record.titleFieldId)),
