@@ -112,6 +112,8 @@ const SHARED_COMPONENT_STYLES_CSS = `
 
 .vortex-cell-link,
 .vortex-cell-rich-text a {
+  /* Keep screen-reader notices inside the link's clipping ancestors when its text is truncated. */
+  position: relative;
   color: var(--foreground);
   text-decoration: underline;
   text-underline-offset: 0.125rem;
