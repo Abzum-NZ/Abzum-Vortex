@@ -100,8 +100,4 @@ export const LAUNCHER_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistr
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
       parsePayload: APPLICATION_PAGE_LINK_PAYLOAD_PARSER,
     }),
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.VIEW_FILTER_BLOCK_RELEASE,
-      parsePayload: noRuntimeInputs,
-    }),
   ]);

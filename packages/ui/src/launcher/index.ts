@@ -18,10 +18,9 @@ export {
   type LauncherSettings,
 } from "./launcher-context";
 
-// Launcher, Tile & View-Filter Components
+// Launcher and Tile Components
 export { ApplicationLauncher } from "./application-launcher";
 export { LinkTiles } from "./link-tiles";
-export { ViewFilter } from "./view-filter";
 
 // Launcher Registrations & Registry
 export {

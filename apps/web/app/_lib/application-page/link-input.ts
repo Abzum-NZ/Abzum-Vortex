@@ -73,9 +73,9 @@ export const titleLinkInputs = async (
 };
 
 /**
- * Starts a new record's link field with the record its page address names, when the field's input
- * declares that address parameter. The record shows only when the viewer may read its title; any
- * other value starts the field empty and is logged.
+ * Starts a link field with the record its page address names under the page parameter the control
+ * publishes (it reads and writes that one name). The record shows only when the viewer may read
+ * its title; any other value starts the field empty and is logged.
  */
 export const projectInitialLinkInputs = async (
   input: Readonly<{
@@ -90,7 +90,7 @@ export const projectInitialLinkInputs = async (
   }>,
 ): Promise<void> => {
   const starts = input.placements.flatMap((placement) => {
-    const parameter = placement.settings.initial_record_parameter;
+    const parameter = placement.settings.publishes_parameter;
     if (!isRecord(parameter) || parameter.kind !== "text" || typeof parameter.value !== "string")
       return [];
     const raw = first(input.parameters[parameter.value]);

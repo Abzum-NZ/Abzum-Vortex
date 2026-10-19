@@ -17,14 +17,14 @@ import {
   sameId,
   isRecord,
 } from "@vortex/platform/schema";
-import type {
-  collectPlacements} from "./placement-helpers";
+import type { collectPlacements } from "./placement-helpers";
+import type { PlacementFlowBinding } from "./types";
 import {
   isBoardPlacement,
   isEditFieldPlacement,
   selectedReadInputTypes
 } from "./placement-helpers";
-import { resolvedQueryRecordTypeId } from "./query-helpers";
+import { resolvedQueryRecordTypeId } from "@vortex/platform/server";
 
 export const projectPlacementRecordTypes = (input: {
   allPlacements: ReturnType<typeof collectPlacements>;
@@ -273,4 +273,93 @@ export const projectFlowBindingTargets = (input: {
     }
   }
   return { refreshPlacementsByBinding, flowsById, selectedReadTypesByFlow };
+};
+
+/** The flow bindings one placement holds, projected for the browser by placement identity. */
+export const projectPlacementBindings = (
+  input: Readonly<{
+    application: InstalledRuntimeContext["releaseSet"]["application"];
+    recordTypeByPlacement: Map<string, string>;
+    bindings: Record<string, PlacementFlowBinding[]>;
+    pageDefinition: PageDefinition;
+    pageSubjectRecordTypeId: string | undefined;
+    selectedReadTypesByFlow: Map<string, ReadonlyMap<string, string>>;
+  }>,
+  { placementId, formId }: ReturnType<typeof collectPlacements>[number],
+): void => {
+  const {
+    application,
+    recordTypeByPlacement,
+    bindings,
+    pageDefinition,
+    pageSubjectRecordTypeId,
+    selectedReadTypesByFlow,
+  } = input;
+  const held = application.content.flowBindings.filter((binding) =>
+    sameId(binding.controlId, placementId),
+  );
+  if (held.length > 0) {
+    const placementRecordTypeId =
+      recordTypeByPlacement.get(placementId.toLowerCase()) ??
+      (formId === undefined ? undefined : recordTypeByPlacement.get(formId.toLowerCase()));
+    bindings[placementId] = held.map((binding) => {
+      // An action selects the page subject, so a foreign placement cannot lend it a record type.
+      const selectedRecordTypeId =
+        binding.event === "action"
+          ? (pageDefinition.type === "detail" || pageDefinition.type === "form") &&
+            pageSubjectRecordTypeId !== undefined &&
+            (placementRecordTypeId === undefined ||
+              sameId(placementRecordTypeId, pageSubjectRecordTypeId))
+            ? pageSubjectRecordTypeId
+            : undefined
+          : placementRecordTypeId;
+      const selectedReadTypes =
+        selectedReadTypesByFlow.get(String(binding.flow.flowId).toLowerCase()) ??
+        new Map<string, string>();
+      const selectedReadInputs = Object.entries(binding.flow.inputs).flatMap(
+        ([inputName, input]) => {
+          const selectedRecordTypeId = selectedReadTypes.get(inputName);
+          return selectedRecordTypeId !== undefined &&
+            isRecord(input) &&
+            input.kind === "caller" &&
+            typeof input.name === "string"
+            ? [{ callerInputName: input.name, recordTypeId: selectedRecordTypeId }]
+            : [];
+        },
+      );
+      const savesValues = (tasks: readonly FlowTask[]): boolean =>
+        tasks.some((task) => {
+          if (task.type === "record.save") {
+            const value = task.properties.values;
+            if (
+              isRecord(value) &&
+              value.kind === "reference" &&
+              isRecord(value.reference) &&
+              value.reference.source === "input" &&
+              typeof value.reference.name === "string"
+            ) {
+              const input = binding.flow.inputs[value.reference.name];
+              if (isRecord(input) && input.kind === "caller" && input.name === "values")
+                return true;
+            }
+          }
+          return flowTaskChildLists(task).some((child) => savesValues(child.tasks));
+        });
+      const flow = application.content.flows.find((entry) => sameId(entry.id, binding.flow.flowId));
+      return {
+        savesFormValues: flow !== undefined && savesValues(flow.tasks),
+        bindingId: binding.bindingId,
+        eventId: binding.eventId,
+        event: binding.event,
+        flowId: binding.flow.flowId,
+        callerInputs: Object.values(binding.flow.inputs).flatMap((input) =>
+          typeof input === "object" && input !== null && input.kind === "caller"
+            ? [input.name]
+            : [],
+        ),
+        ...(selectedRecordTypeId === undefined ? {} : { recordTypeId: selectedRecordTypeId }),
+        ...(selectedReadInputs.length === 0 ? {} : { selectedReadInputs }),
+      };
+    });
+  }
 };

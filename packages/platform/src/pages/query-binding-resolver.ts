@@ -1,0 +1,253 @@
+import { Temporal } from "@js-temporal/polyfill";
+import {
+  defaultAwaitingMessage,
+  parseQueryBindingText,
+  queryInputValueType,
+  type QueryBinding,
+  type QueryBindings,
+  type QueryBindingValueType,
+  type RelativeDateAnchor,
+} from "../definition/schema";
+import type { JsonValue } from "../catalogue/common";
+import type { InstalledRuntimeContext } from "../definition/installed-runtime-context";
+import { recordLinkValueSchema } from "../records/module-field-values";
+
+type DeclaredInput =
+  InstalledRuntimeContext["releaseSet"]["modules"][number]["content"]["queries"][number]["inputs"][number];
+type AddressParameters = Readonly<Record<string, string | readonly string[] | undefined>>;
+
+/** The record a page or a row panel is about, as the server already read it for this request. */
+export type QueryBindingRecordRead =
+  | Readonly<{
+      kind: "read";
+      recordTypeId: string;
+      recordId: string;
+      values: Readonly<Record<string, JsonValue>>;
+    }>
+  /** The record was not readable to the viewer, or the page addresses none. */
+  | Readonly<{ kind: "unreadable" }>;
+
+/**
+ * Everything a binding may read, all of it decided on the server for the current request: the
+ * address, what the page declares, the record reads the page already makes, and the viewer.
+ */
+export type QueryBindingContext = Readonly<{
+  /** The page address; only the names the page declares are ever read from it. */
+  address: AddressParameters;
+  /** The parameters this page declares, typed, in record type identities. */
+  parameters: ReadonlyMap<string, QueryBindingValueType>;
+  /** The parameter each control on the page publishes, by lower-cased placement identity. */
+  controls: ReadonlyMap<string, string>;
+  /** The page subject, read once per request; undefined on a page that is not a record page. */
+  subject: (() => Promise<QueryBindingRecordRead>) | undefined;
+  /** The parent row of a row's related records, which the server just authorised. */
+  row?: QueryBindingRecordRead;
+  /** The person viewing the page, from the verified request scope. */
+  viewerAccountId: string | undefined;
+  /** The organisation's time zone, read only when a relative date needs it. */
+  timeZone: () => Promise<string | undefined>;
+  now: Date;
+}>;
+
+export type QueryBindingResolution =
+  | Readonly<{ kind: "resolved"; inputValues: Readonly<Record<string, JsonValue>> }>
+  /** A required input has no value yet: the block shows its message and reads nothing. */
+  | Readonly<{ kind: "awaiting"; input: string; message: string }>
+  /** A binding the server cannot honour, typed for the log; the block reads nothing. */
+  | Readonly<{ kind: "refused"; part: string; reason: string }>;
+
+type Resolved =
+  | Readonly<{ kind: "value"; value: JsonValue }>
+  | Readonly<{ kind: "missing"; cause?: string }>
+  | Readonly<{ kind: "refused"; reason: string }>;
+
+const firstValue = (value: string | readonly string[] | undefined): string | undefined =>
+  typeof value === "string" ? value : value?.[0];
+
+/** The calendar date an anchor names, counted in the time zone at `now`. */
+const anchorDate = (
+  now: Date,
+  timeZone: string,
+  anchor: RelativeDateAnchor,
+): Temporal.PlainDate => {
+  const today = Temporal.Instant.fromEpochMilliseconds(now.getTime())
+    .toZonedDateTimeISO(timeZone)
+    .toPlainDate();
+  switch (anchor) {
+    case "today":
+      return today;
+    case "start_of_week":
+      // Weeks start on Monday.
+      return today.subtract({ days: today.dayOfWeek - 1 });
+    case "start_of_month":
+      return today.with({ day: 1 });
+    case "start_of_quarter":
+      return today.with({ month: today.month - ((today.month - 1) % 3), day: 1 });
+    case "start_of_year":
+      return today.with({ month: 1, day: 1 });
+    case "end_of_month":
+      return today.with({ day: today.daysInMonth });
+  }
+};
+
+/** A stored field value as an input value: it must already be a value of the input's type. */
+const fieldValue = (value: JsonValue | undefined, type: QueryBindingValueType): Resolved => {
+  if (value === undefined) return { kind: "missing", cause: "record_field_withheld" };
+  if (value === null || value === "") return { kind: "missing" };
+  if (type.kind === "record") {
+    const link = recordLinkValueSchema.safeParse(value);
+    return link.success &&
+      type.recordTypes.some(
+        (accepted) => accepted.toLowerCase() === String(link.data.recordTypeId).toLowerCase(),
+      )
+      ? {
+          kind: "value",
+          value: {
+            recordTypeId: String(link.data.recordTypeId),
+            recordId: String(link.data.recordId),
+          },
+        }
+      : { kind: "refused", reason: "record_field_type_mismatch" };
+  }
+  if (typeof value === "string") {
+    const parsed = parseQueryBindingText(value, type);
+    return parsed === undefined
+      ? { kind: "refused", reason: "record_field_type_mismatch" }
+      : { kind: "value", value: parsed };
+  }
+  if (type.kind === "whole_number" && typeof value === "number" && Number.isSafeInteger(value))
+    return { kind: "value", value };
+  if (type.kind === "yes_no" && typeof value === "boolean") return { kind: "value", value };
+  if (type.kind === "money" || type.kind === "formatted_text") return { kind: "value", value };
+  return { kind: "refused", reason: "record_field_type_mismatch" };
+};
+
+const resolveOne = async (
+  binding: QueryBinding,
+  type: QueryBindingValueType,
+  context: QueryBindingContext,
+): Promise<Resolved> => {
+  const fromAddress = (name: string): Resolved => {
+    const declared = context.parameters.get(name);
+    if (declared === undefined) return { kind: "refused", reason: "parameter_not_declared" };
+    const raw = firstValue(context.address[name]);
+    if (raw === undefined || raw === "") return { kind: "missing" };
+    // The address value is read as the declared parameter's own type; the Query engine then
+    // validates it against the input again.
+    const value = parseQueryBindingText(raw, declared.kind === "record" ? declared : type);
+    return value === undefined
+      ? { kind: "refused", reason: "parameter_value_invalid" }
+      : { kind: "value", value };
+  };
+  const source = binding.source;
+  switch (source.kind) {
+    case "fixed": {
+      const value = parseQueryBindingText(source.value, type);
+      return value === undefined
+        ? { kind: "refused", reason: "fixed_value_invalid" }
+        : { kind: "value", value };
+    }
+    case "page_parameter":
+      return fromAddress(source.name);
+    case "control": {
+      const name = context.controls.get(source.placement.toLowerCase());
+      return name === undefined
+        ? { kind: "refused", reason: "control_not_on_page" }
+        : fromAddress(name);
+    }
+    case "record_field": {
+      if (context.subject === undefined) return { kind: "refused", reason: "not_a_record_page" };
+      const subject = await context.subject();
+      if (subject.kind !== "read") return { kind: "missing", cause: "record_unreadable" };
+      const held = Object.entries(subject.values).find(
+        ([fieldId]) => fieldId.toLowerCase() === source.field.toLowerCase(),
+      );
+      return fieldValue(held?.[1], type);
+    }
+    case "current_person":
+      return context.viewerAccountId === undefined
+        ? { kind: "refused", reason: "viewer_unavailable" }
+        : { kind: "value", value: context.viewerAccountId };
+    case "relative_date": {
+      const timeZone = await context.timeZone();
+      if (timeZone === undefined) return { kind: "refused", reason: "time_zone_unavailable" };
+      const date = anchorDate(context.now, timeZone, source.anchor).add({
+        days: source.offsetDays,
+      });
+      // A date and time input gets the instant the day starts in the organisation's time zone.
+      return {
+        kind: "value",
+        value:
+          type.kind === "date_time"
+            ? date.toZonedDateTime({ timeZone }).toInstant().toString()
+            : date.toString(),
+      };
+    }
+    case "this_row": {
+      const row = context.row;
+      if (row === undefined) return { kind: "refused", reason: "row_unavailable" };
+      if (row.kind !== "read") return { kind: "missing", cause: "row_unreadable" };
+      if (source.field === undefined)
+        return fieldValue({ recordTypeId: row.recordTypeId, recordId: row.recordId }, type);
+      const held = Object.entries(row.values).find(
+        ([fieldId]) => fieldId.toLowerCase() === source.field!.toLowerCase(),
+      );
+      return fieldValue(held?.[1], type);
+    }
+  }
+};
+
+/**
+ * The one binding resolver. Every block reader, the Records table command, the board read, a row
+ * panel's read and the select-all descriptor take their query inputs from it. Each declared input
+ * is filled only from its own binding, resolved on the server for this request: a value of the
+ * wrong type or from an undeclared address name is refused, never guessed. An optional input with
+ * no value is left out, so the Query engine binds it as empty; a required input with no value
+ * yields the block's awaiting state and no query runs.
+ */
+export const resolveQueryBindings = async (
+  bindings: QueryBindings,
+  declaredInputs: readonly DeclaredInput[],
+  context: QueryBindingContext,
+  block: Readonly<{ title?: string; awaitingMessage?: string }>,
+  log: (cause: string) => void = () => undefined,
+): Promise<QueryBindingResolution> => {
+  const inputValues: Record<string, JsonValue> = {};
+  for (const binding of bindings)
+    if (!declaredInputs.some((input) => input.key === binding.input))
+      return { kind: "refused", part: `input:${binding.input}`, reason: "input_not_declared" };
+  for (const input of declaredInputs) {
+    const binding = bindings.find((candidate) => candidate.input === input.key);
+    const type = queryInputValueType({
+      type: input.type,
+      ...(input.type === "record_reference"
+        ? {
+            recordTypes: input.recordTypes.flatMap((recordType) =>
+              recordType.state === "resolved" ? [String(recordType.recordTypeId)] : [],
+            ),
+          }
+        : {}),
+    });
+    if (binding === undefined) {
+      if (input.required)
+        return { kind: "refused", part: `input:${input.key}`, reason: "input_not_bound" };
+      continue;
+    }
+    if (type === undefined)
+      return { kind: "refused", part: `input:${input.key}`, reason: "input_type_unbindable" };
+    const resolved = await resolveOne(binding, type, context);
+    if (resolved.kind === "refused")
+      return { kind: "refused", part: `input:${input.key}`, reason: resolved.reason };
+    if (resolved.kind === "missing") {
+      if (resolved.cause !== undefined) log(`input:${input.key} ${resolved.cause}`);
+      if (!input.required) continue;
+      return {
+        kind: "awaiting",
+        input: input.key,
+        message: block.awaitingMessage ?? defaultAwaitingMessage(input.label, block.title),
+      };
+    }
+    inputValues[input.key] = resolved.value;
+  }
+  return { kind: "resolved", inputValues };
+};

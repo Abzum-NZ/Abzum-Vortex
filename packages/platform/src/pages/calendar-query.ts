@@ -262,6 +262,8 @@ export type CalendarPlacementProjectionInput = Readonly<{
   contract: CalendarPlacementContract;
   /** The organisation's IANA time zone, read by the caller after its own authorisation. */
   timeZone: string;
+  /** The query inputs the placement's bindings resolved on the server for this request. */
+  inputValues: Readonly<Record<string, JsonValue>>;
   /** The raw `view.<placement>` and `date.<placement>` page parameters. */
   requestedView: string | undefined;
   requestedDate: string | undefined;
@@ -376,7 +378,7 @@ export const projectCalendarPlacement = async (
   const command = protectedQueryCommandSchema.safeParse({
     moduleRootId: bound.module.rootId,
     queryId: bound.query.queryId,
-    inputValues: {},
+    inputValues: input.inputValues,
     requestedFieldIds: [...new Set(requestedFieldIds.map((fieldId) => fieldId.toLowerCase()))],
     requestedSystemFieldKeys: [],
     sort: [],

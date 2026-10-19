@@ -744,6 +744,7 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
           transaction,
           scope: {
             organizationId: scope.organizationId,
+            organizationAccountId: scope.organizationAccountId,
             applicationRootId: scope.applicationRootId,
             ...(scope.previewInstallationId === undefined
               ? {}

@@ -45,6 +45,11 @@ export type InstalledRuntimeContext = Readonly<{
   permissionRegistration: PreparedApplicationPermissionRegistration;
   /** The resolved active installation whose bindings were verified against the release set. */
   installation: ActiveApplicationInstallationEvidence;
+  /**
+   * The organisation account of the person a human request runs for, from the verified request
+   * scope; absent for a system context. A query binding to the current person reads only this.
+   */
+  viewerOrganizationAccountId?: string;
 }>;
 
 /**
@@ -98,7 +103,12 @@ export type HumanInstalledRuntimeContextDependencies = Readonly<{
    * The organisation and application the human request scope resolved for this person, and the
    * preview of that application the request runs instead of its installation, if any.
    */
-  scope: Readonly<{ organizationId: string; applicationRootId: string; previewInstallationId?: string }>;
+  scope: Readonly<{
+    organizationId: string;
+    organizationAccountId: string;
+    applicationRootId: string;
+    previewInstallationId?: string;
+  }>;
 }>;
 
 /** Reads the active installation and proves it belongs to the organisation and application the request resolved. */
@@ -143,6 +153,7 @@ export const assembleHumanInstalledRuntimeContext = (
     releaseSet,
     scope.organizationId,
     undefined,
+    scope.organizationAccountId,
     (validated) =>
       prepareRegistration(validated, (candidate) =>
         prepareApplicationPermissionRegistrationForHumanRequest(
@@ -166,6 +177,7 @@ const assembleContext = (
   releaseSet: SystemApplicationBoundReleaseSetResult,
   organizationId: string,
   expectedCorrelationId: string | undefined,
+  viewerOrganizationAccountId: string | undefined,
   prepareRegistration: (
     releaseSet: SystemApplicationBoundReleaseSetResult,
   ) => PreparedApplicationPermissionRegistration,
@@ -217,6 +229,7 @@ const assembleContext = (
     releaseSet,
     permissionRegistration,
     installation,
+    ...(viewerOrganizationAccountId === undefined ? {} : { viewerOrganizationAccountId }),
   });
   assembledContexts.add(context);
   return context;

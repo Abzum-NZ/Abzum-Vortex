@@ -138,9 +138,11 @@ const classifyFailure = (error: unknown): Failure => {
     const block = compilation.location?.segments.find((segment) => segment.kind === "block");
     return { kind: "refused", reason: `compilation_${compilation.ruleCode.toLowerCase()}`,
       ...(block === undefined ? {} : { blockAlias: block.key }),
-      ...(compilation.code === undefined
-        ? {}
-        : { sentence: definitionValidationErrorCatalogue[compilation.code].message }) };
+      ...(compilation.sentence !== undefined
+        ? { sentence: compilation.sentence }
+        : compilation.code === undefined
+          ? {}
+          : { sentence: definitionValidationErrorCatalogue[compilation.code].message }) };
   }
   if (isVersionImpactRefusal(error)) return { kind: "refused", reason: "version_impact_refused" };
   if (error instanceof DefinitionError && error.code !== "DEFINITION_PUBLICATION_FAILED")

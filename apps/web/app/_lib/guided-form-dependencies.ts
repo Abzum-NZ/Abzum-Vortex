@@ -17,6 +17,7 @@ export const guidedFormDependencies = (): GuidedFormDependencies => ({
       transaction,
       scope: {
         organizationId: scope.organizationId,
+        organizationAccountId: scope.organizationAccountId,
         applicationRootId: scope.applicationRootId,
         ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
       },

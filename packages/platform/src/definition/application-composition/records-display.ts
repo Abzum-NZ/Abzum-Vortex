@@ -75,13 +75,6 @@ export type RecordsTableSortContract = Readonly<{
   direction: RecordsTableSortDirection;
 }>;
 
-export type RecordsTableParameterContract = Readonly<{
-  input: string;
-  source: "fixed" | "page";
-  fixedValue?: string;
-  pageParameter?: string;
-}>;
-
 /** Authored messages a Records table or Record detail shows in place of its fixed neutral text. */
 export type RecordsDisplayMessages = Readonly<{
   empty?: string;
@@ -110,7 +103,6 @@ export type RecordsTableContract = Readonly<{
   defaultSort: readonly RecordsTableSortContract[];
   sortableFields: readonly string[];
   pageSize: number;
-  parameters: readonly RecordsTableParameterContract[];
   messages: RecordsDisplayMessages;
   /** Configured row behaviours; empty for a placement that declares none. */
   rowBehaviours: RecordsTableRowBehaviourContract;
@@ -244,29 +236,11 @@ export const readRecordsTableContract = (
     stickyFirstColumn?.kind !== "boolean"
   )
     return undefined;
-  const parameters = (settingItems(settings["query_parameters"]) ?? []).flatMap(
-    (item): RecordsTableParameterContract[] => {
-      const parameter = settingGroup(item);
-      const input = parameter === undefined ? undefined : settingText(parameter["input"]);
-      if (parameter === undefined || input === undefined) return [];
-      const fixed = parameter["fixed_value"];
-      const pageParameter = settingText(parameter["page_parameter"]);
-      return [
-        {
-          input,
-          source: settingChoice(parameter["source"], ["fixed", "page"] as const, "fixed"),
-          ...(fixed?.kind === "text" ? { fixedValue: fixed.value } : {}),
-          ...(pageParameter === undefined ? {} : { pageParameter }),
-        },
-      ];
-    },
-  );
   return {
     columns,
     defaultSort,
     sortableFields: fieldList(settings["sortable_fields"]),
     pageSize: pageSize.value,
-    parameters,
     messages: displayMessages(settings),
     rowBehaviours: readRowBehaviours(settings),
     density,

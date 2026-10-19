@@ -713,6 +713,7 @@ export function compileParsedApplicationRequest(
         catalogueFailure.family,
         catalogueFailure.location,
         catalogueFailure.code,
+        catalogueFailure.sentence,
       );
     const resolution = new Resolution(request.resolution, sourceObject);
     const flowSet = compileCheckedFlowSources(sourceObject, resolution, dependencyOutputs);
@@ -788,6 +789,8 @@ export function compileParsedApplicationRequest(
             error.ruleCode,
             error.family,
             compilerRootLocation(sourceObject),
+            error.code,
+            error.sentence,
           );
     return fail("vortex.definition.invalid_compilation_output", "invalid_value");
   }

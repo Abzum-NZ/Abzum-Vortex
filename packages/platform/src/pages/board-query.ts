@@ -43,26 +43,8 @@ type BoardQueries = Pick<
   "boardMembers" | "boardInitialPages" | "boardSummary"
 >;
 type PermissionProjectedPlacement = ProjectedItem;
-type SearchParameters = Readonly<Record<string, string | readonly string[] | undefined>>;
 
 const lower = (value: string): string => value.toLowerCase();
-
-const firstParameter = (value: string | readonly string[] | undefined): string | undefined =>
-  typeof value === "string" ? value : value?.[0];
-
-/** Uses the same URL-to-typed-input coercion as the installed application page. */
-const coerceInput = (raw: string, type: string): JsonValue | undefined => {
-  switch (type) {
-    case "whole_number": {
-      const value = Number(raw);
-      return raw.trim() !== "" && Number.isSafeInteger(value) ? value : undefined;
-    }
-    case "yes_no":
-      return raw === "true" ? true : raw === "false" ? false : undefined;
-    default:
-      return raw;
-  }
-};
 
 const findInstalledQuery = (
   context: InstalledRuntimeContext,
@@ -351,8 +333,8 @@ export type BoardPlacementProjection =
 
 /**
  * Adapts one permission-projected placement and installed Query into the board's ready values.
- * Caller, selection, parameters and optional continuation are inputs; module/query identities,
- * field projections, options and page bounds are always rebound here.
+ * Caller, selection, the query inputs its bindings resolved and optional continuation are inputs;
+ * module/query identities, field projections, options and page bounds are always rebound here.
  */
 export const projectBoardPlacement = async (
   input: Readonly<{
@@ -360,7 +342,8 @@ export const projectBoardPlacement = async (
     session: IdentitySession;
     selection: OrganizationSelectionCandidate;
     placement: PermissionProjectedPlacement;
-    parameters: SearchParameters;
+    /** The query inputs the placement's bindings resolved on the server for this request. */
+    inputValues: Readonly<Record<string, JsonValue>>;
     queries: BoardQueries;
     continuation?: unknown;
   }>,
@@ -406,12 +389,7 @@ export const projectBoardPlacement = async (
       contract.cardTitleField,
       ...contract.detailFields.map((field) => field.field),
     ];
-    const inputValues: Record<string, JsonValue> = {};
-    for (const declared of binding.query.inputs) {
-      const raw = firstParameter(input.parameters[declared.key]);
-      const value = raw === undefined ? undefined : coerceInput(raw, declared.type);
-      if (value !== undefined) inputValues[declared.key] = value;
-    }
+    const inputValues = input.inputValues;
 
     let pageRequest:
       | Readonly<{ kind: "initial" }>

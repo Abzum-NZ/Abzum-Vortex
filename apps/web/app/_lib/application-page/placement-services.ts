@@ -47,6 +47,7 @@ export const createPlacementReadServices = (input: Readonly<{
         transaction,
         scope: {
           organizationId: scope.organizationId,
+          organizationAccountId: scope.organizationAccountId,
           applicationRootId: scope.applicationRootId,
           ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
         },

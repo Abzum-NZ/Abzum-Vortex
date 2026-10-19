@@ -395,11 +395,6 @@ export const APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE: PlatformBlockRelease = r
   sources.APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
 );
 
-/** Exact immutable metadata release for the view filter block. */
-export const VIEW_FILTER_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.VIEW_FILTER_BLOCK_RELEASE,
-);
-
 /** All immutable display block releases, including calendar and query-bound board releases. */
 export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
   TEXT_BLOCK_RELEASE,
@@ -449,13 +444,12 @@ export const CONTROL_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.fr
   FORM_CONTAINER_BLOCK_RELEASE,
 ]);
 
-/** All three immutable launcher, tile and view-filter block releases. */
+/** All immutable launcher and tile block releases. */
 export const LAUNCHER_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
   LINK_TILES_BLOCK_RELEASE,
   RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
   APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
-  VIEW_FILTER_BLOCK_RELEASE,
 ]);
 
 /** All immutable general layout block releases. */

@@ -31,7 +31,6 @@ import {
   type LauncherRenderProps,
 } from "./launcher-context";
 import { externalLinkActivation } from "./link-navigation";
-import { filterLauncherRows, useLauncherRowFilter } from "./view-filter-context";
 
 const cellText = (cells: Readonly<Record<string, DisplayCellValue>>, key: string): string => {
   const cell = cells[key];
@@ -45,18 +44,16 @@ const cellText = (cells: Readonly<Record<string, DisplayCellValue>>, key: string
  * bounded HTTPS contract and opened in a new browsing context without opener access or referrer
  * (#619); internal application and page destinations are re-checked on the server by the page
  * capability service, never here. A non-link address cell is ignored rather than promoted, so a
- * tile can show only a validated safe address. An enclosing view filter can only hide rows it
- * already received.
+ * tile can show only a validated safe address.
  */
 function ExternalLinkTiles(props: LauncherRenderProps): ReactElement {
-  const filter = useLauncherRowFilter();
   const context = resolveLauncherListContext(props);
   const settings = readLauncherSettings(props, context.location);
   const labelKey = settings.cellKey("label_key", "label");
   const addressKey = settings.cellKey("address_key", "address");
   const descriptionKey = settings.cellKey("description_key", "description");
   const values = context.values;
-  const rows = values === undefined ? [] : filterLauncherRows(values.rows, filter, labelKey);
+  const rows = values?.rows ?? [];
   const actions = props.slots.actions ?? null;
   // A tile shows its open control only when the declared row action is bound and invocable.
   const openable = context.events?.row_action !== undefined;
@@ -89,7 +86,7 @@ function ExternalLinkTiles(props: LauncherRenderProps): ReactElement {
                 aria-label={`${context.accessibleName}: empty`}
               >
                 <EmptyHeader>
-                  <EmptyTitle>{filter?.emptyMessage ?? "No links to show"}</EmptyTitle>
+                  <EmptyTitle>No links to show</EmptyTitle>
                 </EmptyHeader>
               </Empty>
             ) : (
@@ -166,19 +163,12 @@ export function LinkTiles(props: RecordPinRenderProps): ReactElement {
 }
 
 function RecordPinTiles(props: RecordPinRenderProps): ReactElement {
-  const filter = useLauncherRowFilter();
   const context = resolveLauncherListContext(props);
   const settings = readLauncherSettings(props, context.location);
   const labelKey = settings.cellKey("label_key", "label");
   const state = props.pinData ?? { status: "loading" as const };
   const values = props.availability === "available" && state.status === "ready" ? state.values : undefined;
-  const rows = values?.rows.filter((row) => {
-    const label = row.target.kind === "record" ? titleText(row.target.title)
-      : row.target.kind !== "unavailable" ? row.target.label
-      : values?.kind === "application_page_link_tiles" ? "Unavailable link" : "Unavailable record";
-    return filter?.matches({ recordId: row.sourceRecordId,
-      cells: { [labelKey]: { kind: "text", text: label } } }, labelKey) ?? true;
-  }) ?? [];
+  const rows = values?.rows ?? [];
   const events = props.availability === "available" ? props.events : undefined;
   const actionLabel = settings.text("row_action_label");
   const actions = props.slots.actions ?? null;
@@ -195,7 +185,7 @@ function RecordPinTiles(props: RecordPinRenderProps): ReactElement {
             aria-label={`${context.accessibleName}: empty`}
           >
             <EmptyHeader>
-              <EmptyTitle>{filter?.emptyMessage ?? "No links to show"}</EmptyTitle>
+              <EmptyTitle>No links to show</EmptyTitle>
             </EmptyHeader>
           </Empty>
         ) : <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3">

@@ -1,7 +1,5 @@
 import type { InstalledRuntimeContext } from "@vortex/platform/server";
 import {
-  BOARD_BLOCK_RELEASE,
-  BOARD_BLOCK_RELEASE_1_1_0,
   TABLE_BLOCK_RELEASE,
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
@@ -23,6 +21,8 @@ import {
   walkPageComposition,
 } from "@vortex/platform/schema";
 import type { InstalledFlow, ModuleRelease, ModuleField } from "./types";
+
+export { isBoardPlacement, projectedUseAvailability } from "@vortex/platform/server";
 
 /**
  * The page address parameter that carries a detail page's subject record id, the same name the
@@ -100,36 +100,10 @@ export const projectedBodyContentAvailable = (
   return visit(layout.content, visible);
 };
 
-export const isBoardPlacement = ({ vortex }: Pick<PlacedItem, "vortex">): boolean => {
-  if (!isRecord(vortex.block)) return false;
-  return (
-    typeof vortex.block.blockId === "string" &&
-    sameId(vortex.block.blockId, BOARD_BLOCK_RELEASE.blockId) &&
-    (vortex.block.releaseVersion === BOARD_BLOCK_RELEASE.releaseVersion ||
-      vortex.block.releaseVersion === BOARD_BLOCK_RELEASE_1_1_0.releaseVersion)
-  );
-};
-
 export const isTablePlacement = ({ vortex }: Pick<PlacedItem, "vortex">): boolean =>
   isRecord(vortex.block) &&
   typeof vortex.block.blockId === "string" &&
   sameId(vortex.block.blockId, TABLE_BLOCK_RELEASE.blockId);
-
-export const projectedUseAvailability = ({
-  vortex,
-}: Pick<PlacedItem, "vortex">): "available" | "unavailable" | "invalid" => {
-  const hasAvailability = Object.hasOwn(vortex, "availability");
-  const hasReason = Object.hasOwn(vortex, "unavailableReason");
-  if (!hasAvailability && !hasReason) return "available";
-  if (
-    hasAvailability &&
-    hasReason &&
-    vortex.availability === "unavailable" &&
-    vortex.unavailableReason === "operation_unavailable"
-  )
-    return "unavailable";
-  return "invalid";
-};
 
 export const isEditFieldPlacement = (placement: PlacedItemParts): boolean => {
   const block = placement.vortex.block;

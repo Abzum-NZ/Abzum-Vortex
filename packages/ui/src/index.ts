@@ -282,7 +282,7 @@ export {
 } from "./launcher";
 
 // Launcher, Link-Tile & View-Filter Components
-export { ApplicationLauncher, LinkTiles, ViewFilter } from "./launcher";
+export { ApplicationLauncher, LinkTiles } from "./launcher";
 
 // Launcher Registrations & Registry
 export { LAUNCHER_COMPONENT_REGISTRATIONS } from "./launcher";

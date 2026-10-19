@@ -70,6 +70,15 @@ export type ApplicationPageModel = Readonly<{
   bindings: Readonly<Record<string, readonly PlacementFlowBinding[]>>;
   /** Data placements to re-read after a write from each installed flow binding. */
   refreshPlacementsByBinding: Readonly<Record<string, readonly string[]>>;
+  /**
+   * The parameters the page declares that its controls publish and its blocks' bindings read: the
+   * placements reading each parameter, by name, and the parameter each control writes, by placement.
+   * A control change rereads exactly the placements bound to it.
+   */
+  pageParameters: Readonly<{
+    dependents: Readonly<Record<string, readonly string[]>>;
+    controls: Readonly<Record<string, string>>;
+  }>;
   /** Displayed values of readable edit fields, used only to omit unchanged fields on submit. */
   editFormBaselines: Readonly<Record<string, Readonly<Record<string, JsonValue>>>>;
   /** Dynamic reference-choice placements within the viewer's projected page. */
