@@ -6,6 +6,7 @@ import {
   type ImmutablePlatformBlockCatalogue,
   type PlatformBlockRelease,
   type PlatformBlockReleaseSummary,
+  type ModuleQueryExposure,
 } from "@vortex/platform/schema";
 import { PALETTE_GROUP_TITLES } from "../palette-groups";
 import { studioHasSlotStarter } from "./composition-starters";
@@ -163,6 +164,17 @@ export function groupStudioPaletteChoices(
 /** One field a query reads, as the qualified field reference a block stores: `<module>:<record>.<field>`. */
 export type StudioQueryField = Readonly<{ reference: string; label: string; type: string }>;
 
+/** One input a query asks for, which a block binds to a value when it reads the query. */
+export type StudioQueryInput = Readonly<{
+  key: string;
+  label: string;
+  /** The input's value type, as the query declares it (for example `text` or `record_reference`). */
+  type: string;
+  required: boolean;
+  /** For a record input, the record types it accepts, as `<module>:<record>`. */
+  recordTypes?: readonly string[];
+}>;
+
 /** A query a data block can read, and the fields it reads. */
 export type StudioQueryChoice = Readonly<{
   /** The qualified query reference a block stores: `<module>:<query>`. */
@@ -171,6 +183,10 @@ export type StudioQueryChoice = Readonly<{
   /** The record type the query reads, as `<module>:<record>`. */
   recordType: string;
   fields: readonly StudioQueryField[];
+  /** The values the query asks for. */
+  inputs: readonly StudioQueryInput[];
+  /** Whether the Applications that use its Module may read it. A borrowed query is always exposed. */
+  exposure: ModuleQueryExposure;
   /**
    * For a query of a Module the application only uses, the application that owns it. Such a query
    * is chosen as it is: it is changed in its own application.
@@ -229,8 +245,13 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
         reference: `${recordType}.${field.key}`, label: field.label, type: field.type,
       })];
     });
+    const inputs = query.inputs.map((input) => Object.freeze({
+      key: input.key, label: input.label, type: input.type, required: input.required,
+      ...(input.type === "record_reference" ? { recordTypes: Object.freeze(input.record_types.map((type) =>
+        type.includes(":") ? type : `${module.key}:${type}`)) } : {}),
+    }));
     return Object.freeze({ reference: `${module.key}:${query.key}`, label: query.label ?? query.key,
-      recordType, fields: Object.freeze(fields) });
+      recordType, fields: Object.freeze(fields), inputs: Object.freeze(inputs), exposure: query.exposure });
   }));
 
 /** The record types of the application's own Modules in the draft, as `<module>:<record>`. */
@@ -287,13 +308,11 @@ export function studioRelationshipChoices(
 
 /**
  * Whether a block may store this query reference: a query of one of the application's own
- * Modules, or a query of a Module it uses, which the draft compile resolves against that Module's
- * release.
+ * Modules, or an exposed query of a Module it uses, as its last compile read them. It is the
+ * picker's own list, so a private query of another application is never stored.
  */
-export const studioQueryOffered = (source: ApplicationSourceDocument, reference: string): boolean => {
-  if (ownQueries(source).some((query) => query.reference === reference)) return true;
-  const separator = reference.indexOf(":");
-  const module = reference.slice(0, separator);
-  return separator > 0 && /^[a-z][a-z0-9_]*$/.test(reference.slice(separator + 1)) &&
-    source.body.uses.some((use) => use.module === module);
-};
+export const studioQueryOffered = (
+  source: ApplicationSourceDocument,
+  borrowed: StudioBorrowedChoices | null,
+  reference: string,
+): boolean => studioQueryChoices(source, borrowed).some((query) => query.reference === reference);

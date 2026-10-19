@@ -40,6 +40,23 @@ A module-exposed query is this same closed query contract published under a stab
 
 A flow's Query node publishes exactly one `ProtectedOperationReference`, containing the query's owning Application or Module and its permanent query ID. That reference is part of the node's exact release mapping, so a grant cannot be reused for another node or query.
 
+## Query exposure
+
+Every Module query declares `exposure`: `private` (the default a new query gets) or `exposed`.
+The Application that owns the Module reads all of its queries. An Application that only uses the
+Module reads its exposed queries and nothing else. One rule decides it in every place: the Studio
+data picker and its store-time check offer only exposed queries of used Modules, the draft compile
+and publication validation refuse a page, block or interface that names a private query of another
+Application (`vortex.definition.application_query_exposure`), and the database query preparation
+refuses to read it, so neither a hand-written request nor a release compiled before exposure
+existed can bypass it. A published Application release pins the exact Module release it was
+compiled against: when the owner makes a query private, a release that already reads it keeps
+reading that pinned, exposed revision, and the borrower's next publication is refused with the
+query named, so nothing breaks silently. A
+record type's own listing is not an authored query and follows record access. Studio's Data tab
+lists the Application's queries ("This app", with an Expose switch) and the exposed queries of the
+Applications it uses ("From other apps", read-only), each with its record type, inputs and uses.
+
 ## Exact field values in queries
 
 Read value meaning from the exact published Module contract and its field settings,

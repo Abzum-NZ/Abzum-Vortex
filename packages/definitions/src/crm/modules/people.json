@@ -1038,6 +1038,7 @@
     {
       "id": "qry_crm_contacts",
       "key": "crm_contacts",
+      "exposure": "private",
       "label": "Contacts",
       "record_type": "contact",
       "inputs": [],
@@ -1057,6 +1058,7 @@
     {
       "id": "qry_crm_company_contacts",
       "key": "crm_company_contacts",
+      "exposure": "private",
       "label": "Contacts of one company",
       "record_type": "contact",
       "inputs": [
@@ -1088,6 +1090,7 @@
     {
       "id": "qry_crm_leads",
       "key": "crm_leads",
+      "exposure": "private",
       "label": "Leads",
       "record_type": "lead",
       "inputs": [],

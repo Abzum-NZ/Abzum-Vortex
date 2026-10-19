@@ -1,5 +1,6 @@
 import { normalizeExactDecimal, type DefinitionCompilationOutput } from "../../schema";
 import { fingerprintCanonicalValue } from "../canonical-json-definition";
+import { moduleQueryBorrowable } from "../module-query-exposure";
 import type { Resolution } from "./resolution";
 import {
   applicationModuleKeysOf,
@@ -293,6 +294,9 @@ export function applicationModuleValueIndex(
   const fieldsById = new Map<string, { field: JsonObject }>();
   const actionsByKey = new Map<string, ApplicationActionValuePair>();
   const queryIdsByReference = new Map<string, string>();
+  // A query of a Module the Application only uses is read only when that Module exposes it.
+  const privateBorrowedQueries = new Set<string>();
+  const usedModuleKeys = new Set((body.uses as JsonObject[]).map((use) => String(use.module)));
   for (const moduleKey of applicationModuleKeysOf(body)) {
     const expected = resolution.definition(moduleKey, "module");
     const candidates = dependencyOutputs.filter(
@@ -337,7 +341,9 @@ export function applicationModuleValueIndex(
     }
     // `queries` defaults to empty, so stored canonical content may omit it.
     for (const query of (content.queries ?? []) as JsonObject[])
-      queryIdsByReference.set(`${moduleKey}:${String(query.key)}`, String(query.queryId));
+      if (usedModuleKeys.has(moduleKey) && !moduleQueryBorrowable(query))
+        privateBorrowedQueries.add(`${moduleKey}:${String(query.key)}`);
+      else queryIdsByReference.set(`${moduleKey}:${String(query.key)}`, String(query.queryId));
   }
   const record = (reference: string) => {
     const recordTypeId = String(resolution.recordType(reference).recordTypeId);
@@ -378,6 +384,12 @@ export function applicationModuleValueIndex(
     action: (key) => actionsByKey.get(key),
     query: (reference) => {
       const queryId = queryIdsByReference.get(reference);
+      if (privateBorrowedQueries.has(reference))
+        fail(
+          "vortex.definition.application_query_exposure",
+          "scope_conflict",
+          resolution.location("query", reference),
+        );
       if (queryId === undefined)
         fail(
           "vortex.definition.application_page_query",

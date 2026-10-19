@@ -39,6 +39,7 @@ import {
 import { moduleSourceFieldSchema } from "./module-source-fields";
 import { recordTitleFieldEligible } from "./record-title-field";
 import { moduleSourceActionInputSchema } from "./module-source-action-inputs";
+import { moduleQueryExposureSchema } from "./module-query-exposure";
 import {
   maximumPipelineStages,
   maximumPipelineTransitions,
@@ -775,6 +776,8 @@ const moduleSourceQueryAggregateSchema = z
  * One authored Module-owned query. It names a local or dependency-qualified record type,
  * typed inputs, the fields it returns, a typed filter tree, grouping, totals, a stable sort,
  * a bounded page size and its declared relationship hops. It never carries a database target.
+ * `exposure` says whether an Application that uses the Module may read it ("exposed") or only
+ * the Module's own Application ("private").
  */
 const moduleSourceQuerySchema = z
   .object({
@@ -782,6 +785,7 @@ const moduleSourceQuerySchema = z
     key: sourceProvenanceUnchanged(builderKeySchema),
     label: sourceProvenanceUnchanged(labelSchema.optional()),
     description: sourceProvenanceUnchanged(z.string().min(1).max(1_000).optional()),
+    exposure: sourceProvenanceUnchanged(moduleQueryExposureSchema),
     record_type: sourceProvenanceTarget(
       z.union([builderKeySchema, sourceQualifiedRecordTypeSchema]),
       ["recordType/**"],

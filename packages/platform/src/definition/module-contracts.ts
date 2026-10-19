@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { recordTitleFieldEligible } from "./record-title-field";
+import { moduleQueryExposureSchema } from "./module-query-exposure";
 import {
   actionInputValueTypes,
   personalDataClassSchema,
@@ -948,6 +949,7 @@ export const moduleQueryDefinitionSchema = z
     key: builderKeySchema,
     label: z.string().min(1).max(60).optional(),
     description: z.string().min(1).max(1_000).optional(),
+    exposure: moduleQueryExposureSchema,
     recordType: recordTypeReferenceSchema,
     inputs: z.array(actionInputDefinitionSchema).max(50),
     selectedFieldIds: z.array(fieldIdSchema).min(1).max(200),

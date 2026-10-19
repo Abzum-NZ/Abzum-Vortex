@@ -389,6 +389,7 @@ export function ApplicationDraftAgentTools({
       localLifetime: readLifetime(),
       catalogue: authoring.current?.catalogue ?? latest.current.view.catalogue,
       source: state.source,
+      borrowed: authoring.current?.borrowedChoices ?? latest.current.view.borrowedChoices,
     };
   }, [history, organizationId, readLifetime]);
 

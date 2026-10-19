@@ -352,6 +352,7 @@ const listQuery = (
     id: freshAlias(plan, `qry_${key}`),
     key,
     label: resolved.record.plural_name,
+    exposure: "private",
     record_type: resolved.record.key,
     inputs: [],
     select: columns.map((entry) => entry.key),
@@ -792,6 +793,7 @@ const relatedTables = (
               id: freshAlias(plan, `qry_${key}`),
               key,
               label: `${child.plural_name} of one ${lowerFirst(resolved.record.name)}`,
+              exposure: "private",
               record_type: child.key,
               inputs: [
                 {
