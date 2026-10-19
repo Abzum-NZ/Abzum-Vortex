@@ -91,11 +91,26 @@ type Query = Module["queries"][number];
 /** The record types a page can be made for: those of the modules this application owns. */
 export const studioRecordPageChoices = (
   source: Source,
-): readonly Readonly<{ recordType: string; label: string }>[] =>
+): readonly Readonly<{
+  recordType: string;
+  label: string;
+  kinds: readonly StudioRecordPageKind[];
+}>[] =>
   source.body.modules.flatMap((module) =>
     module.record_types.map((record) => ({
       recordType: `${module.key}:${record.key}`,
       label: `${record.plural_name} (${module.name})`,
+      kinds: studioRecordPageKinds
+        .filter(
+          (entry) =>
+            record.standard_actions.includes("read") &&
+            (entry.kind === "form_create" || entry.kind === "guided"
+              ? record.standard_actions.includes("create")
+              : entry.kind === "form_edit"
+                ? record.standard_actions.includes("update")
+                : true),
+        )
+        .map((entry) => entry.kind),
     })),
   );
 
@@ -160,6 +175,10 @@ const resolveRecordType = (source: Source, reference: string) => {
     );
   /** The record type's standard permission for one action, or a located refusal. */
   const standard = (action: "read" | "create" | "update") => {
+    if (!record.standard_actions.includes(action))
+      return refuse(
+        `${record.name} does not allow ${action}. Enable it under Standard actions in Data first.`,
+      );
     const key = standardPermissionKey(module.key, record.key, action);
     return (
       module.permissions.find((entry) => entry.key === key) ??
@@ -690,7 +709,7 @@ const addList = (
     plan.details.push(
       `Rows open nothing yet: ${record.plural_name.toLowerCase()} have no detail page. Adding one makes rows open it.`,
     );
-  if (found.create !== undefined) {
+  if (record.standard_actions.includes("create") && found.create !== undefined) {
     const label = `New ${lowerFirst(record.name)}`;
     openButton(
       context,
@@ -925,7 +944,7 @@ const addDetail = (
       `No related tables: no record type of this application links to ${record.plural_name.toLowerCase()}.`,
     );
   const found = companions(plan.source, resolved.qualified);
-  if (found.edit !== undefined) {
+  if (record.standard_actions.includes("update") && found.edit !== undefined) {
     openButton(
       context,
       plan,
@@ -1362,6 +1381,14 @@ export const addRecordPage = (
   const resolved = resolveRecordType(candidate, command.recordType);
   if (!studioRecordPageKinds.some((entry) => entry.kind === command.type))
     return refuse("Choose which page to add.");
+  if (
+    !studioRecordPageChoices(candidate)
+      .find((choice) => choice.recordType === command.recordType)
+      ?.kinds.includes(command.type)
+  )
+    return refuse(
+      "This page needs actions the record type does not allow. Change Standard actions in Data first.",
+    );
   if (command.addToMenu && (command.type === "detail" || command.type === "form_edit"))
     refuse(
       `${command.type === "detail" ? "A detail page" : "An edit form"} opens one ${lowerFirst(resolved.record.name)}, so it cannot be a menu entry. Add it without one.`,
