@@ -92,6 +92,7 @@ function QueryTable({
   selected,
   onSelect,
   last,
+  owned,
 }: Readonly<{
   caption: string;
   rows: readonly Row[];
@@ -100,9 +101,11 @@ function QueryTable({
   onSelect: (selection: StudioDataSelection) => void;
   /** The last column: the Expose switch of an owned query, or the application that owns a used one. */
   last: Readonly<{ title: string; cell: (row: Row) => ReactNode }>;
+  /** Whether the rows are this application's own queries, which show whether they are exposed. */
+  owned: boolean;
 }>) {
   return (
-    <div className="overflow-hidden rounded-xl border">
+    <div className="overflow-x-auto rounded-xl border">
       <Table containerClassName="border-0">
         <TableCaption className="sr-only">{caption}</TableCaption>
         <TableHeader className="bg-muted/50">
@@ -111,7 +114,7 @@ function QueryTable({
             <TableHead className={headClass}>Records</TableHead>
             <TableHead className={headClass}>Inputs</TableHead>
             <TableHead className={`${headClass} w-20 text-center`}>Used in</TableHead>
-            <TableHead className={`${headClass} w-36`}>{last.title}</TableHead>
+            <TableHead className={headClass}>{last.title}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -145,6 +148,11 @@ function QueryTable({
                   {query.summary ? (
                     <Badge variant="outline" className="ml-2">
                       Summary
+                    </Badge>
+                  ) : null}
+                  {owned && query.exposure === "exposed" ? (
+                    <Badge variant="secondary" className="ml-2">
+                      Exposed
                     </Badge>
                   ) : null}
                 </TableCell>
@@ -251,6 +259,7 @@ export function StudioQueryCatalogue({
         ) : (
           <QueryTable
             caption="Queries of this application"
+            owned
             rows={own}
             source={source}
             selected={selected}
@@ -258,21 +267,14 @@ export function StudioQueryCatalogue({
             last={{
               title: "Exposed",
               cell: (row) => (
-                <span className="inline-flex items-center gap-2">
-                  <Switch
-                    checked={row.query.exposure === "exposed"}
-                    disabled={disabled}
-                    aria-label={`Expose ${row.query.label} to other applications`}
-                    onCheckedChange={(checked) => {
-                      void expose(row, checked);
-                    }}
-                  />
-                  {row.query.exposure === "exposed" ? (
-                    <Badge variant="secondary">Exposed</Badge>
-                  ) : (
-                    <span className="text-muted-foreground">Private</span>
-                  )}
-                </span>
+                <Switch
+                  checked={row.query.exposure === "exposed"}
+                  disabled={disabled}
+                  aria-label={`Expose ${row.query.label} to other applications`}
+                  onCheckedChange={(checked) => {
+                    void expose(row, checked);
+                  }}
+                />
               ),
             }}
           />
@@ -294,6 +296,7 @@ export function StudioQueryCatalogue({
         ) : (
           <QueryTable
             caption="Exposed queries of the applications this one uses"
+            owned={false}
             rows={borrowed}
             source={source}
             selected={selected}
