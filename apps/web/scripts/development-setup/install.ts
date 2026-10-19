@@ -64,7 +64,10 @@ const coordinatorDependencies = (
   resolveModuleContributions,
   builderAuthority: (_transaction, scope) => developmentBuilderAuthority(scope.organizationId),
   containsCustomComponents: releaseSetContainsCustomComponents,
-  preparedRuntimeSource: createPreparedInstallationRuntimeSourceReader(developmentPublicationCatalogue),
+  preparedRuntimeSource: createPreparedInstallationRuntimeSourceReader(
+    developmentPublicationCatalogue,
+    [],
+  ),
 });
 
 const release = (facts: InstallFacts, key: string): PublishedRelease => {
