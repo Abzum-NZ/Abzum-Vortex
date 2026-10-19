@@ -399,6 +399,25 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     return rows.map(parseOwnedModuleRoot);
   }
 
+  async readOwnedModulePublication(applicationRootId: string) {
+    const rows = await this.transaction.query`
+      select vortex_definition.read_owned_module_publication(${applicationRootId}::uuid) as publication
+    `;
+    return parseOneRow(
+      rows,
+      z
+        .object({
+          publication: z
+            .object({
+              recordTypes: z.array(z.string().min(1)),
+              fields: z.array(z.string().min(1)),
+            })
+            .strict(),
+        })
+        .strict(),
+    ).publication;
+  }
+
   /** The draft, its identities and its current release's revision and version, checked as one. */
   private async readPublicationState(
     rootId: string,

@@ -126,6 +126,13 @@ export interface DefinitionPublicationReader {
   readCandidate(rootId: string): Promise<DefinitionPublicationCandidate | undefined>;
   /** The internal Module roots one Application owns. */
   readOwnedModuleRoots(applicationRootId: string): Promise<readonly OwnedModuleRoot[]>;
+  /** Published record and field keys, without materialising the owned Module releases. */
+  readOwnedModulePublication(applicationRootId: string): Promise<
+    Readonly<{
+      recordTypes: readonly string[];
+      fields: readonly string[];
+    }>
+  >;
   /** The draft, its identities and its current release version, without the release itself. */
   readDraftCandidate(rootId: string): Promise<DefinitionDraftCandidate | undefined>;
   readModuleReleasePage(

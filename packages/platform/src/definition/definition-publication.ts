@@ -514,7 +514,11 @@ export const createDefinitionPublicationService = (
   },
 
   /** Published field facts and compilation share one request-scoped definition snapshot. */
-  readApplicationDraftSnapshot: async (context: SessionContext, input: unknown) => {
+  readApplicationDraftSnapshot: async (
+    context: SessionContext,
+    input: unknown,
+    resources: Readonly<{ publication: boolean }>,
+  ) => {
     const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
     if (!command.success) return refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     await authorize(authority, context, { kind: "draft_change", rootId: command.data.rootId });
@@ -527,26 +531,9 @@ export const createDefinitionPublicationService = (
       if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
         return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
       const overlay = createDraftModuleOverlay(reader, context, candidate.draft);
-      const roots = await overlay.readOwnedModuleRoots(String(candidate.draft.rootId));
-      const released = roots.filter((root) => root.currentReleaseRevision !== null);
-      const releases = await overlay.readModuleReleases(
-        candidate.draft.organizationId,
-        released.map((root) => ({
-          rootId: root.rootId,
-          releaseRevision: root.currentReleaseRevision!,
-        })),
-      );
-      const recordTypes: string[] = [];
-      const fields: string[] = [];
-      for (const [index, root] of released.entries()) {
-        const release = releases[index];
-        if (release === undefined) return refuse("DEFINITION_COMPILATION_REFUSED");
-        for (const record of release.compilationOutput.canonical.content.recordTypes) {
-          recordTypes.push(`${root.key}:${record.key}`);
-          for (const field of record.fields) fields.push(`${root.key}:${record.key}.${field.key}`);
-        }
-      }
-      const publication: ApplicationDraftPublication = { recordTypes, fields };
+      const publication: ApplicationDraftPublication | null = resources.publication
+        ? await overlay.readOwnedModulePublication(String(candidate.draft.rootId))
+        : null;
       try {
         return {
           publication,
