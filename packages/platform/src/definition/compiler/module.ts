@@ -481,6 +481,7 @@ function compileModule(
       key: query.key,
       ...(query.label ? { label: query.label } : {}),
       ...(query.description ? { description: query.description } : {}),
+      exposure: query.exposure,
       recordType: resolution.recordType(record),
       inputs: (query.inputs as JsonObject[]).map((input) => actionInput(input, resolution, true)),
       selectedFieldIds: (query.select as string[]).map(localField),

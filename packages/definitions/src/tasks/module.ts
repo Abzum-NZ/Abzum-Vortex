@@ -77,6 +77,7 @@ export const tasksModule: SourceApplicationModule = sourceApplicationModuleSchem
     {
       id: "qry_tasks",
       key: "tasks",
+      exposure: "private",
       label: "Tasks",
       record_type: "task",
       inputs: [],

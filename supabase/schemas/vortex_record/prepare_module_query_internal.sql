@@ -292,6 +292,22 @@ begin
     and (resolved ->> 'moduleReleaseRevision')::bigint <> p_expected_release_revision then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'cursor_stale');
   end if;
+  -- A query of a Module this Application only uses is read only when that Module exposes it,
+  -- the same rule the Studio picker, the draft compile and publication apply; a release that
+  -- names a private or older query of another Application's Module reads nothing. A record
+  -- type's own listing carries its record type's identity and follows record access instead.
+  if pg_catalog.lower(resolved #>> '{query,queryId}')
+      is distinct from pg_catalog.lower(resolved #>> '{query,recordType,recordTypeId}')
+    and resolved #>> '{query,exposure}' is distinct from 'exposed'
+    and not exists (
+      select 1
+      from vortex_definition.roots as root
+      where root.root_id = p_module_root_id
+        and root.kind = 'module'
+        and root.owner_application_root_id = context_application_root_id
+    ) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+  end if;
   end if;
   query_item := resolved -> 'query';
   record_type_item := resolved -> 'recordType';
@@ -778,4 +794,4 @@ grant execute on function vortex_record.prepare_module_query_internal(uuid, uuid
   to vortex_owner;
 
 comment on function vortex_record.prepare_module_query_internal(uuid, uuid, bigint, jsonb, jsonb, jsonb, text, jsonb) is
-  'Shared owner-only Module query preparation for list and summary reads: derives organisation and application authority from validated_human_request_context(), resolves one installed query or the exact current human-owned preview pins, revalidates preview prior plans, exact active field mappings and preview catalogue/field bounds without using the installed read-scan routes, refuses a preview of a used Module''s record type with read_forbidden when the same read plan decision admits no read alternative, validates declared inputs and the published filter narrowed by the declared user filter, and returns the exact access predicate, pushed filter and residual per-row condition with bound inputs; it never accepts authority or identity from caller values.';
+  'Shared owner-only Module query preparation for list and summary reads: derives organisation and application authority from validated_human_request_context(), resolves one installed query or the exact current human-owned preview pins, revalidates preview prior plans, exact active field mappings and preview catalogue/field bounds without using the installed read-scan routes, refuses a preview of a used Module''s record type with read_forbidden when the same read plan decision admits no read alternative, refuses an authored query of a Module the Application does not own unless that query is exposed, validates declared inputs and the published filter narrowed by the declared user filter, and returns the exact access predicate, pushed filter and residual per-row condition with bound inputs; it never accepts authority or identity from caller values.';

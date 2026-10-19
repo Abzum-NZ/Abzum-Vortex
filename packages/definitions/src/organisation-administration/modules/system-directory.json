@@ -2019,6 +2019,7 @@
     {
       "id": "qry_people",
       "key": "people",
+      "exposure": "exposed",
       "label": "People",
       "record_type": "person",
       "inputs": [],
@@ -2043,6 +2044,7 @@
     {
       "id": "qry_organization_invitations",
       "key": "organization_invitations",
+      "exposure": "private",
       "label": "Organisation invitations",
       "record_type": "organization_invitation",
       "inputs": [],
@@ -2067,6 +2069,7 @@
     {
       "id": "qry_roles",
       "key": "roles",
+      "exposure": "exposed",
       "label": "Roles",
       "record_type": "role",
       "inputs": [],
@@ -2095,6 +2098,7 @@
     {
       "id": "qry_groups",
       "key": "groups",
+      "exposure": "exposed",
       "label": "Groups",
       "record_type": "group",
       "inputs": [],
@@ -2118,6 +2122,7 @@
     {
       "id": "qry_role_assignments",
       "key": "role_assignments",
+      "exposure": "exposed",
       "label": "Role assignments",
       "record_type": "role_assignment",
       "inputs": [],
@@ -2150,6 +2155,7 @@
     {
       "id": "qry_group_memberships",
       "key": "group_memberships",
+      "exposure": "exposed",
       "label": "Group memberships",
       "record_type": "group_membership",
       "inputs": [],
@@ -2176,6 +2182,7 @@
     {
       "id": "qry_role_activations",
       "key": "role_activations",
+      "exposure": "exposed",
       "label": "Role activations",
       "record_type": "role_activation",
       "inputs": [],
@@ -2203,6 +2210,7 @@
     {
       "id": "qry_delegations",
       "key": "delegations",
+      "exposure": "exposed",
       "label": "Delegations",
       "record_type": "delegation",
       "inputs": [],
@@ -2230,6 +2238,7 @@
     {
       "id": "qry_organizations",
       "key": "organizations",
+      "exposure": "exposed",
       "label": "Organisations",
       "record_type": "organization",
       "inputs": [],
@@ -2255,6 +2264,7 @@
     {
       "id": "qry_tenant_administrators",
       "key": "tenant_administrators",
+      "exposure": "exposed",
       "label": "Tenant administrators",
       "record_type": "tenant_administrator",
       "inputs": [],

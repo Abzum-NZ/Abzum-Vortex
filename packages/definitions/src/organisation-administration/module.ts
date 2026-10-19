@@ -1345,6 +1345,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
       {
         "id": "qry_organisation_notices",
         "key": "organisation_notices",
+        "exposure": "private",
         "label": "Notices",
         "record_type": "organisation_notice",
         "inputs": [],
@@ -1369,6 +1370,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
       {
         "id": "qry_privacy_request_cases",
         "key": "privacy_request_cases",
+        "exposure": "private",
         "label": "Privacy requests",
         "record_type": "privacy_request_case",
         "inputs": [],
@@ -1394,6 +1396,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
       {
         "id": "qry_organization_settings",
         "key": "organization_settings",
+        "exposure": "private",
         "label": "Organisation settings",
         "record_type": "organization_settings",
         "inputs": [],
@@ -1420,6 +1423,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
       {
         "id": "qry_installed_applications",
         "key": "installed_applications",
+        "exposure": "private",
         "label": "Installed applications",
         "record_type": "installed_application",
         "inputs": [],
@@ -1443,6 +1447,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
       {
         id: "qry_application_role_templates",
         key: "application_role_templates",
+        exposure: "private",
         record_type: "application_role_template",
         inputs: [
           {

@@ -22,6 +22,7 @@ import { type ApplicationFieldValuePair, actionValueReferenceEntry } from "./act
 import { permissionRecordScopesValid } from "./permission-scopes";
 import { actionPermissionKeys } from "./source-paths";
 import { versionRequirementAccepts } from "./publication-rules";
+import { moduleQueryBorrowable } from "../module-query-exposure";
 
 export function applicationScope(
   context: PreparedValidationContext,
@@ -421,14 +422,42 @@ export function applicationScope(
     return collectPlacementEntries(shells.get(shellId)?.layout);
   };
   const queries = new Map(array(content.queries).map((query) => [String(query.queryId), query]));
-  // The queries a page or placement binds are the ones a bound Module exposes, by exact identity.
+  // The queries a page or placement binds are those of the Modules this Application owns and the
+  // exposed queries of the Modules it uses, by exact identity. A private query of a used Module is
+  // refused wherever this Application names it.
+  const ownsModule = (module: (typeof boundModules)[number]) =>
+    object(object(module.canonical).content).ownerApplication === outputKey(output);
   const moduleQueries = new Map(
     boundModules.flatMap((module) =>
-      array(object(object(module.canonical).content).queries).map(
-        (query) => [String(query.queryId), query] as const,
-      ),
+      array(object(object(module.canonical).content).queries)
+        .filter((query) => ownsModule(module) || moduleQueryBorrowable(query))
+        .map((query) => [String(query.queryId), query] as const),
     ),
   );
+  const privateBorrowedQueryIds = new Set(
+    boundModules.flatMap((module) =>
+      ownsModule(module)
+        ? []
+        : array(object(object(module.canonical).content).queries)
+            .filter((query) => !moduleQueryBorrowable(query))
+            .map((query) => String(query.queryId)),
+    ),
+  );
+  // Every place the release names a query by identity: pages, placements and their settings.
+  const namesPrivateBorrowedQuery = (value: unknown): boolean =>
+    Array.isArray(value)
+      ? value.some(namesPrivateBorrowedQuery)
+      : value !== null &&
+        typeof value === "object" &&
+        Object.entries(value).some(([key, candidate]) =>
+          key === "queryId"
+            ? privateBorrowedQueryIds.has(String(candidate))
+            : namesPrivateBorrowedQuery(candidate),
+        );
+  if (privateBorrowedQueryIds.size > 0 && namesPrivateBorrowedQuery(content))
+    failures.push(
+      failure(output, "vortex.definition.application_query_exposure", "scope_conflict"),
+    );
   const connectionMap = new Map(
     connections
       .filter((connection) => {

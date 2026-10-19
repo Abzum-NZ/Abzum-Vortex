@@ -1957,6 +1957,7 @@
     {
       "id": "qry_sd_company_cases",
       "key": "service_desk_company_cases",
+      "exposure": "private",
       "label": "Cases of one company",
       "record_type": "case",
       "inputs": [
@@ -1988,6 +1989,7 @@
     {
       "id": "qry_sd_case_comments",
       "key": "service_desk_case_comments",
+      "exposure": "private",
       "label": "Comments of one case",
       "record_type": "case_comment",
       "inputs": [
@@ -2019,6 +2021,7 @@
     {
       "id": "qry_sd_open_cases",
       "key": "service_desk_open_cases",
+      "exposure": "private",
       "label": "Open cases",
       "record_type": "case",
       "inputs": [],
@@ -2056,6 +2059,7 @@
     {
       "id": "qry_sd_open_cases_by_status",
       "key": "service_desk_open_cases_by_status",
+      "exposure": "private",
       "label": "Open cases by status",
       "description": "Open case count for each unresolved status",
       "record_type": "case",
@@ -2085,6 +2089,7 @@
     {
       "id": "qry_sd_case_board",
       "key": "service_desk_case_board",
+      "exposure": "private",
       "label": "Case board",
       "description": "Cases grouped by status",
       "record_type": "case",
@@ -2110,6 +2115,7 @@
     {
       "id": "qry_sd_customers",
       "key": "service_desk_customers",
+      "exposure": "private",
       "label": "Customers",
       "record_type": "vortex.crm.organisations:company",
       "inputs": [],
@@ -2133,6 +2139,7 @@
     {
       "id": "qry_sd_requesters",
       "key": "service_desk_requesters",
+      "exposure": "private",
       "label": "Requesters",
       "record_type": "vortex.crm.people:contact",
       "inputs": [],
