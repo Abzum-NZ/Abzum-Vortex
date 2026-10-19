@@ -4790,6 +4790,15 @@
             "label": "Search",
             "help": "A search box over the searchable fields of the bound query",
             "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
             "properties": [
               {
                 "kind": "boolean",
@@ -4810,6 +4819,15 @@
             "label": "Column filters",
             "help": "Filter controls for chosen fields of the bound query",
             "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
             "properties": [
               {
                 "kind": "boolean",
@@ -4846,6 +4864,15 @@
             "label": "Saved views",
             "help": "Let people save and reopen sort and filter combinations",
             "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
             "properties": [
               {
                 "kind": "boolean",
@@ -4866,6 +4893,15 @@
             "label": "Bulk actions",
             "help": "Select rows and run a named command over the selection",
             "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
             "properties": [
               {
                 "kind": "boolean",
@@ -4944,6 +4980,15 @@
             "label": "Inline editing",
             "help": "Change chosen values in place; a commit is held as a binding to a flow",
             "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
             "properties": [
               {
                 "kind": "boolean",
