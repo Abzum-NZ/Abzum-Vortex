@@ -4,11 +4,14 @@ import {
   builderPreviewInstallationSchema,
   previewApplicationIdentitySchema,
   previewInstallationSchema,
+  previewSeedResultSchema,
   type BuilderPreviewInstallation,
   type PreviewApplicationIdentity,
+  type PreviewDemand,
   type PreviewInstallation,
   type PreviewInstallationCreateRequest,
   type PreviewInstallationRefreshRequest,
+  type PreviewSeedResult,
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
@@ -35,18 +38,12 @@ type PreviewRow = DatabaseRow & { readonly preview_installation: unknown };
 type IdentityRow = DatabaseRow & { readonly preview_identity: unknown };
 type SeedRow = DatabaseRow & { readonly seeded: unknown };
 
-/** A new preview, and whether its builder reads live records it can be seeded with. */
-export type CreatedPreviewInstallation = Readonly<{
-  installation: PreviewInstallation;
-  seedable: boolean;
-}>;
-
 export type PreviewInstallationRepository = Readonly<{
   /** In the organisation's context: the preview, its registration and its empty storage. */
   create(
     request: PreviewInstallationCreateRequest,
     releases: PreviewReleasePlan,
-  ): Promise<CreatedPreviewInstallation>;
+  ): Promise<PreviewInstallation>;
   /**
    * In the preview's own context: moves it to the current draft revision in place, keeping the
    * records it holds. A change those records cannot take is PREVIEW_INSTALLATION_SHAPE_INCOMPATIBLE.
@@ -56,10 +53,11 @@ export type PreviewInstallationRepository = Readonly<{
     releases: PreviewReleasePlan,
   ): Promise<PreviewInstallation>;
   /**
-   * In the installed Application's own context: seeds the preview with the live records, and
-   * only the fields of them, that its builder reads there.
+   * In the installed Application's own context: seeds each record type the demand needs that the
+   * preview does not hold yet with the live records, and only the fields of them, that its builder
+   * reads there. The database decides what the demand needs.
    */
-  seed(previewInstallationId: string): Promise<void>;
+  seed(previewInstallationId: string, demand: PreviewDemand): Promise<PreviewSeedResult>;
   /**
    * In the installed Application's own context: decides the preview's copied records again by
    * the builder's current live access, removing what they can no longer read.
@@ -131,17 +129,16 @@ export const createPreviewInstallationRepository = (
             ${request.shapeFingerprint}::text
           ) as preview_installation
         `;
-        const value = rows.length === 1 ? rows[0]?.preview_installation : undefined;
-        const { seedable, ...installation } =
-          typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
-        const parsed = previewInstallationSchema.safeParse(installation);
-        if (!parsed.success || typeof seedable !== "boolean")
+        const parsed = previewInstallationSchema.safeParse(
+          rows.length === 1 ? rows[0]?.preview_installation : undefined,
+        );
+        if (!parsed.success)
           throw unexpectedDefinitionFailure(
             "PREVIEW_INSTALLATION_FAILED",
-            parsed.error ?? new Error("Preview seed availability is missing"),
+            parsed.error,
             "preview-installation-repository",
           );
-        return { installation: parsed.data, seedable };
+        return parsed.data;
       } catch (error) {
         throw mapFailure(error);
       }
@@ -172,15 +169,24 @@ export const createPreviewInstallationRepository = (
       }
     },
 
-    async seed(previewInstallationId) {
+    async seed(previewInstallationId, demand) {
       try {
         const rows = await transaction.query<SeedRow>`
           select vortex_definition.seed_preview_installation(
-            ${previewInstallationId}::uuid
+            ${previewInstallationId}::uuid,
+            ${JSON.stringify(demand)}::text::jsonb
           ) as seeded
         `;
-        if (rows.length !== 1 || rows[0]?.seeded === null || rows[0]?.seeded === undefined)
-          throw new DefinitionError("PREVIEW_INSTALLATION_FAILED");
+        const parsed = previewSeedResultSchema.safeParse(
+          rows.length === 1 ? rows[0]?.seeded : undefined,
+        );
+        if (!parsed.success)
+          throw unexpectedDefinitionFailure(
+            "PREVIEW_INSTALLATION_FAILED",
+            parsed.error,
+            "preview-installation-repository",
+          );
+        return parsed.data;
       } catch (error) {
         throw mapFailure(error);
       }

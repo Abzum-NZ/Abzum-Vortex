@@ -239,7 +239,7 @@ function NewPipelineDialog({
               ))}
             </NativeSelect>
             <p className="text-sm text-muted-foreground">
-              Each option of the choice field is one stage. Add options in the field&apos;s editor.
+              Options become stages. Filtering is enabled so Boards can show them.
             </p>
           </div>
           <Problems issues={issues} />
@@ -554,7 +554,8 @@ function PipelineDialog({
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">Allowed moves</legend>
             <p className="text-sm text-muted-foreground">
-              Tick each move a record may make. Any other move between two stages is refused.
+              Tick each move a record may make. Any other move between two stages is refused. A new
+              record without a stage starts at the first stage.
             </p>
             <div className="overflow-x-auto rounded-xl border">
               <Table>
