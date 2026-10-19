@@ -32,18 +32,11 @@ export async function POST(request: NextRequest) {
     const parsed = requestSchema.safeParse(JSON.parse(body.text));
     if (!parsed.success) return privateJsonResponse({ kind: "refused" }, 400);
     const { organizationId, operation, candidate } = parsed.data;
-    const run = async () => operation === "canvas"
+    const result = operation === "canvas"
       ? await readStudioCanvasRecords(identity.session, organizationId, candidate)
       : operation === "data"
         ? await readStudioDataRecords(identity.session, organizationId, candidate)
         : await loadStudioApplicationDraft(organizationId, z.string().parse(candidate));
-    let result = await run();
-    if (result.kind === "temporarily_unavailable") {
-      // The operation logs its cause. A preview moving during this read can invalidate its
-      // installation context (40001); retry once with freshly resolved authority and context.
-      console.info(`[studio] retrying unavailable ${operation} read: STUDIO_READ_RETRY`);
-      result = await run();
-    }
     return privateJsonResponse(result, 200);
   } catch (error) {
     logRefusal("studio/read", "read", "STUDIO_READ_FAILED", error);

@@ -58,7 +58,6 @@ export type StudioCanvasRecordsResult =
   /** The builder may not edit or preview this application, so the canvas reads no records. */
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "following" }>
-  | Readonly<{ kind: "following" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 /** The compiled slot of one page area beside its stored items, and the block name of each compiled placement. */

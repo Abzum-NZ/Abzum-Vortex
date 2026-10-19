@@ -52,7 +52,6 @@ export type StudioPreviewRead =
   /** The saved draft moved on from the revision the request names. */
   | Readonly<{ kind: "conflict" }>
   | Readonly<{ kind: "following" }>
-  | Readonly<{ kind: "following" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 /** Opens the builder's preview of the saved draft at this revision for reading records. */
@@ -73,7 +72,7 @@ export const openStudioPreviewRead = async (
   // Copied live records are read only once they are decided again by the builder's current live
   // access in the installed Application, at most every five minutes, as opening the preview does.
   if (preview.reconcileDue) {
-    const reconciled = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
+    const reconcile = () => humanOrganizationRequests(dependencies.identityAuthorityId).run(
       session,
       application,
       async (transaction) => {
@@ -81,16 +80,25 @@ export const openStudioPreviewRead = async (
         return true;
       },
     );
+    let reconciled = await reconcile();
+    if (reconciled.kind === "temporarily_unavailable" && reconciled.databaseCode === "40001") {
+      console.info("[studio] retrying preview reconcile after serialization conflict: STUDIO_PREVIEW_RECONCILE_RETRY");
+      reconciled = await reconcile();
+    }
     if (reconciled.kind !== "available") {
       console.error(`[studio] preview records unchecked: STUDIO_PREVIEW_RECORDS_UNCHECKED kind=${reconciled.kind}`);
       return reconciled.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };
     }
   }
   const selection: StudioPreviewSelection = { ...application, previewInstallationId: preview.previewInstallationId };
-  const [installed, launcher] = await Promise.all([
+  const [firstInstalled, launcher] = await Promise.all([
     loadInstalledContext(session, dependencies, selection),
     loadOrganizationLauncher(session),
   ]);
+  const installed = firstInstalled.kind === "temporarily_unavailable" && firstInstalled.databaseCode === "40001"
+    ? await loadInstalledContext(session, dependencies, selection) : firstInstalled;
+  if (installed !== firstInstalled)
+    console.info("[studio] retried preview context after serialization conflict: STUDIO_PREVIEW_CONTEXT_RETRY");
   if (installed.kind !== "available") {
     console.error(`[studio] preview context unavailable: STUDIO_PREVIEW_CONTEXT_UNAVAILABLE kind=${installed.kind}`);
     return installed.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };

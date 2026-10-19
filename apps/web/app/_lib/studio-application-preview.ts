@@ -161,10 +161,20 @@ export const readStudioPreviewState = async (
 ): Promise<StudioPreviewState> => {
   try {
     const selection = { organizationId, applicationRootId: rootId };
-    const inApplication = await readPreviewStateIn(session, selection, organizationId, rootId, draftRevision);
+    const readOnceMoreOnSerializationConflict = async (
+      selected: Readonly<{ organizationId: OrganizationId; applicationRootId?: ApplicationRootId }>,
+    ) => {
+      const first = await readPreviewStateIn(session, selected, organizationId, rootId, draftRevision);
+      if (first.kind !== "temporarily_unavailable" || first.databaseCode !== "40001") return first;
+      // A preview move can invalidate this transaction's snapshot. The request service already
+      // logged the SQLSTATE and cause; start one fresh protected transaction for this known race.
+      console.info("[studio] retrying preview state after serialization conflict: STUDIO_PREVIEW_STATE_RETRY");
+      return readPreviewStateIn(session, selected, organizationId, rootId, draftRevision);
+    };
+    const inApplication = await readOnceMoreOnSerializationConflict(selection);
     const read = inApplication.kind === "temporarily_unavailable" ||
       (inApplication.kind === "available" && inApplication.value.kind !== "refused") ? inApplication
-      : await readPreviewStateIn(session, { organizationId }, organizationId, rootId, draftRevision);
+      : await readOnceMoreOnSerializationConflict({ organizationId });
     if (read.kind === "available") return read.value;
     return read.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" }
       : { kind: "refused", reason: "permission_refused" };
@@ -320,7 +330,11 @@ export async function currentStudioPreview(
     draftRevision: draft.draftRevision, shapeFingerprint: studioPreviewShapeFingerprint(draft.source) };
   if (preview === undefined) {
     if (purpose !== "read") return provision(target);
-    after(async () => { await provision(target); });
+    after(async () => {
+      const result = await provision(target);
+      if (result.kind !== "available" && result.kind !== "conflict")
+        console.error(`[studio] preview preparation failed: STUDIO_PREVIEW_PREPARE_${result.kind.toUpperCase()}`);
+    });
     return { kind: "following" };
   }
   // A preview of a newer saved revision means this request's draft revision is no longer current.
@@ -348,11 +362,15 @@ export const prepareStudioPreview = (
   session: IdentitySession, organizationId: OrganizationId, draft: StoredApplicationDefinitionDraft,
 ): void => {
   after(async () => {
-    const state = await readStudioPreviewState(session, organizationId, draft.rootId as ApplicationRootId, draft.draftRevision);
-    if (state.kind !== "read") return;
-    const result = await currentStudioPreview(session, organizationId, state.draft, state.preview, "prepare");
-    if (result.kind !== "available" && result.kind !== "conflict")
-      console.error(`[studio] preview preparation failed: STUDIO_PREVIEW_PREPARE_${result.kind.toUpperCase()}`);
+    try {
+      const state = await readStudioPreviewState(session, organizationId, draft.rootId as ApplicationRootId, draft.draftRevision);
+      if (state.kind !== "read") return;
+      const result = await currentStudioPreview(session, organizationId, state.draft, state.preview, "prepare");
+      if (result.kind !== "available" && result.kind !== "conflict")
+        console.error(`[studio] preview preparation failed: STUDIO_PREVIEW_PREPARE_${result.kind.toUpperCase()}`);
+    } catch (error) {
+      console.error(`[studio] preview preparation failed: STUDIO_PREVIEW_PREPARE_FAILED cause=${describeFailure(error)}`);
+    }
   });
 };
 
