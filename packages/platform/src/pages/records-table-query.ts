@@ -11,6 +11,9 @@ import {
   type OrganizationSelectionCandidate,
   type QueryId,
   type RecordsDisplayFormat,
+  type RecordsTableQueryState,
+  type RecordsTableSortKey,
+  type RecordsTableSortState,
 } from "../schema";
 import type { HumanOrganizationRequestResult } from "../access/index";
 import {
@@ -54,9 +57,12 @@ export type RecordsTableQueryRequest = Readonly<{
   queryId: QueryId;
   settings: Readonly<Record<string, BlockPropertyValueContract>>;
   pageParameters?: Readonly<Record<string, JsonValue>>;
-  page?: number;
-  pageDirection?: "forward" | "backward";
-  continuationToken?: string;
+  /**
+   * The viewer's query state from the page address: ordered sort, filters, search, visible columns
+   * and the requested page. Every part is validated here against the installed placement's
+   * declared contract; nothing in it widens what the placement declares.
+   */
+  state: RecordsTableQueryState;
   /** Headings from the installed definition for declared columns that set no label (field identity to label). */
   fieldLabels?: Readonly<Record<string, string>>;
   /** Labels of the choices each choice field offers (field identity to options). */
@@ -69,21 +75,6 @@ export type RecordsTableQueryRequest = Readonly<{
   fieldLinkTypes?: Readonly<Record<string, LinkFieldType>>;
   /** Reads the labels of the linked records the page's rows carry, once per page. */
   resolveRecordLinks?: RecordLinkResolver;
-  /**
-   * The viewer's chosen sort, from a `sort_changed` data event. It must be a declared sortable
-   * field; `null` or absent uses the bound query's declared sort.
-   */
-  sort?: Readonly<{ fieldId: string; direction: "ascending" | "descending" }> | null;
-  /**
-   * The viewer's active per-field filters, from `filter_changed` data events. An empty value
-   * clears that field; every named field must be a declared filterable field.
-   */
-  filters?: readonly Readonly<{ fieldId: string; value: string }>[];
-  /**
-   * The viewer's search text, from a `search_changed` data event. It is sent only when the
-   * placement enables search; the engine matches it over the record type's searchable fields.
-   */
-  search?: string | null;
 }>;
 
 /**
@@ -94,7 +85,7 @@ export type RecordsTableQueryRequest = Readonly<{
 export type RecordsTableQueryResolution =
   | Readonly<{
       kind: "available";
-      /** Declared columns, in order, as field identities; each row's values are keyed by them. */
+      /** The visible columns, in declared order, as field identities; rows carry only these values. */
       fieldIds: readonly string[];
       pageSize: number;
       rows: readonly ProtectedQueryRow[];
@@ -218,20 +209,48 @@ const filterConditionFor = (
   }
 };
 
+/** A built Records table read: the Query command, its visible projection and its effective order. */
+export type RecordsTableQueryCommand = Readonly<{
+  command: ProtectedQueryCommand;
+  /** The visible columns, in declared order; exactly the fields the command requests. */
+  fieldIds: readonly string[];
+  /** The explicit or authored default order; undefined when the bound query's own sort applies. */
+  sort?: RecordsTableSortState;
+}>;
+
 /**
- * Builds the Query engine command a declared Records table needs: exactly its declared columns,
- * its declared page size, its declared query inputs, and the viewer's current sort, filters and
- * search from the table's data events. Every user choice must stay inside the component's declared
- * sortable and filterable fields, so an unconfigured field can neither sort nor filter. Returns
- * undefined when the placement declares no data contract, a page-supplied input is missing, a user
- * choice names an undeclared or unreadable field, or the command is not one the Query engine accepts.
+ * Builds the Query engine command a declared Records table needs: exactly its visible columns,
+ * its declared page size, its declared query inputs, and the viewer's current sort, filters,
+ * search and page from the table's query state. The visible columns must be a nonempty subset of
+ * the declared columns (the authored default visibility when the viewer chose none); a sort key
+ * must be a declared sortable field and a filter a declared filterable field, so an unconfigured
+ * field can neither sort, filter nor be returned. The effective order is the viewer's sort, else
+ * the authored default sort, else the bound query's own sort; the engine appends the record
+ * identity tie-breaker once. A sorted or filtered field need not be visible: the engine evaluates
+ * it under the current field policy without returning its value. Returns undefined when the
+ * placement declares no data contract, a page-supplied input is missing, any part of the state is
+ * outside the declared contract, or the command is not one the Query engine accepts.
  */
 export const buildRecordsTableQueryCommand = (
   request: RecordsTableQueryRequest,
-): Readonly<{ command: ProtectedQueryCommand; fieldIds: readonly string[] }> | undefined => {
+): RecordsTableQueryCommand | undefined => {
   const contract = readRecordsTableContract(request.settings);
   if (contract === undefined || contract.columns.length === 0) return undefined;
-  const fieldIds = [...new Set(contract.columns.map((column) => column.field))];
+  const { state } = request;
+  const declaredFieldIds = [
+    ...new Set(contract.columns.map((column) => column.field.toLowerCase())),
+  ];
+  const requestedVisible =
+    state.visibleFieldIds ??
+    contract.columns.filter((column) => column.visible).map((column) => column.field);
+  const visibleSet = new Set(requestedVisible.map((fieldId) => fieldId.toLowerCase()));
+  if (
+    visibleSet.size === 0 ||
+    visibleSet.size !== requestedVisible.length ||
+    [...visibleSet].some((fieldId) => !declaredFieldIds.includes(fieldId))
+  )
+    return undefined;
+  const fieldIds = declaredFieldIds.filter((fieldId) => visibleSet.has(fieldId));
   const inputValues: Record<string, JsonValue> = {};
   for (const parameter of contract.parameters) {
     const value =
@@ -246,13 +265,22 @@ export const buildRecordsTableQueryCommand = (
 
   const sortableFieldIds = lowerUnique(contract.sortableFields);
   const filterableFieldIds = lowerUnique(contract.filterableFields);
-  const sort: { fieldId: string; direction: "ascending" | "descending" }[] = [];
-  if (request.sort !== undefined && request.sort !== null) {
-    if (!sortableFieldIds.includes(request.sort.fieldId.toLowerCase())) return undefined;
-    sort.push({ fieldId: request.sort.fieldId, direction: request.sort.direction });
-  }
+  const explicit = state.sort.length > 0;
+  const keys: readonly RecordsTableSortKey[] = explicit
+    ? state.sort
+    : contract.defaultSort.map((key) => ({ fieldId: key.field, direction: key.direction }));
+  const sortFieldIds = lowerUnique(keys.map((key) => key.fieldId));
+  if (
+    sortFieldIds.length !== keys.length ||
+    sortFieldIds.some((fieldId) => !sortableFieldIds.includes(fieldId))
+  )
+    return undefined;
+  const sort = keys.map((key) => ({
+    fieldId: key.fieldId.toLowerCase(),
+    direction: key.direction,
+  }));
   const conditions: JsonValue[] = [];
-  for (const filter of request.filters ?? []) {
+  for (const filter of state.filters) {
     if (filter.value === "") continue;
     const fieldId = filter.fieldId.toLowerCase();
     if (!filterableFieldIds.includes(fieldId)) return undefined;
@@ -268,13 +296,9 @@ export const buildRecordsTableQueryCommand = (
       : conditions.length === 1
         ? conditions[0]
         : { kind: "all", conditions };
+  if (state.search !== null && !contract.search) return undefined;
   const search =
-    contract.search &&
-    request.search !== undefined &&
-    request.search !== null &&
-    request.search.trim() !== ""
-      ? request.search.trim()
-      : undefined;
+    state.search === null || state.search.trim() === "" ? undefined : state.search.trim();
 
   const command = protectedQueryCommandSchema.safeParse({
     moduleRootId: request.moduleRootId,
@@ -291,12 +315,18 @@ export const buildRecordsTableQueryCommand = (
     // declared set tells the engine to search every field the record type marks searchable.
     searchableFieldIds: [],
     pageSize: contract.pageSize,
-    ...(request.pageDirection === undefined ? {} : { pageDirection: request.pageDirection }),
-    ...(request.continuationToken === undefined
+    ...(state.page === undefined ? {} : { pageDirection: state.page.pageDirection }),
+    ...(state.page?.continuationToken === undefined
       ? {}
-      : { continuationToken: request.continuationToken }),
+      : { continuationToken: state.page.continuationToken }),
   });
-  return command.success ? { fieldIds, command: command.data } : undefined;
+  return command.success
+    ? {
+        fieldIds,
+        command: command.data,
+        ...(sort.length === 0 ? {} : { sort: { keys: sort, explicit } }),
+      }
+    : undefined;
 };
 
 /**
@@ -322,7 +352,9 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         links.length === 0 || request.resolveRecordLinks === undefined
           ? undefined
           : await request.resolveRecordLinks(links);
+      const page = request.state.page?.page ?? 1;
       const projected = projectRecordsTableData(
+        built.fieldIds,
         {
           settings: request.settings,
           ...(recordLinks === undefined ? {} : { recordLinks }),
@@ -338,7 +370,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
             : { fieldLinkTypes: request.fieldLinkTypes }),
         },
         result.value.rows,
-        (request.page ?? 1) > 1,
+        page > 1,
       );
       if (projected === undefined) return refused;
       const nextContinuationToken = result.value.nextContinuationToken;
@@ -350,7 +382,8 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
               status: "ready",
               values: {
                 ...projected.values,
-                page: request.page ?? 1,
+                ...(built.sort === undefined ? {} : { sort: built.sort }),
+                page,
                 hasNextPage: nextContinuationToken !== undefined,
                 hasPreviousPage: previousContinuationToken !== undefined,
                 ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),

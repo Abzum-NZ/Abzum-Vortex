@@ -76,14 +76,20 @@ const releaseOf = (context: StudioCompositionContext, item: SourceItem): Release
   );
 };
 
-/** The list settings of a release whose entries each show one field. */
+/**
+ * The list settings of a release whose entries each show one field: lists identified by a field
+ * (columns, detail fields), not lists that only name fields, such as a table's default sort.
+ */
 const fieldListSettings = (
   release: Release,
 ): readonly Extract<BlockPropertySchemaContract, { kind: "list" }>[] =>
   release.properties.flatMap((property) =>
     property.kind === "list" &&
     property.item.kind === "group" &&
-    property.item.properties.some((nested) => nested.kind === "field_reference")
+    property.item.properties.some(
+      (nested) =>
+        nested.kind === "field_reference" && nested.key === property.presentationIdentity,
+    )
       ? [property]
       : [],
   );

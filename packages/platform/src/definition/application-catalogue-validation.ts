@@ -150,8 +150,7 @@ export function validateApplicationSourceCatalogue(
   /**
    * A Records table or Record detail may map only fields of its page's record type. Its bound
    * Module query lives in another document, so the check that mapped columns, sort and filter
-   * fields are selected by that query, and that the default sort is its leading sort, runs in the
-   * compiled application validation. Every refusal here names the placement and the setting that
+   * fields are selected by that query runs in the compiled application validation. Every refusal here names the placement and the setting that
    * carries the field.
    */
   const validateDataContract = (
@@ -200,9 +199,17 @@ export function validateApplicationSourceCatalogue(
 
     if (table !== undefined) {
       checkFields("columns", table.columns.map((column) => column.field), () => true, "invalid_value");
-      if (table.defaultSort !== undefined) {
-        checkFields("default_sort", [table.defaultSort.field], orders, "unsupported_choice");
-      }
+      // A table always shows at least one column before a person chooses other columns.
+      if (!table.columns.some((column) => column.visible))
+        report("vortex.definition.application_block_settings", "required_value", at("columns"));
+      // The default order is a sort a person could choose: each key is a declared sortable field.
+      const sortable = new Set(table.sortableFields.map((field) => field.toLowerCase()));
+      checkFields(
+        "default_sort",
+        table.defaultSort.map((key) => key.field),
+        (field) => sortable.has(field.toLowerCase()),
+        "unsupported_choice",
+      );
       checkFields("sortable_fields", table.sortableFields, orders, "unsupported_choice");
       checkFields("filterable_fields", table.filterableFields, orders, "unsupported_choice");
       const inputs = new Set<string>();
