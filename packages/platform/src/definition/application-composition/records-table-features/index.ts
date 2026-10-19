@@ -7,6 +7,13 @@ import {
   recordsTableColumnFiltersFeature,
   type RecordsTableColumnFiltersSettings,
 } from "./column-filters";
+
+export {
+  recordsTableFieldFilterable,
+  recordsTableFilterKindOf,
+  recordsTableFilterKinds,
+  type RecordsTableFilterKind,
+} from "./column-filters";
 import { recordsTableInlineEditFeature, type RecordsTableInlineEditSettings } from "./inline-edit";
 import {
   recordsTableConditionalFormattingFeature,

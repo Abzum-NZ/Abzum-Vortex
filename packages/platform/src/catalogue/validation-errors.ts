@@ -128,8 +128,9 @@ const definitionValidationErrorCatalogueSource = {
   },
   definition_records_table_column_filters: {
     order: 37,
-    message: "Column filters need fields the bound query can filter by.",
-    guidance: "Choose filterable fields of the bound query, or turn Column filters off.",
+    message: "Column filters need a field the query can filter by.",
+    guidance:
+      "Choose stored fields the bound query selects and its record type allows filtering by, or turn Column filters off.",
   },
   definition_records_table_saved_views: {
     order: 38,
