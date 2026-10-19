@@ -244,6 +244,16 @@ export const createFlowTaskRunner = (
         // A new record has nothing to clear, so a field the person left empty is simply not set.
         for (const [fieldId, value] of Object.entries(submittedValues))
           if (value === null) delete submittedValues[fieldId];
+        // A choice option that a named action sets is reached only by running that action on
+        // the record, so a new record cannot be created already in it.
+        if (
+          Object.entries(submittedValues).some(
+            ([fieldId, value]) =>
+              typeof value === "string" &&
+              recordType.optionActions.get(fieldId.toLowerCase())?.has(value) === true,
+          )
+        )
+          return { outcome: "validation" };
         const selectedOwnerGroupId = call.properties.selected_owner_group_id?.value;
         const selectedGroup = selectedOwnerGroupId === undefined
           ? undefined

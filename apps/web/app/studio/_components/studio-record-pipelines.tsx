@@ -554,7 +554,8 @@ function PipelineDialog({
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">Allowed moves</legend>
             <p className="text-sm text-muted-foreground">
-              Tick each move a record may make. Any other move between two stages is refused.
+              Tick each move a record may make. Any other move between two stages is refused. A new
+              record without a stage starts at the first stage.
             </p>
             <div className="overflow-x-auto rounded-xl border">
               <Table>

@@ -94,27 +94,47 @@ export const pipelineShapeProblems = (
   return problems;
 };
 
-/** The stages a record may move to from one stage, in stage order. */
-export const pipelineMovesFrom = (pipeline: PipelineShape, from: string): string[] =>
-  pipeline.stages
+/**
+ * The pipeline's start stage, its first: a record created without a stage gets it, and a record
+ * that has no stage yet moves as if it were there.
+ */
+export const pipelineStartStage = (pipeline: PipelineShape): string => {
+  const start = pipeline.stages[0];
+  if (start === undefined) throw new Error("A pipeline has at least one stage");
+  return start.option;
+};
+
+/**
+ * The stages a record may move to from one stage, in stage order. A record with no stage yet may
+ * take the start stage or move on from it as a record there could.
+ */
+export const pipelineMovesFrom = (pipeline: PipelineShape, from: string | undefined): string[] => {
+  const start = pipelineStartStage(pipeline);
+  const origin = from ?? start;
+  return pipeline.stages
     .map((stage) => stage.option)
-    .filter((to) =>
-      pipeline.transitions.some((transition) => transition.from === from && transition.to === to),
+    .filter(
+      (to) =>
+        (from === undefined && to === start) ||
+        pipeline.transitions.some(
+          (transition) => transition.from === origin && transition.to === to,
+        ),
     );
+};
 
 /**
  * Whether a save may change the stage field from one value to another. Staying in a stage is no
- * move; a record that has no stage yet, or leaves every stage, is outside the pipeline's moves.
+ * move; a record with no stage yet moves as if it were at the start stage, and a record never
+ * leaves every stage once it has one.
  */
 export const pipelineAllowsMove = (
   pipeline: PipelineShape,
   from: string | undefined,
   to: string | undefined,
 ): boolean =>
-  from === undefined ||
-  to === undefined ||
-  from === to ||
-  pipeline.transitions.some((transition) => transition.from === from && transition.to === to);
+  to === undefined
+    ? from === undefined
+    : from === to || pipelineMovesFrom(pipeline, from).includes(to);
 
 const joined = (labels: readonly string[]): string =>
   labels.length <= 1 ? (labels[0] ?? "") : `${labels.slice(0, -1).join(", ")} or ${labels.at(-1)}`;
@@ -127,14 +147,19 @@ export const pipelineMoveRefusalMessage = (
   pipeline: PipelineShape,
   fieldLabel: string,
   optionLabel: (option: string) => string,
-  from: string,
-  to: string,
+  from: string | undefined,
+  to: string | undefined,
 ): string => {
   const next = pipelineMovesFrom(pipeline, from).map(optionLabel);
-  return (
-    `${fieldLabel} can't move from ${optionLabel(from)} to ${optionLabel(to)}. ` +
-    (next.length === 0
-      ? `Nothing moves on from ${optionLabel(from)}.`
-      : `From ${optionLabel(from)} it can move to ${joined(next)}.`)
-  );
+  const onward = (place: string): string =>
+    next.length === 0
+      ? `Nothing moves on from ${place}.`
+      : `From ${place} it can move to ${joined(next)}.`;
+  if (from === undefined)
+    return (
+      `${fieldLabel} can't be ${optionLabel(to ?? "")}: a record with no ${fieldLabel} starts at ` +
+      `${optionLabel(pipelineStartStage(pipeline))}, so it can move to ${joined(next)}.`
+    );
+  if (to === undefined) return `${fieldLabel} can't be cleared. ${onward(optionLabel(from))}`;
+  return `${fieldLabel} can't move from ${optionLabel(from)} to ${optionLabel(to)}. ${onward(optionLabel(from))}`;
 };
