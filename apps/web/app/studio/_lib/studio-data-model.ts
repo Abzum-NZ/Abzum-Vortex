@@ -1,4 +1,4 @@
-import { moduleFieldTypeLabels, type ApplicationSourceDocument, type ModuleField, type ModuleFieldType } from "@vortex/platform/schema";
+import { moduleFieldTypeLabels, peopleDirectory, type ApplicationSourceDocument, type ModuleField, type ModuleFieldType } from "@vortex/platform/schema";
 import type { StudioRunOptions } from "../_components/use-studio-draft";
 
 /**
@@ -49,6 +49,8 @@ export type StudioDataField = Readonly<{
 /** One record type in the Data tab's tree, from the draft (owned) or the installed module (used). */
 export type StudioDataRecordType = Readonly<{
   key: string; name: string; pluralName: string; titleFieldKey: string; fields: readonly StudioDataField[];
+  /** Ordinary business records can be linked; protected administration projections cannot. */
+  linkable: boolean;
 }>;
 
 /** One query of a module, by the record type it reads. */
@@ -87,6 +89,7 @@ export const ownedDataModules = (source: ApplicationSourceDocument): readonly St
     name: module.name,
     recordTypes: module.record_types.map((record) => ({
       key: record.key, name: record.name, pluralName: record.plural_name, titleFieldKey: record.title_field,
+      linkable: record.system_projection === undefined || `${module.key}:${record.key}` === peopleDirectory.recordType,
       fields: record.fields.map((field) => ({
         key: field.key, label: field.label, type: field.type, required: field.required, unique: field.unique,
         description: field.help_text ?? "", filterable: field.filterable, sortable: field.sortable,
