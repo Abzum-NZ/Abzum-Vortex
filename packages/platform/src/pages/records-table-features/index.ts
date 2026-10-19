@@ -1,4 +1,8 @@
-import type { RecordsTableActionContract, RecordsTableContract } from "../../schema";
+import type {
+  RecordsTableActionContract,
+  RecordsTableContract,
+  RecordsTableFilterField,
+} from "../../schema";
 import type { ProtectedQueryRow } from "../../queries/protected-query-contracts";
 
 /**
@@ -11,8 +15,11 @@ import type { ProtectedQueryRow } from "../../queries/protected-query-contracts"
  */
 export type RecordsTableFeatureProjection = Readonly<{
   search?: true;
-  /** The filterable fields the viewer may filter by. */
-  columnFilters?: readonly string[];
+  /**
+   * The filterable fields the viewer may filter by, each with its canonical type, filter kind and
+   * what its control needs (choice options, a fixed currency, the organisation time zone).
+   */
+  columnFilters?: readonly RecordsTableFilterField[];
   savedViews?: true;
   /** The bulk commands at least one row of the page lets the viewer run. */
   bulkActions?: readonly RecordsTableActionContract[];
@@ -65,7 +72,7 @@ const sameField = (left: string, right: string): boolean =>
 /**
  * Projects the enabled features for the viewer of one read. `visibleFieldIds` are the columns the
  * read requested; a requested column that every returned row withholds is a field the viewer may
- * not read, so it is not offered as a filter. A bulk command that names a capability is offered
+ * not read, so it is not offered as a filter. `filterFields` describes each filterable field. A bulk command that names a capability is offered
  * when some row allows it, and inline editing keeps only fields some row lets the viewer change.
  * Every request a projected control makes is still re-checked by the server.
  */
@@ -73,14 +80,20 @@ export const projectRecordsTableFeatures = (
   contract: RecordsTableContract,
   visibleFieldIds: readonly string[],
   rows: readonly ProtectedQueryRow[],
+  filterFields: Readonly<Record<string, RecordsTableFilterField>> | undefined,
 ): RecordsTableFeatureProjection | undefined => {
   const { features } = contract;
   const withheld = (field: string): boolean =>
     rows.length > 0 &&
     visibleFieldIds.some((fieldId) => sameField(fieldId, field)) &&
     rows.every((row) => !Object.keys(row.values).some((key) => sameField(key, field)));
+  // A declared filter field the installed definition gives no filter kind is not offered; the
+  // server refuses a filter on it anyway.
   const columnFilters = features.columnFilters.enabled
-    ? features.columnFilters.fields.filter((field) => !withheld(field))
+    ? features.columnFilters.fields.flatMap((field) => {
+        const described = filterFields?.[field.toLowerCase()];
+        return described === undefined || withheld(field) ? [] : [described];
+      })
     : [];
   const bulkActions = features.bulkActions.enabled
     ? features.bulkActions.actions.filter(

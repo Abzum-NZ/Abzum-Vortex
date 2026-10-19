@@ -18,7 +18,10 @@ export const dynamic = "force-dynamic";
 
 const maximumRequestBodyLength = 131_072;
 
-/** One page of the records a link field on the person's current page may point at. */
+/**
+ * One page of the records a link field, or a Records table's link filter, on the person's current
+ * page may point at.
+ */
 const requestSchema = z
   .object({
     tenantShortName: z.string().min(1).max(200),
@@ -26,6 +29,8 @@ const requestSchema = z
     applicationKey: z.string().min(1).max(200),
     pageKey: z.string().min(1).max(200),
     placementId: containedComponentIdSchema,
+    /** For a Records table's link filter: the filter field whose target records are offered. */
+    fieldId: recordIdSchema.optional(),
     installationRevision: revisionSchema,
     releaseKey: z.string().min(1).max(512),
     subjectRecordId: recordIdSchema.optional(),
@@ -89,6 +94,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const result = await loadRecordChoicePage(identity.session, address, {
       placementId: body.placementId,
+      ...(body.fieldId === undefined ? {} : { fieldId: body.fieldId }),
       installationRevision: body.installationRevision,
       releaseKey: body.releaseKey,
       ...(body.subjectRecordId === undefined ? {} : { subjectRecordId: body.subjectRecordId }),

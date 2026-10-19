@@ -23,6 +23,7 @@ import {
   type TableFieldColumn,
 } from "../component-data-projection";
 import type { BoardPlacementFailureCause } from "../board-query";
+import type { RecordsTableFilterTarget } from "../records-table-query";
 
 export type PlacementModule = InstalledRuntimeContext["releaseSet"]["modules"][number];
 export type PlacementQuery = PlacementModule["content"]["queries"][number];
@@ -73,6 +74,7 @@ export type PlacementFailureReason =
   | "launcher_query_refused"
   | "calendar_settings_invalid"
   | "calendar_time_zone_unavailable"
+  | "table_time_zone_unavailable"
   | "calendar_query_invalid"
   | "calendar_query_unavailable"
   | "calendar_query_refused"
@@ -298,6 +300,52 @@ export const fieldChoiceLabelsOf = (
               ] as const,
             ],
       ),
+    ),
+  );
+
+/**
+ * What a Records table filter may know of every field of one module: its canonical type and name,
+ * a choice field's options, a fixed money currency and a link field's resolved target record type.
+ * The server builds each filter condition from these, never from what the browser sends.
+ */
+export const fieldFilterTargetsOf = (
+  module: PlacementModule,
+): Record<string, RecordsTableFilterTarget> =>
+  Object.fromEntries(
+    module.content.recordTypes.flatMap((recordType) =>
+      recordType.fields.map((field): [string, RecordsTableFilterTarget] => {
+        const target: RecordsTableFilterTarget = { type: field.type, label: field.label };
+        switch (field.type) {
+          case "choice":
+          case "several_choices":
+            return [
+              String(field.fieldId).toLowerCase(),
+              {
+                ...target,
+                options: field.settings.options.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                })),
+              },
+            ];
+          case "money":
+            return [
+              String(field.fieldId).toLowerCase(),
+              field.settings.currency === undefined
+                ? target
+                : { ...target, currency: field.settings.currency },
+            ];
+          case "link":
+            return [
+              String(field.fieldId).toLowerCase(),
+              field.settings.target.state === "resolved"
+                ? { ...target, recordTypeId: String(field.settings.target.recordTypeId) }
+                : target,
+            ];
+          default:
+            return [String(field.fieldId).toLowerCase(), target];
+        }
+      }),
     ),
   );
 

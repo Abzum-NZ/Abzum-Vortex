@@ -113,6 +113,7 @@ export function StudioGridFeatures({
               ? declaration.properties.filter((setting) => setting.key !== "enabled")
               : [];
           const current = featureValue(key);
+          const editor = studioGridFeatureEditors[key];
           const settingValues: StudioSettingValues = Object.fromEntries(
             Object.entries(current.properties).filter(([setting]) => setting !== "enabled"),
           );
@@ -161,15 +162,17 @@ export function StudioGridFeatures({
                   />
                 </ItemActions>
               </Item>
-              {!enabled ||
-              settings.length === 0 ||
-              studioGridFeatureEditors[key].kind !== "settings" ? null : (
+              {!enabled || settings.length === 0 || editor.kind !== "settings" ? null : (
                 <div className="space-y-3 pb-2">
                   <StudioSettingFields
                     idPrefix={`${switchId}-settings`}
                     properties={settings}
                     values={settingValues}
-                    choices={choices}
+                    choices={
+                      editor.offers === undefined
+                        ? choices
+                        : { ...choices, fields: choices.fields.filter(editor.offers) }
+                    }
                     disabled={disabled}
                     onChange={(next) =>
                       write(key, {

@@ -171,6 +171,7 @@ export const recordsTableBindingRefusal = async (
           contract,
           contract.columns.map((column) => column.field),
           [row],
+          undefined,
         );
         if (!projection?.inlineEdit?.fields.some((field) => sameId(field, inputs.field as string)))
           return recordsTableRequestRefusal(event, "field_not_permitted");

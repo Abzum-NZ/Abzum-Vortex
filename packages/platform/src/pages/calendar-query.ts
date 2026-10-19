@@ -98,7 +98,7 @@ const calendarUtcDate = (year: number, month: number, day: number): Date => {
 const calendarIsoDate = (date: Date): string =>
   `${String(date.getUTCFullYear()).padStart(4, "0")}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 
-const calendarAddDays = (date: string, count: number): string => {
+export const calendarAddDays = (date: string, count: number): string => {
   const [year, month, day] = date.split("-").map(Number) as [number, number, number];
   return calendarIsoDate(calendarUtcDate(year, month - 1, day + count));
 };
@@ -132,7 +132,7 @@ const calendarLocalDate = (instant: number, timeZone: string): string => {
 };
 
 /** First instant of an organisation-local day, including offset changes around daylight saving. */
-const calendarStartOfDay = (date: string, timeZone: string): string => {
+export const calendarStartOfDay = (date: string, timeZone: string): string => {
   const [year, month, day] = date.split("-").map(Number) as [number, number, number];
   const estimate = calendarUtcDate(year, month - 1, day).getTime();
   let lower = estimate - 48 * 60 * 60 * 1_000;

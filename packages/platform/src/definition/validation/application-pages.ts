@@ -74,6 +74,9 @@ export function applicationPageRules(scope: ApplicationScope): void {
               : {}),
           };
         }),
+      unselectedFields: array(record?.fields)
+        .filter((field) => !offered.has(String(field.fieldId).toLowerCase()))
+        .map((field) => ({ field: String(field.fieldId), label: String(field.label) })),
       relationships: array(record?.relationships).map((relationship) => ({
         key: String(relationship.key),
         label: String(relationship.key),
@@ -447,6 +450,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
                 "unsupported_choice",
                 undefined,
                 feature.check.code,
+                feature.check.reason,
               ),
             );
       }

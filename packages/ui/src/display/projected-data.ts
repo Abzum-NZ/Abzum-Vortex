@@ -10,8 +10,11 @@ import {
   type PipelineStageTone,
   type RecordsTableActionContract,
   type RecordsTableFeatureProjection,
+  type RecordsTableFilterField,
   type RecordsTableFilterValue,
+  readRecordsTableFieldFilter,
   recordsTableActionCapabilities,
+  recordsTableFilterKinds,
   type RecordsTableSortKey,
   type RecordsTableSortState,
   RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
@@ -152,6 +155,8 @@ export type ListPayload = Readonly<{
 export type TableNarrowing = Readonly<{
   search: string | null;
   filters: readonly RecordsTableFilterValue[];
+  /** The titles of the records the link filters name (record identity to title). */
+  recordTitles?: Readonly<Record<string, string>>;
 }>;
 
 /** The ready values a table block renders. */
@@ -313,21 +318,27 @@ export type DisplayDataState<Values> =
   | Readonly<{ status: "ready"; values: Values }>;
 
 /** Declared semantic event names this display family can emit. */
-export type DisplaySemanticEventName = Extract<
-  ComponentSemanticEventKind,
-  | "refresh"
-  | "row_clicked"
-  | "row_action"
-  | "selection_changed"
-  | "filter_changed"
-  | "search_changed"
-  | "sort_changed"
-  | "columns_changed"
-  | "page_changed"
-  | "bulk_action"
-  | "inline_edit"
-  | "card_moved"
->;
+export type DisplaySemanticEventName =
+  | Extract<
+      ComponentSemanticEventKind,
+      | "refresh"
+      | "row_clicked"
+      | "row_action"
+      | "selection_changed"
+      | "filter_changed"
+      | "search_changed"
+      | "sort_changed"
+      | "columns_changed"
+      | "page_changed"
+      | "bulk_action"
+      | "inline_edit"
+      | "card_moved"
+    >
+  /**
+   * A Records table's link filter asks the page for one bounded page of the field's target
+   * records. It is the Column filters feature's own read, not a flow event.
+   */
+  | "filter_records_requested";
 
 /**
  * One declared semantic event. Row and item events always carry stable identity;
@@ -356,9 +367,17 @@ export type DisplaySemanticEvent =
   | Readonly<{ event: "selection_changed"; recordId: string; selected: boolean }>
   | Readonly<{
       event: "filter_changed";
-      /** The filterable field whose control changed; empty text clears that field's filter. */
+      /** The filterable field whose control changed. */
       field: string;
+      /** The address spelling of the field's typed filter; empty clears that field's filter. */
       value: string;
+    }>
+  | Readonly<{
+      event: "filter_records_requested";
+      /** The link filter field whose target records the picker offers. */
+      field: string;
+      search?: string;
+      continuationToken?: string;
     }>
   | Readonly<{ event: "search_changed"; query: string }>
   | Readonly<{
@@ -434,6 +453,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "row_action",
   "selection_changed",
   "filter_changed",
+  "filter_records_requested",
   "search_changed",
   "sort_changed",
   "columns_changed",
@@ -1102,7 +1122,7 @@ const parseTableNarrowing = (
   location: DefinitionRenderErrorLocation,
 ): TableNarrowing => {
   const record = requireRecord(value, "Projected table narrowing is invalid", location);
-  requireExactKeys(record, ["search", "filters"], location);
+  requireExactKeys(record, ["search", "filters", "recordTitles"], location);
   if (
     record.search !== null &&
     (typeof record.search !== "string" ||
@@ -1113,19 +1133,37 @@ const parseTableNarrowing = (
   const items = requireArray(record.filters, "Projected table filters must be an array", location);
   const filters = items.map((item): RecordsTableFilterValue => {
     const filter = requireRecord(item, "A projected table filter must be an object", location);
-    requireExactKeys(filter, ["fieldId", "value"], location);
+    requireExactKeys(filter, ["fieldId", "filter"], location);
     const fieldId = requireFieldKey(
       filter.fieldId,
       "A projected table filter requires a field",
       location,
     );
-    if (typeof filter.value !== "string" || filter.value === "")
-      fail("A projected table filter value must be non-empty text", location);
-    return Object.freeze({ fieldId, value: filter.value as string });
+    const typed = readRecordsTableFieldFilter(filter.filter);
+    if (typed === undefined) fail("A projected table filter is not a valid typed filter", location);
+    return Object.freeze({ fieldId, filter: typed! });
   });
   if (new Set(filters.map((filter) => filter.fieldId.toLowerCase())).size !== filters.length)
     fail("A projected table narrowing names each filtered field once", location);
-  return Object.freeze({ search: record.search as string | null, filters: Object.freeze(filters) });
+  let recordTitles: Record<string, string> | undefined;
+  if (record.recordTitles !== undefined) {
+    const titles = requireRecord(
+      record.recordTitles,
+      "Projected filter titles are invalid",
+      location,
+    );
+    recordTitles = Object.fromEntries(
+      Object.entries(titles).map(([recordId, title]) => [
+        recordId,
+        requireNonEmptyString(title, "A projected filter title must be text", location),
+      ]),
+    );
+  }
+  return Object.freeze({
+    search: record.search as string | null,
+    filters: Object.freeze(filters),
+    ...(recordTitles === undefined ? {} : { recordTitles: Object.freeze(recordTitles) }),
+  });
 };
 
 /** One projected bulk command: its flow binding's event identity, label and optional capability. */
@@ -1167,6 +1205,47 @@ const parseFieldKeys = (
   return Object.freeze(fields);
 };
 
+/** One projected filterable field: its identity, label, canonical type, filter kind and control facts. */
+const parseFilterField = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): RecordsTableFilterField => {
+  const message = "A projected filter field is invalid";
+  const field = requireRecord(value, message, location);
+  requireExactKeys(
+    field,
+    ["fieldId", "label", "type", "kind", "options", "currency", "timeZone"],
+    location,
+  );
+  if (!(recordsTableFilterKinds as readonly unknown[]).includes(field.kind))
+    fail(message, location);
+  const options =
+    field.options === undefined
+      ? undefined
+      : requireArray(field.options, message, location).map((option) => {
+          const held = requireRecord(option, message, location);
+          requireExactKeys(held, ["value", "label"], location);
+          return Object.freeze({
+            value: requireNonEmptyString(held.value, message, location),
+            label: requireNonEmptyString(held.label, message, location),
+          });
+        });
+  if ((field.kind === "choice") !== (options !== undefined)) fail(message, location);
+  return Object.freeze({
+    fieldId: requireFieldKey(field.fieldId, message, location),
+    label: requireNonEmptyString(field.label, message, location),
+    type: requireNonEmptyString(field.type, message, location),
+    kind: field.kind as RecordsTableFilterField["kind"],
+    ...(options === undefined ? {} : { options: Object.freeze(options) }),
+    ...(field.currency === undefined
+      ? {}
+      : { currency: requireNonEmptyString(field.currency, message, location) }),
+    ...(field.timeZone === undefined
+      ? {}
+      : { timeZone: requireNonEmptyString(field.timeZone, message, location) }),
+  });
+};
+
 /** The grid features the server projected for the viewer: each present feature is on. */
 const parseTableFeatures = (
   value: unknown,
@@ -1186,7 +1265,18 @@ const parseTableFeatures = (
   const columnFilters =
     record.columnFilters === undefined
       ? undefined
-      : parseFieldKeys(record.columnFilters, "Projected filter fields are invalid", location);
+      : Object.freeze(
+          requireArray(record.columnFilters, "Projected filter fields are invalid", location).map(
+            (field) => parseFilterField(field, location),
+          ),
+        );
+  if (
+    columnFilters !== undefined &&
+    (columnFilters.length === 0 ||
+      new Set(columnFilters.map((field) => field.fieldId.toLowerCase())).size !==
+        columnFilters.length)
+  )
+    fail("Projected filter fields are invalid", location);
   const bulkActions =
     record.bulkActions === undefined
       ? undefined

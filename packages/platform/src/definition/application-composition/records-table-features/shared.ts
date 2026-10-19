@@ -111,6 +111,8 @@ export type RecordsTableQueryFacts = Readonly<{
   actions: readonly Readonly<{ key: string; label: string }>[];
   /** The query groups or aggregates its rows, so rows are not records a person can act on. */
   grouped: boolean;
+  /** The record type's fields the query does not select, so a check can name one a setting chose. */
+  unselectedFields?: readonly Readonly<{ field: string; label: string }>[];
 }>;
 
 /** The field types whose stored value people change directly. */
@@ -143,14 +145,11 @@ export type RecordsTableFeatureCheck =
 
 export const featureAvailable: RecordsTableFeatureCheck = Object.freeze({ kind: "available" });
 
+/** A feature that is not possible: the catalogue sentence, or one that names the field at fault. */
 export const featureNotPossible = (
   code: RecordsTableFeatureRefusalCode,
-): RecordsTableFeatureCheck =>
-  Object.freeze({
-    kind: "not_possible",
-    code,
-    reason: definitionValidationErrorCatalogue[code].message,
-  });
+  reason: string = definitionValidationErrorCatalogue[code].message,
+): RecordsTableFeatureCheck => Object.freeze({ kind: "not_possible", code, reason });
 
 /** The facts of a field the settings name, compared without regard to case. */
 export const factsOf = (
@@ -171,5 +170,8 @@ export type RecordsTableFeatureDefinition<Settings extends object> = Readonly<{
   /** One short line saying what the feature lets people do. */
   description: string;
   read(group: SettingsRecord): RecordsTableFeatureState<Settings>;
-  check(state: RecordsTableFeatureState<Settings>, facts: RecordsTableQueryFacts): RecordsTableFeatureCheck;
+  check(
+    state: RecordsTableFeatureState<Settings>,
+    facts: RecordsTableQueryFacts,
+  ): RecordsTableFeatureCheck;
 }>;
