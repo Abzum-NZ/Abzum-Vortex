@@ -44,7 +44,8 @@ const FULL_SCREEN_KEYS = "Ctrl+Shift+F";
 const FULL_SCREEN_ARIA_KEYS = "Control+Shift+F Meta+Shift+F";
 
 /** The classes of a table expanded to fill the window, as an in-app layer over the page. */
-export const FULL_SCREEN_CLASS = "fixed inset-0 z-50 flex flex-col overflow-auto bg-background p-4";
+export const FULL_SCREEN_CLASS =
+  "fixed inset-0 z-50 flex flex-col overflow-hidden bg-background p-4";
 
 /** Keys inside a cell's own control or a text box keep their meaning; Escape there is not "leave". */
 const ownsEscape = (target: EventTarget | null): boolean => {
@@ -401,7 +402,7 @@ export function GridToolbar({
     );
   })();
   return (
-    <div className="mb-2 flex flex-wrap items-end gap-2">
+    <div className="mb-2 flex shrink-0 flex-wrap items-end gap-2">
       {featureItems}
       {selectionBanner === null && own === null ? null : (
         <div className="ms-auto flex flex-wrap items-center gap-2">

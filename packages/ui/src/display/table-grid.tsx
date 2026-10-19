@@ -548,6 +548,12 @@ export function RecordsGrid({
   const hideColumn = (columnId: string): void => {
     const column = columnsById.get(columnId);
     if (column === undefined) return;
+    const remaining = visibleIds.filter((id) => id !== columnId);
+    const next = remaining[Math.min(visibleIds.indexOf(columnId), remaining.length - 1)];
+    if (next !== undefined) {
+      setActive({ recordId: null, columnId: next });
+      focusRequested.current = true;
+    }
     layout.setVisible(columnId, false);
     announce(`${column.label} hidden`);
   };
@@ -794,7 +800,9 @@ export function RecordsGrid({
                 column={column}
                 open={menuColumnId === slot.id}
                 onOpenChange={(open) => setMenuColumnId(open ? slot.id : undefined)}
-                returnFocus={() => cellElement(-1, slot.id)}
+                returnFocus={() =>
+                  cellElement(-1, slot.id) ?? cellElement(-1, activeColumnIdRef.current)
+                }
                 sort={sort}
                 sortable={sortable}
                 onSort={(keys) =>

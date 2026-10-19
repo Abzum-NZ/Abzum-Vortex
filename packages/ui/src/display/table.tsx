@@ -454,6 +454,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         showActions={showActions}
         activateRow={activateRow}
         renderers={renderers}
+        fill={fullScreen.active}
       />
     ) : (
       <RecordsGrid
@@ -506,7 +507,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         body
       )}
       {!ready || values === undefined ? null : (
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
           <p className="m-0 text-xs text-muted-foreground tabular-nums">
             {values.page === undefined ? "" : `Page ${values.page} · `}
             {rows.length === 1 ? "1 row" : `${rows.length} rows`}
