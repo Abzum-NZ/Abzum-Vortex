@@ -26,6 +26,9 @@ import type { StudioDraft } from "./use-studio-draft";
 import { studioNotice } from "./studio-save-state";
 import { toast } from "@vortex/ui/components/sonner";
 import { useStudioTabVisited } from "./studio-frame";
+import type { StudioCompositionContext } from "@vortex/ui/studio";
+import { studioDataEdit } from "../_lib/studio-data-model";
+import { StudioFieldPageReview } from "./studio-field-page-review";
 
 const ApplicationSourceImport = dynamic(
   () => import("./application-source-import").then((module) => module.ApplicationSourceImport),
@@ -51,6 +54,7 @@ type PublicationSnapshot = Readonly<{
 type PreparedPublication = Readonly<{
   confirmation: DefinitionPublicationConfirmation;
   componentLabels: readonly Readonly<{ componentId: string; label: string }>[];
+  addedFields: readonly string[];
   snapshot: PublicationSnapshot;
 }>;
 const sameSnapshot = (left: PublicationSnapshot, right: PublicationSnapshot | null) =>
@@ -107,8 +111,10 @@ export function useStudioReleasesTab({
   hidden,
   initialSection,
   appStoreHref,
+  compositionContext,
 }: Readonly<{
   draft: StudioDraft;
+  compositionContext: StudioCompositionContext;
   hidden: boolean;
   /** The App Store, where a published version is installed or upgraded to; absent when its address is unknown. */
   appStoreHref: string | undefined;
@@ -230,6 +236,7 @@ export function useStudioReleasesTab({
           setPrepared({
             confirmation: parsed.data.confirmation,
             componentLabels: parsed.data.componentLabels,
+            addedFields: parsed.data.addedFields,
             snapshot,
           });
           return { kind: "prepared", confirmation: parsed.data.confirmation };
@@ -520,6 +527,17 @@ export function useStudioReleasesTab({
       preparing={preparing}
       publishing={draft.isHeld("publication") && !preparing}
       prepared={prepared}
+      revision={draft.state.draftRevision}
+      pageReview={
+        prepared === null ? null : (
+          <StudioFieldPageReview
+            addedFields={prepared.addedFields}
+            context={compositionContext}
+            disabled={draft.locked || preparing || draft.updatingCanvas}
+            edit={studioDataEdit(draft)}
+          />
+        )
+      }
       note={note}
       onNoteChange={setNote}
       problem={problem}
