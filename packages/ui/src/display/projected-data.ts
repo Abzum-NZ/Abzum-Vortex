@@ -136,6 +136,11 @@ export type TableNarrowing = Readonly<{
 export type TablePayload = Readonly<{
   kind: "table";
   columns: readonly DisplayColumn[];
+  /**
+   * The declared columns the page was read without, in declared order: headings only. Showing one
+   * reads the page again with it; hiding a shown column narrows the next read.
+   */
+  hiddenColumns: readonly DisplayColumn[];
   rows: readonly DisplayRow[];
   selectedRecordIds?: readonly string[];
   /**
@@ -285,6 +290,7 @@ export type DisplaySemanticEventName = Extract<
   | "filter_changed"
   | "search_changed"
   | "sort_changed"
+  | "columns_changed"
   | "page_changed"
   | "bulk_action"
   | "inline_edit"
@@ -327,6 +333,14 @@ export type DisplaySemanticEvent =
       /** The whole ordered sort a header asked for; an empty list asks for the default order. */
       event: "sort_changed";
       sort: readonly RecordsTableSortKey[];
+    }>
+  | Readonly<{
+      /**
+       * The declared columns a person asked to see, as field identities; null asks for the authored
+       * default columns. The page is read again with exactly these columns.
+       */
+      event: "columns_changed";
+      fields: readonly string[] | null;
     }>
   | Readonly<{
       event: "page_changed";
@@ -385,6 +399,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "filter_changed",
   "search_changed",
   "sort_changed",
+  "columns_changed",
   "page_changed",
   "bulk_action",
   "inline_edit",
@@ -719,12 +734,13 @@ const parseRows = (
 const parseColumns = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
+  property = "columns",
+  seen = new Set<string>(),
 ): readonly DisplayColumn[] => {
   const items = requireArray(value, "Projected columns must be an array", location);
-  const seen = new Set<string>();
   return Object.freeze(
     items.map((item, index) => {
-      const columnLocation = { ...location, propertyPath: [`columns[${index}]`] };
+      const columnLocation = { ...location, propertyPath: [`${property}[${index}]`] };
       const record = requireRecord(item, "A projected column must be an object", columnLocation);
       requireExactKeys(record, ["key", "label"], columnLocation);
       const key = requireFieldKey(
@@ -1045,6 +1061,7 @@ export const parseTablePayload = (
     [
       "kind",
       "columns",
+      "hiddenColumns",
       "rows",
       "selectedRecordIds",
       "sort",
@@ -1058,7 +1075,10 @@ export const parseTablePayload = (
     ],
     location,
   );
-  const columns = parseColumns(record.columns, location);
+  // A column is either shown or hidden, never both.
+  const seenColumns = new Set<string>();
+  const columns = parseColumns(record.columns, location, "columns", seenColumns);
+  const hiddenColumns = parseColumns(record.hiddenColumns, location, "hiddenColumns", seenColumns);
   const rows = parseRows(record.rows, location);
   const selection = parseSelection(record.selectedRecordIds, rows, location);
   const page =
@@ -1138,6 +1158,7 @@ export const parseTablePayload = (
   return Object.freeze({
     kind: "table",
     columns,
+    hiddenColumns,
     rows,
     ...(selection === undefined ? {} : { selectedRecordIds: selection }),
     ...(sort === undefined ? {} : { sort }),

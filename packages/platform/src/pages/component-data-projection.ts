@@ -116,6 +116,11 @@ const isListRow = (row: ProtectedQueryRow): row is ListRow =>
 export type ProjectedTableValues = Readonly<{
   kind: "table";
   columns: readonly Readonly<{ key: string; label: string }>[];
+  /**
+   * The declared columns the read did not request, in declared order: their headings only, never a
+   * value, so the person can show one again (which reads the page again with that column).
+   */
+  hiddenColumns: readonly Readonly<{ key: string; label: string }>[];
   rows: readonly ProjectedTableRow[];
   /** The order the page was read in, when it is the viewer's or the authored default sort. */
   sort?: RecordsTableSortState;
@@ -359,7 +364,7 @@ const RESTRICTED_CELL: ProjectedCellValue = Object.freeze({ kind: "restricted" }
 /**
  * Projects a Records table's query rows into its display payload. Columns and headings come only
  * from the declared contract, narrowed to the visible columns the read requested (`visibleFieldIds`,
- * already validated as declared columns), so a hidden column has neither a heading nor a value. The Query engine omits a field the viewer cannot read, including a
+ * already validated as declared columns), so a hidden column carries only its heading, never a value. The Query engine omits a field the viewer cannot read, including a
  * calculation or total whose inputs the viewer cannot read, so a row without a declared field
  * shows it as Restricted, never blank and never inferred. Undeclared fields the engine
  * returned are dropped, and each row keeps only the record identity, revision and per-row
@@ -386,12 +391,14 @@ export const projectRecordsTableData = (
   if (completeRows.length !== rows.length) return undefined;
 
   const columns: { key: string; label: string; format: RecordsDisplayFormat }[] = [];
+  const hiddenColumns: { key: string; label: string }[] = [];
   for (const column of contract.columns) {
-    if (columns.some((shown) => sameField(shown.key, column.field))) continue;
-    if (!visibleFieldIds.some((fieldId) => sameField(fieldId, column.field))) continue;
+    if ([...columns, ...hiddenColumns].some((held) => sameField(held.key, column.field))) continue;
     const label = headingFor(column.field, column.label, input.fieldLabels);
     if (label === undefined) return undefined;
-    columns.push({ key: column.field, label, format: column.format });
+    if (visibleFieldIds.some((fieldId) => sameField(fieldId, column.field)))
+      columns.push({ key: column.field, label, format: column.format });
+    else hiddenColumns.push({ key: column.field, label });
   }
   if (columns.length === 0) return { status: "empty" };
 
@@ -400,6 +407,7 @@ export const projectRecordsTableData = (
     values: {
       kind: "table",
       columns: columns.map(({ key, label }) => ({ key, label })),
+      hiddenColumns,
       rows: completeRows.map((row) => ({
         recordId: row.recordId,
         revision: row.revision,

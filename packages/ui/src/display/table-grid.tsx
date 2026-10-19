@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  lazy,
   memo,
+  Suspense,
   useCallback,
   useEffect,
   useId,
@@ -26,8 +28,8 @@ import {
   type SortingState,
   type Updater,
 } from "@tanstack/react-table";
-import { defaultRangeExtractor, useVirtualizer, type Range } from "@tanstack/react-virtual";
 import {
+  RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT,
   nextRecordsTableSort,
   type RecordsTableContract,
   type RecordsTableSortState,
@@ -45,6 +47,10 @@ import {
   virtualizesRows,
 } from "./table-geometry";
 import type { GridColumn, GridLayoutControls } from "./table-layout";
+
+/** TanStack Virtual loads only for a table whose page can hold more than one hundred rows. */
+const loadVirtualRows = () => import("./table-grid-virtual");
+const VirtualRows = lazy(loadVirtualRows);
 
 const SELECT_COLUMN = "vortex-select";
 const ACTIONS_COLUMN = "vortex-actions";
@@ -212,11 +218,11 @@ const GridRow = memo(function GridRow({
 
 /**
  * The Records table's desktop presentation: an accessible data grid over exactly the permitted
- * page the host supplied. TanStack Table holds the controlled column state (order, visibility,
- * widths), the sort the page was read in and the selection; sorting, filtering and paging stay on
- * the server (`manual*`), so no client row model ever reorders or narrows the rows. A page of more
- * than one hundred rows mounts only its visible window through TanStack Virtual, at the fixed row
- * height of the authored density, and reads nothing more.
+ * page the host supplied. TanStack Table holds the controlled column state (order, widths), the
+ * sort the page was read in and the selection; sorting, filtering, paging and the shown columns
+ * stay on the server (`manual*`), so no client row model ever reorders or narrows the rows. A page
+ * of more than one hundred rows mounts only its visible window through TanStack Virtual (a lazy
+ * chunk), at the fixed row height of the authored density, and reads nothing more.
  *
  * Keyboard: the grid is one tab stop. Arrows, Home/End, Ctrl+Home/End and PageUp/PageDown move
  * between cells of the loaded page; Enter or F2 enters a cell's controls, Escape returns to the
@@ -247,8 +253,8 @@ export function RecordsGrid({
     [columns],
   );
 
-  // Column definitions change only with the requested columns; widths, order and visibility are
-  // controlled state, so a layout change never rebuilds them.
+  // Column definitions change only with the requested columns; widths and order are controlled
+  // state, so a layout change never rebuilds them.
   const selectable = selection !== undefined;
   const definitions = useMemo<ColumnDef<DisplayRow>[]>(
     () => [
@@ -301,10 +307,6 @@ export function RecordsGrid({
     () => [SELECT_COLUMN, ...layout.state.order, ACTIONS_COLUMN],
     [layout.state.order],
   );
-  const columnVisibility = useMemo(
-    () => Object.fromEntries(layout.state.hidden.map((key) => [key, false])),
-    [layout.state.hidden],
-  );
   const { setWidths } = layout;
   const onColumnSizingChange = useCallback(
     (updater: Updater<Readonly<Record<string, number>>>) =>
@@ -326,7 +328,6 @@ export function RecordsGrid({
       sorting,
       rowSelection,
       columnOrder,
-      columnVisibility,
       columnSizing: layout.state.widths,
     },
     onColumnSizingChange: onColumnSizingChange as never,
@@ -421,28 +422,11 @@ export function RecordsGrid({
     }
   }, [active.recordId, activeRow, activeColumn, rows, visibleIds, announce]);
 
-  // The active row is always mounted: it stays while the window scrolls away, so focus is never
-  // dropped, and a keyboard move to a row outside the window mounts it in the same render.
-  const rangeExtractor = useCallback(
-    (range: Range): number[] => {
-      const indexes = defaultRangeExtractor(range);
-      if (activeRow < 0 || activeRow >= range.count || indexes.includes(activeRow)) return indexes;
-      return [...indexes, activeRow].sort((left, right) => left - right);
-    },
-    [activeRow],
-  );
-  const virtualizer = useVirtualizer({
-    count: virtual ? rows.length : 0,
-    enabled: virtual,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => rowHeight,
-    getItemKey: (index) => rows[index]?.recordId ?? index,
-    overscan: 6,
-    // The header row sits above the first row inside the same scroll area and stays over it.
-    scrollMargin: rowHeight,
-    scrollPaddingStart: contract.stickyHeader ? rowHeight : 0,
-    rangeExtractor,
-  });
+  // A table whose page can hold more than one hundred rows fetches the virtual body ahead of need.
+  const mayVirtualize = contract.pageSize > RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT;
+  useEffect(() => {
+    if (mayVirtualize) void loadVirtualRows();
+  }, [mayVirtualize]);
 
   const cellElement = (row: number, columnId: string): HTMLElement | null =>
     gridRef.current?.querySelector<HTMLElement>(
@@ -675,7 +659,7 @@ export function RecordsGrid({
     dragged.current = undefined;
     if (source === undefined || source === targetId) return;
     event.preventDefault();
-    const order = layout.state.order.filter((id) => !layout.state.hidden.includes(id));
+    const order = layout.state.order;
     const offset = order.indexOf(targetId) - order.indexOf(source);
     moveColumnBy(source, offset);
   };
@@ -793,7 +777,6 @@ export function RecordsGrid({
 
   const headers = table.getHeaderGroups()[0]?.headers ?? [];
   const headerById = new Map(headers.map((header) => [header.column.id, header]));
-  const virtualItems = virtual ? virtualizer.getVirtualItems() : [];
 
   const drawRow = (row: DisplayRow, index: number, top: number | undefined): ReactElement => (
     <GridRow
@@ -856,18 +839,25 @@ export function RecordsGrid({
             {headerSlots.map((slot, index) => renderHeader(headerById.get(slot.id), slot, index))}
           </div>
         </div>
-        <div
-          ref={rowsRef}
-          role="rowgroup"
-          style={virtual ? { height: virtualizer.getTotalSize(), position: "relative" } : undefined}
-        >
-          {virtual
-            ? virtualItems.map((item) => {
-                const row = rows[item.index];
-                return row === undefined ? null : drawRow(row, item.index, item.start - rowHeight);
-              })
-            : rows.map((row, index) => drawRow(row, index, undefined))}
-        </div>
+        {virtual ? (
+          <Suspense
+            // Until the virtual body arrives, the rows' full height keeps the real scroll range.
+            fallback={<div role="rowgroup" style={{ height: rows.length * rowHeight }} />}
+          >
+            <VirtualRows
+              rows={rows}
+              rowHeight={rowHeight}
+              activeRow={activeRow}
+              stickyHeader={contract.stickyHeader}
+              scrollRef={scrollRef}
+              drawRow={drawRow}
+            />
+          </Suspense>
+        ) : (
+          <div ref={rowsRef} role="rowgroup">
+            {rows.map((row, index) => drawRow(row, index, undefined))}
+          </div>
+        )}
       </div>
     </div>
   );

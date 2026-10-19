@@ -37,6 +37,7 @@ import { DisplayStateContainer } from "./display-state-container";
 import type {
   DisplayCellValue,
   DisplayColumn,
+  DisplayEventHandlers,
   DisplayRow,
   TableNarrowing,
   TablePayload,
@@ -55,10 +56,9 @@ const narrowed = (narrowing: TableNarrowing | undefined): boolean =>
   narrowing !== undefined && (narrowing.search !== null || narrowing.filters.length > 0);
 
 /**
- * The columns the page carries: the declared columns in declared order, but only those the
- * permission projection supplies. A column whose field the viewer cannot read, or that the read did
- * not request, is not in the projection and never rendered, not even as a heading. The projected
- * column supplies the label a declared column left unset.
+ * The columns the page carries: the declared columns in declared order, but only those the read
+ * requested. A column the read did not request has no values in the payload and is offered only
+ * in the Columns menu. The projected column supplies the label a declared column left unset.
  */
 const carriedColumns = (
   contract: RecordsTableContract,
@@ -121,18 +121,43 @@ const useAnnouncer = (): [string, (message: string) => void] => {
   return [message, announce];
 };
 
-/** Hide, show and reset the columns the page carries; arranging them reads nothing. */
+/**
+ * Show, hide and reset the declared columns. Which columns are shown is query state: showing or
+ * hiding one reads the page again on the server with exactly the shown columns, so a hidden
+ * column's values are never sent. Moving and resizing columns read nothing; reset returns both
+ * the authored columns and their authored order and widths.
+ */
 function ColumnsMenu({
   accessibleName,
+  contract,
   layout,
+  hiddenColumns,
+  events,
   announce,
 }: Readonly<{
   accessibleName: string;
+  contract: RecordsTableContract;
   layout: GridLayoutControls;
+  hiddenColumns: readonly DisplayColumn[];
+  events: DisplayEventHandlers | undefined;
   announce: (message: string) => void;
 }>): ReactElement | null {
-  if (layout.columns.length < 2) return null;
-  const shownCount = layout.shown.length;
+  const onColumns = events?.columns_changed;
+  if (layout.columns.length + hiddenColumns.length < 2) return null;
+  const shownKeys = layout.shown.map((column) => column.key);
+  const authoredKeys = contract.columns
+    .filter((column) => column.visible)
+    .map((column) => column.field.toLowerCase());
+  const authoredColumns =
+    shownKeys.length === authoredKeys.length &&
+    shownKeys.every((key) => authoredKeys.includes(key.toLowerCase()));
+  const choose = (fields: readonly string[] | null): void => {
+    if (onColumns !== undefined) void onColumns({ event: "columns_changed", fields });
+  };
+  const entries = [
+    ...layout.shown.map((column) => ({ key: column.key, label: column.label, shown: true })),
+    ...hiddenColumns.map((column) => ({ key: column.key, label: column.label, shown: false })),
+  ];
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -142,30 +167,28 @@ function ColumnsMenu({
         Columns
       </DropdownMenuTrigger>
       <DropdownMenuContent>
-        {layout.state.order.map((key) => {
-          const column = layout.columns.find((candidate) => candidate.key === key);
-          if (column === undefined) return null;
-          const shown = !layout.state.hidden.includes(key);
-          return (
-            <DropdownMenuCheckboxItem
-              key={key}
-              checked={shown}
-              // One column always stays shown.
-              disabled={shown && shownCount <= 1}
-              onCheckedChange={(checked: boolean) => {
-                layout.setHidden(key, !checked);
-                announce(`${column.label} ${checked ? "shown" : "hidden"}`);
-              }}
-            >
-              {column.label}
-            </DropdownMenuCheckboxItem>
-          );
-        })}
+        {entries.map((entry) => (
+          <DropdownMenuCheckboxItem
+            key={entry.key}
+            checked={entry.shown}
+            // One column always stays shown; without the host's read nothing can change.
+            disabled={onColumns === undefined || (entry.shown && shownKeys.length <= 1)}
+            onCheckedChange={(checked: boolean) => {
+              choose(
+                checked ? [...shownKeys, entry.key] : shownKeys.filter((key) => key !== entry.key),
+              );
+              announce(`${entry.label} ${checked ? "shown" : "hidden"}`);
+            }}
+          >
+            {entry.label}
+          </DropdownMenuCheckboxItem>
+        ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          disabled={!layout.changed}
+          disabled={!layout.arranged && (authoredColumns || onColumns === undefined)}
           onClick={() => {
             layout.reset();
+            if (!authoredColumns) choose(null);
             announce("Columns reset");
           }}
         >
@@ -472,7 +495,14 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                 events={events}
               />
             )}
-            <ColumnsMenu accessibleName={accessibleName} layout={layout} announce={announce} />
+            <ColumnsMenu
+              accessibleName={accessibleName}
+              contract={contract}
+              layout={layout}
+              hiddenColumns={values?.hiddenColumns ?? []}
+              events={events}
+              announce={announce}
+            />
           </div>
         )}
       </div>

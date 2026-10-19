@@ -17,97 +17,90 @@ export type GridColumn = Readonly<{
 export type GridLayoutState = Readonly<{
   /** Every carried column's key, in display order. */
   order: readonly string[];
-  /** Keys of carried columns the person hid. */
-  hidden: readonly string[];
-  /** Width in pixels by column key. */
+  /** Width in pixels by carried column key. */
   widths: Readonly<Record<string, number>>;
 }>;
 
 export type GridLayoutControls = Readonly<{
+  /** The columns the page was read with, in declared order. */
   columns: readonly GridColumn[];
   state: GridLayoutState;
-  /** The carried columns in display order, without hidden ones. */
+  /** The carried columns in display order. */
   shown: readonly GridColumn[];
   setWidths: (update: SetStateAction<Readonly<Record<string, number>>>) => void;
-  setHidden: (key: string, hidden: boolean) => void;
-  /** Moves a shown column by an offset among the shown columns; returns its new 1-based position. */
+  /** Moves a column by an offset among the shown columns; returns its new 1-based position. */
   moveColumn: (key: string, offset: number) => number | undefined;
+  /** Returns the order and widths to the authored ones. */
   reset: () => void;
-  changed: boolean;
+  /** Whether the order or a width differs from the authored layout. */
+  arranged: boolean;
 }>;
 
-const authoredLayout = (columns: readonly GridColumn[]): GridLayoutState => ({
-  order: columns.map((column) => column.key),
-  hidden: [],
-  widths: Object.fromEntries(columns.map((column) => [column.key, columnWidth(column.declared)])),
-});
+/** What the person changed: an order once they moved a column, and the widths they set. */
+type Arrangement = Readonly<{
+  order: readonly string[] | undefined;
+  widths: Readonly<Record<string, number>>;
+}>;
+
+const AUTHORED: Arrangement = Object.freeze({ order: undefined, widths: Object.freeze({}) });
 
 /**
- * The column order, visibility and widths of one table, starting from the authored layout of the
- * columns the page carries. It is presentation state only: arranging, hiding or resizing a
- * carried column reads nothing. A different set of carried columns starts from the authored
- * layout again. Hiding is offered only for carried columns, and one column always stays shown.
+ * The column order and widths of one table. Which columns the page carries is query state the
+ * server reads with (a hidden column is never sent); this is presentation state only, so moving or
+ * resizing a column reads nothing. The arrangement survives a read that shows or hides a column:
+ * a column that joins keeps the person's order and goes last, and one that leaves is dropped.
  */
 export const useGridLayout = (columns: readonly GridColumn[]): GridLayoutControls => {
-  const signature = columns.map((column) => `${column.key}:${column.width}`).join("\u0000");
-  const [held, setHeld] = useState(() => ({ signature, state: authoredLayout(columns) }));
-  const state = held.signature === signature ? held.state : authoredLayout(columns);
-  const update = useCallback(
-    (change: (current: GridLayoutState) => GridLayoutState) =>
-      setHeld((current) => ({
-        signature,
-        state: change(current.signature === signature ? current.state : authoredLayout(columns)),
-      })),
-    // `signature` names exactly the columns this layout belongs to.
-    [signature],
-  );
+  const [arrangement, setArrangement] = useState<Arrangement>(AUTHORED);
+  const state = useMemo((): GridLayoutState => {
+    const keys = columns.map((column) => column.key);
+    const order =
+      arrangement.order === undefined
+        ? keys
+        : [
+            ...arrangement.order.filter((key) => keys.includes(key)),
+            ...keys.filter((key) => !arrangement.order!.includes(key)),
+          ];
+    const widths = Object.fromEntries(
+      columns.map((column) => [
+        column.key,
+        arrangement.widths[column.key] ?? columnWidth(column.declared),
+      ]),
+    );
+    return { order, widths };
+  }, [arrangement, columns]);
   const setWidths = useCallback(
     (next: SetStateAction<Readonly<Record<string, number>>>) =>
-      update((current) => ({
+      setArrangement((current) => ({
         ...current,
-        widths: typeof next === "function" ? next(current.widths) : next,
+        widths: { ...current.widths, ...(typeof next === "function" ? next(state.widths) : next) },
       })),
-    [update],
-  );
-  const setHidden = useCallback(
-    (key: string, hidden: boolean) =>
-      update((current) => {
-        const without = current.hidden.filter((held) => held !== key);
-        const next = hidden ? [...without, key] : without;
-        return next.length >= current.order.length ? current : { ...current, hidden: next };
-      }),
-    [update],
+    [state.widths],
   );
   const shown = useMemo(
     () =>
       state.order.flatMap((key) => {
         const column = columns.find((candidate) => candidate.key === key);
-        return column === undefined || state.hidden.includes(key) ? [] : [column];
+        return column === undefined ? [] : [column];
       }),
-    [columns, state.order, state.hidden],
+    [columns, state.order],
   );
   const moveColumn = useCallback(
     (key: string, offset: number): number | undefined => {
-      const visible = state.order.filter((held) => !state.hidden.includes(held));
-      const from = visible.indexOf(key);
-      const to = Math.max(0, Math.min(visible.length - 1, from + offset));
-      if (from < 0 || from === to) return from < 0 ? undefined : from + 1;
-      const target = visible[to]!;
-      update((current) => {
-        const order = current.order.filter((held) => held !== key);
-        const at = order.indexOf(target);
-        order.splice(offset > 0 ? at + 1 : at, 0, key);
-        return { ...current, order };
-      });
+      const from = state.order.indexOf(key);
+      if (from < 0) return undefined;
+      const to = Math.max(0, Math.min(state.order.length - 1, from + offset));
+      if (from === to) return from + 1;
+      const order = state.order.filter((held) => held !== key);
+      order.splice(to, 0, key);
+      setArrangement((current) => ({ ...current, order }));
       return to + 1;
     },
-    [state.order, state.hidden, update],
+    [state.order],
   );
-  const reset = useCallback(() => update(() => authoredLayout(columns)), [update, columns]);
-  const authored = authoredLayout(columns);
-  const changed =
-    state.hidden.length > 0 ||
-    state.order.some((key, index) => authored.order[index] !== key) ||
-    Object.entries(state.widths).some(([key, width]) => authored.widths[key] !== width);
-  return { columns, state, shown, setWidths, setHidden, moveColumn, reset, changed };
+  const reset = useCallback(() => setArrangement(AUTHORED), []);
+  const arranged =
+    state.order.some((key, index) => columns[index]?.key !== key) ||
+    columns.some((column) => state.widths[column.key] !== columnWidth(column.declared));
+  return { columns, state, shown, setWidths, moveColumn, reset, arranged };
 };

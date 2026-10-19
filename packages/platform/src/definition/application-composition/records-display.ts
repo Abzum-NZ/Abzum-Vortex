@@ -1,3 +1,4 @@
+import type { DefinitionValidationErrorCode } from "../../catalogue/validation-errors";
 import type { ComponentSettingValue } from "./block-property-schema";
 
 export const recordsDisplayFormats = [
@@ -344,13 +345,18 @@ export const readRecordsTableContract = (
 };
 
 /**
- * Why a readable Records table contract cannot be published as authored, in business wording, or
- * undefined when it can. The grid mounts only the visible window of a page of more than one hundred
- * rows, which needs its own bounded scroll area.
+ * Why a readable Records table contract cannot be published as authored, as the validation
+ * catalogue code whose message is the business sentence, or undefined when it can. The grid mounts
+ * only the visible window of a page of more than one hundred rows, which needs its own bounded
+ * scroll area.
  */
-export const recordsTableContractRefusal = (contract: RecordsTableContract): string | undefined =>
+export const recordsTableContractRefusal = (
+  contract: RecordsTableContract,
+):
+  | Extract<DefinitionValidationErrorCode, "definition_records_table_bounded_scrolling">
+  | undefined =>
   contract.viewport === "page" && contract.pageSize > RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT
-    ? `A page of more than ${RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT} rows needs the bounded scrolling`
+    ? "definition_records_table_bounded_scrolling"
     : undefined;
 
 /** Reads a Record detail placement's declared detail fields; undefined for earlier releases. */

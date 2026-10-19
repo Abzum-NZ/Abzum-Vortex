@@ -4951,6 +4951,7 @@
       "filter_changed",
       "search_changed",
       "sort_changed",
+      "columns_changed",
       "page_changed",
       "bulk_action",
       "inline_edit"
