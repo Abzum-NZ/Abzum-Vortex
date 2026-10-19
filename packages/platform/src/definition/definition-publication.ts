@@ -495,26 +495,9 @@ export const createDefinitionPublicationService = (
       if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
         return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
       const overlay = createDraftModuleOverlay(reader, context, candidate.draft);
-      const roots = await overlay.readOwnedModuleRoots(String(candidate.draft.rootId));
-      const released = roots.filter((root) => root.currentReleaseRevision !== null);
-      const releases = await overlay.readModuleReleases(
-        candidate.draft.organizationId,
-        released.map((root) => ({
-          rootId: root.rootId,
-          releaseRevision: root.currentReleaseRevision!,
-        })),
+      const publication: ApplicationDraftPublication = await overlay.readOwnedModulePublication(
+        String(candidate.draft.rootId),
       );
-      const recordTypes: string[] = [];
-      const fields: string[] = [];
-      for (const [index, root] of released.entries()) {
-        const release = releases[index];
-        if (release === undefined) return refuse("DEFINITION_COMPILATION_REFUSED");
-        for (const record of release.compilationOutput.canonical.content.recordTypes) {
-          recordTypes.push(`${root.key}:${record.key}`);
-          for (const field of record.fields) fields.push(`${root.key}:${record.key}.${field.key}`);
-        }
-      }
-      const publication: ApplicationDraftPublication = { recordTypes, fields };
       try {
         return {
           publication,

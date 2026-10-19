@@ -29,6 +29,7 @@ import {
   BuilderAuthorityError,
   DefinitionError,
   readApplicationDefinitionDraft,
+  requireApplicationDefinitionDraftConsistency,
   readLiveHumanContext,
   requireBuilderAuthority,
   createDatabaseDefinitionPublicationService,
@@ -424,8 +425,7 @@ export const loadStudioApplicationDraft = async (
               for (const record of records) fieldsByRecord[`${release.key}:${record.key}`] = record.fields;
             }
           }
-          const final = await readApplicationDefinitionDraft(transaction, scope, { rootId: root.data, expectedDraftRevision: draft.draftRevision });
-          if (canonicalJson(final) !== canonicalJson(draft)) throw new Error("STUDIO_DRAFT_COMPILE_MISMATCH");
+          await requireApplicationDefinitionDraftConsistency(transaction, scope, draft);
           await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
           if (canonicalJson(await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt })) !== canonicalJson(context)) throw new Error("STUDIO_DRAFT_COMPILE_MISMATCH");
           borrowedChoices = { usesSignature: studioUsesSignature(draft.source), queries: borrowed,

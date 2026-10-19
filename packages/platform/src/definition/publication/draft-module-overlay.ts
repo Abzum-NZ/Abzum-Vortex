@@ -118,6 +118,7 @@ export const createDraftModuleOverlay = (
     readCandidate: (rootId) =>
       once(["candidate", rootId.toLowerCase()], () => storedReader.readCandidate(rootId)),
     readDraftCandidate: (rootId) => storedReader.readDraftCandidate(rootId),
+    readOwnedModulePublication: (rootId) => storedReader.readOwnedModulePublication(rootId),
     readOwnedModuleRoots: (applicationRootId) =>
       once(["owned", String(applicationRootId).toLowerCase()], () =>
         storedReader.readOwnedModuleRoots(applicationRootId),
@@ -217,6 +218,7 @@ export const createDraftModuleOverlay = (
           };
     },
     readOwnedModuleRoots: (applicationRootId) => reader.readOwnedModuleRoots(applicationRootId),
+    readOwnedModulePublication: (rootId) => reader.readOwnedModulePublication(rootId),
 
     async readModuleReleasePage(
       organizationId: OrganizationId,
