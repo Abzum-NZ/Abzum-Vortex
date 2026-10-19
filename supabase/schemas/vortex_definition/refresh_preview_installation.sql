@@ -101,6 +101,14 @@ begin
       cross join lateral pg_catalog.jsonb_array_elements(preview.storage_identities)
         as identity(value)
       where preview.preview_installation_id = p_preview_installation_id
+    ),
+    -- The seeded record types whose derived fields are worked out.
+    'derivedReadyRecordTypeIds', (
+      select coalesce(pg_catalog.jsonb_agg(pg_catalog.lower(seed.record_type_id::text)
+          order by seed.record_type_id), '[]'::jsonb)
+      from vortex_definition.preview_installation_seeds as seed
+      where seed.preview_installation_id = p_preview_installation_id
+        and seed.derived_ready_at is not null
     )
   );
 end

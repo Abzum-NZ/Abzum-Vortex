@@ -94,6 +94,8 @@ export const previewInstallationSchema = z
     seedable: z.boolean(),
     /** Every record type it has storage for: the record types a demand may name. */
     recordTypeIds: z.array(recordTypeIdSchema),
+    /** The seeded record types whose totals and stored calculations are worked out. */
+    derivedReadyRecordTypeIds: z.array(recordTypeIdSchema),
   })
   .strict()
   .refine((value) => Date.parse(value.expiresAt) > Date.parse(value.createdAt), {

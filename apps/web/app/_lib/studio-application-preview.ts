@@ -319,22 +319,37 @@ const keyOf = (target: Target): string =>
 /** The most record types one demand names. */
 const demandRecordTypeLimit = 201;
 
+type Seedable = Pick<
+  PreviewInstallation,
+  | "previewInstallationId"
+  | "draftRevision"
+  | "seedable"
+  | "recordTypeIds"
+  | "derivedReadyRecordTypeIds"
+>;
+
+/**
+ * Whether the preview holds what its builder reads live: every record type seeded and its derived
+ * fields worked out. A preview whose seeding stopped (its last reader left, or the request failed)
+ * runs, but is not read until it is seeded.
+ */
+const materialized = (preview: Seedable): boolean => {
+  if (!preview.seedable) return true;
+  const ready = new Set(preview.derivedReadyRecordTypeIds);
+  return preview.recordTypeIds.every((recordTypeId) => ready.has(recordTypeId));
+};
+
 /**
  * Seeds the preview with every record type it has storage for, so it holds what its builder reads
  * live; an Application with no installation has nothing to seed. Seeded record types are not
  * seeded again, and a pending backfill of derived fields is finished.
  */
-const materializeEveryRecordType = async <
-  Preview extends Pick<
-    PreviewInstallation,
-    "previewInstallationId" | "draftRevision" | "seedable" | "recordTypeIds"
-  >,
->(
+const materializeEveryRecordType = async <Preview extends Seedable>(
   target: Target,
   preview: Preview,
   signal: AbortSignal,
 ): Promise<Preview> => {
-  if (!preview.seedable) return preview;
+  if (materialized(preview)) return preview;
   for (let start = 0; start < preview.recordTypeIds.length; start += demandRecordTypeLimit)
     await coordinator().materialize(
       target.session,
@@ -352,17 +367,6 @@ const materializeEveryRecordType = async <
       signal,
     );
   return preview;
-};
-
-/**
- * Whether the preview holds what its builder reads live: every record type seeded and its derived
- * fields worked out. A preview whose seeding stopped (its last reader left, or the request failed)
- * runs, but is not read until it is seeded.
- */
-const materialized = (preview: BuilderPreviewInstallation): boolean => {
-  if (!preview.seedable) return true;
-  const ready = new Set(preview.derivedReadyRecordTypeIds);
-  return preview.recordTypeIds.every((recordTypeId) => ready.has(recordTypeId));
 };
 
 /** Seeds a current preview that is not seeded yet, joining a provision or move under way. */
