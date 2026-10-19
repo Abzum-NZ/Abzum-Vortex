@@ -141,6 +141,7 @@ export type RecordsTableFeatureRefusalCode = Extract<
   | "definition_records_table_bulk_actions"
   | "definition_records_table_inline_edit"
   | "definition_records_table_conditional_formatting"
+  | "definition_records_table_pinning"
 >;
 
 /** The outcome of one feature check: available, or not possible with its one business sentence. */

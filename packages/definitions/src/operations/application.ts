@@ -267,11 +267,13 @@ const pages = [
         TABLE_BLOCK_RELEASE,
         {
           title: "Open incidents",
-          columns: incidentColumns.map(([field, label]) => ({
+          features: { pinning: { enabled: true } },
+          columns: incidentColumns.map(([field, label], index) => ({
             field: `${incidentRecordType}.${field}`,
             label,
             visible: true,
             auto_size: false,
+            pin: index === 0 ? "start" : "unpinned",
           })),
           row_click: { mode: "flow", event_id: incidentRowClickEventId },
         },

@@ -22,6 +22,7 @@ export type StudioGridFeatureEditor = Readonly<{ kind: "settings" }> | Readonly<
 export const studioGridFeatureEditors: Readonly<
   Record<RecordsTableFeatureKey, StudioGridFeatureEditor>
 > = {
+  pinning: { kind: "settings" },
   search: { kind: "settings" },
   column_filters: { kind: "settings" },
   saved_views: { kind: "settings" },

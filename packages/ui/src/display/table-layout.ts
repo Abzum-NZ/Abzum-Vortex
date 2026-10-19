@@ -10,6 +10,7 @@ import {
   type GridLayoutCommitResult,
   type GridLayoutState,
   type RecordsTableColumnContract,
+  type RecordsTableColumnPin,
   type RecordsTableContract,
   type RecordsTableDensity,
 } from "@vortex/platform/schema";
@@ -32,7 +33,11 @@ export type GridLayoutControls = Readonly<{
   /** The shown columns the page carries, in declared order. */
   columns: readonly GridColumn[];
   /** The shown columns in display order and their widths in pixels. */
-  state: Readonly<{ order: readonly string[]; widths: Readonly<Record<string, number>> }>;
+  state: Readonly<{
+    order: readonly string[];
+    widths: Readonly<Record<string, number>>;
+    pins: Readonly<Record<string, RecordsTableColumnPin>>;
+  }>;
   /** The shown columns in display order. */
   shown: readonly GridColumn[];
   /** Every declared column, shown or hidden, in display order. */
@@ -47,6 +52,7 @@ export type GridLayoutControls = Readonly<{
   moveColumn: (key: string, offset: number) => number | undefined;
   setVisible: (key: string, visible: boolean) => void;
   setDensity: (density: RecordsTableDensity) => void;
+  setPin: (key: string, pin: RecordsTableColumnPin) => void;
   /** Returns to the authored layout and removes the person's stored one. */
   reset: () => void;
   /** Whether the layout differs from the authored one. */
@@ -152,14 +158,17 @@ export const useGridLayout = ({
     () => new Map(declared.map((column) => [column.key.toLowerCase(), column.label])),
     [declared],
   );
+  const shownFields = layout.columns
+    .filter((entry) => entry.visible)
+    .map((entry) => entry.fieldId)
+    .join(",");
   const shown = useMemo(
     () =>
-      layout.columns.flatMap((entry): GridColumn[] => {
-        if (!entry.visible) return [];
-        const column = carriedByKey.get(entry.fieldId);
+      shownFields.split(",").flatMap((fieldId): GridColumn[] => {
+        const column = carriedByKey.get(fieldId);
         return column === undefined ? [] : [column];
       }),
-    [layout, carriedByKey],
+    [shownFields, carriedByKey],
   );
   const columns = useMemo(
     () => carried.filter((column) => shown.includes(column)),
@@ -176,7 +185,18 @@ export const useGridLayout = ({
       ),
     [layout, shown],
   );
-  const order = useMemo(() => shown.map((column) => column.key), [shown]);
+  const pins = useMemo(
+    () => Object.fromEntries(layout.columns.map((entry) => [entry.fieldId, entry.pin])),
+    [layout],
+  );
+  const pinning = contract?.features.pinning.enabled === true;
+  const order = useMemo(() => {
+    const keys = shown.map((column) => column.key);
+    if (!pinning) return keys;
+    return ["start", "unpinned", "end"].flatMap((pin) =>
+      keys.filter((key) => pins[key.toLowerCase()] === pin),
+    );
+  }, [shown, pins, pinning]);
   const entries = useMemo(
     () =>
       layout.columns.flatMap((entry): GridLayoutEntry[] => {
@@ -219,7 +239,11 @@ export const useGridLayout = ({
             const column = carriedByKey.get(entry.fieldId);
             if (column === undefined) return entry;
             // A width the update leaves out returns to the authored width.
-            if (!(column.key in next)) return { fieldId: entry.fieldId, visible: entry.visible };
+            if (!(column.key in next)) {
+              const rest = { ...entry };
+              delete rest.width;
+              return rest;
+            }
             const width = next[column.key];
             return width === undefined || width === before[column.key]
               ? entry
@@ -244,6 +268,8 @@ export const useGridLayout = ({
       if (from === to) return from + 1;
       const target = order[to]!.toLowerCase();
       const moved = key.toLowerCase();
+      // A move never silently changes a pin; move within the same group or choose a new pin.
+      if (pinning && pins[target] !== pins[moved]) return from + 1;
       change((held) => {
         const rest = held.columns.filter((entry) => entry.fieldId !== moved);
         const entry = held.columns.find((candidate) => candidate.fieldId === moved);
@@ -254,7 +280,22 @@ export const useGridLayout = ({
       }, true);
       return to + 1;
     },
-    [change, order],
+    [change, order, pinning, pins],
+  );
+  const setPin = useCallback(
+    (key: string, pin: RecordsTableColumnPin) => {
+      if (!pinning) return;
+      change(
+        (held) => ({
+          ...held,
+          columns: held.columns.map((entry) =>
+            entry.fieldId === key.toLowerCase() ? { ...entry, pin } : entry,
+          ),
+        }),
+        true,
+      );
+    },
+    [change, pinning],
   );
   const setVisible = useCallback(
     (key: string, visible: boolean) =>
@@ -391,7 +432,7 @@ export const useGridLayout = ({
   const arranged = authored !== undefined && !sameLayout(layout, authored);
   return {
     columns,
-    state: { order, widths },
+    state: { order, widths, pins },
     shown,
     entries,
     density: layout.density ?? contract?.density ?? "comfortable",
@@ -401,6 +442,7 @@ export const useGridLayout = ({
     moveColumn,
     setVisible,
     setDensity,
+    setPin,
     reset,
     arranged,
   };

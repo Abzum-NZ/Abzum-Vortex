@@ -870,8 +870,8 @@ for (const file of files.filter(
   }
 }
 
-// A Records table grid feature exists in exactly three registries: the platform contract (with its
-// one capability check), Studio's Features panel and the UI's lazy chunks. All three name the same
+// A Records table grid feature exists in the platform contract (with its one capability check),
+// Studio's Features panel, the UI's lazy chunks and its extension points. All four name the same
 // features, and only the UI registry imports a feature's chunk, so there is no second gating path
 // (the core header menu and toolbar beside it are imported directly; auto-size is their own chunk).
 {
@@ -885,6 +885,10 @@ for (const file of files.filter(
       /export const studioGridFeatureEditors[^=]*= \{([^;]*)\};/,
     ],
     ["packages/ui/src/display/grid-features/registry.tsx", /const loaders[\s\S]*?> = \{([^;]*)\};/],
+    [
+      "packages/ui/src/display/grid-features/registry.tsx",
+      /const featurePoints[^=]*= \{([^;]*)\};/,
+    ],
   ];
   const keySets = registries.map(([file, pattern]): [string, string[]] => {
     const body = existsSync(resolve(root, file)) ? pattern.exec(read(file))?.[1] : undefined;

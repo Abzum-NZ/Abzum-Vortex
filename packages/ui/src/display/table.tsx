@@ -169,13 +169,14 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         : {
             accessibleName,
             features,
+            layout,
             columns: layout.shown,
             rows,
             selectedRecordIds,
             narrowing,
             events,
           },
-    [accessibleName, features, layout.shown, rows, selectedRecordIds, narrowing, events],
+    [accessibleName, features, layout, rows, selectedRecordIds, narrowing, events],
   );
   const gridFeatures = useGridFeatures(featureContext);
   const {

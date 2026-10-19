@@ -49,13 +49,18 @@ import {
   virtualizesRows,
 } from "./table-geometry";
 import type { GridColumn, GridLayoutControls } from "./table-layout";
+import {
+  ACTIONS_COLUMN,
+  SELECT_COLUMN,
+  pinStyle,
+  sizeVariable,
+  useGridPinning,
+} from "./table-pinning";
 
 /** TanStack Virtual loads only for a table whose page can hold more than one hundred rows. */
 const loadVirtualRows = () => import("./table-grid-virtual");
 const VirtualRows = lazy(loadVirtualRows);
 
-const SELECT_COLUMN = "vortex-select";
-const ACTIONS_COLUMN = "vortex-actions";
 const RESIZE_STEP = 16;
 
 /** Controls inside a cell keep their own meaning: a click or key on one never opens the row. */
@@ -73,10 +78,6 @@ const isInteractiveTarget = (target: EventTarget, row: HTMLElement): boolean => 
 
 const sameFieldKey = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
-
-/** A column's width as a CSS custom property of the grid, so a resize never re-renders the rows. */
-const sizeVariable = (columnId: string): string =>
-  `--grid-col-${columnId.replace(/[^A-Za-z0-9_-]/gu, "_")}`;
 
 /** The cell the roving tab stop is on, by record and column identity; a null record is the header. */
 type ActiveCell = Readonly<{ recordId: string | null; columnId: string }>;
@@ -345,8 +346,10 @@ export function RecordsGrid({
   const visibleColumns = table.getVisibleLeafColumns();
   const visibleIds = visibleColumns.map((column) => column.id);
   const visibleSignature = visibleIds.join("\u0000");
-  const firstDataId = visibleIds.find((id) => id !== SELECT_COLUMN && id !== ACTIONS_COLUMN);
-  const stickySelect = contract.stickyFirstColumn && selectable;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const pinning = contract.features.pinning.enabled;
+  const pinSignature = visibleIds.map((id) => layout.state.pins[id.toLowerCase()]).join(",");
+  const pinningStyle = useGridPinning(scrollRef, layout, pinning, selectable, showActions);
 
   // Rows draw their cells from these slots; a slot changes only with the visible column set, never
   // with a width, so a resize repaints only the grid's width variables.
@@ -355,9 +358,13 @@ export function RecordsGrid({
       visibleSignature.split("\u0000").flatMap((id): CellSlot[] => {
         if (id === "") return [];
         const kind = id === SELECT_COLUMN ? "select" : id === ACTIONS_COLUMN ? "actions" : "data";
-        const sticky =
-          contract.stickyFirstColumn && (id === firstDataId || (kind === "select" && stickySelect));
-        const left = kind === "select" ? 0 : stickySelect ? GRID_CONTROL_COLUMN_WIDTH : 0;
+        const pin =
+          kind === "select"
+            ? "start"
+            : kind === "actions"
+              ? "end"
+              : layout.state.pins[id.toLowerCase()];
+        const sticky = pinning && (pin === "start" || pin === "end");
         return [
           {
             id,
@@ -369,12 +376,12 @@ export function RecordsGrid({
                 kind === "data"
                   ? `var(${sizeVariable(id)}) 0 calc(var(${sizeVariable(id)}) * 1px)`
                   : `0 0 ${GRID_CONTROL_COLUMN_WIDTH}px`,
-              ...(sticky ? { left } : {}),
+              ...(sticky ? pinStyle(id, pin as "start" | "end") : {}),
             },
           },
         ];
       }),
-    [visibleSignature, firstDataId, contract.stickyFirstColumn, stickySelect, columnsById],
+    [visibleSignature, pinSignature, pinning, columnsById],
   );
   const sizeStyle = useMemo(() => {
     const style: Record<string, string | number> = { "--grid-row-height": `${rowHeight}px` };
@@ -396,7 +403,6 @@ export function RecordsGrid({
   const lastPosition = useRef({ row: -1, column: 0 });
   const focusRequested = useRef(false);
   const gridHasFocus = useRef(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
   const rowIndexOf = (recordId: string | null): number =>
@@ -451,7 +457,11 @@ export function RecordsGrid({
   useLayoutEffect(() => {
     if (!focusRequested.current) return;
     focusRequested.current = false;
-    if (activeColumn >= 0) cellElement(activeRow, active.columnId)?.focus();
+    if (activeColumn >= 0) {
+      const element = cellElement(activeRow, active.columnId);
+      element?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      element?.focus({ preventScroll: true });
+    }
   });
 
   // Only the active cell is a tab stop; its controls join the tab order only in control mode.
@@ -872,6 +882,10 @@ export function RecordsGrid({
     // The frame is the theme's card (its radius, ring and surface); the grid scrolls inside it.
     <Card
       ref={scrollRef}
+      style={{
+        scrollPaddingInlineStart: pinningStyle.scrollPaddingInlineStart,
+        scrollPaddingInlineEnd: pinningStyle.scrollPaddingInlineEnd,
+      }}
       data-slot="grid-viewport"
       data-vortex-grid-virtualized={virtual ? "" : undefined}
       className={cn(
@@ -895,7 +909,7 @@ export function RecordsGrid({
         aria-colcount={slots.length}
         {...(selection === "multiple" ? { "aria-multiselectable": true } : {})}
         className="text-sm"
-        style={{ ...sizeStyle, width: totalWidth, minWidth: "100%" }}
+        style={{ ...sizeStyle, ...pinningStyle, width: totalWidth, minWidth: "100%" }}
         onKeyDown={onKeyDown}
         onFocus={onFocus}
         onBlur={onBlur}

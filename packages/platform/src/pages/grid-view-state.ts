@@ -3,6 +3,7 @@ import {
   RECORDS_TABLE_COLUMN_MAXIMUM_WIDTH,
   RECORDS_TABLE_COLUMN_MINIMUM_WIDTH,
   recordsTableDensities,
+  recordsTableColumnPins,
   type RecordsTableContract,
 } from "../definition/application-composition/records-display";
 
@@ -30,6 +31,7 @@ export const gridLayoutColumnSchema = z
       .regex(FIELD_ID_PATTERN)
       .transform((fieldId) => fieldId.toLowerCase()),
     visible: z.boolean(),
+    pin: z.enum(recordsTableColumnPins),
     /** The width the person resized the column to; absent keeps the authored width. */
     width: z
       .number()
@@ -108,7 +110,7 @@ const declaredColumns = (contract: RecordsTableContract) => {
     const fieldId = column.field.toLowerCase();
     if (seen.has(fieldId)) return [];
     seen.add(fieldId);
-    return [{ fieldId, visible: column.visible }];
+    return [{ fieldId, visible: column.visible, pin: column.pin }];
   });
 };
 

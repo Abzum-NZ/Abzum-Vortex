@@ -26,6 +26,8 @@ export const recordsDisplayFormats = [
 export type RecordsDisplayFormat = (typeof recordsDisplayFormats)[number];
 
 export const recordsTableColumnWidths = ["auto", "narrow", "medium", "wide"] as const;
+export const recordsTableColumnPins = ["start", "end", "unpinned"] as const;
+export type RecordsTableColumnPin = (typeof recordsTableColumnPins)[number];
 /**
  * The narrowest and widest a person may resize a column, in pixels. The authored width token is
  * the column's starting width; a resize, and a stored layout, stays within these bounds.
@@ -64,6 +66,7 @@ export type RecordsTableColumnContract = Readonly<{
   alignment: (typeof recordsTableColumnAlignments)[number];
   priority: (typeof recordsTableColumnPriorities)[number];
   visible: boolean;
+  pin: RecordsTableColumnPin;
   /** People may fit the column to the content of the page they see, from its column menu. */
   autoSize: boolean;
 }>;
@@ -112,8 +115,6 @@ export type RecordsTableContract = Readonly<{
   density: RecordsTableDensity;
   /** The header row stays in view while the rows scroll; it applies to the bounded viewport. */
   stickyHeader: boolean;
-  /** The first visible data column (after any selection column) stays in view on a wide scroll. */
-  stickyFirstColumn: boolean;
   /** People may expand the table to fill the screen from its toolbar. */
   allowFullScreen: boolean;
   phonePresentation: RecordsTablePhonePresentation;
@@ -203,6 +204,7 @@ export const readRecordsTableContract = (
         alignment: settingChoice(column["alignment"], recordsTableColumnAlignments, "start"),
         priority: settingChoice(column["priority"], recordsTableColumnPriorities, "medium"),
         visible: visible?.kind === "boolean" && visible.value,
+        pin: settingOptionalChoice(column["pin"], recordsTableColumnPins)!,
         autoSize: autoSize?.kind === "boolean" && autoSize.value,
       },
     ];
@@ -212,7 +214,11 @@ export const readRecordsTableContract = (
   if (
     columnItems.some((item) => {
       const column = settingGroup(item);
-      return column?.["visible"]?.kind !== "boolean" || column["auto_size"]?.kind !== "boolean";
+      return (
+        column?.["visible"]?.kind !== "boolean" ||
+        column["auto_size"]?.kind !== "boolean" ||
+        settingOptionalChoice(column["pin"], recordsTableColumnPins) === undefined
+      );
     })
   )
     return undefined;
@@ -243,7 +249,6 @@ export const readRecordsTableContract = (
   );
   const viewport = settingOptionalChoice(settings["viewport"], recordsTableViewports);
   const stickyHeader = settings["sticky_header"];
-  const stickyFirstColumn = settings["sticky_first_column"];
   const allowFullScreen = settings["allow_full_screen"];
   const features = readRecordsTableFeatures(settings["features"]);
   if (
@@ -252,7 +257,6 @@ export const readRecordsTableContract = (
     phonePresentation === undefined ||
     viewport === undefined ||
     stickyHeader?.kind !== "boolean" ||
-    stickyFirstColumn?.kind !== "boolean" ||
     allowFullScreen?.kind !== "boolean"
   )
     return undefined;
@@ -265,7 +269,6 @@ export const readRecordsTableContract = (
     rowBehaviours: readRowBehaviours(settings),
     density,
     stickyHeader: stickyHeader.value,
-    stickyFirstColumn: stickyFirstColumn.value,
     allowFullScreen: allowFullScreen.value,
     phonePresentation,
     viewport,
