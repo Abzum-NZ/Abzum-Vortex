@@ -1,4 +1,5 @@
 import { builderKeySchema } from "../catalogue/identifiers";
+import type { ModuleQueryExposure } from "./module-query-exposure";
 import {
   applicationSourceDocumentSchema,
   type ApplicationSourceDocument,
@@ -215,7 +216,7 @@ export type InlineQueryCreation = Readonly<{ moduleKey: string; recordKey: strin
 /**
  * The Application source with one new query of a record type of an owned inline Module. It starts
  * as a plain list: the title field as its one column, sorted by it (or by the first sortable
- * field), no filter, groups or totals, 40 records a page.
+ * field), no filter, groups or totals, 40 records a page. It is private until it is exposed.
  */
 export const createInlineQuery = (current: ApplicationSourceDocument, creation: InlineQueryCreation): InlineQueryResult => {
   const source = structuredClone(current);
@@ -239,7 +240,7 @@ export const createInlineQuery = (current: ApplicationSourceDocument, creation: 
   let id = `qry_${key}`;
   for (let n = 2; taken.has(id); n += 1) id = `qry_${key}_${n}`;
   (module.queries as InlineQuery[]).push({
-    id, key, label, record_type: record.key, inputs: [], select: [title.key], filter: null, group_by: [], aggregates: [],
+    id, key, label, exposure: "private", record_type: record.key, inputs: [], select: [title.key], filter: null, group_by: [], aggregates: [],
     sort: [{ field: sorted.key, direction: "ascending" }], page_size: defaultQueryPageSize, relationship_hops: 0,
   } as InlineQuery);
   return parsed(source, module.key, key, label);
@@ -277,6 +278,23 @@ export const changeInlineQuery = (
   }
   (module.queries as InlineQuery[])[index] = next;
   return parsed(source, moduleKey, queryKey, label);
+};
+
+/**
+ * The Application source with one query of an owned inline Module exposed to the Applications that
+ * use its Module, or made private again. A private query is read only by this Application.
+ */
+export const setInlineQueryExposure = (
+  current: ApplicationSourceDocument, moduleKey: string, queryKey: string, exposure: ModuleQueryExposure,
+): InlineQueryResult => {
+  const source = structuredClone(current);
+  const module = source.body.modules.find((item) => item.key === moduleKey);
+  const index = module?.queries.findIndex((query) => query.key === queryKey) ?? -1;
+  const existing = module?.queries[index];
+  if (module === undefined || existing === undefined)
+    return { kind: "invalid", issues: ["The query is not in this application's modules any more."] };
+  (module.queries as InlineQuery[])[index] = { ...existing, exposure };
+  return parsed(source, moduleKey, queryKey, existing.label ?? queryKey);
 };
 
 /** The Application source without one query of an owned Module; refused while anything uses it. */

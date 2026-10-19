@@ -34,6 +34,16 @@ export const describeStudioCompileFailure = (
 ): StudioCompileProblem => {
   if (failure.reasonCode === "vortex.definition.application_role_review_volume")
     return { message: applicationRoleReviewVolumeMessage, selection: null };
+  if (failure.reasonCode === "vortex.definition.application_query_exposure") {
+    const reference = failure.queryKey ?? "";
+    const separator = reference.indexOf(":");
+    const queryName =
+      separator < 0 ? "a query" : `the query ${ruleWords(reference.slice(separator + 1))}`;
+    return {
+      message: `A block reads ${queryName} of another application, which keeps it private. Choose another query for the block, or ask that application's builder to expose it in its Data tab and publish it.`,
+      selection: null,
+    };
+  }
   const modules = source.body.modules;
   if (failure.queryKey !== undefined) {
     const module =

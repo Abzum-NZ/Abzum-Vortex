@@ -176,7 +176,7 @@ export function ApplicationDraftAgentTools({ draft, catalogue, command, readQuer
   const contextNow = useCallback((): StudioCompositionContext => {
     const state = history.getState();
     return { organizationId, rootId: state.rootId, key: state.source.key, draftRevision: state.draftRevision,
-      localLifetime: readLifetime(), catalogue, source: state.source };
+      localLifetime: readLifetime(), catalogue, source: state.source, borrowed: latest.current.view.borrowedChoices };
   }, [history, organizationId, readLifetime, catalogue]);
 
   const describeNow = useCallback(() => {

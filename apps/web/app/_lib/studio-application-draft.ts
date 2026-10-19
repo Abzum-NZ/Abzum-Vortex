@@ -23,6 +23,7 @@ import {
   type StoredDefinitionDraft,
   type ModuleField,
   type PeopleDirectoryOwner,
+  moduleQueryBorrowable,
 } from "@vortex/platform/schema";
 import type { DatabaseRow } from "@vortex/platform/server";
 import {
@@ -36,7 +37,7 @@ import {
   DefinitionCompilationError,
 } from "@vortex/platform/server";
 import { studioUsesSignature, type StudioActionChoice, type StudioBorrowedChoices, type StudioCompileFailure, type StudioQueryChoice,
-  type StudioRelationshipChoice } from "@vortex/ui/studio";
+  type StudioQueryInput, type StudioRelationshipChoice } from "@vortex/ui/studio";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import type { StudioCompiledFields, StudioDataModule, StudioPublishedData } from "../studio/_lib/studio-data-model";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
@@ -347,6 +348,16 @@ export const loadStudioApplicationDraft = async (
           const declaredReads = new Set(draft.source.body.permissions
             .filter((permission) => permission.action_kind === "read")
             .map((permission) => permission.record_type));
+          // Every record type of the compiled Module releases by identity, as `<module>:<record>`,
+          // for the record types a borrowed query's record inputs accept.
+          const recordTypeKeys = new Map(compiled.moduleReleases.flatMap((release) =>
+            release.compilationOutput.canonical.content.recordTypes.map((record) =>
+              [String(record.recordTypeId), `${release.key}:${record.key}`] as const)));
+          const queryInputs = (query: (typeof compiled.moduleReleases)[number]["compilationOutput"]["canonical"]["content"]["queries"][number]): StudioQueryInput[] =>
+            query.inputs.map((input) => ({ key: input.key, label: input.label, type: input.type, required: input.required,
+              ...(input.type === "record_reference" ? { recordTypes: input.recordTypes.flatMap((type) =>
+                type.state === "resolved" && recordTypeKeys.has(String(type.recordTypeId))
+                  ? [recordTypeKeys.get(String(type.recordTypeId))!] : []) } : {}) }));
           // The exact Module releases the draft compiled against, its own inline Modules included.
           {
             for (const binding of compiled.compilation.canonical.content.moduleBindings) {
@@ -384,16 +395,18 @@ export const loadStudioApplicationDraft = async (
                       filterable: field.filterable, sortable: field.sortable, personalData: field.personalData,
                       ...(field.searchPriority === undefined ? {} : { searchPriority: field.searchPriority }) })),
                   })),
-                  queries: content.queries.flatMap((query) => {
+                  // Only the queries its Module exposes: the others are its own application's.
+                  queries: content.queries.filter(moduleQueryBorrowable).flatMap((query) => {
                     const recordType = query.recordType.state === "resolved" ? records.find((candidate) =>
                       sameId(String(candidate.recordTypeId), String((query.recordType as { recordTypeId: string }).recordTypeId))) : undefined;
                     return recordType === undefined ? [] : [{ key: query.key, recordKey: recordType.key,
                       label: query.label ?? query.key.replaceAll("_", " ").replace(/^./u, (first) => first.toUpperCase()),
-                      summary: query.groupByFieldIds.length > 0 || query.aggregates.length > 0 }];
+                      summary: query.groupByFieldIds.length > 0 || query.aggregates.length > 0,
+                      exposure: query.exposure, inputs: queryInputs(query) }];
                   }) });
-              // A used Module's queries are offered as they are: they belong to its own application.
+              // A used Module's exposed queries are offered as they are: they belong to its own application.
               if (use !== undefined && !borrowed.some((query) => query.reference.startsWith(`${release!.key}:`))) {
-                for (const query of content.queries) {
+                for (const query of content.queries.filter(moduleQueryBorrowable)) {
                   const recordType = query.recordType.state === "resolved" ? records.find((candidate) =>
                     sameId(String(candidate.recordTypeId), String((query.recordType as { recordTypeId: string }).recordTypeId))) : undefined;
                   if (recordType === undefined) continue;
@@ -404,7 +417,7 @@ export const loadStudioApplicationDraft = async (
                       const field = recordType.fields.find((candidate) => sameId(String(candidate.fieldId), String(fieldId)));
                       return field === undefined ? [] : [{ reference: `${release!.key}:${recordType.key}.${field.key}`,
                         label: field.label, type: field.type }];
-                    }) });
+                    }), inputs: queryInputs(query), exposure: query.exposure });
                 }
                 // Its actions and relationships are chosen as they are too: they belong to its own application.
                 for (const action of content.actions.filter((action) => records.some((record) =>

@@ -26,6 +26,7 @@ import { studioMenuPosition } from "@vortex/ui/studio";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
 import { ApplicationVisibilityConditionEditor } from "./application-visibility-condition-editor";
 import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
+import { StudioQuerySheet } from "./studio-query-sheet";
 import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-toolbar";
 import { StudioPanelShell } from "./studio-frame";
 import { StudioInspector } from "./studio-inspector";
@@ -88,6 +89,8 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
   const rootId = state.rootId;
   const key = draft.saved.key;
   const [fitZoom, setFitZoom] = useState(0);
+  // The query sheet a block's data picker opened, with how the block chooses the query it makes.
+  const [querySheet, setQuerySheet] = useState<Readonly<{ use: (reference: string) => void }> | null>(null);
   const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>(100);
   const [breakpoint, setBreakpoint] = useState<StudioCanvasBreakpoint>("desktop");
   // The canvas previews the application in light or dark; the running application keeps its own toggle.
@@ -131,11 +134,12 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
 
   const compositionContext = useMemo<StudioCompositionContext>(() => ({
     organizationId, rootId, key, draftRevision: state.draftRevision, localLifetime: draft.lifetime, catalogue, source: state.source,
-  }), [organizationId, rootId, key, state.draftRevision, draft.lifetime, catalogue, state.source]);
+    borrowed: view.borrowedChoices,
+  }), [organizationId, rootId, key, state.draftRevision, draft.lifetime, catalogue, state.source, view.borrowedChoices]);
   const liveContext = (): StudioCompositionContext => {
     const current = draft.history.getState();
     return { organizationId, rootId: current.rootId, key, draftRevision: current.draftRevision, localLifetime: draft.lifetime,
-      catalogue, source: current.source };
+      catalogue, source: current.source, borrowed: draft.view.borrowedChoices };
   };
 
   // The one composition edit: the item editor's controls, the Data tab's placements and the agent tools all come through here.
@@ -347,7 +351,8 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
     {(selected?.kind === "flow" || selected?.kind === "flow_step") && tab === "flows" && inspector.status === "resolved" && flowsInspector}
     {selected?.kind === "placement" && inspector.status === "resolved" &&
       <ApplicationCompositionEditor key={selectionKey} context={compositionContext} selection={selected}
-        disabled={draft.locked} choices={draftChoices} onCommand={commandComposition} />}
+        disabled={draft.locked} choices={draftChoices} onCommand={commandComposition}
+        onNewQuery={(use) => setQuerySheet({ use })} />}
     {selected?.kind === "placement" && inspector.status === "resolved" &&
       <ApplicationVisibilityConditionEditor key={`${draft.lifetime}:${selectionKey}`} context={compositionContext}
         selection={selected} saved={draft.saved} disabled={draft.locked} onCommand={commandVisibility} />}
@@ -401,7 +406,12 @@ export function useStudioCanvasTab({ draft, tab, catalogue, fieldInputControlRel
         roles: source.body.roles.filter((role) => view.frames?.roles[role.key] !== undefined) }}
       inspectorOpen={inspectorOpen} onToggleInspector={toggleInspector} focused={focused} onFocusCanvas={focusCanvas} />;
 
-  const dialog = <StudioBlockSetupDialog request={blockSetup} source={source} choices={draftChoices} onClose={() => setBlockSetup(null)} />;
+  const dialog = <>
+    <StudioBlockSetupDialog request={blockSetup} source={source} choices={draftChoices} onClose={() => setBlockSetup(null)} />
+    <StudioQuerySheet key={querySheet === null ? "query-closed" : "query-open"} open={querySheet !== null} draft={draft}
+      doneLabel="Use this query" onClose={() => setQuerySheet(null)}
+      onDone={(reference) => { querySheet?.use(reference); setQuerySheet(null); }} />
+  </>;
 
   return {
     panels, inspector: inspectorPanel, centre, toolbar, dialog, title, breadcrumbItem, compositionContext,

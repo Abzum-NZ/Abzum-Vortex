@@ -39,7 +39,7 @@ const filterModules = (
 /**
  * The Data tab's tree: the modules this application owns, their record types and each record
  * type's fields and queries, then the modules it uses from other applications, read-only. The
- * application's search settings follow below.
+ * application's query catalogue and search settings follow below.
  */
 export function StudioDataPanel({
   hidden,
@@ -52,6 +52,8 @@ export function StudioDataPanel({
   disabled,
   searchSelected,
   onSearch,
+  queriesSelected,
+  onQueries,
 }: Readonly<{
   hidden: boolean;
   /** The modules the draft owns. */
@@ -67,6 +69,9 @@ export function StudioDataPanel({
   disabled: boolean;
   searchSelected: boolean;
   onSearch: () => void;
+  /** Whether the application's query catalogue is open. */
+  queriesSelected: boolean;
+  onQueries: () => void;
 }>) {
   const [query, setQuery] = useState("");
   const ownedShown = useMemo(() => filterModules(owned, query), [owned, query]);
@@ -209,6 +214,12 @@ export function StudioDataPanel({
         <p className="text-sm text-muted-foreground">Nothing matches.</p>
       ) : null}
       <StudioSection title="Application">
+        <StudioNavItem
+          label="Queries"
+          icon="panel-left"
+          selected={queriesSelected}
+          onClick={onQueries}
+        />
         <StudioNavItem
           label="Search settings"
           icon="search"

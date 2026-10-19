@@ -19,6 +19,7 @@ import { deriveFormCommitActionKeys } from "../form-commit";
 import { standardRecordActions } from "./module";
 import type { Resolution } from "./resolution";
 import { applicationModuleKeysOf, asObject, fail, type JsonObject } from "./shared";
+import { moduleQueryBorrowable } from "../module-query-exposure";
 
 type ApplicationToolDraft = ApplicationToolBundleInput["tools"][number];
 type ApplicationToolStandardRecordAction = Extract<
@@ -254,10 +255,19 @@ export function compileApplicationToolBundle(
   // bound release.
   const moduleQueriesById = new Map(
     boundModuleOutputs.flatMap((output) =>
-      output.canonical.content.queries.map(
-        (query) =>
-          [String(query.queryId), { moduleRootId: String(output.artifact.rootId), query }] as const,
-      ),
+      output.canonical.content.queries
+        .filter(
+          (query) =>
+            output.canonical.content.ownerApplication === applicationKey ||
+            moduleQueryBorrowable(query),
+        )
+        .map(
+          (query) =>
+            [
+              String(query.queryId),
+              { moduleRootId: String(output.artifact.rootId), query },
+            ] as const,
+        ),
     ),
   );
   const boundModuleQueriesByKey = new Map<string, string[]>();

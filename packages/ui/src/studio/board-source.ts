@@ -64,7 +64,7 @@ export const createStudioBoardQuery = (source: ApplicationSourceDocument,
   if (module.queries.length >= 100) return undefined;
   const key = uniqueKey(`${record.key}_by_${stageKey}`, "", new Set(module.queries.map((query) => query.key)), 40);
   const id = uniqueKey(`qry_${key}`, "", taken, 160);
-  module.queries.push({ id, key, label: pipeline.label, record_type: record.key,
+  module.queries.push({ id, key, label: pipeline.label, exposure: "private", record_type: record.key,
     inputs: [], select: selected, filter: null, group_by: [stageKey!], aggregates: [],
     sort: [{ field: stageKey!, direction: "ascending" }], page_size: 40, relationship_hops: 0 });
   return `${module.key}:${key}`;

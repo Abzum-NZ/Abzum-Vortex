@@ -448,6 +448,7 @@
     {
       "id": "qry_crm_activities",
       "key": "crm_activities",
+      "exposure": "private",
       "label": "Activities",
       "record_type": "activity",
       "inputs": [],
