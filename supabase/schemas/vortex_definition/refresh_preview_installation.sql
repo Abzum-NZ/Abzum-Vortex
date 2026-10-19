@@ -91,7 +91,25 @@ begin
     'draftRevision', p_expected_draft_revision,
     'applicationReleaseRevision', application_release_revision_value,
     'createdAt', preview_row.created_at,
-    'expiresAt', expires_at_value
+    'expiresAt', expires_at_value,
+    'seedable', preview_row.seedable,
+    -- Every record type it has storage for: the record types a demand may name.
+    'recordTypeIds', (
+      select coalesce(pg_catalog.jsonb_agg(pg_catalog.lower(identity.value ->> 'recordTypeId')
+          order by identity.value ->> 'previewStorageContractId'), '[]'::jsonb)
+      from vortex_definition.preview_installations as preview
+      cross join lateral pg_catalog.jsonb_array_elements(preview.storage_identities)
+        as identity(value)
+      where preview.preview_installation_id = p_preview_installation_id
+    ),
+    -- The seeded record types whose derived fields are worked out.
+    'derivedReadyRecordTypeIds', (
+      select coalesce(pg_catalog.jsonb_agg(pg_catalog.lower(seed.record_type_id::text)
+          order by seed.record_type_id), '[]'::jsonb)
+      from vortex_definition.preview_installation_seeds as seed
+      where seed.preview_installation_id = p_preview_installation_id
+        and seed.derived_ready_at is not null
+    )
   );
 end
 $function$;
@@ -103,4 +121,4 @@ revoke all on function vortex_definition.refresh_preview_installation(uuid, bigi
 grant execute on function vortex_definition.refresh_preview_installation(uuid, bigint, jsonb, text)
   to vortex_request;
 comment on function vortex_definition.refresh_preview_installation(uuid, bigint, jsonb, text) is
-  'Moves the builder''s preview, in its own request, to the current draft revision in place: the server-compiled release plan, the Module pins, its permission registration and its Record storage, keeping the records it holds, and another 24 hours. Its release set is written again in the same request. A change the stored records cannot take raises V3201.';
+  'Moves the builder''s preview, in its own request, to the current draft revision in place: the server-compiled release plan, the Module pins, its permission registration and its Record storage, keeping the records it holds and its seed ledger, and another 24 hours. Its release set is written again in the same request. A change the stored records cannot take raises V3201.';

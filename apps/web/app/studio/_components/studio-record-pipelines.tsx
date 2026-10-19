@@ -239,7 +239,7 @@ function NewPipelineDialog({
               ))}
             </NativeSelect>
             <p className="text-sm text-muted-foreground">
-              Each option of the choice field is one stage. Add options in the field&apos;s editor.
+              Options become stages. Filtering is enabled so Boards can show them.
             </p>
           </div>
           <Problems issues={issues} />

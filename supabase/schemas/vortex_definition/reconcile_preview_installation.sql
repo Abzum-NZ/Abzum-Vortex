@@ -36,14 +36,25 @@ begin
     raise exception using errcode = '42501', message = 'Preview installation is unavailable';
   end if;
   -- A preview with nothing seeded has nothing to check; a recent check is not repeated.
-  if preview_row.seeded_at is null
+  if not exists (
+      select 1
+      from vortex_definition.preview_installation_seeds as seed
+      where seed.preview_installation_id = p_preview_installation_id
+    )
     or preview_row.reconciled_at > pg_catalog.statement_timestamp() - reconcile_interval then
     return false;
   end if;
   for storage_identity in
     select identity.value
     from pg_catalog.jsonb_array_elements(preview_row.storage_identities) as identity(value)
+    -- Only the record types the preview was seeded with hold copies of live records.
     where exists (
+      select 1
+      from vortex_definition.preview_installation_seeds as seed
+      where seed.preview_installation_id = p_preview_installation_id
+        and seed.record_type_id = (identity.value ->> 'recordTypeId')::uuid
+    )
+    and exists (
       select 1
       from vortex_record.storage_catalogue as catalogue
       where catalogue.storage_contract_id = (identity.value ->> 'releaseStorageContractId')::uuid
