@@ -117,6 +117,11 @@ const SHARED_COMPONENT_STYLES_CSS = `
   text-underline-offset: 0.125rem;
 }
 
+.vortex-cell-link {
+  /* Keep the screen-reader hint inside the link's clipped cell on narrow screens. */
+  position: relative;
+}
+
 .vortex-cell-link:hover,
 .vortex-cell-rich-text a:hover {
   text-decoration-thickness: 0.125rem;
