@@ -1,4 +1,4 @@
-import { moduleFieldTypeLabels, peopleDirectory, type ApplicationSourceDocument, type ModuleField, type ModuleFieldType, type ModuleQueryExposure } from "@vortex/platform/schema";
+import { moduleFieldTypeLabels, peopleDirectory, type ApplicationSourceDocument, type ModuleField, type ModuleFieldType, type ModuleQueryExposure, type RecordOwnershipMode } from "@vortex/platform/schema";
 import type { StudioQueryInput } from "@vortex/ui/studio";
 import type { StudioDraft, StudioRunOptions } from "../_components/use-studio-draft";
 
@@ -30,7 +30,7 @@ export const studioEditProblem = (result: Readonly<{ kind: string }>): string | 
 };
 
 /**
- * What the current published versions of the application's own modules hold, as qualified
+ * What any published version of the application's own modules held, as qualified
  * references: record types (`module:record`) and fields (`module:record.field`). Their stored shape
  * is fixed. It is read from the stored releases, so a draft that does not compile still has it; an
  * application never published has none.
@@ -62,6 +62,8 @@ export type StudioDataRecordType = Readonly<{
   key: string; name: string; pluralName: string; titleFieldKey: string; fields: readonly StudioDataField[];
   /** Ordinary business records can be linked; protected administration projections cannot. */
   linkable: boolean;
+  /** Who owns each record; a record type inheriting its owner from a link reads it from there. */
+  ownershipMode: RecordOwnershipMode;
 }>;
 
 /** One query of a module, by the record type it reads. */
@@ -105,6 +107,7 @@ export const ownedDataModules = (source: ApplicationSourceDocument): readonly St
     recordTypes: module.record_types.map((record) => ({
       key: record.key, name: record.name, pluralName: record.plural_name, titleFieldKey: record.title_field,
       linkable: record.system_projection === undefined || `${module.key}:${record.key}` === peopleDirectory.recordType,
+      ownershipMode: record.ownership_mode,
       fields: record.fields.map((field) => ({
         key: field.key, label: field.label, type: field.type, required: field.required, unique: field.unique,
         description: field.help_text ?? "", filterable: field.filterable, sortable: field.sortable,
