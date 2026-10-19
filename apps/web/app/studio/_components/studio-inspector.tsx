@@ -5,7 +5,6 @@ import { Textarea } from "@vortex/ui/components/textarea";
 import { TechnicalDetails } from "@vortex/ui/components/technical-details";
 import type { resolveStudioSelectionInspectorContext } from "@vortex/ui/studio";
 import { StudioPanelShell } from "./studio-frame";
-import { studioKindLabel } from "../_lib/studio-labels";
 import { useStudioDraftText } from "./use-studio-draft-text";
 
 type InspectorContext = ReturnType<typeof resolveStudioSelectionInspectorContext>;
@@ -41,9 +40,8 @@ function LabelsForm({ labels }: Readonly<{ labels: StudioLabelsForm }>) {
  * The right-hand inspector: what is selected, its name (when it has one) and the editors for it,
  * which the workspace passes in as `children` because they edit its one draft history.
  */
-export function StudioInspector({ inspector, title, labels, labelsKey, note, children }: Readonly<{
+export function StudioInspector({ inspector, labels, labelsKey, note, children }: Readonly<{
   inspector: InspectorContext;
-  title: string;
   /** Present when the selection's name can be edited here. */
   labels: StudioLabelsForm | undefined;
   /** The selection the name form belongs to: another selection starts a new form. */
@@ -52,8 +50,7 @@ export function StudioInspector({ inspector, title, labels, labelsKey, note, chi
   note: string | undefined;
   children: ReactNode;
 }>) {
-  return <StudioPanelShell title="Inspector"
-    description={inspector.status === "resolved" ? `${studioKindLabel(inspector.descriptor.kind)}: ${title}` : "Select an item to change it."}>
+  return <StudioPanelShell title="Inspector">
     {inspector.status === "resolved" && <TechnicalDetails>
       <dl className="space-y-1">
         <div><dt className="font-semibold">Kind</dt><dd>{inspector.descriptor.kind}</dd></div>

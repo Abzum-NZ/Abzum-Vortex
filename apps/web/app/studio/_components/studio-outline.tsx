@@ -24,12 +24,7 @@ export function StudioOutline({
   const project = (node: StudioSemanticOutlineNode): StudioNavNode => ({
     key: node.key,
     label: node.label,
-    icon:
-      node.selection?.kind === "shell"
-        ? "grid"
-        : node.selection?.kind === "page"
-          ? "file-text"
-          : "blocks",
+    icon: node.icon,
     selected: node.selection !== null && selectedKey === studioSemanticSelectionKey(node.selection),
     meta:
       node.selection !== null && studioSemanticSelectionKey(node.selection) === homePageKey ? (
