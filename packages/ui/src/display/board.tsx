@@ -454,12 +454,7 @@ export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElem
             label: "Unassigned",
             selector: { kind: "unassigned" as const },
             values: values.unassigned,
-            // Columns come in stage order, so the first is the start stage: a card with no stage
-            // yet may take it or move on from it as a card there could.
-            moves:
-              values.columns[0] === undefined
-                ? []
-                : [values.columns[0].value, ...values.columns[0].moves],
+            moves: values.unassigned.moves,
           }] : []),
         ];
 

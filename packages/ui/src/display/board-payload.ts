@@ -315,13 +315,42 @@ export const parseBoardPayload = (
   for (const column of columns)
     if (column.moves.some((move) => !seenOptions.has(move)))
       fail("A board column moves only to columns of the board", location);
-  const unassigned = parseBoardBucket(
+  const unassignedLocation = { ...location, propertyPath: ["unassigned"] };
+  const unassignedRecord = requireRecord(
     record.unassigned,
-    aggregates,
-    declaredCardFields,
-    seenRecordIds,
-    { ...location, propertyPath: ["unassigned"] },
+    "A board's unassigned bucket must be an object",
+    unassignedLocation,
   );
+  requireExactKeys(
+    unassignedRecord,
+    ["moves", "rowCount", "aggregates", "page"],
+    unassignedLocation,
+  );
+  const unassignedMoves = requireArray(
+    unassignedRecord.moves,
+    "A board's unassigned bucket lists the stages it moves to",
+    unassignedLocation,
+  );
+  if (
+    unassignedMoves.length > maximumBoardColumns ||
+    unassignedMoves.some((move) => typeof move !== "string" || !seenOptions.has(move)) ||
+    new Set(unassignedMoves).size !== unassignedMoves.length
+  )
+    fail("Unassigned cards move only to columns of the board, each once", unassignedLocation);
+  const unassigned = Object.freeze({
+    moves: Object.freeze(unassignedMoves as string[]),
+    ...parseBoardBucket(
+      {
+        rowCount: unassignedRecord.rowCount,
+        aggregates: unassignedRecord.aggregates,
+        page: unassignedRecord.page,
+      },
+      aggregates,
+      declaredCardFields,
+      seenRecordIds,
+      unassignedLocation,
+    ),
+  });
   const partitionedCount =
     columns.reduce((total, column) => total + column.rowCount, 0) + unassigned.rowCount;
   if (!Number.isSafeInteger(partitionedCount) || partitionedCount !== totalRowCount)

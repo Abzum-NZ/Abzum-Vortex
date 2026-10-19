@@ -282,7 +282,8 @@ export type BoardPayload = Readonly<{
   totalRowCount: number;
   aggregates: readonly DisplaySummaryMetric[];
   columns: readonly BoardColumnPayload[];
-  unassigned: BoardBucketPayload;
+  /** Cards with no stage yet, and the stages they may move to: the start stage and its moves. */
+  unassigned: BoardBucketPayload & Readonly<{ moves: readonly string[] }>;
 }>;
 
 export type TextData = DisplayDataState<TextPayload>;
