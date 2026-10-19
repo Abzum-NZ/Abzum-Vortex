@@ -1,7 +1,6 @@
 "use client";
 import { useMemo, useState, type FormEvent } from "react";
 import { Icon } from "@vortex/ui";
-import { StudioDataGroup } from "./studio-data-group";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +22,7 @@ import {
   studioRelationshipChoices,
   studioSettingProblems,
   StudioOptionControl,
+  StudioInspectorGroup,
   StudioSettingFields,
   studioSourceRecordTypes,
   type StudioCompositionContext,
@@ -60,7 +60,7 @@ import {
   type TotalSettings,
 } from "@vortex/platform/schema";
 import { StudioField } from "./studio-field";
-import { StudioReferencesAlert } from "./studio-used-in";
+import { StudioReferencesAlert, StudioUsedIn } from "./studio-used-in";
 import { StudioLinkSection } from "./studio-link-section";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
@@ -661,7 +661,7 @@ export function ModuleFieldsEditor({
           </DropdownMenu>
         </div>
       )}
-      <StudioDataGroup title="General">
+      <StudioInspectorGroup title="General">
         <StudioField
           label="Label"
           error={problemOf(label.problem)}
@@ -712,8 +712,8 @@ export function ModuleFieldsEditor({
           )}
         </StudioField>
         {flag("required", "Required", adding && recordPublished)}
-      </StudioDataGroup>
-      <StudioDataGroup
+      </StudioInspectorGroup>
+      <StudioInspectorGroup
         title={form.type === "choice" || form.type === "several_choices" ? "Choices" : "Format"}
       >
         {shapeHint === undefined ? null : (
@@ -773,7 +773,7 @@ export function ModuleFieldsEditor({
             {computedValue.problem}
           </p>
         )}
-      </StudioDataGroup>
+      </StudioInspectorGroup>
       {linkTypes.has(form.type) && (
         <StudioLinkSection
           settings={form.settings}
@@ -789,7 +789,7 @@ export function ModuleFieldsEditor({
           }
         />
       )}
-      <StudioDataGroup title="Default value">
+      <StudioInspectorGroup title="Default value">
         {defaultModel.kind === "declared" ? (
           <StudioSettingFields
             idPrefix="module-field-default"
@@ -807,8 +807,8 @@ export function ModuleFieldsEditor({
             {defaultValue.problem}
           </p>
         )}
-      </StudioDataGroup>
-      <StudioDataGroup title="Behaviour">
+      </StudioInspectorGroup>
+      <StudioInspectorGroup title="Behaviour">
         <StudioField
           label="Help text"
           hint="Shown under the field on forms. Optional."
@@ -876,10 +876,10 @@ export function ModuleFieldsEditor({
             </Button>
           )}
         </fieldset>
-      </StudioDataGroup>
-      <StudioDataGroup title="Access" defaultOpen={false}>
+      </StudioInspectorGroup>
+      <StudioInspectorGroup title="Access" defaultOpen={false}>
         <p className="text-sm text-muted-foreground">Field permissions are managed in Access.</p>
-      </StudioDataGroup>
+      </StudioInspectorGroup>
       {adding && (
         <Button type="submit" size="sm" disabled={disabled || form.label.trim() === ""}>
           Add field
@@ -901,7 +901,12 @@ export function ModuleFieldsEditor({
       {existing === undefined ? null : (
         <>
           <StudioReferencesAlert name={existing.label} action="removed" references={references} />
-          <StudioDataGroup title="Details" defaultOpen={false}>
+          <StudioUsedIn
+            source={source}
+            target={{ kind: "field", moduleKey, recordKey, fieldKey: existing.key }}
+            name={existing.label}
+          />
+          <StudioInspectorGroup title="Details" defaultOpen={false}>
             <dl className="space-y-2 font-mono text-xs">
               <div>
                 <dt>Key</dt>
@@ -912,7 +917,7 @@ export function ModuleFieldsEditor({
                 <dd>{qualifiedRecord}</dd>
               </div>
             </dl>
-          </StudioDataGroup>
+          </StudioInspectorGroup>
         </>
       )}
       {confirmDialog}
