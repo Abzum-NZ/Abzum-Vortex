@@ -179,9 +179,14 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     [accessibleName, features, layout.shown, rows, selectedRecordIds, narrowing, events],
   );
   const gridFeatures = useGridFeatures(featureContext);
-  const { cell: featureCell, cellClassName, headerAdornment, columnMenuItems } = gridFeatures;
-  // Full screen keeps this same tree and changes only the container's classes, so scroll,
-  // selection and an open editor survive entering and leaving it.
+  const {
+    cell: featureCell,
+    decorate,
+    cellClassName,
+    headerAdornment,
+    columnMenuItems,
+  } = gridFeatures;
+  // Full screen keeps this same tree and changes only the container classes.
   const containerRef = useRef<HTMLDivElement>(null);
   const fullScreen = useGridFullScreen(containerRef, contract?.allowFullScreen === true, announce);
 
@@ -216,13 +221,15 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   // the bindings and the heading column, so the grid's memoized rows keep their identity.
   const renderers = useMemo((): GridRenderers & CardRenderers => {
     const rowActions = behaviours?.rowActions ?? [];
+    // Cards show the same formatting as the grid, never its editors.
     const value = (row: DisplayRow, column: GridColumn) => {
       const cell: DisplayCellValue = row.cells[column.key] ?? { kind: "empty" };
-      return <DisplayCellView value={cell} />;
+      return decorate(row, column, <DisplayCellView value={cell} />);
     };
     return {
       value,
-      text: (row, column) => cellValueToText(row.cells[column.key] ?? { kind: "empty" }),
+      heading: (row, column) =>
+        decorate(row, column, cellValueToText(row.cells[column.key] ?? { kind: "empty" })),
       cell: (row, column) => {
         const cell: DisplayCellValue = row.cells[column.key] ?? { kind: "empty" };
         const decoration = cellClassName(row, column);
@@ -267,6 +274,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     headingKey,
     placementId,
     featureCell,
+    decorate,
     cellClassName,
     headerAdornment,
     columnMenuItems,

@@ -1,5 +1,17 @@
 import type { RecordsTableActionContract, RecordsTableContract } from "../../schema";
 import type { ProtectedQueryRow } from "../../queries/protected-query-contracts";
+import type { ConditionalFormattingProjection } from "./conditional-formatting";
+
+export {
+  conditionalFormattingFieldIds,
+  conditionalFormattingRelativeDates,
+  conditionalFormattingUsesRelativeDates,
+  evaluateConditionalFormatting,
+  type ConditionalColumnFormatProjection,
+  type ConditionalFormattingContext,
+  type ConditionalFormattingProjection,
+  type RecordsTableRowFormat,
+} from "./conditional-formatting";
 
 /**
  * The grid features one viewer may use on one Records table read: each feature the release turns
@@ -20,6 +32,8 @@ export type RecordsTableFeatureProjection = Readonly<{
   inlineEdit?: Readonly<{ eventId: string; fields: readonly string[] }>;
   /** Rows expand to their related records, read this many at a time. */
   masterDetail?: Readonly<{ pageSize: number }>;
+  /** The styles the page's rows name and the numeric columns drawn as bars or scales. */
+  conditionalFormatting?: ConditionalFormattingProjection;
 }>;
 
 /** The part of a Records table request a refusal names, kept only in the server log. */
@@ -76,6 +90,7 @@ export const projectRecordsTableFeatures = (
   contract: RecordsTableContract,
   visibleFieldIds: readonly string[],
   rows: readonly ProtectedQueryRow[],
+  conditionalFormatting?: ConditionalFormattingProjection,
 ): RecordsTableFeatureProjection | undefined => {
   const { features } = contract;
   const withheld = (field: string): boolean =>
@@ -117,6 +132,9 @@ export const projectRecordsTableFeatures = (
     ...(masterDetail.enabled && masterDetail.childPageSize !== undefined
       ? { masterDetail: { pageSize: masterDetail.childPageSize } }
       : {}),
+    ...(conditionalFormatting === undefined || !features.conditionalFormatting.enabled
+      ? {}
+      : { conditionalFormatting }),
   };
   return Object.keys(projection).length === 0 ? undefined : projection;
 };

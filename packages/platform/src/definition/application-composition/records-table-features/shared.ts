@@ -102,7 +102,13 @@ export type RecordsTableFieldFacts = Readonly<{
   editable: boolean;
   /** For a choice field, how many options it declares. */
   choiceCount?: number;
+  /** For a calculation or total, the type of the value it produces. */
+  resultType?: string;
 }>;
+
+/** The type of value a field holds: a calculation's or total's result type, else its own type. */
+export const factsValueType = (field: RecordsTableFieldFacts): string =>
+  field.resultType ?? field.type;
 
 /**
  * One query the application may read, as a row's related records see it: the record type it reads,
@@ -176,6 +182,7 @@ export type RecordsTableFeatureRefusalCode = Extract<
   | "definition_records_table_bulk_actions"
   | "definition_records_table_inline_edit"
   | "definition_records_table_master_detail"
+  | "definition_records_table_conditional_formatting"
 >;
 
 /** The outcome of one feature check: available, or not possible with its one business sentence. */
@@ -210,5 +217,8 @@ export type RecordsTableFeatureDefinition<Settings extends object> = Readonly<{
   /** One short line saying what the feature lets people do. */
   description: string;
   read(group: SettingsRecord): RecordsTableFeatureState<Settings>;
-  check(state: RecordsTableFeatureState<Settings>, facts: RecordsTableQueryFacts): RecordsTableFeatureCheck;
+  check(
+    state: RecordsTableFeatureState<Settings>,
+    facts: RecordsTableQueryFacts,
+  ): RecordsTableFeatureCheck;
 }>;

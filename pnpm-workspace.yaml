@@ -39,3 +39,8 @@ overrides:
   framer-motion: 13.4.6
   motion-dom: 13.4.5
   motion-utils: 13.3.0
+
+# Reject writes queued after socket closure until the driver ships the fix.
+# https://github.com/porsager/postgres/pull/1209
+patchedDependencies:
+  postgres@3.4.9: patches/postgres@3.4.9.patch

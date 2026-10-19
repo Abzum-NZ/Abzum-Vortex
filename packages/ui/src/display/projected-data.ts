@@ -8,10 +8,9 @@ import {
   type BlockPropertyValueContract,
   type ComponentSemanticEventKind,
   type PipelineStageTone,
-  type RecordsTableActionContract,
   type RecordsTableFeatureProjection,
+  type RecordsTableRowFormat,
   type RecordsTableFilterValue,
-  recordsTableActionCapabilities,
   type RecordsTableSortKey,
   type RecordsTableSortState,
   RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
@@ -22,6 +21,8 @@ import {
   isRecord,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
+import { parseRowFormat } from "./projected-format";
+import { parseTableFeatures } from "./projected-grid-features";
 
 /**
  * Validated structured rich-text document from the shared closed rich-text contract.
@@ -98,6 +99,8 @@ export type DisplayRow = Readonly<{
   revision?: number;
   capabilities?: DisplayRowCapabilities;
   cells: Readonly<Record<string, DisplayCellValue>>;
+  /** The style keys and measures the table's formatting gives the row, decided on the server. */
+  format?: RecordsTableRowFormat;
 }>;
 
 /** One declared table column; only declared columns are ever rendered. */
@@ -547,7 +550,7 @@ const requireBuilderKey = (
 };
 
 /** A row cell, column, detail field or sort key: a builder key or a declared field identity. */
-const requireFieldKey = (
+export const requireFieldKey = (
   value: unknown,
   message: string,
   location: DefinitionRenderErrorLocation,
@@ -771,7 +774,11 @@ const parseRows = (
     items.map((item, index) => {
       const rowLocation = { ...location, propertyPath: [`rows[${index}]`] };
       const record = requireRecord(item, "A projected row must be an object", rowLocation);
-      requireExactKeys(record, ["recordId", "revision", "capabilities", "cells"], rowLocation);
+      requireExactKeys(
+        record,
+        ["recordId", "revision", "capabilities", "cells", "format"],
+        rowLocation,
+      );
       const recordId = requireNonEmptyString(
         record.recordId,
         "A projected row requires a stable record identity",
@@ -806,11 +813,19 @@ const parseRows = (
               ...rowLocation,
               propertyPath: [`rows[${index}]`, "capabilities"],
             });
+      const format =
+        record.format === undefined
+          ? undefined
+          : parseRowFormat(record.format, {
+              ...rowLocation,
+              propertyPath: [`rows[${index}]`, "format"],
+            });
       return Object.freeze({
         recordId,
         ...(revision === undefined ? {} : { revision }),
         ...(capabilities === undefined ? {} : { capabilities }),
         cells: Object.freeze(cells),
+        ...(format === undefined ? {} : { format }),
       });
     }),
   );
@@ -1138,112 +1153,6 @@ const parseTableNarrowing = (
   if (new Set(filters.map((filter) => filter.fieldId.toLowerCase())).size !== filters.length)
     fail("A projected table narrowing names each filtered field once", location);
   return Object.freeze({ search: record.search as string | null, filters: Object.freeze(filters) });
-};
-
-/** One projected bulk command: its flow binding's event identity, label and optional capability. */
-const parseTableAction = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): RecordsTableActionContract => {
-  const action = requireRecord(value, "A projected bulk command must be an object", location);
-  requireExactKeys(action, ["eventId", "label", "capability"], location);
-  const eventId = requireNonEmptyString(action.eventId, "A bulk command needs its event", location);
-  const label = requireNonEmptyString(action.label, "A bulk command needs its label", location);
-  if (
-    action.capability !== undefined &&
-    !(recordsTableActionCapabilities as readonly unknown[]).includes(action.capability)
-  )
-    fail("A bulk command names an unknown capability", location);
-  return Object.freeze({
-    eventId,
-    label,
-    ...(action.capability === undefined
-      ? {}
-      : { capability: action.capability as RecordsTableActionContract["capability"] & string }),
-  });
-};
-
-const parseFieldKeys = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): readonly string[] => {
-  const fields = requireArray(value, message, location).map((field) =>
-    requireFieldKey(field, message, location),
-  );
-  if (
-    fields.length === 0 ||
-    new Set(fields.map((field) => field.toLowerCase())).size !== fields.length
-  )
-    fail(message, location);
-  return Object.freeze(fields);
-};
-
-/** The grid features the server projected for the viewer: each present feature is on. */
-const parseTableFeatures = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): RecordsTableFeatureProjection => {
-  const record = requireRecord(value, "Projected table features are invalid", location);
-  requireExactKeys(
-    record,
-    ["search", "columnFilters", "savedViews", "bulkActions", "inlineEdit", "masterDetail"],
-    location,
-  );
-  if (Object.keys(record).length === 0) fail("Projected table features name no feature", location);
-  if (record.search !== undefined && record.search !== true)
-    fail("A projected search feature is only ever on", location);
-  if (record.savedViews !== undefined && record.savedViews !== true)
-    fail("A projected saved views feature is only ever on", location);
-  const columnFilters =
-    record.columnFilters === undefined
-      ? undefined
-      : parseFieldKeys(record.columnFilters, "Projected filter fields are invalid", location);
-  const bulkActions =
-    record.bulkActions === undefined
-      ? undefined
-      : requireArray(record.bulkActions, "Projected bulk commands are invalid", location).map(
-          (action) => parseTableAction(action, location),
-        );
-  if (bulkActions !== undefined && bulkActions.length === 0)
-    fail("Projected bulk commands are empty", location);
-  let inlineEdit: RecordsTableFeatureProjection["inlineEdit"];
-  if (record.inlineEdit !== undefined) {
-    const inline = requireRecord(
-      record.inlineEdit,
-      "Projected inline editing is invalid",
-      location,
-    );
-    requireExactKeys(inline, ["eventId", "fields"], location);
-    inlineEdit = Object.freeze({
-      eventId: requireNonEmptyString(inline.eventId, "Inline editing needs its event", location),
-      fields: parseFieldKeys(inline.fields, "Projected editable fields are invalid", location),
-    });
-  }
-  let masterDetail: RecordsTableFeatureProjection["masterDetail"];
-  if (record.masterDetail !== undefined) {
-    const related = requireRecord(
-      record.masterDetail,
-      "Projected related records are invalid",
-      location,
-    );
-    requireExactKeys(related, ["pageSize"], location);
-    masterDetail = Object.freeze({
-      pageSize: requirePositiveInteger(
-        related.pageSize,
-        "Related records need their page size",
-        location,
-      ),
-    });
-  }
-  return Object.freeze({
-    ...(record.search === true ? { search: true as const } : {}),
-    ...(columnFilters === undefined ? {} : { columnFilters }),
-    ...(record.savedViews === true ? { savedViews: true as const } : {}),
-    ...(bulkActions === undefined ? {} : { bulkActions: Object.freeze(bulkActions) }),
-    ...(inlineEdit === undefined ? {} : { inlineEdit }),
-    ...(masterDetail === undefined ? {} : { masterDetail }),
-  });
 };
 
 /** The ready values a table block accepts. */

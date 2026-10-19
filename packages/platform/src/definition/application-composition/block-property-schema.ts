@@ -2,6 +2,7 @@ import { z } from "zod";
 import { labelSchema, safeHttpsUrlSchema } from "../../catalogue/common";
 import {
   sourceProvenanceUnchanged,
+  sourceQualifiedConditionSchema,
   sourceQualifiedFieldSchema,
   sourceQualifiedQueryReferenceSchema,
   sourceQualifiedRelationshipSchema,
@@ -90,6 +91,11 @@ export type BlockPropertySchemaContract =
        */
       fieldTypes?: z.infer<typeof fieldTypeSchema>[] | undefined;
     })
+  /**
+   * A condition over the fields of the block's bound data, built with the one condition checker:
+   * authored in a query filter's short form with qualified fields, compiled to the canonical tree.
+   */
+  | (BlockPropertySchemaBase & { kind: "condition" })
   | (BlockPropertySchemaBase & {
       kind:
         | "relationship_reference"
@@ -476,6 +482,10 @@ export const typedSourceSettingValue = (
       const parsed = text(sourceQualifiedFieldSchema);
       return parsed === undefined ? undefined : { kind: "field_reference", field: parsed };
     }
+    case "condition": {
+      const parsed = sourceQualifiedConditionSchema.safeParse(value);
+      return parsed.success ? { kind: "condition", condition: parsed.data } : invalid();
+    }
     case "relationship_reference": {
       const parsed = text(sourceQualifiedRelationshipSchema);
       return parsed === undefined
@@ -607,6 +617,8 @@ export const plainSourceSettingValue = (value: SourceBlockPropertyValueContract)
       return value.icon_key;
     case "field_reference":
       return value.field;
+    case "condition":
+      return value.condition;
     case "relationship_reference":
       return value.relationship;
     case "action_reference":
@@ -646,6 +658,8 @@ export const plainSettingValue = (value: BlockPropertyValueContract): unknown =>
       return value.iconKey;
     case "field_reference":
       return value.fieldId;
+    case "condition":
+      return value.condition;
     case "relationship_reference":
       return value.relationshipId;
     case "action_reference":
@@ -691,6 +705,8 @@ const typedSettingCandidate = (
       return { kind: declaration.kind, iconKey: value };
     case "field_reference":
       return { kind: declaration.kind, fieldId: value };
+    case "condition":
+      return { kind: declaration.kind, condition: value };
     case "relationship_reference":
       return { kind: declaration.kind, relationshipId: value };
     case "action_reference":
@@ -746,6 +762,7 @@ export const typedSettingValue = (
 /** Kinds naming application-scoped authority, which a platform-owned default cannot choose. */
 const authorityReferenceKinds: ReadonlySet<string> = new Set([
   "field_reference",
+  "condition",
   "relationship_reference",
   "action_reference",
   "page_reference",
@@ -957,6 +974,9 @@ export const blockPropertySchema: z.ZodType<BlockPropertySchemaContract> = z.laz
             new Set(value.fieldTypes).size === value.fieldTypes.length,
           { path: ["fieldTypes"], message: "Field types must be unique" },
         ),
+      z
+        .object({ ...propertySchemaBase, kind: sourceProvenanceUnchanged(z.literal("condition")) })
+        .strict(),
       z
         .object({
           ...propertySchemaBase,

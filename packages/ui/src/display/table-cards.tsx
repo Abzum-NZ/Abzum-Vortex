@@ -5,6 +5,7 @@ import type { RecordsTableColumnContract } from "@vortex/platform/schema";
 import { Card } from "../components/card";
 import { cn } from "../lib/utils";
 import type { DisplayRow } from "./projected-data";
+import { cellValueToText } from "./cell";
 import { useRowEntrance } from "./row-entrance";
 import type { RowExpansionControls } from "./row-expansion";
 import { RowExpansionToggle } from "./row-expansion-toggle";
@@ -23,8 +24,8 @@ const INTERACTIVE_IN_CARD =
 /** Content renderers the host supplies; the same ones the grid uses. */
 export type CardRenderers = Readonly<{
   value: (row: DisplayRow, column: GridColumn) => ReactNode;
-  /** Plain text of a value, for the heading that opens the row (a link cannot nest in it). */
-  text: (row: DisplayRow, column: GridColumn) => string;
+  /** Decorated plain text for the heading that opens the row; it cannot contain a nested link. */
+  heading: (row: DisplayRow, column: GridColumn) => ReactNode;
   select: (row: DisplayRow, selected: boolean) => ReactNode;
   actions: (row: DisplayRow) => ReactNode;
 }>;
@@ -100,7 +101,10 @@ export function RecordsCards({
         const selected = selectedRecordIds.includes(row.recordId);
         const headingId = `record-${row.recordId}-heading`;
         const expanded = expansion?.isExpanded(row.recordId) === true;
-        const name = heading === undefined ? "this record" : renderers.text(row, heading);
+        const name =
+          heading === undefined
+            ? "this record"
+            : cellValueToText(row.cells[heading.key] ?? { kind: "empty" });
         return (
           <li
             key={row.recordId}
@@ -151,7 +155,7 @@ export function RecordsCards({
                       className="max-w-full truncate text-start font-medium underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
                       onClick={() => activate(row.recordId)}
                     >
-                      {renderers.text(row, heading)}
+                      {renderers.heading(row, heading)}
                     </button>
                   )}
                 </h3>
