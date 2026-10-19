@@ -13,8 +13,9 @@ import { applicationValidationContractVersion } from "./application-contract-ver
 import { applicationModuleSources } from "./application-module-lowering";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
+  assertReleasable,
   compileApplicationCandidate,
-  compileCandidate,
+  compileModuleCandidate,
   validateCandidate,
 } from "./definition-publication-compilation";
 import {
@@ -38,6 +39,7 @@ import {
   selectCurrentModuleRelease,
 } from "./definition-dependency-resolution";
 import { createDraftModuleOverlay } from "./publication/draft-module-overlay";
+import { derivedOwnedModuleRootId } from "./derived-definition-id";
 import { moduleDependencies } from "./module-dependencies";
 import { assignNextDefinitionVersion } from "./semantic-version";
 import { compareDefinitionVersionImpactWithEvidence } from "./version-impact-definition";
@@ -108,6 +110,55 @@ export const materializeInlineModules = async (
   return roots;
 };
 
+/**
+ * The owned roots exactly as `materializeInlineModules` leaves them, worked out without staging:
+ * each inline Module at the root, revision and source its staging gives it (a released or changed
+ * one is staged at the next revision, a missing one is created at revision 1), and every other
+ * owned root as it is stored. Staging is deterministic, so a draft compile that stages in memory
+ * and a preview plan that reads what preview preparation staged name the same roots.
+ */
+export const stagedOwnedModuleRoots = (
+  candidate: DefinitionCandidateDraft,
+  ownedRoots: readonly OwnedModuleRoot[],
+): readonly (readonly unknown[])[] => {
+  const owned = new Map(ownedRoots.map((root) => [root.key, root] as const));
+  const sources = inlineModuleSources(candidate);
+  const inlineKeys = new Set(sources.map((source) => source.key));
+  return [
+    ...sources.map((source) => {
+      const sourceFingerprint = fingerprintCanonicalValue(source);
+      const existing = owned.get(source.key);
+      if (existing === undefined)
+        return [
+          source.key,
+          derivedOwnedModuleRootId(String(candidate.draft.rootId), source.key).toLowerCase(),
+          1,
+          null,
+          sourceFingerprint,
+        ];
+      const staged =
+        existing.sourceFingerprint !== sourceFingerprint ||
+        existing.draftRevision === existing.currentReleaseRevision;
+      return [
+        source.key,
+        String(existing.rootId).toLowerCase(),
+        staged ? existing.draftRevision + 1 : existing.draftRevision,
+        existing.currentReleaseRevision,
+        sourceFingerprint,
+      ];
+    }),
+    ...ownedRoots
+      .filter((root) => !inlineKeys.has(root.key))
+      .map((root) => [
+        root.key,
+        String(root.rootId).toLowerCase(),
+        root.draftRevision,
+        root.currentReleaseRevision,
+        root.sourceFingerprint,
+      ]),
+  ];
+};
+
 const highestImpact = (reasons: readonly VersionImpactReason[]): VersionImpact => {
   const ranks = { patch: 0, minor: 1, major: 2 } as const;
   return reasons.reduce<VersionImpact>(
@@ -117,8 +168,9 @@ const highestImpact = (reasons: readonly VersionImpactReason[]): VersionImpact =
 };
 
 /**
- * Compiles every inline Module, in dependency order, against the current release of each Module
- * it depends on, and appends a release at `version` for each one that changed. A sibling released
+ * Compiles every inline Module once, in dependency order, against the current release of each
+ * Module it depends on, and appends a release at `version` for each one that changed; that same
+ * output is compared with the latest release and judged as the release. A sibling released
  * earlier in the same pass is already the current release its dependants compile against.
  */
 const releaseInlineModules = async (
@@ -152,18 +204,18 @@ const releaseInlineModules = async (
     const dependencies = await resolveDependencies(transaction, catalogue, module);
     await assertNoCycle(transaction, module, dependencies.modules);
     const resolution = buildResolution(module, dependencies, version);
-    const draftOutput = compileCandidate(
+    const compiled = compileModuleCandidate(
       module,
       dependencies,
       resolution,
-      false,
       catalogue.permissions,
     );
+    const output = compiled.output;
     const impact = compareDefinitionVersionImpactWithEvidence({
       kind: "module",
       validationContractVersion: "3.0.0",
       historyEvidence: module.historyEvidence,
-      candidate: draftOutput.canonical,
+      candidate: output.canonical,
     });
     // A Module is released again when a Module it depends on was, even with no change of its own,
     // so every release in one Application pins each Module at exactly one release.
@@ -186,8 +238,7 @@ const releaseInlineModules = async (
       (pins.length !== latestPins.size || pins.some((pin) => !latestPins.has(pin)));
     if (impact.outcome === "no_change" && !repinned) continue;
     const reasons = impact.outcome === "no_change" ? [] : impact.reasons;
-    const output = compileCandidate(module, dependencies, resolution, true, catalogue.permissions);
-    if (output.kind !== "module") return refuse("DEFINITION_COMPILATION_REFUSED");
+    assertReleasable(compiled, module.historyEvidence, catalogue.permissions);
     const append: DefinitionReleaseAppend = {
       draft: module.draft,
       compilationOutput: output,
@@ -204,26 +255,31 @@ const releaseInlineModules = async (
   return steps;
 };
 
-/** The Application compiled at `version` against the current release of every Module it names. */
+/**
+ * The Application compiled once at `version` against the current release of every Module it
+ * names. A release of it (publication, preview) judges this same output with `assertReleasable`.
+ */
 const compileApplication = async (
   transaction: DefinitionPublicationTransaction,
   catalogue: DefinitionPublicationCatalogue,
   candidate: DefinitionDraftCandidate | DefinitionPublicationCandidate,
   version: string,
-  final: boolean,
   pinned?: readonly ExactDefinitionDependency[],
 ) => {
   const dependencies = await resolveDependencies(transaction, catalogue, candidate, pinned);
   await assertNoCycle(transaction, candidate, dependencies.modules);
   const resolution = buildResolution(candidate, dependencies, version);
-  const output =
-    "historyEvidence" in candidate
-      ? compileCandidate(candidate, dependencies, resolution, final, catalogue.permissions)
-      : compileApplicationCandidate(candidate, dependencies, resolution, catalogue.permissions)
-          .output;
+  const { request, output, dependencyOutputs } = compileApplicationCandidate(
+    candidate,
+    dependencies,
+    resolution,
+    catalogue.permissions,
+  );
   if (output.kind !== "application") return refuse("DEFINITION_COMPILATION_REFUSED");
   return {
+    request,
     output,
+    dependencyOutputs,
     resolution,
     dependencies,
     manifest: manifestFor(dependencies, output, resolution),
@@ -298,13 +354,13 @@ export const planApplicationPublication = async (
   const latestVersion = candidate.historyEvidence.latestRelease?.publication.releaseVersion;
   const provisional =
     latestVersion === undefined ? "1.0.0" : assignNextDefinitionVersion(latestVersion, "major");
-  const pass = async (version: string, final: boolean, pins?: typeof pinned) => {
+  const pass = async (version: string, pins?: typeof pinned) => {
     const application = await compileApplicationWithInlineModules(
       context,
       transaction,
       catalogue,
       candidate,
-      { version, final, pinned: pins, releaseNote },
+      { version, pinned: pins, releaseNote },
     );
     return {
       modules: application.modules,
@@ -312,14 +368,15 @@ export const planApplicationPublication = async (
       reasons: publicationReasons(candidate, roots, application.modules, application),
     };
   };
-  const provisionalReasons = (await pass(provisional, false)).reasons;
+  const provisionalReasons = (await pass(provisional)).reasons;
   if (latestVersion !== undefined && provisionalReasons.length === 0)
     refuse("DEFINITION_NO_CHANGE");
   const version =
     latestVersion === undefined
       ? "1.0.0"
       : assignNextDefinitionVersion(latestVersion, highestImpact(provisionalReasons));
-  const { modules, application, reasons } = await pass(version, true, pinned);
+  const { modules, application, reasons } = await pass(version, pinned);
+  assertReleasable(application, candidate.historyEvidence, catalogue.permissions);
   if (canonicalJson(reasons) !== canonicalJson(provisionalReasons))
     refuse("DEFINITION_VERSION_REFUSED");
   const confirmation = definitionPublicationConfirmationSchema.parse({
@@ -450,7 +507,6 @@ export const compileApplicationWithInlineModules = async (
   candidate: DefinitionDraftCandidate | DefinitionPublicationCandidate,
   options: Readonly<{
     version?: string;
-    final?: boolean;
     pinned?: readonly ExactDefinitionDependency[] | undefined;
     releaseNote?: string;
   }> = {},
@@ -481,8 +537,12 @@ export const compileApplicationWithInlineModules = async (
     catalogue,
     candidate,
     version,
-    options.final ?? false,
     options.pinned,
   );
   return { ...application, modules };
 };
+
+/** One compiled Application with its inline Module releases: what a preview or publication releases. */
+export type ApplicationReleasePlan = Awaited<
+  ReturnType<typeof compileApplicationWithInlineModules>
+>;
