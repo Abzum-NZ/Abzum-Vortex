@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@vortex/ui/components/dialog";
 import { Input } from "@vortex/ui/components/input";
-import { NativeSelect } from "@vortex/ui/components/native-select";
+import { StudioReferencePicker } from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
 import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
 
@@ -37,12 +37,14 @@ const pluralOf = (name: string): string => {
 export function StudioRecordTypeDialog({
   open,
   source,
+  initialModuleKey,
   edit,
   onClose,
   onCreated,
 }: Readonly<{
   open: boolean;
   source: ApplicationSourceDocument;
+  initialModuleKey: string | undefined;
   edit: StudioDataEdit;
   onClose: () => void;
   /** Called with the record type the form added. */
@@ -53,7 +55,7 @@ export function StudioRecordTypeDialog({
   const [plural, setPlural] = useState<string | null>(null);
   const [key, setKey] = useState<string | null>(null);
   const [titleLabel, setTitleLabel] = useState("Name");
-  const [moduleKey, setModuleKey] = useState(modules[0]?.key ?? "");
+  const [moduleKey, setModuleKey] = useState(initialModuleKey ?? modules[0]?.key ?? "");
   const [newModuleKey, setNewModuleKey] = useState<string | null>(null);
   const [newModuleName, setNewModuleName] = useState<string | null>(null);
   const [issues, setIssues] = useState<readonly string[]>([]);
@@ -216,21 +218,15 @@ export function StudioRecordTypeDialog({
             modules.length > 1 && (
               <StudioField label="Module">
                 {(control) => (
-                  <NativeSelect
+                  <StudioReferencePicker
                     {...control}
-                    className="w-full"
                     value={target?.key ?? ""}
-                    onChange={(event) => {
-                      setModuleKey(event.target.value);
+                    options={modules.map((module) => ({ value: module.key, label: module.name }))}
+                    onChange={(value) => {
+                      setModuleKey(value);
                       setKey(null);
                     }}
-                  >
-                    {modules.map((module) => (
-                      <option key={module.key} value={module.key}>
-                        {module.name}
-                      </option>
-                    ))}
-                  </NativeSelect>
+                  />
                 )}
               </StudioField>
             )

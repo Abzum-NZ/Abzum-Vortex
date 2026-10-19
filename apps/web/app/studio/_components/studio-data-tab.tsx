@@ -34,6 +34,7 @@ import { StudioField } from "./studio-field";
 import { StudioDataPanel } from "./studio-data-panel";
 import { StudioDataCentre, StudioDataEmpty } from "./studio-data-centre";
 import { StudioRecordTypeDialog } from "./studio-record-type-dialog";
+import { StudioModuleDialog } from "./studio-module-dialog";
 import { StudioReferencesAlert, StudioUsedIn } from "./studio-used-in";
 import { studioUseTargetOf } from "../_lib/studio-places";
 import { StudioNewQueryForm, StudioQueryEditor, queryInputTypeLabel } from "./studio-query-editor";
@@ -512,6 +513,7 @@ export function useStudioDataTab({
   // The query catalogue stays in the centre while one of its queries is open in the inspector.
   const [queriesOpen, setQueriesOpen] = useState(false);
   const [newQuery, setNewQuery] = useState(false);
+  const [creatingModule, setCreatingModule] = useState(false);
   const [section, setSection] = useState("fields");
   const [adding, setAdding] = useState<Readonly<{ scope: string; type: "text" | "link" }> | null>(
     null,
@@ -651,6 +653,7 @@ export function useStudioDataTab({
       selected={current}
       onSelect={select}
       onCreate={() => setCreating(true)}
+      onCreateModule={() => setCreatingModule(true)}
       disabled={disabled}
       searchSelected={showingSearch}
       onSearch={() => {
@@ -907,10 +910,19 @@ export function useStudioDataTab({
   );
   const dialog = (
     <>
+      <StudioModuleDialog
+        key={creatingModule ? "module-open" : "module-closed"}
+        open={creatingModule}
+        source={source}
+        edit={edit}
+        onClose={() => setCreatingModule(false)}
+        onCreated={(moduleKey) => select({ kind: "module", moduleKey })}
+      />
       <StudioRecordTypeDialog
         key={creating ? "open" : "closed"}
         open={creating}
         source={source}
+        initialModuleKey={isOwned ? current?.moduleKey : undefined}
         edit={edit}
         onClose={() => setCreating(false)}
         onCreated={(moduleKey, recordKey) => select({ kind: "record_type", moduleKey, recordKey })}

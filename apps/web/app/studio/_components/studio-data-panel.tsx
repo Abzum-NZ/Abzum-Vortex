@@ -49,6 +49,7 @@ export function StudioDataPanel({
   selected,
   onSelect,
   onCreate,
+  onCreateModule,
   disabled,
   searchSelected,
   onSearch,
@@ -66,6 +67,7 @@ export function StudioDataPanel({
   onSelect: (selection: StudioDataSelection) => void;
   /** Opens the new record type form. */
   onCreate: () => void;
+  onCreateModule: () => void;
   disabled: boolean;
   searchSelected: boolean;
   onSearch: () => void;
@@ -162,10 +164,28 @@ export function StudioDataPanel({
       title="Data"
       hidden={hidden}
       action={
-        <Button type="button" size="sm" variant="secondary" onClick={onCreate} disabled={disabled}>
-          <Icon name="plus" />
-          Record type
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={onCreateModule}
+            disabled={disabled}
+          >
+            <Icon name="plus" />
+            Module
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={onCreate}
+            disabled={disabled}
+          >
+            <Icon name="plus" />
+            Record type
+          </Button>
+        </div>
       }
       search={
         <StudioSearchBox
