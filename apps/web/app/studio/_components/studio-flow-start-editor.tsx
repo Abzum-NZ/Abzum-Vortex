@@ -282,11 +282,11 @@ export function StudioFlowStartEditor({
     return result;
   };
   const setInputs = (inputs: readonly StudioFlowInputDraft[], setting?: string) => {
-    inputKeys.current = inputs.map((input) => {
+    const nextKeys = inputs.map((input) => {
       const previous = shown.inputs.findIndex((entry) => entry.id === input.id);
       return previous === -1 ? newKey() : inputKeys.current[previous]!;
     });
-    return change(
+    const result = change(
       {
         ...shown,
         inputs,
@@ -305,6 +305,8 @@ export function StudioFlowStartEditor({
       },
       setting,
     );
+    if (result === true) inputKeys.current = nextKeys;
+    return result;
   };
   return (
     <section className="space-y-4" aria-label="How it starts">
