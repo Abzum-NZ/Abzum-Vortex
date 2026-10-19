@@ -19,18 +19,29 @@ declare
   definitions jsonb := '{}'::jsonb;
   targets jsonb := '{}'::jsonb;
 begin
-  context_value := vortex_access.validated_human_request_context();
+  context_value := vortex_platform.current_context();
+  if context_value ->> 'callerKind' = 'system' then
+    context_value := vortex_access.derived_backfill_context_internal();
+    installation := vortex_definition.read_active_installation_for_scope_internal(
+      (context_value ->> 'organizationId')::uuid,
+      (context_value ->> 'applicationRootId')::uuid
+    );
+  else
+    context_value := vortex_access.validated_human_request_context();
+  end if;
   if not context_value ? 'applicationRootId' then
     raise exception using errcode = '42501',
       message = 'Derived field backfill requires an application context';
   end if;
-  preview_installation := vortex_record.read_current_preview_installation_internal();
-  if preview_installation is not null and preview_installation ->> 'outcome' = 'refused' then
+  if context_value ->> 'callerKind' <> 'system' then
+    preview_installation := vortex_record.read_current_preview_installation_internal();
+    if preview_installation is not null and preview_installation ->> 'outcome' = 'refused' then
     raise exception using errcode = '42501', message = 'Preview Record context is unavailable';
-  end if;
-  installation := case when preview_installation is null
+    end if;
+    installation := case when preview_installation is null
     then vortex_definition.read_current_active_installation()
     else preview_installation end;
+  end if;
   plan := vortex_record.resolve_installation_access_plan_internal(installation);
 
   for binding_item in
@@ -54,7 +65,8 @@ begin
       definitions := definitions || pg_catalog.jsonb_build_object(record_type_key, record_type_item);
       -- The fields a backfill works out: every total and every stored calculation. A preview's
       -- storage is new, so all of them; a live upgrade only those this exact Module release
-      -- brought into storage, since a published field's formula never changes afterwards.
+      -- brought into storage. A background delivery catches up all stored derived fields of
+      -- the current installation, including fields from releases superseded while it waited.
       select coalesce(pg_catalog.jsonb_agg(pg_catalog.lower(field.value ->> 'fieldId')
           order by pg_catalog.lower(field.value ->> 'fieldId') collate "C"), '[]'::jsonb)
       into field_ids
@@ -62,7 +74,7 @@ begin
       where (field.value ->> 'type' = 'total'
           or (field.value ->> 'type' = 'calculation'
             and field.value #>> '{settings,evaluation}' is distinct from 'read_time'))
-        and (preview_installation is not null or exists (
+        and (context_value ->> 'callerKind' = 'system' or preview_installation is not null or exists (
           select 1
           from vortex_record.field_storage_mappings as mapping
           where mapping.storage_contract_id = (type_meta ->> 'storageContractId')::uuid

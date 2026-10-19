@@ -3,6 +3,7 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import {
   createEventDispatcherWakeup,
+  createDerivedFieldBackfillConsumer,
   createSearchEventConsumer,
   createSearchIndexDependencies,
 } from "@vortex/platform/server";
@@ -26,7 +27,10 @@ const maximumDrainDispatches = 500;
 export const createLocalEventDispatcher = (): LocalEventDispatcher => {
   const credential = randomBytes(32).toString("hex");
   const wakeup = createEventDispatcherWakeup({
-    consumers: [createSearchEventConsumer(createSearchIndexDependencies())],
+    consumers: [
+      createDerivedFieldBackfillConsumer(),
+      createSearchEventConsumer(createSearchIndexDependencies()),
+    ],
     environment: {
       VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256: createHash("sha256")
         .update(credential, "utf8")
@@ -56,7 +60,9 @@ export const createLocalEventDispatcher = (): LocalEventDispatcher => {
       if (claimed === 0) return delivered;
       delivered += claimed;
     }
-    throw new Error(`Event delivery was still claiming after ${maximumDrainDispatches} dispatches.`);
+    throw new Error(
+      `Event delivery was still claiming after ${maximumDrainDispatches} dispatches.`,
+    );
   };
 
   return Object.freeze({ dispatchOnce, drain });

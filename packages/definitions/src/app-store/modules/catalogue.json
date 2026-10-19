@@ -185,6 +185,61 @@
               }
             ]
           }
+        },
+        {
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "id": "fld_store_application_record_update_status",
+          "key": "record_update_status",
+          "label": "Existing records",
+          "type": "choice",
+          "settings": {
+            "options": [
+              {
+                "value": "not_required",
+                "label": "No record update needed"
+              },
+              {
+                "value": "pending",
+                "label": "Record update queued"
+              },
+              {
+                "value": "updating",
+                "label": "Updating existing records"
+              },
+              {
+                "value": "retrying",
+                "label": "Record update failed ? retry scheduled"
+              },
+              {
+                "value": "failed",
+                "label": "Record update failed"
+              },
+              {
+                "value": "up_to_date",
+                "label": "Records up to date"
+              }
+            ]
+          }
+        },
+        {
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "id": "fld_store_application_records_processed",
+          "key": "records_processed",
+          "label": "Records processed",
+          "type": "whole_number",
+          "settings": {
+            "minimum": 0
+          }
         }
       ],
       "pipelines": [],
@@ -218,7 +273,9 @@
           "latest_release_note",
           "published_at",
           "installed_version",
-          "status"
+          "status",
+          "record_update_status",
+          "records_processed"
         ],
         "changeable_fields": []
       }
@@ -244,7 +301,9 @@
         "latest_release_note",
         "published_at",
         "installed_version",
-        "status"
+        "status",
+        "record_update_status",
+        "records_processed"
       ],
       "filter": null,
       "group_by": [],

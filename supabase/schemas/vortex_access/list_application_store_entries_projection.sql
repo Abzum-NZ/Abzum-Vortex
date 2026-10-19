@@ -89,6 +89,15 @@ begin
         'latest_version', latest.release_version,
         'latest_release_note', latest.release_note,
         'published_at', latest.published_at,
+        'record_update_status', case
+          when installed.release_revision is null then 'not_required'
+          when backfill.occurrence_id is null then 'up_to_date'
+          when backfill.terminally_failed_at is not null then 'failed'
+          when backfill.acknowledged_at is not null or (backfill.checkpoint ->> 'complete')::boolean then 'up_to_date'
+          when backfill.last_failure_code is not null then 'retrying'
+          when backfill.claimed_at is null then 'pending'
+          else 'updating' end,
+        'records_processed', coalesce((backfill.checkpoint ->> 'processedCount')::bigint, 0),
         'installed_version', coalesce(installed.release_version, 'Not installed'),
         'status', case
           when installed.release_revision is null then 'available'
@@ -121,6 +130,19 @@ begin
         )
       limit 1
     ) as installed on true
+    left join lateral (
+      select occurrence.occurrence_id, progress.terminally_failed_at, progress.acknowledged_at,
+        progress.claimed_at, progress.last_failure_code, progress.checkpoint
+      from vortex_platform.event_outbox as occurrence
+      left join vortex_platform.consumer_occurrence_progress as progress
+        on progress.occurrence_id = occurrence.occurrence_id
+        and progress.consumer_key = 'installation-derived-values'
+      where occurrence.organization_id = root.organization_id
+        and occurrence.sequence_application_root_id = root.root_id
+        and occurrence.occurrence_kind = 'installation_activated'
+        and occurrence.record_sequence = installed.release_revision
+      limit 1
+    ) as backfill on true
     where root.organization_id = $1
       and root.kind = 'application'
       and root.application_origin_kind = 'ordinary'
