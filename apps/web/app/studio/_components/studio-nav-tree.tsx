@@ -99,7 +99,7 @@ export function StudioNavItem({
       variant="navigation"
       data-two-line={description !== undefined ? "true" : undefined}
       className={cn(
-        "min-w-0 flex-1 flex-nowrap text-left text-sm hover:bg-accent hover:text-accent-foreground focus-visible:ring-0",
+        "min-w-0 flex-1 flex-nowrap text-left text-sm hover:bg-accent hover:text-accent-foreground focus-visible:border-transparent focus-visible:ring-0",
         selected && "bg-accent font-medium text-accent-foreground",
         className,
       )}
@@ -181,8 +181,9 @@ export function StudioNavItem({
     );
   return (
     <div
+      data-vortex-focus-group=""
       className={cn(
-        "group/nav-row flex min-w-0 items-center rounded-md hover:bg-accent focus-within:bg-accent has-focus-visible:ring-2 has-focus-visible:ring-ring",
+        "group/nav-row flex min-w-0 items-center rounded-md hover:bg-accent focus-within:bg-accent",
         selected && "bg-accent",
       )}
     >
