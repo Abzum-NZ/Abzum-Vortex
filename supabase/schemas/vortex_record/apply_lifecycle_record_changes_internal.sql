@@ -403,6 +403,7 @@ begin
       or updated_concurrency_number not between 1 and 9007199254740991 then
       raise exception using errcode = '55000', message = 'Record ownership transfer saved identity is unavailable';
     end if;
+    perform vortex_access.invalidate_preview_installations_internal(organization_id_value);
     perform vortex_record.append_ownership_transfer_activity_internal(p_activity_id, p_record_id, 'completed');
     event_result := vortex_platform.append_record_occurrences(
       (record_type_fact ->> 'storageContractId')::uuid,
