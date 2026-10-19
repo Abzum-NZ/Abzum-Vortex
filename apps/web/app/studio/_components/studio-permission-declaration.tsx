@@ -83,12 +83,14 @@ export function StudioPermissionDeclaration({
         hint="Requires a privileged organisation role to grant this permission."
       >
         {(control) => (
-          <Switch
-            {...control}
-            disabled={disabled}
-            checked={administrative}
-            onCheckedChange={setAdministrative}
-          />
+          <div>
+            <Switch
+              {...control}
+              disabled={disabled}
+              checked={administrative}
+              onCheckedChange={setAdministrative}
+            />
+          </div>
         )}
       </StudioField>
       <div aria-label="Role impact" className="space-y-2 text-sm" aria-live="polite">

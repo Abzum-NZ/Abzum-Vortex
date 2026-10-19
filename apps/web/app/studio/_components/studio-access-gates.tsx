@@ -71,7 +71,7 @@ function GateSelect({
             label: choice.label,
             description: choice.roles.length === 0 ? "No role yet" : choice.roles.join(", "),
           })),
-          { value: newChoice, label: "New permission?" },
+          { value: newChoice, label: "New permission" },
         ]}
         onChange={(key) => {
           setCreating(key === newChoice);
