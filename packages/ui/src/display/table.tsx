@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } 
 import {
   readRecordsTableContract,
   type RecordsTableActionContract,
-  type RecordsTableColumnContract,
   type RecordsTableContract,
 } from "@vortex/platform/schema";
 import { Button } from "../components/button";
@@ -20,18 +19,14 @@ import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "../components/empt
 import { Icon } from "../icons/icon";
 import { cellValueToText, DisplayCellView } from "./cell";
 import {
-  BulkActionsMenu,
   DisplayHeader,
-  FilterControl,
-  type FilterInputKind,
-  InlineEditCell,
   PaginationControl,
   RecordsEmptyState,
   RowActionsMenu,
-  SearchControl,
   SelectAllControl,
   SelectionControl,
 } from "./controls";
+import { useGridFeatures, type GridFeatureContext } from "./grid-features/registry";
 import { resolveDisplayContext, rowName, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
 import type {
@@ -79,23 +74,6 @@ const carriedColumns = (
           },
         ];
   });
-};
-
-/** The filter control kind for a declared filterable field, from the column it is declared with. */
-const filterInputKind = (declared: RecordsTableColumnContract): FilterInputKind => {
-  switch (declared.format) {
-    case "number":
-    case "currency":
-    case "percent":
-      return "number";
-    case "date":
-    case "date_time":
-      return "date";
-    case "boolean":
-      return "boolean";
-    default:
-      return "text";
-  }
 };
 
 /**
@@ -238,17 +216,42 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   );
   const layout = useGridLayout(columns);
   const rows = values?.rows ?? [];
-  const selectionMode = contract?.selectionMode ?? "none";
+  // The grid features this viewer may use on this read, as the server projected them. While the
+  // next page is being read the last projection stays, so the search box and filters keep focus.
+  const lastFeatures = useRef(values?.features);
+  if (values !== undefined) lastFeatures.current = values.features;
+  const features = lastFeatures.current;
+  // Rows are selectable only for bulk commands over the selection.
   const selectable =
-    events?.selection_changed !== undefined && contract !== undefined && selectionMode !== "none";
+    events?.selection_changed !== undefined &&
+    contract !== undefined &&
+    features?.bulkActions !== undefined;
   const selectedRecordIds = values?.selectedRecordIds ?? [];
   const narrowing = values?.narrowing;
   const [message, announce] = useAnnouncer();
   const [clearCount, setClearCount] = useState(0);
 
-  // Configured row behaviours: a row click, named row actions, bulk actions over the selection and
-  // inline edit of permitted fields. Each declared control carries the stable identity of its own
-  // flow binding, so one table placement can run several different flows.
+  // The optional grid features draw through their extension points; each feature's code loads only
+  // when the projection turns it on.
+  const featureContext = useMemo(
+    (): GridFeatureContext | undefined =>
+      features === undefined
+        ? undefined
+        : {
+            accessibleName,
+            features,
+            columns: layout.shown,
+            rows,
+            selectedRecordIds,
+            narrowing,
+            events,
+          },
+    [accessibleName, features, layout.shown, rows, selectedRecordIds, narrowing, events],
+  );
+  const gridFeatures = useGridFeatures(featureContext);
+
+  // Configured row behaviours: a row click and named row actions. Each declared control carries
+  // the stable identity of its own flow binding, so one table placement can run several flows.
   const behaviours = contract?.rowBehaviours;
   const rowClickEventId = behaviours?.rowClick?.eventId;
   const onRowClick = rowClickEventId === undefined ? undefined : events?.row_clicked;
@@ -260,30 +263,13 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
             onRowClick({ event: "row_clicked", eventId: rowClickEventId, recordId }),
     [onRowClick, rowClickEventId],
   );
-  const declaredBulkActions = behaviours?.bulkActions ?? [];
   const showActions = (behaviours?.rowActions.length ?? 0) > 0 && events?.row_action !== undefined;
   const headingKey = layout.shown[0]?.key;
 
   // Cell, selection and command renderers shared by the grid and the cards. They change only with
   // the bindings and the heading column, so the grid's memoized rows keep their identity.
   const renderers = useMemo((): GridRenderers & CardRenderers => {
-    const inlineEdit = behaviours?.inlineEdit;
-    const onInlineEdit = inlineEdit === undefined ? undefined : events?.inline_edit;
     const rowActions = behaviours?.rowActions ?? [];
-    // Only a text, link, number or yes/no cell of a field the row may change has a closed value
-    // the editor can commit without guessing; any other cell stays read-only. The row revision
-    // travels with the commit so the server refuses a stale change.
-    const editable = (row: DisplayRow, columnKey: string, value: DisplayCellValue): boolean =>
-      onInlineEdit !== undefined &&
-      inlineEdit !== undefined &&
-      inlineEdit.fields.some((field) => sameFieldKey(field, columnKey)) &&
-      row.capabilities !== undefined &&
-      row.capabilities.actions.includes("update") &&
-      row.capabilities.changeableFieldIds.some((fieldId) => sameFieldKey(fieldId, columnKey)) &&
-      (value.kind === "text" ||
-        value.kind === "link" ||
-        value.kind === "number" ||
-        value.kind === "boolean");
     const value = (row: DisplayRow, column: GridColumn) => {
       const cell: DisplayCellValue = row.cells[column.key] ?? { kind: "empty" };
       return <DisplayCellView value={cell} />;
@@ -293,36 +279,26 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
       text: (row, column) => cellValueToText(row.cells[column.key] ?? { kind: "empty" }),
       cell: (row, column) => {
         const cell: DisplayCellValue = row.cells[column.key] ?? { kind: "empty" };
-        if (
-          onInlineEdit !== undefined &&
-          inlineEdit !== undefined &&
-          editable(row, column.key, cell)
-        )
-          return (
-            // Keyed by the projected value so a refreshed row resets the editor.
-            <InlineEditCell
-              key={JSON.stringify(cell)}
-              eventId={inlineEdit.eventId}
-              recordId={row.recordId}
-              {...(row.revision === undefined ? {} : { revision: row.revision })}
-              field={column.key}
-              label={column.label}
-              value={cell.kind === "link" ? { kind: "text", text: cell.label } : cell}
-              handler={onInlineEdit}
-            />
-          );
-        return (
-          <span className="min-w-0 truncate">
+        const decoration = gridFeatures.cellClassName(row, column);
+        return gridFeatures.cell(
+          row,
+          column,
+          <span
+            className={
+              decoration === undefined ? "min-w-0 truncate" : `min-w-0 truncate ${decoration}`
+            }
+          >
             <DisplayCellView value={cell} />
-          </span>
+          </span>,
         );
       },
+      headerAdornment: (column) => gridFeatures.headerAdornment(column),
       select: (row, selected) => (
         <SelectionControl
           row={row}
           name={rowName(row, headingKey)}
           selected={selected}
-          mode={selectionMode === "single" ? "single" : "multiple"}
+          mode="multiple"
           groupName={`vortex-selection-${placementId}`}
           events={events}
         />
@@ -338,7 +314,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         />
       ),
     };
-  }, [behaviours, events, headingKey, placementId, selectionMode]);
+  }, [behaviours, events, headingKey, placementId, gridFeatures]);
 
   const pageRecordIds = rows.map((row) => row.recordId);
   const allSelected =
@@ -359,18 +335,6 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     // The page's record identities are part of `allSelected` and the rows' own identity.
     [renderers, allSelected, pageRecordIds.join("\u0000"), accessibleName, events],
   );
-
-  // A bulk command that declares a capability stays disabled unless every selected row reports it.
-  const bulkCapable = (capability: RecordsTableActionContract["capability"]): boolean => {
-    if (capability === undefined) return true;
-    if (selectedRecordIds.length === 0) return false;
-    return selectedRecordIds.every(
-      (recordId) =>
-        rows
-          .find((row) => row.recordId === recordId)
-          ?.capabilities?.actions.includes(capability) === true,
-    );
-  };
 
   // Announcements: a new order or page of rows, and the selection count.
   const sortKeys = values?.sort?.keys;
@@ -418,18 +382,6 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   ]);
 
   const revealed = useLoadingReveal(state.status === "loading");
-  const showSearch = contract?.search === true && events?.search_changed !== undefined;
-  // A filter is offered only for a configured filterable field the viewer can read: a field
-  // withheld from the projection has no carried column, so it gets no control and its identity is
-  // never shown as a label.
-  const filterColumns =
-    contract === undefined
-      ? []
-      : contract.filterableFields.flatMap((field) => {
-          const column = columns.find((candidate) => sameFieldKey(candidate.key, field));
-          return column === undefined ? [] : [column];
-        });
-  const showFilters = events?.filter_changed !== undefined && filterColumns.length > 0;
 
   if (contract === undefined) {
     console.error("[display] Records table settings do not declare a readable contract", {
@@ -452,49 +404,13 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   // The search and filter controls start from what the first shown page was read with, and start
   // again when the person clears them; their own commits keep the controls (and their focus).
   const controlsKey = `${clearCount}:${values === undefined ? "reading" : "read"}`;
-  const filterValue = (key: string): string =>
-    narrowing?.filters.find((filter) => sameFieldKey(filter.fieldId, key))?.value ?? "";
   const toolbar =
-    !showSearch && !showFilters && !(ready && rows.length > 0) ? null : (
+    gridFeatures.keys.length === 0 && !(ready && rows.length > 0) ? null : (
       <div className="mb-2 flex flex-wrap items-end gap-2" key={controlsKey}>
-        {!showSearch ? null : (
-          <SearchControl
-            accessibleName={accessibleName}
-            initialQuery={narrowing?.search ?? ""}
-            events={events}
-          />
-        )}
-        {!showFilters || state.status === "empty" ? null : (
-          <div
-            className="flex flex-wrap gap-2"
-            role="group"
-            aria-label={`Filters for ${accessibleName}`}
-          >
-            {filterColumns.map((column) => (
-              <FilterControl
-                key={column.key}
-                field={column.key}
-                label={column.label}
-                input={filterInputKind(column.declared)}
-                initialValue={filterValue(column.key)}
-                events={events}
-              />
-            ))}
-          </div>
-        )}
+        {state.status === "empty" ? null : gridFeatures.toolbarItems()}
         {!ready || rows.length === 0 ? null : (
           <div className="ms-auto flex flex-wrap items-center gap-2">
-            {!selectable ||
-            declaredBulkActions.length === 0 ||
-            events?.bulk_action === undefined ? null : (
-              <BulkActionsMenu
-                accessibleName={accessibleName}
-                actions={declaredBulkActions}
-                recordIds={selectedRecordIds}
-                canRun={(action) => bulkCapable(action.capability)}
-                events={events}
-              />
-            )}
+            {selectable ? gridFeatures.selectionBanner() : null}
             <ColumnsMenu
               accessibleName={accessibleName}
               contract={contract}
@@ -598,7 +514,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         layout={layout}
         rows={rows}
         sort={values.sort}
-        selection={selectable ? (selectionMode === "single" ? "single" : "multiple") : undefined}
+        selection={selectable ? "multiple" : undefined}
         selectedRecordIds={selectedRecordIds}
         showActions={showActions}
         events={events}
