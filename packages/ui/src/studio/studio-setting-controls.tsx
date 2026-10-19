@@ -163,6 +163,18 @@ const failurePlace = (
   return parts.join(", ");
 };
 
+/**
+ * The fields a field reference may name: the block's fields, narrowed to the field types its
+ * declaration allows. Publication refuses any other, so the picker never offers one.
+ */
+export const studioFittingFields = (
+  property: BlockPropertySchemaContract,
+  fields: readonly StudioQueryField[],
+): readonly StudioQueryField[] =>
+  property.kind === "field_reference" && property.fieldTypes !== undefined
+    ? fields.filter((field) => (property.fieldTypes as readonly string[]).includes(field.type))
+    : fields;
+
 /** Why these settings would be refused, in words, one line per problem; empty when they pass. */
 export const studioSettingProblems = (
   values: StudioSettingValues,
@@ -173,7 +185,6 @@ export const studioSettingProblems = (
     (failure) => `${failurePlace(properties, failure.path)} ${familyText[failure.family]}.`,
   );
   if (choices !== undefined) {
-    const offered = new Set(choices.fields.map((field) => field.reference));
     const visit = (
       property: BlockPropertySchemaContract,
       value: SettingValue,
@@ -182,7 +193,9 @@ export const studioSettingProblems = (
       if (
         property.kind === "field_reference" &&
         value?.kind === "field_reference" &&
-        !offered.has(value.field)
+        !studioFittingFields(property, choices.fields).some(
+          (field) => field.reference === value.field,
+        )
       )
         problems.push(
           `${failurePlace(properties, path)} is not offered by the chosen data. Choose another field or remove this entry.`,
@@ -234,10 +247,10 @@ const initialValue = (
       return property.options[0] === undefined
         ? undefined
         : { kind: "choice", value: property.options[0].key };
-    case "field_reference":
-      return choices.fields[0] === undefined
-        ? undefined
-        : { kind: "field_reference", field: choices.fields[0].reference };
+    case "field_reference": {
+      const first = studioFittingFields(property, choices.fields)[0];
+      return first === undefined ? undefined : { kind: "field_reference", field: first.reference };
+    }
     case "query_reference":
       return choices.queries[0] === undefined
         ? undefined
@@ -499,7 +512,10 @@ function SettingControl(props: ControlProps): ReactElement {
           unset={
             choices.fields.length === 0 ? "Choose the data first" : unsetLabel(property, undefined)
           }
-          options={choices.fields.map((field) => ({ value: field.reference, label: field.label }))}
+          options={studioFittingFields(property, choices.fields).map((field) => ({
+            value: field.reference,
+            label: field.label,
+          }))}
           onChange={(next) =>
             onChange(next === "" ? undefined : { kind: "field_reference", field: next })
           }

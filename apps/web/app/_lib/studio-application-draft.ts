@@ -38,6 +38,7 @@ import {
   type ModuleField,
   type PeopleDirectoryOwner,
   moduleQueryBorrowable,
+  definitionValidationErrorCatalogue,
 } from "@vortex/platform/schema";
 import type { DatabaseRow } from "@vortex/platform/server";
 import {
@@ -384,6 +385,9 @@ const studioCompileFailure = (error: unknown): StudioCompileFailure => {
       return {
         reasonCode: current.ruleCode,
         family: current.family,
+        ...(current.code === undefined
+          ? {}
+          : { sentence: definitionValidationErrorCatalogue[current.code].message }),
         ...(block === undefined ? {} : { blockAlias: block.key }),
         ...(setting === undefined || setting.key === "theme" ? {} : { tokenKey: setting.key }),
         ...Object.fromEntries(Object.entries(located).filter(([, key]) => key !== undefined)),
@@ -759,6 +763,8 @@ export const loadStudioApplicationDraft = async (
                         const field = recordType.fields.find((candidate) =>
                           sameId(String(candidate.fieldId), String(fieldId)),
                         );
+                        const options =
+                          field?.type === "choice" ? field.settings.options : undefined;
                         return field === undefined
                           ? []
                           : [
@@ -766,9 +772,14 @@ export const loadStudioApplicationDraft = async (
                                 reference: `${release!.key}:${recordType.key}.${field.key}`,
                                 label: field.label,
                                 type: field.type,
+                                sortable: field.sortable,
+                                filterable: field.filterable,
+                                searchable: field.searchPriority !== undefined,
+                                ...(options === undefined ? {} : { choiceCount: options.length }),
                               },
                             ];
                       }),
+                      grouped: query.groupByFieldIds.length > 0 || query.aggregates.length > 0,
                       inputs: queryInputs(query),
                       exposure: query.exposure,
                     });

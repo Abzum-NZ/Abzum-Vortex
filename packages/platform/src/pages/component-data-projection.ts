@@ -19,6 +19,10 @@ import type { ProtectedQueryRow } from "../queries/index";
 import { formatDecimal, formatMoney, isExactDecimal } from "./value-format";
 import { recordLinkLabelKey, type RecordLinkReference } from "../definition/app-index";
 import { defaultQueryPageSize } from "../definition/module-query-edit";
+import {
+  projectRecordsTableFeatures,
+  type RecordsTableFeatureProjection,
+} from "./records-table-features";
 
 /**
  * One closed display value. It is structurally the value the shared display components render, so
@@ -143,6 +147,8 @@ export type ProjectedTableValues = Readonly<{
   /** The person's layout of this grid: order, shown columns, widths and density. */
   layout: GridLayoutState;
   rows: readonly ProjectedTableRow[];
+  /** The grid features this viewer may use on this read; absent when every feature is off. */
+  features?: RecordsTableFeatureProjection;
   /** The order the page was read in, when it is the viewer's or the authored default sort. */
   sort?: RecordsTableSortState;
   /**
@@ -489,6 +495,8 @@ export const projectRecordsTableData = (
     else hiddenColumns.push({ key: column.field, label });
   }
   if (columns.length === 0) return { status: "empty" };
+  // The viewer's grid features, decided from the same rows and per-row capabilities as the page.
+  const features = projectRecordsTableFeatures(contract, visibleFieldIds, completeRows);
 
   return {
     status: "ready",
@@ -497,6 +505,7 @@ export const projectRecordsTableData = (
       columns: columns.map(({ key, label }) => ({ key, label })),
       hiddenColumns,
       layout,
+      ...(features === undefined ? {} : { features }),
       rows: completeRows.map((row) => ({
         recordId: row.recordId,
         revision: row.revision,

@@ -8,6 +8,7 @@ import type {
 import { canonicalJson } from "../canonical-json-definition";
 import { peopleDirectory } from "../module-links";
 import { explicitSourceTargets } from "./explicit-source-targets";
+import { compiledSourceFlowBindings } from "./application-flow-binding-sources";
 import {
   applicationCompositionProvenance,
   compiledSettingStart,
@@ -150,10 +151,13 @@ function applicationFlowProvenance(
     canonicalPath: ["content", "flows", ...entry.canonicalPath],
     ...(entry.sourcePath ? { sourcePath: ["body", "flows", ...entry.sourcePath] } : {}),
   }));
+  // The canonical bindings are the authored ones that compile, in authored order.
+  const compiled = compiledSourceFlowBindings(source.body as unknown as JsonObject);
   canonical.content.flowBindings.forEach((binding, index) => {
-    const authored = source.body.flow_bindings[index]!;
+    const authored = compiled[index]! as unknown as (typeof source.body.flow_bindings)[number];
+    const authoredIndex = source.body.flow_bindings.indexOf(authored);
     const canonicalBase: Path = ["content", "flowBindings", index];
-    const sourceBase: Path = ["body", "flow_bindings", index];
+    const sourceBase: Path = ["body", "flow_bindings", authoredIndex];
     const resolved = (canonicalPath: Path, sourcePath: Path) =>
       entries.push({
         canonicalPath: [...canonicalBase, ...canonicalPath],

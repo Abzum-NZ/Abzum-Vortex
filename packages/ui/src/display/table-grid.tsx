@@ -92,6 +92,8 @@ type CellSlot = Readonly<{
 /** Content renderers the host supplies; the grid places them and owns only focus and layout. */
 export type GridRenderers = Readonly<{
   cell: (row: DisplayRow, column: GridColumn) => ReactNode;
+  /** What the projected grid features draw after a column's heading (for example a filter mark). */
+  headerAdornment?: (column: GridColumn) => ReactNode;
   select: (row: DisplayRow, selected: boolean) => ReactNode;
   selectAll: () => ReactNode;
   actions: (row: DisplayRow) => ReactNode;
@@ -758,6 +760,7 @@ export function RecordsGrid({
                 {priority + 1}
               </span>
             )}
+            {column === undefined ? null : renderers.headerAdornment?.(column)}
             {header === undefined || !header.column.getCanResize() ? null : (
               <div
                 aria-hidden="true"
