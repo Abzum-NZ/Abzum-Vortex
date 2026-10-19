@@ -41,7 +41,7 @@ begin
       p_occurrence_id
     );
   exception
-    when serialization_failure then
+    when serialization_failure or lock_not_available then
       -- Identical per-record boundary to the retained entry: a contested final
       -- update rolls back its own pending receipt and is reported as a
       -- conflict, so one contested record never fails the whole batch.
