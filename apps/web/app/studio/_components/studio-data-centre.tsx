@@ -21,7 +21,11 @@ import { StudioPlaceList } from "./studio-used-in";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import { Label } from "@vortex/ui/components/label";
-import { StudioOptionControl, type StudioDataSelection } from "@vortex/ui/studio";
+import {
+  StudioOptionControl,
+  StudioFieldTypeIcon,
+  type StudioDataSelection,
+} from "@vortex/ui/studio";
 import {
   Table,
   TableBody,
@@ -58,7 +62,7 @@ function SchemaGrid({
 }>) {
   return (
     <div className="overflow-hidden rounded-xl border">
-      <Table>
+      <Table containerClassName="border-0">
         <TableCaption className="sr-only">Fields of {record.pluralName}</TableCaption>
         <TableHeader className="sticky top-0 bg-muted/50">
           <TableRow>
@@ -110,14 +114,7 @@ function SchemaGrid({
                 </TableCell>
                 <TableCell>
                   <span className="inline-flex items-center gap-2">
-                    <Icon
-                      name={
-                        field.type === "link" || field.type === "multi_link"
-                          ? "sitemap"
-                          : "sliders-horizontal"
-                      }
-                      className="size-4 text-muted-foreground"
-                    />
+                    <StudioFieldTypeIcon type={field.type} />
                     {fieldTypeLabel(field.type)}
                   </span>
                 </TableCell>

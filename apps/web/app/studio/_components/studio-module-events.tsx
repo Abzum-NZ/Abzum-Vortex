@@ -5,6 +5,7 @@ import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
+import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import {
   Dialog,
   DialogContent,
@@ -29,7 +30,8 @@ function EventDialog({
   edit: StudioDataEdit;
   close: () => void;
 }>) {
-  const record = module.record_types.find((entry) => entry.key === recordKey)!;
+  const [selectedRecord, setSelectedRecord] = useState(event?.record_type ?? recordKey);
+  const record = module.record_types.find((entry) => entry.key === selectedRecord)!;
   const [key, setKey] = useState(event?.key ?? `${module.key}.${record.key}.`);
   const [carries, setCarries] = useState(event?.carries ?? []);
   const [problem, setProblem] = useState<string>();
@@ -38,7 +40,7 @@ function EventDialog({
     const result = edit((source) =>
       saveInlineModuleEvent(source, {
         moduleKey: module.key,
-        recordKey,
+        recordKey: selectedRecord,
         ...(event === undefined ? {} : { eventId: event.id }),
         key,
         carries,
@@ -70,6 +72,22 @@ function EventDialog({
             disabled={event !== undefined}
             onChange={(change) => setKey(change.target.value)}
           />
+          <Label htmlFor="module-event-record">Record type</Label>
+          <NativeSelect
+            id="module-event-record"
+            className="w-full"
+            value={selectedRecord}
+            onChange={(change) => {
+              setSelectedRecord(change.target.value);
+              setCarries([]);
+            }}
+          >
+            {module.record_types.map((entry) => (
+              <NativeSelectOption key={entry.key} value={entry.key}>
+                {entry.name}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">Carried fields</legend>
             {record.fields.map((field) => (
@@ -93,6 +111,10 @@ function EventDialog({
               </div>
             ))}
           </fieldset>
+          <div className="flex items-center gap-2">
+            <Checkbox id="module-event-personal-values" checked={false} disabled />
+            <Label htmlFor="module-event-personal-values">Allow personal or sensitive values</Label>
+          </div>
           <p className="text-sm text-muted-foreground">
             Privacy policy: personal and sensitive values are refused. Only fields without personal
             data can be carried.

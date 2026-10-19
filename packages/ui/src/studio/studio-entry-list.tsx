@@ -129,7 +129,7 @@ export function StudioEntryList({
       {items.length === 0 && empty !== undefined && (
         <p className="text-sm text-muted-foreground">{empty}</p>
       )}
-      <ul aria-label={label} className="space-y-px">
+      <ul aria-label={label} className="m-0 list-none space-y-px p-0">
         {items.map((item, index) => {
           const expanded = open === item.key && item.content !== undefined;
           return (
@@ -179,7 +179,7 @@ export function StudioEntryList({
                     else headings.current.set(item.key, element);
                   }}
                   type="button"
-                  className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md border-0 bg-transparent px-0 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-expanded={item.content === undefined ? undefined : expanded}
                   aria-keyshortcuts={movable ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
                   onClick={() => {
@@ -204,7 +204,14 @@ export function StudioEntryList({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{item.title}</span>
                     {item.summary !== undefined && item.summary !== "" && (
-                      <span className="block truncate text-xs text-muted-foreground">
+                      <span
+                        className={cn(
+                          "block truncate text-xs",
+                          expanded
+                            ? "text-foreground"
+                            : "text-muted-foreground group-hover/entry:text-foreground group-focus-within/entry:text-foreground",
+                        )}
+                      >
                         {item.summary}
                       </span>
                     )}
