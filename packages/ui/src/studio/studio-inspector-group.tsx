@@ -45,3 +45,17 @@ export function StudioInspectorGroup({
     </Collapsible>
   );
 }
+
+/** Raw Studio source uses the same quiet disclosure as the inspector's other details. */
+export function StudioSourceView({
+  value,
+  title = "View source",
+}: Readonly<{ value: unknown; title?: string }>) {
+  return (
+    <StudioInspectorGroup title={title} defaultOpen={false}>
+      <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all font-mono text-xs">
+        {JSON.stringify(value, null, 2)}
+      </pre>
+    </StudioInspectorGroup>
+  );
+}

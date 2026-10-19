@@ -1,27 +1,20 @@
 "use client";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState } from "react";
 import type { SourceApplicationThemeSelection } from "@vortex/platform/schema";
 import { createVortexStyleRootProps, Icon, VORTEX_STYLES } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@vortex/ui/components/card";
 import { Input } from "@vortex/ui/components/input";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@vortex/ui/components/collapsible";
-import {
-  InputGroup,
-  InputGroupInput,
-  InputGroupAddon,
-  InputGroupButton,
-} from "@vortex/ui/components/input-group";
+import { InputGroup, InputGroupInput, InputGroupAddon } from "@vortex/ui/components/input-group";
 import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
 import { ToggleGroup, ToggleGroupItem } from "@vortex/ui/components/toggle-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import { toast } from "@vortex/ui/components/sonner";
 import { cn } from "@vortex/ui/lib/utils";
 import {
+  StudioInspectorGroup,
+  StudioIconButton,
+  StudioCopyButton,
   decodeStudioThemePreset,
   encodeStudioThemePreset,
   shuffleStudioThemeSelection,
@@ -56,59 +49,18 @@ function StylePreview({ style }: Readonly<{ style: string }>) {
   return (
     <div {...props} data-vortex-theme="" aria-hidden="true" inert>
       <div style={{ zoom: 0.65 }}>
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle>Overview</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <Input placeholder="Search" tabIndex={-1} />
-              <Button type="button" tabIndex={-1}>
-                Go
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="space-y-3 bg-background p-3 text-foreground">
+          <p className="text-sm font-semibold">Overview</p>
+
+          <div className="flex items-center gap-2">
+            <Input placeholder="Search" tabIndex={-1} />
+            <Button type="button" tabIndex={-1}>
+              Go
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
-  );
-}
-
-/** Remember each theme disclosure independently, including the closed preset-code form. */
-function ThemeSection({
-  title,
-  children,
-  initiallyOpen = true,
-}: Readonly<{ title: string; children: ReactNode; initiallyOpen?: boolean }>) {
-  const [open, setOpen] = useState(initiallyOpen);
-  const key = `vortex.studio.theme-section:${title}`;
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(key);
-      if (stored !== null) setOpen(stored === "true");
-    } catch {
-      /* Storage is optional for disclosure state. */
-    }
-  }, [key]);
-  return (
-    <Collapsible
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        try {
-          localStorage.setItem(key, String(next));
-        } catch {
-          /* Keep this visit's state. */
-        }
-      }}
-      className="space-y-3"
-    >
-      <CollapsibleTrigger className="flex min-h-8 w-full items-center justify-between rounded-md text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">
-        {title}
-        <Icon name={open ? "chevron-down" : "chevron-right"} className="size-4" />
-      </CollapsibleTrigger>
-      <CollapsibleContent className="space-y-4">{children}</CollapsibleContent>
-    </Collapsible>
   );
 }
 
@@ -134,23 +86,29 @@ function Swatch({
         className="flex flex-wrap gap-3"
       >
         {dimension.options.map((option) => (
-          <RadioGroupItem
-            key={option.id}
-            value={option.id}
-            aria-label={option.label}
-            title={option.label}
-            className={cn(
-              "size-7 overflow-hidden rounded-full [&_[data-slot=radio-group-indicator]]:hidden",
-              value === option.id && "ring-2 ring-primary ring-offset-2 ring-offset-background",
-            )}
-            style={
-              option.swatch === undefined
-                ? undefined
-                : {
-                    background: `linear-gradient(135deg, ${option.swatch.light} 50%, ${option.swatch.dark} 50%)`,
+          <Tooltip key={option.id}>
+            <TooltipTrigger
+              render={
+                <RadioGroupItem
+                  value={option.id}
+                  aria-label={option.label}
+                  className={cn(
+                    "size-7 overflow-hidden rounded-full [&_[data-slot=radio-group-indicator]]:hidden",
+                    value === option.id &&
+                      "ring-2 ring-primary ring-offset-2 ring-offset-background",
+                  )}
+                  style={
+                    option.swatch === undefined
+                      ? undefined
+                      : {
+                          background: `linear-gradient(135deg, ${option.swatch.light} 50%, ${option.swatch.dark} 50%)`,
+                        }
                   }
-            }
-          />
+                />
+              }
+            />
+            <TooltipContent>{option.label}</TooltipContent>
+          </Tooltip>
         ))}
       </RadioGroup>
       <p className="text-sm text-muted-foreground">
@@ -262,20 +220,6 @@ export function StudioThemePanel({
     });
   };
 
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(current);
-      setFeedback(null);
-      toast.success("Preset code copied.");
-    } catch (error) {
-      console.error("[studio] could not copy the theme preset", error);
-      setFeedback({
-        kind: "refused",
-        message: "Could not copy the preset code. Select and copy it below.",
-      });
-    }
-  };
-
   const select = (entry: StudioThemeDimension) => (
     <StudioField label={entry.label}>
       {(control) => (
@@ -326,17 +270,9 @@ export function StudioThemePanel({
       hidden={hidden}
       description="How every page of this application looks. Changes show on the canvas and save automatically."
       action={
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={locked}
-          onClick={() => {
-            void shuffle();
-          }}
-        >
-          Shuffle
-        </Button>
+        <StudioIconButton label="Shuffle theme" disabled={locked} onClick={() => void shuffle()}>
+          <Icon name="redo" />
+        </StudioIconButton>
       }
     >
       {feedback !== null && (
@@ -363,7 +299,7 @@ export function StudioThemePanel({
           Checking the theme…
         </p>
       )}
-      <ThemeSection title="Style">
+      <StudioInspectorGroup title="Style">
         <RadioGroup
           aria-label="Style"
           value={selection.style}
@@ -375,7 +311,7 @@ export function StudioThemePanel({
             <div
               key={option.id}
               className={cn(
-                "relative cursor-pointer space-y-2 rounded-lg border p-2 focus-within:ring-2 focus-within:ring-ring",
+                "relative cursor-pointer space-y-2 rounded-lg p-2 hover:bg-accent focus-within:ring-2 focus-within:ring-ring",
                 selection.style === option.id && "ring-2 ring-primary",
                 locked && "cursor-not-allowed opacity-50",
               )}
@@ -402,24 +338,24 @@ export function StudioThemePanel({
             </div>
           ))}
         </RadioGroup>
-      </ThemeSection>
+      </StudioInspectorGroup>
       {(["base_color", "theme", "chart_color"] as const).map((key) => (
-        <ThemeSection key={key} title={dimension(key).label}>
+        <StudioInspectorGroup key={key} title={dimension(key).label}>
           <Swatch
             dimension={dimension(key)}
             value={selection[key]}
             disabled={locked}
             onPick={(id) => pick(key, id)}
           />
-        </ThemeSection>
+        </StudioInspectorGroup>
       ))}
-      <ThemeSection title="Radius">{segmented(dimension("radius"))}</ThemeSection>
-      <ThemeSection title="Fonts">
+      <StudioInspectorGroup title="Radius">{segmented(dimension("radius"))}</StudioInspectorGroup>
+      <StudioInspectorGroup title="Fonts">
         {select(dimension("body_font"))}
         {select(dimension("heading_font"))}
-      </ThemeSection>
-      <ThemeSection title="Icons">{select(dimension("icon_library"))}</ThemeSection>
-      <ThemeSection title="Menu">
+      </StudioInspectorGroup>
+      <StudioInspectorGroup title="Icons">{select(dimension("icon_library"))}</StudioInspectorGroup>
+      <StudioInspectorGroup title="Menu">
         <div className="space-y-2">
           <p className="text-sm font-medium">Colour</p>
           {segmented(dimension("menu_color"))}
@@ -428,8 +364,8 @@ export function StudioThemePanel({
           <p className="text-sm font-medium">Accent</p>
           {segmented(dimension("menu_accent"))}
         </div>
-      </ThemeSection>
-      <ThemeSection title="Preset code" initiallyOpen={false}>
+      </StudioInspectorGroup>
+      <StudioInspectorGroup title="Preset code" defaultOpen={false}>
         <InputGroup>
           <InputGroupInput
             aria-label="Current preset code"
@@ -438,14 +374,7 @@ export function StudioThemePanel({
             className="tabular-nums"
           />
           <InputGroupAddon align="inline-end">
-            <InputGroupButton
-              aria-label="Copy preset code"
-              onClick={() => {
-                void copy();
-              }}
-            >
-              Copy
-            </InputGroupButton>
+            <StudioCopyButton label="Copy preset code" value={current} />
           </InputGroupAddon>
         </InputGroup>
         <form
@@ -474,7 +403,7 @@ export function StudioThemePanel({
             )}
           </StudioField>
         </form>
-      </ThemeSection>
+      </StudioInspectorGroup>
     </StudioPanelShell>
   );
 }
