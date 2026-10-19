@@ -64,3 +64,4 @@ export * from "./studio-segmented-control";
 export * from "./studio-field";
 export * from "./studio-inspector-group";
 export * from "./studio-inspector-actions";
+export * from "./studio-field-type-icon";
