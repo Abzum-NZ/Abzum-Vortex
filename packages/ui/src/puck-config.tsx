@@ -70,7 +70,6 @@ import {
 } from "./registry";
 import { ApplicationLauncher } from "./launcher/application-launcher";
 import { LinkTiles } from "./launcher/link-tiles";
-import { ViewFilter } from "./launcher/view-filter";
 import { ApplicationNavigationBlock } from "./navigation/navigation";
 import { ApplicationAccountActionsBlock } from "./navigation/account-actions";
 import {
@@ -281,7 +280,6 @@ const IMPLEMENTATIONS: ReadonlyMap<string, PlatformComponentRenderer> = new Map<
   ["platform.renderer.application_search", ApplicationSearchBlock],
   ["platform.renderer.application_launcher", ApplicationLauncher],
   ["platform.renderer.link_tiles", LinkTiles],
-  ["platform.renderer.view_filter", ViewFilter],
 ]);
 
 const implementationFor = (release: PlatformBlockRelease): PlatformComponentRenderer => {

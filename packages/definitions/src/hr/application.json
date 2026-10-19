@@ -493,7 +493,8 @@
                   "props": {
                     "id": "hr_department_list",
                     "row_click": {
-                      "event_id": "event_hr_open_department"
+                      "event_id": "event_hr_open_department",
+                      "mode": "flow"
                     },
                     "columns": [
                       {
@@ -911,7 +912,8 @@
                   "props": {
                     "id": "hr_position_list",
                     "row_click": {
-                      "event_id": "event_hr_open_position"
+                      "event_id": "event_hr_open_position",
+                      "mode": "flow"
                     },
                     "columns": [
                       {
@@ -1386,7 +1388,8 @@
                   "props": {
                     "id": "hr_employee_list",
                     "row_click": {
-                      "event_id": "event_hr_open_employee"
+                      "event_id": "event_hr_open_employee",
+                      "mode": "flow"
                     },
                     "columns": [
                       {
@@ -2036,7 +2039,8 @@
                   "props": {
                     "id": "hr_leave_request_list",
                     "row_click": {
-                      "event_id": "event_hr_open_leave_request"
+                      "event_id": "event_hr_open_leave_request",
+                      "mode": "flow"
                     },
                     "columns": [
                       {
@@ -2740,7 +2744,8 @@
                   "props": {
                     "id": "hr_leave_entitlement_list",
                     "row_click": {
-                      "event_id": "event_hr_open_leave_entitlement"
+                      "event_id": "event_hr_open_leave_entitlement",
+                      "mode": "flow"
                     },
                     "columns": [
                       {
