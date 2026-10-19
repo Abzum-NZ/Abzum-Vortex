@@ -392,7 +392,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     if (state.status === "loading") return loading;
     if (state.status === "empty")
       return <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />;
-    if (state.status === "error" || state.status === "refused")
+    if (state.status === "error" || state.status === "refused" || state.status === "awaiting_input")
       return (
         <div className="flex flex-col items-start gap-2">
           <DisplayStateContainer
@@ -490,7 +490,9 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         accessibleName={accessibleName}
         events={state.status === "empty" ? undefined : events}
       />
-      {state.status === "refused" || state.status === "error" ? null : toolbar}
+      {state.status === "refused" || state.status === "error" || state.status === "awaiting_input"
+        ? null
+        : toolbar}
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {message}
       </div>

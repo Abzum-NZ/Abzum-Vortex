@@ -206,7 +206,11 @@ export const studioSettingProblems = (
       else if (property.kind === "list" && value?.kind === "list")
         value.items.forEach((item, index) => visit(property.item, item, [...path, index]));
     };
-    for (const property of properties) visit(property, values[property.key], [property.key]);
+    // Binding fields belong to the page subject or parent row, not the query output.
+    // The shared binding check validates their scope and type in Studio and publication.
+    for (const property of properties)
+      if (property.key !== "query_parameters")
+        visit(property, values[property.key], [property.key]);
   }
   // A data grid shows at least one column before a person arranges it; publication refuses a
   // grid whose columns are all hidden by default.

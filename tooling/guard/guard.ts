@@ -265,6 +265,42 @@ for (const file of codeFiles) {
       add("layering", file, lineAt(content, offset), specifier);
   };
   const visit = (node: ts.Node): void => {
+    // An address read keyed by a query input's own key (`parameters[input.key]`,
+    // `searchParams.get(declared.key)`) is the deleted name matching.
+    const addressNames = [
+      "parameters",
+      "params",
+      "pageParameters",
+      "address",
+      "search",
+      "searchParams",
+    ];
+    const isInputKey = (argument: ts.Node | undefined): boolean =>
+      argument !== undefined &&
+      ts.isPropertyAccessExpression(argument) &&
+      argument.name.text === "key" &&
+      ts.isIdentifier(argument.expression) &&
+      ["input", "declared", "declaredInput", "queryInput"].includes(argument.expression.text);
+    const addressOf = (expression: ts.Expression): boolean =>
+      (ts.isIdentifier(expression) && addressNames.includes(expression.text)) ||
+      (ts.isPropertyAccessExpression(expression) && addressNames.includes(expression.name.text));
+    if (
+      file !== "packages/platform/src/pages/query-binding-resolver.ts" &&
+      ((ts.isElementAccessExpression(node) &&
+        addressOf(node.expression) &&
+        isInputKey(node.argumentExpression)) ||
+        (ts.isCallExpression(node) &&
+          ts.isPropertyAccessExpression(node.expression) &&
+          ["get", "getAll", "has"].includes(node.expression.name.text) &&
+          addressOf(node.expression.expression) &&
+          isInputKey(node.arguments[0])))
+    )
+      add(
+        "query-input-name-matching",
+        file,
+        lineAt(content, node.getStart(source)),
+        "Resolve explicit query bindings instead of matching input names to the address",
+      );
     if (
       literalStyleScope &&
       (ts.isStringLiteral(node) ||

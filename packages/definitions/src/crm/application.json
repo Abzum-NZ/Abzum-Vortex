@@ -578,7 +578,8 @@
                   "props": {
                     "id": "content_1",
                     "row_click": {
-                      "event_id": "event_crm_open_company"
+                      "event_id": "event_crm_open_company",
+                      "mode": "flow"
                     },
                     "columns": [
                       {
@@ -697,7 +698,8 @@
                   "props": {
                     "id": "content_2",
                     "row_click": {
-                      "event_id": "event_crm_open_contact"
+                      "event_id": "event_crm_open_contact",
+                      "mode": "flow"
                     },
                     "columns": [
                       {
@@ -801,7 +803,8 @@
                   "props": {
                     "id": "content_3",
                     "row_click": {
-                      "event_id": "event_crm_open_lead"
+                      "event_id": "event_crm_open_lead",
+                      "mode": "flow"
                     },
                     "columns": [
                       {
@@ -923,7 +926,8 @@
                   "props": {
                     "id": "content_4",
                     "row_click": {
-                      "event_id": "event_crm_open_opportunity"
+                      "event_id": "event_crm_open_opportunity",
+                      "mode": "flow"
                     },
                     "columns": [
                       {
@@ -1043,7 +1047,8 @@
                   "props": {
                     "id": "content_5",
                     "row_click": {
-                      "event_id": "event_crm_open_activity"
+                      "event_id": "event_crm_open_activity",
+                      "mode": "flow"
                     },
                     "columns": [
                       {
@@ -1740,7 +1745,6 @@
                               "props": {
                                 "id": "input_crm_contact_create_company",
                                 "field": "vortex.crm.people:contact.company",
-                                "initial_record_parameter": "company",
                                 "vortex": {
                                   "block": {
                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
@@ -1757,7 +1761,8 @@
                                       }
                                     }
                                   }
-                                }
+                                },
+                                "publishes_parameter": "company"
                               }
                             },
                             {
@@ -2588,8 +2593,8 @@
                     "query_parameters": [
                       {
                         "input": "company",
-                        "source": "page",
-                        "page_parameter": "record_id"
+                        "source": "page_parameter",
+                        "name": "record_id"
                       }
                     ],
                     "vortex": {

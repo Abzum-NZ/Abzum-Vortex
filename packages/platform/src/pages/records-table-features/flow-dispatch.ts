@@ -93,6 +93,7 @@ export const recordsTableBindingRefusal = async (
   if (
     event === "row_clicked" &&
     (contract.rowBehaviours.rowClick === undefined ||
+      contract.rowBehaviours.rowClick.selectsRecord ||
       !sameId(contract.rowBehaviours.rowClick.eventId, binding.eventId))
   )
     return recordsTableRequestRefusal(event, "command_not_declared");

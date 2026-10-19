@@ -699,7 +699,7 @@ begin
   loop
     input_key := input_item ->> 'key';
     input_value := coalesce(p_input_values -> input_key, 'null'::jsonb);
-    if input_value = 'null'::jsonb and (input_item ->> 'required')::boolean then
+    if input_value = 'null'::jsonb and coalesce((input_item ->> 'required')::boolean, true) then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'input_invalid');
     end if;
     if input_value <> 'null'::jsonb and input_item ->> 'type' = 'record_reference' then
@@ -736,6 +736,11 @@ begin
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
     end;
   end if;
+
+  filter_condition := vortex_record.omit_unbound_query_conditions_internal(filter_condition, parameter_values);
+  select coalesce(pg_catalog.array_agg(distinct referenced.value #>> '{}'), array[]::text[])
+  into filter_ids
+  from pg_catalog.jsonb_path_query(filter_condition, 'lax $.**?(@.source == "field").fieldId') as referenced(value);
 
   -- The published filter is pushed into the candidate scan only when every
   -- field it reads is one the reader is guaranteed to see; otherwise it is

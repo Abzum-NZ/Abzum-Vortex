@@ -236,6 +236,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   });
   const releases = useStudioReleasesTab({
     draft,
+    compositionContext: canvas.compositionContext,
     hidden: tab !== "releases",
     initialSection: isStudioReleasesSection(props.initialSection)
       ? props.initialSection

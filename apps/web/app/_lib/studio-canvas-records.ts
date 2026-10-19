@@ -8,7 +8,6 @@ import {
   fingerprintSchema,
   organizationIdSchema,
   readRecordDetailContract,
-  readRecordsTableContract,
   recordIdSchema,
   revisionSchema,
   sameId,
@@ -24,8 +23,17 @@ import { z } from "zod";
 import { pageCompiledSlotsFor } from "./studio-application-draft";
 import { compiledDraftContent } from "./studio-compiled-drafts";
 import { collectPlacements, pageSubjectParameter } from "./application-page/placement-helpers";
-import { findModuleQuery } from "./application-page/query-helpers";
-import { isStreamablePlacement, readPlacement } from "./application-page/placement-reader";
+import { findModuleQuery, pageQueryBindingContext } from "@vortex/platform/server";
+import {
+  applicationLauncherQueryRowsToListValues,
+  parseBoardPayload,
+  parseDisplayData,
+} from "@vortex/ui";
+import {
+  isStreamablePlacement,
+  readPlacement,
+  type PlacementReaderInput,
+} from "./application-page/placement-reader";
 import { openStudioPreviewRead } from "./studio-preview-read";
 import type { PageDataState } from "./application-page/types";
 
@@ -232,26 +240,22 @@ export const readStudioCanvasRecords = async (
       subjectId.success &&
       typeof placement.vortex.queryId !== "string" &&
       readRecordDetailContract(settingsOf(placement)) !== undefined;
-    // A table whose query takes a value from the page's address is read only when the canvas has it.
-    const hasPageValues = (placement: Placement) =>
-      (readRecordsTableContract(settingsOf(placement))?.parameters ?? []).every(
-        (parameter) =>
-          parameter.source !== "page" ||
-          (parameter.pageParameter !== undefined &&
-            Object.hasOwn(parameters, parameter.pageParameter)),
-      );
     // A query the preview does not run yet is read once the preview has moved to this revision.
+    // A block whose bindings wait for a value the canvas does not have (a control's choice) shows
+    // its awaiting message, exactly as the running page does before the choice.
     const placements = collectPlacements(areaPage).filter(
       (placement) =>
         readsSubject(placement) ||
         (isStreamablePlacement(placement) &&
-          findModuleQuery(context, String(placement.vortex.queryId)) !== undefined &&
-          hasPageValues(placement)),
+          findModuleQuery(context, String(placement.vortex.queryId)) !== undefined),
     );
     const data: Record<string, PageDataState> = {};
     let subjectRead: ReturnType<typeof services.subjects.read> | undefined;
-    const input = {
+    const readSubject = (recordTypeId: string, recordId: string) =>
+      (subjectRead ??= services.subjects.read(session, selection, { recordTypeId, recordId }));
+    const input: PlacementReaderInput = {
       pageDefinition: compiledPage,
+      accessVersion: undefined,
       pageSubjectRecordTypeId:
         subjectType === undefined ? undefined : String(subjectType.recordTypeId),
       data,
@@ -264,23 +268,38 @@ export const readStudioCanvasRecords = async (
       address: { application: { key: draft.key }, pageKey: page.key },
       subjectType,
       parameters,
+      // The bindings resolve against the whole draft page and the sample subject, under the
+      // builder's own access in the preview.
+      bindings: pageQueryBindingContext({
+        context,
+        pageDefinition: compiledPage,
+        parameters,
+        readSubject:
+          subjectType === undefined || !subjectId.success
+            ? undefined
+            : () => readSubject(String(subjectType.recordTypeId), subjectId.data),
+        subjectRecordTypeId:
+          subjectType === undefined ? undefined : String(subjectType.recordTypeId),
+        readTimeZone: async () => {
+          const read = await services.readCalendarSettings();
+          return read.kind === "available" ? read.value.settings?.timeZone : undefined;
+        },
+      }),
       dependencies,
-      subjectId,
-      readSubject: (recordTypeId: string, recordId: string) =>
-        (subjectRead ??= services.subjects.read(session, selection, {
-          recordTypeId,
-          recordId,
-        })),
-      linkTiles: services.linkTiles,
-      queryNotices: services.queryNotices,
-      boardContinuation: undefined,
+      subjectId: subjectId.success ? subjectId.data : undefined,
+      services: {
+        queries: services.queries,
+        linkTiles: services.linkTiles,
+        queryNotices: services.queryNotices,
+        tables: services.tables,
+        resolveRecordLinks: services.recordLinkResolver(context),
+        readCalendarSettings: services.readCalendarSettings,
+        readSubject,
+        launcherValues: applicationLauncherQueryRowsToListValues,
+        boardData: (values) => parseDisplayData({ status: "ready", values }, parseBoardPayload),
+      },
       permittedApplicationKeys: undefined,
-      permittedApplicationsRead: undefined,
-      queries: services.queries,
-      readCalendarSettings: services.readCalendarSettings,
-      tables: services.tables,
-      resolveRecordLinks: services.recordLinkResolver(context),
-      tableContinuation: undefined,
+      permittedApplicationsUnavailable: false,
       // The Studio canvas shows the authored layout; a person's layout belongs to the running app.
       gridLayouts: { persisted: false, stored: new Map(), readable: undefined },
       adoptSubjectRead: () => {},

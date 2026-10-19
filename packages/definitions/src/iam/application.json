@@ -1066,7 +1066,8 @@
                   "props": {
                     "id": "iam_people_region",
                     "row_click": {
-                      "event_id": "event_iam_open_person"
+                      "event_id": "event_iam_open_person",
+                      "mode": "flow"
                     },
                     "title": "People (organisation accounts)",
                     "row_actions": [
@@ -2689,7 +2690,8 @@
                   "props": {
                     "id": "iam_access_requests_list",
                     "row_click": {
-                      "event_id": "event_iam_open_access_request"
+                      "event_id": "event_iam_open_access_request",
+                      "mode": "flow"
                     },
                     "columns": [
                       {

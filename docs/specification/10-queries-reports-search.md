@@ -277,3 +277,11 @@ sequenceDiagram
 Use [explicit typed binding contexts](appendices/page-builder-contracts.md#data-context-and-related-records) for the page subject, related panels and row items. A valid employee-to-department example does not require every query on the page to target Employees. This is ordinary related-record querying, not permission to join different shared sources.
 
 Evaluate access before grouping, aggregation, counts and pagination. A cached or stored derived result must not expose inputs the reader cannot access. Caller-filtered totals are computed for that caller, not stored as one universal business value. Invalid predicates refuse the affected query rather than being silently dropped.
+
+### Explicit block input bindings
+
+Every query-bound page block maps query inputs through `query_parameters`. Each item names an input and one source: a typed fixed value, a declared page parameter, a readable field of the page subject, the current person, a page control, a relative date, or an authorised parent row inside related records. The same mapping checker supplies Studio and publication messages. No URL name is implicitly a query input.
+
+The server resolves each binding per request. Record fields reuse the authorised subject read; a withheld field is logged without its value and yields `awaiting_input`. Missing required values render the authored awaiting message and make no query. Missing optional values omit their comparison from the query condition, including within conjunctions, alternatives and negation. Additional grid filters only narrow the resulting query. Relative dates use the organisation time zone; date-time inputs receive the start-of-day instant.
+
+The currently supported person part is the organisation account representing the signed-in person. Organisation and team parts require corresponding typed query inputs and an authoritative session selection before they can be offered.
