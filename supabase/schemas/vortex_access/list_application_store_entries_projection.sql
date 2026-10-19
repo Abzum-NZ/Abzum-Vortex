@@ -89,7 +89,7 @@ begin
         'latest_version', latest.release_version,
         'latest_release_note', latest.release_note,
         'published_at', latest.published_at,
-        'installed_version', installed.release_version,
+        'installed_version', coalesce(installed.release_version, 'Not installed'),
         'status', case
           when installed.release_revision is null then 'available'
           when installed.release_revision < root.current_release_revision then 'update_available'
