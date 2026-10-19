@@ -20,6 +20,7 @@ import {
 } from "@vortex/ui/studio";
 import { saveStudioApplication, type StudioDraftChangedElsewhere } from "../actions";
 import { reopenStudioApplication } from "../_lib/studio-reads";
+import { createStudioPreviewGate, type StudioPreviewGate } from "../_lib/studio-preview-gate";
 import type {
   StudioViewResources,
   StudioApplicationCanvasFrames,
@@ -36,7 +37,7 @@ import { conflictMessage, refusalMessage } from "./studio-refusal-messages";
 import { useStudioSession } from "./use-studio-session";
 
 /** How long Studio waits after the last edit of a batch before it saves the batch. */
-const autosaveDelayMs = 600;
+const autosaveDelayMs = 300;
 /** How long Studio waits before it tries again a save the platform did not confirm, doubling each time. */
 const retryDelayMs = 4000;
 /** After this many unconfirmed saves in a row, Studio waits for the next edit instead of trying again. */
@@ -52,6 +53,8 @@ export type StudioCompiledView = StudioViewResources &
     source: StudioStoredApplicationDraft["source"];
     draftRevision: number;
     sourceFingerprint: string;
+    /** The revision's data shape: its records are read once the builder's preview runs it. */
+    previewShape: string;
     slots: StudioApplicationCompiledPageSlots | null;
     frames: StudioApplicationCanvasFrames | null;
     failure: StudioCompileFailure | null;
@@ -127,6 +130,8 @@ export type StudioDraft = Readonly<{
    */
   readSaved: () => StudioStoredApplicationDraft;
   view: StudioCompiledView;
+  /** When the builder's preview runs a compiled revision's data shape, for every reader of its records. */
+  preview: StudioPreviewGate;
   /** Live immutable resources, including an agent read completed before the next render. */
   readCatalogue: () => StudioCompiledView["catalogue"];
   loadingView: boolean;
@@ -190,12 +195,13 @@ type StudioViewCache = Readonly<{
   draftRevision: number;
   sourceFingerprint: string;
   draft: LoadedResult["draft"];
+  previewShape: string;
   views: Map<string, LoadedView>;
 }>;
 
 /** Revision-bound metadata is replaced; immutable editor resources remain for this visit. */
 const viewOf = (
-  draft: LoadedResult["draft"],
+  { draft, previewShape }: Pick<LoadedResult, "draft" | "previewShape">,
   loaded: LoadedView,
   generation: number,
   previous: StudioCompiledView,
@@ -208,6 +214,7 @@ const viewOf = (
   source: draft.source,
   draftRevision: draft.draftRevision,
   sourceFingerprint: draft.sourceFingerprint,
+  previewShape,
   slots: loaded.pageCompiledSlots,
   frames: loaded.canvasFrames,
   failure: loaded.compileFailure,
@@ -297,6 +304,7 @@ export function useStudioDraft({
       },
     }),
   );
+  const [preview] = useState(() => createStudioPreviewGate(organizationId, draft.rootId));
   const [selection] = useState(() =>
     createStudioSemanticSelectionStore({
       rootId: draft.rootId,
@@ -340,6 +348,7 @@ export function useStudioDraft({
       draftRevision: draft.draftRevision,
       sourceFingerprint: draft.sourceFingerprint,
       draft,
+      previewShape: initialView.previewShape,
       views: new Map([
         [
           JSON.stringify(initialView.request),
@@ -389,6 +398,7 @@ export function useStudioDraft({
         draftRevision,
         sourceFingerprint,
         draft: result.draft,
+        previewShape: result.previewShape,
         views,
       };
     },
@@ -405,7 +415,7 @@ export function useStudioDraft({
       known.draftRevision !== target.draftRevision ||
       known.sourceFingerprint !== target.sourceFingerprint
       ? undefined
-      : { draft: known.draft, loaded };
+      : { draft: known.draft, previewShape: known.previewShape, loaded };
   }, []);
 
   /** Draws the visible view from a read already made for the saved revision, if there is one. */
@@ -414,7 +424,7 @@ export function useStudioDraft({
       const known = knownView(key);
       if (known === undefined) return false;
       generation.current += 1;
-      setView((previous) => viewOf(known.draft, known.loaded, generation.current, previous));
+      setView((previous) => viewOf(known, known.loaded, generation.current, previous));
       return true;
     },
     [knownView],
@@ -425,9 +435,7 @@ export function useStudioDraft({
       ? knownView(requestKey)
       : undefined;
   if (switchedTo !== undefined)
-    setView((previous) =>
-      viewOf(switchedTo.draft, switchedTo.loaded, previous.generation + 1, previous),
-    );
+    setView((previous) => viewOf(switchedTo, switchedTo.loaded, previous.generation + 1, previous));
 
   // The compile of the saved head, asked for only once no edit is waiting, so a batch costs one save and one compile.
   const refreshCompiled = useCallback(async (): Promise<void> => {
@@ -497,7 +505,7 @@ export function useStudioDraft({
           remember(result, [requested]);
           generation.current += 1;
           const loaded = { ...result.views[0]!, catalogue: result.catalogue };
-          setView((previous) => viewOf(result.draft, loaded, generation.current, previous));
+          setView((previous) => viewOf(result, loaded, generation.current, previous));
         } catch (error) {
           console.error(
             "[studio] compiling the saved draft for the canvas failed",
@@ -827,7 +835,7 @@ export function useStudioDraft({
       remember(result, [requested]);
       generation.current += 1;
       const loaded = { ...result.views[0]!, catalogue: result.catalogue };
-      setView((previous) => viewOf(result.draft, loaded, generation.current, previous));
+      setView((previous) => viewOf(result, loaded, generation.current, previous));
       lifetimeRef.current += 1;
       setLifetime(lifetimeRef.current);
       setStatus({ kind: "saved" });
@@ -872,6 +880,7 @@ export function useStudioDraft({
       saved,
       readSaved: () => savedRef.current,
       view,
+      preview,
       readCatalogue: () => catalogueRef.current,
       loadingView,
       viewProblem,
@@ -909,6 +918,7 @@ export function useStudioDraft({
       selected,
       saved,
       view,
+      preview,
       loadingView,
       viewProblem,
       refreshCompiled,

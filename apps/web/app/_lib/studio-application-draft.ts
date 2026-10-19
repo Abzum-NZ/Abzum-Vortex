@@ -116,6 +116,32 @@ const loadFailure = (operation: string, error: unknown): StudioApplicationFailur
   return declined(operation, { kind: "temporarily_unavailable", reason: "request_failed" }, error);
 };
 
+/**
+ * The parts of a saved Application draft a preview's records, queries and access depend on. A
+ * draft edit that leaves them as they are is presentation only (pages, layouts, the menu, the
+ * theme, names and blocks), so the preview's data and access are still the draft's.
+ */
+const presentationKeys: ReadonlySet<string> = new Set([
+  "name",
+  "description",
+  "icon",
+  "home_page",
+  "navigation",
+  "shells",
+  "pages",
+  "theme",
+  "platform_block_dependencies",
+]);
+export const studioPreviewShapeFingerprint = (
+  source: StoredApplicationDefinitionDraft["source"],
+): string =>
+  fingerprintCanonicalValue({
+    key: source.key,
+    body: Object.fromEntries(
+      Object.entries(source.body).filter(([key]) => !presentationKeys.has(key)),
+    ),
+  });
+
 export type StudioViewResources = Readonly<{
   request: StudioViewRequest;
   themeOptions: StudioThemeOptions | null;
@@ -144,6 +170,8 @@ type StudioApplicationLoadResult =
       kind: "available";
       organizationId: OrganizationId;
       draft: StoredApplicationDefinitionDraft;
+      /** The draft's data shape: Studio reads its records once the builder's preview runs this shape. */
+      previewShape: string;
       /** The immutable block catalogue, once for every view; complete when any view uses its releases. */
       catalogue: typeof IMMUTABLE_PLATFORM_BLOCK_CATALOGUE;
       /** One view per request, in request order. */
@@ -405,6 +433,7 @@ export const loadStudioApplicationDraft = async (
           Readonly<{
             organizationId: OrganizationId;
             draft: StoredApplicationDefinitionDraft;
+            previewShape: string;
             catalogue: typeof IMMUTABLE_PLATFORM_BLOCK_CATALOGUE;
             views: readonly StudioLoadedView[];
           }>
@@ -822,6 +851,7 @@ export const loadStudioApplicationDraft = async (
           value: {
             organizationId: scope.organizationId,
             draft,
+            previewShape: studioPreviewShapeFingerprint(draft.source),
             catalogue,
             views: requests.map((request, index) => ({
               ...resourcesOf(request),
