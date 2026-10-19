@@ -251,6 +251,7 @@
       {
         "id": "event_organisation_settings_action",
         "key": "vortex.app.organisation_administration.settings_action",
+        "label": "Settings action",
         "record_type": "vortex.organisation_administration:organisation_notice",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -258,6 +259,7 @@
       {
         "id": "event_open_organization_settings",
         "key": "vortex.app.organisation_administration.open_organization_settings",
+        "label": "Open organization settings",
         "record_type": "vortex.organisation_administration:organization_settings",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -265,6 +267,7 @@
       {
         "id": "event_submit_organization_settings_record",
         "key": "vortex.app.organisation_administration.submit_organization_settings_record",
+        "label": "Submit organization settings record",
         "record_type": "vortex.organisation_administration:organization_settings",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -272,6 +275,7 @@
       {
         "id": "event_organisation_notice_submit",
         "key": "vortex.app.organisation_administration.notice_submit",
+        "label": "Notice submit",
         "record_type": "vortex.organisation_administration:organisation_notice",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -279,6 +283,7 @@
       {
         "id": "event_organisation_privacy_request_submit",
         "key": "vortex.app.organisation_administration.privacy_request_submit",
+        "label": "Privacy request submit",
         "record_type": "vortex.organisation_administration:privacy_request_case",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -286,6 +291,7 @@
       {
         "id": "event_suspend_account",
         "key": "vortex.app.organisation_administration.suspend_account",
+        "label": "Suspend account",
         "record_type": "vortex.system_directory:person",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -293,6 +299,7 @@
       {
         "id": "event_reactivate_account",
         "key": "vortex.app.organisation_administration.reactivate_account",
+        "label": "Reactivate account",
         "record_type": "vortex.system_directory:person",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -300,6 +307,7 @@
       {
         "id": "event_close_account",
         "key": "vortex.app.organisation_administration.close_account",
+        "label": "Close account",
         "record_type": "vortex.system_directory:person",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -307,6 +315,7 @@
       {
         "id": "event_revoke_invitation",
         "key": "vortex.app.organisation_administration.revoke_invitation",
+        "label": "Revoke invitation",
         "record_type": "vortex.system_directory:organization_invitation",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -314,6 +323,7 @@
       {
         "id": "event_new_notice",
         "key": "vortex.app.organisation_administration.new_notice",
+        "label": "New notice",
         "record_type": "vortex.organisation_administration:organisation_notice",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -321,6 +331,7 @@
       {
         "id": "event_new_privacy_request",
         "key": "vortex.app.organisation_administration.new_privacy_request",
+        "label": "New privacy request",
         "record_type": "vortex.organisation_administration:privacy_request_case",
         "carries": [],
         "personal_or_sensitive_values_allowed": false

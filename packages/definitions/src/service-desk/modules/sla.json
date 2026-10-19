@@ -660,6 +660,7 @@
     {
       "id": "evt_sla_changed",
       "key": "vortex.service_desk.sla.service_level.changed",
+      "label": "Service level changed",
       "record_type": "service_level",
       "carries": [
         "name",

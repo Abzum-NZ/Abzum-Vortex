@@ -661,6 +661,7 @@ export const sourceApplicationBodySchema = z
             .object({
               id: sourceProvenanceTarget(sourceAliasSchema, ["eventId"]),
               key: sourceProvenanceUnchanged(namespacedKeySchema),
+              label: sourceProvenanceUnchanged(labelSchema),
               record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema.optional(), [
                 "recordTypeId",
               ]),

@@ -62,6 +62,7 @@
       {
         "id": "event_install_or_upgrade",
         "key": "vortex.app.app_store.install_or_upgrade",
+        "label": "Install or upgrade",
         "record_type": "vortex.app_store:store_application",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -69,6 +70,7 @@
       {
         "id": "event_open_store_application",
         "key": "vortex.app.app_store.open_application",
+        "label": "Open application",
         "record_type": "vortex.app_store:store_application",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -76,6 +78,7 @@
       {
         "id": "event_remove_application",
         "key": "vortex.app.app_store.remove_application",
+        "label": "Remove application",
         "record_type": "vortex.app_store:store_application",
         "carries": [],
         "personal_or_sensitive_values_allowed": false

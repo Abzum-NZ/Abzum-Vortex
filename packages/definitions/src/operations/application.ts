@@ -627,6 +627,7 @@ export const operationsApplication: ApplicationSourceDocument =
         {
           id: "form_submit_operations_new_incident",
           key: "vortex.app.events.vortex_app_operations_create_incident",
+          label: "Create incident",
           record_type: incidentRecordType,
           carries: [],
           personal_or_sensitive_values_allowed: false,
@@ -634,6 +635,7 @@ export const operationsApplication: ApplicationSourceDocument =
         {
           id: "form_submit_operations_incident_attach",
           key: "vortex.app.events.vortex_app_operations_attach_signal",
+          label: "Attach signal",
           record_type: incidentRecordType,
           carries: [],
           personal_or_sensitive_values_allowed: false,
@@ -641,6 +643,7 @@ export const operationsApplication: ApplicationSourceDocument =
         {
           id: incidentActionEventId,
           key: "vortex.app.events.vortex_app_operations_incident_action",
+          label: "Incident action",
           record_type: incidentRecordType,
           carries: [],
           personal_or_sensitive_values_allowed: false,
@@ -648,6 +651,7 @@ export const operationsApplication: ApplicationSourceDocument =
         {
           id: incidentRowClickEventId,
           key: "vortex.app.events.vortex_app_operations_open_incident",
+          label: "Open incident",
           record_type: incidentRecordType,
           carries: [],
           personal_or_sensitive_values_allowed: false,
