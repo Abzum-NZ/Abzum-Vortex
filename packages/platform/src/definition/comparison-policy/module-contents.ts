@@ -1030,11 +1030,23 @@ export const compareModuleContents = (
     "query",
     // Label and description are presentation, and the selected fields are an ordered list of
     // entries: appending a field added in this same release, or reordering, is minor; appending a
-    // field that already existed exposes it to every consumer, so it is major. Every other
-    // declared part of a published query changes what consumers receive: major.
+    // field that already existed exposes it to every consumer, so it is major. Exposing a private
+    // query offers it to the Applications that use the Module: minor; making an exposed query
+    // private takes it from them: major. Every other declared part of a published query changes
+    // what consumers receive: major.
     (left, right) => {
-      const { selectedFieldIds: leftSelected, ...leftRest } = left;
-      const { selectedFieldIds: rightSelected, ...rightRest } = right;
+      const { selectedFieldIds: leftSelected, exposure: leftExposure, ...leftRest } = left;
+      const { selectedFieldIds: rightSelected, exposure: rightExposure, ...rightRest } = right;
+      pushChange(
+        reasons,
+        leftExposure,
+        rightExposure,
+        rightExposure === "exposed" ? "minor" : "major",
+        rightExposure === "exposed" ? "component_added" : "existing_behavior_changed",
+        "query",
+        "behavior",
+        right.queryId,
+      );
       compareSimpleComponent(reasons, "query", right.queryId, leftRest, rightRest, [
         "label",
         "description",

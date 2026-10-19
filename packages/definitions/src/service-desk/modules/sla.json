@@ -687,6 +687,7 @@
     {
       "id": "qry_sd_sla",
       "key": "service_desk_service_levels",
+      "exposure": "private",
       "label": "Service levels",
       "record_type": "service_level",
       "inputs": [],
@@ -712,6 +713,7 @@
     {
       "id": "qry_sd_business_calendars",
       "key": "service_desk_business_calendars",
+      "exposure": "private",
       "label": "Business calendars",
       "record_type": "business_calendar",
       "inputs": [],

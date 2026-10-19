@@ -36,7 +36,9 @@ import { StudioDataCentre, StudioDataEmpty } from "./studio-data-centre";
 import { StudioRecordTypeDialog } from "./studio-record-type-dialog";
 import { StudioReferencesAlert, StudioUsedIn } from "./studio-used-in";
 import { studioUseTargetOf } from "../_lib/studio-places";
-import { StudioNewQueryForm, StudioQueryEditor } from "./studio-query-editor";
+import { StudioNewQueryForm, StudioQueryEditor, queryInputTypeLabel } from "./studio-query-editor";
+import { StudioQueryCatalogue } from "./studio-query-catalogue";
+import { StudioQuerySheet } from "./studio-query-sheet";
 import { StudioRecordTypeSearch, StudioSearchOverview } from "./studio-search-settings";
 import { StudioRelationshipsSection } from "./studio-relationships-section";
 import { StudioModuleEvents } from "./studio-module-events";
@@ -55,6 +57,7 @@ import {
 import {
   fieldTypeLabel,
   ownedDataModules,
+  studioDataEdit,
   studioEditProblem,
   type StudioDataEdit,
   type StudioDataModule,
@@ -398,11 +401,26 @@ function ReadOnlyInspector({
         </dl>
       )}
       {query !== undefined && (
-        <p>
-          The query {query.label} lists {queryRecord?.pluralName.toLowerCase() ?? "records"} for
-          pages and blocks.
-          {query.summary ? " It groups records or adds totals, so it reads as a summary." : ""}
-        </p>
+        <>
+          <p>
+            The query {query.label} lists {queryRecord?.pluralName.toLowerCase() ?? "records"} for
+            pages and blocks. Its application exposes it, so this application can read it.
+            {query.summary ? " It groups records or adds totals, so it reads as a summary." : ""}
+          </p>
+          {query.inputs.length === 0 ? null : (
+            <dl className="space-y-1">
+              <dt className="font-semibold">Inputs</dt>
+              {query.inputs.map((input) => (
+                <dd key={input.key}>
+                  {input.label}{" "}
+                  <span className="text-muted-foreground">
+                    {queryInputTypeLabel(input.type)}, {input.required ? "required" : "optional"}
+                  </span>
+                </dd>
+              ))}
+            </dl>
+          )}
+        </>
       )}
       {module.ownerApplication === undefined ? null : (
         <p role="note">
@@ -486,12 +504,16 @@ export function useStudioDataTab({
   const { source, organizationId, view } = draft;
   const disabled = draft.locked;
   const [searchOpen, setSearchOpen] = useState(false);
+  // The query catalogue stays in the centre while one of its queries is open in the inspector.
+  const [queriesOpen, setQueriesOpen] = useState(false);
+  const [newQuery, setNewQuery] = useState(false);
   const [section, setSection] = useState("fields");
   const [adding, setAdding] = useState<Readonly<{ scope: string; type: "text" | "link" }> | null>(
     null,
   );
   const select = (next: StudioDataSelection | null) => {
     setSearchOpen(false);
+    if (next?.kind !== "query") setQueriesOpen(false);
     setSection("fields");
     setAdding(null);
     draft.select(next);
@@ -504,17 +526,7 @@ export function useStudioDataTab({
     draft.select({ kind: "module", moduleKey: initialModule });
   }, [initialModule, draft]);
   /** The Data tab's one edit path: a platform command over the current draft source, as one edit of the draft. */
-  const edit: StudioDataEdit = (command, options) => {
-    const outcome = draft.run((current) => {
-      const result = command(current);
-      const changed =
-        result.kind === "changed" ? (result as Readonly<{ source?: Source }>).source : undefined;
-      return changed === undefined
-        ? { kind: "keep", result }
-        : { kind: "edit", source: changed, result };
-    }, options);
-    return outcome.kind === "blocked" ? outcome : outcome.result;
-  };
+  const edit: StudioDataEdit = studioDataEdit(draft);
   const saved = useMemo(() => draft.parsed(draft.saved.source), [draft, draft.saved.source]);
   // The compile refusal of the revision the view was compiled from, while no newer edit is on its way.
   const { parsed, updatingCanvas } = draft;
@@ -581,6 +593,7 @@ export function useStudioDataTab({
   const current = selection !== null && selectionExists(modules, selection) ? selection : null;
   // Reference links select through the workspace, outside this tab's navigator.
   const showingSearch = searchOpen && current === null;
+  const showingQueries = queriesOpen && (current === null || current.kind === "query");
 
   const recordTypes = useMemo(
     () => [
@@ -635,12 +648,32 @@ export function useStudioDataTab({
       searchSelected={showingSearch}
       onSearch={() => {
         setSearchOpen(true);
+        setQueriesOpen(false);
+        setAdding(null);
+        draft.select(null);
+      }}
+      queriesSelected={showingQueries}
+      onQueries={() => {
+        setQueriesOpen(true);
+        setSearchOpen(false);
         setAdding(null);
         draft.select(null);
       }}
     />
   );
-  const centre = showingSearch ? (
+  const centre = showingQueries ? (
+    <StudioQueryCatalogue
+      source={source}
+      owned={owned}
+      used={used}
+      applications={applications}
+      selected={current}
+      disabled={disabled}
+      edit={edit}
+      onSelect={select}
+      onNew={() => setNewQuery(true)}
+    />
+  ) : showingSearch ? (
     <div className="mx-auto w-full max-w-4xl space-y-6 px-8 py-6">
       <h2 className="text-xl font-semibold tracking-tight">Search settings</h2>
       <StudioSearchOverview
@@ -863,20 +896,39 @@ export function useStudioDataTab({
     </StudioPanelShell>
   );
   const dialog = (
-    <StudioRecordTypeDialog
-      key={creating ? "open" : "closed"}
-      open={creating}
-      source={source}
-      edit={edit}
-      onClose={() => setCreating(false)}
-      onCreated={(moduleKey, recordKey) => select({ kind: "record_type", moduleKey, recordKey })}
-    />
+    <>
+      <StudioRecordTypeDialog
+        key={creating ? "open" : "closed"}
+        open={creating}
+        source={source}
+        edit={edit}
+        onClose={() => setCreating(false)}
+        onCreated={(moduleKey, recordKey) => select({ kind: "record_type", moduleKey, recordKey })}
+      />
+      <StudioQuerySheet
+        key={newQuery ? "query-open" : "query-closed"}
+        open={newQuery}
+        draft={draft}
+        doneLabel="Done"
+        onClose={() => setNewQuery(false)}
+        onDone={(reference) => {
+          setNewQuery(false);
+          const separator = reference.indexOf(":");
+          select({
+            kind: "query",
+            moduleKey: reference.slice(0, separator),
+            queryKey: reference.slice(separator + 1),
+          });
+        }}
+      />
+    </>
   );
   return {
     panel,
     centre,
     inspector,
     dialog,
-    title: showingSearch ? "Search settings" : describeSelection(modules, current),
+    title: showingQueries && current === null ? "Queries"
+      : showingSearch ? "Search settings" : describeSelection(modules, current),
   };
 }

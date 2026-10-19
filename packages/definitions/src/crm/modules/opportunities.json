@@ -1267,6 +1267,7 @@
     {
       "id": "qry_crm_pipeline",
       "key": "crm_pipeline",
+      "exposure": "private",
       "label": "Opportunities",
       "record_type": "opportunity",
       "inputs": [],
@@ -1301,6 +1302,7 @@
     {
       "id": "qry_crm_pipeline_by_stage",
       "key": "crm_pipeline_by_stage",
+      "exposure": "private",
       "label": "Pipeline by stage",
       "description": "Opportunity count for each pipeline stage",
       "record_type": "opportunity",
@@ -1330,6 +1332,7 @@
     {
       "id": "qry_crm_pipeline_board",
       "key": "crm_pipeline_board",
+      "exposure": "private",
       "label": "Pipeline board",
       "description": "Opportunities grouped by stage with the total value of each stage",
       "record_type": "opportunity",

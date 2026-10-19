@@ -67,6 +67,9 @@ const inputTypes: readonly Readonly<{ value: InputType; label: string }>[] = [
   { value: "record_reference", label: "A record" },
   { value: "organization_account_reference", label: "A person's account" },
 ];
+/** An input type in the editor's words; a type the editor does not offer is named by its key. */
+export const queryInputTypeLabel = (type: string): string =>
+  inputTypes.find((option) => option.value === type)?.label ?? type.replaceAll("_", " ");
 const directions = [
   { value: "ascending", label: "A to Z, low to high, old to new" },
   { value: "descending", label: "Z to A, high to low, new to old" },

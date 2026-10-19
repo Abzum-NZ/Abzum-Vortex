@@ -1,5 +1,6 @@
-import { moduleFieldTypeLabels, peopleDirectory, type ApplicationSourceDocument, type ModuleField, type ModuleFieldType } from "@vortex/platform/schema";
-import type { StudioRunOptions } from "../_components/use-studio-draft";
+import { moduleFieldTypeLabels, peopleDirectory, type ApplicationSourceDocument, type ModuleField, type ModuleFieldType, type ModuleQueryExposure } from "@vortex/platform/schema";
+import type { StudioQueryInput } from "@vortex/ui/studio";
+import type { StudioDraft, StudioRunOptions } from "../_components/use-studio-draft";
 
 /**
  * The Data tab's one edit path: `command` changes the current draft source; a result of kind
@@ -10,6 +11,16 @@ import type { StudioRunOptions } from "../_components/use-studio-draft";
 export type StudioDataEdit = <Result extends Readonly<{ kind: string }>>(
   command: (source: ApplicationSourceDocument) => Result, options?: StudioRunOptions,
 ) => Result | Readonly<{ kind: "blocked"; message: string }>;
+
+/** The Data tab's one edit path over a draft: a platform command over its current source, as one edit of it. */
+export const studioDataEdit = (draft: StudioDraft): StudioDataEdit => (command, options) => {
+  const outcome = draft.run((current) => {
+    const result = command(current);
+    const changed = result.kind === "changed" ? (result as Readonly<{ source?: ApplicationSourceDocument }>).source : undefined;
+    return changed === undefined ? { kind: "keep", result } : { kind: "edit", source: changed, result };
+  }, options);
+  return outcome.kind === "blocked" ? outcome : outcome.result;
+};
 
 /** Why an edit was kept out of the draft, in words; undefined when it was applied. */
 export const studioEditProblem = (result: Readonly<{ kind: string }>): string | undefined => {
@@ -58,6 +69,10 @@ export type StudioDataQuery = Readonly<{
   key: string; label: string; recordKey: string;
   /** Whether it groups records or adds totals: then it reads as a summary, not as a list. */
   summary: boolean;
+  /** Whether the applications that use its module may read it; a used module lists only exposed ones. */
+  exposure: ModuleQueryExposure;
+  /** The values it asks for. */
+  inputs: readonly StudioQueryInput[];
 }>;
 
 /** A module in the Data tab: one the application owns (edited here) or one it uses (read-only). */
@@ -99,5 +114,9 @@ export const ownedDataModules = (source: ApplicationSourceDocument): readonly St
     queries: module.queries.map((query) => ({
       key: query.key, label: queryLabel(query), summary: query.group_by.length > 0 || query.aggregates.length > 0,
       recordKey: query.record_type.includes(":") ? query.record_type.slice(query.record_type.indexOf(":") + 1) : query.record_type,
+      exposure: query.exposure,
+      inputs: query.inputs.map((input) => ({ key: input.key, label: input.label, type: input.type, required: input.required,
+        ...(input.type === "record_reference" ? { recordTypes: input.record_types.map((type) =>
+          type.includes(":") ? type : `${module.key}:${type}`) } : {}) })),
     })),
   }));
