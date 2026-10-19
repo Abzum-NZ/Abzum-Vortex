@@ -155,7 +155,11 @@ export function useStudioCanvasTab({
   const [blockSetup, setBlockSetup] = useState<StudioBlockSetupRequest | null>(null);
   const [notice, setNotice] = useState("");
 
-  const inspector = resolveStudioSelectionInspectorContext({ rootId, source }, selected);
+  // Resolving validates the whole source: once per source and selection, not on every render.
+  const inspector = useMemo(
+    () => resolveStudioSelectionInspectorContext({ rootId, source }, selected),
+    [rootId, source, selected],
+  );
   const selectionKey = selected === null ? "" : studioSemanticSelectionKey(selected);
   // The page or layout that holds each block: the canvas draws a block's page, the Outline lists its owner's blocks.
   const placementOwners = useMemo(() => {
