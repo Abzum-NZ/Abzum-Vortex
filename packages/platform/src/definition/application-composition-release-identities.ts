@@ -278,12 +278,6 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     rendererKey: "platform.renderer.link_tiles",
     releaseVersion: "1.2.0",
   },
-  VIEW_FILTER_BLOCK_RELEASE: {
-    blockId: "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15",
-    key: "platform.launcher.view_filter",
-    rendererKey: "platform.renderer.view_filter",
-    releaseVersion: "1.0.0",
-  },
   CONTAINER_BLOCK_RELEASE_1_2_0: {
     blockId: "11d1a889-531f-4880-a1a4-5dda5289e5ff",
     key: "platform.layout.container",

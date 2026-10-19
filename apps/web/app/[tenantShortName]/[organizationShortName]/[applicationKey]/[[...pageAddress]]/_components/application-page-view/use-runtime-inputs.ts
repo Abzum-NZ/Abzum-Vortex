@@ -1,4 +1,4 @@
-import { useMemo, type Dispatch, type SetStateAction, type RefObject } from "react";
+import { useMemo, useRef, type Dispatch, type SetStateAction, type RefObject } from "react";
 import type { useRouter } from "next/navigation";
 import type { createFormBlockRuntime, parseTablePayload, useUnsavedWorkGuard } from "@vortex/ui";
 import {
@@ -31,6 +31,12 @@ import { boardPayloadFor, tablePayloadFor, compatibleBoardRowAction } from "./pl
 import type { TableContinuationTarget, Notice, SubmittedForm, EventHandlers } from "./types";
 import { bindingFor, suppliedValues, bindingOfEvent, asComponentBinding } from "./event-values";
 import { cancelledMoveNotice, unavailableNotice } from "./notices";
+import {
+  publishedControlData,
+  rememberPublishedChoices,
+  type PublishedRecordTitles,
+} from "./published-control-data";
+import { usePageParameters } from "./use-page-parameters";
 import { requestRecordChoices } from "./record-choices";
 
 export function useRuntimeInputs({
@@ -192,7 +198,21 @@ export function useRuntimeInputs({
   ) => Promise<void>;
   runtimeInputsRef: RefObject<Readonly<Record<string, unknown>>>;
 }>) {
+  const pageParameters = usePageParameters({
+    model,
+    currentSearch,
+    navigationKey,
+    refreshPlacements,
+    setSelection,
+  });
+  const titles = useRef<{ scope: string; values: PublishedRecordTitles }>({
+    scope: navigationKey,
+    values: new Map(),
+  });
+  if (titles.current.scope !== navigationKey)
+    titles.current = { scope: navigationKey, values: new Map() };
   const runtimeInputs = useMemo(() => {
+    const search = new URLSearchParams(currentSearch);
     const inputs: Record<string, unknown> = {};
     // A placement may hold bindings (a form submits) without holding projected data, so both key
     // sets are wired: every placement with data or with a flow binding receives its callbacks.
@@ -205,6 +225,7 @@ export function useRuntimeInputs({
         .filter((field) => field.dependency !== undefined)
         .map((field) => field.formId),
       ...model.linkInputPlacementIds,
+      ...Object.keys(model.pageParameters.controls),
     ]);
     if (guidedActivePlacementIds !== undefined)
       for (const placementId of placementIds)
@@ -213,7 +234,13 @@ export function useRuntimeInputs({
       const data =
         guidedFormCompleted && guidedActiveFormIds.includes(placementId)
           ? ({ status: "disabled", reason: "Refresh to start another form." } as const)
-          : currentData[placementId];
+          : publishedControlData(
+              model,
+              placementId,
+              currentData[placementId],
+              search,
+              titles.current.values,
+            );
       const bindings = model.bindings[placementId] ?? [];
       const events: EventHandlers = {};
       const boardData = boardPayloadFor(data);
@@ -370,7 +397,27 @@ export function useRuntimeInputs({
       if (model.linkInputPlacementIds.includes(placementId))
         events.records_requested = (event: ControlSemanticEvent) => {
           if (event.event !== "records_requested") return;
-          return requestRecordChoices(model, placementId, event, () => router.refresh());
+          return requestRecordChoices(model, placementId, event, () => router.refresh()).then(
+            (page) => {
+              if (titles.current.scope === navigationKey)
+                rememberPublishedChoices(titles.current.values, placementId, page);
+              return page;
+            },
+          );
+        };
+      const publishedParameter = model.pageParameters.controls[placementId];
+      if (publishedParameter !== undefined && supportsEvent("field_changed")) {
+        const fieldChanged = events.field_changed as
+          ((event: ControlSemanticEvent) => void) | undefined;
+        events.field_changed = (event: ControlSemanticEvent) => {
+          fieldChanged?.(event);
+          pageParameters.change(placementId, event);
+        };
+      }
+      if (publishedParameter !== undefined && supportsEvent("row_clicked"))
+        events.row_clicked = (event: DisplaySemanticEvent) => {
+          if (event.event === "row_clicked")
+            pageParameters.publish(placementId, event.recordId, false);
         };
       // An action button runs its bound flow through the same path as a display event. Inside a
       // form it reports the form's current values. A record page also supplies its verified page
@@ -513,7 +560,7 @@ export function useRuntimeInputs({
         continue;
       }
       const held = selection[placementId];
-      const ready = data as { status?: string; values?: Record<string, unknown> };
+      const ready = (data ?? {}) as { status?: string; values?: Record<string, unknown> };
       const pins =
         ready.status === "ready"
           ? ready.values?.kind === "application_page_link_tiles"
@@ -717,6 +764,7 @@ export function useRuntimeInputs({
     application,
     currentPageKey,
     currentSearch,
+    pageParameters,
     navigationKey,
     model.pageId,
     currentEditFormBaselines,

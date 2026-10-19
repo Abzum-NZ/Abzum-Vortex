@@ -353,61 +353,15 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.view_filter",
+                  "type": "platform.renderer.text_input",
                   "props": {
                     "id": "home_favourites_filter",
                     "label": "Search favourites",
                     "placeholder": "Search favourites",
-                    "match_key": "label",
-                    "match_mode": "contains",
-                    "case_sensitive": false,
-                    "empty_message": "No favourites match your search.",
-                    "content": [
-                      {
-                        "type": "platform.renderer.link_tiles",
-                        "props": {
-                          "id": "home_favourites",
-                          "title": "Favourites",
-                          "label_key": "label",
-                          "address_key": "external_address",
-                          "description_key": "description",
-                          "target_kind_key": "target_kind",
-                          "application_key_key": "application_key",
-                          "page_key_key": "page_key",
-                          "open_behaviour_key": "open_behaviour",
-                          "organization_id_key": "target_organization_id",
-                          "application_root_id_key": "target_application_root_id",
-                          "module_root_id_key": "target_module_root_id",
-                          "module_release_revision_key": "target_module_release_revision",
-                          "record_type_id_key": "target_record_type_id",
-                          "storage_contract_id_key": "target_storage_contract_id",
-                          "record_id_key": "record_id",
-                          "row_action_label": "Remove",
-                          "actions": [],
-                          "vortex": {
-                            "block": {
-                              "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47",
-                              "release_version": "1.2.0"
-                            },
-                            "query": "vortex.landing_zone:landing_zone_favourites",
-                            "responsive": {
-                              "desktop": {
-                                "visible": true,
-                                "width": {
-                                  "kind": "fill"
-                                },
-                                "height": {
-                                  "kind": "content"
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    ],
+                    "publishes_parameter": "home_favourites_filter",
                     "vortex": {
                       "block": {
-                        "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15",
+                        "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                         "release_version": "1.0.0"
                       },
                       "responsive": {
@@ -421,52 +375,68 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "name": "home_favourites_filter"
                   }
                 },
                 {
-                  "type": "platform.renderer.view_filter",
+                  "type": "platform.renderer.link_tiles",
+                  "props": {
+                    "id": "home_favourites",
+                    "title": "Favourites",
+                    "label_key": "label",
+                    "address_key": "external_address",
+                    "description_key": "description",
+                    "target_kind_key": "target_kind",
+                    "application_key_key": "application_key",
+                    "page_key_key": "page_key",
+                    "open_behaviour_key": "open_behaviour",
+                    "organization_id_key": "target_organization_id",
+                    "application_root_id_key": "target_application_root_id",
+                    "module_root_id_key": "target_module_root_id",
+                    "module_release_revision_key": "target_module_release_revision",
+                    "record_type_id_key": "target_record_type_id",
+                    "storage_contract_id_key": "target_storage_contract_id",
+                    "record_id_key": "record_id",
+                    "row_action_label": "Remove",
+                    "actions": [],
+                    "vortex": {
+                      "block": {
+                        "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47",
+                        "release_version": "1.2.0"
+                      },
+                      "query": "vortex.landing_zone:landing_zone_favourites",
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    },
+                    "query_parameters": [
+                      {
+                        "input": "search",
+                        "source": "control",
+                        "control_placement": "home_favourites_filter"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "type": "platform.renderer.text_input",
                   "props": {
                     "id": "home_applications_filter",
                     "label": "Search applications",
                     "placeholder": "Search applications",
-                    "match_key": "name",
-                    "match_mode": "contains",
-                    "case_sensitive": false,
-                    "empty_message": "No applications match your search.",
-                    "content": [
-                      {
-                        "type": "platform.renderer.application_launcher",
-                        "props": {
-                          "id": "home_applications",
-                          "title": "All applications",
-                          "name_key": "name",
-                          "icon_key": "icon",
-                          "side_panel": [],
-                          "vortex": {
-                            "block": {
-                              "block_id": "b1a7c2e4-5d3f-4a91-8c26-0e7f4b9a1d33",
-                              "release_version": "1.0.0"
-                            },
-                            "query": "vortex.landing_zone:landing_zone_applications",
-                            "responsive": {
-                              "desktop": {
-                                "visible": true,
-                                "width": {
-                                  "kind": "fill"
-                                },
-                                "height": {
-                                  "kind": "content"
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    ],
+                    "publishes_parameter": "home_applications_filter",
                     "vortex": {
                       "block": {
-                        "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15",
+                        "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                         "release_version": "1.0.0"
                       },
                       "responsive": {
@@ -480,7 +450,43 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "name": "home_applications_filter"
+                  }
+                },
+                {
+                  "type": "platform.renderer.application_launcher",
+                  "props": {
+                    "id": "home_applications",
+                    "title": "All applications",
+                    "name_key": "name",
+                    "icon_key": "icon",
+                    "side_panel": [],
+                    "vortex": {
+                      "block": {
+                        "block_id": "b1a7c2e4-5d3f-4a91-8c26-0e7f4b9a1d33",
+                        "release_version": "1.0.0"
+                      },
+                      "query": "vortex.landing_zone:landing_zone_applications",
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    },
+                    "query_parameters": [
+                      {
+                        "input": "search",
+                        "source": "control",
+                        "control_placement": "home_applications_filter"
+                      }
+                    ]
                   }
                 }
               ],
@@ -505,61 +511,15 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.view_filter",
+                  "type": "platform.renderer.text_input",
                   "props": {
                     "id": "favourites_filter",
                     "label": "Search favourites",
                     "placeholder": "Search favourites",
-                    "match_key": "label",
-                    "match_mode": "contains",
-                    "case_sensitive": false,
-                    "empty_message": "No favourites match your search.",
-                    "content": [
-                      {
-                        "type": "platform.renderer.link_tiles",
-                        "props": {
-                          "id": "favourites_tiles",
-                          "title": "Favourites",
-                          "label_key": "label",
-                          "address_key": "external_address",
-                          "description_key": "description",
-                          "target_kind_key": "target_kind",
-                          "application_key_key": "application_key",
-                          "page_key_key": "page_key",
-                          "open_behaviour_key": "open_behaviour",
-                          "organization_id_key": "target_organization_id",
-                          "application_root_id_key": "target_application_root_id",
-                          "module_root_id_key": "target_module_root_id",
-                          "module_release_revision_key": "target_module_release_revision",
-                          "record_type_id_key": "target_record_type_id",
-                          "storage_contract_id_key": "target_storage_contract_id",
-                          "record_id_key": "record_id",
-                          "row_action_label": "Remove",
-                          "actions": [],
-                          "vortex": {
-                            "block": {
-                              "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47",
-                              "release_version": "1.2.0"
-                            },
-                            "query": "vortex.landing_zone:landing_zone_favourites",
-                            "responsive": {
-                              "desktop": {
-                                "visible": true,
-                                "width": {
-                                  "kind": "fill"
-                                },
-                                "height": {
-                                  "kind": "content"
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    ],
+                    "publishes_parameter": "favourites_filter",
                     "vortex": {
                       "block": {
-                        "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15",
+                        "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                         "release_version": "1.0.0"
                       },
                       "responsive": {
@@ -573,7 +533,56 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "name": "favourites_filter"
+                  }
+                },
+                {
+                  "type": "platform.renderer.link_tiles",
+                  "props": {
+                    "id": "favourites_tiles",
+                    "title": "Favourites",
+                    "label_key": "label",
+                    "address_key": "external_address",
+                    "description_key": "description",
+                    "target_kind_key": "target_kind",
+                    "application_key_key": "application_key",
+                    "page_key_key": "page_key",
+                    "open_behaviour_key": "open_behaviour",
+                    "organization_id_key": "target_organization_id",
+                    "application_root_id_key": "target_application_root_id",
+                    "module_root_id_key": "target_module_root_id",
+                    "module_release_revision_key": "target_module_release_revision",
+                    "record_type_id_key": "target_record_type_id",
+                    "storage_contract_id_key": "target_storage_contract_id",
+                    "record_id_key": "record_id",
+                    "row_action_label": "Remove",
+                    "actions": [],
+                    "vortex": {
+                      "block": {
+                        "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47",
+                        "release_version": "1.2.0"
+                      },
+                      "query": "vortex.landing_zone:landing_zone_favourites",
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    },
+                    "query_parameters": [
+                      {
+                        "input": "search",
+                        "source": "control",
+                        "control_placement": "favourites_filter"
+                      }
+                    ]
                   }
                 }
               ],
@@ -598,61 +607,15 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.view_filter",
+                  "type": "platform.renderer.text_input",
                   "props": {
                     "id": "bookmarks_filter",
                     "label": "Search bookmarks",
                     "placeholder": "Search bookmarks",
-                    "match_key": "label",
-                    "match_mode": "contains",
-                    "case_sensitive": false,
-                    "empty_message": "No bookmarks match your search.",
-                    "content": [
-                      {
-                        "type": "platform.renderer.link_tiles",
-                        "props": {
-                          "id": "bookmarks_tiles",
-                          "title": "Bookmarks",
-                          "label_key": "label",
-                          "address_key": "external_address",
-                          "description_key": "description",
-                          "target_kind_key": "target_kind",
-                          "application_key_key": "application_key",
-                          "page_key_key": "page_key",
-                          "open_behaviour_key": "open_behaviour",
-                          "organization_id_key": "target_organization_id",
-                          "application_root_id_key": "target_application_root_id",
-                          "module_root_id_key": "target_module_root_id",
-                          "module_release_revision_key": "target_module_release_revision",
-                          "record_type_id_key": "target_record_type_id",
-                          "storage_contract_id_key": "target_storage_contract_id",
-                          "record_id_key": "record_id",
-                          "row_action_label": "Remove",
-                          "actions": [],
-                          "vortex": {
-                            "block": {
-                              "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47",
-                              "release_version": "1.2.0"
-                            },
-                            "query": "vortex.landing_zone:landing_zone_tiles",
-                            "responsive": {
-                              "desktop": {
-                                "visible": true,
-                                "width": {
-                                  "kind": "fill"
-                                },
-                                "height": {
-                                  "kind": "content"
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    ],
+                    "publishes_parameter": "bookmarks_filter",
                     "vortex": {
                       "block": {
-                        "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15",
+                        "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                         "release_version": "1.0.0"
                       },
                       "responsive": {
@@ -666,7 +629,56 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "name": "bookmarks_filter"
+                  }
+                },
+                {
+                  "type": "platform.renderer.link_tiles",
+                  "props": {
+                    "id": "bookmarks_tiles",
+                    "title": "Bookmarks",
+                    "label_key": "label",
+                    "address_key": "external_address",
+                    "description_key": "description",
+                    "target_kind_key": "target_kind",
+                    "application_key_key": "application_key",
+                    "page_key_key": "page_key",
+                    "open_behaviour_key": "open_behaviour",
+                    "organization_id_key": "target_organization_id",
+                    "application_root_id_key": "target_application_root_id",
+                    "module_root_id_key": "target_module_root_id",
+                    "module_release_revision_key": "target_module_release_revision",
+                    "record_type_id_key": "target_record_type_id",
+                    "storage_contract_id_key": "target_storage_contract_id",
+                    "record_id_key": "record_id",
+                    "row_action_label": "Remove",
+                    "actions": [],
+                    "vortex": {
+                      "block": {
+                        "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47",
+                        "release_version": "1.2.0"
+                      },
+                      "query": "vortex.landing_zone:landing_zone_tiles",
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    },
+                    "query_parameters": [
+                      {
+                        "input": "search",
+                        "source": "control",
+                        "control_placement": "bookmarks_filter"
+                      }
+                    ]
                   }
                 }
               ],
@@ -959,48 +971,15 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.view_filter",
+                  "type": "platform.renderer.text_input",
                   "props": {
                     "id": "all_applications_filter",
                     "label": "Search applications",
                     "placeholder": "Search applications",
-                    "match_key": "name",
-                    "match_mode": "contains",
-                    "case_sensitive": false,
-                    "empty_message": "No applications match your search.",
-                    "content": [
-                      {
-                        "type": "platform.renderer.application_launcher",
-                        "props": {
-                          "id": "all_applications",
-                          "title": "All applications",
-                          "name_key": "name",
-                          "icon_key": "icon",
-                          "side_panel": [],
-                          "vortex": {
-                            "block": {
-                              "block_id": "b1a7c2e4-5d3f-4a91-8c26-0e7f4b9a1d33",
-                              "release_version": "1.0.0"
-                            },
-                            "query": "vortex.landing_zone:landing_zone_applications",
-                            "responsive": {
-                              "desktop": {
-                                "visible": true,
-                                "width": {
-                                  "kind": "fill"
-                                },
-                                "height": {
-                                  "kind": "content"
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    ],
+                    "publishes_parameter": "all_applications_filter",
                     "vortex": {
                       "block": {
-                        "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15",
+                        "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
                         "release_version": "1.0.0"
                       },
                       "responsive": {
@@ -1014,7 +993,43 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "name": "all_applications_filter"
+                  }
+                },
+                {
+                  "type": "platform.renderer.application_launcher",
+                  "props": {
+                    "id": "all_applications",
+                    "title": "All applications",
+                    "name_key": "name",
+                    "icon_key": "icon",
+                    "side_panel": [],
+                    "vortex": {
+                      "block": {
+                        "block_id": "b1a7c2e4-5d3f-4a91-8c26-0e7f4b9a1d33",
+                        "release_version": "1.0.0"
+                      },
+                      "query": "vortex.landing_zone:landing_zone_applications",
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    },
+                    "query_parameters": [
+                      {
+                        "input": "search",
+                        "source": "control",
+                        "control_placement": "all_applications_filter"
+                      }
+                    ]
                   }
                 }
               ],

@@ -193,7 +193,7 @@ const bindControl = (source: ApplicationSourceDocument, controlAlias: string, ev
   }
   body.flow_bindings.push({ id, control: controlAlias, event_id: eventId, event, flow: flowKey, inputs });
   if (event === "row_clicked") {
-    if (item !== undefined) item.props.row_click = { event_id: eventId };
+    if (item !== undefined) item.props.row_click = { mode: "flow", event_id: eventId };
   }
   if (rowActionMenu && item !== undefined) {
     item.props.row_actions = [...(Array.isArray(item.props.row_actions) ? item.props.row_actions : []),
