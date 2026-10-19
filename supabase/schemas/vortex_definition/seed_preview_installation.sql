@@ -97,6 +97,13 @@ begin
       from pg_catalog.unnest(seeded_ids) as source(id)
       where closure_value -> 'totalsOver' -> source.id ? pg_catalog.lower(seed.record_type_id::text)
     );
+  -- A seeded record type the preview no longer runs, or that no longer has totals or stored
+  -- calculations, has nothing left to work out.
+  update vortex_definition.preview_installation_seeds as seed
+  set derived_ready_at = pg_catalog.statement_timestamp()
+  where seed.preview_installation_id = p_preview_installation_id
+    and seed.derived_ready_at is null
+    and not closure_value -> 'derivedRecordTypeIds' ? pg_catalog.lower(seed.record_type_id::text);
 
   return pg_catalog.jsonb_build_object(
     'draftRevision', preview_row.draft_revision,

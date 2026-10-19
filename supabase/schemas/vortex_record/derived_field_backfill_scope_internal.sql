@@ -58,8 +58,7 @@ begin
       record_type_key := pg_catalog.lower(record_type_item ->> 'recordTypeId');
       type_meta := plan -> 'recordTypes' -> record_type_key;
       continue when type_meta is null
-        or coalesce((type_meta ->> 'isSystemProjection')::boolean, false)
-        or (preview_installation is not null and not pending_ids ? record_type_key);
+        or coalesce((type_meta ->> 'isSystemProjection')::boolean, false);
       definitions := definitions || pg_catalog.jsonb_build_object(record_type_key, record_type_item);
       -- The fields a backfill works out: every total and every stored calculation. A preview's
       -- storage is new, so all of them; a live upgrade only those this exact Module release
@@ -80,7 +79,9 @@ begin
             and mapping.introduced_by_module_root_id = (type_meta ->> 'moduleRootId')::uuid
             and mapping.introduced_at_release_revision = (type_meta ->> 'releaseRevision')::bigint
         ));
-      if pg_catalog.jsonb_array_length(field_ids) > 0 then
+      -- Every definition stays listed: a total reads its source record type's definition.
+      if pg_catalog.jsonb_array_length(field_ids) > 0
+        and (preview_installation is null or pending_ids ? record_type_key) then
         targets := targets || pg_catalog.jsonb_build_object(record_type_key, field_ids);
       end if;
     end loop;
