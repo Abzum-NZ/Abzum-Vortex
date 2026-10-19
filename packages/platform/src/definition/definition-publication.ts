@@ -35,7 +35,7 @@ import {
 import { fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
   applicationDraftCompilationKey,
-  readCachedApplicationDraftCompilation,
+  compileApplicationDraftOnce,
   retainApplicationDraftCompilation,
 } from "./application-draft-compilation-cache";
 import {
@@ -47,6 +47,7 @@ import {
   type PreparedDefinitionPublication,
   type DefinitionDraftCandidate,
   type DefinitionPublicationCandidate,
+  type DefinitionPublicationReader,
   type DefinitionPublicationTransaction,
 } from "./definition-publication-contracts";
 import type { ResolvedDependencies } from "./definition-dependency-resolution";
@@ -284,7 +285,7 @@ const authorize = async (
  * uses. The same draft revision over the same of those is compiled once, whichever of the builder
  * or preview planning asks first; authorisation and the candidate validation run on every call.
  */
-const compileDraftSnapshot = async (
+const compileDraftSnapshotOver = async (
   context: SessionContext,
   overlay: DefinitionPublicationTransaction,
   catalogue: DefinitionPublicationCatalogue,
@@ -321,46 +322,76 @@ const compileDraftSnapshot = async (
       ? null
       : [directoryPage.rootId, directoryPage.anchorReleaseRevision],
   ]);
-  const cached = readCachedApplicationDraftCompilation(cacheKey);
-  if (cached !== undefined) return cached;
-  // The draft's own inline Modules are compiled from the draft, in memory, by the
-  // publication's own steps; nothing is written.
-  const compiled = await compileApplicationWithInlineModules(
-    context,
-    overlay,
-    catalogue,
-    candidate,
-  );
-  const compilation = compiled.output;
-  if (
-    compilation.kind !== "application" ||
-    compilation.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION
-  )
-    return refuse("DEFINITION_COMPILATION_REFUSED");
-  let directory = compiled.dependencies.modules.find(
-    (release) => release.key === peopleDirectory.module,
-  );
-  if (directory === undefined && directoryPage !== undefined && directoryPage.rootId !== null) {
-    try {
-      directory = await selectCurrentModuleRelease(overlay, candidate, peopleDirectory.module);
-    } catch (error) {
-      if (!(error instanceof DefinitionError)) throw error;
-      console.error(`[definition] the people directory release could not be read: ${error.code}`);
+  return compileApplicationDraftOnce(cacheKey, async () => {
+    // The draft's own inline Modules are compiled from the draft, in memory, by the
+    // publication's own steps; nothing is written.
+    const compiled = await compileApplicationWithInlineModules(
+      context,
+      overlay,
+      catalogue,
+      candidate,
+    );
+    const compilation = compiled.output;
+    if (
+      compilation.kind !== "application" ||
+      compilation.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION
+    )
+      return refuse("DEFINITION_COMPILATION_REFUSED");
+    let directory = compiled.dependencies.modules.find(
+      (release) => release.key === peopleDirectory.module,
+    );
+    if (directory === undefined && directoryPage !== undefined && directoryPage.rootId !== null) {
+      try {
+        directory = await selectCurrentModuleRelease(overlay, candidate, peopleDirectory.module);
+      } catch (error) {
+        if (!(error instanceof DefinitionError)) throw error;
+        console.error(`[definition] the people directory release could not be read: ${error.code}`);
+      }
     }
-  }
-  return retainApplicationDraftCompilation(cacheKey, {
-    compilation,
-    releasePlan: compiled,
-    moduleReleases: compiled.dependencies.modules,
-    conditionContexts: projectDraftConditionContexts(
-      source,
-      candidate.draft.sourceFingerprint,
-      compiled.dependencies,
-      compiled.resolution,
-    ),
-    currentReleaseRevision: candidate.draft.publishedRevision ?? null,
-    peopleDirectory: directory === undefined ? null : peopleDirectoryOwnerOf(directory),
+    return retainApplicationDraftCompilation(cacheKey, {
+      compilation,
+      releasePlan: compiled,
+      moduleReleases: compiled.dependencies.modules,
+      conditionContexts: projectDraftConditionContexts(
+        source,
+        candidate.draft.sourceFingerprint,
+        compiled.dependencies,
+        compiled.resolution,
+      ),
+      currentReleaseRevision: candidate.draft.publishedRevision ?? null,
+      peopleDirectory: directory === undefined ? null : peopleDirectoryOwnerOf(directory),
+    });
   });
+};
+
+/**
+ * The compile of a saved Application revision over the overlay, or over a fresh one when preview
+ * preparation staged the draft's inline Modules between the compile's reads of their roots and
+ * drafts (the reads see each commit): that refusal is a moved snapshot, not a stale draft, so the
+ * compile reads them once more. A second refusal is the answer.
+ */
+const compileDraftSnapshot = async (
+  context: SessionContext,
+  reader: DefinitionPublicationReader,
+  overlay: DefinitionPublicationTransaction,
+  catalogue: DefinitionPublicationCatalogue,
+  candidate: DefinitionDraftCandidate | DefinitionPublicationCandidate,
+): Promise<ApplicationDraftCompilation> => {
+  try {
+    return await compileDraftSnapshotOver(context, overlay, catalogue, candidate);
+  } catch (error) {
+    if (!(error instanceof DefinitionError) || error.code !== "DEFINITION_DRAFT_STALE_OR_MISSING")
+      throw error;
+    console.info(
+      "[definition] inline Modules were staged during the draft compile: DEFINITION_DRAFT_COMPILE_RESTAGED",
+    );
+    return compileDraftSnapshotOver(
+      context,
+      createDraftModuleOverlay(reader, context, candidate.draft),
+      catalogue,
+      candidate,
+    );
+  }
 };
 
 /**
@@ -474,6 +505,7 @@ export const createDefinitionPublicationService = (
         refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
       return compileDraftSnapshot(
         context,
+        reader,
         createDraftModuleOverlay(reader, context, candidate.draft),
         catalogue,
         candidate,
@@ -518,7 +550,7 @@ export const createDefinitionPublicationService = (
       try {
         return {
           publication,
-          compilation: await compileDraftSnapshot(context, overlay, catalogue, candidate),
+          compilation: await compileDraftSnapshot(context, reader, overlay, catalogue, candidate),
           failure: undefined,
         };
       } catch (failure) {
@@ -565,7 +597,7 @@ export const createDefinitionPublicationService = (
         candidate,
         catalogue.permissions,
         async () =>
-          (await compileDraftSnapshot(context, overlay, catalogue, candidate)).releasePlan,
+          (await compileDraftSnapshot(context, reader, overlay, catalogue, candidate)).releasePlan,
       );
     });
   },

@@ -119,12 +119,13 @@ const recordKeys = (
   return keys;
 };
 
-/** The records of the canvas's data blocks for one saved revision, as the workspace read them. */
+/**
+ * The records of the canvas's data blocks for one saved revision, as the workspace read them.
+ * `superseded`: a newer saved revision replaced this one; its own read follows, so what is shown stays.
+ */
 export type StudioCanvasRecordsRead = Readonly<{
-  state: StudioCanvasRecords["state"];
+  state: StudioCanvasRecords["state"] | "superseded";
   records: Readonly<Record<string, unknown>>;
-  /** Read from a preview still moving to this revision: it is read again shortly. */
-  behind?: boolean;
   /** On a page of one record, the record its blocks were read with. */
   sample?: StudioCanvasSample;
 }>;
@@ -205,7 +206,7 @@ export type ApplicationPagePuckEditorProps = Readonly<{
   palette?: StudioCanvasPalette | undefined;
   /**
    * Reads the records of one content area's data blocks for the saved revision `compiledSource`
-   * is. The canvas reads again whenever a newer saved revision is compiled.
+   * is, once. The canvas reads again whenever a newer saved revision is compiled.
    */
   readRecords?:
     ((area: string, signal: AbortSignal) => Promise<StudioCanvasRecordsRead>) | undefined;
@@ -467,33 +468,23 @@ function ApplicationPageSlotPuckEditor({
   );
   const [recordsRead, setRecordsRead] = useState<
     StudioCanvasRecordsRead & {
+      state: StudioCanvasRecords["state"];
       source?: ApplicationSourceDocument;
       keys?: ReadonlyMap<string, string>;
     }
   >({ state: "loading", records: {} });
-  // A preview still moving to this revision is read again shortly; the records shown meanwhile stay.
-  const [followed, setFollowed] = useState<
-    Readonly<{ source?: ApplicationSourceDocument; area?: string; count: number }>
-  >({ count: 0 });
-  const followUp =
-    followed.source === compiledSource && followed.area === at.key ? followed.count : 0;
+  // One read per content area and compiled revision: the workspace sends it once the preview runs
+  // this revision's data shape, so it is never re-sent on a timer.
   useEffect(() => {
     if (readRecords === undefined || savedKeys.size === 0) return;
     let cancelled = false;
     const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
     readRecords(at.key, controller.signal).then(
       (read) => {
-        if (cancelled) return;
-        const again = read.behind === true && followUp < 30;
-        // A read that failed for a moment is tried again, and what is shown meanwhile stays.
-        if (read.state !== "unavailable" || !again)
-          setRecordsRead({ ...read, source: compiledSource, keys: savedKeys });
-        if (again)
-          timer = setTimeout(
-            () => setFollowed({ source: compiledSource, area: at.key, count: followUp + 1 }),
-            1500,
-          );
+        if (cancelled || controller.signal.aborted) return;
+        // A newer saved revision replaced this one: its own read follows, and what is shown stays.
+        if (read.state === "superseded") return;
+        setRecordsRead({ ...read, state: read.state, source: compiledSource, keys: savedKeys });
       },
       (error: unknown) => {
         if (controller.signal.aborted) return;
@@ -510,9 +501,8 @@ function ApplicationPageSlotPuckEditor({
     return () => {
       cancelled = true;
       controller.abort();
-      if (timer !== undefined) clearTimeout(timer);
     };
-  }, [readRecords, compiledSource, at.key, followUp]);
+  }, [readRecords, compiledSource, at.key]);
   // Records read for another saved revision are never shown as this one's, except while this
   // revision's own read runs after a presentation edit: every data block is still exactly as it
   // was read (same release, settings and query), so its records are the same.

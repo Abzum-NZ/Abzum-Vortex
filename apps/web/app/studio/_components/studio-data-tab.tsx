@@ -698,6 +698,8 @@ export function useStudioDataTab({
       selection={current}
       unsaved={unsaved}
       draftRevision={view.draftRevision}
+      previewShape={view.previewShape}
+      preview={draft.preview}
       onSelect={select}
       onCreate={() => setCreating(true)}
       onAddField={isOwned && !disabled ? () => addField("text") : undefined}

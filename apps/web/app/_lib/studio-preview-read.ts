@@ -13,7 +13,7 @@ import {
   type OrganizationId,
 } from "@vortex/platform/schema";
 import { humanOrganizationRequests } from "./server-composition";
-import { currentStudioPreview, readStudioPreviewState } from "./studio-application-preview";
+import { readStudioPreviewState, studioPreviewRunsDraft } from "./studio-application-preview";
 import { loadInstalledContext, requestDependencies } from "./application-page/load";
 import { createPlacementReadServices } from "./application-page/placement-services";
 import { loadOrganizationLauncher } from "./organization-context";
@@ -29,8 +29,9 @@ export type StudioPreviewSelection = Readonly<{
 /**
  * Where Studio's canvas and Data tab read the records of the saved draft: the builder's own preview
  * installation of that draft, with its runtime context and the running application's own readers.
- * The visible reader moves the preview to the saved data shape before reading its records.
- * Presentation-only edits reuse the existing records. Every read in it runs under
+ * It reads only a preview that already runs the saved revision's data shape: a save moves the
+ * preview on the server and Studio's readers wait for it to be ready before they read, so a read
+ * never prepares or moves a preview. Presentation-only edits reuse the existing records. Every read in it runs under
  * the builder's preview access, as the preview itself decides it: the draft's roles for the
  * Application's own permissions, the builder's own live access for people and every other system
  * projection, and no record-share authority.
@@ -40,8 +41,6 @@ export type StudioPreviewRead =
       kind: "available";
       /** The saved draft at exactly the requested revision. */
       draft: StoredApplicationDefinitionDraft;
-      /** The preview still runs an older revision's data shape and moves to this one meanwhile. */
-      behind: boolean;
       selection: StudioPreviewSelection;
       context: InstalledRuntimeContext;
       dependencies: HumanOrganizationRequestDependencies;
@@ -51,6 +50,7 @@ export type StudioPreviewRead =
   | Readonly<{ kind: "refused" }>
   /** The saved draft moved on from the revision the request names. */
   | Readonly<{ kind: "conflict" }>
+  /** The preview does not run this revision's data shape yet: wait until it is ready, then read. */
   | Readonly<{ kind: "following" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
@@ -67,17 +67,10 @@ export const openStudioPreviewRead = async (
   signal?.throwIfAborted();
   if (state.kind === "refused") return { kind: "refused" };
   if (state.kind !== "read") return state;
-  const preview = await currentStudioPreview(
-    session,
-    organizationId,
-    state.draft,
-    state.preview,
-    "read",
-    signal,
-  );
-  signal?.throwIfAborted();
-  if (preview.kind === "refused") return { kind: "refused" };
-  if (preview.kind !== "available") return preview;
+  const runs = studioPreviewRunsDraft(state.draft, state.preview);
+  if (runs === "newer") return { kind: "conflict" };
+  const preview = state.preview;
+  if (runs !== "ready" || preview === undefined) return { kind: "following" };
   const dependencies = requestDependencies();
   const application = { organizationId, applicationRootId: rootId };
   // Copied live records are read only once they are decided again by the builder's current live
@@ -157,7 +150,6 @@ export const openStudioPreviewRead = async (
   return {
     kind: "available",
     draft: state.draft,
-    behind: preview.behind,
     selection,
     context: installed.value,
     dependencies,
