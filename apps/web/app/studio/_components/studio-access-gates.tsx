@@ -293,11 +293,16 @@ export function StudioAccessPermissionList({
                 kind: "permission",
                 permissionKey: permission.key,
               });
-              const declaration = source.body.permissions.find(
+              const declaration = (
+                permission.moduleKey === undefined
+                  ? source.body.permissions
+                  : (source.body.modules.find((module) => module.key === permission.moduleKey)
+                      ?.permissions ?? [])
+              ).find(
                 (entry) =>
                   entry.key === permission.key &&
-                  entry.action_kind === "named" &&
-                  entry.record_type === undefined,
+                  !permission.standard &&
+                  (entry.action_kind === "read" || entry.action_kind === "named"),
               );
               return (
                 <Fragment key={permission.key}>
@@ -412,14 +417,10 @@ export function StudioAccessPermissionList({
                     <TableRow>
                       <TableCell colSpan={4} className="whitespace-normal py-4">
                         <StudioPermissionDeclaration
-                          key={JSON.stringify([
-                            declaration.id,
-                            declaration.label,
-                            declaration.description,
-                            declaration.administrative,
-                          ])}
+                          key={JSON.stringify(declaration)}
                           source={source}
                           permission={declaration}
+                          moduleKey={permission.moduleKey}
                           disabled={disabled}
                           run={run}
                           close={() => setExpanded(null)}
