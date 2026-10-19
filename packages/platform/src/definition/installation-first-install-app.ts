@@ -38,10 +38,7 @@ import {
   type FirstInstallSelector,
 } from "./installation-first-install";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
-import {
-  releaseRoleTemplates,
-  type ApplicationRoleTemplate,
-} from "./installation-role-templates";
+import { releaseRoleTemplates, type ApplicationRoleTemplate } from "./installation-role-templates";
 
 /** What a first-install read needs from the application: the catalogue, the permissions, and the custom-component rule. */
 export type FirstInstallEnvironment = Readonly<{
@@ -86,6 +83,14 @@ const readFirstInstallCandidateInTransaction = async (
   const latest = await readApplicationLatestRelease(transaction, selector.rootId);
   if (selector.releaseRevision > latest.releaseRevision)
     firstInstallUnavailable("release_not_published");
+  const bindings = await readInstallationBindings(transaction, selector.rootId);
+  // A different registered release needs the upgrade journey. Decide that from the protected
+  // binding read before fetching and projecting a release set a first install cannot use.
+  if (
+    bindings.registeredReleaseRevision !== null &&
+    bindings.registeredReleaseRevision !== selector.releaseRevision
+  )
+    firstInstallUnavailable("already_installed");
   const releaseSet = await readFirstInstallReleaseSet(
     transaction,
     environment.catalogue,
@@ -101,7 +106,6 @@ const readFirstInstallCandidateInTransaction = async (
     permissions,
     installationOperation(selector.rootId, customComponents),
   );
-  const bindings = await readInstallationBindings(transaction, selector.rootId);
   await firstInstallLatestReleaseMatches(transaction, selector, latest);
   const finalContext = await readInstallationHumanContext(
     transaction,

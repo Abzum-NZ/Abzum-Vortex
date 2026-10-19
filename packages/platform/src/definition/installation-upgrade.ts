@@ -105,10 +105,13 @@ export type UpgradeAuthorizedState = Readonly<{
   checkedAt: string;
 }>;
 
-const same = (left: unknown, right: unknown): boolean => canonicalJson(left) === canonicalJson(right);
+const same = (left: unknown, right: unknown): boolean =>
+  canonicalJson(left) === canonicalJson(right);
 
 const fingerprint = (domain: string, value: unknown): string =>
-  `sha256:${createHash("sha256").update(JSON.stringify([domain, value]), "utf8").digest("hex")}`;
+  `sha256:${createHash("sha256")
+    .update(JSON.stringify([domain, value]), "utf8")
+    .digest("hex")}`;
 
 const releaseIdentity = (release: UpgradeReleaseIdentity): UpgradeReleaseIdentity => ({
   releaseRevision: release.releaseRevision,
@@ -118,12 +121,10 @@ const releaseIdentity = (release: UpgradeReleaseIdentity): UpgradeReleaseIdentit
   resolutionFingerprint: release.resolutionFingerprint,
 });
 
-const readCurrentState = async (
-  environment: UpgradeEnvironment,
+const readCurrentInstallation = async (
   transaction: RequestDatabaseTransaction,
   selector: UpgradeSelector,
-  context: InstallationHumanContext,
-): Promise<UpgradeState> => {
+): Promise<Pick<UpgradeState, "active" | "bindings">> => {
   await readInstallationOrdinaryRoot(transaction, selector.rootId);
   let active: ActiveApplicationInstallationEvidence;
   try {
@@ -193,6 +194,16 @@ const readCurrentState = async (
         : "installation_incomplete",
     );
 
+  return { active, bindings };
+};
+
+const readCurrentState = async (
+  environment: UpgradeEnvironment,
+  transaction: RequestDatabaseTransaction,
+  selector: UpgradeSelector,
+  context: InstallationHumanContext,
+): Promise<UpgradeState> => {
+  const { active, bindings } = await readCurrentInstallation(transaction, selector);
   const activeReleaseSet = await readInstallationReleaseSet(
     transaction,
     environment.catalogue,
@@ -272,7 +283,11 @@ const assertStateEligible = (
   );
   if (selector.releaseRevision === state.active.applicationReleaseRevision) {
     if (!sameModules)
-      installationProblem("active_release_module_set_differs", "refused", "installation_incomplete");
+      installationProblem(
+        "active_release_module_set_differs",
+        "refused",
+        "installation_incomplete",
+      );
     if (!allowEqual) installationProblem("selected_release_not_newer", "refused", "not_newer");
     return;
   }
@@ -369,7 +384,10 @@ export const readUpgradeAuthorizedState = async (
   allowEqual: boolean,
 ): Promise<UpgradeAuthorizedState> => {
   let captured: InstallationProblemShape | undefined;
-  const scopeCandidate = { organizationId: selector.organizationId, applicationRootId: selector.rootId };
+  const scopeCandidate = {
+    organizationId: selector.organizationId,
+    applicationRootId: selector.rootId,
+  };
   const result = await environment.requests.run(
     session,
     scopeCandidate,
@@ -401,11 +419,12 @@ export const readUpgradeAuthorizedState = async (
           issuedAt,
           scopeCandidate,
         );
-        if (!same(context, finalContext))
-          installationProblem("human_context_changed", "refused");
-        const finalState = await readCurrentState(environment, transaction, selector, finalContext);
-        assertStateEligible(selector, finalState, allowEqual);
-        if (!same(firstState, finalState))
+        if (!same(context, finalContext)) installationProblem("human_context_changed", "refused");
+        // Release contents are immutable. Re-read the live installation and binding revisions,
+        // keeping the exact release sets already verified in this transaction only while that
+        // mutable state is unchanged. Authority and its deadline are still checked afresh below.
+        const finalInstallation = await readCurrentInstallation(transaction, selector);
+        if (!same({ active: firstState.active, bindings: firstState.bindings }, finalInstallation))
           installationProblem("installation_state_changed", "conflict");
         await requireInstallationAuthority(
           transaction,
@@ -413,7 +432,7 @@ export const readUpgradeAuthorizedState = async (
           environment.permissions,
           installationOperation(
             selector.rootId,
-            environment.containsCustomComponents(finalState.selectedReleaseSet),
+            environment.containsCustomComponents(firstState.selectedReleaseSet),
           ),
         );
 
@@ -423,11 +442,16 @@ export const readUpgradeAuthorizedState = async (
           scope,
           finalContext,
           selector.rootId,
-          finalState.selectedReleaseSet,
+          firstState.selectedReleaseSet,
         );
         return {
-          snapshot: makeSnapshot(selector, finalState, finalContext, new Date(deadline).toISOString()),
-          state: finalState,
+          snapshot: makeSnapshot(
+            selector,
+            firstState,
+            finalContext,
+            new Date(deadline).toISOString(),
+          ),
+          state: firstState,
           checkedAt: completedAt,
         };
       } catch (error) {
@@ -437,13 +461,11 @@ export const readUpgradeAuthorizedState = async (
     },
   );
   if (result.kind === "available") return result.value;
-  if (captured !== undefined) throw new InstallationProblem(captured, "transaction_failure_captured");
+  if (captured !== undefined)
+    throw new InstallationProblem(captured, "transaction_failure_captured");
   if (result.kind === "unavailable")
     return installationProblem("upgrade_request_unavailable", "refused");
-  return installationProblem(
-    "upgrade_request_temporarily_unavailable",
-    "temporarily_unavailable",
-  );
+  return installationProblem("upgrade_request_temporarily_unavailable", "temporarily_unavailable");
 };
 
 /**
@@ -470,8 +492,12 @@ export const readUpgradeActiveObservation = async (
           issuedAt,
           scopeCandidate,
         );
-        const active = await createActiveApplicationInstallationRepository(transaction).readCurrent();
-        if (!sameId(active.organizationId, organizationId) || !sameId(active.applicationRootId, rootId))
+        const active =
+          await createActiveApplicationInstallationRepository(transaction).readCurrent();
+        if (
+          !sameId(active.organizationId, organizationId) ||
+          !sameId(active.applicationRootId, rootId)
+        )
           installationProblem("observed_installation_mismatch", "refused");
         const registration = await readInstallationBindings(transaction, rootId);
         const registeredActive = registration.moduleBindings.filter(
@@ -527,7 +553,14 @@ export const readUpgradeActiveObservation = async (
           scopeCandidate,
         );
         if (!same(context, finalContext)) installationProblem("human_context_changed", "refused");
-        await installationDeadline(environment, transaction, scope, finalContext, rootId, releaseSet);
+        await installationDeadline(
+          environment,
+          transaction,
+          scope,
+          finalContext,
+          rootId,
+          releaseSet,
+        );
         return releaseIdentity(releaseSet.application);
       } catch (error) {
         captured = classifyInstallationFailure(error);
@@ -536,13 +569,16 @@ export const readUpgradeActiveObservation = async (
     },
   );
   if (result.kind === "available") return result.value;
-  if (captured !== undefined) throw new InstallationProblem(captured, "transaction_failure_captured");
+  if (captured !== undefined)
+    throw new InstallationProblem(captured, "transaction_failure_captured");
   return result.kind === "unavailable"
     ? installationProblem("observation_request_unavailable", "refused")
     : installationProblem("observation_request_temporarily_unavailable", "temporarily_unavailable");
 };
 
-const humanDefinitionAccess = (environment: UpgradeEnvironment): HumanInstallationDefinitionAccess => ({
+const humanDefinitionAccess = (
+  environment: UpgradeEnvironment,
+): HumanInstallationDefinitionAccess => ({
   async readReleaseSet(session, target) {
     const result = await environment.requests.run(
       session,
@@ -563,7 +599,10 @@ const humanDefinitionAccess = (environment: UpgradeEnvironment): HumanInstallati
   async prepareRegistrationCandidate(target, releaseSet) {
     return prepareApplicationRoleTemplatesForHumanRequest(
       target.organizationId,
-      { applicationRootId: target.applicationRootId, releaseRevision: target.applicationReleaseRevision },
+      {
+        applicationRootId: target.applicationRootId,
+        releaseRevision: target.applicationReleaseRevision,
+      },
       releaseSet,
     );
   },
@@ -640,9 +679,15 @@ const coordinatorFor = (
             scope.applicationRootId !== undefined
           )
             installationProblem("coordinator_scope_mismatch", "refused");
-          const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
-            organizationId: selector.organizationId,
-          });
+          const context = await readInstallationHumanContext(
+            transaction,
+            scope,
+            session,
+            issuedAt,
+            {
+              organizationId: selector.organizationId,
+            },
+          );
           await readInstallationOrdinaryRoot(transaction, selector.rootId);
           await currentInstallationStateForCoordinator(
             transaction,
@@ -714,7 +759,10 @@ const verifyCoordinatorActivation = (
   if (result.outcome === "activated") {
     if (result.previousApplicationReleaseRevision !== priorRevision)
       installationProblem("activation_prior_revision_mismatch", "conflict");
-    return { outcome: "activated", previousActiveRevision: result.previousApplicationReleaseRevision };
+    return {
+      outcome: "activated",
+      previousActiveRevision: result.previousApplicationReleaseRevision,
+    };
   }
   if (result.previousApplicationReleaseRevision !== selector.releaseRevision)
     installationProblem("activation_unchanged_revision_mismatch", "conflict");
@@ -743,13 +791,21 @@ export const activateUpgradeRelease = async (
   ) => Promise<void>,
 ): Promise<UpgradeActivation> => {
   const priorRevision = state.active.applicationReleaseRevision;
-  const result = await coordinatorFor(environment, selector, state, beforeRegistration).activate(session, {
-    organizationId: state.active.organizationId,
-    applicationRootId: selector.rootId,
-    applicationReleaseRevision: selector.releaseRevision,
-    expectedActiveReleaseRevision: priorRevision,
-  });
-  const verified = verifyCoordinatorActivation(result, selector, priorRevision, state.selectedReleaseSet);
+  const result = await coordinatorFor(environment, selector, state, beforeRegistration).activate(
+    session,
+    {
+      organizationId: state.active.organizationId,
+      applicationRootId: selector.rootId,
+      applicationReleaseRevision: selector.releaseRevision,
+      expectedActiveReleaseRevision: priorRevision,
+    },
+  );
+  const verified = verifyCoordinatorActivation(
+    result,
+    selector,
+    priorRevision,
+    state.selectedReleaseSet,
+  );
   await backfillActivatedApplication(environment.requests, session, {
     organizationId: state.active.organizationId,
     applicationRootId: selector.rootId,
