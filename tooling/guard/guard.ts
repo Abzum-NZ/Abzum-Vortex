@@ -918,7 +918,9 @@ for (const file of files.filter(
       for (const match of content.matchAll(
         /from\s+"([^"]*grid-features\/(?!(?:registry|column-menu|toolbar)")[^"]+)"/g,
       ))
-        if (!(file.startsWith("packages/ui/src/studio/") && match[1]!.startsWith("./grid-features/")))
+        if (!(
+          file.startsWith("packages/ui/src/studio/") && match[1]!.startsWith("./grid-features/")
+        ))
           add("grid-feature-registry", file, lineAt(content, match.index ?? 0), match[0]);
     }
 }

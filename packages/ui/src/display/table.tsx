@@ -178,7 +178,13 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     [accessibleName, features, layout.shown, rows, selectedRecordIds, narrowing, events],
   );
   const gridFeatures = useGridFeatures(featureContext);
-  const { cell: featureCell, decorate, cellClassName, headerAdornment, columnMenuItems } = gridFeatures;
+  const {
+    cell: featureCell,
+    decorate,
+    cellClassName,
+    headerAdornment,
+    columnMenuItems,
+  } = gridFeatures;
   // Full screen keeps this same tree and changes only the container classes.
   const containerRef = useRef<HTMLDivElement>(null);
   const fullScreen = useGridFullScreen(containerRef, contract?.allowFullScreen === true, announce);
