@@ -17,7 +17,11 @@ import {
   type PlatformBlockRelease,
   type ProjectedApplicationFrame,
 } from "@vortex/platform/schema";
-import type { ApplicationAccount, PlatformThemeTokens, FieldInputControlReleaseMap } from "@vortex/ui";
+import type {
+  ApplicationAccount,
+  PlatformThemeTokens,
+  FieldInputControlReleaseMap,
+} from "@vortex/ui";
 import { resolveIdentitySessionWithEmail } from "../auth/_lib/session-server";
 import { resolveApplicationAddress } from "./application-address";
 import { loadApplicationSearch } from "./application-search";
@@ -158,6 +162,7 @@ export const loadApplicationFrame = cache(
       context,
       pageDefinition.pageId,
       subject,
+      undefined,
     );
     const [projected, navigation] = await Promise.all([projectedPageRead, navigationRead]);
     if (projected.kind !== "available" || projected.value === undefined) return undefined;
@@ -169,7 +174,9 @@ export const loadApplicationFrame = cache(
         ? undefined
         : content.shells.find((candidate) => sameId(candidate.shellId, shellId));
     if (shellId !== undefined && shell === undefined)
-      throw new Error(`Compiled page '${pageDefinition.key}' references missing shell '${shellId}'`);
+      throw new Error(
+        `Compiled page '${pageDefinition.key}' references missing shell '${shellId}'`,
+      );
     const { frame } = splitProjectedPage(projected.value, shell);
 
     const switcherRead =
@@ -188,7 +195,14 @@ export const loadApplicationFrame = cache(
           : [];
 
     const query = addressed.query.getAll("q");
-    const expression = query.length === 1 ? (query[0] === "" ? undefined : query[0]) : query.length === 0 ? undefined : "";
+    const expression =
+      query.length === 1
+        ? query[0] === ""
+          ? undefined
+          : query[0]
+        : query.length === 0
+          ? undefined
+          : "";
     const search: ApplicationSearchView =
       expression === undefined
         ? content.search?.enabled === true

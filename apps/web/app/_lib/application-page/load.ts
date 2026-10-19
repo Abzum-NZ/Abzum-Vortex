@@ -152,7 +152,14 @@ export const readPageProjections = cache(
       // A detail subject is read by visibility conditions during projection. Prepare that subject
       // first; query readers are prepared only after projection has removed invisible placements.
       if (
-        !(await prepareRuntimePreviewPage(session, context, page, undefined, selectedPlacementIds))
+        !(await prepareRuntimePreviewPage(
+          session,
+          context,
+          page,
+          subjectRecordId !== undefined,
+          undefined,
+          selectedPlacementIds,
+        ))
       )
         return { kind: "temporarily_unavailable" } as const;
       const projected = await createStoredPageCapabilityService({
@@ -167,6 +174,7 @@ export const readPageProjections = cache(
           session,
           context,
           page,
+          subjectRecordId !== undefined,
           projected.value,
           selectedPlacementIds,
         ))

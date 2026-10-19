@@ -602,7 +602,12 @@ export const readStudioPreviewDemand = async (
     });
     return {
       kind: "derived",
-      demand: studioPreviewDemand(content, modules, { kind: "placements", page, placements }),
+      demand: studioPreviewDemand(content, modules, {
+        kind: "placements",
+        page,
+        readSubject: page.type === "detail",
+        placements,
+      }),
       compiled,
     } as const;
   } catch (error) {
@@ -696,6 +701,7 @@ export const prepareRuntimePreviewPage = cache(
     session: IdentitySession,
     context: InstalledRuntimeContext,
     page: PageDefinition,
+    readSubject: boolean,
     projected: Readonly<Record<string, unknown>> | undefined,
     selectedPlacementIds: ReadonlySet<string> | undefined,
   ): Promise<boolean> => {
@@ -712,6 +718,7 @@ export const prepareRuntimePreviewPage = cache(
       {
         kind: "placements",
         page,
+        readSubject,
         placements:
           projected === undefined
             ? []

@@ -40,6 +40,7 @@ type Selection =
   | Readonly<{
       kind: "placements";
       page: PageDefinition;
+      readSubject: boolean;
       placements: ReturnType<typeof collectPlacements>;
     }>
   | Extract<StudioPreviewReader, { kind: "records" }>;
@@ -129,7 +130,7 @@ export const studioPreviewDemand = (
       queryDemand(query);
     }
     const subject = "recordType" in selection.page ? selection.page.recordType : undefined;
-    if (subject?.state === "resolved") {
+    if (selection.readSubject && subject?.state === "resolved") {
       const record = modules
         .flatMap((module) => module.content.recordTypes)
         .find((candidate) => sameId(candidate.recordTypeId, subject.recordTypeId));
@@ -141,15 +142,8 @@ export const studioPreviewDemand = (
     }
   }
   if (types.size === 0) return undefined;
-  for (const entry of types.values()) {
-    const record = modules
-      .flatMap((module) => module.content.recordTypes)
-      .find((candidate) => sameId(candidate.recordTypeId, entry.recordTypeId))!;
-    entry.relationshipPaths = record.relationships
-      .filter((relationship) => entry.fieldIds.has(relationship.fromFieldId.toLowerCase()))
-      .map((relationship) => [relationship.relationshipId.toLowerCase()])
-      .sort((a, b) => a[0]!.localeCompare(b[0]!));
-  }
+  // Query predicates and sorts currently name fields directly. Relationship-field targets are
+  // expanded by SQL from fieldIds; no traversal path is authored in the query contract.
   return previewDemandSchema.parse({
     recordTypes: [...types.values()]
       .sort((a, b) => a.recordTypeId.localeCompare(b.recordTypeId))
