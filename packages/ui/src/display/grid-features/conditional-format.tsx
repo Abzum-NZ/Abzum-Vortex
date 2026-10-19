@@ -137,8 +137,11 @@ function ConditionalFormatCell({
   const measure = format === undefined ? undefined : keyed(row.format?.measures, column.key);
   if (styled === undefined && measure === undefined) return <>{children}</>;
   const style = styled?.style;
+  const rowMarkerColumn = context.columns.find(
+    (candidate) => styleOf(context, row, candidate)?.own === false,
+  );
   const marked =
-    style !== undefined && (styled?.own === true || context.columns[0]?.key === column.key);
+    style !== undefined && (styled?.own === true || rowMarkerColumn?.key === column.key);
   const tint =
     format?.kind === "colour_scale" && measure !== undefined
       ? tintClasses[scaleToken(format, measure)]

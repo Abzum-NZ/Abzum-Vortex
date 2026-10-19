@@ -297,7 +297,7 @@ export const evaluateConditionalFormatting = (
     const high = format.kind === "data_bar" ? Math.max(0, max) : max;
     for (const entry of measured) {
       const fraction =
-        high === low ? (format.kind === "data_bar" ? 1 : 0.5) : (entry.n - low) / (high - low);
+        high === low ? (format.kind === "data_bar" ? 0 : 0.5) : (entry.n - low) / (high - low);
       const held = formats.get(entry.recordId) ?? {};
       formats.set(entry.recordId, {
         ...held,

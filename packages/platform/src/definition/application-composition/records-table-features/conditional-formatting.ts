@@ -281,8 +281,7 @@ const fieldName = (facts: RecordsTableQueryFacts, field: string): string =>
   factsOf(facts, field)?.label ?? field.split(/[.:]/).at(-1) ?? field;
 
 /** A rule whose style colours a value conveys status, so it needs an icon or a label as well. */
-const showsStatusByColour = (style: ConditionalFormatStyle): boolean =>
-  style.token !== "muted" && (style.tint || style.text);
+const showsStatusByColour = (style: ConditionalFormatStyle): boolean => style.tint || style.text;
 
 /**
  * What stops one rule from being published, as the sentence Studio shows beside it, or undefined
@@ -400,7 +399,12 @@ export const recordsTableConditionalFormattingFeature: RecordsTableFeatureDefini
         const issue = conditionalFormatRuleIssue(rule, facts);
         if (issue !== undefined) return notPossible(issue);
       }
+      const formattedFields = new Set<string>();
       for (const format of state.columnFormats) {
+        const field = format.field.toLowerCase();
+        if (formattedFields.has(field))
+          return notPossible(`Choose one number format for ${fieldName(facts, format.field)}.`);
+        formattedFields.add(field);
         const issue = conditionalColumnFormatIssue(format, facts);
         if (issue !== undefined) return notPossible(issue);
       }

@@ -283,6 +283,9 @@ export function StudioConditionalFormattingEditor({
   const numberFields = queryFields.filter((field) =>
     conditionalColumnFormatFieldTypes.includes(field.resultType ?? field.type),
   );
+  const availableNumberFields = numberFields.filter(
+    (field) => !columnFormats.some((format) => format.field === field.reference),
+  );
 
   const selectedIndex = rules.findIndex((rule) => rule.id === selected);
   const selectedRule = selectedIndex < 0 ? undefined : rules[selectedIndex];
@@ -347,8 +350,8 @@ export function StudioConditionalFormattingEditor({
                   onDragEnd={() => setDragged(undefined)}
                   data-vortex-formatting-rule={rule.id}
                   className={cn(
-                    "flex items-start gap-2 rounded-md border p-2",
-                    selected === rule.id && "border-ring",
+                    "flex items-start gap-2 rounded-md py-2",
+                    selected === rule.id && "bg-accent text-accent-foreground",
                     !rule.enabled && "opacity-60",
                   )}
                 >
@@ -364,12 +367,12 @@ export function StudioConditionalFormattingEditor({
                     onClick={() => setSelected(selected === rule.id ? undefined : rule.id)}
                   >
                     <span className="block truncate">{summary}</span>
-                    <span className="block truncate text-xs text-muted-foreground">
+                    <span className="block truncate text-sm">
                       {target}
                       {rule.stopIfTrue ? " · stops" : ""}
                     </span>
                     {issue === undefined ? null : (
-                      <span role="alert" className="block text-xs text-destructive">
+                      <span role="alert" className="block text-sm text-destructive">
                         {issue}
                       </span>
                     )}
@@ -438,7 +441,7 @@ export function StudioConditionalFormattingEditor({
             type="button"
             variant="outline"
             size="sm"
-            disabled={disabled || numberFields.length === 0 || formatItems.length >= 10}
+            disabled={disabled || availableNumberFields.length === 0 || formatItems.length >= 10}
             onClick={() =>
               write({
                 formats: [
@@ -448,7 +451,7 @@ export function StudioConditionalFormattingEditor({
                     properties: {
                       field: {
                         kind: "field_reference",
-                        field: numberFields[0]!.reference as never,
+                        field: availableNumberFields[0]!.reference as never,
                       },
                       kind: choice("data_bar"),
                       token: choice("info"),
@@ -462,7 +465,7 @@ export function StudioConditionalFormattingEditor({
             Add
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Data bars and colour scales measure the rows on the page.
         </p>
         {columnFormats.map((format, index) => (
@@ -470,7 +473,11 @@ export function StudioConditionalFormattingEditor({
             key={`${format.field}-${index}`}
             idPrefix={`${idPrefix}-${ownId}-column-${index}`}
             format={format}
-            numberFields={numberFields}
+            numberFields={numberFields.filter(
+              (field) =>
+                field.reference === format.field ||
+                !columnFormats.some((held) => held.field === field.reference),
+            )}
             issue={conditionalColumnFormatIssue(format, facts)}
             disabled={disabled}
             onChange={(next) =>
@@ -570,7 +577,7 @@ function RuleEditor({
   return (
     <section
       aria-label={`Rule ${rule.id}`}
-      className="space-y-3 rounded-md border bg-muted/30 p-3"
+      className="space-y-3"
       data-vortex-formatting-rule-editor={rule.id}
     >
       {reading.kind === "unreadable" ? (
@@ -623,7 +630,7 @@ function RuleEditor({
                 {queryFields.find((candidate) => candidate.reference === field)?.label ?? field}
                 <button
                   type="button"
-                  aria-label={`Remove ${field}`}
+                  aria-label={`Remove ${queryFields.find((candidate) => candidate.reference === field)?.label ?? field}`}
                   disabled={disabled}
                   onClick={() =>
                     onChange({
@@ -796,7 +803,7 @@ function ColumnFormatEditor({
   const current = (): Value =>
     format.kind === "data_bar" ? asBar(format.token) : asScale(format.tokens);
   return (
-    <div className="space-y-2 rounded-md border p-2" data-vortex-column-format={format.field}>
+    <div className="space-y-2 py-2" data-vortex-column-format={format.field}>
       <div className="flex items-center gap-2">
         <StudioReferencePicker
           id={`${idPrefix}-field`}
@@ -869,7 +876,7 @@ function ColumnFormatEditor({
         ))
       )}
       {issue === undefined ? null : (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-sm text-destructive">
           {issue}
         </p>
       )}
