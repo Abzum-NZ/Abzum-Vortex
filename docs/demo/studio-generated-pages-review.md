@@ -1,8 +1,9 @@
 # Studio-generated pages: appearance review
 
 Issue: [#2897](https://github.com/Abzum-NZ/Abzum-Vortex/issues/2897).
-Reviewed on 19 October 2026 against `b9ca613d`, which was `origin/main` when the
-production build and fresh database setup began.
+Initial walkthrough on 19 October 2026 against `b9ca613d`, which was `origin/main`
+when the production build and fresh database setup began. The review below
+distinguishes that baseline from the subsequent reviewer correction.
 
 ## Application and method
 
@@ -30,7 +31,7 @@ Used a production Next.js build, freshly reset Supabase lane 7, the isolated
 The build completed before taking the lane. No automated tests were created or
 run. Browser screenshots and temporary walkthrough scripts are outside the repository.
 
-## Results
+## Initial results
 
 The matrix uses 1440 × 1000 and 390 × 844 CSS-pixel viewports. Appearance was
 selected through the application's Light/Dark menu for every capture.
@@ -73,10 +74,80 @@ The projection currently maps structured table rows to an empty display cell.
 Displaying them requires coordinated field metadata, a closed projected value
 contract and its renderer, including column labels and permission-safe linked
 values. This is broader than a bounded theme correction. The issue contains the
-exact Studio reproduction and paired edit/detail screenshots. No renderer or
-grid-owned files were changed for this review.
+exact Studio reproduction and paired edit/detail screenshots. The grid-owned
+files remain unchanged by this review.
 
-## Screenshots
+## Reviewer correction
+
+Reviewing all twenty baseline screenshots against the owner design rule found
+that the create and edit form results above missed nested borders: each table
+row added a card inside the form card, another indent, and a full-width removal
+button. Those baseline form results establish functionality and viewport fit,
+but do not constitute a design pass.
+
+The shared `TableInput` now renders flat rows aligned with the other fields,
+with a labelled, titled removal icon and an add icon from the application's
+selected icon library. The definition, column controls, validation, disabled and
+read-only checks, and record write path are unchanged. This correction does not
+touch the grid-owned `display/table.tsx`, `display/controls.tsx` or
+`display/projected-data.ts`, and does not overlap PR #3076.
+
+The baseline Board also retains the editable starter welcome text. Its pass
+describes the Board's layout and operation, not that placeholder's suitability
+as published business copy. Authors should replace that text before publication.
+
+### Fresh reviewer walkthrough
+
+The correction was walked on production build `c7efdf3b` (including main
+`39c19e93`), after resetting lane 8 through all 149 migrations. To keep the
+owner's tenant untouched, provisioning used `demo:owner` and `setup:local` with
+tenant and organisation `val_x3082` and account `val-x3082@vortex.test`.
+
+The reviewer rebuilt **Validation Workshop** (`val.workshop3082`) through Studio,
+with the same fields, generated pages and pipeline, then published and installed
+1.0.0 with the Members role. In this recipe Parts was added before Stage. The
+generated pages survived a Studio reload. The home page's editable starter text
+was replaced with **Workshop progress** and **Track jobs from the queue through
+work to completion.**
+
+| Page        | Light 1440 | Dark 1440 | Light 390 | Dark 390 |
+| ----------- | ---------- | --------- | --------- | -------- |
+| Jobs list   | Pass       | Pass      | Pass      | Pass     |
+| Create form | Pass       | Pass      | Pass      | Pass     |
+| Edit form   | Pass       | Pass      | Pass      | Pass     |
+| Job detail  | See #3080  | See #3080 | See #3080 | See #3080 |
+| Board       | Pass       | Pass      | Pass      | Pass     |
+
+All twenty screenshots were visually reviewed against the redesign principles
+and owner design rule. Table rows have no nested card border or extra indent;
+labels and actions remain readable in both modes. Each captured document and
+body width equals its viewport. The phone Board scrolls within its 326-pixel
+region, whose content width is 1060 pixels.
+
+Created Pump inspection with Parts rows **Seal kit** and **Bearing**. Both rows
+survived save and reload. At 390 pixels, focused **Remove row 1** and pressed
+Enter, changed the title and phone, saved and reloaded: Bearing was the remaining
+row and the title and phone changes persisted. Restored the title, phone and both
+rows, saved, reloaded and confirmed both values. Created Valve replacement linked
+to Pump inspection; the linked label and reverse-related list rendered. Moved
+Pump inspection from Queued to Working and confirmed both records in Working
+after reload. The detail page still hides the saved Parts rows, confirming #3080.
+
+The final navigation through `jobs`, `new_job`, `job`, `edit_job` and `home`
+returned HTTP 200 with no browser console or page errors during that pass.
+The UI package typecheck, changed-file ESLint, production build, Markdown
+formatting and whitespace checks passed. CI supplies whole-workspace lint,
+typecheck, guard and build. No tests were created or run. No SQL, permission,
+query or migration contract changed. The reviewer stopped its browser and server
+and released its build, setup, lane and server locks.
+
+The [reviewer screenshot release](https://github.com/Abzum-NZ/Abzum-Vortex/releases/tag/untagged-eb8838b113b56c8772d3)
+holds the new twenty-image matrix and supplementary persistence screenshots;
+its configured tag is `x3082-proof-20261019`. The final PR review comment pairs
+the original and corrected light/dark forms. The original release below remains
+the baseline, not evidence of the corrected renderer.
+
+## Original screenshots
 
 The [draft proof release](https://github.com/Abzum-NZ/Abzum-Vortex/releases/tag/untagged-e21dd79e668b5644a446)
 contains the matrix and supplementary screenshots. Its configured tag is
