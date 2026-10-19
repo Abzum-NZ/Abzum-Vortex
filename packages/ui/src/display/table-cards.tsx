@@ -171,7 +171,7 @@ export function RecordsCards({
                 role="region"
                 aria-label={`Related records of ${name}`}
                 data-vortex-related-panel=""
-                className="mt-1 rounded-lg bg-muted/40 px-3 py-2"
+                className="mt-1 bg-muted/40 px-3 py-2"
               >
                 {expansion.panel(row)}
               </div>
