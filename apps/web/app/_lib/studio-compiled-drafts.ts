@@ -15,49 +15,14 @@ import { platformPermissionSource } from "./platform-permission-source";
 import { studioDraftTargetFacts } from "./studio-application-draft";
 
 /**
- * The compiled content of recent saved draft revisions, by organisation, Application, revision and
- * source fingerprint. A saved revision never changes, so Studio compiles it once when it opens it
- * after a save, and the canvas reads its records against that same compile. It holds definition
- * content only; every reader still checks the builder's authority and the saved draft first.
- */
-// Page rendering and route handlers use separate Turbopack module runtimes. Their one cache
-// shares immutable definition content only; every caller still checks live draft authority.
-const compiledDraftsKey = Symbol.for("vortex.web.studio-compiled-drafts");
-const processDefinitions = globalThis as typeof globalThis & {
-  [compiledDraftsKey]?: Map<string, ApplicationContent>;
-};
-const compiled = (processDefinitions[compiledDraftsKey] ??= new Map<string, ApplicationContent>());
-const capacity = 64;
-
-const keyOf = (
-  organizationId: string,
-  draft: Pick<StoredApplicationDefinitionDraft, "rootId" | "draftRevision" | "sourceFingerprint">,
-) =>
-  `${organizationId}|${draft.rootId}|${draft.draftRevision}|${draft.sourceFingerprint}`.toLowerCase();
-
-/** Keeps the compiled content of one saved draft revision. */
-export const rememberCompiledDraft = (
-  organizationId: string,
-  draft: Pick<StoredApplicationDefinitionDraft, "rootId" | "draftRevision" | "sourceFingerprint">,
-  content: ApplicationContent,
-): void => {
-  const key = keyOf(organizationId, draft);
-  compiled.delete(key);
-  compiled.set(key, content);
-  while (compiled.size > capacity) compiled.delete(compiled.keys().next().value!);
-};
-
-/**
- * The compiled content of a saved draft revision the caller has already read under the builder's
- * authority: the one Studio compiled when it opened it, or compiled now.
+ * Read compiled content through the platform's one draft compilation cache. Its lookup checks
+ * current authority and dependency revisions, even when the saved source itself has not changed.
  */
 export const compiledDraftContent = async (
   session: IdentitySession,
   organizationId: OrganizationId,
   draft: StoredApplicationDefinitionDraft,
 ): Promise<ApplicationContent | "refused" | "temporarily_unavailable" | "conflict"> => {
-  const known = compiled.get(keyOf(organizationId, draft));
-  if (known !== undefined) return known;
   const result = await humanOrganizationRequests().run(
     session,
     { organizationId },
@@ -92,6 +57,5 @@ export const compiledDraftContent = async (
   if (result.kind !== "available")
     return result.kind === "temporarily_unavailable" ? "temporarily_unavailable" : "refused";
   if (result.value === "conflict") return "conflict";
-  rememberCompiledDraft(organizationId, draft, result.value);
   return result.value;
 };
