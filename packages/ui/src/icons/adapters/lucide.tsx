@@ -46,6 +46,9 @@ import {
   ClockIcon,
   FlagIcon,
   StarIcon,
+  EyeOffIcon,
+  Maximize2Icon,
+  Minimize2Icon,
 } from "lucide-react";
 
 import type { VortexIconAdapter } from "../icon-names";
@@ -100,4 +103,7 @@ export const icons: VortexIconAdapter = {
   tablet: TabletIcon,
   smartphone: SmartphoneIcon,
   eye: EyeIcon,
+  "eye-off": EyeOffIcon,
+  maximize: Maximize2Icon,
+  minimize: Minimize2Icon,
 };

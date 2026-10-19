@@ -45,6 +45,9 @@ import {
   Alert02Icon,
   Flag01Icon,
   StarIcon,
+  ViewOffIcon,
+  Maximize01Icon,
+  Minimize01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import type { ComponentType } from "react";
@@ -112,4 +115,7 @@ export const icons: VortexIconAdapter = {
   tablet: hugeicon(Tablet01Icon),
   smartphone: hugeicon(SmartPhone01Icon),
   eye: hugeicon(ViewIcon),
+  "eye-off": hugeicon(ViewOffIcon),
+  maximize: hugeicon(Maximize01Icon),
+  minimize: hugeicon(Minimize01Icon),
 };

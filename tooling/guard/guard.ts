@@ -872,7 +872,8 @@ for (const file of files.filter(
 
 // A Records table grid feature exists in exactly three registries: the platform contract (with its
 // one capability check), Studio's Features panel and the UI's lazy chunks. All three name the same
-// features, and only the UI registry imports a feature's chunk, so there is no second gating path.
+// features, and only the UI registry imports a feature's chunk, so there is no second gating path
+// (the core header menu and toolbar beside it are imported directly; auto-size is their own chunk).
 {
   const registries: Array<[string, RegExp]> = [
     [
@@ -913,11 +914,11 @@ for (const file of files.filter(
   for (const file of codeFiles.filter((candidate) => candidate.startsWith("packages/ui/src/")))
     if (file !== `${chunkDirectory}registry.tsx` && !file.startsWith(chunkDirectory)) {
       const content = read(file);
-      // Studio's Features panel draws a feature's own editor from Studio's grid-features folder.
-      for (const match of content.matchAll(/from\s+"([^"]*grid-features\/(?!registry")[^"]+)"/g))
-        if (!(
-          file.startsWith("packages/ui/src/studio/") && match[1]!.startsWith("./grid-features/")
-        ))
+      // Studio owns its feature editors; runtime feature chunks load through the registry.
+      for (const match of content.matchAll(
+        /from\s+"([^"]*grid-features\/(?!(?:registry|column-menu|toolbar)")[^"]+)"/g,
+      ))
+        if (!(file.startsWith("packages/ui/src/studio/") && match[1]!.startsWith("./grid-features/")))
           add("grid-feature-registry", file, lineAt(content, match.index ?? 0), match[0]);
     }
 }
