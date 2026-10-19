@@ -60,13 +60,22 @@ only the route URL and credential for each scheduled flow; it has no database-de
 The Kestra API credential is also provided to the web application so it can reach the engine.
 
 `event_dispatch_recovery` is the scheduled recovery half of the event dispatch boundary. Its
-schedule trigger calls the protected Vercel dispatch route every five minutes, so an event
+schedule trigger calls the protected Vercel dispatch route every minute, so an event
 occurrence committed while a database-webhook hint or a web deployment was unavailable is still
 delivered. After a Kestra outage it runs one catch-up tick rather than every missed interval, and an
 overlapping tick is cancelled because the running one already covers it. The flow holds only two
 values: the route address and the route bearer credential. It never receives a database URL,
 migration credential or application secret, and it never reads the database. The route accepts
 only an optional `source` label and refuses any batch or consumer tuning.
+
+Each authenticated wake-up reclaims continued installation pages and full batches for up to ten
+seconds or 200 dispatches. Every dispatch rechecks the system actor grant and uses the existing
+claim, lease, retry and fencing operations. A failed or interrupted batch stops the wake-up;
+retries keep their existing backoff. The budget stops new dispatches, allowing the current bounded
+batch to commit normally within the route's 60-second allowance. Counts in the response cover all
+dispatches, and the backlog snapshot is read once at the end. Work left at the budget boundary
+resumes from its committed cursor on the next one-minute recovery tick, without needing another
+outbox insert or an in-process timer.
 
 `runtime_bundle_cleanup` calls the protected Vercel `POST /api/runtime-bundles/cleanup` route daily
 with concurrency one. It carries only the route URL and bearer credential; Kestra never receives a
