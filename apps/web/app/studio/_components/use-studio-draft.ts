@@ -209,7 +209,7 @@ const viewOf = (
   request: loaded.request,
   catalogue: loaded.catalogue.releases.length === 0 ? previous.catalogue : loaded.catalogue,
   themeOptions: loaded.themeOptions ?? previous.themeOptions,
-  fieldInputControlReleases: loaded.fieldInputControlReleases,
+  fieldInputControlReleases: loaded.fieldInputControlReleases ?? previous.fieldInputControlReleases,
   platformThemeTokens: loaded.platformThemeTokens,
   source: draft.source,
   draftRevision: draft.draftRevision,
@@ -806,6 +806,15 @@ export function useStudioDraft({
           )
             return;
           remember(result, missing);
+          // Immutable editor resources are taken now, so the first switch does not rebuild with them.
+          const controls = result.views.find((loaded) => loaded.fieldInputControlReleases !== null);
+          setView((previous) => ({
+            ...previous,
+            catalogue:
+              previous.catalogue.releases.length === 0 ? result.catalogue : previous.catalogue,
+            fieldInputControlReleases:
+              previous.fieldInputControlReleases ?? controls?.fieldInputControlReleases ?? null,
+          }));
           setReadCount((count) => count + 1);
         } catch (error) {
           console.error("[studio] reading the other tabs' views failed", describeFailure(error));
