@@ -1,0 +1,105 @@
+diff --git a/cf/src/connection.js b/cf/src/connection.js
+index 8e79170aeb13efe8c3c77ccede0cd3a115b5e1b5..7d6a4a8f4a2b1948de94a3ffb63bda2173ca2a99 100644
+--- a/cf/src/connection.js
++++ b/cf/src/connection.js
+@@ -254,6 +254,14 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+   }
+ 
+   function nextWrite(fn) {
++    // A transaction rollback can be queued after closed() cleared the socket.
++    // Reject its queries through the connection error path rather than dropping the write.
++    if (socket === null) {
++      nextWriteTimer !== null && clearImmediate(nextWriteTimer)
++      chunk = nextWriteTimer = null
++      error(Errors.connection('CONNECTION_CLOSED', options, socket))
++      return false
++    }
+     const x = socket.write(chunk, fn)
+     nextWriteTimer !== null && clearImmediate(nextWriteTimer)
+     chunk = nextWriteTimer = null
+@@ -427,6 +435,7 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+       error(Errors.connection('CONNECTION_DESTROYED', options))
+ 
+     clearImmediate(nextWriteTimer)
++    chunk = nextWriteTimer = null
+     if (socket) {
+       socket.removeListener('data', data)
+       socket.removeListener('connect', connected)
+@@ -440,6 +449,7 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     remaining = 0
+     incomings = null
+     clearImmediate(nextWriteTimer)
++    chunk = nextWriteTimer = null
+     socket.removeListener('data', data)
+     socket.removeListener('connect', connected)
+     idleTimer.cancel()
+diff --git a/cjs/src/connection.js b/cjs/src/connection.js
+index 07f6716702ac888215c86ad6e0071aaf55ae519c..5b1330458a951a4a4374dc8d3bbade3f955be80a 100644
+--- a/cjs/src/connection.js
++++ b/cjs/src/connection.js
+@@ -252,6 +252,14 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+   }
+ 
+   function nextWrite(fn) {
++    // A transaction rollback can be queued after closed() cleared the socket.
++    // Reject its queries through the connection error path rather than dropping the write.
++    if (socket === null) {
++      nextWriteTimer !== null && clearImmediate(nextWriteTimer)
++      chunk = nextWriteTimer = null
++      error(Errors.connection('CONNECTION_CLOSED', options, socket))
++      return false
++    }
+     const x = socket.write(chunk, fn)
+     nextWriteTimer !== null && clearImmediate(nextWriteTimer)
+     chunk = nextWriteTimer = null
+@@ -425,6 +433,7 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+       error(Errors.connection('CONNECTION_DESTROYED', options))
+ 
+     clearImmediate(nextWriteTimer)
++    chunk = nextWriteTimer = null
+     if (socket) {
+       socket.removeListener('data', data)
+       socket.removeListener('connect', connected)
+@@ -438,6 +447,7 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     remaining = 0
+     incomings = null
+     clearImmediate(nextWriteTimer)
++    chunk = nextWriteTimer = null
+     socket.removeListener('data', data)
+     socket.removeListener('connect', connected)
+     idleTimer.cancel()
+diff --git a/src/connection.js b/src/connection.js
+index 1b1cccde43b4570d5d071d6ffaab2669b3c2065a..0adf99869a13f53187c94790bf7e90f47d8b4e90 100644
+--- a/src/connection.js
++++ b/src/connection.js
+@@ -252,6 +252,14 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+   }
+ 
+   function nextWrite(fn) {
++    // A transaction rollback can be queued after closed() cleared the socket.
++    // Reject its queries through the connection error path rather than dropping the write.
++    if (socket === null) {
++      nextWriteTimer !== null && clearImmediate(nextWriteTimer)
++      chunk = nextWriteTimer = null
++      error(Errors.connection('CONNECTION_CLOSED', options, socket))
++      return false
++    }
+     const x = socket.write(chunk, fn)
+     nextWriteTimer !== null && clearImmediate(nextWriteTimer)
+     chunk = nextWriteTimer = null
+@@ -425,6 +433,7 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+       error(Errors.connection('CONNECTION_DESTROYED', options))
+ 
+     clearImmediate(nextWriteTimer)
++    chunk = nextWriteTimer = null
+     if (socket) {
+       socket.removeListener('data', data)
+       socket.removeListener('connect', connected)
+@@ -438,6 +447,7 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     remaining = 0
+     incomings = null
+     clearImmediate(nextWriteTimer)
++    chunk = nextWriteTimer = null
+     socket.removeListener('data', data)
+     socket.removeListener('connect', connected)
+     idleTimer.cancel()
