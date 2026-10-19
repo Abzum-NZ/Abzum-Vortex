@@ -373,16 +373,37 @@
                       {
                         "field": "vortex.app_store:store_application.latest_release_note",
                         "label": "What's new"
-                      },
-                      {
-                        "field": "vortex.app_store:store_application.key",
-                        "label": "Technical name"
                       }
                     ],
                     "vortex": {
                       "block": {
                         "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
                         "release_version": "1.2.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.button",
+                  "props": {
+                    "id": "store_application_install",
+                    "label": "Install or upgrade",
+                    "action_kind": "action",
+                    "vortex": {
+                      "block": {
+                        "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                        "release_version": "1.0.0"
                       },
                       "responsive": {
                         "desktop": {
@@ -2192,6 +2213,19 @@
         "event_id": "event_remove_application",
         "event": "row_action",
         "flow": "flow_remove_application",
+        "inputs": {
+          "application_root_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_install_from_details",
+        "control": "store_application_install",
+        "event_id": "event_install_or_upgrade",
+        "event": "action",
+        "flow": "flow_install_or_upgrade_application",
         "inputs": {
           "application_root_id": {
             "kind": "caller",

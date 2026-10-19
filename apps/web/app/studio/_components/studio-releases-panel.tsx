@@ -1,20 +1,25 @@
 "use client";
+import type { VortexIconName } from "@vortex/ui";
 import { Badge } from "@vortex/ui/components/badge";
 import { StudioNavItem } from "./studio-nav-tree";
 import { StudioPanelShell, StudioSection } from "./studio-frame";
 import { studioReleasesSections, type StudioReleasesSection } from "./studio-rail-tabs";
+
+const sectionIcons: Record<StudioReleasesSection, VortexIconName> = {
+  history: "history",
+  "page-adoption": "blocks",
+  import: "arrow-up",
+};
 
 /** The Releases tab's panel: what it can open in the centre. Publishing itself is the top bar's Publish button. */
 export function StudioReleasesPanel({
   hidden,
   section,
   onSection,
-  savedStateLabel,
 }: Readonly<{
   hidden: boolean;
   section: StudioReleasesSection;
   onSection: (section: StudioReleasesSection) => void;
-  savedStateLabel: string;
 }>) {
   return (
     <StudioPanelShell title="Releases" hidden={hidden}>
@@ -25,7 +30,7 @@ export function StudioReleasesPanel({
               <StudioNavItem
                 label={entry.label}
                 description={entry.description}
-                icon={entry.value === "history" ? "history" : "panel-left"}
+                icon={sectionIcons[entry.value]}
                 selected={section === entry.value}
                 onClick={() => onSection(entry.value)}
                 meta={
@@ -36,9 +41,6 @@ export function StudioReleasesPanel({
           ))}
         </ul>
       </StudioSection>
-      <Badge variant="outline" role="status">
-        {savedStateLabel}
-      </Badge>
     </StudioPanelShell>
   );
 }
