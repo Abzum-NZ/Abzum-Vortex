@@ -1,0 +1,333 @@
+diff --git a/cf/src/connection.js b/cf/src/connection.js
+index 8e79170aeb13efe8c3c77ccede0cd3a115b5e1b5..8619022812e800a8741bb4b1eb562e23ce134143 100644
+--- a/cf/src/connection.js
++++ b/cf/src/connection.js
+@@ -254,6 +254,14 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+   }
+
+   function nextWrite(fn) {
++    // A transaction rollback can be queued after closed() cleared the socket.
++    // Reject its queries through the connection error path rather than dropping the write.
++    if (socket === null) {
++      nextWriteTimer !== null && clearImmediate(nextWriteTimer)
++      chunk = nextWriteTimer = null
++      error(errorResponse || Errors.connection('CONNECTION_CLOSED', options, socket))
++      return false
++    }
+     const x = socket.write(chunk, fn)
+     nextWriteTimer !== null && clearImmediate(nextWriteTimer)
+     chunk = nextWriteTimer = null
+@@ -367,6 +375,9 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+   function connected() {
+     try {
+       statements = {}
++      // A new backend must not inherit a terminated backend's pending response or result.
++      query = results = errorResponse = null
++      result = new Result()
+       needsTypes = options.fetch_types
+       statementId = Math.random().toString(36).slice(2)
+       statementCount = 1
+@@ -427,6 +438,7 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+       error(Errors.connection('CONNECTION_DESTROYED', options))
+
+     clearImmediate(nextWriteTimer)
++    chunk = nextWriteTimer = null
+     if (socket) {
+       socket.removeListener('data', data)
+       socket.removeListener('connect', connected)
+@@ -440,6 +452,7 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     remaining = 0
+     incomings = null
+     clearImmediate(nextWriteTimer)
++    chunk = nextWriteTimer = null
+     socket.removeListener('data', data)
+     socket.removeListener('connect', connected)
+     idleTimer.cancel()
+@@ -452,11 +465,13 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     if (initial)
+       return reconnect()
+
+-    !hadError && (query || sent.length) && error(Errors.connection('CONNECTION_CLOSED', options, socket))
++    // A fatal server response has no ReadyForQuery; retain its cause for the caller.
++    const closeError = errorResponse || Errors.connection('CONNECTION_CLOSED', options, socket)
++    !hadError && (query || sent.length) && error(closeError)
+     closedTime = performance.now()
+     hadError && options.shared.retries++
+     delay = (typeof backoff === 'function' ? backoff(options.shared.retries) : backoff) * 1000
+-    onclose(connection, Errors.connection('CONNECTION_CLOSED', options, socket))
++    onclose(connection, closeError)
+   }
+
+   /* Handlers */
+@@ -812,11 +827,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+   }
+
+   function ErrorResponse(x) {
++    // Idle-session termination also needs its server cause when the socket closes.
++    errorResponse = Errors.postgres(parseError(x))
+     if (query) {
+       (query.cursorFn || query.describeFirst) && write(Sync)
+-      errorResponse = Errors.postgres(parseError(x))
+     } else {
+-      errored(Errors.postgres(parseError(x)))
++      errored(errorResponse)
+     }
+   }
+
+diff --git a/cf/src/index.js b/cf/src/index.js
+index ffbe7aef075d6037c540cbd5e8f7e298d4345cc3..925f33e38a3245b768449742bb553e997c687af5 100644
+--- a/cf/src/index.js
++++ b/cf/src/index.js
+@@ -237,13 +237,20 @@ function Postgres(a, b) {
+     const queries = Queue()
+     let savepoints = 0
+       , connection
++      , connectionError
+       , prepare = null
+
+     try {
+       await sql.unsafe('begin ' + options.replace(/[^a-z ]/ig, ''), [], { onexecute }).execute()
+       return await Promise.race([
+         scope(connection, fn),
+-        new Promise((_, reject) => connection.onclose = reject)
++        new Promise((_, reject) => connection.onclose = error => {
++          // This transaction must never enqueue rollback or later work on a reused connection.
++          connectionError = error
++          while (queries.length)
++            queries.shift().reject(error)
++          reject(error)
++        })
+       ])
+     } catch (error) {
+       throw error
+@@ -291,6 +298,8 @@ function Postgres(a, b) {
+
+       function handler(q) {
+         q.catch(e => uncaughtError || (uncaughtError = e))
++        if (connectionError)
++          return q.reject(connectionError)
+         c.queue === full
+           ? queries.push(q)
+           : c.execute(q) || move(c, full)
+diff --git a/cjs/src/connection.js b/cjs/src/connection.js
+index 07f6716702ac888215c86ad6e0071aaf55ae519c..b0940fe81347e07cede427fb3d0f9548459751ea 100644
+--- a/cjs/src/connection.js
++++ b/cjs/src/connection.js
+@@ -252,6 +252,14 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+   }
+
+   function nextWrite(fn) {
++    // A transaction rollback can be queued after closed() cleared the socket.
++    // Reject its queries through the connection error path rather than dropping the write.
++    if (socket === null) {
++      nextWriteTimer !== null && clearImmediate(nextWriteTimer)
++      chunk = nextWriteTimer = null
++      error(errorResponse || Errors.connection('CONNECTION_CLOSED', options, socket))
++      return false
++    }
+     const x = socket.write(chunk, fn)
+     nextWriteTimer !== null && clearImmediate(nextWriteTimer)
+     chunk = nextWriteTimer = null
+@@ -365,6 +373,9 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+   function connected() {
+     try {
+       statements = {}
++      // A new backend must not inherit a terminated backend's pending response or result.
++      query = results = errorResponse = null
++      result = new Result()
+       needsTypes = options.fetch_types
+       statementId = Math.random().toString(36).slice(2)
+       statementCount = 1
+@@ -425,6 +436,7 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+       error(Errors.connection('CONNECTION_DESTROYED', options))
+
+     clearImmediate(nextWriteTimer)
++    chunk = nextWriteTimer = null
+     if (socket) {
+       socket.removeListener('data', data)
+       socket.removeListener('connect', connected)
+@@ -438,6 +450,7 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     remaining = 0
+     incomings = null
+     clearImmediate(nextWriteTimer)
++    chunk = nextWriteTimer = null
+     socket.removeListener('data', data)
+     socket.removeListener('connect', connected)
+     idleTimer.cancel()
+@@ -450,11 +463,13 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     if (initial)
+       return reconnect()
+
+-    !hadError && (query || sent.length) && error(Errors.connection('CONNECTION_CLOSED', options, socket))
++    // A fatal server response has no ReadyForQuery; retain its cause for the caller.
++    const closeError = errorResponse || Errors.connection('CONNECTION_CLOSED', options, socket)
++    !hadError && (query || sent.length) && error(closeError)
+     closedTime = performance.now()
+     hadError && options.shared.retries++
+     delay = (typeof backoff === 'function' ? backoff(options.shared.retries) : backoff) * 1000
+-    onclose(connection, Errors.connection('CONNECTION_CLOSED', options, socket))
++    onclose(connection, closeError)
+   }
+
+   /* Handlers */
+@@ -810,11 +825,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+   }
+
+   function ErrorResponse(x) {
++    // Idle-session termination also needs its server cause when the socket closes.
++    errorResponse = Errors.postgres(parseError(x))
+     if (query) {
+       (query.cursorFn || query.describeFirst) && write(Sync)
+-      errorResponse = Errors.postgres(parseError(x))
+     } else {
+-      errored(Errors.postgres(parseError(x)))
++      errored(errorResponse)
+     }
+   }
+
+diff --git a/cjs/src/index.js b/cjs/src/index.js
+index f09c61c7e998f411560b95c9a8e1ed6a97972c11..4fcdf9b34ef2ed14b5e480f20b565e0c18fba909 100644
+--- a/cjs/src/index.js
++++ b/cjs/src/index.js
+@@ -236,13 +236,20 @@ function Postgres(a, b) {
+     const queries = Queue()
+     let savepoints = 0
+       , connection
++      , connectionError
+       , prepare = null
+
+     try {
+       await sql.unsafe('begin ' + options.replace(/[^a-z ]/ig, ''), [], { onexecute }).execute()
+       return await Promise.race([
+         scope(connection, fn),
+-        new Promise((_, reject) => connection.onclose = reject)
++        new Promise((_, reject) => connection.onclose = error => {
++          // This transaction must never enqueue rollback or later work on a reused connection.
++          connectionError = error
++          while (queries.length)
++            queries.shift().reject(error)
++          reject(error)
++        })
+       ])
+     } catch (error) {
+       throw error
+@@ -290,6 +297,8 @@ function Postgres(a, b) {
+
+       function handler(q) {
+         q.catch(e => uncaughtError || (uncaughtError = e))
++        if (connectionError)
++          return q.reject(connectionError)
+         c.queue === full
+           ? queries.push(q)
+           : c.execute(q) || move(c, full)
+diff --git a/src/connection.js b/src/connection.js
+index 1b1cccde43b4570d5d071d6ffaab2669b3c2065a..473dd76d439e3368de8e7ec9b497f1c170f0fc7b 100644
+--- a/src/connection.js
++++ b/src/connection.js
+@@ -252,6 +252,14 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+   }
+
+   function nextWrite(fn) {
++    // A transaction rollback can be queued after closed() cleared the socket.
++    // Reject its queries through the connection error path rather than dropping the write.
++    if (socket === null) {
++      nextWriteTimer !== null && clearImmediate(nextWriteTimer)
++      chunk = nextWriteTimer = null
++      error(errorResponse || Errors.connection('CONNECTION_CLOSED', options, socket))
++      return false
++    }
+     const x = socket.write(chunk, fn)
+     nextWriteTimer !== null && clearImmediate(nextWriteTimer)
+     chunk = nextWriteTimer = null
+@@ -365,6 +373,9 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+   function connected() {
+     try {
+       statements = {}
++      // A new backend must not inherit a terminated backend's pending response or result.
++      query = results = errorResponse = null
++      result = new Result()
+       needsTypes = options.fetch_types
+       statementId = Math.random().toString(36).slice(2)
+       statementCount = 1
+@@ -425,6 +436,7 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+       error(Errors.connection('CONNECTION_DESTROYED', options))
+
+     clearImmediate(nextWriteTimer)
++    chunk = nextWriteTimer = null
+     if (socket) {
+       socket.removeListener('data', data)
+       socket.removeListener('connect', connected)
+@@ -438,6 +450,7 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     remaining = 0
+     incomings = null
+     clearImmediate(nextWriteTimer)
++    chunk = nextWriteTimer = null
+     socket.removeListener('data', data)
+     socket.removeListener('connect', connected)
+     idleTimer.cancel()
+@@ -450,11 +463,13 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     if (initial)
+       return reconnect()
+
+-    !hadError && (query || sent.length) && error(Errors.connection('CONNECTION_CLOSED', options, socket))
++    // A fatal server response has no ReadyForQuery; retain its cause for the caller.
++    const closeError = errorResponse || Errors.connection('CONNECTION_CLOSED', options, socket)
++    !hadError && (query || sent.length) && error(closeError)
+     closedTime = performance.now()
+     hadError && options.shared.retries++
+     delay = (typeof backoff === 'function' ? backoff(options.shared.retries) : backoff) * 1000
+-    onclose(connection, Errors.connection('CONNECTION_CLOSED', options, socket))
++    onclose(connection, closeError)
+   }
+
+   /* Handlers */
+@@ -810,11 +825,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+   }
+
+   function ErrorResponse(x) {
++    // Idle-session termination also needs its server cause when the socket closes.
++    errorResponse = Errors.postgres(parseError(x))
+     if (query) {
+       (query.cursorFn || query.describeFirst) && write(Sync)
+-      errorResponse = Errors.postgres(parseError(x))
+     } else {
+-      errored(Errors.postgres(parseError(x)))
++      errored(errorResponse)
+     }
+   }
+
+diff --git a/src/index.js b/src/index.js
+index c7fba3dace20173f4cb13f3f138bb6d213b43683..6f1b5f93a87822f7f64be4c8e078a750dcaf334c 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -236,13 +236,20 @@ function Postgres(a, b) {
+     const queries = Queue()
+     let savepoints = 0
+       , connection
++      , connectionError
+       , prepare = null
+
+     try {
+       await sql.unsafe('begin ' + options.replace(/[^a-z ]/ig, ''), [], { onexecute }).execute()
+       return await Promise.race([
+         scope(connection, fn),
+-        new Promise((_, reject) => connection.onclose = reject)
++        new Promise((_, reject) => connection.onclose = error => {
++          // This transaction must never enqueue rollback or later work on a reused connection.
++          connectionError = error
++          while (queries.length)
++            queries.shift().reject(error)
++          reject(error)
++        })
+       ])
+     } catch (error) {
+       throw error
+@@ -290,6 +297,8 @@ function Postgres(a, b) {
+
+       function handler(q) {
+         q.catch(e => uncaughtError || (uncaughtError = e))
++        if (connectionError)
++          return q.reject(connectionError)
+         c.queue === full
+           ? queries.push(q)
+           : c.execute(q) || move(c, full)
