@@ -29,6 +29,19 @@ begin
     or pg_catalog.jsonb_array_length(p_records) > 100 then
     raise exception using errcode = '22023', message = 'Derived field backfill is invalid';
   end if;
+  -- With a preview's last page, the record type's derived fields are worked out: its seed ledger
+  -- says so in this same transaction. An empty page has nothing else to write.
+  if p_last_page then
+    preview_installation := vortex_record.read_current_preview_installation_internal();
+    if preview_installation is not null then
+      perform vortex_definition.mark_preview_derived_ready_internal(
+        (preview_installation ->> 'previewInstallationId')::uuid, p_record_type_id
+      );
+    end if;
+  end if;
+  if pg_catalog.jsonb_array_length(p_records) = 0 then
+    return 0;
+  end if;
   scope := vortex_record.derived_field_backfill_scope_internal();
   record_type_key := pg_catalog.lower(p_record_type_id::text);
   field_ids := scope -> 'targets' -> record_type_key;
@@ -99,16 +112,6 @@ begin
       (scope ->> 'organizationId')::uuid, (type_meta ->> 'storageContractId')::uuid,
       application_scope
     );
-  end if;
-  -- With a preview's last page, the record type's derived fields are worked out: its seed ledger
-  -- says so in this same transaction.
-  if p_last_page then
-    preview_installation := vortex_record.read_current_preview_installation_internal();
-    if preview_installation is not null then
-      perform vortex_definition.mark_preview_derived_ready_internal(
-        (preview_installation ->> 'previewInstallationId')::uuid, p_record_type_id
-      );
-    end if;
   end if;
   return written;
 end
