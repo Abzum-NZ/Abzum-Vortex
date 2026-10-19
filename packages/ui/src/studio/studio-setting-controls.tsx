@@ -119,13 +119,13 @@ export const studioBlockChoices = (
 ): StudioSettingChoices => {
   const chosen =
     query === null ? undefined : draft.queries.find((candidate) => candidate.reference === query);
-  return chosen === undefined
+  return query === null
     ? draft
     : {
         ...draft,
-        fields: chosen.fields,
+        fields: chosen?.fields ?? [],
         relationships: draft.relationships.filter(
-          (relationship) => relationship.recordType === chosen.recordType,
+          (relationship) => relationship.recordType === chosen?.recordType,
         ),
       };
 };
@@ -166,13 +166,36 @@ const failurePlace = (
 export const studioSettingProblems = (
   values: StudioSettingValues,
   properties: readonly BlockPropertySchemaContract[],
-): readonly string[] => [
-  ...new Set(
-    validateComponentSettings(values, properties).map(
-      (failure) => `${failurePlace(properties, failure.path)} ${familyText[failure.family]}.`,
-    ),
-  ),
-];
+  choices?: Pick<StudioSettingChoices, "fields">,
+): readonly string[] => {
+  const problems = validateComponentSettings(values, properties).map(
+    (failure) => `${failurePlace(properties, failure.path)} ${familyText[failure.family]}.`,
+  );
+  if (choices !== undefined) {
+    const offered = new Set(choices.fields.map((field) => field.reference));
+    const visit = (
+      property: BlockPropertySchemaContract,
+      value: SettingValue,
+      path: readonly (string | number)[],
+    ) => {
+      if (
+        property.kind === "field_reference" &&
+        value?.kind === "field_reference" &&
+        !offered.has(value.field)
+      )
+        problems.push(
+          `${failurePlace(properties, path)} is not offered by the chosen data. Choose another field or remove this entry.`,
+        );
+      else if (property.kind === "group" && value?.kind === "group")
+        for (const child of property.properties)
+          visit(child, value.properties[child.key], [...path, child.key]);
+      else if (property.kind === "list" && value?.kind === "list")
+        value.items.forEach((item, index) => visit(property.item, item, [...path, index]));
+    };
+    for (const property of properties) visit(property, values[property.key], [property.key]);
+  }
+  return [...new Set(problems)];
+};
 
 /** The value a new list entry starts with. */
 const initialValue = (

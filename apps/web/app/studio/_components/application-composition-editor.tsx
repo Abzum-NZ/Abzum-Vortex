@@ -216,7 +216,11 @@ export function ApplicationCompositionEditor(props: Props) {
       ...(settingsModel.readsQuery && next.query === null
         ? ["Choose the data this block shows."]
         : []),
-      ...studioSettingProblems(next.settings, settingsModel.properties),
+      ...studioSettingProblems(
+        next.settings,
+        settingsModel.properties,
+        studioBlockChoices(props.choices, next.query),
+      ),
     ];
     if (problems.length > 0) {
       settings.hold(next, problems.join(" "));
