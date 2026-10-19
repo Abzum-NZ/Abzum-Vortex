@@ -184,7 +184,12 @@ export function useApplyDispatch({
             }
           }
           if (!isCurrentNavigation()) return;
-          showResult(resultNotice, refusalFeedback);
+          const sourceEvent = Object.values(model.bindings).flat()
+            .find((binding) => binding.bindingId === sourceBindingId)?.event;
+          const initialized = (sourceEvent === "form_ready" || sourceEvent === "load") &&
+            server.descriptor.outcome === "completed" && server.failure === undefined &&
+            server.descriptor.commit !== "confirmed" && server.descriptor.commit !== "partial";
+          if (!initialized) showResult(resultNotice, refusalFeedback);
           // A finished guided-form submission may have abandoned its draft. Keep the journey
           // visible but inactive until a new page load establishes the next draft.
           if (

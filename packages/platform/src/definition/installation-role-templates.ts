@@ -59,7 +59,7 @@ export type ApplicationRoleTemplate = Readonly<{
   defaultMember: boolean;
   /** True when the role confers an administrative permission. */
   privileged: boolean;
-  permissions: readonly Readonly<{ key: string; label: string }>[];
+  permissions: readonly Readonly<{ key: string; label: string; description: string }>[];
 }>;
 
 type Declared = Readonly<{
@@ -150,6 +150,7 @@ export const releaseRoleTemplates = (
         permissions: granted.map((entry) => ({
           key: entry.declaration.key,
           label: entry.declaration.label,
+          description: entry.declaration.description,
         })),
       };
     })

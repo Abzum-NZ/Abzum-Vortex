@@ -9,6 +9,7 @@ import {
   type FlowTaskPropertyType,
   type FlowTaskTypeDefinition,
   type FlowValue,
+  type FlowFormula,
   type SourceFlow,
   type SourceFlowTask,
 } from "@vortex/platform/schema";
@@ -44,7 +45,7 @@ export type StudioFlowCommand =
   | Readonly<{
       kind: "insert_task";
       taskType: string;
-      formAlias?: string;
+      settings: StudioFlowNewStepSettings;
       listPath: StudioFlowPath;
       index: number;
     }>
@@ -61,7 +62,7 @@ export type StudioFlowCommand =
       taskId: string;
       taskPath: StudioFlowPath;
       taskType: string;
-      formAlias?: string;
+      settings: StudioFlowNewStepSettings;
     }>
   /** Writes one step's settings form (its description, settings and control shape) back to the step. */
   | Readonly<{
@@ -72,6 +73,14 @@ export type StudioFlowCommand =
     }>;
 
 type RegisteredTask = Extract<SourceFlowTask, { properties: unknown }>;
+
+/** Required choices are authored before a new step enters the saved draft. */
+export type StudioFlowNewStepSettings = Readonly<{
+  formAlias?: string;
+  message?: string;
+  field?: string;
+  condition?: FlowFormula;
+}>;
 
 const staleEdit = (
   reason = "The draft or the selected step changed. Select the step again and retry.",
@@ -126,7 +135,7 @@ const seedValue = (
         : { kind: "reference", reference: { source: "input", name: input[0] } };
     }
     case "message_text":
-      return text("Edit this message");
+      return text("");
     case "formula":
       return {
         kind: "formula",
@@ -258,14 +267,14 @@ const uniqueTaskId = (type: string, used: Set<string>): string => {
   return candidate;
 };
 
-/** A new step of a type; a decision starts with one step in its Then branch and always holds until its condition is set. */
+/** A new step of a type, with required decisions made explicitly by the author. */
 const newStep = (
   flow: SourceFlow,
   source: Readonly<ApplicationSourceDocument>,
   taskType: string,
   used: Set<string>,
   context: StudioFlowContext,
-  formAlias?: string,
+  settings: StudioFlowNewStepSettings,
 ): SourceFlowTask | StudioFlowEditResult => {
   const refused: StudioFlowEditResult = {
     kind: "unsupported",
@@ -273,9 +282,17 @@ const newStep = (
       "This flow cannot run that kind of step, or the step needs settings this application does not have yet.",
   };
   if (!stepTypes(flow, source, context).some((entry) => entry.type === taskType)) return refused;
+  const definition = studioFlowDefinitionOf(taskType);
+  const needsMessage = taskType === "if" || definition?.properties.message?.required === true;
+  if (needsMessage && !settings.message?.trim())
+    return { kind: "invalid", reason: "Write the message before adding this step." };
+  if (taskType === "rule.require" && !settings.field)
+    return { kind: "invalid", reason: "Choose the field before adding this step." };
   if (taskType === "stop")
     return { id: uniqueTaskId("stop", used), type: "stop", outcome: "stopped" };
   if (taskType === "if") {
+    if (settings.condition === undefined || settings.condition.op === "literal")
+      return { kind: "invalid", reason: "Set a comparison before adding an If step." };
     const types = registeredTypes(flow, source, context);
     const first =
       types.find(
@@ -287,26 +304,28 @@ const newStep = (
         ? undefined
         : seededTask(first, uniqueTaskId(first.type, used), flow, source, context);
     if (inner === undefined) return refused;
+    inner.properties.message = text(settings.message!.trim());
     return {
       id: uniqueTaskId("decision", used),
       type: "if",
-      condition: { op: "literal", type: "yes_no", value: true },
+      condition: settings.condition,
       then: [inner],
     };
   }
-  const definition = studioFlowDefinitionOf(taskType);
   const task =
     definition === undefined
       ? undefined
       : seededTask(definition, uniqueTaskId(definition.type, used), flow, source, context);
-  if (task?.type === "interface.show_form" && formAlias !== undefined) {
+  if (task !== undefined && settings.message !== undefined) task.properties.message = text(settings.message.trim());
+  if (task?.type === "rule.require" && settings.field !== undefined) task.properties.field = text(settings.field);
+  if (task?.type === "interface.show_form" && settings.formAlias !== undefined) {
     const form = projectStudioFlowDraftChoices({
       ...context,
       source: source as ApplicationSourceDocument,
       flow,
-    }).forms.find((entry) => entry.alias === formAlias);
+    }).forms.find((entry) => entry.alias === settings.formAlias);
     if (form === undefined) return refused;
-    task.properties.form = text(formAlias);
+    task.properties.form = text(settings.formAlias);
     task.properties.inputs = {
       kind: "map",
       entries: Object.fromEntries(
@@ -456,7 +475,7 @@ export const applyStudioFlowCommand = (
         command.taskType,
         used,
         current,
-        command.formAlias,
+        command.settings,
       );
       if ("kind" in task && !("id" in task)) return task;
       target.splice(command.index, 0, task as SourceFlowTask);
@@ -522,7 +541,7 @@ export const applyStudioFlowCommand = (
           command.taskType,
           used,
           current,
-          command.formAlias,
+          command.settings,
         );
         if ("kind" in task && !("id" in task)) return task;
         const owner = list[index]!;

@@ -91,6 +91,21 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     usedModules: props.usedModules ?? null, published: props.published ?? null, peopleDirectory: props.peopleDirectory ?? null,
   } });
   const [tab, setTab] = useState<StudioRailKey>(isStudioRailKey(props.initialTab) ? props.initialTab : "structure");
+  // Every way of opening a tab shares this state, including rule links and the rail.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("tab") === tab) return;
+    url.searchParams.set("tab", tab);
+    window.history.replaceState(window.history.state, "", url);
+  }, [tab]);
+  useEffect(() => {
+    const restoreTab = () => {
+      const next = new URL(window.location.href).searchParams.get("tab");
+      setTab(isStudioRailKey(next ?? undefined) ? next as StudioRailKey : "structure");
+    };
+    window.addEventListener("popstate", restoreTab);
+    return () => window.removeEventListener("popstate", restoreTab);
+  }, []);
   const { source, state } = draft;
   const openIn = (nextTab: StudioRailKey, next: StudioSemanticSelection) => { setTab(nextTab); draft.select(next); };
 

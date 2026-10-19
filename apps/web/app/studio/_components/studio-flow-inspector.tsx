@@ -5,7 +5,7 @@ import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { describeFailure, type SourceFlow } from "@vortex/platform/schema";
 import {
   StudioFlowStepPicker, projectStudioFlowStepActions, projectStudioFlowStepForm, refreshStudioFlowStepFields, samePath,
-  studioFlowConditionContext, studioFlowOutline, studioFlowReferenceChoices,
+  studioFlowConditionContext, studioFlowOutline, studioFlowReferenceChoices, studioFlowFieldOptions,
   type StudioFlowCommand, type StudioFlowContext, type StudioFlowDraftChoices, type StudioFlowEditResult, type StudioFlowPath,
   type StudioFlowSelection, type StudioFlowStartDraft, type StudioFlowStartProjection, type StudioFlowStepDraft,
   type StudioFlowTaskListOutline, type StudioFlowTaskOutline,
@@ -110,6 +110,11 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
     } else { setStatus(""); setProblem(result.reason); }
     return result;
   };
+  const pickerContext = (path: StudioFlowPath) => ({
+    condition: studioFlowConditionContext(outline === null ? [] : studioFlowReferenceChoices(
+      context.source, outline.flow, outline.siblings, selection.moduleKey, path, choices.forms)),
+    fields: outline === null ? [] : studioFlowFieldOptions(context.source, outline.flow, selection.moduleKey, {}) ?? [],
+  });
   const add = (command: Extract<StudioFlowCommand, { kind: "insert_task" | "add_branch" }>, done: string) => {
     const result = run(command, done);
     if (result.kind === "applied") setFocusId(result.taskId);
@@ -136,8 +141,8 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
         }} />
       {ownerNote === undefined ? null : <p className="text-sm text-muted-foreground">{ownerNote}</p>}
       <p className="text-sm text-muted-foreground">Select a step on the canvas to change its settings, move it or add a step after it.</p>
-      {main !== undefined && <StudioFlowStepPicker forms={choices.forms} id="flow-add-last" label="Add a step at the end" types={actions.stepTypes} disabled={disabled}
-        action="Add" onAdd={(taskType, formAlias) => add({ kind: "insert_task", taskType, ...(formAlias === undefined ? {} : { formAlias }), listPath: main.path, index: main.tasks.length }, "Step added at the end.")} />}
+      {main !== undefined && <StudioFlowStepPicker context={pickerContext([...(main.path), main.tasks.length])} forms={choices.forms} id="flow-add-last" label="Add a step at the end" types={actions.stepTypes} disabled={disabled}
+        action="Add" onAdd={(taskType, settings) => add({ kind: "insert_task", taskType, settings, listPath: main.path, index: main.tasks.length }, "Step added at the end.")} />}
       {messages}
       {confirmDialog}
     </div>;
@@ -192,14 +197,14 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
       </>}
     </section>
     <section className="space-y-3" aria-label="Add steps">
-      <StudioFlowStepPicker forms={choices.forms} id="flow-add-after" label="Add a step after this one" types={actions.stepTypes} disabled={disabled}
-        action="Add" onAdd={(taskType, formAlias) => add({ kind: "insert_task", taskType, ...(formAlias === undefined ? {} : { formAlias }), listPath, index: index + 1 }, "Step added.")} />
-      {step.children.map((child) => <StudioFlowStepPicker forms={choices.forms} key={JSON.stringify(child.path)} id={`flow-add-in-${JSON.stringify(child.path)}`}
+      <StudioFlowStepPicker context={pickerContext([...listPath, index + 1])} forms={choices.forms} id="flow-add-after" label="Add a step after this one" types={actions.stepTypes} disabled={disabled}
+        action="Add" onAdd={(taskType, settings) => add({ kind: "insert_task", taskType, settings, listPath, index: index + 1 }, "Step added.")} />
+      {step.children.map((child) => <StudioFlowStepPicker context={pickerContext([...child.path, child.tasks.length])} forms={choices.forms} key={JSON.stringify(child.path)} id={`flow-add-in-${JSON.stringify(child.path)}`}
         label={`Add a step to ${child.label}`} types={actions.stepTypes} disabled={disabled} action="Add"
-        onAdd={(taskType, formAlias) => add({ kind: "insert_task", taskType, ...(formAlias === undefined ? {} : { formAlias }), listPath: child.path, index: child.tasks.length }, `Step added to ${child.label}.`)} />)}
-      {actions.branch !== null && <StudioFlowStepPicker forms={choices.forms} id="flow-add-branch" label={`Add the ${actions.branch} branch, starting with`}
+        onAdd={(taskType, settings) => add({ kind: "insert_task", taskType, settings, listPath: child.path, index: child.tasks.length }, `Step added to ${child.label}.`)} />)}
+      {actions.branch !== null && <StudioFlowStepPicker context={pickerContext(step.path)} forms={choices.forms} id="flow-add-branch" label={`Add the ${actions.branch} branch, starting with`}
         types={actions.stepTypes} disabled={disabled} action="Add branch"
-        onAdd={(taskType, formAlias) => add({ kind: "add_branch", taskId: step.id, taskPath: step.path, taskType, ...(formAlias === undefined ? {} : { formAlias }) }, `${actions.branch} branch added.`)} />}
+        onAdd={(taskType, settings) => add({ kind: "add_branch", taskId: step.id, taskPath: step.path, taskType, settings }, `${actions.branch} branch added.`)} />}
     </section>
     {messages}
     {confirmDialog}

@@ -226,19 +226,19 @@ function ConditionControl({ id, condition, context, disabled, onChange }: Readon
       <Button type="button" variant="outline" size="sm" disabled={disabled}
         onClick={() => {
           const fresh: FlowFormula = { op: "literal", type: "yes_no", value: true };
-          setReplaced(true); setTree(undefined); setShown(fresh); onChange(fresh, null);
+          setReplaced(true); setTree(undefined); setShown(fresh); onChange(condition, "Set a condition before replacing this one.");
         }}>Replace it with a new condition</Button>
     </div>;
   const change = (next: ConditionNode | undefined, validation: StudioConditionValidation) => {
     setTree(next);
     const formula = studioFlowConditionFormula(next, context);
-    if (!validation.isValid || formula === undefined)
+    if (next === undefined || !validation.isValid || formula === undefined)
       onChange(condition, "Condition: finish every comparison, with a value on both sides, and the step takes it.");
     else { setShown(formula); onChange(formula, null); }
   };
   return <fieldset className="space-y-2" id={id} disabled={disabled}>
     <legend className="text-sm font-medium">Condition</legend>
-    {tree === undefined && <p className="text-sm text-muted-foreground">No condition yet: the Then branch always runs.</p>}
+    {tree === undefined && <p className="text-sm text-muted-foreground">Set a condition. The step keeps its saved condition until this is complete.</p>}
     <StudioConditionControls {...(tree === undefined ? {} : { value: tree })} context={context.controls}
       label="Condition" onChange={change} />
   </fieldset>;

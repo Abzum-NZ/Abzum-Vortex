@@ -6,7 +6,7 @@ import { useAppearanceMode } from "@vortex/ui";
 import {
   applyStudioFlowCommand, applyStudioFlowCreate, applyStudioFlowStart, describeStudioFlowStarts,
   projectStudioFlowCreateChoices, projectStudioFlowDraftChoices, projectStudioFlowStart, projectStudioFlowStepActions,
-  samePath, studioFlowOfSelection, studioFlowOutline, studioSemanticSelectionKey,
+  studioFlowConditionContext, studioFlowReferenceChoices, studioFlowFieldOptions, samePath, studioFlowOfSelection, studioFlowOutline, studioSemanticSelectionKey,
   type StudioFlowCommand, type StudioFlowContext, type StudioFlowCreateCommand, type StudioFlowCreateResult, type StudioFlowEditResult, type StudioFlowPath,
   type StudioFlowSelection, type StudioFlowStartDraft, type StudioSemanticSelection,
 } from "@vortex/ui/studio";
@@ -151,8 +151,13 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
         <StudioFlowCanvas lists={outline.lists} starts={starts} selectedPath={stepPath} onSelect={selectStep}
           appearance={appearance} types={stepTypes} forms={flowChoices.forms} disabled={disabled}
           title={labels.get(selectionKey) ?? "Flow"}
-          onAdd={(insertion, taskType, formAlias) => {
-            const result = command(context, flowSelection, { kind: "insert_task", ...insertion, taskType, ...(formAlias === undefined ? {} : { formAlias }) });
+          choicesAt={(insertion) => ({
+            condition: studioFlowConditionContext(studioFlowReferenceChoices(source, outline.flow, outline.siblings,
+              flowSelection.moduleKey, [...insertion.listPath, insertion.index], flowChoices.forms)),
+            fields: studioFlowFieldOptions(source, outline.flow, flowSelection.moduleKey, {}) ?? [],
+          })}
+          onAdd={(insertion, taskType, settings) => {
+            const result = command(context, flowSelection, { kind: "insert_task", ...insertion, taskType, settings });
             if (result.kind !== "applied") return result.reason;
             draft.select({ kind: "flow_step", flowAlias: flowSelection.flowAlias, moduleKey: flowSelection.moduleKey, taskId: result.taskId });
             return true;

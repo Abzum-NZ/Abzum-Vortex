@@ -76,20 +76,22 @@ import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "../compon
 import { cn } from "../lib/utils";
 import type { ThemeMode } from "../theme";
 import type { StudioFlowDraftChoices } from "./application-flow-step-form";
+import type { StudioFlowNewStepSettings } from "./application-flow-commands";
 import type { StudioFlowPath, StudioFlowTaskListOutline } from "./application-flow-model";
-import { StudioFlowStepPicker, type StudioFlowStepChoice } from "./studio-flow-step-picker";
+import { StudioFlowStepPicker, type StudioFlowStepChoice, type StudioFlowStepPickerContext } from "./studio-flow-step-picker";
 
 /** The graph is a view of the authored lists; no canvas positions or graph state are stored. */
 type NodeKind = "start" | "step" | "group" | "end";
 type FlowNodeData = Readonly<{ title: string; caption: string; kind: NodeKind; taskType?: string }>;
 type Insertion = Readonly<{ listPath: StudioFlowPath; index: number }>;
 type FlowEdge = Edge<Readonly<{ insertion: Insertion; label: string }>, "studio">;
-type AddStep = (insertion: Insertion, taskType: string, formAlias?: string) => true | string;
+type AddStep = (insertion: Insertion, taskType: string, settings: StudioFlowNewStepSettings) => true | string;
 type CanvasActions = Readonly<{
   types: readonly StudioFlowStepChoice[];
   forms: StudioFlowDraftChoices["forms"];
   disabled: boolean;
   onAdd: AddStep;
+  choicesAt: (insertion: Insertion) => StudioFlowStepPickerContext;
 }>;
 const ActionsContext = createContext<CanvasActions | null>(null);
 
@@ -250,15 +252,16 @@ function StudioFlowEdge(props: EdgeProps<FlowEdge>) {
             <PopoverContent className="w-80" onKeyDown={(event) => event.stopPropagation()}>
               <PopoverTitle>Add a step</PopoverTitle>
               <StudioFlowStepPicker
+                context={(request ?? actions).choicesAt(insertion)}
                 forms={request?.forms ?? actions.forms}
                 id={id}
                 label="Kind of step"
                 types={request?.types ?? actions.types}
                 disabled={actions.disabled}
                 action="Add step"
-                onAdd={(taskType, formAlias) => {
+                onAdd={(taskType, settings) => {
                   if (request === null) return;
-                  const result = request.onAdd(insertion, taskType, formAlias);
+                  const result = request.onAdd(insertion, taskType, settings);
                   if (result === true) {
                     setRequest(null);
                     setProblem("");
@@ -508,6 +511,7 @@ export function StudioFlowCanvas({
   forms,
   disabled,
   onAdd,
+  choicesAt,
 }: Readonly<{
   lists: readonly StudioFlowTaskListOutline[];
   starts: readonly string[];
@@ -521,11 +525,12 @@ export function StudioFlowCanvas({
   forms: StudioFlowDraftChoices["forms"];
   disabled: boolean;
   onAdd: AddStep;
+  choicesAt: (insertion: Insertion) => StudioFlowStepPickerContext;
 }>) {
   const graph = useMemo(() => buildGraph(lists, starts), [lists, starts]);
   const actions = useMemo(
-    () => ({ types, forms, disabled, onAdd }),
-    [types, forms, disabled, onAdd],
+    () => ({ types, forms, disabled, onAdd, choicesAt }),
+    [types, forms, disabled, onAdd, choicesAt],
   );
   const selectedKey = selectedPath === null ? null : pathKey(selectedPath);
   const selectNode = (clicked: Node<FlowNodeData>) => {

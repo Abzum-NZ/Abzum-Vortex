@@ -76,7 +76,7 @@ export type StudioFlowCreateCommand =
       bindingInputs: SourceBinding["inputs"]; rowActionLabel?: string }>
   | Readonly<{ kind: "bind"; controlAlias: string; event: StudioFlowControlEvent; flowKey: string;
       bindingInputs: SourceBinding["inputs"]; rowActionLabel?: string }>
-  | Readonly<{ kind: "before_save"; moduleKey: string; recordTypeKey: string; name: string;
+  | Readonly<{ kind: "before_save"; moduleKey: string; recordTypeKey: string; name: string; message: string;
       operations: readonly ("create" | "update")[] }>;
 
 export type StudioFlowCreateResult =
@@ -239,6 +239,7 @@ export const applyStudioFlowCreate = (
     const name = command.name.trim();
     if (name.length < 1 || name.length > 100) return { kind: "refused", reason: "Name the flow, in at most 100 characters." };
     if (command.kind === "before_save") {
+      if (!command.message.trim()) return { kind: "refused", reason: "Write the warning message before adding the rule." };
       const module = body.modules.find((entry) => entry.key === command.moduleKey);
       if (module === undefined) return { kind: "refused", reason: "This application does not own that module, so it cannot hold a flow for it." };
       if (!module.record_types.some((recordType) => recordType.key === command.recordTypeKey))
@@ -250,7 +251,7 @@ export const applyStudioFlowCreate = (
         runAs: { kind: "saver" }, inputs: {}, variables: {}, outputs: {}, errors: [], finally: [],
         triggers: [{ id: "before_save", type: "BeforeSave", recordTypeId: command.recordTypeKey, inputs: {},
           operations: command.operations.map((kind) => ({ kind })), priority: 100 }],
-        tasks: [{ id: "warn", type: "rule.warn", version: "1.0.0", properties: { message: message("Edit this message") } }] };
+        tasks: [{ id: "warn", type: "rule.warn", version: "1.0.0", properties: { message: message(command.message.trim()) } }] };
       module.flows.push(flow);
       return created(candidate, flow, module.key, undefined);
     }
