@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "../../components/dropdown-menu";
 import { Icon } from "../../icons/icon";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/tooltip";
 import type { GridColumn } from "../table-layout";
 
 /** Auto-size is its own chunk: it loads only when the menu of a column that allows it opens. */
@@ -76,20 +77,27 @@ export function ColumnMenu({
     onSort([{ fieldId: column.key, direction }]);
   return (
     <DropdownMenu open={open} onOpenChange={(next: boolean) => onOpenChange(next)}>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label={`${column.label} column menu`}
-            className="ms-auto shrink-0"
-            // Opening the menu is not a request to sort by the column.
-            onClick={(event) => event.stopPropagation()}
-          />
-        }
-      >
-        <Icon name="chevron-down" aria-hidden="true" />
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`${column.label} column menu`}
+                  className="ms-auto shrink-0"
+                  // Opening the menu is not a request to sort by the column.
+                  onClick={(event) => event.stopPropagation()}
+                />
+              }
+            />
+          }
+        >
+          <Icon name="chevron-down" aria-hidden="true" />
+        </TooltipTrigger>
+        <TooltipContent>{column.label} column menu</TooltipContent>
+      </Tooltip>
       <DropdownMenuContent
         className="min-w-48"
         finalFocus={() => returnFocus() ?? true}

@@ -1330,6 +1330,16 @@ function SettingFields({
                 />
               )}
             </StudioField>
+            {property.key === "auto_size" && fieldProperty !== undefined && (
+              <p className="text-sm text-muted-foreground">
+                {fieldReference !== undefined
+                  ? "Available"
+                  : `Not possible - ${labelText?.trim() || "Column"} has no field to measure`}
+              </p>
+            )}
+            {property.key === "allow_full_screen" && (
+              <p className="text-sm text-muted-foreground">Available</p>
+            )}
             {property === labelProperty && fieldProperty !== undefined && (
               <div className="space-y-1 text-sm text-muted-foreground">
                 {field === undefined ? (
