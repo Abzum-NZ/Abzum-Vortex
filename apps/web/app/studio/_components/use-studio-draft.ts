@@ -336,7 +336,34 @@ export function useStudioDraft({
   const compiling = useRef<Promise<void> | null>(null);
   const compileAgain = useRef(false);
   const generation = useRef(0);
+  // The view the page opened with is the first one known for the saved revision.
   const viewCache = useRef<StudioViewCache | null>(null);
+  if (viewCache.current === null)
+    viewCache.current = {
+      draftRevision: draft.draftRevision,
+      sourceFingerprint: draft.sourceFingerprint,
+      draft,
+      views: new Map([
+        [
+          JSON.stringify(initialView.request),
+          {
+            request: initialView.request,
+            catalogue: initialView.catalogue,
+            themeOptions: initialView.themeOptions,
+            fieldInputControlReleases: initialView.fieldInputControlReleases,
+            platformThemeTokens: initialView.platformThemeTokens,
+            compiledFields: initialView.compiledFields,
+            borrowedChoices: initialView.borrowedChoices,
+            usedModules: initialView.usedModules,
+            published: initialView.published,
+            peopleDirectory: initialView.peopleDirectory,
+            pageCompiledSlots: initialView.slots,
+            canvasFrames: initialView.frames,
+            compileFailure: initialView.failure,
+          },
+        ],
+      ]),
+    };
   // The idle read of the other tabs' views, which a switch to one of them waits for instead of reading again.
   const reading = useRef<Readonly<{ keys: ReadonlySet<string>; done: Promise<void> }> | null>(null);
 
@@ -748,7 +775,7 @@ export function useStudioDraft({
           handle = window.requestIdleCallback(read, { timeout: idleReadTimeoutMs });
         else read();
       },
-      viewCache.current === null ? 0 : idleReadDelayMs,
+      readCount === 0 ? 0 : idleReadDelayMs,
     );
     return () => {
       clearTimeout(timer);
