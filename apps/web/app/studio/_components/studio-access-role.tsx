@@ -245,7 +245,7 @@ export function StudioAccessRoleEditor({
                 setEditingName(false);
             }}
           >
-            <StudioField label="Role name" error={name.problem === "" ? undefined : name.problem}>
+            <StudioField label="Role name" error={name.problem === "" ? undefined : name.problem} onUndo={name.reset}>
               {(control) => (
                 <Input
                   {...control}

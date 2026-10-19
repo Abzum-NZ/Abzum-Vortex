@@ -466,7 +466,11 @@ function StudioMenuEntryEditor({
       <p className="text-sm font-medium">
         {kindWords(item)} “{item.label}”
       </p>
-      <StudioField label="Label" error={label.problem === "" ? undefined : label.problem}>
+      <StudioField
+        label="Label"
+        error={label.problem === "" ? undefined : label.problem}
+        onUndo={label.reset}
+      >
         {(control) => (
           <Input
             {...control}
@@ -539,7 +543,11 @@ function StudioMenuEntryEditor({
         </StudioField>
       )}
       {item.type === "external" && (
-        <StudioField label="Address" error={address.problem === "" ? undefined : address.problem}>
+        <StudioField
+          label="Address"
+          error={address.problem === "" ? undefined : address.problem}
+          onUndo={address.reset}
+        >
           {(control) => (
             <Input
               {...control}
