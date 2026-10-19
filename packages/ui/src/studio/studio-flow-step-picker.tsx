@@ -43,7 +43,7 @@ export function StudioFlowStepPicker({
   types: readonly StudioFlowStepChoice[];
   forms: StudioFlowDraftChoices["forms"];
   disabled: boolean;
-  onAdd: (type: string, settings: StudioFlowNewStepSettings) => void;
+  onAdd: (type: string, settings: StudioFlowNewStepSettings) => boolean;
   action: string;
   context: StudioFlowStepPickerContext;
 }>) {
@@ -143,10 +143,11 @@ export function StudioFlowStepPicker({
           (needsCondition && (formula === undefined || !branchTypes.some((entry) => entry.type === thenTaskType)))}
         onClick={() => {
           if (chosen !== null) {
-            onAdd(chosen.type, {
+            const added = onAdd(chosen.type, {
               ...(needsForm ? { formAlias } : {}), ...(needsMessage ? { message: message.trim() } : {}),
               ...(needsField ? { field } : {}), ...(needsCondition && formula !== undefined ? { condition: formula, thenTaskType } : {}),
             });
+            if (!added) return;
             setFormAlias("");
             setMessage(""); setField(""); setCondition(undefined); setFormula(undefined); setThenTaskType("");
             setChosen(null);

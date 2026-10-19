@@ -260,12 +260,13 @@ function StudioFlowEdge(props: EdgeProps<FlowEdge>) {
                 disabled={actions.disabled}
                 action="Add step"
                 onAdd={(taskType, settings) => {
-                  if (request === null) return;
+                  if (request === null) return false;
                   const result = request.onAdd(insertion, taskType, settings);
                   if (result === true) {
                     setRequest(null);
                     setProblem("");
                   } else setProblem(result);
+                  return result === true;
                 }}
               />
               {problem === "" ? null : (

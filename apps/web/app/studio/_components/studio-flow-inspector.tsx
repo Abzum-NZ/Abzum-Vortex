@@ -118,6 +118,7 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, owner
   const add = (command: Extract<StudioFlowCommand, { kind: "insert_task" | "add_branch" }>, done: string) => {
     const result = run(command, done);
     if (result.kind === "applied") setFocusId(result.taskId);
+    return result.kind === "applied";
   };
 
   const messages = <>
