@@ -24,6 +24,13 @@ type AppearanceState = Readonly<{ mode: ThemeMode; choose: (mode: ThemeMode) => 
 
 const AppearanceContext = createContext<AppearanceState | null>(null);
 
+/** The viewer's choice; components with system-mode support resolve it with the same media query. */
+export function useAppearanceMode(): ThemeMode {
+  const appearance = useContext(AppearanceContext);
+  if (appearance === null) throw new Error("Appearance requires an AppearanceProvider.");
+  return appearance.mode;
+}
+
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 
 /**

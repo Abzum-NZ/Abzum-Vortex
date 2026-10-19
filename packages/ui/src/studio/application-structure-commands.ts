@@ -17,6 +17,7 @@ import {
   type Navigation, type Page, type Shell, type Source, type StudioStructureContext, type StudioStructureResult,
 } from "./application-structure-common";
 import { addRecordPage, type StudioRecordPageCommand } from "./application-record-pages";
+import { movePage, type StudioPageLayoutCommand } from "./application-page-layout";
 
 /**
  * The Structure tab's edits: add, rename and remove pages and layouts, add the pages of a record
@@ -37,7 +38,7 @@ export type StudioStructureCommand =
   | Readonly<{ kind: "remove_page"; pageAlias: string }>
   | Readonly<{ kind: "remove_shell"; shellAlias: string }>
   | Readonly<{ kind: "set_home_page"; pageAlias: string }>
-  | Readonly<{ kind: "move_page"; pageAlias: string; shellAlias: string | null }>;
+  | StudioPageLayoutCommand;
 
 /** A layout a page can use. */
 export type StudioStructureShellChoice = Readonly<{ shellAlias: string | null; label: string }>;
@@ -58,10 +59,6 @@ const placementsOf = (source: Source) => [
   ...source.body.shells.flatMap((shell) => sourceItemTree(shell.layout.content)
     .map((item) => ({ item, where: `layout ${quoted(shell.name)}`, page: undefined as string | undefined, shell: shell.id as string | undefined }))),
 ];
-
-const releaseOf = (catalogue: ImmutablePlatformBlockCatalogue, item: SourceItem) =>
-  catalogue.releases.find((release) => String(release.blockId) === item.props.vortex.block.block_id &&
-    String(release.releaseVersion) === item.props.vortex.block.release_version);
 
 const flowReferenceWords: Readonly<Record<StudioCompositionRemovalReason, string>> = {
   flow_control: "is bound to a flow",
@@ -115,70 +112,6 @@ const addPage = (context: StudioStructureContext, candidate: Source,
   const placed = placeNewPage(candidate, name, { type: "dashboard", permission: home!.permission }, composition, command.addToMenu);
   return { kind: "applied", source: judged(placed.source), select: { kind: "page", pageAlias: placed.page.id }, details: [],
     message: `Page ${quoted(name)} added${command.addToMenu ? " to the menu" : ""}.` };
-};
-
-type PageData = Readonly<{ root: { props: Record<string, unknown> & { vortex: { shell: string | null; slot_orders: Record<string, unknown> } } }; content: SourceItem[] }>;
-
-/** One content area of a frame: the default frame's single area is named "content". */
-type Area = Readonly<{ id: string; key: string; label: string; allowed: readonly string[] | undefined }>;
-const areasOf = (source: Source, shellAlias: string | null): readonly Area[] => {
-  if (shellAlias === null) return [{ id: "content", key: "content", label: "Content", allowed: undefined }];
-  const shell = source.body.shells.find((entry) => entry.id === shellAlias);
-  return (shell?.content_slots ?? []).map((slot) =>
-    ({ id: slot.id, key: slot.key, label: slot.label, allowed: slot.allowed_child_categories }));
-};
-
-/**
- * A page's data in another frame. Each area that holds blocks moves to the target area with the
- * same name, with its tablet and phone order; an area with no counterpart refuses rather than
- * guessing, and so does a block the target area does not admit.
- */
-const movedData = (context: StudioStructureContext, page: Page, data: PageData, target: string | null): PageData => {
-  const from = areasOf(context.source, data.root.props.vortex.shell);
-  const to = areasOf(context.source, target);
-  const blocksIn = (area: Area): SourceItem[] => area.id === "content" && data.root.props.vortex.shell === null
-    ? data.content : (data.root.props[area.id] as SourceItem[] | undefined) ?? [];
-  const placed = new Map<string, { items: SourceItem[]; order: unknown }>();
-  for (const area of from) {
-    const items = blocksIn(area);
-    if (items.length === 0) continue;
-    const match = to.find((candidate) => candidate.key === area.key);
-    if (match === undefined)
-      refuse(`The page ${quoted(page.name)} cannot move: its area ${quoted(area.label)} has blocks, and the new layout has no area of that name (it has ${to.map((entry) => quoted(entry.label)).join(", ")}). Move those blocks or choose another layout.`);
-    for (const item of items) {
-      const release = releaseOf(context.catalogue, item);
-      if (match!.allowed !== undefined && (release === undefined || !match!.allowed.includes(release.paletteGroup))) {
-        const block = context.describePlacement({ block: item.props.vortex.block, settings: settingsOf(item) }) ?? "A block";
-        refuse(`The page ${quoted(page.name)} cannot move: the block ${quoted(block)} is not allowed in the area ${quoted(match!.label)} of the new layout.`);
-      }
-    }
-    placed.set(match!.id, { items, order: data.root.props.vortex.slot_orders[area.id] });
-  }
-  const slotOrders = Object.fromEntries([...placed].flatMap(([id, entry]) => entry.order === undefined ? [] : [[id, entry.order]]));
-  if (target === null)
-    return { root: { props: { vortex: { shell: null, slot_orders: slotOrders } } }, content: placed.get("content")?.items ?? [] };
-  return {
-    root: { props: { vortex: { shell: target, slot_orders: slotOrders },
-      ...Object.fromEntries(to.map((area) => [area.id, placed.get(area.id)?.items ?? []])) } },
-    content: [],
-  };
-};
-
-const movePage = (context: StudioStructureContext, candidate: Source,
-  command: Extract<StudioStructureCommand, { kind: "move_page" }>): StudioStructureResult => {
-  const page = candidate.body.pages.find((entry) => entry.id === command.pageAlias);
-  if (page === undefined) return refuse("That page is no longer in the draft.");
-  const current = sourcePageShell(page.composition);
-  if (current === command.shellAlias) return refuse(`${quoted(page.name)} already uses that layout.`);
-  const target = command.shellAlias === null ? undefined : candidate.body.shells.find((entry) => entry.id === command.shellAlias);
-  if (command.shellAlias !== null && target === undefined) refuse("The chosen layout is no longer in this application. Choose another.");
-  const composition = page.composition as unknown as PageData | { step_content: Record<string, PageData> };
-  page.composition = ("step_content" in composition
-    ? { step_content: Object.fromEntries(Object.entries(composition.step_content)
-      .map(([step, data]) => [step, movedData(context, page, data, command.shellAlias)])) }
-    : movedData(context, page, composition, command.shellAlias)) as unknown as Page["composition"];
-  return { kind: "applied", source: judged(candidate), select: { kind: "page", pageAlias: page.id }, details: [],
-    message: `${quoted(page.name)} now uses ${target === undefined ? "the platform default frame" : `the layout ${quoted(target.name)}`}.` };
 };
 
 /**
