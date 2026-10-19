@@ -16,7 +16,6 @@ import {
   literalInputValue,
   literalMatchesType,
   localDateTimeInputValue,
-  pointerForPath,
 } from "./condition-model";
 
 type LiteralEditorProps = Readonly<{
@@ -106,7 +105,7 @@ export function LiteralEditor({
       <label className="flex flex-col gap-2 text-sm">
         {label}
         <Textarea
-          key={`${pointerForPath(path)}:${JSON.stringify(operand.value)}`}
+          key={JSON.stringify(operand.value)}
           aria-invalid={error !== undefined}
           aria-describedby={error === undefined ? undefined : errorId}
           defaultValue={JSON.stringify(Array.isArray(operand.value) ? operand.value : [], null, 2)}
@@ -157,7 +156,7 @@ export function LiteralEditor({
       <label className="flex flex-col gap-2 text-sm">
         {label}
         <Input
-          key={`${pointerForPath(path)}:${JSON.stringify(operand.value)}`}
+          key={JSON.stringify(operand.value)}
           aria-invalid={error !== undefined}
           aria-describedby={error === undefined ? undefined : errorId}
           type="text"
@@ -323,7 +322,7 @@ export function LiteralEditor({
       <label className="flex flex-col gap-2 text-sm">
         {label} (JSON value)
         <Textarea
-          key={`${pointerForPath(path)}:${JSON.stringify(operand.value)}`}
+          key={JSON.stringify(operand.value)}
           aria-invalid={error !== undefined}
           aria-describedby={error === undefined ? undefined : errorId}
           defaultValue={JSON.stringify(operand.value)}

@@ -24,6 +24,7 @@ import {
 } from "@vortex/platform/schema";
 import {
   StudioEntryList,
+  useStudioEntryKeys,
   StudioOptionControl,
   StudioReferencePicker,
   StudioHelp,
@@ -170,6 +171,7 @@ function NumberPart({
   disabled: boolean;
   onChange: (part: Numeric) => void;
 }>) {
+  const { keys, newKey } = useStudioEntryKeys(part.operands.length);
   const setOperand = (index: number, next: CalculationNumber) =>
     onChange({
       ...part,
@@ -194,11 +196,11 @@ function NumberPart({
         itemName="value"
         disabled={disabled}
         items={part.operands.map((operand, index) => ({
-          key: String(index),
+          key: keys.current[index]!,
           title: numberTitle(operand, fields),
           content: (
             <NumberValue
-              id={`${id}-${index}`}
+              id={`${id}-${keys.current[index]}`}
               value={operand}
               fields={fields}
               depth={depth}
@@ -212,13 +214,17 @@ function NumberPart({
           const [moved] = operands.splice(from, 1);
           if (moved === undefined) return;
           operands.splice(to, 0, moved);
+          const [movedKey] = keys.current.splice(from, 1);
+          keys.current.splice(to, 0, movedKey!);
           onChange({ ...part, operands });
         }}
         onRemove={
           part.operands.length <= 2
             ? undefined
-            : (index) =>
-                onChange({ ...part, operands: part.operands.filter((_, at) => at !== index) })
+            : (index) => {
+                keys.current.splice(index, 1);
+                onChange({ ...part, operands: part.operands.filter((_, at) => at !== index) });
+              }
         }
       >
         <Button
@@ -226,9 +232,10 @@ function NumberPart({
           size="sm"
           variant="ghost"
           disabled={disabled || part.operands.length >= 20}
-          onClick={() =>
-            onChange({ ...part, operands: [...part.operands, { source: "literal", value: "1" }] })
-          }
+          onClick={() => {
+            keys.current.push(newKey());
+            onChange({ ...part, operands: [...part.operands, { source: "literal", value: "1" }] });
+          }}
         >
           <Icon name="plus" />
           Add a value

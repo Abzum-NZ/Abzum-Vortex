@@ -9,6 +9,7 @@ import type { ConditionNode, FlowFormula, SourceFlow } from "@vortex/platform/sc
 import {
   StudioConditionControls,
   StudioEntryList,
+  useStudioEntryKeys,
   StudioOptionControl,
   StudioReferencePicker,
   StudioHelp,
@@ -80,12 +81,16 @@ function EntryRows({
   disabled: boolean;
   onChange: (entries: readonly Entry[]) => void;
 }>) {
+  const { keys, newKey } = useStudioEntryKeys(entries.length);
   const named = expected ?? [];
   const extra = entries.filter(
     (entry) => !named.some((expectedEntry) => expectedEntry.name === entry.name),
   );
   const set = (name: string, source: StudioFlowValueSource | null) => {
     const others = entries.filter((entry) => entry.name !== name);
+    const existingKey = keys.current[entries.findIndex((entry) => entry.name === name)];
+    keys.current = keys.current.filter((_, index) => entries[index]!.name !== name);
+    if (source !== null) keys.current.push(existingKey ?? newKey());
     onChange(source === null ? others : [...others, { name, source }]);
   };
   return (
@@ -105,13 +110,12 @@ function EntryRows({
           onChange={(source) => set(entry.name, source)}
         />
       ))}
-      {/* Keyed by place: the name is edited here, and a key that changed with it would lose the focus. */}
       <StudioEntryList
         label={`${label}: other entries`}
         itemName="entry"
         disabled={disabled}
         items={extra.map((entry, index) => ({
-          key: `extra-${index}`,
+          key: keys.current[entries.indexOf(entry)]!,
           title: studioWords(entry.name),
           summary: describeStudioFlowValue(entry.source, references),
           content: (
@@ -161,15 +165,16 @@ function EntryRows({
           variant="ghost"
           size="sm"
           disabled={disabled}
-          onClick={() =>
+          onClick={() => {
+            keys.current.push(newKey());
             onChange([
               ...entries,
               {
                 name: `entry_${entries.length + 1}`,
                 source: { kind: "fixed", literal: { type: "text", value: "" } },
               },
-            ])
-          }
+            ]);
+          }}
         >
           <Icon name="plus" />
           Add an entry
@@ -599,6 +604,9 @@ function ControlForm({
   disabled: boolean;
   onChange: (control: StudioFlowControlDraft, problem: string | null) => void;
 }>) {
+  const { keys: caseKeys } = useStudioEntryKeys(
+    control.kind === "switch" ? control.cases.length : 0,
+  );
   const keep = (
     source: StudioFlowValueSource | null,
     apply: (source: StudioFlowValueSource) => StudioFlowControlDraft,
@@ -701,7 +709,7 @@ function ControlForm({
                   ? entry.when.value
                   : JSON.stringify(entry.when.value);
               return {
-                key: `case-${index}`,
+                key: caseKeys.current[index]!,
                 title: entry.key === "" ? `Case ${index + 1}` : studioWords(entry.key),
                 summary: when === "" ? undefined : `When the value is ${when}`,
                 content: (

@@ -26,7 +26,7 @@ import {
   type StudioReferencePickerOption,
 } from "./studio-reference-picker";
 import { StudioField, StudioHelp } from "./studio-field";
-import { StudioEntryList } from "./studio-entry-list";
+import { StudioEntryList, useStudioEntryKeys } from "./studio-entry-list";
 import { useConfirm } from "../components/confirm-dialog";
 import { StudioInspectorGroup } from "./studio-inspector-group";
 import { Label } from "../components/label";
@@ -821,13 +821,9 @@ function ListControl({
 }: ControlProps): ReactElement {
   const [newLabel, setNewLabel] = useState("");
   const [confirm, confirmDialog] = useConfirm();
-  // Entries carry no identity of their own; these keys follow them through this editor's moves.
-  const keys = useRef<string[]>([]);
-  const nextKey = useRef(0);
   if (property.kind !== "list") throw new TypeError("A list control needs a list setting.");
   const items = value?.kind === "list" ? value.items : [];
-  const newKey = () => `entry-${(nextKey.current += 1)}`;
-  if (keys.current.length !== items.length) keys.current = items.map(newKey);
+  const { keys, newKey } = useStudioEntryKeys(items.length);
   const named = property.item.kind === "group" ? property.item.namedEntry : undefined;
   const labelProperty =
     property.item.kind === "group" && named !== undefined
@@ -895,7 +891,7 @@ function ListControl({
             summary: heading.summary,
             content: (
               <SettingControl
-                id={`${id}-${index}`}
+                id={`${id}-${keys.current[index]}`}
                 property={property.item}
                 value={item}
                 choices={choices}

@@ -1,9 +1,28 @@
 "use client";
-import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { ArrowDown, ArrowUp, ChevronRight, CircleAlert, GripVertical, Trash2 } from "lucide-react";
 import { Button } from "../components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { cn } from "../lib/utils";
+
+/** Editor-only identities. Callers carry these keys alongside insertions, removals and moves. */
+export function useStudioEntryKeys(count: number) {
+  const prefix = useId();
+  const keys = useRef<string[]>([]);
+  const sequence = useRef(0);
+  const newKey = () => `${prefix}-${(sequence.current += 1)}`;
+  // An externally replaced list has no known correspondence with the previous editor rows.
+  if (keys.current.length !== count) keys.current = Array.from({ length: count }, newKey);
+  return { keys, newKey };
+}
 
 /** A small repeated action drawn as an icon, named by its tooltip and accessible label. */
 export function StudioIconButton({
@@ -82,6 +101,13 @@ export function StudioEntryList({
 }>): ReactElement {
   const [open, setOpen] = useState<string | null>(null);
   const [dragging, setDragging] = useState<number | null>(null);
+  const headings = useRef(new Map<string, HTMLButtonElement>());
+  const focusAfterMove = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    if (focusAfterMove.current === null) return;
+    headings.current.get(focusAfterMove.current)?.focus();
+    focusAfterMove.current = null;
+  }, [items]);
   const seen = useRef(items.map((item) => item.key));
   // A newly added entry opens, so its settings can be filled in at once.
   useEffect(() => {
@@ -93,7 +119,10 @@ export function StudioEntryList({
   }, [items]);
   const movable = onMove !== undefined && !disabled;
   const move = (from: number, to: number) => {
-    if (movable && to >= 0 && to < items.length && to !== from) onMove(from, to);
+    if (movable && to >= 0 && to < items.length && to !== from) {
+      focusAfterMove.current = items[from]!.key;
+      onMove(from, to);
+    }
   };
   return (
     <div className="space-y-1">
@@ -145,6 +174,10 @@ export function StudioEntryList({
                   </span>
                 )}
                 <button
+                  ref={(element) => {
+                    if (element === null) headings.current.delete(item.key);
+                    else headings.current.set(item.key, element);
+                  }}
                   type="button"
                   className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-expanded={item.content === undefined ? undefined : expanded}

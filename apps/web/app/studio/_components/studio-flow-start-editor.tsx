@@ -8,6 +8,7 @@ import { Label } from "@vortex/ui/components/label";
 import { flowStandardEventKindSchema, workflowValueTypeSchema } from "@vortex/platform/schema";
 import {
   StudioEntryList,
+  useStudioEntryKeys,
   StudioOptionControl,
   StudioReferencePicker,
   StudioHelp,
@@ -264,6 +265,9 @@ export function StudioFlowStartEditor({
 }>) {
   // Why the last choice (a select, a checkbox, an added or removed input) was not taken; a text keeps its own problem.
   const [problem, setProblem] = useState("");
+  const { keys: inputKeys, newKey } = useStudioEntryKeys(
+    projection.kind === "unavailable" ? 0 : projection.draft.inputs.length,
+  );
   if (projection.kind === "unavailable")
     return (
       <p role="alert" className="text-sm">
@@ -277,8 +281,12 @@ export function StudioFlowStartEditor({
     if (setting === undefined) setProblem(result === true ? "" : result);
     return result;
   };
-  const setInputs = (inputs: readonly StudioFlowInputDraft[], setting?: string) =>
-    change(
+  const setInputs = (inputs: readonly StudioFlowInputDraft[], setting?: string) => {
+    inputKeys.current = inputs.map((input) => {
+      const previous = shown.inputs.findIndex((entry) => entry.id === input.id);
+      return previous === -1 ? newKey() : inputKeys.current[previous]!;
+    });
+    return change(
       {
         ...shown,
         inputs,
@@ -297,6 +305,7 @@ export function StudioFlowStartEditor({
       },
       setting,
     );
+  };
   return (
     <section className="space-y-4" aria-label="How it starts">
       <StudioInspectorGroup title="General">
@@ -374,9 +383,8 @@ export function StudioFlowStartEditor({
                   },
                   setting,
                 );
-              // Keyed by place: renaming an input changes its identity with every keystroke.
               return (
-                <div key={inputIndex} className="space-y-1.5">
+                <div key={inputKeys.current[inputIndex]} className="space-y-1.5">
                   <Label htmlFor={id}>
                     {studioWords(input.name)}
                     {!input.required && (
@@ -439,13 +447,12 @@ export function StudioFlowStartEditor({
       </StudioInspectorGroup>
       <StudioInspectorGroup title="Inputs">
         <StudioHelp hint="The values the flow is given when it starts. Its steps read them." />
-        {/* Keyed by place: renaming an input changes its identity with every keystroke. */}
         <StudioEntryList
           label="Inputs"
           itemName="input"
           disabled={disabled}
           items={shown.inputs.map((input, index) => ({
-            key: `input-${index}`,
+            key: inputKeys.current[index]!,
             title: studioWords(input.name),
             summary: [
               input.type === "record_reference" || input.type === "record_reference_list"
@@ -458,7 +465,7 @@ export function StudioFlowStartEditor({
               .join(", "),
             content: (
               <InputSettings
-                id={`flow-start-input-${index}`}
+                id={`flow-start-input-${inputKeys.current[index]}`}
                 input={input}
                 recordTypes={recordTypes}
                 disabled={disabled}

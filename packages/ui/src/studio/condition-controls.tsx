@@ -11,7 +11,7 @@ import {
 import { Plus, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { StudioOptionControl } from "./studio-setting-controls";
-import { StudioEntryList, StudioIconButton } from "./studio-entry-list";
+import { StudioEntryList, StudioIconButton, useStudioEntryKeys } from "./studio-entry-list";
 import { StudioInspectorActions } from "./studio-inspector-actions";
 import {
   conditionMaximumNestingDepth,
@@ -50,7 +50,6 @@ import {
   operatorOptions,
   pathEquals,
   pathStartsWith,
-  pointerForPath,
   studioConditionOperatorsFor,
   unaryOperators,
   validateStudioCondition,
@@ -77,6 +76,9 @@ function TreeEditor({
   onReplace,
   onInvalid,
 }: TreeEditorProps) {
+  const { keys, newKey } = useStudioEntryKeys(
+    condition.kind === "all" || condition.kind === "any" ? condition.conditions.length : 0,
+  );
   if (condition.kind === "all" || condition.kind === "any") {
     const level = conditionLevelForPath(path);
     const canAddComparison = level + 1 <= conditionMaximumNestingDepth && remainingOperandCount > 0;
@@ -97,6 +99,7 @@ function TreeEditor({
           : kind === "not"
             ? { kind: "not", condition: leaf }
             : { kind, conditions: [leaf] };
+      keys.current.push(newKey());
       onReplace({ ...condition, conditions: [...condition.conditions, child] });
     };
     const addDisabled =
@@ -125,7 +128,7 @@ function TreeEditor({
           items={condition.conditions.map((child, index) => {
             const childPath = [...path, "conditions", index];
             return {
-              key: pointerForPath(childPath),
+              key: keys.current[index]!,
               title: describeCondition(child, context),
               invalid: validation.issues.some((issue) => pathStartsWith(issue.path, childPath)),
               content: (
@@ -150,12 +153,15 @@ function TreeEditor({
             const [moved] = conditions.splice(from, 1);
             if (moved === undefined) return;
             conditions.splice(to, 0, moved);
+            const [movedKey] = keys.current.splice(from, 1);
+            keys.current.splice(to, 0, movedKey!);
             onReplace({ ...condition, conditions }, path);
           }}
           onRemove={
             condition.conditions.length <= 1
               ? undefined
-              : (index) =>
+              : (index) => {
+                  keys.current.splice(index, 1);
                   onReplace(
                     {
                       ...condition,
@@ -164,7 +170,8 @@ function TreeEditor({
                       ),
                     },
                     path,
-                  )
+                  );
+                }
           }
         >
           <div className="flex flex-wrap gap-1">
