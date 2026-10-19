@@ -57,6 +57,7 @@ import {
   releasedUnchangedModules,
   compileApplicationWithInlineModules,
   planApplicationPublication,
+  latestReleaseVersion,
   stagedOwnedModuleRoots,
   type ApplicationReleasePlan,
 } from "./application-publication";
@@ -313,9 +314,7 @@ const compileDraftSnapshot = async (
     candidate.draft.draftRevision,
     candidate.draft.sourceFingerprint,
     candidate.draft.publishedRevision ?? null,
-    "currentReleaseVersion" in candidate
-      ? candidate.currentReleaseVersion
-      : (candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? null),
+    latestReleaseVersion(candidate),
     stagedOwnedModuleRoots(candidate, ownedRoots),
     usedAnchors,
     directoryPage === undefined

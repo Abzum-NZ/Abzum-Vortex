@@ -80,6 +80,22 @@ const inlineModuleSources = (candidate: DefinitionCandidateDraft) =>
     ? applicationModuleSources(candidate.draft.source)
     : refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
 
+/** The release version a draft or publication candidate was last released at, if any. */
+export const latestReleaseVersion = (
+  candidate: DefinitionDraftCandidate | DefinitionPublicationCandidate,
+): string | null =>
+  "currentReleaseVersion" in candidate
+    ? candidate.currentReleaseVersion
+    : (candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? null);
+
+/**
+ * Whether staging gives a stored inline Module root a new draft revision: its source changed, or
+ * its draft is already released.
+ */
+const stagesOwnedModule = (existing: OwnedModuleRoot, sourceFingerprint: string): boolean =>
+  existing.sourceFingerprint !== sourceFingerprint ||
+  existing.draftRevision === existing.currentReleaseRevision;
+
 /**
  * Writes the current lowering of each inline Module into the internal root the Application owns,
  * creating the roots that are missing. A Module whose source changed, or whose draft is already
@@ -101,8 +117,7 @@ export const materializeInlineModules = async (
     const root =
       existing === undefined
         ? await transaction.createOwnedModuleRoot(String(candidate.draft.rootId), source)
-        : existing.sourceFingerprint !== fingerprintCanonicalValue(source) ||
-            existing.draftRevision === existing.currentReleaseRevision
+        : stagesOwnedModule(existing, fingerprintCanonicalValue(source))
           ? await transaction.stageOwnedModuleSource(existing, source)
           : existing;
     roots.set(source.key, root);
@@ -136,13 +151,12 @@ export const stagedOwnedModuleRoots = (
           null,
           sourceFingerprint,
         ];
-      const staged =
-        existing.sourceFingerprint !== sourceFingerprint ||
-        existing.draftRevision === existing.currentReleaseRevision;
       return [
         source.key,
         String(existing.rootId).toLowerCase(),
-        staged ? existing.draftRevision + 1 : existing.draftRevision,
+        stagesOwnedModule(existing, sourceFingerprint)
+          ? existing.draftRevision + 1
+          : existing.draftRevision,
         existing.currentReleaseRevision,
         sourceFingerprint,
       ];
@@ -515,13 +529,10 @@ export const compileApplicationWithInlineModules = async (
   const ownedRoots = await transaction.readOwnedModuleRoots(String(candidate.draft.rootId));
   const unchanged = await releasedUnchangedModules(transaction, candidate, ownedRoots);
   const roots = await materializeInlineModules(transaction, candidate, ownedRoots, unchanged);
-  const latestVersion =
-    "currentReleaseVersion" in candidate
-      ? candidate.currentReleaseVersion
-      : candidate.historyEvidence.latestRelease?.publication.releaseVersion;
+  const latestVersion = latestReleaseVersion(candidate);
   const version =
     options.version ??
-    (latestVersion == null ? "1.0.0" : assignNextDefinitionVersion(latestVersion, "major"));
+    (latestVersion === null ? "1.0.0" : assignNextDefinitionVersion(latestVersion, "major"));
   const modules = await releaseInlineModules(
     context,
     transaction,
