@@ -29,16 +29,16 @@ as $function$
   ),
   valid as (
     select p_registration_revision = 6
-      and pg_catalog.count(*) = 22
-      and pg_catalog.count(distinct permission_id) = 22
-      and pg_catalog.count(distinct permission_key) = 22
+      and pg_catalog.count(*) = 23
+      and pg_catalog.count(distinct permission_id) = 23
+      and pg_catalog.count(distinct permission_key) = 23
       and pg_catalog.count(*) filter (where action_kind = 'named') = 0
       and pg_catalog.bool_and(first_revision between 1 and 6)
       as is_valid
     from declarations
   )
   select 6::bigint, 6::bigint, '1.4.0'::text,
-    'sha256:1e5cceb04465d940f163ec926af7423efc9b37788551b00766d768fe9089195b'::text,
+    'sha256:60d2c42cab03723fda56198083a70e8703792587546379372334d99609b15538'::text,
     declaration.permission_id, declaration.permission_key,
     declaration.action_kind, declaration.label, declaration.description,
     declaration.meaning_fingerprint, declaration.steward_minimum,

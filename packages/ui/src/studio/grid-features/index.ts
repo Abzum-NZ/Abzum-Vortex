@@ -56,7 +56,7 @@ export const studioGridFeatureEditors: Readonly<
         editable: false,
       }),
   },
-  saved_views: { kind: "settings" },
+  saved_views: { kind: "custom" },
   bulk_actions: { kind: "settings", boundRecordTypeActions: true },
   inline_edit: { kind: "settings" },
   master_detail: { kind: "settings" },
@@ -100,10 +100,12 @@ export type StudioRelatedRecordsChoices = Readonly<{
  */
 export const studioRecordsTableQueryFacts = (
   query: StudioQueryChoice | undefined,
+  signedIn: boolean,
   actions: readonly StudioActionChoice[],
   relationships: readonly StudioRelationshipChoice[],
   related: StudioRelatedRecordsChoices,
 ): RecordsTableQueryFacts => ({
+  signedIn,
   recordTypeLabel: query?.label ?? "",
   fields: (query?.fields ?? []).map((field) => ({
     field: field.reference,

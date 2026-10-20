@@ -430,8 +430,15 @@ export function ApplicationPageViewContent({
     applyDispatch,
   });
 
-  const { commitTablePage, changeTableQuery, tableQueryPending } = useTablePageAddress({
+  const {
+    commitTablePage,
+    changeTableQuery,
+    openTableView,
+    selectTableViewInPlace,
+    tableQueryPending,
+  } = useTablePageAddress({
     model,
+    currentData,
     currentSearch,
     refreshPlacements,
     setSelection,
@@ -470,7 +477,15 @@ export function ApplicationPageViewContent({
     tableQueryPending,
   });
 
-  const { commitLayout } = useGridLayout({ model, currentData });
+  const { commitLayout, runViewCommand } = useGridLayout({
+    model,
+    currentData,
+    navigationKey,
+    setRefreshedPlacementData,
+    openTableView,
+    selectTableViewInPlace,
+    refreshPlacements,
+  });
   const { readDetail: readRowDetail } = useRowDetail({
     application,
     currentPageKey,
@@ -498,6 +513,7 @@ export function ApplicationPageViewContent({
     setSelection,
     changeTableQuery,
     commitLayout,
+    runViewCommand,
     readRowDetail,
     requestChoicePageRef,
     changeChoiceField,

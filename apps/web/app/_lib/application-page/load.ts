@@ -13,6 +13,7 @@ import {
   type RecordLinkResolver,
   readCurrentRecordOwnerGroupsAfterAuthorization,
   pageSubjectFieldIds,
+  gridViewPlacement,
 } from "@vortex/platform/server";
 import {
   FORM_CONTAINER_BLOCK_RELEASE,
@@ -32,6 +33,9 @@ import {
   isRecord,
   compiledPageShellId,
   recordsTableParameterPlacement,
+  readRecordsTableContract,
+  readRecordsTableViewId,
+  type BlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import { createPlacementReadServices } from "./placement-services";
 import { readApplicationReleaseAdoption } from "../application-release-adoption";
@@ -669,12 +673,43 @@ const loadApplicationPageJoined = async (
     selection,
     context,
     String(pageDefinition.pageId),
-    placements.filter(isTablePlacement).flatMap(({ placementId, vortex }) => {
+    placements.filter(isTablePlacement).flatMap(({ placementId, vortex, settings }) => {
       const recordTypeId =
         typeof vortex.queryId === "string"
           ? resolvedQueryRecordTypeId(context, vortex.queryId)
           : undefined;
-      return recordTypeId === undefined ? [] : [{ placementId, recordTypeId }];
+      if (recordTypeId === undefined) return [];
+      // Saved views are read only for a grid that turns them on.
+      const savedViews = readRecordsTableContract(
+        settings as Readonly<Record<string, BlockPropertyValueContract>>,
+      )?.features.savedViews;
+      const viewsOn = savedViews?.enabled === true;
+      return [
+        {
+          placementId,
+          recordTypeId,
+          selectedViewId: viewsOn
+            ? readRecordsTableViewId(
+                placementId,
+                Object.entries(parameters).flatMap(([name, value]): [string, string][] => {
+                  const text = first(value);
+                  return text === undefined ? [] : [[name, text]];
+                }),
+              )
+            : undefined,
+          defaultViews: (() => {
+            const installed = gridViewPlacement(pageDefinition, placementId);
+            const feature = installed?.contract.features.savedViews;
+            return installed === undefined || feature?.enabled !== true
+              ? []
+              : feature.defaultViews.map((view) => ({
+                  viewId: view.viewId,
+                  queryId: installed.queryId,
+                  document: view.document,
+                }));
+          })(),
+        },
+      ];
     }),
   );
   startedReads.push(gridLayoutsRead);

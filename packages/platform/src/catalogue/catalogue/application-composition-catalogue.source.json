@@ -3557,7 +3557,7 @@
         "key": "maximum_size_mb",
         "label": "Maximum size (MiB)",
         "required": true,
-        "minimum": 0.000001,
+        "minimum": 1e-6,
         "maximum": 5000,
         "integer": false
       },
@@ -4740,7 +4740,7 @@
             "kind": "group",
             "key": "saved_views",
             "label": "Saved views",
-            "help": "Let people save and reopen sort and filter combinations",
+            "help": "Let people save, reopen and share views of the table",
             "required": false,
             "defaultValue": {
               "kind": "group",
@@ -4761,6 +4761,260 @@
                 "defaultValue": {
                   "kind": "boolean",
                   "value": false
+                }
+              },
+              {
+                "kind": "list",
+                "key": "default_views",
+                "label": "Default views",
+                "help": "Default views",
+                "required": false,
+                "minimumItems": 0,
+                "maximumItems": 20,
+                "item": {
+                  "kind": "group",
+                  "key": "item",
+                  "label": "Default views",
+                  "help": "Default views",
+                  "required": true,
+                  "properties": [
+                    {
+                      "kind": "text",
+                      "key": "view_id",
+                      "label": "View identity",
+                      "help": "View identity",
+                      "required": true,
+                      "minLength": 36,
+                      "maxLength": 36
+                    },
+                    {
+                      "kind": "text",
+                      "key": "name",
+                      "label": "Name",
+                      "help": "Name",
+                      "required": true,
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    {
+                      "kind": "text",
+                      "key": "role",
+                      "label": "Role",
+                      "help": "Role",
+                      "required": true,
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    {
+                      "kind": "boolean",
+                      "key": "is_default",
+                      "label": "Use by default",
+                      "help": "Use by default",
+                      "required": true,
+                      "defaultValue": {
+                        "kind": "boolean",
+                        "value": true
+                      }
+                    },
+                    {
+                      "kind": "group",
+                      "key": "state",
+                      "label": "Saved state",
+                      "help": "Table configuration",
+                      "required": true,
+                      "properties": [
+                        {
+                          "kind": "list",
+                          "key": "columns",
+                          "label": "Columns",
+                          "help": "Columns",
+                          "required": true,
+                          "minimumItems": 1,
+                          "maximumItems": 200,
+                          "item": {
+                            "kind": "group",
+                            "key": "item",
+                            "label": "Columns",
+                            "help": "Columns",
+                            "required": true,
+                            "properties": [
+                              {
+                                "kind": "field_reference",
+                                "key": "field",
+                                "label": "Field",
+                                "help": "Field",
+                                "required": true
+                              },
+                              {
+                                "kind": "boolean",
+                                "key": "visible",
+                                "label": "Visible",
+                                "help": "Visible",
+                                "required": true,
+                                "defaultValue": {
+                                  "kind": "boolean",
+                                  "value": true
+                                }
+                              },
+                              {
+                                "kind": "choice",
+                                "key": "pin",
+                                "label": "Pin",
+                                "help": "Pin",
+                                "required": true,
+                                "options": [
+                                  {
+                                    "key": "start",
+                                    "label": "Start"
+                                  },
+                                  {
+                                    "key": "end",
+                                    "label": "End"
+                                  },
+                                  {
+                                    "key": "unpinned",
+                                    "label": "Unpinned"
+                                  }
+                                ],
+                                "defaultValue": {
+                                  "kind": "choice",
+                                  "value": "unpinned"
+                                }
+                              },
+                              {
+                                "kind": "number",
+                                "key": "width",
+                                "label": "Width",
+                                "help": "Column width in pixels",
+                                "required": false,
+                                "integer": true,
+                                "minimum": 64,
+                                "maximum": 640
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kind": "choice",
+                          "key": "density",
+                          "label": "Density",
+                          "help": "Density",
+                          "required": true,
+                          "options": [
+                            {
+                              "key": "comfortable",
+                              "label": "Comfortable"
+                            },
+                            {
+                              "key": "compact",
+                              "label": "Compact"
+                            }
+                          ],
+                          "defaultValue": {
+                            "kind": "choice",
+                            "value": "comfortable"
+                          }
+                        },
+                        {
+                          "kind": "list",
+                          "key": "sort",
+                          "label": "Sort",
+                          "help": "Sort",
+                          "required": true,
+                          "minimumItems": 0,
+                          "maximumItems": 20,
+                          "defaultValue": {
+                            "kind": "list",
+                            "items": []
+                          },
+                          "item": {
+                            "kind": "group",
+                            "key": "item",
+                            "label": "Sort",
+                            "help": "Sort",
+                            "required": true,
+                            "properties": [
+                              {
+                                "kind": "field_reference",
+                                "key": "field",
+                                "label": "Field",
+                                "help": "Field",
+                                "required": true
+                              },
+                              {
+                                "kind": "choice",
+                                "key": "direction",
+                                "label": "Direction",
+                                "help": "Direction",
+                                "required": true,
+                                "options": [
+                                  {
+                                    "key": "ascending",
+                                    "label": "Ascending"
+                                  },
+                                  {
+                                    "key": "descending",
+                                    "label": "Descending"
+                                  }
+                                ],
+                                "defaultValue": {
+                                  "kind": "choice",
+                                  "value": "ascending"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kind": "list",
+                          "key": "filters",
+                          "label": "Filters",
+                          "help": "Filters",
+                          "required": true,
+                          "minimumItems": 0,
+                          "maximumItems": 50,
+                          "defaultValue": {
+                            "kind": "list",
+                            "items": []
+                          },
+                          "item": {
+                            "kind": "group",
+                            "key": "item",
+                            "label": "Filters",
+                            "help": "Filters",
+                            "required": true,
+                            "properties": [
+                              {
+                                "kind": "field_reference",
+                                "key": "field",
+                                "label": "Field",
+                                "help": "Field",
+                                "required": true
+                              },
+                              {
+                                "kind": "text",
+                                "key": "filter",
+                                "label": "Filter value",
+                                "help": "Filter value",
+                                "required": true,
+                                "minLength": 1,
+                                "maxLength": 4000
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kind": "text",
+                          "key": "search",
+                          "label": "Search",
+                          "help": "Quick search",
+                          "required": false,
+                          "minLength": 1,
+                          "maxLength": 200
+                        }
+                      ]
+                    }
+                  ]
                 }
               }
             ]
@@ -7219,7 +7473,7 @@
         "key": "maximum_size_mb",
         "label": "Maximum size (MiB)",
         "required": true,
-        "minimum": 0.000001,
+        "minimum": 1e-6,
         "maximum": 5000,
         "integer": false
       },
