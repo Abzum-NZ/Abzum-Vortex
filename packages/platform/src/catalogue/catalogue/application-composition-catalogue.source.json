@@ -4454,19 +4454,10 @@
         "help": "Table shows columns; List shows the same records as cards at every screen size",
         "required": true,
         "options": [
-          {
-            "key": "grid",
-            "label": "Table"
-          },
-          {
-            "key": "cards",
-            "label": "List"
-          }
+          { "key": "grid", "label": "Table" },
+          { "key": "cards", "label": "List" }
         ],
-        "defaultValue": {
-          "kind": "choice",
-          "value": "grid"
-        }
+        "defaultValue": { "kind": "choice", "value": "grid" }
       },
       {
         "kind": "choice",
