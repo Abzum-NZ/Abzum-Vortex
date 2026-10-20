@@ -172,7 +172,7 @@ begin
       );
       -- A previous stage's physical tokens and field bounds are reusable only
       -- after this invocation re-reads the exact preview catalogue and bounds.
-      prepared_plan := prepared_plan - 'storage' - 'readableFieldIds' - 'access'
+      prepared_plan := prepared_plan - 'storage' - 'readableFieldIds' - 'fieldBoundIds' - 'access'
         - 'filterFieldIds' - 'filter';
     elsif prepared_plan ? 'preview' then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
@@ -477,6 +477,8 @@ begin
         ),
         'fieldMappings', preview_field_mappings,
         'readableFieldIds', pg_catalog.to_jsonb(readable_field_ids),
+        -- The builder's preview field bounds are also the bound a list offers its controls by.
+        'fieldBoundIds', pg_catalog.to_jsonb(readable_field_ids),
         'access', pg_catalog.jsonb_build_object(
           'predicate', 'true',
           'parameters', '[]'::jsonb,
@@ -539,6 +541,9 @@ begin
           'protectedReadModelKey', catalogue_row.protected_read_model_key
         ),
         'readableFieldIds', pg_catalog.to_jsonb(readable_field_ids),
+        -- The fields the reader is guaranteed to see on every record it may read, whatever the
+        -- scan examines: the current field bound a list offers its filter, search and sort by.
+        'fieldBoundIds', pg_catalog.to_jsonb(coalesce(access_plan.bound_field_ids, array[]::text[])),
         'access', pg_catalog.jsonb_build_object(
           'predicate', access_plan.access_predicate,
           'parameters', coalesce(access_plan.access_parameters, '[]'::jsonb),
