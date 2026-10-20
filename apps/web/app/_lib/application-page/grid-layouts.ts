@@ -1,16 +1,20 @@
 import {
   createHumanOrganizationRequestService,
+  gridViewPlacement,
   readGridViews,
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
   type StoredGridViews,
 } from "@vortex/platform/server";
+import { readRecordsTableViewId } from "@vortex/platform/schema";
 import type {
   GridViewDocument,
   IdentitySession,
   OrganizationSelectionCandidate,
 } from "@vortex/platform/schema";
 import { decideRecordTypeFieldIds } from "./form-field-access";
+import { first } from "./placement-helpers";
+import type { SearchParameters } from "./types";
 
 /**
  * The person's stored layouts and saved views of a page's data grids, read once before any grid
@@ -48,6 +52,39 @@ export type PageGrid = Readonly<{
     document: GridViewDocument;
   }>[];
 }>;
+
+/** The same authored and addressed views for the initial page and an expanded tree level. */
+export const pageGridLayoutRequest = (
+  page: InstalledRuntimeContext["releaseSet"]["application"]["content"]["pages"][number],
+  placementId: string,
+  recordTypeId: string,
+  parameters: SearchParameters,
+): PageGrid => {
+  const installed = gridViewPlacement(page, placementId);
+  const feature = installed?.contract.features.savedViews;
+  return {
+    placementId,
+    recordTypeId,
+    selectedViewId:
+      feature?.enabled === true
+        ? readRecordsTableViewId(
+            placementId,
+            Object.entries(parameters).flatMap(([name, value]): [string, string][] => {
+              const text = first(value);
+              return text === undefined ? [] : [[name, text]];
+            }),
+          )
+        : undefined,
+    defaultViews:
+      installed === undefined || feature?.enabled !== true
+        ? []
+        : feature.defaultViews.map((view) => ({
+            viewId: view.viewId,
+            queryId: installed.queryId,
+            document: view.document,
+          })),
+  };
+};
 
 /**
  * Reads every stored layout of the named grid placements, and the person's current field policy
