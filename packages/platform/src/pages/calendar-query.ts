@@ -1,13 +1,10 @@
 import "server-only";
 
 import {
-  CalendarEndpointError,
-  calendarAddDays,
-  calendarDateIsValid,
-  calendarDaysInMonth,
-  calendarDaysSinceMonday,
+  type CalendarView,
   calendarLocalDate,
-  calendarMonthStart,
+  calendarPeriod,
+  calendarPeriodSupported,
   calendarStartOfDay,
 } from "./calendar-date";
 
@@ -34,8 +31,6 @@ import {
 
 type ModuleRelease = InstalledRuntimeContext["releaseSet"]["modules"][number];
 type ModuleQuery = ModuleRelease["content"]["queries"][number];
-
-export type CalendarView = "month" | "week" | "agenda";
 
 export type CalendarPlacementContract = Readonly<{
   calendarMapping: CalendarMapping;
@@ -85,20 +80,6 @@ export const readCalendarPlacementContract = (
 };
 
 const calendarToday = (timeZone: string): string => calendarLocalDate(Date.now(), timeZone);
-
-const calendarPeriod = (
-  view: CalendarView,
-  date: string,
-): Readonly<{ startDate: string; endDate: string }> => {
-  if (view === "agenda") return { startDate: date, endDate: calendarAddDays(date, 30) };
-  if (view === "week") {
-    const startDate = calendarAddDays(date, -calendarDaysSinceMonday(date));
-    return { startDate, endDate: calendarAddDays(startDate, 7) };
-  }
-  const startDate = calendarMonthStart(date);
-  const endDate = calendarAddDays(startDate, calendarDaysInMonth(date));
-  return { startDate, endDate };
-};
 
 const calendarWindowFilter = (
   mapping: CalendarMapping,
@@ -300,24 +281,10 @@ export const projectCalendarPlacement = async (
     rawView === "week" || rawView === "agenda" || rawView === "month"
       ? rawView
       : calendarContract.defaultView;
-  const rawDate = input.requestedDate;
-  if (rawDate !== undefined && !calendarDateIsValid(rawDate))
-    return refused("calendar_range_unsupported");
-  const date = rawDate ?? calendarToday(timeZone);
+  const date = input.requestedDate ?? calendarToday(timeZone);
+  if (!calendarPeriodSupported(view, date, timeZone)) return refused("calendar_range_unsupported");
   const window = calendarPeriod(view, date);
-  if (!calendarDateIsValid(window.startDate) || !calendarDateIsValid(window.endDate))
-    return refused("calendar_range_unsupported");
-  let filter: JsonValue;
-  try {
-    // Check both endpoints even for date-only calendars: a period must also be renderable
-    // by the same calendar when it contains instants.
-    calendarStartOfDay(window.startDate, timeZone);
-    calendarStartOfDay(window.endDate, timeZone);
-    filter = calendarWindowFilter(mapping, dateFieldType as "date" | "date_time", window, timeZone);
-  } catch (error) {
-    if (!(error instanceof CalendarEndpointError)) throw error;
-    return refused("calendar_range_unsupported");
-  }
+  const filter = calendarWindowFilter(mapping, dateFieldType as "date" | "date_time", window, timeZone);
   const filterableFieldIds = [
     ...new Set(
       (mapping.kind === "start_end"

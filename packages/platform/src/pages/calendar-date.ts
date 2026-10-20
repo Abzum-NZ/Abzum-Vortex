@@ -54,3 +54,43 @@ export const calendarStartOfDay = (date: string, timeZone: string): string => {
   if (flowInstantMicros(instant) === undefined) throw new CalendarEndpointError();
   return instant;
 };
+
+export type CalendarView = "month" | "week" | "agenda";
+
+/** The local days a Calendar view shows for a date: start inclusive, end exclusive. */
+export const calendarPeriod = (
+  view: CalendarView,
+  date: string,
+): Readonly<{ startDate: string; endDate: string }> => {
+  if (view === "agenda") return { startDate: date, endDate: calendarAddDays(date, 30) };
+  if (view === "week") {
+    const startDate = calendarAddDays(date, -calendarDaysSinceMonday(date));
+    return { startDate, endDate: calendarAddDays(startDate, 7) };
+  }
+  const startDate = calendarMonthStart(date);
+  const endDate = calendarAddDays(startDate, calendarDaysInMonth(date));
+  return { startDate, endDate };
+};
+
+/**
+ * Whether a Calendar can show this view and date: both period days are valid four-digit-year
+ * dates and both local-midnight endpoints are representable instants, even for date-only
+ * calendars, so the same period renders whether or not it contains instants.
+ */
+export const calendarPeriodSupported = (
+  view: CalendarView,
+  date: string,
+  timeZone: string,
+): boolean => {
+  if (!calendarDateIsValid(date)) return false;
+  const period = calendarPeriod(view, date);
+  if (!calendarDateIsValid(period.startDate) || !calendarDateIsValid(period.endDate)) return false;
+  try {
+    calendarStartOfDay(period.startDate, timeZone);
+    calendarStartOfDay(period.endDate, timeZone);
+    return true;
+  } catch (error) {
+    if (error instanceof CalendarEndpointError) return false;
+    throw error;
+  }
+};

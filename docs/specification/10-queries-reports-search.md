@@ -152,8 +152,8 @@ including its six-digit fractional precision. The maximum canonical UTC instant 
 instant or replaced with today's date. For example, the boundary after 9999-12-31 is out of range
 in UTC, but remains representable in a zone whose positive offset places it in UTC year 9999.
 Calendar views additionally require their local start and exclusive end dates to fit the calendar
-date contract (0001 through 9999); a period crossing that domain is refused explicitly. A date-time column filter whose boundary
-falls outside the UTC instant domain refuses the read.
+date contract (0001 through 9999); a period crossing that domain is refused explicitly. A date-time
+column filter whose boundary falls outside the UTC instant domain refuses the read.
 
 Calculated fields, totals and other types take no filter. The filters of different fields AND together and AND the published query filter, so a filter only ever narrows the query. The page address carries each filter as `filter.<placement>.<field>=<kind>:<operand>` (one codec for the runtime, the address, saved layouts and Studio preview); a malformed, inverted, open-on-both-ends or repeated filter refuses the read rather than being dropped. The server rebuilds every condition from the installed field (type, options, currency and link target) and refuses a filter on a field the feature does not declare, a field whose filter kind does not match its type, or a feature that is not projected on. A field the viewer's current field policy withholds is not offered, and a forged filter on it is refused by the Query engine. A committed filter is one bounded read of that table only, from page one with the selection cleared; text commits after a 300 ms pause, and a reply for an earlier state is discarded. Every supported filter, money ranges included, is pushed into the indexed candidate scan when its field is readable for the whole record type.
 

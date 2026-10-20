@@ -199,8 +199,8 @@ export {
   type CalendarPlacementProjectionInput,
   type CalendarPlacementValues,
   type CalendarQueryRunner,
-  type CalendarView,
 } from "./calendar-query";
+export type { CalendarView } from "./calendar-date";
 export {
   projectBoardPlacement,
   type BoardPlacementFailureCause,

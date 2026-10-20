@@ -7,6 +7,7 @@ import {
   calendarDaysSinceMonday,
   calendarLocalDate,
   calendarMonthStart,
+  calendarPeriodSupported,
   calendarShiftMonth,
   calendarStartOfDay,
 } from "@vortex/platform/schema";
@@ -116,6 +117,16 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
     }
   }
 
+  const periodStep = values?.view === "week" ? 7 : values?.view === "agenda" ? 30 : 0;
+  const shiftedDate = (direction: 1 | -1): string =>
+    values === undefined
+      ? ""
+      : periodStep === 0
+        ? calendarShiftMonth(values.date, direction)
+        : addDays(values.date, direction * periodStep);
+  const previousDate = shiftedDate(-1);
+  const nextDate = shiftedDate(1);
+
   const replaceParameters = (change: (parameters: URLSearchParams) => void): void => {
     const parameters = new URLSearchParams(searchParams.toString());
     change(parameters);
@@ -149,15 +160,11 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                 type="button"
                 variant="outline"
                 aria-label="Previous period"
+                disabled={!calendarPeriodSupported(values.view, previousDate, values.timeZone)}
                 onClick={() =>
-                  replaceParameters((parameters) => {
-                    const amount = values.view === "week" ? -7 : values.view === "agenda" ? -30 : 0;
-                    const date =
-                      amount === 0
-                        ? calendarShiftMonth(values.date, -1)
-                        : addDays(values.date, amount);
-                    parameters.set(`date.${placementId}`, date);
-                  })
+                  replaceParameters((parameters) =>
+                    parameters.set(`date.${placementId}`, previousDate),
+                  )
                 }
               >
                 Previous
@@ -177,15 +184,11 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                 type="button"
                 variant="outline"
                 aria-label="Next period"
+                disabled={!calendarPeriodSupported(values.view, nextDate, values.timeZone)}
                 onClick={() =>
-                  replaceParameters((parameters) => {
-                    const amount = values.view === "week" ? 7 : values.view === "agenda" ? 30 : 0;
-                    const date =
-                      amount === 0
-                        ? calendarShiftMonth(values.date, 1)
-                        : addDays(values.date, amount);
-                    parameters.set(`date.${placementId}`, date);
-                  })
+                  replaceParameters((parameters) =>
+                    parameters.set(`date.${placementId}`, nextDate),
+                  )
                 }
               >
                 Next
@@ -204,6 +207,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                   size="sm"
                   variant={values.view === view ? "default" : "outline"}
                   aria-pressed={values.view === view}
+                  disabled={!calendarPeriodSupported(view, values.date, values.timeZone)}
                   onClick={() =>
                     replaceParameters((parameters) => parameters.set(`view.${placementId}`, view))
                   }

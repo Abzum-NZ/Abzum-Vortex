@@ -72,7 +72,7 @@ export const readCalendar = async (
     data[placementId] = {
       status: "awaiting_input",
       message:
-        "This period extends beyond the supported calendar range. Choose a different period.",
+        "This period is outside the supported calendar range. Choose a different period.",
     };
     return;
   }
