@@ -254,6 +254,11 @@ function Levels({ context, expandedRecordIds, publish }: GridFeatureSubRowsProps
     [pageSize, remaining, patch, readPage, live],
   );
 
+  // The controls in the reported entries call the latest reads, so a new read handler never
+  // reports the whole tree again.
+  const reads = useRef({ load, showMore });
+  reads.current = { load, showMore };
+
   const wanted = useMemo(
     () => reachableOpen(expandedRecordIds, pageRows, nodes),
     [expandedRecordIds, pageRows, nodes],
@@ -294,7 +299,7 @@ function Levels({ context, expandedRecordIds, publish }: GridFeatureSubRowsProps
         ? "this record"
         : cellValueToText(row.cells[heading] ?? { kind: "empty" }) || "this record";
     };
-    const retry = (id: string) => ({ label: "Try again", run: () => void load(id) });
+    const retry = (id: string) => ({ label: "Try again", run: () => void reads.current.load(id) });
     const result = new Map<
       string,
       Readonly<{ entries: readonly SubRowEntry[]; complete: boolean }>
@@ -362,7 +367,7 @@ function Levels({ context, expandedRecordIds, publish }: GridFeatureSubRowsProps
               action: {
                 label: state.more === "reading" ? "Reading…" : "Show more",
                 disabled: state.more === "reading",
-                run: () => void showMore(id),
+                run: () => void reads.current.showMore(id),
               },
             });
           if (state.capped && state.next !== undefined)
@@ -381,7 +386,7 @@ function Levels({ context, expandedRecordIds, publish }: GridFeatureSubRowsProps
       }
     }
     return result;
-  }, [wanted, nodes, pageRows, heading, load, showMore]);
+  }, [wanted, nodes, pageRows, heading]);
 
   useEffect(() => {
     publish(beneath);
