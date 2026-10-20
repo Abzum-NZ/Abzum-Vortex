@@ -153,7 +153,9 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                   replaceParameters((parameters) => {
                     const amount = values.view === "week" ? -7 : values.view === "agenda" ? -30 : 0;
                     const date =
-                      amount === 0 ? calendarShiftMonth(values.date, -1) : addDays(values.date, amount);
+                      amount === 0
+                        ? calendarShiftMonth(values.date, -1)
+                        : addDays(values.date, amount);
                     parameters.set(`date.${placementId}`, date);
                   })
                 }
@@ -179,7 +181,9 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                   replaceParameters((parameters) => {
                     const amount = values.view === "week" ? 7 : values.view === "agenda" ? 30 : 0;
                     const date =
-                      amount === 0 ? calendarShiftMonth(values.date, 1) : addDays(values.date, amount);
+                      amount === 0
+                        ? calendarShiftMonth(values.date, 1)
+                        : addDays(values.date, amount);
                     parameters.set(`date.${placementId}`, date);
                   })
                 }
