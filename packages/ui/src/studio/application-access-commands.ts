@@ -4,7 +4,7 @@ import {
   builderKeySchema,
   changeableByPeople,
   maximumApplicationRoles,
-  standardPermissionKeys,
+  isStandardRecordPermission,
   standardPermissionKey,
   type ApplicationSourceDocument,
   type ApplicationUsePlace,
@@ -171,9 +171,6 @@ export const studioAccessPermissions = (source: Source): readonly StudioAccessPe
     standard: false,
   })),
   ...source.body.modules.flatMap((module) => {
-    const standard = new Set(
-      module.record_types.flatMap((record) => [...standardPermissionKeys(module.key, record.key)]),
-    );
     return module.permissions.map((permission): StudioAccessPermission => ({
       key: permission.key,
       label: permission.label,
@@ -182,7 +179,7 @@ export const studioAccessPermissions = (source: Source): readonly StudioAccessPe
       recordKey: permission.record_type,
       actionKind: permission.action_kind,
       administrative: permission.administrative,
-      standard: standard.has(permission.key),
+      standard: isStandardRecordPermission(module, permission),
     }));
   }),
 ];

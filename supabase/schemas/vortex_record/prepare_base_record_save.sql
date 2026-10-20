@@ -118,6 +118,13 @@ begin
       and meta -> 'recordType' ? 'systemProjection') then
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;
+  -- Ordinary saves require the explicit operation; named actions use their own preparation.
+  if not coalesce((meta #> '{recordType,standardActions}') ? p_operation, false) then
+    raise log 'Record save preparation refused: standard operation % is not declared', p_operation;
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused', 'correlationId', correlation_id_value
+    );
+  end if;
   installation := case when preview_installation is null
     then vortex_definition.read_current_active_installation()
     else preview_installation end;
