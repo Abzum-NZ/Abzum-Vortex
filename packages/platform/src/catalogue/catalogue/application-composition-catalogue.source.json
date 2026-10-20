@@ -5801,11 +5801,7 @@
                 "help": "Shown on the group of records that have no value, or whose value the viewer cannot see",
                 "required": false,
                 "minLength": 1,
-                "maxLength": 40,
-                "defaultValue": {
-                  "kind": "text",
-                  "value": "Unassigned"
-                }
+                "maxLength": 40
               }
             ]
           },

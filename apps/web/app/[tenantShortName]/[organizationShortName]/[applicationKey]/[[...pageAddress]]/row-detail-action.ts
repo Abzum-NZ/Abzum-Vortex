@@ -22,7 +22,7 @@ const rowDetailRequestSchema = z
     /** The row whose related records or child records are read. */
     recordId: z.string().min(1).max(80).optional(),
     /** The group of a grouped table whose members are read (the codec's group key). */
-    groupKey: z.string().min(1).max(200).optional(),
+    groupKey: z.string().min(1).max(400).optional(),
     direction: z.enum(["forward", "backward"]).optional(),
     continuationToken: z.string().min(1).max(65_536).optional(),
     pageSize: z.number().int().min(1).max(200).optional(),
