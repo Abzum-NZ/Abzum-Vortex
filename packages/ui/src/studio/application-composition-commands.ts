@@ -46,6 +46,7 @@ import {
 import { studioStarterSlots } from "./composition-starters";
 import { applyStudioFlowCreate } from "./application-flow-create";
 import { studioLayoutOutletPlacementUses } from "./application-layout-outlets";
+import { studioPageAreaLabel } from "./application-page-layout";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
 import {
   studioPaletteChoices,
@@ -621,7 +622,10 @@ const addPlaces = (
       });
     }
     const area = address.key;
-    const areaLabel = pageRegions.length > 1 ? `Page content: ${address.label}` : "Page content";
+    const areaLabel =
+      pageRegions.length > 1
+        ? `Page content: ${studioPageAreaLabel(source, page, address)}`
+        : "Page content";
     places.push({
       region,
       steps: [],

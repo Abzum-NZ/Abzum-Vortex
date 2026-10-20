@@ -165,6 +165,7 @@ function OutletSettings({
         {target?.categories.map((category) => (
           <label key={category} className="flex items-center gap-2 text-sm">
             <Checkbox
+              disabled={disabled}
               checked={outlet.allowed_child_categories.includes(category)}
               onCheckedChange={(checked) =>
                 edit({
@@ -254,13 +255,19 @@ export function StudioLayoutOutlets({
       }
       return true;
     }
-    setRefusal(result);
     toast.error("Nothing was changed", {
+      id: "studio-layout-outlet-refusal",
       description: result.message,
       closeButton: true,
       duration: Infinity,
       action: result.where?.length
-        ? { label: "Show me where", onClick: () => setShowUses(true) }
+        ? {
+            label: "Show me where",
+            onClick: () => {
+              setRefusal(result);
+              setShowUses(true);
+            },
+          }
         : undefined,
     });
     return result.message;

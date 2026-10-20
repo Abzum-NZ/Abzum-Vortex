@@ -27,6 +27,7 @@ import {
 import { createPlatformComponentRegistryForReleases } from "../combined-registry";
 import { getVortexPuckConfig } from "../puck-config";
 import { contentConfigFor } from "../shell-outlet";
+import { studioPageAreaLabel } from "./application-page-layout";
 import type { Breakpoint } from "../definition-error";
 
 export type { Breakpoint as StudioCanvasBreakpoint } from "../definition-error";
@@ -45,7 +46,7 @@ import { Button } from "../components/button";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "../components/collapsible";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "../components/empty";
 import { Label } from "../components/label";
-import { NativeSelect, NativeSelectOption } from "../components/native-select";
+import { StudioReferencePicker } from "./studio-reference-picker";
 import type { StudioCompileFailure } from "./compile-failure";
 import {
   StoredCompositionRefusal,
@@ -301,7 +302,7 @@ export function ApplicationPagePuckEditor(props: ApplicationPagePuckEditorProps)
   const at =
     addresses.find((candidate) => candidate.key === selectedKey) ?? holding ?? addresses[0];
   const selectorId = `puck-slot-${props.pageAlias}`;
-  if (at === undefined)
+  if (at === undefined || page === undefined)
     return (
       <CanvasEmpty
         title="No content area"
@@ -313,17 +314,15 @@ export function ApplicationPagePuckEditor(props: ApplicationPagePuckEditorProps)
       {addresses.length < 2 ? null : (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={selectorId}>Content area</Label>
-          <NativeSelect
+          <StudioReferencePicker
             id={selectorId}
             value={at.key}
-            onChange={(event) => setSelectedKey(event.target.value)}
-          >
-            {addresses.map((candidate) => (
-              <NativeSelectOption key={candidate.key} value={candidate.key}>
-                {candidate.label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            onChange={setSelectedKey}
+            options={addresses.map((candidate) => ({
+              value: candidate.key,
+              label: studioPageAreaLabel(props.source, page, candidate),
+            }))}
+          />
         </div>
       )}
       <ApplicationPageSlotPuckEditor key={`${props.pageAlias}:${at.key}`} {...props} at={at} />
