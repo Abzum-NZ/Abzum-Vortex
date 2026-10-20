@@ -301,7 +301,8 @@ export type SummaryData = DisplayDataState<SummaryPayload>;
 export type BoardData = DisplayDataState<BoardPayload>;
 
 /** Fixed, data-free refusal reasons; a refused state never carries a value. */
-export type DisplayRefusalReason = "not_permitted" | "access_ended" | "not_found";
+export type DisplayRefusalReason =
+  "not_permitted" | "access_ended" | "not_found" | "value_out_of_range" | "dataset_limit_exceeded";
 
 /**
  * Explicit, data-safe state for one placement, parameterised by that block's own ready values.
@@ -548,6 +549,8 @@ const DISPLAY_REFUSAL_REASONS: readonly DisplayRefusalReason[] = [
   "not_permitted",
   "access_ended",
   "not_found",
+  "value_out_of_range",
+  "dataset_limit_exceeded",
 ];
 
 /** Every event name a display block accepts; each block further narrows this to its own binding. */
