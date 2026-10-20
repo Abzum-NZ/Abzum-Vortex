@@ -53,6 +53,7 @@ import {
   virtualizesRows,
 } from "./table-geometry";
 import type { GridColumn, GridLayoutControls } from "./table-layout";
+import { isInteractiveGridTarget } from "./table-interaction";
 import {
   ACTIONS_COLUMN,
   EXPAND_COLUMN,
@@ -68,20 +69,11 @@ const VirtualRows = lazy(loadVirtualRows);
 
 const RESIZE_STEP = 16;
 
-/** Controls inside a cell keep their own meaning: a click or key on one never opens the row. */
-const INTERACTIVE_IN_ROW =
-  "a,button,input,select,textarea,label,summary,[role='button'],[role='checkbox'],[role='radio'],[role='menuitem'],[role='switch'],[contenteditable='true']";
 /** An expanded row's panel of related records: its controls follow the row in the tab order. */
 const PANEL = "[data-grid-panel]";
 /** Every element inside a cell that would otherwise be its own tab stop. */
 const INNER_FOCUSABLE =
   "a[href],button,input,select,textarea,[contenteditable='true'],[tabindex]:not([data-grid-cell])";
-
-const isInteractiveTarget = (target: EventTarget, row: HTMLElement): boolean => {
-  if (!(target instanceof Element)) return false;
-  const control = target.closest(INTERACTIVE_IN_ROW);
-  return control !== null && control !== row && row.contains(control);
-};
 
 const sameFieldKey = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
@@ -199,7 +191,7 @@ const GridRow = memo(function GridRow({
       )}
       style={{ height: rowHeight }}
       onClick={(event: MouseEvent<HTMLDivElement>) => {
-        if (!activatable || isInteractiveTarget(event.target, event.currentTarget)) return;
+        if (!activatable || isInteractiveGridTarget(event.target, event.currentTarget)) return;
         onActivate(row.recordId);
       }}
     >

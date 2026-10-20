@@ -5,6 +5,7 @@ import { Button } from "../../components/button";
 import { Input } from "../../components/input";
 import { Icon } from "../../icons/icon";
 import { cellValueToText } from "../cell";
+import { useDateFormatOptions } from "../date-format-context";
 import type { GridFeatureInteractionProps } from "./registry";
 
 type Match = Readonly<{ row: number; field: string }>;
@@ -13,6 +14,7 @@ const currentClasses = ["outline", "outline-primary", "-outline-offset-2"];
 
 /** Page-local find scans only projected, visible cells. Search all records uses the server event. */
 export default function Find({ context, surface }: GridFeatureInteractionProps): ReactElement {
+  const dateFormat = useDateFormatOptions();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
@@ -29,13 +31,16 @@ export default function Find({ context, surface }: GridFeatureInteractionProps):
         const cell = row.cells[column.key];
         if (cell === undefined || ["restricted", "unavailable", "empty"].includes(cell.kind))
           return [];
-        return cellValueToText(cell).toLocaleLowerCase().includes(term)
+        return cellValueToText(cell, dateFormat).toLocaleLowerCase().includes(term)
           ? [{ row: index, field: column.key }]
           : [];
       }),
     );
-  }, [context.rows, context.columns, query, open]);
+  }, [context.rows, context.columns, query, open, dateFormat]);
   const current = matches.length === 0 ? undefined : matches[index % matches.length];
+  useEffect(() => {
+    if (current !== undefined) latest.current.focusCell(current.row, current.field, false);
+  }, [current]);
   useEffect(() => {
     const root = surface.rootRef.current;
     if (root === null) return;
@@ -104,8 +109,6 @@ export default function Find({ context, surface }: GridFeatureInteractionProps):
     if (matches.length === 0) return;
     const next = (index + offset + matches.length) % matches.length;
     setIndex(next);
-    const match = matches[next]!;
-    latest.current.focusCell(match.row, match.field, false);
   };
   if (!open)
     return (

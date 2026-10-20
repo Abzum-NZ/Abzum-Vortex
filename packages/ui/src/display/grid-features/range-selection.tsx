@@ -2,6 +2,7 @@
 
 import { lazy, Suspense, useEffect, useRef, useState, type ReactElement } from "react";
 import type { GridFeatureInteractionProps, GridFeatureModule } from "./registry";
+import { isInteractiveGridTarget } from "../table-interaction";
 
 const Find = lazy(() => import("./find"));
 type Point = Readonly<{ row: number; column: number }>;
@@ -143,11 +144,7 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
       const point = pointOf(event.target);
       if (point === undefined || event.button !== 0 || event.pointerType === "touch") return;
       // Links, editors and action buttons retain their own pointer behaviour.
-      if (
-        event.target instanceof Element &&
-        event.target.closest("a,button,input,select,textarea,[contenteditable='true']")
-      )
-        return;
+      if (isInteractiveGridTarget(event.target, root)) return;
       event.preventDefault();
       select(event.shiftKey ? (range.current?.anchor ?? point) : point, point);
       dragging.current = true;
@@ -175,8 +172,7 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
       if (
         range.current !== undefined &&
         pointOf(event.target) !== undefined &&
-        event.target instanceof Element &&
-        !event.target.closest("a,button,input,select,textarea,[contenteditable='true']")
+        !isInteractiveGridTarget(event.target, root)
       ) {
         event.preventDefault();
         event.stopPropagation();
