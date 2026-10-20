@@ -34,6 +34,11 @@ import {
   type RecordsTableMasterDetailSettings,
 } from "./master-detail";
 import {
+  RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE,
+  recordsTableTreeFeature,
+  type RecordsTableTreeSettings,
+} from "./tree";
+import {
   recordsTableConditionalFormattingFeature,
   type RecordsTableConditionalFormattingSettings,
 } from "./conditional-formatting";
@@ -66,6 +71,7 @@ export {
   type RecordsTableRelatedRecordsFacts,
 } from "./shared";
 export { RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE } from "./master-detail";
+export { RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE } from "./tree";
 export { boardProblem, recordsTableBoardFactsOf } from "./board";
 export {
   RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS,
@@ -103,6 +109,7 @@ export type {
   RecordsTableColumnFiltersSettings,
   RecordsTableInlineEditSettings,
   RecordsTableMasterDetailSettings,
+  RecordsTableTreeSettings,
   RecordsTableSavedViewsSettings,
   RecordsTableSearchSettings,
   RecordsTablePinningSettings,
@@ -125,6 +132,7 @@ export type RecordsTableFeatures = Readonly<{
   bulkActions: RecordsTableFeatureState<RecordsTableBulkActionsSettings>;
   inlineEdit: RecordsTableFeatureState<RecordsTableInlineEditSettings>;
   masterDetail: RecordsTableFeatureState<RecordsTableMasterDetailSettings>;
+  tree: RecordsTableFeatureState<RecordsTableTreeSettings>;
   conditionalFormatting: RecordsTableFeatureState<RecordsTableConditionalFormattingSettings>;
   pinning: RecordsTableFeatureState<RecordsTablePinningSettings>;
   pivot: RecordsTableFeatureState<RecordsTablePivotSettings>;
@@ -141,6 +149,7 @@ const registry = {
   bulk_actions: { property: "bulkActions", definition: recordsTableBulkActionsFeature },
   inline_edit: { property: "inlineEdit", definition: recordsTableInlineEditFeature },
   master_detail: { property: "masterDetail", definition: recordsTableMasterDetailFeature },
+  tree: { property: "tree", definition: recordsTableTreeFeature },
   conditional_formatting: {
     property: "conditionalFormatting",
     definition: recordsTableConditionalFormattingFeature,
@@ -165,6 +174,7 @@ export const recordsTableFeatureKeys = [
   "bulk_actions",
   "inline_edit",
   "master_detail",
+  "tree",
   "conditional_formatting",
   "pivot",
   "board",
@@ -208,6 +218,7 @@ export const readRecordsTableFeatures = (
   const bulkActions = read("bulk_actions");
   const inlineEdit = read("inline_edit");
   const masterDetail = read("master_detail");
+  const tree = read("tree");
   const conditionalFormatting = read("conditional_formatting");
   const pinning = read("pinning");
   const pivot = read("pivot");
@@ -220,6 +231,7 @@ export const readRecordsTableFeatures = (
     bulkActions === undefined ||
     inlineEdit === undefined ||
     masterDetail === undefined ||
+    tree === undefined ||
     conditionalFormatting === undefined ||
     pinning === undefined ||
     pivot === undefined ||
@@ -235,6 +247,7 @@ export const readRecordsTableFeatures = (
     bulkActions: bulkActions as RecordsTableFeatures["bulkActions"],
     inlineEdit: inlineEdit as RecordsTableFeatures["inlineEdit"],
     masterDetail: masterDetail as RecordsTableFeatures["masterDetail"],
+    tree: tree as RecordsTableFeatures["tree"],
     conditionalFormatting: conditionalFormatting as RecordsTableFeatures["conditionalFormatting"],
     pivot: pivot as RecordsTableFeatures["pivot"],
     board: board as RecordsTableFeatures["board"],
@@ -251,6 +264,9 @@ export const checkRecordsTableFeature = (
   state: RecordsTableFeatureState<object>,
   facts: RecordsTableQueryFacts,
   presentation: "grid" | "cards",
+  features: RecordsTableFeatures,
+  /** The table's own page size; the tree's opened levels share one row budget with it. */
+  tablePageSize: number | undefined,
 ): RecordsTableFeatureCheck => {
   if (presentation === "cards" && key === "spreadsheet")
     return featureNotPossible(
@@ -267,7 +283,35 @@ export const checkRecordsTableFeature = (
       "definition_records_table_pinning",
       "Column pinning needs the Table preset. Lists have no scrolling columns.",
     );
-  return (registry[key].definition as RecordsTableFeatureDefinition<object>).check(state, facts);
+  if (key === "tree" && state.enabled && features.board.enabled)
+    return featureNotPossible(
+      "definition_records_table_tree",
+      "Turn Board off to show records as a tree.",
+    );
+  // A row opens one panel: its related records or the records beneath it, never both.
+  if (key === "tree" && state.enabled && features.masterDetail.enabled)
+    return featureNotPossible(
+      "definition_records_table_tree",
+      "A row shows either its related records or the records beneath it; turn Related records off to use a tree.",
+    );
+  const check = (registry[key].definition as RecordsTableFeatureDefinition<object>).check(
+    state,
+    facts,
+  );
+  // The table's page and one page of child records must fit the rows a tree table holds at once.
+  const childPageSize = features.tree.enabled ? features.tree.childPageSize : undefined;
+  if (
+    key === "tree" &&
+    check.kind !== "not_possible" &&
+    childPageSize !== undefined &&
+    tablePageSize !== undefined &&
+    tablePageSize + childPageSize > RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE
+  )
+    return featureNotPossible(
+      "definition_records_table_tree",
+      `A tree table shows at most ${RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE} rows at once: its ${tablePageSize} records a page and ${childPageSize} child records at a time do not fit. Lower one of them.`,
+    );
+  return check;
 };
 
 /** Every feature's state and check, in Studio's order. */
@@ -275,6 +319,7 @@ export const checkRecordsTableFeatures = (
   features: RecordsTableFeatures,
   facts: RecordsTableQueryFacts,
   presentation: "grid" | "cards",
+  tablePageSize: number | undefined,
 ): readonly Readonly<{
   key: RecordsTableFeatureKey;
   enabled: boolean;
@@ -285,7 +330,7 @@ export const checkRecordsTableFeatures = (
     return {
       key,
       enabled: state.enabled,
-      check: checkRecordsTableFeature(key, state, facts, presentation),
+      check: checkRecordsTableFeature(key, state, facts, presentation, features, tablePageSize),
     };
   });
 

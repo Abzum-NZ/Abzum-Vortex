@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
   type ComponentType,
-  type LazyExoticComponent,
   type ReactElement,
   type ReactNode,
   type RefObject,
@@ -21,6 +20,7 @@ import type {
   RecordsTableSortState,
 } from "@vortex/platform/schema";
 import type { DisplayEventHandlers, DisplayRow, TableNarrowing } from "../projected-data";
+import type { RowExpansionKind } from "../row-expansion";
 import type { TableSelectionParts } from "../projected-grid-features";
 import type { GridColumn, GridLayoutControls } from "../table-layout";
 
@@ -171,6 +171,7 @@ const loaders: Readonly<
   bulk_actions: () => import("./bulk-actions"),
   inline_edit: () => import("./inline-edit"),
   master_detail: () => import("./master-detail"),
+  tree: () => import("./tree"),
   conditional_formatting: () => import("./conditional-format"),
   pivot: () => import("./pivot"),
 };
@@ -184,6 +185,7 @@ const projectionKeys: Readonly<Record<keyof RecordsTableFeatureProjection, GridE
   bulkActions: "bulk_actions",
   inlineEdit: "inline_edit",
   masterDetail: "master_detail",
+  tree: "tree",
   conditionalFormatting: "conditional_formatting",
   pivot: "pivot",
 };
@@ -208,28 +210,28 @@ const PassThrough = ({ children }: Readonly<{ children?: ReactNode }>): ReactEle
   <>{children}</>
 );
 
-// One lazy component per feature and point, made once: the server renders it (the boundary
-// suspends and streams) and the browser downloads the feature's chunk only when it is drawn.
-const lazyPoints = new Map<string, LazyExoticComponent<ComponentType<object>>>();
-const lazyPoint = <Props,>(
+/** Exported code only: cached points never hold a viewer's data or access decisions. */
+const pointComponents = new Map<string, ComponentType<object>>();
+const pointComponentOf = (
+  module: GridFeatureModule,
+  point: ComponentPoint,
+): ComponentType<object> =>
+  (module[point] ??
+    (point === "CellEditor" || point === "CellAdornment"
+      ? PassThrough
+      : Nothing)) as unknown as ComponentType<object>;
+
+const featurePoint = <Props,>(
   key: GridExtensionKey,
   point: ComponentPoint,
-): LazyExoticComponent<ComponentType<Props>> => {
+): ComponentType<Props> => {
   const id = `${key}:${point}`;
-  const held = lazyPoints.get(id);
+  const held = pointComponents.get(id);
   const component =
     held ??
-    lazy(async () => {
-      const loaded = (await loaders[key]()).gridFeature[point];
-      return {
-        default: (loaded ??
-          (point === "CellEditor" || point === "CellAdornment"
-            ? PassThrough
-            : Nothing)) as unknown as ComponentType<object>,
-      };
-    });
-  if (held === undefined) lazyPoints.set(id, component);
-  return component as unknown as LazyExoticComponent<ComponentType<Props>>;
+    lazy(async () => ({ default: pointComponentOf((await loaders[key]()).gridFeature, point) }));
+  if (held === undefined) pointComponents.set(id, component);
+  return component as unknown as ComponentType<Props>;
 };
 
 /** Which points each feature fills, so the table never draws a boundary for an empty point. */
@@ -242,8 +244,29 @@ const featurePoints: Readonly<Record<GridExtensionKey, readonly ComponentPoint[]
   bulk_actions: ["SelectionBanner"],
   inline_edit: ["CellEditor"],
   master_detail: ["RowExpansion"],
+  tree: ["RowExpansion"],
   conditional_formatting: ["CellAdornment", "HeaderAdornment"],
   pivot: ["ToolbarItems", "ViewBody"],
+};
+
+/**
+ * What a row opens to for each feature that fills the row panel. A row's related records open at
+ * most three at a time; a tree's rows are bounded by the tree's shared row budget, so any number
+ * of them may be open, and only a row the server says has children offers the toggle.
+ */
+const expansionKinds: Readonly<Partial<Record<RecordsTableFeatureKey, RowExpansionKind>>> = {
+  master_detail: {
+    noun: "related records",
+    maximum: 3,
+    tree: false,
+    expandable: () => true,
+  },
+  tree: {
+    noun: "child records",
+    maximum: Number.MAX_SAFE_INTEGER,
+    tree: true,
+    expandable: (row) => row.hasChildren === true,
+  },
 };
 
 const activeKeys = (signature: string): readonly GridExtensionKey[] =>
@@ -259,7 +282,7 @@ const drawPoint = (
   active
     .filter((key) => featurePoints[key].includes(point))
     .map((key) => {
-      const Point = lazyPoint<Record<string, unknown>>(key, point);
+      const Point = featurePoint<Record<string, unknown>>(key, point);
       return (
         <Suspense key={key} fallback={null}>
           <Point context={context} {...props} />
@@ -276,6 +299,8 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   keys: readonly GridExtensionKey[];
   /** A projected feature draws a panel below an expanded row, so rows offer an expand toggle. */
   expands: boolean;
+  /** What that panel holds and how many may be open; undefined when no feature draws one. */
+  expansionKind: RowExpansionKind | undefined;
   toolbarItems: () => ReactNode;
   interaction: (surface: GridInteractionSurface) => ReactNode;
   selectionBanner: () => ReactNode;
@@ -306,6 +331,17 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
     let current = true;
     void Promise.all(signature.split(",").map((key) => loaders[key as GridExtensionKey]())).then(
       (modules) => {
+        // An enabled feature is already downloaded here. Keep its concrete points so opening a
+        // panel later does not introduce another asynchronous boundary and Suspense delay.
+        modules.forEach((module, index) => {
+          const key = activeKeys(signature)[index]!;
+          for (const point of featurePoints[key]) {
+            const id = `${key}:${point}`;
+            // Keep an already mounted editor's component identity and local edit state.
+            if (!pointComponents.has(id))
+              pointComponents.set(id, pointComponentOf(module.gridFeature, point));
+          }
+        });
         if (current)
           setLoadedDecorators({
             signature,
@@ -338,7 +374,7 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
       const current = latest.current;
       if (current === undefined) return plain;
       return adornments.reduce<ReactNode>((inner, key) => {
-        const Adornment = lazyPoint<GridFeatureCellProps>(key, "CellAdornment");
+        const Adornment = featurePoint<GridFeatureCellProps>(key, "CellAdornment");
         return (
           <Suspense key={key} fallback={inner}>
             <Adornment context={current} row={row} column={column}>
@@ -379,7 +415,7 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
         if (current === undefined) return plain;
         return editors.reduce<ReactNode>(
           (inner, key) => {
-            const Editor = lazyPoint<GridFeatureCellProps>(key, "CellEditor");
+            const Editor = featurePoint<GridFeatureCellProps>(key, "CellEditor");
             return (
               <Suspense key={key} fallback={inner}>
                 <Editor context={current} row={row} column={column}>
@@ -399,6 +435,7 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   return {
     keys: active,
     expands: active.some((key) => featurePoints[key].includes("RowExpansion")),
+    expansionKind: active.map((key) => expansionKinds[key]).find((kind) => kind !== undefined),
     toolbarItems: () =>
       context === undefined ? null : drawPoint(active, "ToolbarItems", context, {}),
     selectionBanner: () =>
