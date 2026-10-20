@@ -335,6 +335,20 @@ export const protectedQueryRefusalSchema = z
   .strict();
 export type ProtectedQueryRefusal = z.infer<typeof protectedQueryRefusalSchema>;
 
+/**
+ * The reader's current field bound, decided by the same read as the page and carried even by an
+ * empty page: the record type's fields the reader is guaranteed to see on every record it may read
+ * now, and whether any field the record type marks searchable is among them. A list offers (and
+ * accepts) its filter, search and sort controls only within it; it is never taken from the browser.
+ */
+export const protectedQueryFieldBoundsSchema = z
+  .object({
+    readableFieldIds: z.array(fieldIdSchema).max(500),
+    searchable: z.boolean(),
+  })
+  .strict();
+export type ProtectedQueryFieldBounds = z.infer<typeof protectedQueryFieldBoundsSchema>;
+
 export const protectedQueryPageSchema = z
   .object({
     outcome: z.literal("completed"),
@@ -342,6 +356,7 @@ export const protectedQueryPageSchema = z
     moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
     queryId: queryIdSchema,
     rows: z.array(protectedQueryPageRowSchema).max(200),
+    fieldBounds: protectedQueryFieldBoundsSchema,
     /** Opaque; present only when a later page may hold further permitted rows. */
     nextContinuationToken: z.string().optional(),
     previousContinuationToken: z.string().optional(),

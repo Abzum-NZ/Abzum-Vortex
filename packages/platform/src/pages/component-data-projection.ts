@@ -16,7 +16,7 @@ import {
   type RecordsTableSortState,
   type tableCellTypeKeys,
 } from "../schema";
-import type { ProtectedQueryRow } from "../queries/index";
+import type { ProtectedQueryFieldBounds, ProtectedQueryRow } from "../queries/index";
 import { formatDecimal, formatMoney, isExactDecimal } from "./value-format";
 import { recordLinkLabelKey, type RecordLinkReference } from "../definition/app-index";
 import { defaultQueryPageSize } from "../definition/module-query-edit";
@@ -479,12 +479,14 @@ const RESTRICTED_CELL: ProjectedScalarCellValue = Object.freeze({ kind: "restric
  * contract, a heading is missing, a row carries no revision or capabilities, or the rows are not a
  * valid page (a repeated record identity), so the caller refuses neutrally. A continuation page
  * with no rows keeps its columns and an empty row list when `keepEmptyPage` is set, so the viewer
- * can still page back; a first page with no rows is the plain empty state.
+ * can still page back; a first page with no rows is the plain empty state. `fieldBounds` is the
+ * viewer's current field bound from the same read, which decides the filters, search and saved views.
  */
 export const projectRecordsTableData = (
   layout: GridLayoutState,
   input: ComponentDataProjectionInput,
   rows: readonly ProtectedQueryRow[],
+  fieldBounds: ProtectedQueryFieldBounds,
   keepEmptyPage = false,
 ): ProjectedComponentData<ProjectedTableValues> | undefined => {
   const contract = readRecordsTableContract(input.settings);
@@ -529,10 +531,10 @@ export const projectRecordsTableData = (
               })),
           input.formatting,
         );
-  // The viewer's grid features, decided from the same rows and per-row capabilities as the page.
+  // The viewer's grid features, decided from the field bound and per-row capabilities of the same read.
   const features = projectRecordsTableFeatures(
     contract,
-    visibleFieldIds,
+    fieldBounds,
     completeRows,
     input.filterFields,
     formatting?.projection,
