@@ -8,6 +8,7 @@ import {
 import {
   applicationRootIdSchema,
   applyRecordsTableQueryChange,
+  authoredGridLayout,
   compiledItemSlots,
   describeFailure,
   fingerprintSchema,
@@ -16,6 +17,8 @@ import {
   gridLayoutSchema,
   organizationIdSchema,
   readRecordDetailContract,
+  readRecordsTableContract,
+  resolveGridLayout,
   RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
   RECORDS_TABLE_MAXIMUM_SORT_KEYS,
   recordIdSchema,
@@ -237,7 +240,13 @@ export const readStudioCanvasRecords = async (
 ): Promise<StudioCanvasRecordsResult> => {
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
   const parsed = requestSchema.safeParse(candidate);
-  if (!organization.success || !parsed.success) return { kind: "refused" };
+  if (!organization.success || !parsed.success) {
+    console.error(
+      "[studio] canvas request refused: STUDIO_CANVAS_REQUEST_INVALID cause=invalid_request",
+      parsed.success ? [] : parsed.error.issues.map(({ code, path }) => ({ code, path })),
+    );
+    return { kind: "refused" };
+  }
   const request = parsed.data;
   try {
     const preview = await openStudioPreviewRead(
@@ -395,11 +404,28 @@ export const readStudioCanvasRecords = async (
           ? undefined
           : placements.find((placement) => sameId(placement.placementId, compiled));
       const queryId = table?.vortex.queryId;
-      if (compiled === undefined || table === undefined || typeof queryId !== "string") {
+      const contract =
+        table === undefined ? undefined : readRecordsTableContract(settingsOf(table));
+      if (
+        compiled === undefined ||
+        table === undefined ||
+        contract === undefined ||
+        typeof queryId !== "string"
+      ) {
         console.error(
           `[studio] canvas table state ignored: STUDIO_CANVAS_TABLE_STATE_REFUSED cause=not_a_table placement=${alias}`,
         );
-        continue;
+        return { kind: "refused" };
+      }
+      if (state.layout !== undefined) {
+        const authored = authoredGridLayout(contract);
+        if (authored === undefined) throw new Error("STUDIO_CANVAS_TABLE_COLUMNS_MISSING");
+        if (resolveGridLayout(authored, { queryId, layout: state.layout }, queryId).reset) {
+          console.error(
+            `[studio] canvas table state refused: STUDIO_CANVAS_TABLE_STATE_REFUSED cause=projection_not_subset placement=${alias}`,
+          );
+          return { kind: "refused" };
+        }
       }
       const address = new URLSearchParams();
       if (state.sort.length > 0)

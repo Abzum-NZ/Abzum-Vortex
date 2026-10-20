@@ -210,15 +210,12 @@ export function ApplicationCompositionEditor(props: Props) {
     props.canvasArrangement?.key ===
     studioCanvasGridKey(
       settingsInputs.query,
-      settingsInputs.settings.columns === undefined
-        ? undefined
-        : plainSourceSettingValue(settingsInputs.settings.columns),
-      settingsInputs.settings.density === undefined
-        ? undefined
-        : plainSourceSettingValue(settingsInputs.settings.density),
-      settingsInputs.settings.features === undefined
-        ? undefined
-        : plainSourceSettingValue(settingsInputs.settings.features),
+      Object.fromEntries(
+        Object.entries(settingsInputs.settings).map(([key, value]) => [
+          key,
+          plainSourceSettingValue(value),
+        ]),
+      ),
     );
   const destinations = moveModel.kind === "available" ? moveModel.destinations : [];
   const inputs = layout.value;

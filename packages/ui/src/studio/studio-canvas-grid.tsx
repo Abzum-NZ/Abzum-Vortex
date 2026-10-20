@@ -60,14 +60,14 @@ export type StudioCanvasGridState = Readonly<{
 /** A query or authored layout change invalidates an earlier interactive arrangement. */
 export const studioCanvasGridKey = (
   query: unknown,
-  columns: unknown,
-  density: unknown,
-  features: unknown,
-): string =>
-  canonicalJson([
+  settings: Readonly<Record<string, unknown>>,
+): string => {
+  const features = settings.features;
+  return canonicalJson([
     query ?? null,
-    columns ?? null,
-    density ?? null,
+    ...["columns", "density", "query_parameters", "sortable_fields", "default_sort"].map(
+      (key) => settings[key] ?? null,
+    ),
     isRecord(features)
       ? [
           features.search,
@@ -76,6 +76,7 @@ export const studioCanvasGridKey = (
         ]
       : null,
   ]);
+};
 
 type StudioCanvasGridEvent =
   | Readonly<{ kind: "sync" }>
@@ -330,8 +331,15 @@ export function useStudioCanvasGridEvents(
 
 /** The authored settings identify held state even while its compiled rows are being replaced. */
 const gridSource = (props: Readonly<Record<string, unknown>>, release: PlatformBlockRelease) => {
-  const declarations = release.properties.filter(
-    ({ key }) => key === "columns" || key === "density" || key === "features",
+  const declarations = release.properties.filter(({ key }) =>
+    [
+      "columns",
+      "density",
+      "features",
+      "query_parameters",
+      "sortable_fields",
+      "default_sort",
+    ].includes(key),
   );
   const normalized = typedSourceSettings(
     Object.fromEntries(
@@ -340,14 +348,18 @@ const gridSource = (props: Readonly<Record<string, unknown>>, release: PlatformB
     declarations,
   );
   if (normalized.failures.length > 0) throw new Error("STUDIO_CANVAS_GRID_SETTINGS_INVALID");
-  const plain = (key: string) =>
-    normalized.settings[key] === undefined
-      ? undefined
-      : plainSourceSettingValue(normalized.settings[key]);
   const vortex = isRecord(props.vortex) ? props.vortex : {};
   return {
     settings: normalized.settings,
-    key: studioCanvasGridKey(vortex.query, plain("columns"), plain("density"), plain("features")),
+    key: studioCanvasGridKey(
+      vortex.query,
+      Object.fromEntries(
+        Object.entries(normalized.settings).map(([key, value]) => [
+          key,
+          plainSourceSettingValue(value),
+        ]),
+      ),
+    ),
   };
 };
 
