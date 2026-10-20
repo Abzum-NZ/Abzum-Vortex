@@ -237,7 +237,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         page: undefined,
       },
       layout: {
-        persisted: false,
+        storage: "preview",
         queryId: String(placement.query.queryId).toLowerCase(),
         revision: null,
         layout,

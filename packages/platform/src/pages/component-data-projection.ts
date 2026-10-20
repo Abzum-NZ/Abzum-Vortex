@@ -156,6 +156,33 @@ type ListRow = TableSourceRow & Pick<ProjectedTableRow, "revision" | "capabiliti
 const isListRow = (row: TableSourceRow): row is ListRow =>
   row.revision !== undefined && row.capabilities !== undefined;
 
+/** One group of a grouped table: its key, its label and how many records it holds right now. */
+export type ProjectedTableGroup = Readonly<{
+  /** The canonical key of the group's value (see `recordsTableGroupKey`), never a display label. */
+  key: string;
+  label: string;
+  count: number;
+  /** The group of records that hold no value, or whose value the viewer cannot see. */
+  unassigned?: true;
+}>;
+
+/**
+ * The groups a grouped table was read with. `ready` carries one bounded count per group, read with
+ * the table's own filters, search and access; `too_many` says the filtered records are more than a
+ * grouped read counts, so the table shows its records flat until the viewer narrows them.
+ */
+export type ProjectedTableGroups =
+  | Readonly<{
+      status: "ready";
+      fieldId: string;
+      groups: readonly ProjectedTableGroup[];
+      /** The records the groups hold together, as the same read counted them. */
+      total: number;
+      /** The key of the open group; absent while every group is closed. */
+      expanded?: string;
+    }>
+  | Readonly<{ status: "too_many" }>;
+
 export type ProjectedTableValues = Readonly<{
   kind: "table";
   columns: readonly Readonly<{ key: string; label: string }>[];
@@ -167,6 +194,8 @@ export type ProjectedTableValues = Readonly<{
   /** The person's layout of this grid: order, shown columns, widths and density. */
   layout: GridLayoutState;
   rows: readonly ProjectedTableRow[];
+  /** Present when the table is grouped: its rows are then the open group's members only. */
+  groups?: ProjectedTableGroups;
   /** The grid features this viewer may use on this read; absent when every feature is off. */
   features?: RecordsTableFeatureProjection;
   /** The order the page was read in, when it is the viewer's or the authored default sort. */
@@ -248,6 +277,8 @@ export type ComponentDataProjectionInput = Readonly<{
   fieldEditors?: Readonly<Record<string, RecordsTableInlineEditor>>;
   /** The pivot view the address opens the table in; absent shows the ordinary grid. */
   pivotView?: Readonly<{ cursor?: string }>;
+  /** The groups a grouped read counted; absent for an ordinary read. */
+  groups?: ProjectedTableGroups;
 }>;
 
 /** One declared column of a table field: its key, readable heading, cell type and, for a choice, its options. */
@@ -583,6 +614,7 @@ export const projectRecordsTableData = (
     input.fieldEditors,
     formatting?.projection,
     input.pivotView,
+    input.fieldLabels,
   );
   const editableFields = [
     ...(features?.inlineEdit?.fields ?? []),
@@ -596,6 +628,7 @@ export const projectRecordsTableData = (
       columns: columns.map(({ key, label }) => ({ key, label })),
       hiddenColumns,
       layout,
+      ...(input.groups === undefined ? {} : { groups: input.groups }),
       ...(features === undefined ? {} : { features }),
       rows: completeRows.map((row) => {
         const format = formatting?.rows.get(row.recordId);

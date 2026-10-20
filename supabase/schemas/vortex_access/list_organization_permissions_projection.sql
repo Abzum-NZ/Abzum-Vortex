@@ -1,6 +1,6 @@
 create or replace function vortex_access.list_organization_permissions_projection(
   p_record_ids uuid[], p_sort_key text, p_direction text, p_after jsonb,
-  p_limit integer
+  p_limit integer, p_predicate jsonb
 )
 returns table (
   organization_id uuid,
@@ -26,6 +26,7 @@ declare
   sort_bind_sql text;
   direction_sql text;
   scan_sql text;
+  predicate_plan jsonb;
 begin
   if p_sort_key is null or p_sort_key not in ('record_id', 'key', 'label', 'administrative')
     or p_direction not in ('ascending', 'descending')
@@ -73,6 +74,17 @@ begin
       sort_bind_sql
     ) end;
   end if;
+  predicate_plan := vortex_record.compile_projection_predicate_internal(
+    p_predicate,
+    $declared${
+      "key": {"sql": "entry.permission_key", "database": "text", "search": true},
+      "label": {"sql": "entry.label", "database": "text", "search": true},
+      "owner_kind": {"sql": "entry.owner_kind", "database": "text", "filter": true},
+      "action_kind": {"sql": "entry.action_kind", "database": "text", "filter": true},
+      "administrative": {"sql": "entry.administrative", "database": "boolean", "filter": true}
+    }$declared$::jsonb,
+    6
+  );
   begin
     select authorized.* into strict scope_row
     from vortex_access.organization_permissions_administration_scope() as authorized;
@@ -109,20 +121,20 @@ begin
           entry.organization_id, entry.registration_kind, entry.registration_owner_id,
           entry.owner_kind, entry.owner_id, entry.permission_id
         ) = any($2))
-  $scan$ || keyset_sql || pg_catalog.format(
+  $scan$ || coalesce(' and ' || (predicate_plan ->> 'predicate'), '') || keyset_sql || pg_catalog.format(
     ' order by %s %s, %s %s limit $4) as entry '
       || 'where registration.organization_id = $1 and registration.state = ''active'' '
       || 'order by %s %s, entry.projected_record_id %s limit $4',
     sort_sql, direction_sql, record_id_sql, direction_sql,
     outer_sort_sql, direction_sql, direction_sql);
   return query execute scan_sql using scope_row.organization_id, p_record_ids,
-    after_record_id, p_limit, after_sort_key;
+    after_record_id, p_limit, after_sort_key, predicate_plan -> 'parameters';
 end
 $function$;
 
-revoke all on function vortex_access.list_organization_permissions_projection(uuid[], text, text, jsonb, integer)
+revoke all on function vortex_access.list_organization_permissions_projection(uuid[], text, text, jsonb, integer, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_access.list_organization_permissions_projection(uuid[], text, text, jsonb, integer)
+grant execute on function vortex_access.list_organization_permissions_projection(uuid[], text, text, jsonb, integer, jsonb)
   to vortex_owner, vortex_record_adapter, postgres;
-alter function vortex_access.list_organization_permissions_projection(uuid[], text, text, jsonb, integer)
+alter function vortex_access.list_organization_permissions_projection(uuid[], text, text, jsonb, integer, jsonb)
   owner to vortex_owner;

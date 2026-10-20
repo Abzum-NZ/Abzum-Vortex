@@ -78,6 +78,8 @@ const clampWidth = (width: number): number =>
 type Local = Readonly<{
   /** The stored layout state this local copy started from; a new page read starts it again. */
   base: GridLayoutState;
+  /** Which authored columns and density the canvas arrangement started from. */
+  definition: string;
   layout: GridLayout;
   /** The last completed gesture; a pending write never captures an in-progress resize. */
   committedLayout: GridLayout;
@@ -89,12 +91,13 @@ type Local = Readonly<{
   resetting: boolean;
 }>;
 
-const startFrom = (base: GridLayoutState): Local => ({
+const startFrom = (base: GridLayoutState, definition: string): Local => ({
   base,
+  definition,
   layout: base.layout,
   committedLayout: base.layout,
   revision: base.revision,
-  commits: base.reset && base.persisted ? 1 : 0,
+  commits: base.reset && base.storage === "personal" ? 1 : 0,
   savedCommits: 0,
   resetting: base.reset,
 });
@@ -127,23 +130,45 @@ export const useGridLayout = ({
     // Before the page is read there is nothing to store; the authored layout shows.
     return authored === undefined
       ? undefined
-      : { persisted: false, queryId: "", revision: null, layout: authored, authored, reset: false };
+      : {
+          storage: "preview",
+          queryId: "",
+          revision: null,
+          layout: authored,
+          authored,
+          reset: false,
+        };
   }, [contract]);
   const source = stored ?? fallback;
+  const canvasDefinition =
+    source?.storage === "canvas" ? JSON.stringify([contract?.columns, contract?.density]) : "";
   const [local, setLocal] = useState<Local | undefined>(() =>
-    source === undefined ? undefined : startFrom(source),
+    source === undefined ? undefined : startFrom(source, canvasDefinition),
   );
   // A new page read carries the stored layout again; the local copy starts over from it.
   let current = local;
   if (source !== undefined && current?.base !== source) {
+    // The canvas reparses the same payload when its inspector receives a gesture. That is not a
+    // new authored arrangement: keep the transient layout until its actual definition changes.
+    const sameCanvas =
+      current !== undefined &&
+      source.storage === "canvas" &&
+      current.base.storage === "canvas" &&
+      current.definition === canvasDefinition &&
+      current.base.queryId === source.queryId &&
+      sameLayout(current.base.layout, source.layout) &&
+      sameLayout(current.base.authored, source.authored);
     // A projection read may finish after another gesture. Keep that unsaved gesture while
     // adopting the read's revision; its values are still persisted through the same writer.
     current =
       current !== undefined &&
-      current.base.queryId === source.queryId &&
-      current.commits > current.savedCommits
-        ? { ...current, base: source, revision: source.revision }
-        : startFrom(source);
+      (sameCanvas ||
+        (source.storage === "personal" &&
+          current.base.storage === "personal" &&
+          current.base.queryId === source.queryId &&
+          current.commits > current.savedCommits))
+        ? { ...current, base: source, definition: canvasDefinition, revision: source.revision }
+        : startFrom(source, canvasDefinition);
     setLocal(current);
   }
   const layout = current?.layout ?? { columns: [] };
@@ -362,7 +387,9 @@ export const useGridLayout = ({
     }
     const { current: snapshot, carried: loaded, events: handlers } = latest.current;
     const onColumns = handlers?.columns_changed;
-    if (snapshot === undefined || !snapshot.base.persisted || onColumns === undefined) return;
+    // An application preview keeps the arrangement on screen: nothing is reported or stored.
+    if (snapshot === undefined || snapshot.base.storage === "preview" || onColumns === undefined)
+      return;
     const loadedKeys = new Set(loaded.map((column) => column.key.toLowerCase()));
     held.busy = true;
     let result: GridLayoutCommitResult = { outcome: "unavailable" };
@@ -380,8 +407,17 @@ export const useGridLayout = ({
     }
     // A response from an earlier page must never overwrite the new page's layout or revision.
     if (latest.current.current?.base !== snapshot.base) return;
-    if (result.outcome === "saved" || result.outcome === "reset") {
-      const revision = result.outcome === "saved" ? result.revision : null;
+    if (
+      result.outcome === "saved" ||
+      result.outcome === "reset" ||
+      result.outcome === "previewed"
+    ) {
+      const revision =
+        result.outcome === "previewed"
+          ? snapshot.revision
+          : result.outcome === "saved"
+            ? result.revision
+            : null;
       updateLocal((latestLocal) =>
         latestLocal === undefined
           ? latestLocal
@@ -415,7 +451,9 @@ export const useGridLayout = ({
     }
     const pending = latest.current.current;
     if (
-      (result.outcome === "saved" || result.outcome === "reset") &&
+      (result.outcome === "saved" ||
+        result.outcome === "reset" ||
+        result.outcome === "previewed") &&
       pending !== undefined &&
       pending.commits > snapshot.commits
     ) {
@@ -429,9 +467,32 @@ export const useGridLayout = ({
       void handlers?.refresh?.({ event: "refresh" });
     }
   }, [updateLocal]);
+  // Entering canvas arrangement accepts its starting layout too, including a grid with no rows.
+  // It uses the same event as later gestures, so capture never falls back to inspector settings.
+  const canvasSource =
+    source?.storage === "canvas" && events?.columns_changed !== undefined
+      ? `${source.queryId}:${canvasDefinition}`
+      : undefined;
+  const reportedCanvas = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (canvasSource === undefined) {
+      reportedCanvas.current = undefined;
+      return;
+    }
+    if (reportedCanvas.current === canvasSource) return;
+    reportedCanvas.current = canvasSource;
+    void store();
+  }, [canvasSource, store]);
   const commits = current?.commits ?? 0;
   useEffect(() => {
-    if (commits === 0) return;
+    const storage = latest.current.current?.base.storage;
+    if (commits === 0 || storage === "preview") return;
+    // Capture must see the completed canvas gesture before the next click; only personal writes
+    // need the coalescing delay. Both hosts still receive the same committed-layout event.
+    if (storage === "canvas") {
+      void store();
+      return;
+    }
     const held = writer.current;
     if (held.timer !== undefined) clearTimeout(held.timer);
     held.timer = setTimeout(() => {
@@ -455,7 +516,7 @@ export const useGridLayout = ({
     shown,
     entries,
     density: layout.density ?? contract?.density ?? "comfortable",
-    persisted: source?.persisted === true,
+    persisted: source?.storage === "personal",
     setWidths,
     commit,
     moveColumn,

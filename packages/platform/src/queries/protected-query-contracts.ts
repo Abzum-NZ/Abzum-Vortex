@@ -375,6 +375,10 @@ export const protectedQueryRefusalReasonCodes = [
   "input_invalid",
   "field_unbounded",
   "filter_invalid",
+  /** The data source declares no column for a filtered or searched field. */
+  "filter_field_not_declared",
+  /** The filter cannot be applied exactly inside the data source's own scan. */
+  "predicate_unsupported",
   "sort_invalid",
   "relationship_invalid",
   "page_size_invalid",
@@ -384,6 +388,8 @@ export const protectedQueryRefusalReasonCodes = [
   "dataset_limit_exceeded",
   /** A pivot's column dimension holds more values than one pivot shows. */
   "pivot_columns_exceeded",
+  /** A date bucket (its start or its exclusive end) falls outside the supported UTC years 0001 to 9999. */
+  "value_out_of_range",
 ] as const;
 export type ProtectedQueryRefusalReasonCode = (typeof protectedQueryRefusalReasonCodes)[number];
 
@@ -439,6 +445,8 @@ export const protectedQueryGroupedMembersCompletedSchema = z
     groupByFieldIds: z.array(fieldIdSchema).min(1).max(10),
     groupValues: z.record(fieldIdSchema, jsonValueSchema),
     rows: z.array(protectedQueryPageRowSchema).max(200),
+    /** The reader's field bound from this same read, as a plain page carries it. */
+    fieldBounds: protectedQueryFieldBoundsSchema,
     nextContinuationToken: z.string().optional(),
     previousContinuationToken: z.string().optional(),
   })
@@ -668,6 +676,8 @@ export const protectedQuerySummaryCompletedSchema = z
     aggregates: z.record(builderKeySchema, protectedQuerySummaryAggregateResultSchema),
     /** Present only when the request pivoted: its cells, row totals and column totals. */
     pivot: protectedQueryPivotResultSchema.optional(),
+    /** Present only for a grid's grouped read: the reader's field bound, as a plain page carries it. */
+    fieldBounds: protectedQueryFieldBoundsSchema.optional(),
   })
   .strict();
 
