@@ -31,13 +31,7 @@ import {
   type SourcePageZone,
   type SourceSlotOrder,
 } from "@vortex/platform/schema";
-import {
-  boardModeOf,
-  createStudioBoardQuery,
-  studioBoardQueryFits,
-  studioBoardQueryUnavailable,
-  studioBoardSourceProblem,
-} from "./board-source";
+import { boardModeOf, createStudioBoardQuery, studioBoardQueryFits } from "./board-source";
 import { studioStarterSlots } from "./composition-starters";
 import { applyStudioFlowCreate } from "./application-flow-create";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
@@ -1118,22 +1112,18 @@ const applySettings = (
   // pipeline binds the grid to the query that groups by it (an existing one, or a new one written
   // like any other query, editable in Data); every other board setting is judged against it.
   const board = boardModeOf(settings);
-  if (board !== undefined) {
-    if (
-      board.columnField !== undefined &&
-      board.cardTitleField !== undefined &&
-      (query === null || !studioBoardQueryFits(source, board, query))
-    ) {
-      const made = createStudioBoardQuery(source, board, sourceNames(source));
-      if (made === undefined) return { kind: "refused", reason: studioBoardQueryUnavailable };
-      query = made;
-    }
-    const boardProblem = studioBoardSourceProblem(source, board, query);
-    if (boardProblem !== undefined)
+  if (
+    board?.columnField !== undefined &&
+    board.cardTitleField !== undefined &&
+    (query === null || !studioBoardQueryFits(source, board, query))
+  ) {
+    const made = createStudioBoardQuery(source, board, sourceNames(source));
+    if ("problem" in made)
       return {
         kind: "refused",
-        reason: `${release.name} can't take these settings. ${boardProblem}.`,
+        reason: `${release.name} can't take these settings. ${made.problem}.`,
       };
+    query = made.query;
   }
   try {
     const working = workingCopy(target.region);

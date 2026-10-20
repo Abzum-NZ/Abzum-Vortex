@@ -1,9 +1,7 @@
 import {
-  boardProblem,
   readRecordsTableFeatures,
   type ApplicationSourceDocument,
   type RecordsTableBoardMode,
-  type RecordsTableFeatureCheck,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import { uniqueKey } from "./application-structure-common";
@@ -89,18 +87,23 @@ export const studioBoardQueryFits = (
 /**
  * Writes an ordinary unfiltered query grouped by the board's stage field, editable in Data like any
  * other query, or reuses one that already reads exactly the board's fields. Returns the query's
- * reference, or undefined when the stage is not a pipeline's stage field or the record type is full.
+ * reference, or the sentence saying why no such query can be made.
  */
 export const createStudioBoardQuery = (
   source: ApplicationSourceDocument,
   board: RecordsTableBoardMode,
   taken: ReadonlySet<string>,
-): string | undefined => {
-  if (board.columnField === undefined || board.cardTitleField === undefined) return undefined;
+): Readonly<{ query: string }> | Readonly<{ problem: string }> => {
   const pipeline = studioBoardPipelines(source).find(
     (candidate) => candidate.reference === board.columnField,
   );
-  if (pipeline === undefined || !pipeline.selectable) return undefined;
+  if (
+    pipeline === undefined ||
+    board.columnField === undefined ||
+    board.cardTitleField === undefined
+  )
+    return { problem: "Choose a pipeline of this application" };
+  if (!pipeline.selectable) return { problem: pipeline.unavailableReason ?? stageFilterError };
   const [moduleKey, rest] = board.columnField.split(":");
   const [recordKey, stageKey] = rest!.split(".");
   const module = source.body.modules.find((candidate) => candidate.key === moduleKey)!;
@@ -110,9 +113,10 @@ export const createStudioBoardQuery = (
     return reference.startsWith(prefix) ? reference.slice(prefix.length) : undefined;
   };
   const requestedKeys = [board.columnField, board.cardTitleField, ...board.cardFields].map(
-    qualifiedFieldKey,
+    (reference) => qualifiedFieldKey(reference),
   );
-  if (requestedKeys.some((key) => key === undefined)) return undefined;
+  if (requestedKeys.some((key) => key === undefined))
+    return { problem: `Choose card fields of ${record.plural_name}` };
   const selected = [...new Set(requestedKeys.filter((key): key is string => key !== undefined))];
   const selectsExactly = (candidate: readonly string[]): boolean =>
     candidate.length === selected.length && selected.every((key) => candidate.includes(key));
@@ -129,8 +133,8 @@ export const createStudioBoardQuery = (
         query.select.length === 0 ? record.fields.map((candidate) => candidate.key) : query.select,
       ),
   );
-  if (existing !== undefined) return `${module.key}:${existing.key}`;
-  if (module.queries.length >= 100) return undefined;
+  if (existing !== undefined) return { query: `${module.key}:${existing.key}` };
+  if (module.queries.length >= 100) return { problem: studioBoardQueryUnavailable };
   const key = uniqueKey(
     `${record.key}_by_${stageKey}`,
     "",
@@ -153,34 +157,5 @@ export const createStudioBoardQuery = (
     page_size: 40,
     relationship_hops: 0,
   });
-  return `${module.key}:${key}`;
-};
-
-/**
- * Why a Data grid in Board mode cannot read this query, judged by the same capability check
- * publication and the server apply, over the draft's own query and record type. Undefined when it
- * can. A query of a Module the application only uses is judged at publication.
- */
-export const studioBoardSourceProblem = (
-  source: ApplicationSourceDocument,
-  board: RecordsTableBoardMode,
-  queryReference: string | null,
-): string | undefined => {
-  if (queryReference === null) return "Choose the data it shows";
-  const separator = queryReference.indexOf(":");
-  const module = source.body.modules.find(
-    (candidate) => candidate.key === queryReference.slice(0, separator),
-  );
-  if (module === undefined) return undefined;
-  const query = module.queries.find(
-    (candidate) => candidate.key === queryReference.slice(separator + 1),
-  );
-  const record = module.record_types.find((candidate) => candidate.key === query?.record_type);
-  if (query === undefined || record === undefined)
-    return "Its data is not a query of this application";
-  const check: RecordsTableFeatureCheck | undefined = boardProblem(
-    board,
-    studioBoardFacts(module.key, query, record),
-  );
-  return check?.kind === "not_possible" ? check.reason.replace(/\.$/, "") : undefined;
+  return { query: `${module.key}:${key}` };
 };
