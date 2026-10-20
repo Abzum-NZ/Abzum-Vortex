@@ -1089,7 +1089,7 @@ declare
   user_search text;
   effective_sort jsonb;
   effective_sort_is_user boolean := false;
-  search_candidate_ids text[] := array[]::text[];
+  search_plan jsonb;
   search_field_ids text[] := array[]::text[];
   board_member_mode boolean := false;
   group_member_mode boolean := false;
