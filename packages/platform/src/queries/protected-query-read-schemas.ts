@@ -87,6 +87,7 @@ export const groupedMemberPageReadSchema = z.discriminatedUnion("outcome", [
       rows: z.array(protectedQueryPageRowSchema).max(200),
       next: pageAnchorSchema.nullable(),
       opposite: pageAnchorSchema.nullable(),
+      fieldBounds: protectedQueryFieldBoundsSchema,
     })
     .strict(),
   refusedSchema,
