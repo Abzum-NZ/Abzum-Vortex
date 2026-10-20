@@ -296,6 +296,7 @@ export type BoardPlacementValues = Readonly<{
   choiceFieldRequired: boolean;
   /** The cards a column should not exceed; a column over it warns. */
   wipLimit?: number;
+  quickAdd: boolean;
   cardTitleFieldId: string;
   cardFieldIds: readonly string[];
   columns: readonly (BoardBucketValues & BoardStageValues)[];
@@ -518,6 +519,7 @@ export const projectBoardPlacement = async (
         choiceFieldKey: String(choiceField.key),
         choiceFieldRequired: choiceField.required,
         ...(board.wipLimit === undefined ? {} : { wipLimit: board.wipLimit }),
+        quickAdd: board.quickAdd,
         cardTitleFieldId: board.cardTitleField,
         cardFieldIds: requestedFieldIds,
         columns,

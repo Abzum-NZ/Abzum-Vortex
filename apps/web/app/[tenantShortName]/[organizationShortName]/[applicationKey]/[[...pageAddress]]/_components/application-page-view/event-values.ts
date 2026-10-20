@@ -47,6 +47,8 @@ export const suppliedValues = (event: DisplaySemanticEvent): Record<string, unkn
         value: event.value,
         ...(event.revision === undefined ? {} : { revision: event.revision }),
       };
+    case "card_added":
+      return { value: event.value };
     default:
       return {};
   }

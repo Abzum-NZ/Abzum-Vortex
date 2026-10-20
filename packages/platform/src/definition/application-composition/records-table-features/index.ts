@@ -377,6 +377,7 @@ const featureEvents: Readonly<Record<string, RecordsTableFeatureKey>> = {
   inline_edit: "inline_edit",
   row_edit: "row_edit",
   card_moved: "board",
+  card_added: "board",
 };
 
 /** The feature whose controls raise this Records table event, for the events a feature owns. */

@@ -47,6 +47,7 @@ export type StudioFlowAuthoringEvent = Extract<
   StudioFlowControlEvent,
   | "action"
   | "card_moved"
+  | "card_added"
   | "form_submit"
   | "row_clicked"
   | "row_action"
@@ -57,6 +58,7 @@ export type StudioFlowAuthoringEvent = Extract<
 export const studioFlowEventLabels: Readonly<Record<StudioFlowAuthoringEvent, string>> = {
   action: "When used",
   card_moved: "When a card is moved",
+  card_added: "When a card is added to a column",
   form_submit: "When submitted",
   row_clicked: "When a row is clicked",
   row_action: "Row action",
@@ -82,7 +84,7 @@ const controlEventRecordType = (
     typeof choiceField === "string" && choiceField.includes(".")
       ? choiceField.slice(0, choiceField.lastIndexOf("."))
       : undefined;
-  if (event === "card_moved") return boardRecord;
+  if (event === "card_moved" || event === "card_added") return boardRecord;
   if (
     event === "row_clicked" ||
     event === "row_action" ||
@@ -323,7 +325,7 @@ const bindControl = (
   );
   if (resolved === undefined)
     return refuse(
-      event === "card_moved"
+      event === "card_moved" || event === "card_added"
         ? "Choose the board's choice field first."
         : "The row's query could not be resolved. Reload the draft and choose its query before binding a flow.",
     );

@@ -24,7 +24,8 @@ const RECORDS_TABLE_BOARD_MAXIMUM_WIP_LIMIT = 1_000;
  * Board: the grid shows its records as cards in columns, one column for each stage of a pipeline's
  * stage field. `columnField` is that stage field, `cardTitleField` the field shown as each card's
  * title, `cardFields` up to three more fields shown on the card, `totals` the bound query's own
- * aggregates shown in every column header and `wipLimit` the cards a column should not exceed.
+ * aggregates shown in every column header, `wipLimit` the cards a column should not exceed and
+ * `quickAdd` whether each column offers adding a card with its stage already chosen.
  * Each part is absent until the builder names it, which the check refuses.
  */
 export type RecordsTableBoardSettings = Readonly<{
@@ -33,6 +34,8 @@ export type RecordsTableBoardSettings = Readonly<{
   cardFields: readonly string[];
   totals: readonly Readonly<{ alias: string; label: string }>[];
   wipLimit?: number;
+  /** Each stage column offers adding a card there, through the flow bound to a card being added. */
+  quickAdd: boolean;
 }>;
 
 /** The Board feature while it is on: what the board projection and its capability check read. */
@@ -82,6 +85,7 @@ export const recordsTableBoardFeature: RecordsTableFeatureDefinition<RecordsTabl
       cardFields: fieldList(group["card_fields"]),
       totals,
       ...(wipLimit?.kind === "number" ? { wipLimit: wipLimit.value } : {}),
+      quickAdd: group["quick_add"]?.kind === "boolean" && group["quick_add"].value,
     };
   },
   // A board's columns and moves come from the pipeline of its stage field, so the bound query must

@@ -47,6 +47,7 @@ import {
 } from "./board-source";
 import { studioStarterSlots } from "./composition-starters";
 import { applyStudioFlowCreate } from "./application-flow-create";
+import { ensureStudioBoardQuickAdd } from "./board-quick-add";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
 import {
   studioPaletteChoices,
@@ -1132,6 +1133,7 @@ const applySettings = (
   // A board's card moves are saved through a flow: the first time the board is on, it gets the
   // one flow that saves the moved card's new stage, so its pipeline and the action owning the
   // stage apply. It stays when the board is switched off and is reused when it is switched on.
+  let flowed: ApplicationSourceDocument = source;
   if (
     board?.columnField !== undefined &&
     !source.body.flow_bindings.some(
@@ -1150,8 +1152,15 @@ const applySettings = (
       null,
     );
     if (moved.kind !== "applied") return moved;
-    return { kind: "applied", source: moved.source };
+    flowed = moved.source;
   }
+  // Quick add opens the record type's create form from a column, through one flow like the move.
+  if (board !== undefined) {
+    const added = ensureStudioBoardQuickAdd(flowed, alias, board);
+    if (added.kind === "refused") return added;
+    flowed = added.source;
+  }
+  if (flowed !== source) return { kind: "applied", source: flowed };
   const parsed = applicationSourceDocumentSchema.parse(source);
   return sameValue(parsed, current.source)
     ? { kind: "invalid" }

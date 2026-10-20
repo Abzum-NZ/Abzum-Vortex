@@ -249,10 +249,14 @@ const publishedBy = (placement: QueryBindingPlacement): Published => {
     case "platform.form.link_input":
       return { kind: "control", type: { kind: "record", recordTypes: placement.linkTargets } };
     case "platform.form.field_input":
-      // A field input publishes the record its link field holds; its form owns any other value.
+      // A field input publishes the record its link field holds or the text of its text or choice
+      // field, so a new form can start with that value; its form owns any other value.
       return {
         kind: "control",
-        type: placement.fieldType?.kind === "record" ? placement.fieldType : undefined,
+        type:
+          placement.fieldType?.kind === "record" || placement.fieldType?.kind === "text"
+            ? placement.fieldType
+            : undefined,
       };
     case "platform.form.text_input":
     case "platform.form.choice_input":
@@ -317,7 +321,7 @@ export const pageBindingFacts = (
     if (name === undefined) continue;
     if (published.type === undefined)
       pageProblems.push({
-        sentence: `${label} can publish a page parameter only for a link field.`,
+        sentence: `${label} can publish a page parameter only for a link, choice or text field.`,
       });
     else if (!isPageParameterName(name))
       pageProblems.push({ sentence: `${name} cannot be a page parameter name.` });
