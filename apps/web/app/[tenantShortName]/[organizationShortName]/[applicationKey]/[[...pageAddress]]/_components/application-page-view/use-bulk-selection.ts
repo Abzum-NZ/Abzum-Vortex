@@ -92,6 +92,8 @@ export function useBulkSelection({
       >
     >
   >({});
+  const heldAvailability = useRef(availability);
+  heldAvailability.current = availability;
   const inFlight = useRef(new Set<string>());
   const navigation = useRef({ key: navigationKey });
   if (navigation.current.key !== navigationKey) navigation.current = { key: navigationKey };
@@ -109,15 +111,24 @@ export function useBulkSelection({
     const timer = window.setTimeout(() => {
       for (const [placementId, selected] of Object.entries(selection)) {
         if (selected.length === 0 || scopes[placementId] !== undefined) continue;
+        const held = heldAvailability.current[placementId];
+        // A table whose selection and rows did not change keeps its decisions; no second read.
+        if (held?.data === currentData[placementId] && held.selected === selected) continue;
         const table = tablePayloadFor(currentData[placementId]);
         if (table?.features?.bulkActions === undefined || table.rows.length === 0) continue;
-        const targets = table.rows
-          .filter((row) => selected.includes(row.recordId))
-          .map((row) => {
-            if (row.revision === undefined) throw new Error("ACTION_AVAILABILITY_REVISION_MISSING");
-            return { recordId: row.recordId, revision: row.revision };
-          });
-        if (targets.length === 0) continue;
+        const visible = table.rows.filter((row) => selected.includes(row.recordId));
+        const targets = visible.flatMap((row) =>
+          row.revision === undefined ? [] : [{ recordId: row.recordId, revision: row.revision }],
+        );
+        if (targets.length === 0 || targets.length !== visible.length) {
+          if (targets.length !== visible.length)
+            console.error("[page] action availability needs every selected row's revision");
+          setAvailability((current) => ({
+            ...current,
+            [placementId]: { data: currentData[placementId], selected, records: "unavailable" },
+          }));
+          continue;
+        }
         void import("./read-action-availability")
           .then(({ readActionAvailability }) =>
             readActionAvailability(

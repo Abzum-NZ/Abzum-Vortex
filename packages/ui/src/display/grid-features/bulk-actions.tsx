@@ -55,18 +55,26 @@ const availabilityFor = (
   action: string,
 ): Readonly<{ eligible: number; reason?: string }> | undefined => {
   const availability = context.selection.actionAvailability;
-  if (availability === "unavailable")
-    return { eligible: 0, reason: "Availability could not be checked. Select the records again." };
+  const unchecked = {
+    eligible: 0,
+    reason: "availability could not be checked; select the records again",
+  };
+  if (availability === "unavailable") return unchecked;
   if (availability === undefined) return undefined;
   let eligible = 0;
   const reasons = new Set<RecordsTableBulkRefusalReason>();
   for (const recordId of context.selectedRecordIds) {
     const row = context.rows.find((candidate) => candidate.recordId === recordId);
+    if (row === undefined) {
+      reasons.add("removed");
+      continue;
+    }
     const record = availability.find(
-      (candidate) => candidate.recordId === recordId && candidate.revision === row?.revision,
+      (candidate) => candidate.recordId === recordId && candidate.revision === row.revision,
     );
+    // No decision for the displayed revision: never guess; the person selects again.
     const decision = record?.actions.find((candidate) => candidate.action === action);
-    if (decision === undefined) throw new Error("NAMED_ACTION_AVAILABILITY_DECISION_MISSING");
+    if (decision === undefined) return unchecked;
     if (decision.eligible) eligible += 1;
     else reasons.add(decision.reason);
   }
