@@ -392,7 +392,7 @@ function GroupSection({
 }>): ReactElement {
   return (
     <Collapsible open={open} onOpenChange={() => onToggle()}>
-      <div className="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1.5">
+      <div className="flex items-center gap-2 bg-muted/40 px-2 py-1.5">
         <Tooltip>
           <TooltipTrigger
             render={
