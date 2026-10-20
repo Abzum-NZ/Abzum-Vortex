@@ -1101,6 +1101,7 @@ export const parseTablePayload = (
       "selectionToken",
       "selectionScope",
       "bulkRun",
+      "actionAvailability",
     ],
     location,
   );
