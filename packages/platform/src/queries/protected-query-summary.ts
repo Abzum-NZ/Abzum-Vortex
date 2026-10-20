@@ -39,9 +39,8 @@ const readSummary = async (
         filter: command.filter ?? null,
         search: command.search ?? null,
         searchableFieldIds: command.searchableFieldIds,
-        ...(command.groupingFieldId === undefined
-          ? {}
-          : { groupingFieldId: command.groupingFieldId }),
+        ...(command.grouping === undefined ? {} : { grouping: command.grouping }),
+        ...(command.groupAfter === undefined ? {} : { groupAfter: command.groupAfter }),
         filterableFieldIds: command.filterableFieldIds,
       })}::text::jsonb
     ) as result
@@ -93,7 +92,22 @@ export const summariseCommand = async (
     throw error;
   }
 
-  return readSummary(transaction, command, declared.moduleReleaseRevision, inputValues);
+  const result = await readSummary(
+    transaction,
+    command,
+    declared.moduleReleaseRevision,
+    inputValues,
+  );
+  if (
+    result.outcome === "completed" &&
+    command.grouping !== undefined &&
+    (result.groups.length > command.grouping.limit ||
+      result.groupByFieldIds.length !== 1 ||
+      result.groupByFieldIds[0]?.toLowerCase() !== command.grouping.fieldId.toLowerCase() ||
+      (result.nextGroupKey !== null && result.nextGroupKey !== result.groups.at(-1)?.groupKey))
+  )
+    throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+  return result;
 };
 
 export const boardSummaryCommand = async (
