@@ -1,5 +1,5 @@
 create or replace function vortex_access.list_organization_delegations_projection(
-  p_record_ids uuid[], p_sort_key text, p_direction text, p_after jsonb, p_limit integer
+  p_record_ids uuid[], p_sort_key text, p_direction text, p_after jsonb, p_limit integer, p_predicate jsonb
 )
 returns table (
   organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
@@ -17,6 +17,7 @@ declare
   after_value text;
   after_record_id uuid;
   scan_sql text;
+  predicate_plan jsonb;
 begin
   if p_sort_key not in ('record_id', 'scope_kind', 'starts_at', 'expires_at', 'state')
     or p_direction not in ('ascending', 'descending')
@@ -89,6 +90,18 @@ begin
       sort_expression, case when p_direction = 'ascending' then 'asc' else 'desc' end,
       case when p_direction = 'ascending' then 'asc' else 'desc' end) end;
 
+  predicate_plan := vortex_record.compile_projection_predicate_internal(
+    p_predicate,
+    $declared${
+      "holder_kind": {"sql": "delegation.holder_kind::text", "database": "text", "filter": true},
+      "organization_account_id": {"sql": "delegation.organization_account_id::text", "database": "text", "filter": true},
+      "group_id": {"sql": "delegation.group_id::text", "database": "text", "filter": true},
+      "scope_kind": {"sql": "delegation.scope_kind::text", "database": "text", "filter": true},
+      "state": {"sql": "delegation.state::text", "database": "text", "filter": true},
+      "temporal_state": {"sql": "(case when delegation.state = 'revoked' then 'revoked' when delegation.starts_at > $5 then 'scheduled' when delegation.expires_at is not null and delegation.expires_at <= $5 then 'expired' else 'active' end)", "database": "text", "filter": true}
+    }$declared$::jsonb,
+    7
+  );
   begin
     select authorized.* into strict scope_row
     from vortex_access.organization_assignment_ledger_administration_scope() as authorized;
@@ -116,15 +129,15 @@ begin
     from vortex_access.organization_delegation_authorities as delegation
     where delegation.organization_id = $1
       and ($2 is null or delegation.delegation_authority_id = any($2))
-  $scan$ || keyset_sql || pg_catalog.format(' order by %s limit $6', order_sql);
+  $scan$ || coalesce(' and ' || (predicate_plan ->> 'predicate'), '') || keyset_sql || pg_catalog.format(' order by %s limit $6', order_sql);
   return query execute scan_sql using scope_row.organization_id, p_record_ids,
-    after_value, after_record_id, checked_at, p_limit;
+    after_value, after_record_id, checked_at, p_limit, predicate_plan -> 'parameters';
 end
 $function$;
 
-revoke all on function vortex_access.list_organization_delegations_projection(uuid[], text, text, jsonb, integer)
+revoke all on function vortex_access.list_organization_delegations_projection(uuid[], text, text, jsonb, integer, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_access.list_organization_delegations_projection(uuid[], text, text, jsonb, integer)
+grant execute on function vortex_access.list_organization_delegations_projection(uuid[], text, text, jsonb, integer, jsonb)
   to vortex_owner, vortex_record_adapter, postgres;
-alter function vortex_access.list_organization_delegations_projection(uuid[], text, text, jsonb, integer)
+alter function vortex_access.list_organization_delegations_projection(uuid[], text, text, jsonb, integer, jsonb)
   owner to vortex_owner;

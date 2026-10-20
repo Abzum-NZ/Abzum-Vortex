@@ -106,6 +106,9 @@ declare
   projection_batch_exhausted boolean := false;
   projection_last_record_id uuid;
   projection_last_sort_key text[];
+  projection_predicate jsonb;
+  projection_plan jsonb;
+  projection_failure text;
   scan_record record;
   scan_cursor refcursor;
   cursor_position integer;
@@ -802,51 +805,29 @@ begin
       end if;
       projection_after := p_after;
       projection_batch_size := least(p_page_size, scan_limit);
-      select coalesce(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(projected) order by projected.ordinality), '[]'::jsonb)
-      into projection_batch
-      from vortex_record.read_system_projection_rows_internal(v_storage_contract_id,
-        null::uuid[], projection_sort_key, scan_directions[1], projection_after,
-        projection_batch_size) with ordinality as projected(organization_id, record_id,
-        revision, attribute_values, ordinality);
-  end if;
-  if projection_page_scan then
-      -- The registered view contributes its row type only. The bounded reader
-      -- supplies every candidate, including rows later rejected by the query.
-      scan_source_sql := pg_catalog.format($source$
-        pg_catalog.jsonb_to_recordset($11) as projection(
-          organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
-        )
-        cross join lateral pg_catalog.jsonb_populate_record(
-          null::record_data.%I,
-          pg_catalog.jsonb_build_object(
-            'organisation_id', projection.organization_id,
-            'module_root_id', %L::uuid,
-            'record_type_id', %L::uuid,
-            'storage_contract_id', %L::uuid,
-            'record_id', projection.record_id,
-            'definition_revision', %L::bigint,
-            'lifecycle_state', 'active',
-            'concurrency_number', projection.revision
-          ) || coalesce((
-            select pg_catalog.jsonb_object_agg(
-              'f_' || pg_catalog.replace(pg_catalog.lower(field.value ->> 'fieldId'), '-', ''),
-              case
-                when field.value ->> 'fieldId' = %L
-                  then pg_catalog.to_jsonb(projection.organization_id::text)
-                when field.value ->> 'fieldId' = %L
-                  then pg_catalog.to_jsonb(projection.revision)
-                else projection.attribute_values -> (field.value ->> 'key')
-              end
-            )
-            from pg_catalog.jsonb_array_elements(%L::jsonb -> 'fields') as field(value)
-          ), '{}'::jsonb)
-        ) as stored$source$,
-        physical_table_token, p_module_root_id, record_type_id_value,
-        v_storage_contract_id, (resolved ->> 'moduleReleaseRevision')::bigint,
-        record_type_item #>> '{systemProjection,organizationFieldId}',
-        record_type_item #>> '{systemProjection,revisionFieldId}',
-        record_type_item
-      );
+      projection_plan := vortex_record.prepare_system_projection_scan_internal(
+        prepared_plan || pg_catalog.jsonb_build_object('queryModuleRootId', p_module_root_id), search_plan);
+      if projection_plan ->> 'outcome' <> 'prepared' then return projection_plan; end if;
+      projection_predicate := projection_plan -> 'predicate';
+      scan_source_sql := projection_plan ->> 'sourceSql';
+      -- The one place the predicate is applied is the reader's scan.
+      filter_predicate := 'true';
+      filter_exact := true;
+      filter_expressions := array[]::text[];
+      begin
+        select coalesce(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(projected) order by projected.ordinality), '[]'::jsonb)
+        into projection_batch
+        from vortex_record.read_system_projection_rows_internal(v_storage_contract_id,
+          null::uuid[], projection_sort_key, scan_directions[1], projection_after,
+          projection_batch_size, projection_predicate) with ordinality as projected(organization_id,
+          record_id, revision, attribute_values, ordinality);
+      exception when sqlstate '22023' then
+        get stacked diagnostics projection_failure = message_text;
+        if projection_failure in ('filter_field_not_declared', 'predicate_unsupported') then
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', projection_failure);
+        end if;
+        raise;
+      end;
       scan_projection_sql := 'pg_catalog.to_jsonb(projection)';
   end if;
   -- The scan. Identifiers come only from the storage catalogue; every value is
@@ -1256,6 +1237,10 @@ begin
         if not exists (
           select 1 from pg_catalog.unnest(filter_ids) as referenced(id)
           where not (readable_values ? referenced.id)
+        ) and not exists (
+          select 1 from pg_catalog.unnest(search_field_ids) as searched(id)
+          where projection_page_scan and user_search is not null
+            and not (readable_values ? searched.id)
         ) then
           if needs_refusal_check then
             return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
@@ -1312,7 +1297,8 @@ begin
             last_examined_record_id := scan_record.record_id;
             continue;
           end if;
-          if user_search is not null and not vortex_record.query_search_matches_internal(
+          if user_search is not null and not projection_page_scan
+            and not vortex_record.query_search_matches_internal(
             readable_values, search_field_ids, user_search
           ) then
             last_examined_sort_key := scan_record.sort_key;
@@ -1368,8 +1354,8 @@ begin
   into projection_batch
   from vortex_record.read_system_projection_rows_internal(v_storage_contract_id,
     null::uuid[], projection_sort_key, scan_directions[1], projection_after,
-    projection_batch_size) with ordinality as projected(organization_id, record_id,
-    revision, attribute_values, ordinality);
+    projection_batch_size, projection_predicate) with ordinality as projected(organization_id,
+    record_id, revision, attribute_values, ordinality);
   end loop;
   exit when more_rows or budget_exhausted;
   end loop;
