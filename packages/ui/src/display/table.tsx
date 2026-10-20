@@ -198,13 +198,15 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
   const selectionToken = values?.selectionToken;
   const selectionScope = values?.selectionScope;
   const bulkRun = values?.bulkRun;
+  const actionAvailability = values?.actionAvailability;
   const selectionParts = useMemo(
     () => ({
       ...(selectionToken === undefined ? {} : { selectionToken }),
       ...(selectionScope === undefined ? {} : { selectionScope }),
       ...(bulkRun === undefined ? {} : { bulkRun }),
+      ...(actionAvailability === undefined ? {} : { actionAvailability }),
     }),
-    [selectionToken, selectionScope, bulkRun],
+    [selectionToken, selectionScope, bulkRun, actionAvailability],
   );
   const paged = values?.hasNextPage === true || values?.hasPreviousPage === true;
   const narrowing = values?.narrowing;

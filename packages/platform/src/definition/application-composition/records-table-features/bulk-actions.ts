@@ -84,6 +84,19 @@ export const recordsTableBulkActionsFeature: RecordsTableFeatureDefinition<Recor
       if (facts.grouped || (!state.enabled && offered.length === 0)) return needed;
       if (!state.enabled) return featureAvailable;
       if (state.actions.length === 0) return needed;
+      if (state.actions.length > 20)
+        return featureNotPossible(
+          "definition_records_table_bulk_actions",
+          "Choose at most 20 bulk actions",
+        );
+      if (
+        new Set(state.actions.map((action) => action.action.toLowerCase())).size !==
+        state.actions.length
+      )
+        return featureNotPossible(
+          "definition_records_table_bulk_actions",
+          "Choose each bulk action once",
+        );
       for (const declared of state.actions) {
         const action = facts.actions.find((candidate) => sameKey(candidate.key, declared.action));
         if (action === undefined) return needed;
