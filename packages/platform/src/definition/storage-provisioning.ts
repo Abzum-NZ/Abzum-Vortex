@@ -72,7 +72,7 @@ const mapFailure = (error: unknown): DefinitionError<ModuleInstallationStorageEr
     case "conflict":
       return new DefinitionError("MODULE_INSTALLATION_BINDING_CONFLICT");
     case "wrong_state":
-      return new DefinitionError("RECORD_STORAGE_INCOMPATIBLE");
+      return new DefinitionError("RECORD_STORAGE_INCOMPATIBLE", { cause: error });
     default:
       return unexpectedDefinitionFailure(
         "RECORD_STORAGE_PROVISIONING_FAILED",

@@ -12,6 +12,7 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
   "role_acceptance_required",
   "recent_authentication_required",
   "role_settings_change_required",
+  "application_storage_incompatible",
 ]);
 
 /** Definition-authored guidance and a page to open within the current organization. */
