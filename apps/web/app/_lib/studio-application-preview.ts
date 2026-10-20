@@ -10,6 +10,7 @@ import {
   dropRetiredPreviewStorage,
   previewApplicationKey,
   readApplicationDefinitionDraft,
+  readLiveHumanContext,
   requireBuilderAuthority,
   type BuilderTargetFactsReader,
   type DatabaseRow,
@@ -22,6 +23,7 @@ import {
   revisionSchema,
   sameId,
   type ApplicationRootId,
+  type ApplicationContent,
   type BuilderPreviewInstallation,
   type IdentitySession,
   type OrganizationId,
@@ -73,6 +75,8 @@ export type StudioPreviewState =
       kind: "read";
       draft: StoredApplicationDefinitionDraft;
       preview: BuilderPreviewInstallation | undefined;
+      /** The retained compile, when a ready canvas read requests it in this same transaction. */
+      content?: ApplicationContent;
     }>
   | PreviewFailure;
 
@@ -143,6 +147,7 @@ export const readStudioPreviewState = async (
   organizationId: OrganizationId,
   rootId: ApplicationRootId,
   draftRevision: number,
+  readCompilation = false,
 ): Promise<StudioPreviewState> => {
   try {
     const selection = { organizationId, applicationRootId: rootId };
@@ -155,6 +160,7 @@ export const readStudioPreviewState = async (
         organizationId,
         rootId,
         draftRevision,
+        readCompilation,
       );
       if (first.kind !== "temporarily_unavailable" || first.databaseCode !== "40001") return first;
       // A preview move can invalidate this transaction's snapshot. The request service already
@@ -162,7 +168,14 @@ export const readStudioPreviewState = async (
       console.info(
         "[studio] retrying preview state after serialization conflict: STUDIO_PREVIEW_STATE_RETRY",
       );
-      return readPreviewStateIn(session, selected, organizationId, rootId, draftRevision);
+      return readPreviewStateIn(
+        session,
+        selected,
+        organizationId,
+        rootId,
+        draftRevision,
+        readCompilation,
+      );
     };
     const inApplication = await readOnceMoreOnSerializationConflict(selection);
     const read =
@@ -190,8 +203,9 @@ const readPreviewStateIn = (
   organizationId: OrganizationId,
   rootId: ApplicationRootId,
   draftRevision: number,
+  readCompilation: boolean,
 ) =>
-  humanOrganizationRequests().run(session, selection, async (transaction, scope) => {
+  humanOrganizationRequests().run(session, selection, async (transaction, scope, issuedAt) => {
     const authority = createBuilderAuthority({
       transaction,
       scope,
@@ -224,6 +238,34 @@ const readPreviewStateIn = (
         !sameId(preview.organizationId, organizationId))
     )
       throw new Error("STUDIO_PREVIEW_LOOKUP_MISMATCH");
+    // A ready canvas needs the current compile as well as the saved source. Keep both in this
+    // protected request rather than opening another organisation request and checking the same
+    // builder permission twice there. The platform compiler still checks current authority,
+    // the saved revision and dependency revisions before consulting its compilation retention.
+    if (readCompilation && studioPreviewRunsDraft(draft, preview) === "ready") {
+      const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
+      try {
+        const compiled = await createDatabaseDefinitionPublicationService(
+          installedReleaseCatalogue,
+          transaction,
+          authority,
+        ).compileApplicationDraft(context, { rootId, expectedDraftRevision: draftRevision });
+        return {
+          kind: "read",
+          draft,
+          preview,
+          content: compiled.compilation.canonical.content,
+        } as const;
+      } catch (error) {
+        if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING")
+          return { kind: "conflict" } as const;
+        if (error instanceof BuilderAuthorityError) {
+          console.error(`[studio] canvas compilation refused: ${describeFailure(error)}`);
+          return { kind: "refused", reason: "permission_refused" } as const;
+        }
+        throw error;
+      }
+    }
     return { kind: "read", draft, preview } as const;
   });
 
