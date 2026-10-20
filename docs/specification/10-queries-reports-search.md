@@ -340,8 +340,10 @@ before it reads records. It does not derive counts from a loaded member page.
 
 Generic member pages take the ordinary ordered sort contract and forward/backward keysets. They
 carry at most 200 records, with only the requested field projection. Choice grouping narrows the
-candidate scan by its stored key; date grouping uses typed half-open ranges from one local bucket
-boundary to the next (including 23/25-hour DST days). These predicates apply only after guaranteed
+candidate scan by its stored key; date grouping uses typed half-open calendar ranges. Instant
+grouping widens the index range around the bucket boundaries and applies exact authored-zone
+bucket equality before the candidate page limit, so repeated local midnight retains both
+occurrences (including 23/25-hour DST days). These predicates apply only after guaranteed
 readability is established, then membership is rechecked by the same canonical bucket operation
 on the current readable record. A noncanonical bucket start is refused. JSON null denotes the unassigned group; a missing or
 withheld value never establishes generic group membership. Continuations bind the actor, scope,
