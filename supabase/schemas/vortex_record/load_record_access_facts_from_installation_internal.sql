@@ -150,7 +150,7 @@ begin
     -- Shape each protected reader row as the existing view's composite type.
     -- The view supplies the type only: its unbounded reader is never scanned.
     projection_reader_sql := case when p_projection_row is null then pg_catalog.format(
-      'vortex_record.read_system_projection_rows_internal(%L::uuid, array[$2]::uuid[], %L, ''ascending'', null::jsonb, 1) as projection',
+      'vortex_record.read_system_projection_rows_internal(%L::uuid, array[$2]::uuid[], %L, ''ascending'', null::jsonb, 1, null::jsonb) as projection',
       (target_meta ->> 'storageContractId')::uuid, target_projection_sort_key
     ) else
       'pg_catalog.jsonb_to_record($3) as projection(organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb)'

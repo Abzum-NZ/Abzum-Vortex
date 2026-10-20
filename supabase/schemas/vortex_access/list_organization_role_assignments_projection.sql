@@ -1,6 +1,6 @@
 create or replace function vortex_access.list_organization_role_assignments_projection(
   p_record_ids uuid[], p_sort_key text, p_direction text,
-  p_after jsonb, p_limit integer
+  p_after jsonb, p_limit integer, p_predicate jsonb
 )
 returns table (
   organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
@@ -23,6 +23,7 @@ declare
   after_time timestamptz;
   after_record_id uuid;
   scan_sql text;
+  predicate_plan jsonb;
 begin
   if p_sort_key not in ('record_id', 'starts_at', 'expires_at', 'state', 'role_key', 'role_label')
     or p_sort_key is null or p_direction not in ('ascending', 'descending')
@@ -112,6 +113,31 @@ begin
         sort_expression, case when p_direction = 'ascending' then '>' else '<' end);
     end if;
   end if;
+  predicate_plan := vortex_record.compile_projection_predicate_internal(
+    p_predicate,
+    $declared${
+      "role_id": {"sql": "assignment.role_id::text", "database": "text", "filter": true},
+      "assignee_kind": {"sql": "assignment.assignee_kind::text", "database": "text", "filter": true},
+      "organization_account_id": {"sql": "assignment.organization_account_id::text", "database": "text", "filter": true},
+      "group_id": {"sql": "assignment.group_id::text", "database": "text", "filter": true},
+      "assignment_kind": {"sql": "assignment.assignment_kind::text", "database": "text", "filter": true},
+      "state": {"sql": "assignment.state::text", "database": "text", "filter": true},
+      "temporal_state": {"sql": "(case when assignment.state = 'revoked' then 'revoked' when assignment.starts_at > $7 then 'scheduled' when assignment.expires_at is not null and assignment.expires_at <= $7 then 'expired' else 'active' end)", "database": "text", "filter": true},
+      "role_key": {"sql": "role_revision.role_key", "database": "text", "search": true},
+      "role_label": {"sql": "role_revision.label", "database": "text", "search": true}
+    }$declared$::jsonb,
+    8
+  );
+  if predicate_plan ->> 'predicate' is not null then
+    -- The predicate may read the role of an assignment; the final select
+    -- joins it the same way, so the candidate scan sees the same rows.
+    candidate_joins := $joins$join vortex_access.organization_roles as role
+      on role.organization_id = assignment.organization_id and role.role_id = assignment.role_id
+    join vortex_access.organization_role_revisions as role_revision
+      on role_revision.organization_id = role.organization_id
+      and role_revision.role_id = role.role_id and role_revision.revision = role.live_revision$joins$;
+    keyset_sql := ' and ' || (predicate_plan ->> 'predicate') || keyset_sql;
+  end if;
   begin
     select authorized.* into strict scope_row
     from vortex_access.organization_assignment_ledger_administration_scope() as authorized;
@@ -160,12 +186,12 @@ begin
   $scan$, sort_expression, sort_null_expression, candidate_joins, keyset_sql,
     order_sql, outer_order_sql);
   return query execute scan_sql using scope_row.organization_id, p_record_ids,
-    after_text, after_record_id, after_time, p_limit, checked_at;
+    after_text, after_record_id, after_time, p_limit, checked_at, predicate_plan -> 'parameters';
 end
 $function$;
 
-revoke all on function vortex_access.list_organization_role_assignments_projection(uuid[], text, text, jsonb, integer)
+revoke all on function vortex_access.list_organization_role_assignments_projection(uuid[], text, text, jsonb, integer, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_access.list_organization_role_assignments_projection(uuid[], text, text, jsonb, integer)
+grant execute on function vortex_access.list_organization_role_assignments_projection(uuid[], text, text, jsonb, integer, jsonb)
   to vortex_owner, vortex_record_adapter, postgres;
-alter function vortex_access.list_organization_role_assignments_projection(uuid[], text, text, jsonb, integer) owner to vortex_owner;
+alter function vortex_access.list_organization_role_assignments_projection(uuid[], text, text, jsonb, integer, jsonb) owner to vortex_owner;
