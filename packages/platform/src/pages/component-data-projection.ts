@@ -16,7 +16,7 @@ import {
   type RecordsTableSortState,
   type tableCellTypeKeys,
 } from "../schema";
-import type { ProtectedQueryRow } from "../queries/index";
+import type { ProtectedQueryFieldBounds, ProtectedQueryRow } from "../queries/index";
 import { formatDecimal, formatMoney, isExactDecimal } from "./value-format";
 import { recordLinkLabelKey, type RecordLinkReference } from "../definition/app-index";
 import { defaultQueryPageSize } from "../definition/module-query-edit";
@@ -49,6 +49,7 @@ export type ProjectedTableField = Readonly<{
 /** One display value that is not itself a table. */
 export type ProjectedScalarCellValue =
   | Readonly<{ kind: "text"; text: string }>
+  | Readonly<{ kind: "choice"; key: string; label: string }>
   | Readonly<{ kind: "number"; value: number; formatted: string }>
   | Readonly<{ kind: "boolean"; value: boolean }>
   | Readonly<{ kind: "date"; iso: string }>
@@ -172,6 +173,11 @@ export type ProjectedTableValues = Readonly<{
   nextContinuationToken?: string;
   hasPreviousPage?: boolean;
   previousContinuationToken?: string;
+  /**
+   * The sealed "every matching record" descriptor of this read, present only when bulk actions are
+   * on: the browser hands it back to select every matching record without listing them.
+   */
+  selectionToken?: string;
 }>;
 
 /** The viewer's search and filters a table page was read with; both empty when it was not narrowed. */
@@ -339,7 +345,9 @@ const projectCell = (
   // One selected choice shows its label; a value the field no longer offers shows no value.
   if (typeof value === "string" && choiceLabels !== undefined) {
     const option = choiceLabels.find((candidate) => candidate.value === value);
-    return option === undefined ? empty : { kind: "text", text: option.label };
+    return option === undefined
+      ? empty
+      : { kind: "choice", key: option.value, label: option.label };
   }
   // A formatted-text value is shown as its document, never flattened or dropped.
   const document = richTextDocumentSchema.safeParse(value);
@@ -482,20 +490,19 @@ const RESTRICTED_CELL: ProjectedScalarCellValue = Object.freeze({ kind: "restric
  * capabilities the engine returned; a row's changeable fields are narrowed to the visible columns,
  * so its capability metadata never names a field the payload does not carry. Returns undefined when the placement declares no data
  * contract, a heading is missing, a row carries no revision or capabilities, or the rows are not a
- * valid page (a repeated record identity), so the caller refuses neutrally. A continuation page
- * with no rows keeps its columns and an empty row list when `keepEmptyPage` is set, so the viewer
- * can still page back; a first page with no rows is the plain empty state.
+ * valid page (a repeated record identity), so the caller refuses neutrally. An empty page keeps
+ * its columns and controls, so the viewer can search, clear filters or page back. `fieldBounds` is the
+ * viewer's current field bound from the same read, which decides the filters, search and saved views.
  */
 export const projectRecordsTableData = (
   layout: GridLayoutState,
   input: ComponentDataProjectionInput,
   rows: readonly TableSourceRow[],
-  keepEmptyPage = false,
+  fieldBounds: ProtectedQueryFieldBounds,
 ): ProjectedComponentData<ProjectedTableValues> | undefined => {
   const contract = readRecordsTableContract(input.settings);
   if (contract === undefined || contract.columns.length === 0) return undefined;
   if (new Set(rows.map((row) => row.recordId)).size !== rows.length) return undefined;
-  if (rows.length === 0 && !keepEmptyPage) return { status: "empty" };
   // A list row must carry the revision and capabilities the engine decided for it; a row without
   // them is withheld whole, never displayed with an inferred or absent capability.
   const completeRows = rows.filter(isListRow);
@@ -534,10 +541,10 @@ export const projectRecordsTableData = (
               })),
           input.formatting,
         );
-  // The viewer's grid features, decided from the same rows and per-row capabilities as the page.
+  // The viewer's grid features, decided from the field bound and per-row capabilities of the same read.
   const features = projectRecordsTableFeatures(
     contract,
-    visibleFieldIds,
+    fieldBounds,
     completeRows,
     input.filterFields,
     formatting?.projection,

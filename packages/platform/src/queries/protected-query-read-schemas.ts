@@ -8,6 +8,7 @@ import {
 } from "../schema";
 import {
   protectedQueryBoardColumnSchema,
+  protectedQueryFieldBoundsSchema,
   protectedQueryPageRowSchema,
   protectedQueryRefusalReasonCodes,
   protectedQueryRowCapabilitiesSchema,
@@ -70,6 +71,7 @@ export const pageReadSchema = z.discriminatedUnion("outcome", [
       rows: pageRowsSchema,
       next: pageAnchorSchema.nullable(),
       opposite: pageAnchorSchema.nullable(),
+      fieldBounds: protectedQueryFieldBoundsSchema,
     })
     .strict(),
   refusedSchema,
@@ -99,6 +101,7 @@ export const treeLevelPageReadSchema = z.discriminatedUnion("outcome", [
       rows: z.array(protectedQueryTreeRowSchema).max(200),
       next: pageAnchorSchema.nullable(),
       opposite: pageAnchorSchema.nullable(),
+      fieldBounds: protectedQueryFieldBoundsSchema,
     })
     .strict(),
   refusedSchema,
@@ -123,6 +126,7 @@ export const boardColumnPagesReadSchema = z.discriminatedUnion("outcome", [
         )
         .min(1)
         .max(13),
+      fieldBounds: protectedQueryFieldBoundsSchema,
     })
     .strict(),
   refusedSchema,

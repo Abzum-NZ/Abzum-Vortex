@@ -90,11 +90,26 @@ export {
   type TreeLevelResult,
 } from "./placement-read";
 export {
+  createRecordsTableBulkService,
+  type RecordsTableBulkAddress,
+  type RecordsTableBulkDependencies,
+} from "./records-table-features/bulk-run";
+export {
+  readNamedActionEligibility,
+  type NamedActionEligibilityTarget,
+  type NamedActionRecordEligibility,
+} from "./records-table-features/named-action-eligibility";
+export {
+  createRecordsSelectionSealer,
+  type RecordsSelectionSealer,
+} from "./records-selection-seal";
+export {
   readRecordsTableRowDetail,
   type RowDetailRequest,
   type RowDetailResult,
   type RowDetailRow,
 } from "./records-table-features/master-detail";
+
 export { readPageSubjectInTransaction } from "./page-subject-read";
 export {
   createPageSubjectReader,

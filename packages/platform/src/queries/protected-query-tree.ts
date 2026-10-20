@@ -216,6 +216,7 @@ export const treeLevelCommand = async (
     moduleReleaseVersion: page.moduleReleaseVersion,
     queryId: command.queryId,
     rows: page.rows,
+    fieldBounds: page.fieldBounds,
     ...(next === undefined ? {} : { nextContinuationToken: next }),
     ...(previous === undefined ? {} : { previousContinuationToken: previous }),
   });

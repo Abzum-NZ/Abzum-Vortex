@@ -6,7 +6,7 @@ import {
   createThemeRootProps,
   type DisplayRow,
   type DisplaySemanticEvent,
-  type ListPayload,
+  type LauncherRowsPayload,
 } from "@vortex/ui";
 import {
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
@@ -31,7 +31,10 @@ import {
 import { signOut } from "../auth/actions";
 import { SubmitButton } from "../auth/_components/submit-button";
 import { continueSessionOrEnd, redirectToSessionEnd } from "../auth/_lib/session-redirect";
-import { resolveIdentitySession, resolveIdentitySessionWithEmail } from "../auth/_lib/session-server";
+import {
+  resolveIdentitySession,
+  resolveIdentitySessionWithEmail,
+} from "../auth/_lib/session-server";
 import { OrganizationChooserPage } from "./_components/organization-chooser-page";
 import { organizationAddressPath } from "../_lib/address-paths";
 import { loadOrganizationLauncher } from "../_lib/organization-context";
@@ -65,30 +68,28 @@ const retryOnceWhenTemporarilyUnavailable = async <Result extends Readonly<{ kin
  */
 const organizationTileValues = (
   entries: readonly OrganizationLauncherEntry[],
-): ListPayload => {
-  const rows = entries.map(
-    (entry): DisplayRow => ({
-      recordId: entry.organizationId,
-      cells: {
-        name: {
-          kind: "text",
-          text: entry.organizationDisplayName,
-        },
-        description: {
-          kind: "text",
-          text:
-            [entry.tenantDisplayName, entry.accountDisplayName]
-              .filter((part) => part !== undefined && part !== entry.organizationDisplayName)
-              .join(" · ") || entry.tenantShortName,
-        },
-        icon: {
-          kind: "text",
-          text: "building-2",
-        },
+): LauncherRowsPayload => {
+  const rows = entries.map((entry): DisplayRow => ({
+    recordId: entry.organizationId,
+    cells: {
+      name: {
+        kind: "text",
+        text: entry.organizationDisplayName,
       },
-    }),
-  );
-  return { kind: "list", headingKey: "name", secondaryKey: "icon", rows };
+      description: {
+        kind: "text",
+        text:
+          [entry.tenantDisplayName, entry.accountDisplayName]
+            .filter((part) => part !== undefined && part !== entry.organizationDisplayName)
+            .join(" · ") || entry.tenantShortName,
+      },
+      icon: {
+        kind: "text",
+        text: "building-2",
+      },
+    },
+  }));
+  return { kind: "launcher_rows", headingKey: "name", secondaryKey: "icon", rows };
 };
 
 /**
@@ -111,39 +112,39 @@ async function openOrganization(event: DisplaySemanticEvent): Promise<void> {
 }
 
 const organizationsUnavailable = (
-        <main
-          className="flex min-h-svh items-center justify-center p-4 bg-background text-foreground"
-          {...createThemeRootProps(undefined, DEFAULT_PLATFORM_THEME_RELEASE.tokens)}
-        >
-          <style href="vortex-ui-styles" precedence="default">
-            {ALL_UI_STYLES_CSS}
-          </style>
-          <Card className="w-full max-w-md border-border bg-card text-card-foreground shadow-sm">
-            <CardHeader className="gap-2">
-              <Badge variant="secondary" className="w-fit text-xs uppercase">
-                Organisation access
-              </Badge>
-              <CardTitle>
-                <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground">
-                  Organisations are temporarily unavailable
-                </h1>
-              </CardTitle>
-              <CardDescription className="text-sm text-muted-foreground">
-                Your sign-in is still active. Try loading your organisations again.
-              </CardDescription>
-            </CardHeader>
-            <CardFooter className="flex justify-between gap-3">
-              <Button variant="outline" nativeButton={false} render={<Link href="/signed-in" />}>
-                Try again
-              </Button>
-              <form action={signOut}>
-                <SubmitButton variant="ghost" pendingLabel="Signing out…">
-                  Sign out
-                </SubmitButton>
-              </form>
-            </CardFooter>
-          </Card>
-        </main>
+  <main
+    className="flex min-h-svh items-center justify-center p-4 bg-background text-foreground"
+    {...createThemeRootProps(undefined, DEFAULT_PLATFORM_THEME_RELEASE.tokens)}
+  >
+    <style href="vortex-ui-styles" precedence="default">
+      {ALL_UI_STYLES_CSS}
+    </style>
+    <Card className="w-full max-w-md border-border bg-card text-card-foreground shadow-sm">
+      <CardHeader className="gap-2">
+        <Badge variant="secondary" className="w-fit text-xs uppercase">
+          Organisation access
+        </Badge>
+        <CardTitle>
+          <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground">
+            Organisations are temporarily unavailable
+          </h1>
+        </CardTitle>
+        <CardDescription className="text-sm text-muted-foreground">
+          Your sign-in is still active. Try loading your organisations again.
+        </CardDescription>
+      </CardHeader>
+      <CardFooter className="flex justify-between gap-3">
+        <Button variant="outline" nativeButton={false} render={<Link href="/signed-in" />}>
+          Try again
+        </Button>
+        <form action={signOut}>
+          <SubmitButton variant="ghost" pendingLabel="Signing out…">
+            Sign out
+          </SubmitButton>
+        </form>
+      </CardFooter>
+    </Card>
+  </main>
 );
 
 const CHOOSER_BLOCK_RELEASES = [

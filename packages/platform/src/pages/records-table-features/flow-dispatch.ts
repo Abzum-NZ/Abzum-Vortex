@@ -11,13 +11,13 @@ import {
 } from "../../definition/application-composition-catalogue";
 import { pageSubjectFromRead } from "../page-subject-read";
 import {
-  projectRecordsTableFeatures,
+  recordsTableEditableFields,
   recordsTableRequestRefusal,
   type RecordsTableRequestRefusal,
 } from ".";
 
 /** Locate the exact compiled placement; bindings of other block types keep their own gates. */
-const installedPlacementProps = (
+export const installedPlacementProps = (
   content: unknown,
   placementId: string,
 ): Record<string, unknown> | undefined => {
@@ -74,21 +74,13 @@ export const recordsTableBindingRefusal = async (
   const contract = readRecordsTableContract(placementSettings(props));
   if (contract === undefined)
     return recordsTableRequestRefusal("contract", "placement_contract_unreadable");
+  // A bulk action runs a named action through the table's own bulk run, never a flow binding.
+  if (event === "bulk_action") return recordsTableRequestRefusal(event, "command_not_declared");
   const command =
-    event === "bulk_action"
-      ? contract.features.bulkActions.enabled
-        ? contract.features.bulkActions.actions.find((action) =>
-            sameId(action.eventId, binding.eventId),
-          )
-        : undefined
-      : event === "row_action"
-        ? contract.rowBehaviours.rowActions.find((action) =>
-            sameId(action.eventId, binding.eventId),
-          )
-        : undefined;
-  if (event === "bulk_action" && !contract.features.bulkActions.enabled)
-    return recordsTableRequestRefusal(event, "feature_off");
-  if ((event === "bulk_action" || event === "row_action") && command === undefined)
+    event === "row_action"
+      ? contract.rowBehaviours.rowActions.find((action) => sameId(action.eventId, binding.eventId))
+      : undefined;
+  if (event === "row_action" && command === undefined)
     return recordsTableRequestRefusal(event, "command_not_declared");
   if (
     event === "row_clicked" &&
@@ -117,13 +109,7 @@ export const recordsTableBindingRefusal = async (
   if (query?.recordType.state !== "resolved")
     return recordsTableRequestRefusal("contract", "query_not_installed");
   const recordTypeId = query.recordType.recordTypeId;
-  const candidates = event === "bulk_action" ? inputs.record_ids : [inputs.record_id];
-  if (
-    !Array.isArray(candidates) ||
-    candidates.length === 0 ||
-    candidates.length > contract.pageSize
-  )
-    return recordsTableRequestRefusal(event, "record_selection_invalid");
+  const candidates = [inputs.record_id];
   const recordIds: string[] = [];
   for (const candidate of candidates) {
     // A selected-record read carries the existing typed reference input; ordinary row gestures
@@ -141,7 +127,7 @@ export const recordsTableBindingRefusal = async (
     recordIds.push(parsed.data);
   }
   const revision = inputs.revision;
-  if (revision !== undefined && (event === "bulk_action" || typeof revision !== "number"))
+  if (revision !== undefined && typeof revision !== "number")
     return recordsTableRequestRefusal(event, "revision_invalid");
   const read = await run(async (transaction) => {
     const rows = await transaction.query<{
@@ -167,13 +153,8 @@ export const recordsTableBindingRefusal = async (
       )
         return recordsTableRequestRefusal(event, "command_not_permitted");
       if (event === "inline_edit") {
-        const projection = projectRecordsTableFeatures(
-          contract,
-          contract.columns.map((column) => column.field),
-          [row],
-          undefined,
-        );
-        if (!projection?.inlineEdit?.fields.some((field) => sameId(field, inputs.field as string)))
+        const editable = recordsTableEditableFields(contract, [row]);
+        if (!editable.some((field) => sameId(field, inputs.field as string)))
           return recordsTableRequestRefusal(event, "field_not_permitted");
       }
     }

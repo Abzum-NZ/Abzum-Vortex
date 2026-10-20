@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type MouseEvent, type ReactElement, type ReactNode } from "react";
-import type { RecordsTableColumnContract } from "@vortex/platform/schema";
+import type { RecordsTableColumnContract, RecordsTableDensity } from "@vortex/platform/schema";
 import { Card } from "../components/card";
 import { cn } from "../lib/utils";
 import type { DisplayRow } from "./projected-data";
@@ -10,6 +10,7 @@ import { useRowEntrance } from "./row-entrance";
 import type { RowExpansionControls } from "./row-expansion";
 import { RowExpansionToggle } from "./row-expansion-toggle";
 import type { GridColumn } from "./table-layout";
+import { CARD_SPACING } from "./table-geometry";
 
 const PRIORITY_ORDER: Readonly<Record<RecordsTableColumnContract["priority"], number>> = {
   essential: 0,
@@ -31,7 +32,7 @@ export type CardRenderers = Readonly<{
 }>;
 
 /**
- * The Records table on a phone: one card per record of the same page, built from the columns the
+ * The List preset and phone cards: one card per record of the same page, built from the columns the
  * page carries. The first shown column is the card's heading; the others follow as labelled values,
  * essential and high priority first. A card opens through the same declared row click, and its
  * selection and row commands send the same events as the grid's. A card that expands shows its
@@ -48,6 +49,7 @@ export function RecordsCards({
   renderers,
   expansion,
   fill,
+  density,
 }: Readonly<{
   accessibleName: string;
   columns: readonly GridColumn[];
@@ -60,6 +62,7 @@ export function RecordsCards({
   /** Cards expand to a panel of related records; undefined when no projected feature draws one. */
   expansion: RowExpansionControls | undefined;
   fill: boolean;
+  density: RecordsTableDensity;
 }>): ReactElement {
   const [heading, ...rest] = columns;
   const details = rest
@@ -142,10 +145,17 @@ export function RecordsCards({
               activate(row.recordId);
             }}
           >
-            <Card size="sm" className={cn("gap-2 p-3", selected && "ring-2 ring-primary")}>
+            <Card
+              size="sm"
+              className={cn(CARD_SPACING[density], selected && "ring-2 ring-primary")}
+            >
               <div className="flex min-w-0 items-center gap-2">
                 {selectable ? renderers.select(row, selected) : null}
-                <h3 id={headingId} className="m-0 min-w-0 flex-1 truncate text-sm font-medium">
+                <h3
+                  id={headingId}
+                  data-vortex-field-key={heading?.key}
+                  className="m-0 min-w-0 flex-1 truncate text-sm font-medium"
+                >
                   {activateRow === undefined || heading === undefined ? (
                     heading === undefined ? null : (
                       renderers.value(row, heading)
@@ -176,7 +186,10 @@ export function RecordsCards({
                   {details.map((column) => (
                     <div key={column.key} className="contents">
                       <dt className="truncate text-muted-foreground">{column.label}</dt>
-                      <dd className="m-0 min-w-0 truncate text-end">
+                      <dd
+                        data-vortex-field-key={column.key}
+                        className="m-0 min-w-0 truncate text-end"
+                      >
                         {renderers.value(row, column)}
                       </dd>
                     </div>

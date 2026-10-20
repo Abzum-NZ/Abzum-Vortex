@@ -3,6 +3,11 @@ import {
   recordsTableBulkActionsFeature,
   type RecordsTableBulkActionsSettings,
 } from "./bulk-actions";
+
+export {
+  recordsTableBulkActionRecordLimit,
+  type RecordsTableBulkActionContract,
+} from "./bulk-actions";
 import {
   recordsTableColumnFiltersFeature,
   type RecordsTableColumnFiltersSettings,
@@ -211,20 +216,33 @@ export const checkRecordsTableFeature = (
   key: RecordsTableFeatureKey,
   state: RecordsTableFeatureState<object>,
   facts: RecordsTableQueryFacts,
+  presentation: "grid" | "cards",
   features: RecordsTableFeatures,
-): RecordsTableFeatureCheck =>
+): RecordsTableFeatureCheck => {
+  if (presentation === "cards" && key === "inline_edit")
+    return featureNotPossible(
+      "definition_records_table_inline_edit",
+      "Inline editing needs the Table preset. Open a record to edit it from a List.",
+    );
+  if (presentation === "cards" && key === "pinning")
+    return featureNotPossible(
+      "definition_records_table_pinning",
+      "Column pinning needs the Table preset. Lists have no scrolling columns.",
+    );
   // A row opens one panel: its related records or the records beneath it, never both.
-  key === "tree" && state.enabled && features.masterDetail.enabled
-    ? featureNotPossible(
-        "definition_records_table_tree",
-        "A row shows either its related records or the records beneath it; turn Related records off to use a tree.",
-      )
-    : (registry[key].definition as RecordsTableFeatureDefinition<object>).check(state, facts);
+  if (key === "tree" && state.enabled && features.masterDetail.enabled)
+    return featureNotPossible(
+      "definition_records_table_tree",
+      "A row shows either its related records or the records beneath it; turn Related records off to use a tree.",
+    );
+  return (registry[key].definition as RecordsTableFeatureDefinition<object>).check(state, facts);
+};
 
 /** Every feature's state and check, in Studio's order. */
 export const checkRecordsTableFeatures = (
   features: RecordsTableFeatures,
   facts: RecordsTableQueryFacts,
+  presentation: "grid" | "cards",
 ): readonly Readonly<{
   key: RecordsTableFeatureKey;
   enabled: boolean;
@@ -235,14 +253,13 @@ export const checkRecordsTableFeatures = (
     return {
       key,
       enabled: state.enabled,
-      check: checkRecordsTableFeature(key, state, facts, features),
+      check: checkRecordsTableFeature(key, state, facts, presentation, features),
     };
   });
 
 const featureEvents: Readonly<Record<string, RecordsTableFeatureKey>> = {
   search_changed: "search",
   filter_changed: "column_filters",
-  bulk_action: "bulk_actions",
   inline_edit: "inline_edit",
 };
 

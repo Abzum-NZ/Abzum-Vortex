@@ -263,6 +263,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "store_applications_region",
                     "title": "Applications",
                     "row_click": {
@@ -291,7 +292,7 @@
                       {
                         "field": "vortex.app_store:store_application.records_processed",
                         "label": "Records processed",
-                        "visible": false,
+                        "visible": true,
                         "pin": "unpinned"
                       },
                       {

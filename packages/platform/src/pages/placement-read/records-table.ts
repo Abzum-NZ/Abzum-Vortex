@@ -220,5 +220,30 @@ export const readRecordsTable = async (
     );
     data[placementId] = { status: "refused", reason: "not_permitted" };
   } else if (resolved.display.status === "empty") data[placementId] = { status: "empty" };
-  else data[placementId] = { status: "ready", values: resolved.display.values };
+  else {
+    const values = resolved.display.values;
+    // Bulk actions may run over every matching record: the read seals what it matched (release,
+    // resolved inputs and query state minus the page) for this viewer, with no extra read.
+    const seal = read.services.tables.sealSelection;
+    const selectionToken =
+      seal === undefined || values.features?.bulkActions === undefined
+        ? undefined
+        : seal({
+            installationRevision: read.context.applicationReleaseRevision,
+            placementId,
+            moduleRootId: String(bound.module.rootId),
+            queryId: String(bound.query.queryId),
+            inputValues,
+            state: {
+              sort: addressed.state.sort,
+              filters: addressed.state.filters,
+              search: addressed.state.search,
+            },
+            ...(timeZone === undefined ? {} : { timeZone }),
+          });
+    data[placementId] = {
+      status: "ready",
+      values: selectionToken === undefined ? values : { ...values, selectionToken },
+    };
+  }
 };

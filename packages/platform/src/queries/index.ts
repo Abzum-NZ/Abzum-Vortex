@@ -1,12 +1,22 @@
 import "server-only";
 
 export {
+  prepareRecordsExport,
+  recordsCsvFormat,
+  type RecordsExportCell,
+  type RecordsExportPage,
+  type RecordsExportFormat,
+  type RecordsExportOutcome,
+} from "./export-records";
+
+export {
   protectedQueryCommandSchema,
   protectedQueryBoardColumnSchema,
   protectedQueryBoardSelectorSchema,
   protectedQueryBoardMembersCommandSchema,
   protectedQueryGroupValueSchema,
   protectedQueryGroupSelectorSchema,
+  protectedQueryGroupingSchema,
   protectedQueryGroupedMembersCommandSchema,
   protectedQueryGroupedMembersCompletedSchema,
   protectedQueryGroupedMembersResultSchema,
@@ -53,6 +63,7 @@ export {
   type ProtectedQueryRowActionKind,
   type ProtectedQueryRefusalReasonCode,
   type ProtectedQueryRefusal,
+  type ProtectedQueryFieldBounds,
   type ProtectedQueryPage,
   type ProtectedQueryResult,
   type ProtectedQuerySummaryCommand,

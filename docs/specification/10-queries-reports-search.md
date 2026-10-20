@@ -127,7 +127,7 @@ A record type that links to itself (a company's parent company) can show its rec
 
 A one-record link from a record type to itself can never make a record its own ancestor. The record writer, the single place a link is written, refuses a record that would become its own parent or the parent of one of its ancestors, and the save is corrected on the parent field ("Parent company cannot be this company or one of the records beneath it."). The check runs after the writer holds the link's edge locks, so two concurrent re-parentings cannot make a loop between them.
 
-The table's own page lists the **roots**: the records with no parent and the records whose parent the viewer cannot read, so a record never disappears and its unreadable parent is never revealed. Opening a row reads **one page of its children** (one read per open and one per "Show more") through the table's own read, with the viewer's search, filters and sort applied at that level and the table's columns, formatting and field policy. Every child is decided under the viewer's current access like any row of the table; the parent needs no read of its own, because a child whose parent the viewer cannot read is already a root. Every row says in the same read whether the viewer may read a child of it: the whole page is decided at once with a bounded number of statements, never one per row, and the answer counts only children the exact access decision allows. The parent link must be a field every reader of the type is guaranteed to see, so a hidden parent never decides which rows are listed. A row with nothing to open shows no toggle.
+The table's own page lists the **roots**: the records with no parent and the records whose parent the viewer cannot read, so a record never disappears and its unreadable parent is never revealed. Opening a row reads **one page of its children** (one read per open and one per "Show more") through the table's own read, with the viewer's search, filters and sort applied at that level and the table's columns, formatting and field policy. Every child is decided under the viewer's current access like any row of the table; the parent needs no read of its own, because a child whose parent the viewer cannot read is already a root. Every row says in the same read whether the viewer may read a child of it: the whole page is decided at once with a bounded number of statements, never one per row, and the answer counts only children the exact access decision allows. The parent link must be a field every reader of the type is guaranteed to see, so a hidden parent never decides which rows are listed; a viewer who may not see it on every record it may read has no tree, and the table lists its records flat as it does without the feature. Rows the table's query leaves out are not shown, and neither are their children. A row with nothing to open shows no toggle.
 
 The table holds **at most 200 rows at once**, its page and every level opened beneath it; a level that would exceed the budget waits until a branch is closed, and closing a branch gives its rows back. The grid is a tree grid: rows say their level, the toggle is exposed as expanded or collapsed, and the right and left arrow keys open and close the row under the focus. Filters and search narrow each level on its own; they do not walk the ancestors of a matching record.
 
@@ -323,14 +323,27 @@ Current person supplies a record reference to the signed-in viewer's directory p
 
 Grid grouping is state of the Data grid, executed by `run_module_query_summary` and the protected
 `groupedMembers` reader. Query-authored grouping and totals supply defaults; they are not a second
-grid engine. The separate `grouped_data` block converges to a Data grid preset in #3085.
+grid engine. Data grid is the only record-table block. Its List preset renders the same bounded
+record page as cards at every screen size; Table can use those same cards on phones. Presets write
+ordinary grid settings and never select a second query or renderer. The former standalone list
+and grouped-data blocks have been removed; grouped preset authoring follows the grid grouping feature.
 
-The protected readers accept `groupingFieldId` to replace those defaults with one query-selected,
-filterable choice field with at most 50 options. A lifecycle stage uses its canonical choice field
-identity, never its label. Both readers refuse this override unless the field is guaranteed readable
-under the current read plan. The summary retains the 100,000-candidate ceiling and returns a neutral
-`dataset_limit_exceeded` refusal above it. Counts describe the currently read result, independently
-of a later member page.
+The protected readers accept `grouping: { fieldId, limit, dateBucket? }` to replace those defaults
+with one query-selected, filterable dimension. A choice field has at most 50 options; a lifecycle
+stage uses its canonical choice field identity, never its label. A date or date-time field requires
+`dateBucket: { unit, timeZone }`, with a day, week (Monday start), month, quarter or year unit and an
+explicit recognised time zone. Date-only values retain calendar dates. Date-time values bucket the
+stored instant in that zone and return the bucket's start as canonical UTC, independent of session
+time zone or display format. Both readers refuse this override unless the field is guaranteed
+readable under the current read plan.
+
+The authored `limit` is 1–200 groups. A summary returns only that page of groups, ordered by its
+canonical JSON group key. `nextGroupKey` is the last visible key when more groups exist and null
+otherwise; the next request supplies it as `groupAfter`. Each page rechecks current access and
+recomputes counts over the complete filtered set. `totalRowCount` and aggregate totals do not shrink
+to the visible group page. The summary retains the 100,000-candidate ceiling and returns a neutral
+`dataset_limit_exceeded` refusal above it. Counts describe the currently readable result,
+independently of a later member page.
 
 Summary and member requests carry the same resolved query inputs, narrowing filter and search.
 Search matches only the current readable scalar or choice-array values of fields the record type
@@ -340,12 +353,18 @@ before it reads records. It does not derive counts from a loaded member page.
 
 Generic member pages take the ordinary ordered sort contract and forward/backward keysets. They
 carry at most 200 records, with only the requested field projection. Choice grouping narrows the
-candidate scan by its stored key only after guaranteed readability is established, then rechecks
-membership from the current readable record. JSON null denotes the unassigned group; a missing or
+candidate scan by its stored key; date grouping uses typed half-open calendar ranges. Instant
+grouping widens the index range around the bucket boundaries and applies exact authored-zone
+bucket equality before the candidate page limit, so repeated local midnight retains both
+occurrences (including 23/25-hour DST days). These predicates apply only after guaranteed
+readability is established, then membership is rechecked by the same canonical bucket operation
+on the current readable record. A noncanonical bucket start is refused. JSON null denotes the unassigned group; a missing or
 withheld value never establishes generic group membership. Continuations bind the actor, scope,
-release, query, resolved inputs, exact selector, grouping field, sort, filters, search, projection,
+release, query, resolved inputs, exact selector, grouping dimension/bucket/zone/cap, sort, filters, search, projection,
 page size and direction. Member reads remain uncached.
 
-These reader capabilities are the execution foundation of #3027. The grid feature gate, Studio
+These reader capabilities are the execution foundation of #3027 and the date/group-cap part of
+#3032. Link dimensions still require permitted batched titles and neutral unreadable-target groups;
+they are refused as grid overrides until that support lands. The grid feature gate, Studio
 controls, single URL codec, group headers and active-group interactions are supplied by that
 feature's UI/runtime integration, rather than inferred by the query readers.

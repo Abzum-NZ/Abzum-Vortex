@@ -71,6 +71,7 @@ export function StudioGridFeatures({
   idPrefix,
   property,
   value,
+  presentation,
   query,
   compiledFields,
   choices,
@@ -83,6 +84,7 @@ export function StudioGridFeatures({
   property: Extract<BlockPropertySchemaContract, { kind: "group" }>;
   /** The authored features group; unset uses the catalogue default (every feature off). */
   value: SourceBlockPropertyValueContract | undefined;
+  presentation: "grid" | "cards";
   /** The query the table reads, or undefined until one is chosen. */
   query: StudioQueryChoice | undefined;
   /** The saved draft's compiled fields of the record type the query reads; undefined before a save. */
@@ -177,6 +179,7 @@ export function StudioGridFeatures({
                   key,
                   recordsTableFeatureState(features, key),
                   facts,
+                  presentation,
                   features,
                 );
           const switchId = `${idPrefix}-${ownId}-${key}`;
@@ -269,10 +272,19 @@ export function StudioGridFeatures({
                           )}
                           values={settingValues}
                           choices={
-                            own?.choices ??
-                            (editor.offers === undefined
-                              ? choices
-                              : { ...choices, fields: choices.fields.filter(editor.offers) })
+                            own?.choices ?? {
+                              ...choices,
+                              ...(editor.offers === undefined
+                                ? {}
+                                : { fields: choices.fields.filter(editor.offers) }),
+                              ...(editor.boundRecordTypeActions === undefined
+                                ? {}
+                                : {
+                                    actions: choices.actions.filter(
+                                      (action) => action.recordType === query?.recordType,
+                                    ),
+                                  }),
+                            }
                           }
                           disabled={disabled}
                           onChange={(next) =>

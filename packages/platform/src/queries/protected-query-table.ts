@@ -167,6 +167,7 @@ export const runCommand = async (
     let nextAnchor: z.infer<typeof pageAnchorSchema> | null = null;
     let oppositeAnchor: z.infer<typeof pageAnchorSchema> | null = null;
     let releaseVersion: string | undefined;
+    let fieldBounds: ProtectedQueryPage["fieldBounds"] | undefined;
     for (let call = 0; call < (command.exactRecordId === undefined ? 4 : 1); call += 1) {
       const page = await readPage(
         transaction,
@@ -177,6 +178,8 @@ export const runCommand = async (
       );
       if (page.outcome === "refused") return refusal(page.reasonCode);
       releaseVersion = page.moduleReleaseVersion;
+      // Every call of one request reads under the same authority; the first decides the bound.
+      fieldBounds ??= page.fieldBounds;
       if (oppositeAnchor === null) oppositeAnchor = page.opposite;
       rows = direction === "forward" ? [...rows, ...page.rows] : [...page.rows, ...rows];
       nextAnchor = page.next;
@@ -194,7 +197,8 @@ export const runCommand = async (
         ...nextAnchor,
       };
     }
-    if (releaseVersion === undefined) throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+    if (releaseVersion === undefined || fieldBounds === undefined)
+      throw new Error("PROTECTED_QUERY_RESULT_INVALID");
     if (rows.length < command.pageSize && nextAnchor !== null)
       return refusal("dataset_limit_exceeded");
     // Only the declared system values may appear; a row carrying any other is a
@@ -251,6 +255,7 @@ export const runCommand = async (
       moduleReleaseVersion: releaseVersion,
       queryId: command.queryId,
       rows,
+      fieldBounds,
       ...(next === undefined ? {} : { nextContinuationToken: next }),
       ...(previous === undefined ? {} : { previousContinuationToken: previous }),
     };

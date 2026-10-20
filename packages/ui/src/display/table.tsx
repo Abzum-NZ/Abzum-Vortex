@@ -1,6 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from "react";
 import {
   readRecordsTableContract,
   type RecordsTableActionContract,
@@ -30,11 +39,13 @@ import type {
   TablePayload,
 } from "./projected-data";
 import { useRowExpansion } from "./row-expansion";
-import { RecordsCards, type CardRenderers } from "./table-cards";
+import type { CardRenderers } from "./table-cards";
 import { columnWidth, useTablePresentation } from "./table-geometry";
 import { RecordsGrid, type GridRenderers } from "./table-grid";
 import { useGridLayout, type GridColumn } from "./table-layout";
 import { TableLoadingState, useLoadingReveal } from "./table-loading";
+
+const RecordsCards = lazy(async () => ({ default: (await import("./table-cards")).RecordsCards }));
 
 /** Field identities compare without regard to case, as the Query engine keys them. */
 const sameFieldKey = (left: string, right: string): boolean =>
@@ -113,8 +124,9 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     events,
   } = resolveDisplayContext<TablePayload>(
     props,
-    // A narrowed page or a later page that matched nothing keeps its controls and columns.
-    (table) => table.rows.length === 0 && !narrowed(table.narrowing) && (table.page ?? 1) <= 1,
+    // A completed read carries current feature bounds even with no rows. Keep its controls so
+    // empty queries offer the same permitted features as populated queries.
+    () => false,
     "No records to show",
   );
   // Publication refuses a Records table without its contract, so a missing one is a definition
@@ -157,6 +169,19 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     contract !== undefined &&
     features?.bulkActions !== undefined;
   const selectedRecordIds = values?.selectedRecordIds ?? [];
+  // The selection beyond the page: the read's sealed descriptor and what the page runtime holds.
+  const selectionToken = values?.selectionToken;
+  const selectionScope = values?.selectionScope;
+  const bulkRun = values?.bulkRun;
+  const selectionParts = useMemo(
+    () => ({
+      ...(selectionToken === undefined ? {} : { selectionToken }),
+      ...(selectionScope === undefined ? {} : { selectionScope }),
+      ...(bulkRun === undefined ? {} : { bulkRun }),
+    }),
+    [selectionToken, selectionScope, bulkRun],
+  );
+  const paged = values?.hasNextPage === true || values?.hasPreviousPage === true;
   const narrowing = values?.narrowing;
   const [message, announce] = useAnnouncer();
   const [clearCount, setClearCount] = useState(0);
@@ -175,6 +200,8 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
             columns: layout.shown,
             rows,
             selectedRecordIds,
+            selection: selectionParts,
+            paged,
             narrowing,
             events,
           },
@@ -186,6 +213,8 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
       layout.shown,
       rows,
       selectedRecordIds,
+      selectionParts,
+      paged,
       narrowing,
       events,
     ],
@@ -297,12 +326,16 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   const allSelected =
     pageRecordIds.length > 0 &&
     pageRecordIds.every((recordId) => selectedRecordIds.includes(recordId));
+  // Some but not all rows of the page selected: the header checkbox shows the mixed state.
+  const someSelected =
+    !allSelected && pageRecordIds.some((recordId) => selectedRecordIds.includes(recordId));
   const gridRenderers = useMemo(
     (): GridRenderers => ({
       ...renderers,
       selectAll: () => (
         <SelectAllControl
           allSelected={allSelected}
+          someSelected={someSelected}
           recordIds={pageRecordIds}
           accessibleName={accessibleName}
           events={events}
@@ -310,7 +343,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
       ),
     }),
     // The page's record identities are part of `allSelected` and the rows' own identity.
-    [renderers, allSelected, pageRecordIds.join("\u0000"), accessibleName, events],
+    [renderers, allSelected, someSelected, pageRecordIds.join("\u0000"), accessibleName, events],
   );
 
   // Announcements: a new order or page of rows, and the selection count.
@@ -398,7 +431,9 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         accessibleName={accessibleName}
         featureItems={state.status === "empty" ? null : gridFeatures.toolbarItems()}
         selectionBanner={
-          layoutControls !== undefined && selectable ? gridFeatures.selectionBanner() : null
+          selectable && (layoutControls !== undefined || bulkRun !== undefined)
+            ? gridFeatures.selectionBanner()
+            : null
         }
         layoutControls={layoutControls}
         fullScreen={allowFullScreen ? fullScreen : undefined}
@@ -415,6 +450,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     <TableLoadingState
       accessibleName={accessibleName}
       contract={contract}
+      density={layout.density}
       presentation={presentation ?? "grid"}
       selectionColumn={selectable}
       actionsColumn={showActions}
@@ -462,7 +498,9 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
             <EmptyTitle>
               {narrowed(narrowing)
                 ? "No records match the search or filters"
-                : "No records on this page"}
+                : (values.page ?? 1) > 1
+                  ? "No records on this page"
+                  : emptyMessage}
             </EmptyTitle>
           </EmptyHeader>
           {!narrowed(narrowing) ? null : (
@@ -478,18 +516,21 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     // skeleton stands in until the one presentation that fits is known.
     if (presentation === undefined) return loading;
     return presentation === "cards" ? (
-      <RecordsCards
-        accessibleName={accessibleName}
-        columns={layout.shown}
-        rows={rows}
-        selectedRecordIds={selectedRecordIds}
-        selectable={selectable}
-        showActions={showActions}
-        activateRow={activateRow}
-        renderers={renderers}
-        expansion={expansion}
-        fill={fullScreen.active}
-      />
+      <Suspense fallback={loading}>
+        <RecordsCards
+          accessibleName={accessibleName}
+          columns={layout.shown}
+          rows={rows}
+          selectedRecordIds={selectedRecordIds}
+          selectable={selectable}
+          showActions={showActions}
+          activateRow={activateRow}
+          renderers={renderers}
+          expansion={expansion}
+          fill={fullScreen.active}
+          density={layout.density}
+        />
+      </Suspense>
     ) : (
       <RecordsGrid
         accessibleName={accessibleName}
@@ -517,6 +558,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
       data-vortex-display="table"
       data-vortex-placement-id={placementId}
       data-vortex-table-density={layout.density}
+      data-vortex-table-presentation={presentation}
       {...(fullScreen.active ? { "data-vortex-full-screen": "" } : {})}
       className={cn(fullScreen.active && FULL_SCREEN_CLASS)}
       {...(revealed ? { "data-vortex-display-revealed": "" } : {})}

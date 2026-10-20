@@ -245,7 +245,10 @@ export type GridToolbarProps = Readonly<{
   accessibleName: string;
   /** What the projected grid features draw first: search, filter chips, the view switcher. */
   featureItems: ReactNode;
-  /** The bulk commands over the selection, when the projection offers them. */
+  /**
+   * The bulk actions over the selection and the selection band, when the projection offers them;
+   * the band takes a row of its own below the toolbar.
+   */
   selectionBanner: ReactNode;
   /** The layout controls (density, columns) show when the page has rows to arrange. */
   layoutControls: (ColumnChoicesProps & Readonly<{ layout: GridLayoutControls }>) | undefined;
@@ -404,12 +407,8 @@ export function GridToolbar({
   return (
     <div className="mb-2 flex shrink-0 flex-wrap items-end gap-2">
       {featureItems}
-      {selectionBanner === null && own === null ? null : (
-        <div className="ms-auto flex flex-wrap items-center gap-2">
-          {selectionBanner}
-          {own}
-        </div>
-      )}
+      {selectionBanner}
+      {own === null ? null : <div className="ms-auto flex flex-wrap items-center gap-2">{own}</div>}
     </div>
   );
 }

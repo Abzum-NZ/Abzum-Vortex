@@ -37,6 +37,7 @@ import {
   type PublishedRecordTitles,
 } from "./published-control-data";
 import { usePageParameters } from "./use-page-parameters";
+import { useBulkSelection } from "./use-bulk-selection";
 import { requestRecordChoices } from "./record-choices";
 
 export function useRuntimeInputs({
@@ -207,6 +208,8 @@ export function useRuntimeInputs({
     refreshPlacements,
     setSelection,
   });
+  // Bulk actions: every matching record of a table, and the runs over a selection.
+  const bulk = useBulkSelection({ model, navigationKey, setSelection, refreshPlacements });
   const titles = useRef<{ scope: string; values: PublishedRecordTitles }>({
     scope: navigationKey,
     values: new Map(),
@@ -277,7 +280,7 @@ export function useRuntimeInputs({
               return;
             await onOpenApplication(event);
           };
-        for (const kind of ["row_clicked", "row_action", "bulk_action", "inline_edit"] as const)
+        for (const kind of ["row_clicked", "row_action", "inline_edit"] as const)
           if (
             supportsEvent(kind) &&
             (kind !== "row_action" ||
@@ -364,9 +367,21 @@ export function useRuntimeInputs({
           events.refresh = () => {
             void refreshPlacements([placementId]);
           };
+        // A table's bulk actions run named actions on the server over its selection, never a flow.
+        if (
+          tableData?.features?.bulkActions !== undefined &&
+          supportsEvent("bulk_action") &&
+          supportsEvent("selection_changed")
+        )
+          Object.assign(events, bulk.eventsFor(placementId, tableData, selection[placementId]));
         if (supportsEvent("selection_changed"))
           events.selection_changed = (event: DisplaySemanticEvent) => {
             if (event.event !== "selection_changed") return;
+            if (
+              tableData !== undefined &&
+              bulk.toggleMatching(placementId, tableData, event.recordId, event.selected)
+            )
+              return;
             setSelection((current) => {
               const held = new Set(current[placementId] ?? []);
               if (event.selected) held.add(event.recordId);
@@ -602,6 +617,14 @@ export function useRuntimeInputs({
       }
       const held = selection[placementId];
       const ready = (data ?? {}) as { status?: string; values?: Record<string, unknown> };
+      const shownTable = ready.status === "ready" ? tablePayloadFor(data) : undefined;
+      const tableValues =
+        shownTable === undefined || ready.values === undefined
+          ? undefined
+          : ((values: Record<string, unknown>) =>
+              bulk.decorate(placementId, shownTable, values) ?? values)(
+              held === undefined ? ready.values : { ...ready.values, selectedRecordIds: held },
+            );
       const pins =
         ready.status === "ready"
           ? ready.values?.kind === "application_page_link_tiles"
@@ -617,8 +640,8 @@ export function useRuntimeInputs({
         data:
           activeChoicePages[placementId] !== undefined
             ? { status: "ready", values: activeChoicePages[placementId] }
-            : ready.status === "ready" && ready.values?.kind === "table" && held !== undefined
-              ? { ...ready, values: { ...ready.values, selectedRecordIds: held } }
+            : tableValues !== undefined
+              ? { ...ready, values: tableValues }
               : data,
         events,
         ...(pins?.success !== true || !pinFrame.success
@@ -831,6 +854,7 @@ export function useRuntimeInputs({
     unsavedWork,
     continueBoardColumn,
     continueTablePage,
+    bulk,
   ]);
 
   runtimeInputsRef.current = runtimeInputs;

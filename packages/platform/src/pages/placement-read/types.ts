@@ -15,6 +15,7 @@ import type { RecordsTablePageRequest } from "../records-table-state";
 import type { StoredGridView } from "../grid-views";
 import type { PageSubjectReadResult } from "../page-subject-read";
 import type { QueryBindingContext } from "../query-binding-resolver";
+import type { RecordsSelectionSealer } from "../records-selection-seal";
 import type {
   AddressParameters,
   IdentitySession,
@@ -52,7 +53,12 @@ export type PlacementReadServices = Readonly<{
   queries: ReturnType<typeof createProtectedQueryService>;
   linkTiles: ReturnType<typeof createLinkTilesQueryResolver>;
   queryNotices: ReturnType<typeof createQueryNoticeQueryResolver>;
-  tables: ReturnType<typeof createRecordsTableQueryResolver>;
+  /**
+   * The Records table reader. `sealSelection` seals a read's "every matching record" descriptor for
+   * the viewer; a host where nothing runs over a selection leaves it out.
+   */
+  tables: ReturnType<typeof createRecordsTableQueryResolver> &
+    Readonly<{ sealSelection?: RecordsSelectionSealer }>;
   resolveRecordLinks: RecordLinkResolver;
   readCalendarSettings: () => Promise<
     HumanOrganizationRequestResult<{

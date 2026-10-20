@@ -44,6 +44,7 @@ import {
 import {
   conditionalFormattingFieldIds,
   logRecordsTableRequestRefusal,
+  recordsTableNarrowingRefusal,
   recordsTableRequestRefusal,
   type ConditionalFormattingContext,
   type RecordsTableRequestRefusal,
@@ -494,10 +495,21 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         );
         return refused;
       }
-      const result =
+      let result: HumanOrganizationRequestResult<
+        ProtectedQueryResult | ProtectedQueryTreeLevelResult
+      > =
         treeCommand === undefined
           ? await runner.run(session, selection, built.command)
           : await runner.treeLevel(session, selection, treeCommand.data);
+      // A viewer who may not see the parent link on every record it may read has no tree: the
+      // table lists its records flat, as a table without the feature does.
+      if (
+        tree?.parentRecordId === null &&
+        result.kind === "available" &&
+        result.value.outcome === "refused" &&
+        result.value.reasonCode === "field_unbounded"
+      )
+        result = await runner.run(session, selection, built.command);
       if (result.kind === "temporarily_unavailable") return unavailableResult;
       if (result.kind !== "available") return refused;
       if (result.value.outcome === "refused")
@@ -550,11 +562,19 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
           ...(request.formatting === undefined ? {} : { formatting: request.formatting }),
         },
         result.value.rows,
-        // A later page, or a narrowed first page, keeps its columns when nothing matched, so the
-        // viewer can page back or change the search and filters that matched nothing.
-        page > 1 || built.narrowing.search !== null || built.narrowing.filters.length > 0,
+        result.value.fieldBounds,
       );
       if (projected === undefined) return refused;
+      // The projection that draws the controls also decides whether this read's own search and
+      // filters were the viewer's to use; a refused read returns none of its rows.
+      const narrowingRefusal = recordsTableNarrowingRefusal(
+        projected.status === "ready" ? projected.values.features : undefined,
+        built.narrowing,
+      );
+      if (narrowingRefusal !== undefined) {
+        logRecordsTableRequestRefusal(narrowingRefusal, "table_read");
+        return refused;
+      }
       const nextContinuationToken = result.value.nextContinuationToken;
       const previousContinuationToken = result.value.previousContinuationToken;
       const display: ProjectedComponentData<ProjectedTableValues> =
