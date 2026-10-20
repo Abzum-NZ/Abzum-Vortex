@@ -1040,37 +1040,53 @@
       ],
       "tasks": [
         {
-          "id": "large_discount",
+          "id": "discount_present",
           "type": "if",
           "condition": {
-            "op": "gt",
-            "left": {
+            "op": "is_not_empty",
+            "arg": {
               "op": "reference",
               "reference": {
                 "source": "trigger_record",
                 "field": "discount_percent"
               }
-            },
-            "right": {
-              "op": "literal",
-              "type": "decimal_number",
-              "value": "15"
             }
           },
           "then": [
             {
-              "id": "large_discount_review",
-              "type": "rule.warn",
-              "version": "1.0.0",
-              "properties": {
-                "message": {
-                  "kind": "literal",
-                  "literal": {
-                    "type": "text",
-                    "value": "A discount above 15 percent needs review before the opportunity is saved."
+              "id": "large_discount",
+              "type": "if",
+              "condition": {
+                "op": "gt",
+                "left": {
+                  "op": "reference",
+                  "reference": {
+                    "source": "trigger_record",
+                    "field": "discount_percent"
+                  }
+                },
+                "right": {
+                  "op": "literal",
+                  "type": "decimal_number",
+                  "value": "15"
+                }
+              },
+              "then": [
+                {
+                  "id": "large_discount_review",
+                  "type": "rule.warn",
+                  "version": "1.0.0",
+                  "properties": {
+                    "message": {
+                      "kind": "literal",
+                      "literal": {
+                        "type": "text",
+                        "value": "A discount above 15 percent needs review before the opportunity is saved."
+                      }
+                    }
                   }
                 }
-              }
+              ]
             }
           ]
         }

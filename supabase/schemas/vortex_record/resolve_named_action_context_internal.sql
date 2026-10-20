@@ -32,7 +32,6 @@ declare
   event_descriptor jsonb;
   event_descriptors jsonb := '[]'::jsonb;
   task_value jsonb;
-  rules_unsupported boolean := false;
   matched_count integer;
 begin
   if p_action_owner_kind is null
@@ -121,19 +120,6 @@ begin
           from pg_catalog.jsonb_array_elements(permission_keys) as declared(value)
         )
     ), '[]'::jsonb);
-    -- #578: the owning Module release's rules are evaluated by Record
-    -- (`beforeSaveRules`); a rule for the subject in any other release is not.
-    if (binding_value ->> 'moduleRootId')::uuid <>
-        (base_context ->> 'moduleRootId')::uuid
-      and exists (
-        select 1 from pg_catalog.jsonb_array_elements(
-          coalesce(release_content -> 'rules', '[]'::jsonb)
-        ) as item(value)
-        where pg_catalog.lower(item.value ->> 'subjectRecordTypeId') =
-          pg_catalog.lower(p_record_type_id::text)
-      ) then
-      rules_unsupported := true;
-    end if;
   end loop;
 
   select release.record_content into strict application_content
@@ -157,16 +143,6 @@ begin
         from pg_catalog.jsonb_array_elements(permission_keys) as declared(value)
       )
   ), '[]'::jsonb);
-  if exists (
-    select 1 from pg_catalog.jsonb_array_elements(
-      coalesce(application_content -> 'rules', '[]'::jsonb)
-    ) as item(value)
-    where pg_catalog.lower(item.value ->> 'subjectRecordTypeId') =
-      pg_catalog.lower(p_record_type_id::text)
-  ) then
-    rules_unsupported := true;
-  end if;
-
   for permission_key in
     select item.value #>> '{}'
     from pg_catalog.jsonb_array_elements(permission_keys) as item(value)
@@ -247,7 +223,6 @@ begin
         and release.release_revision = (base_context ->> 'moduleReleaseRevision')::bigint
     ),
     'eventDescriptors', event_descriptors,
-    'rulesUnsupported', rules_unsupported,
     'declaration', pg_catalog.jsonb_build_object(
       'operationKey', action_content -> 'key',
       'action', pg_catalog.jsonb_build_object(
