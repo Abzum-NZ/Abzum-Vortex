@@ -905,6 +905,7 @@ export const validateFlowTaskPlacement = (
   // An action flow is a transaction flow with no trigger, started only through its binding; every
   // BeforeSave flow shares its run with the other rules and never places an action-flow task.
   const actionFlow = flow.execution === "transaction" && flow.triggers.length === 0;
+  const beforeSave = flow.triggers.some((trigger) => trigger.type === "BeforeSave");
   const visit = (tasks: readonly FlowTask[], path: (string | number)[]) => {
     tasks.forEach((flowTask, index) => {
       const taskPath = [...path, index];
@@ -929,6 +930,14 @@ export const validateFlowTaskPlacement = (
           });
         if (!isFlowControlTask(flowTask)) {
           const registered = flowTask as Extract<FlowTask, { properties: unknown }>;
+          // The save evaluates a BeforeSave flow in memory before anything is written, so a task
+          // that reads, changes or starts something outside the flow cannot run there.
+          if (beforeSave && definition.effect !== "pure")
+            issues.push({
+              path: [...taskPath, "type"],
+              code: "wrong_run_location",
+              message: `${definition.title} acts outside the flow, so a flow that runs before a save cannot place it`,
+            });
           if (registered.version !== definition.version)
             issues.push({
               path: [...taskPath, "version"],

@@ -17,9 +17,6 @@ as $function$
 declare
   meta jsonb;
   loaded jsonb;
-  installation jsonb;
-  application_content jsonb;
-  unsupported boolean := false;
   context_value jsonb;
   preview_installation jsonb;
   preview_bounds jsonb;
@@ -125,38 +122,7 @@ begin
       'outcome', 'refused', 'correlationId', correlation_id_value
     );
   end if;
-  installation := case when preview_installation is null
-    then vortex_definition.read_current_active_installation()
-    else preview_installation end;
-
-  select release.record_content
-  into strict application_content
-  from vortex_definition.runtime_releases as release
-  where release.root_id = (meta -> 'context' ->> 'applicationRootId')::uuid
-    and release.release_revision =
-      (installation ->> 'applicationReleaseRevision')::bigint;
-
-  -- A record type holding a total saves here too: a save of the record itself never moves its
-  -- totals, so a new record starts with totals over no related records and an update keeps them.
-  unsupported := exists (
-    -- #578: Record evaluates the owning Module release's rules (`beforeSaveRules`);
-    -- an Application rule on this record type cannot be evaluated and refuses.
-    select 1
-    from pg_catalog.jsonb_array_elements(
-      coalesce(application_content -> 'rules', '[]'::jsonb)
-    ) as item(value)
-    where pg_catalog.lower(item.value ->> 'subjectRecordTypeId') =
-      pg_catalog.lower(p_record_type_id::text)
-  );
-
-  if unsupported then
-    return pg_catalog.jsonb_build_object(
-      'outcome', 'unsupported',
-      'correlationId', meta -> 'context' -> 'correlationId'
-    );
-  end if;
-
-  if meta -> 'recordType' ? 'systemProjection' then
+    if meta -> 'recordType' ? 'systemProjection' then
     if p_operation <> 'update'
       or meta #>> '{recordType,key}' <> 'organization_settings'
       or meta #>> '{recordType,systemProjection,protectedView}' <>
@@ -228,7 +194,7 @@ begin
     return pg_catalog.jsonb_build_object(
       'outcome', 'prepared',
       'recordType', meta -> 'recordType',
-      'beforeSaveRules', vortex_record.before_save_rules_for_record_type_internal(
+      'beforeSaveFlows', vortex_record.before_save_flows_for_record_type_internal(
         (meta ->> 'moduleRootId')::uuid,
         (meta ->> 'moduleReleaseRevision')::bigint,
         p_record_type_id
@@ -283,8 +249,8 @@ begin
   return pg_catalog.jsonb_build_object(
     'outcome', 'prepared',
     'recordType', meta -> 'recordType',
-    -- #578: the owning Module release's rules for this record type, evaluated by Record.
-    'beforeSaveRules', vortex_record.before_save_rules_for_record_type_internal(
+    -- The owning Module release's BeforeSave flows for this record type, run by Record.
+    'beforeSaveFlows', vortex_record.before_save_flows_for_record_type_internal(
       (meta ->> 'moduleRootId')::uuid,
       (meta ->> 'moduleReleaseRevision')::bigint,
       p_record_type_id

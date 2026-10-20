@@ -204,14 +204,16 @@ const resolveTriggers = (ctx: Context, source: SourceFlow): unknown[] =>
   source.triggers.map((trigger, index) => {
     const path: Path = ["triggers", index];
     const inputs = resolveDeclarations(ctx, trigger.inputs, [...path, "inputs"]);
-    if (trigger.type === "BeforeSave")
+    if (trigger.type === "BeforeSave") {
+      const recordType = ctx.resolver.recordType(trigger.recordTypeId);
+      // A save reads the BeforeSave flows of the record type's own Module release, so a flow of
+      // another Module could never run.
+      if (recordType.definitionKey !== ctx.resolver.definitionKey)
+        throw refusal(ctx, "vortex.definition.workflow_node_references", "invalid_value");
       return {
         ...trigger,
         inputs,
-        recordTypeId: resolveAt(ctx, ctx.resolver.recordType(trigger.recordTypeId), [
-          ...path,
-          "recordTypeId",
-        ]),
+        recordTypeId: resolveAt(ctx, recordType, [...path, "recordTypeId"]),
         operations: trigger.operations.map((operation, operationIndex) =>
           operation.kind === "transition"
             ? {
@@ -226,6 +228,7 @@ const resolveTriggers = (ctx: Context, source: SourceFlow): unknown[] =>
             : operation,
         ),
       };
+    }
     if (trigger.type === "Event")
       return {
         ...trigger,

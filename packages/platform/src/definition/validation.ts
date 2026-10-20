@@ -1,5 +1,4 @@
 import { applicationCatalogueRuleCodes } from "./application-catalogue-validation";
-import { ruleGraphValidationCodes } from "./rule-graph-validation";
 import type { createContractValueWalker } from "./contract-value-walker";
 import {
   type DefinitionRuleFailure,
@@ -40,7 +39,6 @@ import {
   applicationCatalogueRule,
   publicationContextRule,
   semanticAggregateRule,
-  moduleRuleGraphRule,
   moduleRuleCodes,
   applicationRuleCodes,
   connectionRuleCodes,
@@ -156,15 +154,6 @@ export const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object
     ["compiled_set"],
     "module",
     dependencyRule,
-  ),
-  semanticAggregateRule(
-    "vortex.definition.module_rule_graphs",
-    Object.values(ruleGraphValidationCodes),
-    "publish",
-    ["module"],
-    ["compiled_set"],
-    "rule",
-    moduleRuleGraphRule,
   ),
   semanticAggregateRule(
     "vortex.definition.module_references",

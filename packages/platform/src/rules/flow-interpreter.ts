@@ -85,6 +85,17 @@ export type FlowFailure = Readonly<{
   diagnostic?: FlowRefusalFeedback;
   /** The cause for the server log: names and types only, never a submitted value. */
   reason?: string;
+  /** The authored reason, message and field of the `rule.refuse` task that refused a save. */
+  ruleRefusal?: Readonly<{ reason: string; message: string; field?: string }>;
+}>;
+
+/** What a save rule task reported while a save transaction flow ran, in flow order. */
+export type FlowRuleFeedback = Readonly<{
+  kind: "warn" | "require";
+  taskId: string;
+  message: string;
+  /** The permanent field identity a `rule.require` task requires. */
+  field?: string;
 }>;
 
 export type FlowRuntimeValues = Readonly<Record<string, FlowRuntimeValue>>;
@@ -158,6 +169,10 @@ export type FlowRunState = Readonly<{
    * from a flow.
    */
   triggerRecord?: FlowRuntimeValues;
+  /** The record as stored before a save, keyed by field key, for `trigger.previous.<field>` reads. */
+  previousRecord?: FlowRuntimeValues;
+  /** Warnings and requirements the save rule tasks reported, in the order they ran. */
+  ruleFeedback?: readonly FlowRuleFeedback[];
   activations: readonly Activation[];
   /** Protected operations started so far in this run, across every resume. */
   protectedOperations: number;
@@ -239,6 +254,8 @@ export type FlowRunStart = Readonly<{
   executionKinds?: readonly FlowExecutionKind[];
   /** The record the run acts on, keyed by field key; see `FlowRunState.triggerRecord`. */
   triggerRecord?: FlowRuntimeValues;
+  /** The record as stored before a save; see `FlowRunState.previousRecord`. */
+  previousRecord?: FlowRuntimeValues;
   /**
    * Inputs the host has already verified and typed under its own rules (a named action checks each
    * input against its declaration before the run). When supplied they are the run's inputs as given,
@@ -425,6 +442,8 @@ const scopeOf = (state: FlowRunState, activation: Activation, flow: FlowDefiniti
       // record it acts on. That record is the started flow's own: a flow it runs reads none.
       case "trigger_record":
         return activation.prefix === "" ? state.triggerRecord?.[reference.field] : undefined;
+      case "trigger_previous":
+        return activation.prefix === "" ? state.previousRecord?.[reference.field] : undefined;
       default:
         return undefined;
     }
@@ -852,9 +871,37 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
       });
       return { kind: "continue" };
     }
-    // A transaction flow refuses its record here, as a save rule refuses a save.
-    if (registered.type === "rule.refuse" && flow.execution === "transaction")
-      return failed("task_refused", "refused", taskId);
+    // A save transaction flow reports its warnings and requirements and refuses its record here.
+    if (flow.execution === "transaction" && registered.type.startsWith("rule.")) {
+      const message = properties.message?.value;
+      if (typeof message !== "string") return failed("value_unresolved", "failed", taskId);
+      const field = properties.field?.value;
+      if (field !== undefined && typeof field !== "string")
+        return failed("value_unresolved", "failed", taskId);
+      if (registered.type === "rule.refuse") {
+        const reason = properties.reason?.value;
+        if (typeof reason !== "string") return failed("value_unresolved", "failed", taskId);
+        throw new Failed({
+          outcome: "refused",
+          code: "task_refused",
+          taskId,
+          ruleRefusal: { reason, message, ...(field === undefined ? {} : { field }) },
+        });
+      }
+      if (registered.type === "rule.require" && field === undefined)
+        return failed("value_unresolved", "failed", taskId);
+      machine.state.ruleFeedback = [
+        ...(machine.state.ruleFeedback ?? []),
+        {
+          kind: registered.type === "rule.warn" ? "warn" : "require",
+          taskId,
+          message,
+          ...(field === undefined ? {} : { field }),
+        },
+      ];
+      replaceTop(machine, next);
+      return { kind: "continue" };
+    }
     // Save rules give feedback in the browser and are authoritative in the save transaction.
     return failed("task_not_available", "failed", taskId);
   }
@@ -1080,6 +1127,7 @@ export const startFlowRun = (
     steps: 0,
     pendingIntents: [],
     ...(start.triggerRecord === undefined ? {} : { triggerRecord: start.triggerRecord }),
+    ...(start.previousRecord === undefined ? {} : { previousRecord: start.previousRecord }),
   };
   const machine: Machine = { state: { ...state }, library };
   const flow = library(start.flowId);

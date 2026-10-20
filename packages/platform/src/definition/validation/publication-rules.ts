@@ -10,7 +10,6 @@ import {
   compareDefinitionVersionImpactWithEvidence,
   compareDefinitionVersionImpact,
 } from "../version-impact-definition";
-import { ruleGraphValidationCodes, validateRuleGraph } from "../rule-graph-validation";
 import { validateApplicationSourceCatalogue } from "../application-catalogue-validation";
 import {
   type DefinitionSetValidationContext,
@@ -290,46 +289,6 @@ export function semanticAggregateRule(
     safeLocationFamily,
     run: aggregateRunner,
   };
-}
-
-export function moduleRuleGraphRule(
-  context: DefinitionSetValidationContext,
-): DefinitionRuleFailure[] {
-  const failures: DefinitionRuleFailure[] = [];
-  for (const output of context.outputs) {
-    if (output.kind !== "module") continue;
-    const content = output.canonical.content;
-    const allowedRoots = new Set([
-      output.canonical.envelope.rootId,
-      ...content.dependencies.map((dependency) => dependency.moduleRootId),
-    ]);
-    const availableRecordTypeIds = new Set(
-      allValidationOutputs(context).flatMap((dependency) =>
-        dependency.kind === "module" && allowedRoots.has(dependency.canonical.envelope.rootId)
-          ? dependency.canonical.content.recordTypes.map((record) => String(record.recordTypeId))
-          : [],
-      ),
-    );
-    for (const graph of content.rules) {
-      const subjectRecordType = content.recordTypes.find(
-        (record) => record.recordTypeId === graph.subjectRecordTypeId,
-      );
-      if (!subjectRecordType) {
-        failures.push(
-          failure(output, ruleGraphValidationCodes.references, "broken_reference", {
-            kind: "rule",
-            key: graph.key,
-          }),
-        );
-        continue;
-      }
-      for (const issue of validateRuleGraph({ graph, subjectRecordType, availableRecordTypeIds }))
-        failures.push(
-          failure(output, issue.ruleCode, issue.family, { kind: "rule", key: graph.key }),
-        );
-    }
-  }
-  return failures;
 }
 
 export function applicationCatalogueRule(

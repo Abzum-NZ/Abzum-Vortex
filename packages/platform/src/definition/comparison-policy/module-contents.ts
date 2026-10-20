@@ -991,15 +991,6 @@ export const compareModuleContents = (
   );
   compareKeyed(
     reasons,
-    previous.rules as RecordValue[],
-    candidate.rules as RecordValue[],
-    "ruleId",
-    "rule",
-    (left, right) => compareSimpleComponent(reasons, "rule", right.ruleId, left, right),
-    () => "major",
-  );
-  compareKeyed(
-    reasons,
     previous.flows as RecordValue[],
     candidate.flows as RecordValue[],
     "id",

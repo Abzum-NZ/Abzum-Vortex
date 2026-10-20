@@ -1016,7 +1016,24 @@ begin
   from pg_catalog.jsonb_each(
     compilation_output_value #> '{canonical,content}'
   ) as item(key, value)
-  where item.key in ('recordTypes', 'permissions', 'rules', 'actions', 'events');
+  where item.key in ('recordTypes', 'permissions', 'actions', 'events');
+
+  -- A save runs only the BeforeSave flows, so only those travel with the record content.
+  record_content_value := record_content_value || pg_catalog.jsonb_build_object(
+    'beforeSaveFlows', coalesce((
+      select pg_catalog.jsonb_agg(flow.value order by flow.ordinality)
+      from pg_catalog.jsonb_array_elements(
+        coalesce(compilation_output_value #> '{canonical,content,flows}', '[]'::jsonb)
+      ) with ordinality as flow(value, ordinality)
+      where exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(
+          coalesce(flow.value -> 'triggers', '[]'::jsonb)
+        ) as trigger(value)
+        where trigger.value ->> 'type' = 'BeforeSave'
+      )
+    ), '[]'::jsonb)
+  );
 
   insert into vortex_definition.releases (
     root_id, release_revision, release_version, authored_source,

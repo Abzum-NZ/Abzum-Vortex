@@ -122,11 +122,17 @@ const previewRows = (append: DefinitionReleaseAppend, context: SessionContext) =
               shells: application.shells,
               theme: application.theme,
             },
-      record_content: Object.fromEntries(
-        Object.entries(content).filter(([key]) =>
-          ["recordTypes", "permissions", "rules", "actions", "events"].includes(key),
+      record_content: {
+        ...Object.fromEntries(
+          Object.entries(content).filter(([key]) =>
+            ["recordTypes", "permissions", "actions", "events"].includes(key),
+          ),
         ),
-      ),
+        // A save runs only the BeforeSave flows, so only those travel with the record content.
+        beforeSaveFlows: ("flows" in content ? content.flows : []).filter((flow) =>
+          flow.triggers.some((trigger) => trigger.type === "BeforeSave"),
+        ),
+      },
     },
     dependencies: append.dependencyManifest.map((dependency) => ({
       root_id: draft.rootId,
