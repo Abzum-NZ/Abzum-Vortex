@@ -33,8 +33,8 @@ import {
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
 
 /**
- * The one flow validator. It replaces the free-graph validators (rule graphs,
- * frontend flow routing, workflow reachability and the Kestra compiler's repeats) for the single
+ * The one flow validator. It replaces the free-graph validators (frontend flow
+ * routing, workflow reachability and the Kestra compiler's repeats) for the single
  * flow language. A flow is a nested task list, so scope is the nesting itself: no cycle,
  * dominator or reachability analysis exists here or is needed.
  *
@@ -110,7 +110,10 @@ const placementCodes: Readonly<
 const callCodes = {
   cycle: ["vortex.definition.workflow_child_acyclic", "dependency_cycle"],
   depth_exceeded: ["vortex.definition.workflow_child_depth", "too_many_items"],
-  transaction_calls_non_transaction: ["vortex.definition.workflow_child_reference", "invalid_value"],
+  transaction_calls_non_transaction: [
+    "vortex.definition.workflow_child_reference",
+    "invalid_value",
+  ],
 } as const satisfies Record<
   string,
   readonly [DefinitionCompilerRefusalCode, DefinitionRuleFailureFamily]
@@ -204,6 +207,38 @@ export function validateFlow(
   // ── Structure and limits. ──
   validateStructure(flow, add);
 
+  // A save supplies its current and previous record, with no caller inputs or child-flow host.
+  // Keep unsupported save declarations at publication, rather than skipping them at execution.
+  if (flow.triggers.some((trigger) => trigger.type === "BeforeSave")) {
+    const unsupported = (path: Path, message: string) =>
+      add(path, "vortex.definition.unsupported_workflow_node", "unsupported_choice", message);
+    if (flow.triggers.length !== 1)
+      unsupported(["triggers"], "A flow before a save has exactly one record trigger");
+    for (const name of ["inputs", "variables", "outputs"] as const)
+      if (Object.keys(flow[name]).length > 0)
+        unsupported([name], `A flow before a save cannot declare ${name}`);
+    for (const name of ["errors", "finally"] as const)
+      if (flow[name].length > 0)
+        unsupported([name], `A flow before a save cannot declare ${name} tasks`);
+    if (flow.invocationPermissionId !== undefined)
+      unsupported(
+        ["invocationPermissionId"],
+        "The save checks permission before running its flows",
+      );
+    flow.triggers.forEach((trigger, index) => {
+      if (Object.keys(trigger.inputs).length > 0)
+        unsupported(["triggers", index, "inputs"], "A save trigger supplies only its record");
+      if (trigger.type === "BeforeSave")
+        trigger.operations.forEach((operation, operationIndex) => {
+          if (operation.kind === "transition")
+            unsupported(
+              ["triggers", index, "operations", operationIndex],
+              "A flow before a save runs on create or update; a transition runs through its action",
+            );
+        });
+    });
+  }
+
   // ── Declarations. ──
   const inputTypes = new Map<string, StaticType>();
   const variableTypes = new Map<string, StaticType>();
@@ -260,7 +295,10 @@ export function validateFlow(
     const registered = task as Extract<FlowTask, { properties: unknown }>;
     if (key === "outcome" && registered.allowRefusal === true)
       return { known: true as const, type: "choice" as StaticType };
-    const definition: FlowTaskTypeDefinition | undefined = Object.hasOwn(flowTaskRegistry, task.type)
+    const definition: FlowTaskTypeDefinition | undefined = Object.hasOwn(
+      flowTaskRegistry,
+      task.type,
+    )
       ? flowTaskRegistry[task.type as keyof typeof flowTaskRegistry]
       : undefined;
     // An unregistered type is already refused by the placement check.
@@ -432,7 +470,8 @@ export function validateFlow(
             return memberType as StaticType | undefined;
           }
           if (task.type === "operation.call" && reference.key === "result") {
-            const operation = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties.operation;
+            const operation = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>)
+              .properties.operation;
             const key = operation?.kind === "literal" ? operation.literal.value : undefined;
             const entry = Object.values(PLATFORM_SERVICE_OPERATIONS).find(
               (candidate) => platformOperationKey(candidate.key) === key,
@@ -447,7 +486,8 @@ export function validateFlow(
           }
           const inputs =
             task.type === "interface.show_form"
-              ? (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties.inputs
+              ? (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties
+                  .inputs
               : undefined;
           if (reference.key !== "values" || inputs?.kind !== "map") {
             add(
@@ -524,7 +564,12 @@ export function validateFlow(
     const numericArgs = (args: readonly FlowFormula[], segment: string): StaticType => {
       const types = args.map((arg, index) => {
         const type = child(arg, segment, index);
-        expect(type, (candidate) => numericTypes.has(candidate), [...path, segment, index], "a number");
+        expect(
+          type,
+          (candidate) => numericTypes.has(candidate),
+          [...path, segment, index],
+          "a number",
+        );
         return type;
       });
       return types.includes("money")
@@ -629,11 +674,21 @@ export function validateFlow(
       case "and":
       case "or":
         formula.args.forEach((arg, index) =>
-          expect(child(arg, "args", index), (type) => type === "yes_no", [...path, "args", index], "a yes/no value"),
+          expect(
+            child(arg, "args", index),
+            (type) => type === "yes_no",
+            [...path, "args", index],
+            "a yes/no value",
+          ),
         );
         return "yes_no";
       case "not":
-        expect(child(formula.arg, "arg"), (type) => type === "yes_no", [...path, "arg"], "a yes/no value");
+        expect(
+          child(formula.arg, "arg"),
+          (type) => type === "yes_no",
+          [...path, "arg"],
+          "a yes/no value",
+        );
         return "yes_no";
       case "if": {
         expect(
@@ -644,7 +699,12 @@ export function validateFlow(
         );
         const then = child(formula.then, "then");
         const otherwise = child(formula.else, "else");
-        if (then === undefined || otherwise === undefined || then === "json" || otherwise === "json")
+        if (
+          then === undefined ||
+          otherwise === undefined ||
+          then === "json" ||
+          otherwise === "json"
+        )
           return undefined;
         if (then === otherwise) return then;
         if (numericTypes.has(then) && numericTypes.has(otherwise))
@@ -672,8 +732,18 @@ export function validateFlow(
         return date;
       }
       case "date_diff":
-        expect(child(formula.from, "from"), (type) => dateTypes.has(type), [...path, "from"], "a date or date and time");
-        expect(child(formula.to, "to"), (type) => dateTypes.has(type), [...path, "to"], "a date or date and time");
+        expect(
+          child(formula.from, "from"),
+          (type) => dateTypes.has(type),
+          [...path, "from"],
+          "a date or date and time",
+        );
+        expect(
+          child(formula.to, "to"),
+          (type) => dateTypes.has(type),
+          [...path, "to"],
+          "a date or date and time",
+        );
         return "whole_number";
     }
   };
@@ -723,7 +793,11 @@ export function validateFlow(
     }
     if (actual === undefined) return;
     const literal = value.kind === "literal";
-    if (literal ? accepted.some((expected) => valueTypesCompatible(actual, expected, "value")) : fits(actual, accepted))
+    if (
+      literal
+        ? accepted.some((expected) => valueTypesCompatible(actual, expected, "value"))
+        : fits(actual, accepted)
+    )
       return;
     add(
       path,
@@ -749,7 +823,9 @@ export function validateFlow(
   ) => {
     for (const [name, value] of Object.entries(values)) {
       const declared =
-        target !== undefined && Object.hasOwn(target.inputs, name) ? target.inputs[name] : undefined;
+        target !== undefined && Object.hasOwn(target.inputs, name)
+          ? target.inputs[name]
+          : undefined;
       if (target !== undefined && declared === undefined)
         add(
           [...path, name],
@@ -757,7 +833,10 @@ export function validateFlow(
           "unknown_property",
           `The target flow declares no input named ${name}`,
         );
-      checkValue(value, declared === undefined ? undefined : [declared.type], where, [...path, name]);
+      checkValue(value, declared === undefined ? undefined : [declared.type], where, [
+        ...path,
+        name,
+      ]);
     }
     if (target !== undefined)
       for (const [name, declared] of Object.entries(target.inputs))
@@ -788,7 +867,12 @@ export function validateFlow(
     }
     if (declared.type === "formula") {
       if (value.kind !== "formula")
-        add(path, "vortex.definition.workflow_node_values", "invalid_value", `${name} must be a formula`);
+        add(
+          path,
+          "vortex.definition.workflow_node_values",
+          "invalid_value",
+          `${name} must be a formula`,
+        );
       else formulaType(value.formula, where, [...path, "formula"]);
       return;
     }
@@ -847,10 +931,7 @@ export function validateFlow(
     }
   };
 
-  const checkRecordLinkTask = (
-    task: Extract<FlowTask, { properties: unknown }>,
-    path: Path,
-  ) => {
+  const checkRecordLinkTask = (task: Extract<FlowTask, { properties: unknown }>, path: Path) => {
     const properties = task.properties as Readonly<Record<string, FlowValue>>;
     const recordType = properties.record_type;
     let targetTypeId: string | undefined;
@@ -924,14 +1005,24 @@ export function validateFlow(
         const node = task as Extract<FlowTask, { type: "if" }>;
         const type = formulaType(node.condition, where, [...path, "condition"]);
         if (type !== undefined && type !== "json" && type !== "yes_no")
-          add([...path, "condition"], "vortex.definition.source_type_compatibility", "invalid_value", `A condition must be a yes/no value, found ${type}`);
+          add(
+            [...path, "condition"],
+            "vortex.definition.source_type_compatibility",
+            "invalid_value",
+            `A condition must be a yes/no value, found ${type}`,
+          );
         return;
       }
       case "switch": {
         const node = task as Extract<FlowTask, { type: "switch" }>;
         const type = valueType(node.value, where, [...path, "value"]);
         if (node.value.kind === "map" || node.value.kind === "array")
-          add([...path, "value"], "vortex.definition.source_type_compatibility", "invalid_value", `A switch compares one value, never a ${node.value.kind} of values`);
+          add(
+            [...path, "value"],
+            "vortex.definition.source_type_compatibility",
+            "invalid_value",
+            `A switch compares one value, never a ${node.value.kind} of values`,
+          );
         node.cases.forEach((entry, index) => {
           if (
             type !== undefined &&
@@ -951,9 +1042,19 @@ export function validateFlow(
         const node = task as Extract<FlowTask, { type: "for_each" }>;
         const type = valueType(node.items, where, [...path, "items"]);
         if (node.items.kind === "map")
-          add([...path, "items"], "vortex.definition.source_type_compatibility", "invalid_value", "For each needs a list, found a map of values");
+          add(
+            [...path, "items"],
+            "vortex.definition.source_type_compatibility",
+            "invalid_value",
+            "For each needs a list, found a map of values",
+          );
         else if (type !== undefined && type !== "json" && !listTypes.has(type))
-          add([...path, "items"], "vortex.definition.source_type_compatibility", "invalid_value", `For each needs a list, found ${type}`);
+          add(
+            [...path, "items"],
+            "vortex.definition.source_type_compatibility",
+            "invalid_value",
+            `For each needs a list, found ${type}`,
+          );
         return;
       }
       case "run_flow": {
@@ -1004,7 +1105,11 @@ export function validateFlow(
       const taskPath = [...path, index];
       checkTask(task, taskPath, scope);
       for (const child of flowTaskChildLists(task)) {
-        walk(child.tasks, [...taskPath, ...child.path], task.type === "sequential" ? scope : new Map(scope));
+        walk(
+          child.tasks,
+          [...taskPath, ...child.path],
+          task.type === "sequential" ? scope : new Map(scope),
+        );
       }
       scope.set(task.id, task);
     });
@@ -1030,7 +1135,12 @@ export function validateFlow(
       ["triggers", index, "condition"],
     );
     if (type !== undefined && type !== "json" && type !== "yes_no")
-      add(["triggers", index, "condition"], "vortex.definition.source_type_compatibility", "invalid_value", `A condition must be a yes/no value, found ${type}`);
+      add(
+        ["triggers", index, "condition"],
+        "vortex.definition.source_type_compatibility",
+        "invalid_value",
+        `A condition must be a yes/no value, found ${type}`,
+      );
   });
 
   // Outputs: each value must fit its declared type, and may read every task that surely ran.
@@ -1144,7 +1254,12 @@ const validateStructure = (flow: FlowSource, add: Add) => {
 
   for (const name of Object.keys(flow.variables))
     if (Object.hasOwn(flow.inputs, name))
-      add(["variables", name], source, "duplicate_key", "A variable cannot reuse the name of an input");
+      add(
+        ["variables", name],
+        source,
+        "duplicate_key",
+        "A variable cannot reuse the name of an input",
+      );
 
   // Triggers must fit the execution kind, which the flow has exactly one of.
   if (flow.execution === "interactive" && flow.triggers.length > 0)
@@ -1218,9 +1333,23 @@ const validateStructure = (flow: FlowSource, add: Add) => {
   if (!durable && flow.retry !== undefined)
     add(["retry"], source, "invalid_value", "Retries are allowed only in durable flows");
   if (!durable && flow.timeout !== undefined && flow.timeout.seconds > flowMaximumServerSeconds)
-    add(["timeout", "seconds"], source, "invalid_value", `Only durable flows may time out after more than ${flowMaximumServerSeconds} seconds`);
-  if (flow.concurrency !== undefined && flow.execution !== "durable" && flow.execution !== "background")
-    add(["concurrency"], source, "invalid_value", "Concurrency limits apply only to background and durable flows");
+    add(
+      ["timeout", "seconds"],
+      source,
+      "invalid_value",
+      `Only durable flows may time out after more than ${flowMaximumServerSeconds} seconds`,
+    );
+  if (
+    flow.concurrency !== undefined &&
+    flow.execution !== "durable" &&
+    flow.execution !== "background"
+  )
+    add(
+      ["concurrency"],
+      source,
+      "invalid_value",
+      "Concurrency limits apply only to background and durable flows",
+    );
 
   // Tasks: identity, count, nesting and per-task limits.
   const seen = new Set<string>();
@@ -1231,15 +1360,39 @@ const validateStructure = (flow: FlowSource, add: Add) => {
       const taskPath = [...path, index];
       count += 1;
       if (depth > flowMaximumTaskNestingDepth)
-        add(taskPath, source, "too_many_items", `Tasks cannot nest deeper than ${flowMaximumTaskNestingDepth} levels`);
-      if (seen.has(task.id)) add([...taskPath, "id"], source, "duplicate_key", "Task ids must be unique in a flow");
+        add(
+          taskPath,
+          source,
+          "too_many_items",
+          `Tasks cannot nest deeper than ${flowMaximumTaskNestingDepth} levels`,
+        );
+      if (seen.has(task.id))
+        add([...taskPath, "id"], source, "duplicate_key", "Task ids must be unique in a flow");
       seen.add(task.id);
       if (!durable && task.retry !== undefined)
-        add([...taskPath, "retry"], source, "invalid_value", "Retries are allowed only in durable flows");
+        add(
+          [...taskPath, "retry"],
+          source,
+          "invalid_value",
+          "Retries are allowed only in durable flows",
+        );
       if (!durable && task.timeout !== undefined && task.timeout.seconds > flowMaximumServerSeconds)
-        add([...taskPath, "timeout", "seconds"], source, "invalid_value", `Only durable flows may time out after more than ${flowMaximumServerSeconds} seconds`);
-      if (task.type === "for_each" && (task as { maximumItems: number }).maximumItems > forEachMaximum)
-        add([...taskPath, "maximumItems"], source, "too_many_items", `For each allows at most ${forEachMaximum.toLocaleString("en-NZ")} items in ${durable ? "durable" : "non-durable"} flows`);
+        add(
+          [...taskPath, "timeout", "seconds"],
+          source,
+          "invalid_value",
+          `Only durable flows may time out after more than ${flowMaximumServerSeconds} seconds`,
+        );
+      if (
+        task.type === "for_each" &&
+        (task as { maximumItems: number }).maximumItems > forEachMaximum
+      )
+        add(
+          [...taskPath, "maximumItems"],
+          source,
+          "too_many_items",
+          `For each allows at most ${forEachMaximum.toLocaleString("en-NZ")} items in ${durable ? "durable" : "non-durable"} flows`,
+        );
       for (const child of flowTaskChildLists(task))
         visit(child.tasks, [...taskPath, ...child.path], depth + 1);
     });
@@ -1248,7 +1401,12 @@ const validateStructure = (flow: FlowSource, add: Add) => {
   visit(flow.errors, ["errors"], 1);
   visit(flow.finally, ["finally"], 1);
   if (count > flowMaximumTaskCount)
-    add(["tasks"], source, "too_many_items", `A flow can hold at most ${flowMaximumTaskCount} tasks including nested tasks`);
+    add(
+      ["tasks"],
+      source,
+      "too_many_items",
+      `A flow can hold at most ${flowMaximumTaskCount} tasks including nested tasks`,
+    );
 };
 
 // ─── Flows that call each other ────────────────────────────────────────────────────────────────
@@ -1272,7 +1430,11 @@ export const flowIssueLocation = (
   flowLocation: DefinitionValidationLocation | undefined,
   issue: Pick<FlowValidationIssue, "taskId">,
 ): DefinitionValidationLocation | undefined => {
-  if (flowLocation === undefined || issue.taskId === undefined || flowLocation.segments.length >= 12)
+  if (
+    flowLocation === undefined ||
+    issue.taskId === undefined ||
+    flowLocation.segments.length >= 12
+  )
     return flowLocation;
   return {
     ...flowLocation,

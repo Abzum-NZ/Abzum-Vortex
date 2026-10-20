@@ -1,10 +1,10 @@
 "use client";
-import { useState } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
-import type { FlowLiteral, FlowReference } from "@vortex/platform/schema";
+import type { FlowFormula, FlowLiteral, FlowReference, FlowValue } from "@vortex/platform/schema";
 import {
   StudioOptionControl,
   StudioReferencePicker,
@@ -12,6 +12,9 @@ import {
   studioFixedLiteral,
   studioFixedLiteralType,
   studioFlowReferenceToken,
+  studioFlowValueOf,
+  studioFlowValueSourceOf,
+  studioWords,
   type StudioFlowReferenceChoice,
   type StudioFlowValueSource,
 } from "@vortex/ui/studio";
@@ -23,6 +26,238 @@ import {
  */
 
 type LiteralType = FlowLiteral["type"];
+
+/** Nesting depth of built values: only the outermost set of parts is indented, never stacked. */
+const BuiltDepth = createContext(0);
+
+function BuiltParts({ children }: Readonly<{ children: ReactNode }>) {
+  const depth = useContext(BuiltDepth);
+  return (
+    <BuiltDepth.Provider value={depth + 1}>
+      <div className={depth === 0 ? "space-y-3 border-l pl-3" : "space-y-3"}>{children}</div>
+    </BuiltDepth.Provider>
+  );
+}
+
+/** Structured values recurse through the same value control and reference picker as a single value. */
+function BuiltValue({
+  id,
+  value,
+  valueType,
+  references,
+  disabled,
+  onChange,
+}: Readonly<{
+  id: string;
+  value: FlowValue;
+  /** What the whole value must be, which a chosen branch's value must be too. */
+  valueType: string | undefined;
+  references: readonly StudioFlowReferenceChoice[];
+  disabled: boolean;
+  onChange: (value: FlowValue) => void;
+}>) {
+  const child = (
+    key: string,
+    label: string,
+    entry: FlowValue,
+    change: (value: FlowValue) => void,
+    partType?: string,
+  ) => (
+    <StudioFlowValueControl
+      key={key}
+      id={`${id}-part-${key}`}
+      label={label}
+      value={studioFlowValueSourceOf(entry)}
+      valueType={partType}
+      references={references}
+      disabled={disabled}
+      onChange={(next) => {
+        if (next !== null) change(studioFlowValueOf(next));
+      }}
+    />
+  );
+  if (value.kind === "map")
+    return (
+      <BuiltParts>
+        {Object.entries(value.entries).map(([key, entry]) =>
+          child(key, studioWords(key), entry, (next) =>
+            onChange({ ...value, entries: { ...value.entries, [key]: next } }),
+          ),
+        )}
+      </BuiltParts>
+    );
+  if (value.kind === "array")
+    return (
+      <BuiltParts>
+        {value.items.map((entry, index) =>
+          child(String(index), `Item ${index + 1}`, entry, (next) =>
+            onChange({
+              ...value,
+              items: value.items.map((item, at) => (at === index ? next : item)),
+            }),
+          ),
+        )}
+      </BuiltParts>
+    );
+  if (value.kind !== "formula") return null;
+  const formula = value.formula;
+  const part = (
+    key: string,
+    label: string,
+    entry: FlowFormula,
+    change: (next: FlowFormula) => FlowFormula,
+    partType?: string,
+  ) =>
+    child(
+      key,
+      label,
+      entry.op === "literal"
+        ? { kind: "literal", literal: { type: entry.type, value: entry.value } }
+        : entry.op === "reference"
+          ? { kind: "reference", reference: entry.reference }
+          : { kind: "formula", formula: entry },
+      (next) => {
+        if (next.kind === "formula") onChange({ kind: "formula", formula: change(next.formula) });
+        else if (next.kind === "reference")
+          onChange({
+            kind: "formula",
+            formula: change({ op: "reference", reference: next.reference }),
+          });
+        else if (next.kind === "literal")
+          onChange({ kind: "formula", formula: change({ op: "literal", ...next.literal }) });
+      },
+      partType,
+    );
+  switch (formula.op) {
+    case "now":
+      return (
+        <p className="text-sm text-muted-foreground">The date and time when this flow runs.</p>
+      );
+    case "join":
+      return (
+        <BuiltParts>
+          {formula.parts.map((entry, index) =>
+            part(String(index), `Text part ${index + 1}`, entry, (next) => ({
+              ...formula,
+              parts: formula.parts.map((item, at) => (at === index ? next : item)),
+            })),
+          )}
+          <Label htmlFor={`${id}-separator`}>Between parts</Label>
+          <Input
+            id={`${id}-separator`}
+            disabled={disabled}
+            maxLength={20}
+            value={formula.separator ?? ""}
+            onChange={(event) =>
+              onChange({ kind: "formula", formula: { ...formula, separator: event.target.value } })
+            }
+          />
+        </BuiltParts>
+      );
+    case "if":
+      return (
+        <BuiltParts>
+          {part(
+            "condition",
+            "When",
+            formula.condition,
+            (condition) => ({ ...formula, condition }),
+            "yes_no",
+          )}
+          {part(
+            "then",
+            "Use this when yes",
+            formula.then,
+            (then) => ({ ...formula, then }),
+            valueType,
+          )}
+          {part(
+            "else",
+            "Use this when no",
+            formula.else,
+            (otherwise) => ({ ...formula, else: otherwise }),
+            valueType,
+          )}
+        </BuiltParts>
+      );
+    case "record_id":
+    case "is_empty":
+    case "is_not_empty":
+      return (
+        <BuiltParts>
+          {part(
+            "value",
+            formula.op === "record_id" ? "Take the record from" : "Check this value",
+            formula.arg,
+            (arg) => ({ ...formula, arg }),
+          )}
+        </BuiltParts>
+      );
+    case "gt":
+      return (
+        <BuiltParts>
+          {part("left", "This value", formula.left, (left) => ({ ...formula, left }))}
+          {part("right", "Is greater than", formula.right, (right) => ({ ...formula, right }))}
+        </BuiltParts>
+      );
+    case "date_add":
+      return (
+        <BuiltParts>
+          {part(
+            "date",
+            "Starting date",
+            formula.date,
+            (date) => ({ ...formula, date }),
+            formula.date.op === "literal" && formula.date.type === "date" ? "date" : "date_time",
+          )}
+          {part(
+            "amount",
+            "Add this many",
+            formula.amount,
+            (amount) => ({ ...formula, amount }),
+            "whole_number",
+          )}
+          <Label htmlFor={`${id}-unit`}>Time unit</Label>
+          <StudioOptionControl
+            id={`${id}-unit`}
+            disabled={disabled}
+            value={formula.unit}
+            options={(["minutes", "hours", "days", "weeks", "months", "years"] as const).map(
+              (unit) => ({ value: unit, label: studioWords(unit) }),
+            )}
+            onChange={(unit) =>
+              onChange({
+                kind: "formula",
+                formula: { ...formula, unit: unit as typeof formula.unit },
+              })
+            }
+          />
+        </BuiltParts>
+      );
+    case "literal":
+      return child(
+        "value",
+        "Value",
+        { kind: "literal", literal: { type: formula.type, value: formula.value } },
+        onChange,
+        formula.type,
+      );
+    case "reference":
+      return child(
+        "value",
+        "Value",
+        { kind: "reference", reference: formula.reference },
+        onChange,
+        valueType,
+      );
+    default:
+      return (
+        <p className="text-sm">
+          This calculation is defined in Import from source in the Releases tab.
+        </p>
+      );
+  }
+}
 
 /** A fixed value's starting literal for a type. */
 const startLiteral = (
@@ -181,13 +416,14 @@ export function StudioFlowValueControl({
       ? ""
       : value.kind === "fixed"
         ? "fixed"
-        : value.kind === "kept"
-          ? "kept"
+        : value.kind === "kept" || value.kind === "built"
+          ? value.kind
           : studioFlowReferenceToken(value.reference);
   const known =
     token === "" ||
     token === "fixed" ||
     token === "kept" ||
+    token === "built" ||
     offered.some((choice) => choice.token === token);
   return (
     <div className="space-y-1.5">
@@ -208,8 +444,31 @@ export function StudioFlowValueControl({
                 {
                   value: "kept",
                   label: describeStudioFlowValue(value, references),
-                  description: "Kept as it is",
+                  description: "Change this calculation in Import from source in the Releases tab",
                   disabled: true,
+                },
+              ]
+            : []),
+          ...(value?.kind === "built"
+            ? [
+                {
+                  value: "built",
+                  label:
+                    value.value.kind === "map"
+                      ? "A set of named values"
+                      : value.value.kind === "array"
+                        ? "A list of values"
+                        : value.value.kind === "formula" && value.value.formula.op === "join"
+                          ? "Text assembled from values"
+                          : value.value.kind === "formula" && value.value.formula.op === "if"
+                            ? "A value chosen by a condition"
+                            : value.value.kind === "formula" &&
+                                value.value.formula.op === "is_empty"
+                              ? "Whether a value is empty"
+                              : value.value.kind === "formula" &&
+                                  value.value.formula.op === "is_not_empty"
+                                ? "Whether a value is filled in"
+                                : "A calculated value",
                 },
               ]
             : []),
@@ -218,6 +477,9 @@ export function StudioFlowValueControl({
             label: choice.label,
             group: choice.group,
           })),
+          ...(!known
+            ? [{ value: token, label: "A value this step can no longer read", disabled: true }]
+            : []),
         ]}
         onChange={(next) => {
           if (next === "") onChange(null);
@@ -238,6 +500,16 @@ export function StudioFlowValueControl({
           long={long}
           disabled={disabled}
           onChange={(literal) => onChange({ kind: "fixed", literal })}
+        />
+      )}
+      {value?.kind === "built" && (
+        <BuiltValue
+          id={id}
+          value={value.value}
+          valueType={valueType}
+          references={references}
+          disabled={disabled}
+          onChange={(next) => onChange(studioFlowValueSourceOf(next))}
         />
       )}
       {!known && (

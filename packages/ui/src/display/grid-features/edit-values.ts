@@ -18,7 +18,13 @@ import { toLocalInputValue, toStoredInstant } from "../../controls/date-time-zon
  * protected writer validates every value again against the field, the save rules and the record's
  * revision, and its refusal is what the person is shown.
  */
-export type EditDraft = string | boolean;
+export type EditDraft = string | boolean | LinkDraft;
+
+/**
+ * A link's draft: the record chosen (its reference and, once chosen in this editor, the title the
+ * picker showed), or null for none. The title is display only and never committed.
+ */
+export type LinkDraft = Readonly<{ recordTypeId: string; recordId: string; title?: string }> | null;
 
 export type EditReading =
   Readonly<{ ok: true; value: JsonValue }> | Readonly<{ ok: false; message: string }>;
@@ -33,6 +39,33 @@ const isRealDate = (text: string): boolean => {
   return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(text);
 };
 
+const linkReference = (
+  stored: unknown,
+): Readonly<{ recordTypeId: string; recordId: string }> | undefined =>
+  typeof stored === "object" &&
+  stored !== null &&
+  !Array.isArray(stored) &&
+  typeof (stored as Record<string, unknown>).recordTypeId === "string" &&
+  typeof (stored as Record<string, unknown>).recordId === "string"
+    ? {
+        recordTypeId: (stored as Record<string, string>).recordTypeId!,
+        recordId: (stored as Record<string, string>).recordId!,
+      }
+    : undefined;
+
+/** Whether two drafts hold the same value; a chosen record is compared by its record id. */
+export const sameEditDraft = (left: EditDraft, right: EditDraft): boolean => {
+  if (typeof left === "object" || typeof right === "object")
+    return (
+      typeof left === "object" &&
+      typeof right === "object" &&
+      (left === null || right === null
+        ? left === right
+        : left.recordId.toLowerCase() === right.recordId.toLowerCase())
+    );
+  return left === right;
+};
+
 /** The draft a control starts with for a stored value; an empty value starts an empty draft. */
 export const startEditDraft = (
   editor: RecordsTableInlineEditor,
@@ -40,6 +73,8 @@ export const startEditDraft = (
   timeZone: string,
 ): EditDraft => {
   switch (editor.kind) {
+    case "link":
+      return linkReference(stored) ?? null;
     case "yes_no":
       return stored === true;
     case "whole_number":
@@ -64,6 +99,13 @@ export const readEditDraft = (
   const fail = (message: string): EditReading => ({ ok: false, message });
   if (editor.kind === "yes_no")
     return typeof draft === "boolean" ? { ok: true, value: draft } : fail(`Choose ${label}.`);
+  if (editor.kind === "link") {
+    if (typeof draft === "string" || typeof draft === "boolean") return fail(`Choose ${label}.`);
+    if (draft === null)
+      return editor.required ? fail(`${label} is required.`) : { ok: true, value: null };
+    // The record type is the field's installed target, never what the draft carries.
+    return { ok: true, value: { recordTypeId: editor.recordTypeId, recordId: draft.recordId } };
+  }
   if (typeof draft !== "string") return fail(`Enter ${label}.`);
   const text = editor.kind === "text" && editor.input === "long_text" ? draft : draft.trim();
   if (text.length === 0)
@@ -136,6 +178,13 @@ export const sameEditValue = (
   next: JsonValue,
 ): boolean => {
   const current = stored ?? null;
+  if (editor.kind === "link") {
+    const before = linkReference(current);
+    const after = linkReference(next);
+    return before === undefined || after === undefined
+      ? before === after
+      : before.recordId.toLowerCase() === after.recordId.toLowerCase();
+  }
   if (editor.kind === "decimal")
     return (
       typeof current === "string" &&

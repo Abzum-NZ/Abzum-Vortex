@@ -17,23 +17,7 @@ export const LAYOUT_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistrat
       parsePayload: noRuntimeInputs,
     }),
     Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CONTAINER_BLOCK_RELEASE_1_1_0,
-      parsePayload: noRuntimeInputs,
-    }),
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CONTAINER_BLOCK_RELEASE_1_2_0,
-      parsePayload: noRuntimeInputs,
-    }),
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CONTAINER_BLOCK_RELEASE_1_3_0,
-      parsePayload: noRuntimeInputs,
-    }),
-    Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.HEADING_BLOCK_RELEASE,
-      parsePayload: noRuntimeInputs,
-    }),
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.HEADING_BLOCK_RELEASE_1_1_0,
       parsePayload: noRuntimeInputs,
     }),
   ]);

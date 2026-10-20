@@ -180,7 +180,10 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
         </p>
       )}
       {model?.kind === "unsupported" && (
-        <p role="status">This rule cannot be edited here. It is kept as it is.</p>
+        <p role="status">
+          This visibility rule uses values this page cannot offer. Change it with Import from source
+          in the Releases tab.
+        </p>
       )}
       {model?.kind === "stale" && (
         <p role="status">The page or its modules changed. Reload the fields before editing.</p>

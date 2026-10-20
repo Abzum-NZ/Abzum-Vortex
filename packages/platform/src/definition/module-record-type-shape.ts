@@ -96,16 +96,6 @@ const moduleNameIssues = (
     : [];
 };
 
-/** The key of the first Module an Application owns, made from the Application key: `team.workspace.data`. */
-export const defaultOwnedModuleKey = (source: ApplicationSourceDocument): string => {
-  const taken = takenModuleKeys(source);
-  for (let n = 1; n < 1_000; n += 1) {
-    const candidate = `${source.key}.${n === 1 ? "data" : `data_${n}`}`;
-    if (!taken.has(candidate) && namespacedKeySchema.safeParse(candidate).success) return candidate;
-  }
-  return `${source.key}.data`;
-};
-
 const aliasPart = (key: string): string => key.replaceAll(".", "_");
 
 const uniqueAlias = (base: string, taken: Set<string>): string => {

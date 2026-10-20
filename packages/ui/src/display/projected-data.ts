@@ -195,6 +195,8 @@ export type TablePayload = Readonly<{
   pageCount?: number;
   hasNextPage?: boolean;
   nextContinuationToken?: string;
+  /** The read's scan budget ran out before the page filled: more records may match on the next page. */
+  scanLimited?: boolean;
   hasPreviousPage?: boolean;
   previousContinuationToken?: string;
 }> &
@@ -301,7 +303,8 @@ export type SummaryData = DisplayDataState<SummaryPayload>;
 export type BoardData = DisplayDataState<BoardPayload>;
 
 /** Fixed, data-free refusal reasons; a refused state never carries a value. */
-export type DisplayRefusalReason = "not_permitted" | "access_ended" | "not_found";
+export type DisplayRefusalReason =
+  "not_permitted" | "access_ended" | "not_found" | "value_out_of_range" | "dataset_limit_exceeded";
 
 /**
  * Explicit, data-safe state for one placement, parameterised by that block's own ready values.
@@ -337,10 +340,11 @@ export type DisplaySemanticEventName =
       | "row_expanded"
     >
   /**
-   * A Records table's link filter asks the page for one bounded page of the field's target
-   * records, and its Bulk actions widen or clear the selection; neither is a flow event.
+   * A Records table's link picker (a column filter or a cell editor) asks the page for one bounded
+   * page of the field's target records, and its Bulk actions widen or clear the selection; neither
+   * is a flow event.
    */
-  | "filter_records_requested"
+  | "table_records_requested"
   | "selection_scope_changed"
   /**
    * A Records table's pivot asks for one page of its rows, opens the pivot or closes it, or a cell
@@ -394,9 +398,11 @@ export type DisplaySemanticEvent =
       value: string;
     }>
   | Readonly<{
-      event: "filter_records_requested";
-      /** The link filter field whose target records the picker offers. */
+      event: "table_records_requested";
+      /** The link field whose target records the picker offers. */
       field: string;
+      /** Why the records are read: to filter by them, or to choose one in an edited cell. */
+      purpose: "filter" | "edit";
       search?: string;
       continuationToken?: string;
     }>
@@ -548,6 +554,8 @@ const DISPLAY_REFUSAL_REASONS: readonly DisplayRefusalReason[] = [
   "not_permitted",
   "access_ended",
   "not_found",
+  "value_out_of_range",
+  "dataset_limit_exceeded",
 ];
 
 /** Every event name a display block accepts; each block further narrows this to its own binding. */
@@ -557,7 +565,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "row_action",
   "selection_changed",
   "filter_changed",
-  "filter_records_requested",
+  "table_records_requested",
   "pivot_requested",
   "pivot_view_changed",
   "pivot_drilled",
@@ -1200,6 +1208,7 @@ export const parseTablePayload = (
       "pageCount",
       "hasNextPage",
       "nextContinuationToken",
+      "scanLimited",
       "hasPreviousPage",
       "previousContinuationToken",
       "selectionToken",
@@ -1242,6 +1251,9 @@ export const parseTablePayload = (
   if (record.hasPreviousPage !== undefined && typeof record.hasPreviousPage !== "boolean")
     fail("Projected hasPreviousPage must be a boolean", location);
   const hasPreviousPage = record.hasPreviousPage as boolean | undefined;
+  if (record.scanLimited !== undefined && typeof record.scanLimited !== "boolean")
+    fail("Projected scanLimited must be a boolean", location);
+  const scanLimited = record.scanLimited as boolean | undefined;
   let nextContinuationToken: string | undefined;
   if (record.nextContinuationToken !== undefined) {
     nextContinuationToken = requireNonEmptyString(
@@ -1252,6 +1264,8 @@ export const parseTablePayload = (
     if (nextContinuationToken.length > 65_536)
       fail("A table continuation token is too long", location);
   }
+  if (scanLimited === true && !hasNextPage)
+    fail("A scan-limited page requires a next page", location);
   if (
     (hasNextPage === true) !== (nextContinuationToken !== undefined) ||
     ((hasNextPage !== undefined || nextContinuationToken !== undefined) && page === undefined)
@@ -1317,6 +1331,7 @@ export const parseTablePayload = (
     ...(pageCount === undefined ? {} : { pageCount }),
     ...(hasNextPage === undefined ? {} : { hasNextPage }),
     ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
+    ...(scanLimited === undefined ? {} : { scanLimited }),
     ...(hasPreviousPage === undefined ? {} : { hasPreviousPage }),
     ...(previousContinuationToken === undefined ? {} : { previousContinuationToken }),
   });

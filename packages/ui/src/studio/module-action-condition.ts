@@ -1,5 +1,13 @@
-import type { ApplicationSourceDocument, ConditionNode, InlineModuleActionPrecondition, JsonValue } from "@vortex/platform/schema";
-import type { StudioConditionControlsContext, StudioConditionParameterType } from "./condition-model";
+import type {
+  ApplicationSourceDocument,
+  ConditionNode,
+  InlineModuleActionPrecondition,
+  JsonValue,
+} from "@vortex/platform/schema";
+import type {
+  StudioConditionControlsContext,
+  StudioConditionParameterType,
+} from "./condition-model";
 import { studioFieldChoiceOptions, studioFieldValueType } from "./application-flow-values";
 
 /**
@@ -12,83 +20,232 @@ import { studioFieldChoiceOptions, studioFieldValueType } from "./application-fl
 
 type RecordType = ApplicationSourceDocument["body"]["modules"][number]["record_types"][number];
 type Comparison = Extract<ConditionNode, { kind: "comparison" }>;
+type Inputs = ApplicationSourceDocument["body"]["modules"][number]["actions"][number]["inputs"];
 
-const parameterType = (fieldType: string): StudioConditionParameterType => {
-  switch (studioFieldValueType(fieldType)) {
-    case "whole_number": return "whole_number";
-    case "decimal_number": return "decimal_number";
-    case "money": return "money";
-    case "yes_no": return "yes_no";
-    case "date": return "date";
-    case "date_time": return "date_time";
-    case "organization_account_reference": return "organization_account_reference";
-    default: return "text";
+const actionOperands = (record: RecordType, inputs: Inputs) => [
+  ...record.fields.map((field, index) => ({
+    key: `field_${index + 1}`,
+    source: { source: "field" as const, field: field.key },
+  })),
+  ...inputs.map((input, index) => ({
+    key: `input_${index + 1}`,
+    source: { source: "parameter" as const, parameter: input.key },
+  })),
+];
+
+/** A record field's or action input's type as a condition parameter type. */
+const parameterType = (type: string): StudioConditionParameterType => {
+  switch (studioFieldValueType(type) ?? type) {
+    case "whole_number":
+      return "whole_number";
+    case "decimal_number":
+      return "decimal_number";
+    case "money":
+      return "money";
+    case "yes_no":
+      return "yes_no";
+    case "date":
+      return "date";
+    case "date_time":
+      return "date_time";
+    case "record_reference":
+      return "record_reference";
+    case "organization_account_reference":
+      return "organization_account_reference";
+    default:
+      return "text";
   }
 };
 
 /** The fields a precondition can compare, each as one operand named by the field's key. */
-export const studioActionConditionContext = (record: RecordType): StudioConditionControlsContext => ({
-  allowedOperands: record.fields.map((field) => {
-    const options = studioFieldChoiceOptions(field);
-    return { operand: { source: "parameter" as const, key: field.key }, label: field.label, role: "record_field" as const,
-      ...(options === undefined ? {} : { options }) };
-  }),
+export const studioActionConditionContext = (
+  record: RecordType,
+  inputs: Inputs,
+): StudioConditionControlsContext => ({
+  allowedOperands: [
+    ...record.fields.map((field, index) => {
+      const options = studioFieldChoiceOptions(field);
+      return {
+        operand: { source: "parameter" as const, key: `field_${index + 1}` },
+        label: field.label,
+        role: "record_field" as const,
+        ...(options === undefined ? {} : { options }),
+      };
+    }),
+    ...inputs.map((input, index) => ({
+      operand: { source: "parameter" as const, key: `input_${index + 1}` },
+      label: input.label,
+      role: "declared_input" as const,
+    })),
+  ],
   declaredFieldIds: [],
-  parameterDeclarations: record.fields.map((field) => ({ key: field.key, type: parameterType(field.type) })),
+  parameterDeclarations: [
+    ...record.fields.map((field, index) => ({
+      key: `field_${index + 1}`,
+      type: parameterType(field.type),
+    })),
+    ...inputs.map((input, index) => ({
+      key: `input_${index + 1}`,
+      type: parameterType(input.type),
+    })),
+  ],
   allowLiteralValues: true,
 });
 
 /** The tree the controls show, or "unsupported" for a precondition they cannot show. */
-export const projectStudioActionCondition = (condition: InlineModuleActionPrecondition | undefined):
-  Readonly<{ kind: "condition"; condition: ConditionNode | undefined }> | Readonly<{ kind: "unsupported" }> => {
+export const projectStudioActionCondition = (
+  condition: InlineModuleActionPrecondition | undefined,
+  record: RecordType,
+  inputs: Inputs,
+):
+  | Readonly<{ kind: "condition"; condition: ConditionNode | undefined }>
+  | Readonly<{ kind: "unsupported" }> => {
+  const operands = actionOperands(record, inputs);
+  const fieldOperand = (field: string): Comparison["left"] | undefined => {
+    const found = operands.find(
+      (entry) => entry.source.source === "field" && entry.source.field === field,
+    );
+    return found === undefined ? undefined : { source: "parameter", key: found.key };
+  };
+  const parameterOperand = (parameter: string): Comparison["left"] | undefined => {
+    const found = operands.find(
+      (entry) => entry.source.source === "parameter" && entry.source.parameter === parameter,
+    );
+    return found === undefined ? undefined : { source: "parameter", key: found.key };
+  };
   const node = (part: unknown): ConditionNode | undefined => {
     if (part === null || typeof part !== "object") return undefined;
     const entry = part as Record<string, unknown>;
     if (Array.isArray(entry.all) || Array.isArray(entry.any)) {
       const children = ((entry.all ?? entry.any) as unknown[]).map(node);
       return children.every((child) => child !== undefined)
-        ? { kind: Array.isArray(entry.all) ? "all" : "any", conditions: children as ConditionNode[] } : undefined;
+        ? {
+            kind: Array.isArray(entry.all) ? "all" : "any",
+            conditions: children as ConditionNode[],
+          }
+        : undefined;
     }
-    if (entry.not !== undefined) { const inner = node(entry.not); return inner === undefined ? undefined : { kind: "not", condition: inner }; }
+    if (entry.not !== undefined) {
+      const inner = node(entry.not);
+      return inner === undefined ? undefined : { kind: "not", condition: inner };
+    }
     const operator = entry.operator as Comparison["operator"];
     const operand = (side: unknown): Comparison["left"] | undefined => {
       const value = side as Record<string, unknown> | undefined;
-      return value?.source === "field" && typeof value.field === "string" ? { source: "parameter", key: value.field }
-        : value?.source === "value" ? { source: "value", value: value.value as JsonValue } : undefined;
+      return value?.source === "field" && typeof value.field === "string"
+        ? fieldOperand(value.field)
+        : value?.source === "parameter" && typeof value.parameter === "string"
+          ? parameterOperand(value.parameter)
+          : value?.source === "value"
+            ? { source: "value", value: value.value as JsonValue }
+            : undefined;
     };
-    const left = typeof entry.field === "string" ? { source: "parameter" as const, key: entry.field } : operand(entry.left);
+    const left = typeof entry.field === "string" ? fieldOperand(entry.field) : operand(entry.left);
     if (left === undefined) return undefined;
-    if (operator === "is_empty" || operator === "is_not_empty") return { kind: "comparison", operator, left };
-    const right = Object.hasOwn(entry, "value") ? { source: "value" as const, value: entry.value as JsonValue } : operand(entry.right);
+    if (operator === "is_empty" || operator === "is_not_empty")
+      return { kind: "comparison", operator, left };
+    const right =
+      typeof entry.parameter === "string"
+        ? parameterOperand(entry.parameter)
+        : Object.hasOwn(entry, "value")
+          ? { source: "value" as const, value: entry.value as JsonValue }
+          : operand(entry.right);
     return right === undefined ? undefined : { kind: "comparison", operator, left, right };
   };
   if (condition === undefined) return { kind: "condition", condition: undefined };
   const projected = node(condition);
-  return projected === undefined ? { kind: "unsupported" } : { kind: "condition", condition: projected };
+  return projected === undefined
+    ? { kind: "unsupported" }
+    : { kind: "condition", condition: projected };
 };
 
 /** The authored precondition for an edited tree, or undefined when a comparison is not finished. */
-export const studioActionConditionSource = (condition: ConditionNode | undefined):
-  Readonly<{ ok: true; condition: InlineModuleActionPrecondition | undefined }> | Readonly<{ ok: false }> => {
+export const studioActionConditionSource = (
+  condition: ConditionNode | undefined,
+  record: RecordType,
+  inputs: Inputs,
+):
+  | Readonly<{ ok: true; condition: InlineModuleActionPrecondition | undefined }>
+  | Readonly<{ ok: false }> => {
+  const operands = actionOperands(record, inputs);
   const source = (node: ConditionNode): unknown => {
     if (node.kind === "all" || node.kind === "any") {
       const children = node.conditions.map(source);
-      return children.some((child) => child === undefined) ? undefined : node.kind === "all" ? { all: children } : { any: children };
+      return children.some((child) => child === undefined)
+        ? undefined
+        : node.kind === "all"
+          ? { all: children }
+          : { any: children };
     }
-    if (node.kind === "not") { const inner = source(node.condition); return inner === undefined ? undefined : { not: inner }; }
+    if (node.kind === "not") {
+      const inner = source(node.condition);
+      return inner === undefined ? undefined : { not: inner };
+    }
     if (node.kind !== "comparison") return undefined;
-    const operand = (side: Comparison["left"]) => side.source === "parameter" ? { source: "field", field: side.key }
-      : side.source === "value" ? { source: "value", value: side.value } : undefined;
-    if (node.operator === "is_empty" || node.operator === "is_not_empty")
-      return node.left.source === "parameter" ? { field: node.left.key, operator: node.operator } : undefined;
-    if (node.right === undefined) return undefined;
-    if (node.left.source === "parameter" && node.right.source === "value")
-      return node.right.value === null ? undefined : { field: node.left.key, operator: node.operator, value: node.right.value };
+    const operand = (side: Comparison["left"]) =>
+      side.source === "parameter"
+        ? operands.find((entry) => entry.key === side.key)?.source
+        : side.source === "value"
+          ? { source: "value" as const, value: side.value }
+          : undefined;
     const left = operand(node.left);
+    if (node.operator === "is_empty" || node.operator === "is_not_empty")
+      return left?.source === "field"
+        ? { field: left.field, operator: node.operator }
+        : left?.source === "parameter"
+          ? { operator: node.operator, left }
+          : undefined;
+    if (node.right === undefined) return undefined;
     const right = operand(node.right);
-    return left === undefined || right === undefined ? undefined : { operator: node.operator, left, right };
+    if (left?.source === "field" && right?.source === "parameter")
+      return { field: left.field, operator: node.operator, parameter: right.parameter };
+    if (left?.source === "field" && node.right.source === "value")
+      return node.right.value === null
+        ? undefined
+        : { field: left.field, operator: node.operator, value: node.right.value };
+    return left === undefined || right === undefined
+      ? undefined
+      : { operator: node.operator, left, right };
   };
   if (condition === undefined) return { ok: true, condition: undefined };
   const built = source(condition);
-  return built === undefined ? { ok: false } : { ok: true, condition: built as InlineModuleActionPrecondition };
+  return built === undefined
+    ? { ok: false }
+    : { ok: true, condition: built as InlineModuleActionPrecondition };
+};
+
+/**
+ * The edited tree after the action's inputs changed: each input operand follows its input (by key,
+ * through a rename) to its new position. An operand whose input was removed no longer resolves, so
+ * the comparison reads as unfinished until it is replaced.
+ */
+export const remapStudioActionCondition = (
+  condition: ConditionNode | undefined,
+  before: Inputs,
+  after: Inputs,
+  renamed?: Readonly<{ from: string; to: string }>,
+): ConditionNode | undefined => {
+  const keys = new Map<string, string>(
+    before.map((input, index) => {
+      const key = input.key === renamed?.from ? renamed.to : input.key;
+      const at = after.findIndex((entry) => entry.key === key);
+      return [`input_${index + 1}`, at === -1 ? "input_removed" : `input_${at + 1}`];
+    }),
+  );
+  const side = (operand: Comparison["left"]): Comparison["left"] =>
+    operand.source === "parameter" && keys.has(operand.key)
+      ? { ...operand, key: keys.get(operand.key)! }
+      : operand;
+  const remap = (node: ConditionNode): ConditionNode => {
+    if (node.kind === "all" || node.kind === "any")
+      return { kind: node.kind, conditions: node.conditions.map(remap) };
+    if (node.kind === "not") return { kind: "not", condition: remap(node.condition) };
+    const comparison = node as Comparison;
+    return {
+      ...comparison,
+      left: side(comparison.left),
+      ...(comparison.right === undefined ? {} : { right: side(comparison.right) }),
+    };
+  };
+  return condition === undefined ? undefined : remap(condition);
 };

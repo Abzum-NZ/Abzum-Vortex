@@ -202,6 +202,7 @@ const boardMemberResult = (
     queryId: command.queryId,
     rows: page.rows,
     fieldBounds: page.fieldBounds,
+    scanLimited: page.next !== null && page.rows.length < command.pageSize,
     ...(page.next === null
       ? {}
       : {
