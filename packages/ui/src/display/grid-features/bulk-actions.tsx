@@ -254,7 +254,7 @@ function SelectionBand({
     <div
       role="status"
       aria-live="polite"
-      className="order-last flex basis-full flex-wrap items-center gap-2 rounded-md bg-muted/50 px-3 py-2 text-sm text-foreground"
+      className="order-last flex basis-full flex-wrap items-center gap-2 bg-muted/50 px-3 py-2 text-sm text-foreground"
     >
       {scope?.kind === "counting" ? <Spinner aria-hidden="true" /> : null}
       {body}
