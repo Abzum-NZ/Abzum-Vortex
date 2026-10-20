@@ -103,6 +103,14 @@ export {
   type RecordsTableBulkDependencies,
 } from "./records-table-features/bulk-run";
 export {
+  createRecordsTableExportService,
+  type RecordsTableExportDependencies,
+} from "./records-table-features/export";
+export {
+  decideRecordTypeExport,
+  decideRecordTypeFieldIds,
+} from "./records-table-features/record-type-access";
+export {
   readNamedActionEligibility,
   type NamedActionEligibilityTarget,
   type NamedActionRecordEligibility,
