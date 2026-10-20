@@ -19,12 +19,17 @@ declare
   settings_default_application_root_id uuid;
   settings_extension_values jsonb;
   predicate_plan jsonb;
+  predicate_matches boolean;
 begin
   -- This reader declares no filterable or searchable key: a filter is refused, and a
   -- search over no searchable key matches no row.
   predicate_plan := vortex_record.compile_projection_predicate_internal(p_predicate, '{}'::jsonb, 1);
   if predicate_plan ->> 'predicate' is not null then
-    return;
+    execute 'select (' || (predicate_plan ->> 'predicate') || ') is true'
+      into predicate_matches using predicate_plan -> 'parameters';
+    if not predicate_matches then
+      return;
+    end if;
   end if;
   -- One settings row per organisation, so ordering is irrelevant: record_id and the projection's
   -- declared sortable field (language) are both accepted.

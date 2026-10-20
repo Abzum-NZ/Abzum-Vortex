@@ -838,11 +838,16 @@ begin
           'inputValues', parameter_values));
       end if;
       if user_search is not null then
+        if exists (
+          select 1 from pg_catalog.unnest(search_field_ids) as searched(id)
+          where searched.id <> all (readable_field_ids)
+        ) then
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'field_unbounded');
+        end if;
         select coalesce(pg_catalog.array_agg(fields_by_id -> searched.id ->> 'key' order by searched.position),
           array[]::text[])
         into projection_search_keys
-        from pg_catalog.unnest(search_field_ids) with ordinality as searched(id, position)
-        where searched.id = any (readable_field_ids);
+        from pg_catalog.unnest(search_field_ids) with ordinality as searched(id, position);
         projection_predicate := coalesce(projection_predicate, '{}'::jsonb) || pg_catalog.jsonb_build_object(
           'search', pg_catalog.jsonb_build_object(
             'term', user_search, 'keys', pg_catalog.to_jsonb(projection_search_keys)));
@@ -1313,6 +1318,10 @@ begin
         if not exists (
           select 1 from pg_catalog.unnest(filter_ids) as referenced(id)
           where not (readable_values ? referenced.id)
+        ) and not exists (
+          select 1 from pg_catalog.unnest(search_field_ids) as searched(id)
+          where projection_page_scan and user_search is not null
+            and not (readable_values ? searched.id)
         ) then
           if needs_refusal_check then
             return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');

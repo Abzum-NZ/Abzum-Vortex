@@ -40,7 +40,7 @@ declare
 begin
   -- This reader declares no filterable or searchable key: a filter is refused, and a
   -- search over no searchable key matches no row.
-  predicate_plan := vortex_record.compile_projection_predicate_internal(p_predicate, '{}'::jsonb, 1);
+  predicate_plan := vortex_record.compile_projection_predicate_internal(p_predicate, '{}'::jsonb, 10);
   if p_sort_key <> 'occurred_at' or p_direction not in ('ascending', 'descending')
     or p_sort_key is null or p_direction is null
     or (p_limit is not null and p_limit < 1) then
@@ -163,7 +163,8 @@ begin
       case when p_direction = 'descending' then 'desc' else 'asc' end);
   return query execute scan_sql using visible_organization_id, p_record_ids,
     audit_projection, actor_account_id, actor_identity_id,
-    after_occurred_at, after_record_id, p_limit, person_record_type_id;
+    after_occurred_at, after_record_id, p_limit, person_record_type_id,
+    predicate_plan -> 'parameters';
 end
 $function$;
 
