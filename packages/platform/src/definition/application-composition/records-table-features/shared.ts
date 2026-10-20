@@ -97,6 +97,8 @@ export type RecordsTableFieldFacts = Readonly<{
   editable: boolean;
   /** For a choice field, how many options it declares. */
   choiceCount?: number;
+  /** The stored option values, used to check fixed values in formatting conditions. */
+  choiceValues?: readonly string[];
   /** For a calculation or total, the type of the value it produces. */
   resultType?: string;
 }>;
