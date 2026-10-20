@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState, type ReactElement } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
 import {
   encodeRecordsTableFieldFilter,
   type GridLayout,
@@ -190,15 +190,18 @@ function ShareDialog({
     new Set(selected.sharing?.groupIds ?? []),
   );
   const [busy, setBusy] = useState(false);
+  // The roles and groups are read once when the dialog opens, whatever the grid does meanwhile.
+  const requestRef = useRef(request);
+  requestRef.current = request;
   useEffect(() => {
     let current = true;
-    void request({ kind: "share_targets" }).then((result) => {
+    void requestRef.current({ kind: "share_targets" }).then((result) => {
       if (current) setTargets(result.outcome === "targets" ? result.targets : "unavailable");
     });
     return () => {
       current = false;
     };
-  }, [request]);
+  }, []);
   const toggle = (
     held: ReadonlySet<string>,
     set: (next: ReadonlySet<string>) => void,
@@ -380,10 +383,7 @@ function ViewSwitcher({
           <span className="max-w-40 truncate">{label}</span>
           {unsaved ? (
             <>
-              <span
-                aria-hidden="true"
-                className="size-2 rounded-full bg-primary"
-              />
+              <Badge aria-hidden="true" className="size-2 min-w-0 p-0" />
               <span className="sr-only">Unsaved changes</span>
             </>
           ) : null}

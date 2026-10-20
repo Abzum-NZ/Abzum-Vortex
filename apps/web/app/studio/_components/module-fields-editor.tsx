@@ -381,6 +381,7 @@ export function ModuleFieldsEditor({
     recordTypes,
     actions: [],
     relationships,
+    permissions: [],
     records: context.readRecords,
   };
   const offered = studioFieldPlacements(
