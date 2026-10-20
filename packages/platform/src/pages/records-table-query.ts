@@ -518,9 +518,6 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         },
         result.value.rows,
         result.value.fieldBounds,
-        // A later page, or a narrowed first page, keeps its columns when nothing matched, so the
-        // viewer can page back or change the search and filters that matched nothing.
-        page > 1 || built.narrowing.search !== null || built.narrowing.filters.length > 0,
       );
       if (projected === undefined) return refused;
       // The projection that draws the controls also decides whether this read's own search and
