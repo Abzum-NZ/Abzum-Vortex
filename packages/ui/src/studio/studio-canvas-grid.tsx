@@ -3,6 +3,7 @@
 import { createContext, useContext } from "react";
 import {
   canonicalJson,
+  compiledItemSettings,
   isRecord,
   readRecordsTableContract,
   plainSourceSettingValue,
@@ -39,9 +40,7 @@ export function useStudioCanvasGridEvents(
 ): DisplayEventHandlers | undefined {
   const arrange = useContext(StudioCanvasGridContext);
   if (arrange === undefined || compiled === undefined || release === undefined) return undefined;
-  const contract = readRecordsTableContract(
-    compiled as Parameters<typeof readRecordsTableContract>[0],
-  );
+  const contract = readRecordsTableContract(compiledItemSettings(compiled, release));
   if (contract === undefined || !contract.features.savedViews.enabled) return undefined;
   const sourceColumns = props.columns;
   if (!Array.isArray(sourceColumns) || sourceColumns.length !== contract.columns.length)

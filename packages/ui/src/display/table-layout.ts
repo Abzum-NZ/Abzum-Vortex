@@ -78,6 +78,8 @@ const clampWidth = (width: number): number =>
 type Local = Readonly<{
   /** The stored layout state this local copy started from; a new page read starts it again. */
   base: GridLayoutState;
+  /** Which authored columns and density the transient preview arrangement started from. */
+  definition: string;
   layout: GridLayout;
   /** The last completed gesture; a pending write never captures an in-progress resize. */
   committedLayout: GridLayout;
@@ -89,8 +91,9 @@ type Local = Readonly<{
   resetting: boolean;
 }>;
 
-const startFrom = (base: GridLayoutState): Local => ({
+const startFrom = (base: GridLayoutState, definition: string): Local => ({
   base,
+  definition,
   layout: base.layout,
   committedLayout: base.layout,
   revision: base.revision,
@@ -130,20 +133,35 @@ export const useGridLayout = ({
       : { persisted: false, queryId: "", revision: null, layout: authored, authored, reset: false };
   }, [contract]);
   const source = stored ?? fallback;
+  const previewDefinition =
+    source?.persisted === false ? JSON.stringify([contract?.columns, contract?.density]) : "";
   const [local, setLocal] = useState<Local | undefined>(() =>
-    source === undefined ? undefined : startFrom(source),
+    source === undefined ? undefined : startFrom(source, previewDefinition),
   );
   // A new page read carries the stored layout again; the local copy starts over from it.
   let current = local;
   if (source !== undefined && current?.base !== source) {
+    // The canvas reparses the same payload when its inspector receives a gesture. That is not a
+    // new authored arrangement: keep the transient layout until its actual definition changes.
+    const samePreview =
+      current !== undefined &&
+      !source.persisted &&
+      !current.base.persisted &&
+      current.definition === previewDefinition &&
+      current.base.queryId === source.queryId &&
+      sameLayout(current.base.layout, source.layout) &&
+      sameLayout(current.base.authored, source.authored);
     // A projection read may finish after another gesture. Keep that unsaved gesture while
     // adopting the read's revision; its values are still persisted through the same writer.
     current =
       current !== undefined &&
-      current.base.queryId === source.queryId &&
-      current.commits > current.savedCommits
-        ? { ...current, base: source, revision: source.revision }
-        : startFrom(source);
+      (samePreview ||
+        (source.persisted &&
+          current.base.persisted &&
+          current.base.queryId === source.queryId &&
+          current.commits > current.savedCommits))
+        ? { ...current, base: source, definition: previewDefinition, revision: source.revision }
+        : startFrom(source, previewDefinition);
     setLocal(current);
   }
   const layout = current?.layout ?? { columns: [] };
