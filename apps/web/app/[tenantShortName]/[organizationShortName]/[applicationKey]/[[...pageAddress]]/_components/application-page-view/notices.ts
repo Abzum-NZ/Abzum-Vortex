@@ -68,4 +68,8 @@ export const refusalNotices: Readonly<
     tone: "problem",
     text: "Accepting application role changes keeps the role settings. Use Manage roles to change its name, description, classification or assignment and activation settings.",
   },
+  application_storage_incompatible: {
+    tone: "problem",
+    text: "This version changes stored fields in a way existing records cannot accept. Keep existing choice options unchanged when adding options, and preserve field types, storage and ownership settings.",
+  },
 };
