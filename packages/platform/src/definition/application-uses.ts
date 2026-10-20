@@ -599,7 +599,7 @@ const fieldUses = (
         "queries",
       ] as const
     ).flatMap((section) =>
-      (module[section] as unknown[]).flatMap((item, at) =>
+      ((module[section] ?? []) as unknown[]).flatMap((item, at) =>
         componentScoped(item, recordKey, qualifiedRecord)
           ? [{ value: item, path: ["body", "modules", moduleIndex, section, at] }]
           : [],

@@ -105,11 +105,15 @@ export const changeInlineModuleExtensionPoint = (
       };
     if (existing !== undefined && key !== existing.key)
       return { kind: "invalid", field: "key", issues: ["An extension's key is permanent."] };
-    if (module.extension_points.some((point) => point !== existing && point.key === key))
+    if (
+      module.extension_points.some(
+        (point) => point !== existing && (point.key === key || point.id === key),
+      )
+    )
       return {
         kind: "invalid",
         field: "key",
-        issues: ["This module already has an extension with that key."],
+        issues: ["This module already has an extension with that key or identity."],
       };
     if (!module.record_types.some((record) => record.key === change.recordKey))
       return {
@@ -144,6 +148,7 @@ export const changeInlineModuleExtensionPoint = (
       for (const child of Object.values(value)) collect(child);
     };
     collect(source);
+    for (const point of module.extension_points) aliases.add(point.key);
     const base = `extension_${key}`;
     let id = base;
     for (let suffix = 2; aliases.has(id); suffix += 1) id = `${base}_${suffix}`;
