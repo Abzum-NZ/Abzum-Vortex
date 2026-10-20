@@ -93,13 +93,16 @@ function BulkActionsMenu({
           {actions.map((action) => (
             <DropdownMenuItem
               key={action.action}
-              disabled={!ready}
+              disabled={!ready || (!matching && count > action.maxRecords)}
               onClick={() => {
                 if (action.confirm || matching) setConfirming(action);
                 else run(action);
               }}
             >
               {action.label}
+              {!matching && count > action.maxRecords
+                ? ` — select at most ${records(action.maxRecords)}`
+                : ""}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
@@ -119,13 +122,17 @@ function BulkActionsMenu({
               {capped
                 ? `${records(count)} match, and this action changes at most ${records(confirming!.maxRecords)} at a time: the first ${numberFormat.format(confirming!.maxRecords)} in the table's order are changed. `
                 : `This changes ${records(count)}. `}
-              Records it does not apply to, or that you may not change, are left as they are and
-              reported when it finishes.
+              {matching
+                ? "Records it does not apply to, or that you may not change, are left as they are and reported when it finishes."
+                : "All selected records must allow this action. If any record cannot change, none of them change."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
+              disabled={
+                !ready || (!matching && confirming !== undefined && count > confirming.maxRecords)
+              }
               onClick={() => {
                 if (confirming !== undefined) run(confirming);
                 setConfirming(undefined);
@@ -148,7 +155,7 @@ function RunSummary({ run }: Readonly<{ run: Extract<TableBulkRun, { status: "fi
   return (
     <span className="min-w-0">
       {run.label}: {records(summary.done)} of {numberFormat.format(summary.total)} changed.
-      {drift !== 0 && run.selected > 0
+      {!summary.limited && drift !== 0 && run.selected > 0
         ? ` ${numberFormat.format(Math.abs(drift))} ${drift > 0 ? "more matched" : "fewer matched"} than when you selected them.`
         : ""}
       {refused > 0

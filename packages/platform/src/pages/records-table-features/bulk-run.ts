@@ -370,6 +370,10 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
       let targets: readonly Readonly<{ recordId: string; revision?: number }>[];
       let limited = false;
       if (request.selection.kind === "ids") {
+        if (request.selection.items.length > declared.maxRecords) {
+          refuse("selection_larger_than_action_limit");
+          return report({ kind: "refused" });
+        }
         if (request.selection.items.length > placement.contract.pageSize) {
           refuse("selection_larger_than_page");
           return report({ kind: "refused" });
@@ -477,13 +481,9 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
           notProcessed += runnable.length;
           runnable = [];
         }
-        // A record refused inside the transaction rolls the batch back; it is reported and the
-        // rest of the batch runs again without it, at most three times.
-        for (let attempt = 0; runnable.length > 0; attempt += 1) {
-          if (attempt === 3) {
-            notProcessed += runnable.length;
-            break;
-          }
+        // A refusal rolls the batch back. Report the other rows as not reached; never resubmit
+        // a smaller mutation automatically after the person confirmed this selection.
+        if (runnable.length > 0) {
           const result = await actionRecords.executeMany(
             session,
             selection,
@@ -500,17 +500,10 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
           );
           if (result.kind === "completed") {
             done += result.results.length;
-            break;
-          }
-          if (result.kind !== "refused" || allOrNothing) {
-            if (result.kind === "refused") {
-              refused(reasonOfResult(result.result));
-              notProcessed += runnable.length - 1;
-            } else notProcessed += runnable.length;
-            break;
-          }
-          refused(reasonOfResult(result.result));
-          runnable = runnable.filter((_, index) => index !== result.index);
+          } else if (result.kind === "refused") {
+            refused(reasonOfResult(result.result));
+            notProcessed += runnable.length - 1;
+          } else notProcessed += runnable.length;
         }
         processed = Math.min(total, start + batch.length);
         report({ kind: "progress", total, processed });

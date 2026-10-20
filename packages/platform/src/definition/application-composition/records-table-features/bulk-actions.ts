@@ -9,14 +9,14 @@ import {
   type RecordsTableFeatureDefinition,
 } from "./shared";
 
-/** The most records one run over every matching record may change; a run over the page takes 200. */
+/** The maximum authored action limit; explicit selections also have a 200-record page cap. */
 export const recordsTableBulkActionRecordLimit = 5_000;
 
 /**
  * One bulk action: a named action of the bound record type that people run over the selected rows,
  * or over every record the table's query, filters and search match. `action` is the action's key
  * as the release names it; `confirm` asks before it runs, with the exact count; `maxRecords` caps a
- * run over every matching record.
+ * run over either kind of selection.
  */
 export type RecordsTableBulkActionContract = Readonly<{
   action: string;

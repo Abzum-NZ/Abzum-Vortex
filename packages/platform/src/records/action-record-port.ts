@@ -1289,49 +1289,46 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
         states.push(attemptStateOf(command, activityId));
       }
       const rollback = new Error("NAMED_ACTION_BATCH_ROLLED_BACK");
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        let refused:
-          Readonly<{ index: number; result: ExecuteNamedActionResult | undefined }> | undefined;
-        let restarted = false;
-        for (const state of states) {
-          state.deleteSettlement = undefined;
-          state.attempted = { executions: [] };
-        }
-        const result = await requests.runChange(
-          session,
-          selection,
-          async (transaction, _scope, issuedAt) => {
-            const results: ExecuteNamedActionResult[] = [];
-            for (const [index, state] of states.entries()) {
-              const outcome = await attemptNamedAction(transaction, issuedAt, state, run, ids);
-              // A record that moved, or refused, throws through the transaction so every record
-              // of the batch rolls back with it.
-              if (outcome === restart) {
-                restarted = true;
-                throw rollback;
-              }
-              if (outcome === recordedRefusal || outcome.outcome !== "completed") {
-                refused = { index, result: outcome === recordedRefusal ? undefined : outcome };
-                throw rollback;
-              }
-              results.push(outcome);
-            }
-            return results;
-          },
-        );
-        const settled = states.findIndex((state) => state.deleteSettlement !== undefined);
-        const settlement =
-          settled === -1
-            ? undefined
-            : (states[settled]?.deleteSettlement as Settled<unknown> | undefined);
-        if (settlement?.kind === "restart" || restarted) continue;
-        if (settlement?.kind === "result")
-          return { kind: "refused", index: settled, result: deleteRefusal(settlement) };
-        if (refused !== undefined) return { kind: "refused", ...refused };
-        if (result.kind !== "available") return result;
-        return { kind: "completed", results: result.value };
+      let refused:
+        Readonly<{ index: number; result: ExecuteNamedActionResult | undefined }> | undefined;
+      let restarted = false;
+      for (const state of states) {
+        state.deleteSettlement = undefined;
+        state.attempted = { executions: [] };
       }
-      return { kind: "temporarily_unavailable" };
+      const result = await requests.runChange(
+        session,
+        selection,
+        async (transaction, _scope, issuedAt) => {
+          const results: ExecuteNamedActionResult[] = [];
+          for (const [index, state] of states.entries()) {
+            const outcome = await attemptNamedAction(transaction, issuedAt, state, run, ids);
+            // A record that moved, or refused, throws through the transaction so every record
+            // of the batch rolls back with it.
+            if (outcome === restart) {
+              restarted = true;
+              throw rollback;
+            }
+            if (outcome === recordedRefusal || outcome.outcome !== "completed") {
+              refused = { index, result: outcome === recordedRefusal ? undefined : outcome };
+              throw rollback;
+            }
+            results.push(outcome);
+          }
+          return results;
+        },
+      );
+      const settled = states.findIndex((state) => state.deleteSettlement !== undefined);
+      const settlement =
+        settled === -1
+          ? undefined
+          : (states[settled]?.deleteSettlement as Settled<unknown> | undefined);
+      if (settlement?.kind === "restart" || restarted) return { kind: "temporarily_unavailable" };
+      if (settlement?.kind === "result")
+        return { kind: "refused", index: settled, result: deleteRefusal(settlement) };
+      if (refused !== undefined) return { kind: "refused", ...refused };
+      if (result.kind !== "available") return result;
+      return { kind: "completed", results: result.value };
     },
   });
 };
