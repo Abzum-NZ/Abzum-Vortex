@@ -29,7 +29,7 @@ import {
   readInputs,
   normalizeConditionFieldIdentifiers,
 } from "./protected-query-helpers";
-import { groupedMemberPageReadSchema } from "./protected-query-read-schemas";
+import { groupedMemberPageReadSchema, type pageAnchorSchema } from "./protected-query-read-schemas";
 import {
   parseQueryInputDeclarations,
   validateQueryInputValues,
@@ -55,21 +55,22 @@ const readGroupedMemberPage = async (
       ${after === undefined ? null : JSON.stringify({ sort: after.sort, sortKey: after.sortKey, phase: after.phase, recordId: after.recordId })}::text::jsonb,
       ${JSON.stringify(command.requestedSystemFieldKeys)}::text::jsonb,
       ${JSON.stringify({
-        sort: [],
+        sort: command.sort,
         filter: command.filter ?? null,
-        search: null,
-        sortableFieldIds: [],
+        search: command.search ?? null,
+        sortableFieldIds: command.sortableFieldIds,
         filterableFieldIds: command.filterableFieldIds,
-        searchableFieldIds: [],
+        searchableFieldIds: command.searchableFieldIds,
+        ...(command.groupingFieldId === undefined
+          ? {}
+          : { groupingFieldId: command.groupingFieldId }),
         groupMember: selector,
       })}::text::jsonb,
-      ${"forward"}::text,
+      ${command.pageDirection ?? "forward"}::text,
       ${null}::uuid
     ) as result
   `;
-  const page = groupedMemberPageReadSchema.safeParse(one(rows));
-  if (!page.success) throw new Error("PROTECTED_QUERY_RESULT_INVALID");
-  return page.data;
+  return groupedMemberPageReadSchema.parse(one(rows));
 };
 
 export const groupedMembersCommand = async (
@@ -84,6 +85,10 @@ export const groupedMembersCommand = async (
   const filterRefusal = filterInputRefusal(command);
   if (filterRefusal !== undefined) return { outcome: "refused", reasonCode: filterRefusal };
 
+  const sortable = new Set(command.sortableFieldIds.map((id) => id.toLowerCase()));
+  if (command.sort.some((key) => !sortable.has(key.fieldId.toLowerCase())))
+    return { outcome: "refused", reasonCode: "sort_invalid" };
+  const direction = command.pageDirection ?? "forward";
   let after: QueryContinuation | undefined;
   if (command.continuationToken !== undefined) {
     try {
@@ -98,10 +103,9 @@ export const groupedMembersCommand = async (
       !sameId(after.applicationRootId, applicationRootId) ||
       !sameId(after.organizationAccountId, scope.organizationAccountId) ||
       !sameId(after.moduleRootId, command.moduleRootId) ||
-      !sameId(after.queryId, command.queryId)
+      !sameId(after.queryId, command.queryId) ||
+      after.direction !== direction
     )
-      return { outcome: "refused", reasonCode: "cursor_stale" };
-    if (after.sortKey.length !== 0 || after.direction !== "forward")
       return { outcome: "refused", reasonCode: "cursor_stale" };
   }
 
@@ -130,7 +134,7 @@ export const groupedMembersCommand = async (
       ),
   };
   const inputFingerprint = fingerprintQueryInputs({
-    operation: "protected-group-members-v1",
+    operation: "protected-group-members",
     actorIdentityId: caller.identityId,
     inputValues,
     selector,
@@ -139,7 +143,11 @@ export const groupedMembersCommand = async (
     requestedFieldIds: command.requestedFieldIds.map((fieldId) => fieldId.toLowerCase()).sort(),
     requestedSystemFieldKeys: [...command.requestedSystemFieldKeys].sort(),
     pageSize: command.pageSize,
-    memberOrder: "record_id_ascending",
+    groupingFieldId: command.groupingFieldId?.toLowerCase() ?? null,
+    sort: command.sort.map((key) => ({ ...key, fieldId: key.fieldId.toLowerCase() })),
+    search: command.search ?? null,
+    sortableFieldIds: command.sortableFieldIds.map((id) => id.toLowerCase()).sort(),
+    searchableFieldIds: command.searchableFieldIds.map((id) => id.toLowerCase()).sort(),
   });
   if (after !== undefined && after.inputFingerprint !== inputFingerprint)
     return { outcome: "refused", reasonCode: "cursor_stale" };
@@ -189,10 +197,8 @@ export const groupedMembersCommand = async (
     )
       throw new Error("PROTECTED_QUERY_RESULT_INVALID");
   }
-  if (page.next !== null && page.next.sortKey.length !== 0)
-    throw new Error("PROTECTED_QUERY_RESULT_INVALID");
 
-  const result = protectedQueryGroupedMembersResultSchema.safeParse({
+  const result = protectedQueryGroupedMembersResultSchema.parse({
     outcome: "completed",
     moduleRootId: command.moduleRootId,
     moduleReleaseVersion: page.moduleReleaseVersion,
@@ -201,31 +207,43 @@ export const groupedMembersCommand = async (
     groupValues: page.groupValues,
     rows: page.rows,
   });
-  if (!result.success) throw new Error("PROTECTED_QUERY_RESULT_INVALID");
-  if (page.next === null) return result.data;
-
-  const nextContinuationToken = encodeQueryContinuationToken(
-    {
-      version: 1,
-      direction: "forward",
-      organizationId: scope.organizationId,
-      applicationRootId,
-      organizationAccountId: scope.organizationAccountId,
-      moduleRootId: command.moduleRootId,
-      queryId: command.queryId,
-      moduleReleaseRevision: page.moduleReleaseRevision,
-      inputFingerprint,
-      sortKey: page.next.sortKey,
-      sort: page.next.sort,
-      phase: page.next.phase,
-      recordId: page.next.recordId,
-    },
-    continuationKey,
-  );
-  const completedWithToken = protectedQueryGroupedMembersResultSchema.safeParse({
-    ...result.data,
-    nextContinuationToken,
+  // SQL's next anchor follows the scan direction; opposite is the first returned row.
+  // Every token binds the actor, exact group, order, narrowing and visible projection.
+  const seal = (anchor: z.infer<typeof pageAnchorSchema>, tokenDirection: "forward" | "backward") =>
+    encodeQueryContinuationToken(
+      {
+        version: 1,
+        direction: tokenDirection,
+        organizationId: scope.organizationId,
+        applicationRootId,
+        organizationAccountId: scope.organizationAccountId,
+        moduleRootId: command.moduleRootId,
+        queryId: command.queryId,
+        moduleReleaseRevision: page.moduleReleaseRevision,
+        inputFingerprint,
+        ...anchor,
+      },
+      continuationKey,
+    );
+  const next =
+    direction === "forward"
+      ? page.next === null
+        ? undefined
+        : seal(page.next, "forward")
+      : after === undefined || page.opposite === null
+        ? undefined
+        : seal(page.opposite, "forward");
+  const previous =
+    direction === "backward"
+      ? page.next === null
+        ? undefined
+        : seal(page.next, "backward")
+      : after === undefined || page.opposite === null
+        ? undefined
+        : seal(page.opposite, "backward");
+  return protectedQueryGroupedMembersResultSchema.parse({
+    ...result,
+    ...(next === undefined ? {} : { nextContinuationToken: next }),
+    ...(previous === undefined ? {} : { previousContinuationToken: previous }),
   });
-  if (!completedWithToken.success) throw new Error("PROTECTED_QUERY_RESULT_INVALID");
-  return completedWithToken.data;
 };
