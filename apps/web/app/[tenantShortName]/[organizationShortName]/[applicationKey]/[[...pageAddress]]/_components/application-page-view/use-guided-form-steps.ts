@@ -51,7 +51,7 @@ export function useGuidedFormSteps({
   guidedSubmitInFlight: RefObject<boolean>;
   unsavedWorkRegistry: ReturnType<typeof useUnsavedWorkRegistry>;
   formBlock: ReturnType<typeof createFormBlockRuntime>;
-  applyDispatch: (dispatch: Promise<FlowDispatchResult | undefined>, formPlacementId?: string, afterAccepted?: () => Promise<Notice | undefined>, sourceBindingId?: string) => Promise<void>;
+  applyDispatch: (dispatch: Promise<FlowDispatchResult | undefined>, formPlacementId?: string, afterAccepted?: () => Promise<Notice | undefined>, sourceBindingId?: string) => Promise<unknown>;
 }>) {
   const guidedActivePlacementIds = useMemo(() => {
     const guidedForm = model.guidedForm;
