@@ -57,6 +57,7 @@ import { StudioQuerySheet } from "./studio-query-sheet";
 import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-toolbar";
 import { StudioPanelShell } from "./studio-frame";
 import { StudioInspector } from "./studio-inspector";
+import { StudioLayoutOutlets, StudioLayoutOutletUses } from "./studio-layout-outlets";
 import { StudioUsedIn } from "./studio-used-in";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import { StudioBlockOutlinePanel } from "./studio-outline-panels";
@@ -736,18 +737,26 @@ export function useStudioCanvasTab({
               ? undefined
               : selected.kind === "navigation"
                 ? "Change this menu entry in the Menu tab."
-                : selected.kind === "role"
-                  ? tab === "access"
-                    ? undefined
-                    : "Change this role in the Access tab."
-                  : selected.kind === "module" ||
-                      selected.kind === "record_type" ||
-                      selected.kind === "field" ||
-                      selected.kind === "query"
-                    ? "Change this in the Data tab."
-                    : "This item cannot be edited here."
+                : selected.kind === "shell"
+                  ? undefined
+                  : selected.kind === "role"
+                    ? tab === "access"
+                      ? undefined
+                      : "Change this role in the Access tab."
+                    : selected.kind === "module" ||
+                        selected.kind === "record_type" ||
+                        selected.kind === "field" ||
+                        selected.kind === "query"
+                      ? "Change this in the Data tab."
+                      : "This item cannot be edited here."
       }
     >
+      {selected?.kind === "shell" &&
+        source.body.shells
+          .filter((shell) => shell.id === selected.shellAlias)
+          .map((shell) => (
+            <StudioLayoutOutlets key={shell.id} draft={draft} catalogue={catalogue} shell={shell} />
+          ))}
       {(selected?.kind === "flow" || selected?.kind === "flow_step") &&
         tab === "flows" &&
         inspector.status === "resolved" &&
@@ -780,6 +789,9 @@ export function useStudioCanvasTab({
         />
       )}
       {inspector.status === "resolved" && placementWorkflows}
+      {selected?.kind === "placement" && (
+        <StudioLayoutOutletUses source={source} placementAlias={selected.placementAlias} />
+      )}
       {usedIn !== null && (
         <StudioUsedIn source={source} target={usedIn} name={selectedName ?? "it"} />
       )}
