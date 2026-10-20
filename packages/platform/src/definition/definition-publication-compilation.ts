@@ -321,14 +321,8 @@ export const validateCandidate = (
   )
     refuse("DEFINITION_HISTORY_INVALID");
   const latest = candidate.historyEvidence.latestRelease;
-  if (
-    candidate.draft.publishedRevision !== latest?.publication.revision ||
-    candidate.draft.sourceFingerprint !== fingerprintCanonicalValue(candidate.draft.source)
-  )
-    refuse(
-      candidate.draft.sourceFingerprint !== fingerprintCanonicalValue(candidate.draft.source)
-        ? "DEFINITION_SOURCE_EVIDENCE_MISMATCH"
-        : "DEFINITION_HISTORY_INVALID",
-    );
+  // validatedDraft already authenticated this source's fingerprint.
+  if (candidate.draft.publishedRevision !== latest?.publication.revision)
+    refuse("DEFINITION_HISTORY_INVALID");
   return candidate;
 };

@@ -1,6 +1,10 @@
 import "server-only";
 
-import type { ExactDefinitionDependency, SessionContext } from "../schema";
+import type {
+  DefinitionPublicationHistoryEvidence,
+  ExactDefinitionDependency,
+  SessionContext,
+} from "../schema";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import { applicationModuleKeys } from "./application-module-sources";
 import { applicationModuleSources } from "./application-module-lowering";
@@ -8,7 +12,7 @@ import type { ApplicationReleasePlan } from "./application-publication";
 import { assertReleasable } from "./definition-publication-compilation";
 import {
   refuse,
-  type DefinitionPublicationCandidate,
+  type DefinitionDraftCandidate,
   type DefinitionPublicationReader,
   type DefinitionReleaseAppend,
   type OwnedModuleRoot,
@@ -160,9 +164,14 @@ const previewRows = (append: DefinitionReleaseAppend, context: SessionContext) =
 export const planApplicationPreview = async (
   context: SessionContext,
   snapshot: DefinitionPublicationReader,
-  candidate: DefinitionPublicationCandidate,
+  candidate: DefinitionDraftCandidate,
   permissions: PlatformPermissionSource,
-  compile: () => Promise<ApplicationReleasePlan>,
+  compile: () => Promise<
+    Readonly<{
+      releasePlan: ApplicationReleasePlan;
+      historyEvidence: DefinitionPublicationHistoryEvidence;
+    }>
+  >,
 ): Promise<PreviewReleasePlan> => {
   const ownedRoots = await snapshot.readOwnedModuleRoots(String(candidate.draft.rootId));
   const source = candidate.draft.source;
@@ -193,8 +202,8 @@ export const planApplicationPreview = async (
       return refuse("DEFINITION_DEPENDENCY_MISSING");
     return { rootId: page.rootId, currentReleaseRevision: page.anchorReleaseRevision };
   });
-  const compiled = await compile();
-  assertReleasable(compiled, candidate.historyEvidence, permissions);
+  const { releasePlan: compiled, historyEvidence } = await compile();
+  assertReleasable(compiled, historyEvidence, permissions);
   return {
     accessVersion: context.accessVersion,
     application,

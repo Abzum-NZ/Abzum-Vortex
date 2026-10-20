@@ -460,6 +460,39 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         };
   }
 
+  async isApplicationDraftCurrent(candidate: DefinitionDraftCandidate): Promise<boolean> {
+    const { draft } = candidate;
+    const rows = await this.transaction.query`
+      select vortex_definition.read_application_draft_consistency(
+        ${draft.rootId}::uuid, ${draft.draftRevision}::bigint,
+        ${draft.sourceFingerprint}::text, ${draft.publishedRevision ?? null}::bigint
+      ) as consistency
+    `;
+    const { consistency } = parseOneRow(
+      rows,
+      z
+        .object({
+          consistency: z
+            .object({
+              draftRevision: safeRevisionSchema,
+              sourceFingerprint: fingerprintSchema,
+              publishedRevision: nullableRevisionSchema,
+            })
+            .strict()
+            .nullable(),
+        })
+        .strict(),
+    );
+    if (consistency === null) return false;
+    if (
+      consistency.draftRevision !== draft.draftRevision ||
+      consistency.sourceFingerprint !== draft.sourceFingerprint ||
+      consistency.publishedRevision !== (draft.publishedRevision ?? null)
+    )
+      return invalidStorage("Draft consistency returned a substituted identity");
+    return true;
+  }
+
   async readCandidate(rootId: string): Promise<DefinitionPublicationCandidate | undefined> {
     const state = await this.readPublicationState(rootId);
     if (state === undefined) return undefined;
@@ -1025,6 +1058,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       releaseVersion: release.releaseVersion,
       contentFingerprint: release.contentFingerprint,
       resolutionFingerprint: release.resolutionFingerprint,
+      sourceFingerprint: release.authoredSourceFingerprint,
       compilationOutput: output,
       resolutionSnapshot: snapshot,
       published: published.data,

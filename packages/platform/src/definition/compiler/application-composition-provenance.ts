@@ -5,7 +5,7 @@ import {
   type DefinitionProvenanceEntry,
   type PlatformBlockRelease,
 } from "../../schema";
-import { canonicalJson } from "../canonical-json-definition";
+import { sameCanonicalValue } from "../canonical-json-definition";
 import { applicationTypedValueTarget, sourceResolvesIdentity } from "./provenance";
 import type { Resolution } from "./resolution";
 import {
@@ -463,7 +463,7 @@ export function applicationCompositionProvenance(
     if (!canonicalLeafSet.has(pathKey(canonicalPath)))
       fail("vortex.definition.invalid_compilation_output", "invalid_value");
     const canonicalValue = valueAtPath(canonical, canonicalPath);
-    const transformed = canonicalJson(sourceValue) !== canonicalJson(canonicalValue);
+    const transformed = !sameCanonicalValue(sourceValue, canonicalValue);
     let resolved: boolean;
     if (setting) {
       const leafKind = kind ?? "";

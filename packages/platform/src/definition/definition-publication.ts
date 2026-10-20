@@ -20,6 +20,7 @@ import {
   type ModuleField,
   type Fingerprint,
   type Revision,
+  type DefinitionPublicationHistoryEvidence,
 } from "../schema";
 import { applicationModuleKeys } from "./application-module-sources";
 import { peopleDirectory, type PeopleDirectoryOwner } from "./module-links";
@@ -38,6 +39,9 @@ import {
   applicationDraftCompilationKey,
   compileApplicationDraftOnce,
   retainApplicationDraftCompilation,
+  readRetainedApplicationDraftCandidate,
+  readRetainedApplicationPublicationHistory,
+  retainApplicationDraftPublicationHistory,
 } from "./application-draft-compilation-cache";
 import {
   type DefinitionResolution,
@@ -68,6 +72,8 @@ import {
 const preparationReleaseNote = "Planned by publication preparation";
 
 export type ApplicationDraftCompilation = Readonly<{
+  candidate: DefinitionDraftCandidate;
+  publicationHistory: DefinitionPublicationHistoryEvidence | undefined;
   compilation: ApplicationCompilationOutput;
   /**
    * The one compile of this revision as a release plan: the Application with its request and
@@ -351,6 +357,14 @@ const compileDraftSnapshotOver = async (
       }
     }
     return retainApplicationDraftCompilation(cacheKey, {
+      candidate: {
+        draft: candidate.draft,
+        identities: candidate.identities,
+        currentReleaseVersion: latestReleaseVersion(
+          candidate,
+        ) as DefinitionDraftCandidate["currentReleaseVersion"],
+      },
+      publicationHistory: readRetainedApplicationPublicationHistory(candidate),
       compilation,
       releasePlan: compiled,
       moduleReleases: compiled.dependencies.modules,
@@ -589,11 +603,21 @@ export const createDefinitionPublicationService = (
     if (!command.success) return refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     await authorize(authority, context, { kind: "publication", rootId: command.data.rootId });
     return repository.read(context, async (reader) => {
-      const candidate = applicationCandidate(
-        context,
-        await reader.readCandidate(command.data.rootId),
-        command.data,
+      const retained = readRetainedApplicationDraftCandidate(
+        context.organizationId,
+        command.data.rootId,
+        command.data.expectedDraftRevision,
       );
+      const candidate =
+        retained !== undefined && (await reader.isApplicationDraftCurrent(retained))
+          ? retained
+          : validateDraftCandidate(
+              context,
+              await reader.readDraftCandidate(command.data.rootId),
+              command.data,
+            );
+      if (candidate.draft.source.kind !== "application")
+        return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
       const overlay = createDraftModuleOverlay(reader, context, candidate.draft);
       // The revision the builder already compiled is released as it was compiled.
       return planApplicationPreview(
@@ -601,8 +625,26 @@ export const createDefinitionPublicationService = (
         overlay,
         candidate,
         catalogue.permissions,
-        async () =>
-          (await compileDraftSnapshot(context, reader, overlay, catalogue, candidate)).releasePlan,
+        async () => {
+          const compilation = await compileDraftSnapshot(
+            context,
+            reader,
+            overlay,
+            catalogue,
+            candidate,
+          );
+          const historyEvidence =
+            compilation.publicationHistory ??
+            applicationCandidate(
+              context,
+              await reader.readCandidate(command.data.rootId),
+              command.data,
+            ).historyEvidence;
+          if (historyEvidence.anchorReleaseRevision !== (candidate.draft.publishedRevision ?? null))
+            return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+          retainApplicationDraftPublicationHistory(compilation, historyEvidence);
+          return { releasePlan: compilation.releasePlan, historyEvidence };
+        },
       );
     });
   },

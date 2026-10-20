@@ -7,7 +7,11 @@ import {
   versionImpactProperties,
   versionImpactReasonCodes,
 } from "../../schema";
-import { canonicalJson, compareCanonicalStrings } from "../canonical-json-definition";
+import {
+  canonicalJson,
+  compareCanonicalStrings,
+  sameCanonicalValue,
+} from "../canonical-json-definition";
 import type { BlockPropertySchemaContract } from "../application-composition/block-property-schema";
 
 export type RecordValue = Record<string, unknown>;
@@ -27,7 +31,7 @@ export const compareUnknownText = (left: unknown, right: unknown): number =>
 export const asRecord = (value: unknown): RecordValue => value as RecordValue;
 export const same = (left: unknown, right: unknown): boolean => {
   if (left === undefined || right === undefined) return left === right;
-  return canonicalJson(left) === canonicalJson(right);
+  return sameCanonicalValue(left, right);
 };
 const asComponentId = (
   value: unknown,
@@ -66,12 +70,7 @@ export const pushChange = (
     reasons.push(makeReason(impact, code, componentKind, property, componentId));
 };
 
-const setDifference = (left: unknown[], right: unknown[]): unknown[] => {
-  const rightKeys = new Set(right.map((value) => canonicalJson(value)));
-  return left.filter((entry) => !rightKeys.has(canonicalJson(entry)));
-};
-
-export const compareSet = (
+const compareSetChanges = (
   reasons: VersionImpactReason[],
   previous: unknown[],
   candidate: unknown[],
@@ -80,8 +79,12 @@ export const compareSet = (
   property: Property,
   addImpact: VersionImpact = "minor",
   removeImpact: VersionImpact = "major",
-): void => {
-  if (setDifference(candidate, previous).length > 0)
+): Readonly<{ added: boolean; removed: boolean }> => {
+  const previousKeys = new Set(previous.map((value) => canonicalJson(value)));
+  const candidateKeys = new Set(candidate.map((value) => canonicalJson(value)));
+  const added = [...candidateKeys].some((key) => !previousKeys.has(key));
+  const removed = [...previousKeys].some((key) => !candidateKeys.has(key));
+  if (added)
     reasons.push(
       makeReason(
         addImpact,
@@ -91,7 +94,7 @@ export const compareSet = (
         componentId,
       ),
     );
-  if (setDifference(previous, candidate).length > 0)
+  if (removed)
     reasons.push(
       makeReason(
         removeImpact,
@@ -101,6 +104,11 @@ export const compareSet = (
         componentId,
       ),
     );
+  return { added, removed };
+};
+
+export const compareSet = (...parameters: Parameters<typeof compareSetChanges>): void => {
+  compareSetChanges(...parameters);
 };
 
 export const comparePresentationSet = (
@@ -111,12 +119,15 @@ export const comparePresentationSet = (
   componentId: unknown,
   property: Property,
 ): void => {
-  compareSet(reasons, previous, candidate, componentKind, componentId, property);
-  if (
-    setDifference(previous, candidate).length === 0 &&
-    setDifference(candidate, previous).length === 0 &&
-    !same(previous, candidate)
-  )
+  const changes = compareSetChanges(
+    reasons,
+    previous,
+    candidate,
+    componentKind,
+    componentId,
+    property,
+  );
+  if (!changes.added && !changes.removed && !same(previous, candidate))
     reasons.push(makeReason("patch", "presentation_changed", componentKind, "order", componentId));
 };
 
@@ -390,11 +401,19 @@ export const sorted = (
       : identity === undefined
         ? undefined
         : (item) => String(item[identity]);
+  const canonicalKeys = new Map<unknown, string>();
+  const keyOf = (value: unknown): string => {
+    const known = canonicalKeys.get(value);
+    if (known !== undefined) return known;
+    const key = canonicalJson(value);
+    canonicalKeys.set(value, key);
+    return key;
+  };
   return [...values].sort((left, right) => {
     if (identityOf) {
       const result = compareText(identityOf(asRecord(left)), identityOf(asRecord(right)));
       if (result !== 0) return result;
     }
-    return compareText(canonicalJson(left), canonicalJson(right));
+    return compareText(keyOf(left), keyOf(right));
   });
 };

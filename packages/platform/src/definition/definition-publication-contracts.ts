@@ -95,6 +95,7 @@ export type ResolvableModuleRelease = Readonly<{
   releaseVersion: SemanticVersion;
   contentFingerprint: Fingerprint;
   resolutionFingerprint: Fingerprint;
+  sourceFingerprint: Fingerprint;
   published: ModuleVersionImpactHistoryEntry;
   compilationOutput: ModuleOutput;
   resolutionSnapshot: DefinitionResolutionSnapshot;
@@ -138,6 +139,8 @@ export interface DefinitionPublicationReader {
   >;
   /** The draft, its identities and its current release version, without the release itself. */
   readDraftCandidate(rootId: string): Promise<DefinitionDraftCandidate | undefined>;
+  /** Rechecks a retained Application draft's revision, source and publication anchor only. */
+  isApplicationDraftCurrent(candidate: DefinitionDraftCandidate): Promise<boolean>;
   readModuleReleasePage(
     organizationId: OrganizationId,
     key: string,
