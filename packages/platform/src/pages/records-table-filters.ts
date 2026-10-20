@@ -23,6 +23,7 @@ export const RECORDS_TABLE_MAXIMUM_FILTER_RECORDS = 20;
  * its values.
  */
 export type RecordsTableFieldFilter =
+  | Readonly<{ kind: "empty" }>
   | Readonly<{ kind: "text"; text: string }>
   | Readonly<{ kind: "choice"; values: readonly string[] }>
   | Readonly<{ kind: "number"; from?: string; to?: string }>
@@ -139,6 +140,8 @@ export const readRecordsTableFieldFilter = (
       ? (held as string[])
       : undefined;
   switch (record.kind) {
+    case "empty":
+      return only("kind") ? { kind: "empty" } : undefined;
     case "text": {
       const held = typeof record.text === "string" ? record.text.trim() : "";
       return only("kind", "text") &&
@@ -213,6 +216,8 @@ const encodeRange = (from: string | undefined, to: string | undefined): string =
  */
 export const encodeRecordsTableFieldFilter = (filter: RecordsTableFieldFilter): string => {
   switch (filter.kind) {
+    case "empty":
+      return "empty:";
     case "text":
       return `text:${filter.text}`;
     case "choice":
@@ -251,6 +256,8 @@ export const decodeRecordsTableFieldFilter = (
     }
   };
   switch (kind) {
+    case "empty":
+      return operand === "" ? { kind: "empty" } : undefined;
     case "text":
       return readRecordsTableFieldFilter({ kind, text: operand });
     case "choice": {

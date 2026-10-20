@@ -6,6 +6,7 @@ import {
   gridLayoutVisibleFieldIds,
   readRecordsTableContract,
   type BlockPropertyValueContract,
+  type RecordsTableContract,
   type GridLayoutState,
   type IdentitySession,
   type JsonValue,
@@ -46,7 +47,7 @@ import {
   type ConditionalFormattingContext,
   type RecordsTableRequestRefusal,
 } from "./records-table-features";
-import { calendarAddDays, calendarStartOfDay } from "./calendar-query";
+import { CalendarEndpointError, calendarAddDays, calendarStartOfDay } from "./calendar-date";
 import { recordLinkLabelKey } from "../definition/app-index";
 
 /**
@@ -202,6 +203,8 @@ const typedFilterCondition = (
   filter: RecordsTableFieldFilter,
   timeZone: string | undefined,
 ): JsonValue | undefined => {
+  if (filter.kind === "empty")
+    return { kind: "comparison", operator: "is_empty", left: { source: "field", fieldId } };
   if (recordsTableFilterKindOf(target.type) !== filter.kind) return undefined;
   switch (filter.kind) {
     case "text":
@@ -286,6 +289,96 @@ const typedFilterCondition = (
   }
 };
 
+/** The search and filters of one Records table request, built from the installed definition. */
+export type RecordsTableNarrowingCommand = Readonly<{
+  kind: "built";
+  /** The declared filter fields the installed definition describes, for their filter controls. */
+  filterFields: Readonly<Record<string, RecordsTableFilterField>>;
+  appliedFilters: readonly RecordsTableFilterValue[];
+  filter: JsonValue | undefined;
+  search: string | undefined;
+  filterableFieldIds: readonly string[];
+}>;
+
+/**
+ * Validates the viewer's search and filters against the table's declared contract and builds the
+ * condition the Query engine applies: a filter needs a field Column filters declares and a search
+ * needs Search on. Both the page read and the pivot read narrow through this one function, so a
+ * pivot totals exactly the records the table shows.
+ */
+export const buildRecordsTableNarrowing = (
+  contract: RecordsTableContract,
+  request: Pick<RecordsTableQueryRequest, "state" | "filterTargets" | "timeZone" | "fieldLabels">,
+  filterableFieldIds: readonly string[] = lowerUnique(
+    contract.features.columnFilters.enabled ? contract.features.columnFilters.fields : [],
+  ),
+): RecordsTableNarrowingCommand | RecordsTableRequestRefusal => {
+  const { state } = request;
+  const columnFilters = contract.features.columnFilters;
+  const filterFields = Object.fromEntries(
+    filterableFieldIds.flatMap((fieldId): [string, RecordsTableFilterField][] => {
+      const target = request.filterTargets?.[fieldId];
+      const kind = target === undefined ? undefined : recordsTableFilterKindOf(target.type);
+      if (target === undefined || kind === undefined) return [];
+      if (target.type === "date_time" && request.timeZone === undefined) return [];
+      return [
+        [
+          fieldId,
+          {
+            fieldId,
+            label: request.fieldLabels?.[fieldId] ?? target.label,
+            type: target.type,
+            kind,
+            ...(target.options === undefined ? {} : { options: target.options }),
+            ...(target.currency === undefined ? {} : { currency: target.currency }),
+            ...(target.type === "date_time" && request.timeZone !== undefined
+              ? { timeZone: request.timeZone }
+              : {}),
+          },
+        ],
+      ];
+    }),
+  );
+  const conditions: JsonValue[] = [];
+  const appliedFilters: RecordsTableFilterValue[] = [];
+  for (const requested of state.filters) {
+    const fieldId = requested.fieldId.toLowerCase();
+    if (!filterableFieldIds.includes(fieldId))
+      return recordsTableRequestRefusal(
+        "filter",
+        columnFilters.enabled ? "field_not_filterable" : "feature_off",
+      );
+    if (appliedFilters.some((held) => held.fieldId === fieldId))
+      return recordsTableRequestRefusal("filter", "field_filtered_twice");
+    // The address is never trusted: the filter is validated again and built from the installed field.
+    const filter = readRecordsTableFieldFilter(requested.filter);
+    const target = request.filterTargets?.[fieldId];
+    if (filter === undefined) return recordsTableRequestRefusal("filter", "value_malformed");
+    if (target === undefined) return recordsTableRequestRefusal("filter", "field_not_installed");
+    let condition: JsonValue | undefined;
+    try {
+      condition = typedFilterCondition(target, fieldId, filter, request.timeZone);
+    } catch (error) {
+      if (!(error instanceof CalendarEndpointError)) throw error;
+      return recordsTableRequestRefusal("filter", "value_out_of_range");
+    }
+    if (condition === undefined) return recordsTableRequestRefusal("filter", "value_not_for_field");
+    conditions.push(condition);
+    appliedFilters.push({ fieldId, filter });
+  }
+  const filter: JsonValue | undefined =
+    conditions.length === 0
+      ? undefined
+      : conditions.length === 1
+        ? conditions[0]
+        : { kind: "all", conditions };
+  if (state.search !== null && !contract.features.search.enabled)
+    return recordsTableRequestRefusal("search", "feature_off");
+  const search =
+    state.search === null || state.search.trim() === "" ? undefined : state.search.trim();
+  return { kind: "built", filterFields, appliedFilters, filter, search, filterableFieldIds };
+};
+
 /** A built Records table read: the Query command, its visible projection and its effective order. */
 export type RecordsTableQueryCommand = Readonly<{
   kind: "built";
@@ -354,61 +447,9 @@ export const buildRecordsTableQueryCommand = (
     fieldId: key.fieldId.toLowerCase(),
     direction: key.direction,
   }));
-  const filterFields = Object.fromEntries(
-    filterableFieldIds.flatMap((fieldId): [string, RecordsTableFilterField][] => {
-      const target = request.filterTargets?.[fieldId];
-      const kind = target === undefined ? undefined : recordsTableFilterKindOf(target.type);
-      if (target === undefined || kind === undefined) return [];
-      if (target.type === "date_time" && request.timeZone === undefined) return [];
-      return [
-        [
-          fieldId,
-          {
-            fieldId,
-            label: request.fieldLabels?.[fieldId] ?? target.label,
-            type: target.type,
-            kind,
-            ...(target.options === undefined ? {} : { options: target.options }),
-            ...(target.currency === undefined ? {} : { currency: target.currency }),
-            ...(target.type === "date_time" && request.timeZone !== undefined
-              ? { timeZone: request.timeZone }
-              : {}),
-          },
-        ],
-      ];
-    }),
-  );
-  const conditions: JsonValue[] = [];
-  const appliedFilters: RecordsTableFilterValue[] = [];
-  for (const requested of state.filters) {
-    const fieldId = requested.fieldId.toLowerCase();
-    if (!filterableFieldIds.includes(fieldId))
-      return recordsTableRequestRefusal(
-        "filter",
-        columnFilters.enabled ? "field_not_filterable" : "feature_off",
-      );
-    if (appliedFilters.some((held) => held.fieldId === fieldId))
-      return recordsTableRequestRefusal("filter", "field_filtered_twice");
-    // The address is never trusted: the filter is validated again and built from the installed field.
-    const filter = readRecordsTableFieldFilter(requested.filter);
-    const target = request.filterTargets?.[fieldId];
-    if (filter === undefined) return recordsTableRequestRefusal("filter", "value_malformed");
-    if (target === undefined) return recordsTableRequestRefusal("filter", "field_not_installed");
-    const condition = typedFilterCondition(target, fieldId, filter, request.timeZone);
-    if (condition === undefined) return recordsTableRequestRefusal("filter", "value_not_for_field");
-    conditions.push(condition);
-    appliedFilters.push({ fieldId, filter });
-  }
-  const filter: JsonValue | undefined =
-    conditions.length === 0
-      ? undefined
-      : conditions.length === 1
-        ? conditions[0]
-        : { kind: "all", conditions };
-  if (state.search !== null && !contract.features.search.enabled)
-    return recordsTableRequestRefusal("search", "feature_off");
-  const search =
-    state.search === null || state.search.trim() === "" ? undefined : state.search.trim();
+  const narrowed = buildRecordsTableNarrowing(contract, request, filterableFieldIds);
+  if (narrowed.kind === "refused") return narrowed;
+  const { filterFields, appliedFilters, filter, search } = narrowed;
 
   // Fields only the formatting rules read are an optional projection: the engine returns each
   // under the viewer's field policy (absent where withheld) and never filters or sorts by it, so
@@ -515,6 +556,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
             ? {}
             : { fieldLinkTypes: request.fieldLinkTypes }),
           ...(request.formatting === undefined ? {} : { formatting: request.formatting }),
+          ...(request.state.pivot === undefined ? {} : { pivotView: request.state.pivot }),
         },
         result.value.rows,
         result.value.fieldBounds,

@@ -419,6 +419,8 @@ export const arrangementRefusalReasonCodes = [
   "cursor_stale",
   /** The calendar time zone is not a known IANA zone. */
   "time_zone_invalid",
+  /** A pivot's column dimension holds more values than one pivot shows. */
+  "pivot_columns_exceeded",
 ] as const;
 export type ArrangementRefusalReasonCode = (typeof arrangementRefusalReasonCodes)[number];
 

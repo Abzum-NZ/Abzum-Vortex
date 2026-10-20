@@ -54,6 +54,7 @@ import { useTableNextPage, useTableNextPageReadAhead } from "./use-table-next-pa
 import { useRuntimeInputs } from "./use-runtime-inputs";
 import { useGridLayout } from "./use-grid-layout";
 import { useRowDetail } from "./use-row-detail";
+import { usePivot } from "./use-pivot";
 import { WebMcpAdapter } from "../../../../../../_components/webmcp-adapter";
 import {
   useApplicationFrame,
@@ -433,6 +434,7 @@ export function ApplicationPageViewContent({
   const {
     commitTablePage,
     changeTableQuery,
+    commitPivotView,
     openTableView,
     selectTableViewInPlace,
     tableQueryPending,
@@ -492,6 +494,12 @@ export function ApplicationPageViewContent({
     currentSearch,
     onReload: router.refresh,
   });
+  const { readPivotPage } = usePivot({
+    application,
+    currentPageKey,
+    currentSearch,
+    onReload: router.refresh,
+  });
 
   const { runtimeInputs } = useRuntimeInputs({
     currentData,
@@ -515,6 +523,8 @@ export function ApplicationPageViewContent({
     commitLayout,
     runViewCommand,
     readRowDetail,
+    readPivotPage,
+    commitPivotView,
     requestChoicePageRef,
     changeChoiceField,
     subject,

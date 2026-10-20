@@ -71,6 +71,13 @@ declare
   group_value_sql text;
   group_page_limit integer;
   group_after text := p_user_inputs ->> 'groupAfter';
+  pivot_mode boolean := false;
+  pivot_row_field_id text;
+  pivot_column_field_id text;
+  pivot_measure_field_id text;
+  pivot_buckets jsonb := '{}'::jsonb;
+  group_bucket jsonb;
+  pivot_column_limit constant integer := 50;
   group_by_sql text;
   group_presence_sql text;
   aggregate_object_sql text := '';
@@ -119,14 +126,36 @@ begin
 
   if p_user_inputs ? 'grouping' then
     query_item := vortex_record.grouping_query_internal(
-      query_item, record_type_item, p_user_inputs -> 'grouping'
+      query_item, record_type_item, p_user_inputs -> 'grouping', 50
     );
     if query_item is null then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
   end if;
-  group_page_limit := case when p_user_inputs ? 'grouping'
-    then ((p_user_inputs #>> '{grouping,limit}')::numeric)::integer else summary_candidate_limit end;
+  pivot_mode := p_user_inputs ? 'pivot';
+  if pivot_mode then
+    query_item := vortex_record.pivot_query_internal(
+      query_item, record_type_item, p_user_inputs -> 'pivot'
+    );
+    if query_item is null then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+    end if;
+    pivot_row_field_id := pg_catalog.lower(p_user_inputs #>> '{pivot,rowFieldId}');
+    pivot_column_field_id := pg_catalog.lower(p_user_inputs #>> '{pivot,columnFieldId}');
+    pivot_measure_field_id := pg_catalog.lower(p_user_inputs #>> '{pivot,measure,fieldId}');
+    pivot_buckets := pg_catalog.jsonb_build_object(
+      pivot_row_field_id, p_user_inputs #> '{pivot,rowDateBucket}',
+      pivot_column_field_id, p_user_inputs #> '{pivot,columnDateBucket}'
+    );
+  elsif p_user_inputs ? 'grouping' then
+    pivot_buckets := pg_catalog.jsonb_build_object(
+      pg_catalog.lower(p_user_inputs #>> '{grouping,fieldId}'), p_user_inputs #> '{grouping,dateBucket}'
+    );
+  end if;
+  group_page_limit := case
+    when pivot_mode then ((p_user_inputs #>> '{pivot,rowLimit}')::numeric)::integer
+    when p_user_inputs ? 'grouping' then ((p_user_inputs #>> '{grouping,limit}')::numeric)::integer
+    else summary_candidate_limit end;
   if pg_catalog.jsonb_typeof(declared_searchable_ids) is distinct from 'array' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
@@ -309,6 +338,15 @@ begin
 
   if p_user_inputs ? 'grouping' and not (
     pg_catalog.lower(p_user_inputs #>> '{grouping,fieldId}') = any (readable_field_ids)
+  ) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'field_unbounded');
+  end if;
+  -- A pivot axis or measure withheld from the viewer on any record is refused, so a withheld
+  -- value never appears as a row, a column or a measure.
+  if pivot_mode and not (
+    pivot_row_field_id = any (readable_field_ids)
+    and pivot_column_field_id = any (readable_field_ids)
+    and (pivot_measure_field_id is null or pivot_measure_field_id = any (readable_field_ids))
   ) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'field_unbounded');
   end if;
@@ -667,9 +705,10 @@ begin
       aggregate_object_sql) end;
 
   foreach field_key in array group_ids loop
+    group_bucket := nullif(pivot_buckets -> field_key, 'null'::jsonb);
     group_value_sql := pg_catalog.format(
       'vortex_record.grouping_value_internal(candidate.projected_values -> %L, %L, %L::jsonb)',
-      field_key, fields_by_id -> field_key ->> 'type', (p_user_inputs #> '{grouping,dateBucket}')::text
+      field_key, fields_by_id -> field_key ->> 'type', group_bucket::text
     );
     group_value_pairs := pg_catalog.array_append(
       group_value_pairs, pg_catalog.format('%L, %s', field_key, group_value_sql)
@@ -981,6 +1020,126 @@ begin
       board_choice_field_id
     );
     end if;
+  elsif pivot_mode then
+    -- One grouping-sets statement yields every cell, each row total, each column total and the
+    -- grand total over the full readable filtered set. Averages and extremes are computed for
+    -- each set, never combined from cells. Rows are keyset-paged by their canonical value text.
+    summary_sql := pg_catalog.format(
+      'with candidate as materialized (%s),
+       candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
+       selected as materialized (%s),
+       raw_dimensions as materialized (
+         select candidate.projected_values, coalesce(%s, ''null''::jsonb) as row_value, coalesce(%s, ''null''::jsonb) as column_value
+         from selected as candidate
+         where %s and (select value from candidate_count) <= %s
+       ),
+       row_values as materialized (
+         select * from vortex_record.pivot_dimension_internal(
+           (select pg_catalog.array_agg(distinct row_value) from raw_dimensions), %L::jsonb
+         )
+       ),
+       column_values as materialized (
+         select * from vortex_record.pivot_dimension_internal(
+           (select pg_catalog.array_agg(distinct column_value) from raw_dimensions), %L::jsonb
+         )
+       ),
+       dimensions as materialized (
+         select source.projected_values, rows.normalized as row_value,
+           columns.normalized as column_value
+         from raw_dimensions as source
+         join row_values as rows on rows.value = source.row_value
+         join column_values as columns on columns.value = source.column_value
+       ),
+       crossed as materialized (
+         select grouping(candidate.row_value, candidate.column_value) as level,
+           candidate.row_value, candidate.column_value,
+           pg_catalog.count(*)::integer as row_count,
+           pg_catalog.jsonb_build_object(%s) as aggregates
+         from dimensions as candidate
+         group by grouping sets (
+           (candidate.row_value, candidate.column_value), (candidate.row_value),
+           (candidate.column_value), ()
+         )
+       ),
+       column_axis as materialized (
+         select * from crossed where level = 2
+       ),
+       column_count as (select pg_catalog.count(*)::integer as value from column_axis),
+       row_axis as materialized (
+         select * from crossed
+         where level = 1
+           and (%L::text is null or row_value::text collate "C" > %L::text collate "C")
+         order by row_value::text collate "C" limit %s
+       ),
+       visible_rows as materialized (
+         select * from row_axis order by row_value::text collate "C" limit %s
+       ),
+       grand as (select row_count, aggregates from crossed where level = 3)
+       select case
+         when candidate_count.value > %s
+           then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
+         when column_count.value > %s
+           then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''pivot_columns_exceeded'')
+         else pg_catalog.jsonb_build_object(
+           ''outcome'', ''completed'',
+           ''moduleRootId'', %L,
+           ''moduleReleaseVersion'', %L,
+           ''queryId'', %L,
+           ''groupByFieldIds'', %L::jsonb,
+           ''totalRowCount'', grand.row_count,
+           ''groups'', ''[]''::jsonb,
+           ''aggregates'', grand.aggregates,
+           ''nextGroupKey'', case when (select pg_catalog.count(*) from row_axis) > %s
+             then (select row_value::text from visible_rows order by row_value::text collate "C" desc limit 1)
+             else null end,
+           ''pivot'', pg_catalog.jsonb_build_object(
+             ''rowFieldId'', %L,
+             ''columnFieldId'', %L,
+             ''rowGroupCount'', (select pg_catalog.count(*) from crossed where level = 1),
+             ''columns'', (
+               select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+                 ''value'', axis.column_value, ''rowCount'', axis.row_count, ''aggregates'', axis.aggregates
+               ) order by axis.column_value::text collate "C"), ''[]''::jsonb)
+               from column_axis as axis
+             ),
+             ''rows'', (
+               select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+                 ''key'', visible.row_value::text, ''value'', visible.row_value, ''rowCount'', visible.row_count,
+                 ''aggregates'', visible.aggregates,
+                 ''cells'', (
+                   select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+                     ''column'', cell.column_value, ''rowCount'', cell.row_count,
+                     ''aggregates'', cell.aggregates
+                   ) order by cell.column_value::text collate "C"), ''[]''::jsonb)
+                   from crossed as cell
+                   where cell.level = 0 and cell.row_value = visible.row_value
+                 )
+               ) order by visible.row_value::text collate "C"), ''[]''::jsonb)
+               from visible_rows as visible
+             )
+           )
+         ) end
+       from candidate_count cross join column_count cross join grand',
+      candidate_sql,
+      selected_sql,
+      group_by_terms[1],
+      group_by_terms[2],
+      group_presence_sql,
+      summary_candidate_limit,
+      (fields_by_id -> pivot_row_field_id)::text,
+      (fields_by_id -> pivot_column_field_id)::text,
+      aggregate_object_sql,
+      group_after, group_after, group_page_limit + 1, group_page_limit,
+      summary_candidate_limit,
+      pivot_column_limit,
+      p_module_root_id::text,
+      resolved ->> 'moduleReleaseVersion',
+      p_query_id::text,
+      pg_catalog.to_jsonb(group_ids)::text,
+      group_page_limit,
+      pivot_row_field_id,
+      pivot_column_field_id
+    );
   elsif pg_catalog.cardinality(group_ids) > 0 then
     groups_json_sql := pg_catalog.format(
       '(select coalesce(pg_catalog.jsonb_agg(
@@ -1099,7 +1258,7 @@ grant execute on function vortex_record.run_module_query_summary_internal(uuid,u
   to vortex_record_adapter;
 
 comment on function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb) is
-  'Owner-only summary execution over the access plan prepared by the protected adapter entry point; explicit organisation and application scope and the exact read plan bound every aggregate scan.';
+  'Owner-only summary execution over the access plan prepared by the protected adapter entry point; explicit organisation and application scope and the exact read plan bound every aggregate scan, including a pivot crossed in one grouping-sets statement.';
 
 set local role vortex_record_adapter;
 
@@ -1138,15 +1297,16 @@ begin
   if pg_catalog.jsonb_typeof(p_user_inputs) <> 'object'
     or exists (
       select 1 from pg_catalog.jsonb_object_keys(p_user_inputs) as supplied(key)
-      where supplied.key not in ('filter', 'filterableFieldIds', 'boardSummary', 'grouping', 'groupAfter', 'search', 'searchableFieldIds')
+      where supplied.key not in ('filter', 'filterableFieldIds', 'boardSummary', 'grouping', 'pivot', 'groupAfter', 'search', 'searchableFieldIds')
     ) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
   if (p_user_inputs ? 'groupAfter' and (
-      not (p_user_inputs ? 'grouping')
+      not (p_user_inputs ? 'grouping' or p_user_inputs ? 'pivot')
       or pg_catalog.jsonb_typeof(p_user_inputs -> 'groupAfter') is distinct from 'string'
       or pg_catalog.length(p_user_inputs ->> 'groupAfter') not between 1 and 4096
-    )) or (p_user_inputs ? 'grouping' and board_summary_mode)
+    )) or ((p_user_inputs ? 'grouping' or p_user_inputs ? 'pivot') and board_summary_mode)
+    or (p_user_inputs ? 'grouping' and p_user_inputs ? 'pivot')
     or (p_user_inputs ? 'search' and pg_catalog.jsonb_typeof(p_user_inputs -> 'search') not in ('string', 'null'))
     or pg_catalog.length(pg_catalog.btrim(p_user_inputs ->> 'search')) > 200 then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
@@ -1197,6 +1357,6 @@ grant execute on function vortex_record.run_module_query_summary(uuid, uuid, big
   to vortex_request, vortex_owner;
 
 comment on function vortex_record.run_module_query_summary(uuid, uuid, bigint, jsonb, jsonb) is
-  'Runs one bounded database-backed installed Module query summary or protected board summary. It validates the request, prepares one protected read-scan access plan, and delegates the summary to the owner-only aggregate function, normalizes unreadable board choices to one unassigned bucket, summarises the own records of a preview for a preview request, caps authored group pages at 200 with keysets over canonical group keys while keeping full readable totals, and refuses neutrally above 100000 candidate rows.';
+  'Runs one bounded database-backed installed Module query summary, protected board summary or pivot. It validates the request, prepares one protected read-scan access plan, and delegates the summary to the owner-only aggregate function, normalizes unreadable board choices to one unassigned bucket, summarises the own records of a preview for a preview request, caps authored group pages at 200 with keysets over canonical group keys while keeping full readable totals, crosses one row and one column dimension into capped cells with row, column and grand totals from one statement, and refuses neutrally above 100000 candidate rows.';
 
 reset role;

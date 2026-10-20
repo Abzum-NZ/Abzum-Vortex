@@ -219,36 +219,63 @@ export const protectedQueryGroupSelectorSchema = z
   });
 export type ProtectedQueryGroupSelector = z.infer<typeof protectedQueryGroupSelectorSchema>;
 
+/** A calendar bucket for a date dimension: an explicit unit and a named time zone. */
+export const protectedQueryDateBucketSchema = z
+  .object({
+    unit: z.enum(["day", "week", "month", "quarter", "year"]),
+    timeZone: z
+      .string()
+      .min(1)
+      .max(100)
+      .refine(
+        (zone) => {
+          try {
+            // Calendar buckets use named zones from the database timezone catalogue.
+            if (/^[+-]/.test(zone)) return false;
+            new Intl.DateTimeFormat("en", { timeZone: zone });
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        { message: "Choose a recognised time zone for date groups" },
+      ),
+  })
+  .strict();
+export type ProtectedQueryDateBucket = z.infer<typeof protectedQueryDateBucketSchema>;
+
 /** One authored grid dimension. Date fields require an explicit calendar unit and time zone. */
 export const protectedQueryGroupingSchema = z
   .object({
     fieldId: fieldIdSchema,
     limit: z.number().int().min(1).max(200),
-    dateBucket: z
-      .object({
-        unit: z.enum(["day", "week", "month", "quarter", "year"]),
-        timeZone: z
-          .string()
-          .min(1)
-          .max(100)
-          .refine(
-            (zone) => {
-              try {
-                // Calendar buckets use named zones from the database timezone catalogue.
-                if (/^[+-]/.test(zone)) return false;
-                new Intl.DateTimeFormat("en", { timeZone: zone });
-                return true;
-              } catch {
-                return false;
-              }
-            },
-            { message: "Choose a recognised time zone for date groups" },
-          ),
-      })
-      .strict()
-      .optional(),
+    dateBucket: protectedQueryDateBucketSchema.optional(),
   })
   .strict();
+
+/**
+ * One authored pivot: a row and a column dimension crossed with one measure. Rows are paged
+ * (`rowLimit`, at most 200) with the summary's keyset; the engine caps the column dimension.
+ */
+export const protectedQueryPivotSchema = z
+  .object({
+    rowFieldId: fieldIdSchema,
+    rowDateBucket: protectedQueryDateBucketSchema.optional(),
+    columnFieldId: fieldIdSchema,
+    columnDateBucket: protectedQueryDateBucketSchema.optional(),
+    measure: z.discriminatedUnion("operation", [
+      z.object({ operation: z.literal("count") }).strict(),
+      z
+        .object({
+          operation: z.enum(["sum", "average", "minimum", "maximum"]),
+          fieldId: fieldIdSchema,
+        })
+        .strict(),
+    ]),
+    rowLimit: z.number().int().min(1).max(200),
+  })
+  .strict();
+export type ProtectedQueryPivot = z.infer<typeof protectedQueryPivotSchema>;
 
 /** One uncached, ordered, bidirectional page of currently readable members of a group. */
 export const protectedQueryGroupedMembersCommandSchema = protectedQueryCommandSchema
@@ -354,6 +381,8 @@ export const protectedQueryRefusalReasonCodes = [
   "cursor_stale",
   /** A database-backed summary would exceed its bounded candidate scan. */
   "dataset_limit_exceeded",
+  /** A pivot's column dimension holds more values than one pivot shows. */
+  "pivot_columns_exceeded",
 ] as const;
 export type ProtectedQueryRefusalReasonCode = (typeof protectedQueryRefusalReasonCodes)[number];
 
@@ -469,6 +498,8 @@ export const protectedQuerySummaryCommandSchema = z
     inputValues: z.record(builderKeySchema, jsonValueSchema),
     /** A grid's authored dimension overrides query grouping/totals defaults. */
     grouping: protectedQueryGroupingSchema.optional(),
+    /** A pivot crosses two dimensions with one measure; it replaces the query's grouping. */
+    pivot: protectedQueryPivotSchema.optional(),
     /** Last visible summary key; each page recomputes counts under current access. */
     groupAfter: z.string().min(1).max(4096).optional(),
     search: protectedQueryCommandSchema.shape.search,
@@ -484,11 +515,21 @@ export const protectedQuerySummaryCommandSchema = z
   })
   .strict()
   .superRefine((command, context) => {
-    if (command.groupAfter !== undefined && command.grouping === undefined)
+    if (
+      command.groupAfter !== undefined &&
+      command.grouping === undefined &&
+      command.pivot === undefined
+    )
       context.addIssue({
         code: "custom",
         path: ["groupAfter"],
         message: "Choose a grouping dimension before paging groups",
+      });
+    if (command.grouping !== undefined && command.pivot !== undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["pivot"],
+        message: "A request is either grouped or pivoted",
       });
   });
 export type ProtectedQuerySummaryCommand = z.infer<typeof protectedQuerySummaryCommandSchema>;
@@ -518,6 +559,54 @@ export const protectedQuerySummaryGroupSchema = z
   })
   .strict();
 
+/** A pivot axis value: the canonical text of a choice or date bucket, or null for no value. */
+const pivotAxisValueSchema = z.union([z.string(), z.null(), recordLinkValueSchema]);
+const pivotMeasureSchema = z.record(builderKeySchema, protectedQuerySummaryAggregateResultSchema);
+
+export const protectedQueryPivotResultSchema = z
+  .object({
+    rowFieldId: fieldIdSchema,
+    columnFieldId: fieldIdSchema,
+    /** Row groups in the whole filtered set, not only the page. */
+    rowGroupCount: z.number().int().nonnegative().max(100_000),
+    columns: z
+      .array(
+        z
+          .object({
+            value: pivotAxisValueSchema,
+            rowCount: z.number().int().nonnegative().max(100_000),
+            aggregates: pivotMeasureSchema,
+          })
+          .strict(),
+      )
+      .max(50),
+    rows: z
+      .array(
+        z
+          .object({
+            key: z.string().min(1).max(4096),
+            value: pivotAxisValueSchema,
+            rowCount: z.number().int().nonnegative().max(100_000),
+            aggregates: pivotMeasureSchema,
+            cells: z
+              .array(
+                z
+                  .object({
+                    column: pivotAxisValueSchema,
+                    rowCount: z.number().int().nonnegative().max(100_000),
+                    aggregates: pivotMeasureSchema,
+                  })
+                  .strict(),
+              )
+              .max(50),
+          })
+          .strict(),
+      )
+      .max(200),
+  })
+  .strict();
+export type ProtectedQueryPivotResult = z.infer<typeof protectedQueryPivotResultSchema>;
+
 export const protectedQuerySummaryCompletedSchema = z
   .object({
     outcome: z.literal("completed"),
@@ -530,6 +619,8 @@ export const protectedQuerySummaryCompletedSchema = z
     /** Null when this is the last group page; totals still cover the full filtered set. */
     nextGroupKey: z.string().nullable().optional(),
     aggregates: z.record(builderKeySchema, protectedQuerySummaryAggregateResultSchema),
+    /** Present only when the request pivoted: its cells, row totals and column totals. */
+    pivot: protectedQueryPivotResultSchema.optional(),
   })
   .strict();
 
