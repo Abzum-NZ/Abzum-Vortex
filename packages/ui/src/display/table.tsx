@@ -25,6 +25,7 @@ import {
 } from "./controls";
 import {
   GridBoardView,
+  subRowsKindOf,
   useGridFeatures,
   type GridFeatureContext,
   type GridGroupingView,
@@ -42,6 +43,7 @@ import type {
   TablePayload,
 } from "./projected-data";
 import { useRowExpansion } from "./row-expansion";
+import { useRowLines, useRowWrites } from "./sub-rows";
 import { GroupedBody, useGroupedTable } from "./table-groups";
 import type { CardRenderers } from "./table-cards";
 import { columnWidth, useTablePresentation } from "./table-geometry";
@@ -137,7 +139,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     emptyMessage,
     refusedMessage,
     errorMessage,
-    events,
+    events: hostEvents,
   } = resolveDisplayContext<TablePayload>(
     props,
     // A completed read carries current feature bounds even with no rows. Keep its controls so
@@ -145,6 +147,9 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     () => false,
     "No records to show",
   );
+  // Every write on a row is reported once it settles, so rows drawn beneath the page are read again.
+  const rowWritten = useRef<(recordId: string) => void>(() => undefined);
+  const events = useRowWrites(hostEvents, rowWritten);
   // Publication refuses a Records table without its contract, so a missing one is a definition
   // error: it renders the error state below, never a second way of choosing columns or controls.
   const contract = useMemo(() => readRecordsTableContract(settings), [settings]);
@@ -207,6 +212,23 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     grouped !== undefined || values?.hasNextPage === true || values?.hasPreviousPage === true;
   const narrowing = values?.narrowing;
   const [message, announce] = useAnnouncer();
+  const headingKey = layout.shown[0]?.key;
+  const nameOfRow = useCallback((row: DisplayRow) => rowName(row, headingKey), [headingKey]);
+  // The rows drawn: the page's, and the rows a projected feature contributes beneath the open ones.
+  const {
+    lines,
+    subRows,
+    open: subRowsOpen,
+    rowWritten: reportRowWrite,
+  } = useRowLines({
+    kind: subRowsKindOf(features),
+    enabled: events?.row_expanded !== undefined,
+    rows,
+    paged,
+    rowName: nameOfRow,
+    announce,
+  });
+  rowWritten.current = reportRowWrite;
   const [clearCount, setClearCount] = useState(0);
 
   // The pivot view: the address opened the table in it, or the person opened it here. It is a view
@@ -270,6 +292,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
             setPin: layout.setPin,
             columns: featureColumns,
             rows,
+            lines,
             selectedRecordIds,
             selection: selectionParts,
             paged,
@@ -290,6 +313,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
       featureColumns,
       layout.arrangement,
       rows,
+      lines,
       selectedRecordIds,
       selectionParts,
       paged,
@@ -329,10 +353,8 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     [onRowClick, rowClickEventId],
   );
   const showActions = features?.rowEdit !== undefined || features?.rowActions !== undefined;
-  const headingKey = layout.shown[0]?.key;
   // Rows expand to a panel a projected feature draws (their related records); the panel reads only
   // while its row is open.
-  const nameOfRow = useCallback((row: DisplayRow) => rowName(row, headingKey), [headingKey]);
   const expansion = useRowExpansion({
     enabled: gridFeatures.expands && events?.row_expanded !== undefined,
     kind: gridFeatures.expansionKind,
@@ -538,19 +560,20 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
   );
 
   // The rows of one page as the grid, or as cards on a phone: the open group's rows use the same.
-  const membersView = (shown: readonly DisplayRow[]): ReactElement =>
+  const membersView = (): ReactElement =>
     presentation === "cards" ? (
       <Suspense fallback={loading}>
         <RecordsCards
           accessibleName={accessibleName}
           columns={layout.shown}
-          rows={shown}
+          lines={lines}
           selectedRecordIds={selectedRecordIds}
           selectable={selectable}
           showActions={showActions}
           activateRow={activateRow}
           renderers={renderers}
           expansion={expansion}
+          subRows={subRows}
           fill={fullScreen.active}
           density={layout.density}
         />
@@ -560,7 +583,8 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
         accessibleName={accessibleName}
         contract={contract}
         layout={layout}
-        rows={shown}
+        rows={rows}
+        lines={lines}
         sort={values?.sort}
         selection={selectable ? "multiple" : undefined}
         selectedRecordIds={selectedRecordIds}
@@ -572,6 +596,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
         retainedRecordIds={gridFeatures.retainedRecordIds}
         announce={announce}
         expansion={expansion}
+        subRows={subRows}
         rowName={nameOfRow}
         fill={fullScreen.active}
       />
@@ -654,10 +679,10 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
             search or filters to group it.
           </AlertDescription>
         </Alert>
-        {membersView(rows)}
+        {membersView()}
       </div>
     ) : (
-      membersView(rows)
+      membersView()
     );
   })();
 
@@ -687,6 +712,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
           <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
             {message}
           </div>
+          {subRowsOpen === undefined ? null : gridFeatures.subRowsController(subRowsOpen)}
           {ready && availability === "unavailable" ? (
             <DisplayStateContainer
               accessibleName={accessibleName}
