@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
   type ReactElement,
-  type ReactNode,
 } from "react";
 import {
   flowFieldCorrectionSchema,
@@ -27,7 +26,7 @@ import { useUnsavedWorkRegistry } from "../../controls/unsaved-work";
 import { Pencil } from "lucide-react";
 import { useDateFormatOptions } from "../date-format-context";
 import { fail, requireRecord, type DisplayEventHandlers, type DisplayRow } from "../projected-data";
-import { LinkDraftPicker } from "./record-choice-picker";
+import { LinkDraftPicker, linkedRecordTitle } from "./record-choice-picker";
 import {
   readEditDraft,
   sameEditDraft,
@@ -327,13 +326,16 @@ function FieldControl({
   editing,
   events,
   current,
+  inline,
   id: labelledId,
 }: Readonly<{
   field: FieldDraft;
   editing: RowEditing;
   events: DisplayEventHandlers | undefined;
-  /** What the cell displays for the stored value, shown by a link until another record is chosen. */
-  current?: ReactNode;
+  /** The row's title for a stored link, named until another record is chosen. */
+  current?: string | undefined;
+  /** Laid out on one line inside a grid cell. */
+  inline?: boolean;
   id?: string;
 }>): ReactElement {
   const ownId = useId();
@@ -356,7 +358,8 @@ function FieldControl({
         label={field.label}
         events={events}
         draft={typeof field.draft === "object" ? field.draft : null}
-        current={current}
+        {...(current === undefined ? {} : { current })}
+        {...(inline === undefined ? {} : { inline })}
         required={editor.required}
         disabled={editing.saving}
         invalid={message !== undefined}
@@ -460,7 +463,13 @@ function RowCell({ context, row, column, children }: GridFeatureCellProps): Reac
       ? editing.draft.fields.find((entry) => same(entry.field, column.key))
       : undefined;
   return context.presentation === "grid" && editing !== undefined && field !== undefined ? (
-    <FieldControl field={field} editing={editing} events={context.events} current={children} />
+    <FieldControl
+      field={field}
+      editing={editing}
+      events={context.events}
+      current={linkedRecordTitle(row, column.key)}
+      inline
+    />
   ) : (
     <>{children}</>
   );
@@ -553,13 +562,6 @@ function Toolbar({ context }: GridFeaturePointProps): ReactElement | null {
   );
 }
 
-/** The title a card shows for a field's linked record, so its link editor names the stored record. */
-const linkedTitle = (row: DisplayRow, field: string): string | undefined => {
-  const key = Object.keys(row.cells).find((cell) => same(cell, field));
-  const cell = key === undefined ? undefined : row.cells[key];
-  return cell?.kind === "record_link" ? cell.label : undefined;
-};
-
 /** The same draft and controls open inside the phone card, including its heading field. */
 function CardEditor({ context, row }: GridFeatureCommandProps): ReactElement | null {
   const editing = useContext(RowEditingContext);
@@ -579,7 +581,7 @@ function CardEditor({ context, row }: GridFeatureCommandProps): ReactElement | n
             field={field}
             editing={editing}
             events={context.events}
-            current={linkedTitle(row, field.field)}
+            current={linkedRecordTitle(row, field.field)}
           />
         </div>
       ))}

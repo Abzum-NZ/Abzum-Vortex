@@ -6,7 +6,6 @@ import {
   useState,
   type KeyboardEvent,
   type ReactElement,
-  type ReactNode,
   type Ref,
 } from "react";
 import { Button } from "../../components/button";
@@ -20,7 +19,7 @@ import {
 } from "../../components/combobox";
 import { Icon } from "../../icons/icon";
 import { parseRecordChoicePage, type RecordChoiceOption } from "../../controls/projected-data";
-import type { DisplayEventHandlers } from "../projected-data";
+import type { DisplayEventHandlers, DisplayRow } from "../projected-data";
 import type { LinkDraft } from "./edit-values";
 
 /** A search reads once typing pauses this long, so a typed word is one read, not one per key. */
@@ -164,7 +163,7 @@ export function RecordChoicePicker({
         }}
         {...(onBlur === undefined ? {} : { onBlur })}
       />
-      <ComboboxContent>
+      <ComboboxContent className="min-w-64">
         <ComboboxList>
           {(item: RecordChoiceOption) => (
             <ComboboxItem key={item.recordId} value={item}>
@@ -196,10 +195,19 @@ export function RecordChoicePicker({
   );
 }
 
+/** The title a row shows for a field's linked record, so its link editor names the stored record. */
+export const linkedRecordTitle = (row: DisplayRow, field: string): string | undefined => {
+  const key = Object.keys(row.cells).find((cell) => cell.toLowerCase() === field.toLowerCase());
+  const cell = key === undefined ? undefined : row.cells[key];
+  return cell?.kind === "record_link" ? cell.label : undefined;
+};
+
 /**
  * A cell's or row's link control: the record now chosen (its title as the picker showed it, else
- * the cell's own displayed value), the shared picker to choose another, and a clear control for an
- * optional link. It only drafts; the editor around it commits through the one inline-edit path.
+ * the row's own title for the stored record), the shared picker to choose another, and a clear
+ * control for an optional link. In a grid cell (`inline`) the chosen record is the search box's
+ * placeholder, so the control keeps the row's height; on a card it is a line above the search box.
+ * It only drafts; the editor around it commits through the one inline-edit path.
  */
 export function LinkDraftPicker({
   fieldId,
@@ -207,6 +215,7 @@ export function LinkDraftPicker({
   events,
   draft,
   current,
+  inline,
   required,
   disabled,
   autoOpen,
@@ -221,8 +230,10 @@ export function LinkDraftPicker({
   label: string;
   events: DisplayEventHandlers | undefined;
   draft: LinkDraft;
-  /** What the cell displays for the stored record, shown until another record is chosen. */
-  current?: ReactNode;
+  /** The title the row shows for the stored record, named until another record is chosen. */
+  current?: string;
+  /** Laid out on one line inside a grid cell. */
+  inline?: boolean;
   required: boolean;
   disabled?: boolean;
   autoOpen?: boolean;
@@ -233,45 +244,54 @@ export function LinkDraftPicker({
   invalid?: boolean;
   describedBy?: string;
 }>): ReactElement {
-  return (
+  const chosen = draft === null ? "None" : (draft.title ?? current ?? "Chosen record");
+  const clear =
+    draft === null || required ? null : (
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        aria-label={`Clear ${label}`}
+        disabled={disabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          onChange(null);
+        }}
+      >
+        <Icon name="close" aria-hidden="true" />
+      </Button>
+    );
+  const picker = (
+    <RecordChoicePicker
+      fieldId={fieldId}
+      purpose="edit"
+      label={label}
+      events={events}
+      placeholder={inline === true ? chosen : `Find ${label}`}
+      {...(disabled === undefined ? {} : { disabled })}
+      {...(autoOpen === undefined ? {} : { autoOpen })}
+      {...(inputRef === undefined ? {} : { inputRef })}
+      {...(onKeyDown === undefined ? {} : { onKeyDown })}
+      {...(onOpenChange === undefined ? {} : { onOpenChange })}
+      {...(invalid === undefined ? {} : { invalid })}
+      {...(describedBy === undefined ? {} : { describedBy })}
+      onPick={(item) =>
+        onChange({ recordTypeId: item.recordTypeId, recordId: item.recordId, title: item.title })
+      }
+    />
+  );
+  return inline === true ? (
+    <span className="flex min-w-0 items-center gap-1">
+      <span className="min-w-0 flex-1">{picker}</span>
+      {clear}
+    </span>
+  ) : (
     <span className="flex min-w-0 flex-col gap-1">
       <span className="flex min-w-0 items-center gap-1">
-        <span className="min-w-0 flex-1 truncate text-sm">
-          {draft === null ? "None" : (draft.title ?? current ?? "Chosen record")}
-        </span>
-        {draft === null || required ? null : (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label={`Clear ${label}`}
-            disabled={disabled}
-            onClick={(event) => {
-              event.stopPropagation();
-              onChange(null);
-            }}
-          >
-            <Icon name="close" aria-hidden="true" />
-          </Button>
-        )}
+        <span className="min-w-0 flex-1 truncate text-sm">{chosen}</span>
+        {clear}
       </span>
-      <RecordChoicePicker
-        fieldId={fieldId}
-        purpose="edit"
-        label={label}
-        events={events}
-        placeholder={`Find ${label}`}
-        {...(disabled === undefined ? {} : { disabled })}
-        {...(autoOpen === undefined ? {} : { autoOpen })}
-        {...(inputRef === undefined ? {} : { inputRef })}
-        {...(onKeyDown === undefined ? {} : { onKeyDown })}
-        {...(onOpenChange === undefined ? {} : { onOpenChange })}
-        {...(invalid === undefined ? {} : { invalid })}
-        {...(describedBy === undefined ? {} : { describedBy })}
-        onPick={(item) =>
-          onChange({ recordTypeId: item.recordTypeId, recordId: item.recordId, title: item.title })
-        }
-      />
+      {picker}
     </span>
   );
 }

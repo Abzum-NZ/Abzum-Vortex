@@ -33,7 +33,7 @@ import {
   startEditDraft,
   type EditDraft,
 } from "./edit-values";
-import { LinkDraftPicker } from "./record-choice-picker";
+import { LinkDraftPicker, linkedRecordTitle } from "./record-choice-picker";
 import type { GridFeatureCellProps, GridFeatureModule } from "./registry";
 
 type Phase = "idle" | "editing" | "saving";
@@ -378,7 +378,8 @@ function EditableCell({
     },
   } as const;
 
-  if (editor.kind === "link")
+  if (editor.kind === "link") {
+    const currentTitle = linkedRecordTitle(row, field);
     return (
       <span
         ref={linkEditor}
@@ -399,7 +400,8 @@ function EditableCell({
             label={label}
             events={events}
             draft={typeof draft === "object" ? draft : null}
-            current={children}
+            {...(currentTitle === undefined ? {} : { current: currentTitle })}
+            inline
             required={editor.required}
             disabled={phase === "saving"}
             autoOpen
@@ -433,6 +435,7 @@ function EditableCell({
         {status}
       </span>
     );
+  }
 
   let control: ReactElement;
   switch (editor.kind) {
