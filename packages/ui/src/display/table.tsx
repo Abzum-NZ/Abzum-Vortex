@@ -702,7 +702,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
             </div>
           )}
         </div>,
-      )}{" "}
+      )}
     </>
   );
 }

@@ -363,7 +363,7 @@ export function useRuntimeInputs({
                 return { kind: "refused", message: unavailableNotice.text, changed: false };
               const binding = bindingFor(bindings, event);
               if (binding === undefined) {
-                console.error("[page] inline edit has no binding: INLINE_EDIT_BINDING_MISSING");
+                console.error(`[page] ${editEvent} has no binding: EDIT_BINDING_MISSING`);
                 return { kind: "refused", message: unavailableNotice.text, changed: false };
               }
               if (busy)

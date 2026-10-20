@@ -314,8 +314,10 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
 function FieldControl({
   field,
   editing,
-}: Readonly<{ field: FieldDraft; editing: RowEditing }>): ReactElement {
-  const id = useId();
+  id: labelledId,
+}: Readonly<{ field: FieldDraft; editing: RowEditing; id?: string }>): ReactElement {
+  const ownId = useId();
+  const id = labelledId ?? ownId;
   const message = editing.errors[field.field];
   const props = {
     id,
@@ -519,6 +521,7 @@ function Toolbar({ context }: GridFeaturePointProps): ReactElement | null {
 /** The same draft and controls open inside the phone card, including its heading field. */
 function CardEditor({ context, row }: GridFeatureCommandProps): ReactElement | null {
   const editing = useContext(RowEditingContext);
+  const id = useId();
   if (editing?.draft?.recordId !== row.recordId || context.presentation !== "cards") return null;
   return (
     <section
@@ -528,8 +531,8 @@ function CardEditor({ context, row }: GridFeatureCommandProps): ReactElement | n
     >
       {editing.draft.fields.map((field) => (
         <div key={field.field} className="space-y-1">
-          <Label>{field.label}</Label>
-          <FieldControl field={field} editing={editing} />
+          <Label htmlFor={`${id}-${field.field}`}>{field.label}</Label>
+          <FieldControl id={`${id}-${field.field}`} field={field} editing={editing} />
         </div>
       ))}
       <SaveControls editing={editing} />
