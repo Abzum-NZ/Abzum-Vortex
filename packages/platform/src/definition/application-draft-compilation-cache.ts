@@ -5,8 +5,39 @@ import type {
   DefinitionDraftCandidate,
   DefinitionPublicationCandidate,
   DefinitionResolution,
+  OwnedModuleRoot,
 } from "./definition-publication-contracts";
 import type { ResolvedDependencies } from "./definition-dependency-resolution";
+
+const sameApplicationPublication = (
+  retained: ApplicationDraftCompilation,
+  application: DefinitionCandidateDraft,
+): boolean =>
+  retained.candidate.draft.rootId === application.draft.rootId &&
+  retained.candidate.draft.organizationId === application.draft.organizationId &&
+  retained.candidate.draft.publishedRevision === application.draft.publishedRevision;
+
+/** The authenticated inputs of the same immutable staged Module revision, before a history read. */
+export const readRetainedApplicationModuleCandidate = (
+  application: DefinitionCandidateDraft,
+  root: OwnedModuleRoot,
+  sourceFingerprint: string,
+): DefinitionPublicationCandidate | undefined => {
+  if (root.sourceFingerprint !== sourceFingerprint) return undefined;
+  for (const retained of [...applicationDraftCompilations.values()].reverse()) {
+    if (!sameApplicationPublication(retained, application)) continue;
+    const step = retained.releasePlan.moduleCompilations.find(
+      ({ candidate }) =>
+        candidate.draft.rootId === root.rootId &&
+        candidate.draft.key === root.key &&
+        candidate.draft.draftRevision === root.draftRevision &&
+        candidate.draft.sourceFingerprint === sourceFingerprint &&
+        (candidate.draft.publishedRevision ?? null) === root.currentReleaseRevision,
+    );
+    if (step !== undefined) return step.candidate;
+  }
+  return undefined;
+};
 
 /** A possible retained draft; the reader must check its live revision and fingerprints. */
 export const readRetainedApplicationDraftCandidate = (
@@ -74,13 +105,7 @@ export const readRetainedApplicationModule = (
   resolution: DefinitionResolution,
 ): ApplicationDraftCompilation["releasePlan"]["moduleCompilations"][number] | undefined => {
   for (const retained of [...applicationDraftCompilations.values()].reverse()) {
-    const draft = retained.candidate.draft;
-    if (
-      draft.rootId !== application.draft.rootId ||
-      draft.organizationId !== application.draft.organizationId ||
-      (draft.publishedRevision ?? null) !== (application.draft.publishedRevision ?? null)
-    )
-      continue;
+    if (!sameApplicationPublication(retained, application)) continue;
     const step = retained.releasePlan.moduleCompilations.find(
       ({ append }) =>
         append.draft.rootId === module.draft.rootId &&
@@ -123,8 +148,8 @@ export const readRetainedApplicationModule = (
  * not compile it again. Compilation is a pure function of the draft source, the exact resolved
  * dependencies and the platform catalogue, and the key names every one of them, so a changed
  * draft, another organisation or a different dependency resolution can never read an entry. An
- * entry holds only what the compile itself returned; authorisation runs before every lookup and
- * is never cached.
+ * entry holds the compile's authenticated inputs and outputs; authorisation runs before every
+ * lookup and is never cached.
  */
 const applicationDraftCompilationCacheLimit = 16;
 // Page rendering, actions and API routes can load separate module runtimes in one process.

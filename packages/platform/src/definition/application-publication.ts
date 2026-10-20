@@ -11,7 +11,10 @@ import {
 } from "../schema";
 import { applicationValidationContractVersion } from "./application-contract-versions";
 import { applicationModuleSources } from "./application-module-lowering";
-import { readRetainedApplicationModule } from "./application-draft-compilation-cache";
+import {
+  readRetainedApplicationModule,
+  readRetainedApplicationModuleCandidate,
+} from "./application-draft-compilation-cache";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
   assertReleasable,
@@ -65,6 +68,7 @@ type ModuleStep = Readonly<{
   append: DefinitionReleaseAppend;
   dependencies: ResolvedDependencies;
   released: boolean;
+  candidate: DefinitionPublicationCandidate;
 }>;
 
 /** Reads and checks the Application draft a publication is for; any other kind is refused. */
@@ -206,18 +210,18 @@ const releaseInlineModules = async (
     if (unchanged.has(source.key)) continue;
     const root = roots.get(source.key);
     if (root === undefined) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-    const module = validateCandidate(
-      context,
-      await transaction.readCandidate(root.rootId),
-      prepareDefinitionPublicationCommandSchema.parse({
-        rootId: root.rootId,
-        expectedDraftRevision: root.draftRevision,
-      }),
-    );
-    if (
-      module.draft.kind !== "module" ||
-      module.draft.sourceFingerprint !== fingerprintCanonicalValue(source)
-    )
+    const sourceFingerprint = fingerprintCanonicalValue(source);
+    const module =
+      readRetainedApplicationModuleCandidate(candidate, root, sourceFingerprint) ??
+      validateCandidate(
+        context,
+        await transaction.readCandidate(root.rootId),
+        prepareDefinitionPublicationCommandSchema.parse({
+          rootId: root.rootId,
+          expectedDraftRevision: root.draftRevision,
+        }),
+      );
+    if (module.draft.kind !== "module" || module.draft.sourceFingerprint !== sourceFingerprint)
       return refuse("DEFINITION_SOURCE_EVIDENCE_MISMATCH");
     const dependencies = await resolveDependencies(transaction, catalogue, module);
     await assertNoCycle(transaction, module, dependencies.modules);
@@ -226,7 +230,7 @@ const releaseInlineModules = async (
     if (retained !== undefined) {
       const append = { ...retained.append, draft: module.draft, releaseNote };
       if (retained.released) await transaction.appendModuleRelease(append);
-      steps.push({ ...retained, append });
+      steps.push({ ...retained, candidate: module, append });
       continue;
     }
     const compiled = compileModuleCandidate(
@@ -275,7 +279,7 @@ const releaseInlineModules = async (
       releaseNote,
     };
     if (released) await transaction.appendModuleRelease(append);
-    steps.push({ output, reasons, append, dependencies, released });
+    steps.push({ output, reasons, append, dependencies, released, candidate: module });
   }
   return steps;
 };
