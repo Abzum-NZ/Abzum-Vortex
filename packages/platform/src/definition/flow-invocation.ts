@@ -69,7 +69,6 @@ import {
 type ProjectedFormField = Readonly<{
   fieldKey: string;
   command: RecordReferenceChoiceCommand;
-  releaseVersion: "1.1.0" | "1.2.0";
   dependency?: Readonly<{ key: string; fromField: string }>;
 }>;
 type ProjectedForm = Readonly<{ fields: ReadonlyMap<string, ProjectedFormField> }>;

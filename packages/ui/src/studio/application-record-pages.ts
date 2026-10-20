@@ -14,7 +14,7 @@ import {
   blockItem,
   emptyPageData,
   judged,
-  newestRelease,
+  blockRelease,
   placeNewPage,
   quoted,
   refuse,
@@ -331,7 +331,7 @@ const release = (
   identity: Readonly<{ blockId: string }>,
   what: string,
 ): StructureRelease =>
-  newestRelease(context.catalogue, identity) ??
+  blockRelease(context.catalogue, identity) ??
   refuse(`The block catalogue has no ${what} block, so the page was not added.`);
 
 const field = (resolved: Readonly<{ module: Module; record: RecordType }>, entry: Field) =>
@@ -1118,7 +1118,7 @@ const formBlock = (
     { content: [...inputs, button] },
   );
   const frame = blockItem(
-    release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.CONTAINER_BLOCK_RELEASE_1_3_0, "container"),
+    release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.CONTAINER_BLOCK_RELEASE, "container"),
     freshAlias(plan, `${formAlias}_frame`),
     { direction: "column", gap: "medium", padding: "medium", content_width: "readable" },
     { content: [form] },

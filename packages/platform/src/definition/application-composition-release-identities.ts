@@ -8,61 +8,25 @@ export type PlatformBlockReleaseIdentity = Readonly<{
 }>;
 
 export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
-  TEXT_BLOCK_RELEASE: {
-    blockId: "addfad00-1b11-4674-83fa-913667f87e79",
-    key: "platform.display.text",
-    rendererKey: "platform.renderer.text",
-    releaseVersion: "1.0.0",
-  },
-  RICH_TEXT_BLOCK_RELEASE: {
-    blockId: "148f420f-f7db-4145-80f4-3d3fa036096b",
-    key: "platform.display.rich_text",
-    rendererKey: "platform.renderer.rich_text",
-    releaseVersion: "1.0.0",
-  },
-  RECORD_DETAIL_BLOCK_RELEASE: {
-    blockId: "e2569df0-2f10-4b20-b41d-177b66cd136c",
-    key: "platform.display.record_detail",
-    rendererKey: "platform.renderer.record_detail",
-    releaseVersion: "1.0.0",
-  },
-  SUMMARY_VALUES_BLOCK_RELEASE: {
-    blockId: "b00f7a0f-9094-4186-b8c4-066b1df6c395",
-    key: "platform.display.summary_values",
-    rendererKey: "platform.renderer.summary_values",
-    releaseVersion: "1.0.0",
-  },
-  NOTICE_BLOCK_RELEASE: {
-    blockId: "a7c95d9b-3fc2-4e6c-bebb-7a62fa912d84",
-    key: "platform.display.notice",
-    rendererKey: "platform.renderer.notice",
-    releaseVersion: "1.0.0",
-  },
   QUERY_NOTICE_BLOCK_RELEASE: {
     blockId: "69e284dd-e253-484a-8aad-676026eebf0e",
     key: "platform.display.query_notice",
     rendererKey: "platform.renderer.query_notice",
     releaseVersion: "1.0.0",
   },
-  TEXT_BLOCK_RELEASE_1_1_0: {
+  TEXT_BLOCK_RELEASE: {
     blockId: "addfad00-1b11-4674-83fa-913667f87e79",
     key: "platform.display.text",
     rendererKey: "platform.renderer.text",
     releaseVersion: "1.1.0",
   },
-  RICH_TEXT_BLOCK_RELEASE_1_1_0: {
+  RICH_TEXT_BLOCK_RELEASE: {
     blockId: "148f420f-f7db-4145-80f4-3d3fa036096b",
     key: "platform.display.rich_text",
     rendererKey: "platform.renderer.rich_text",
     releaseVersion: "1.1.0",
   },
-  RECORD_DETAIL_BLOCK_RELEASE_1_1_0: {
-    blockId: "e2569df0-2f10-4b20-b41d-177b66cd136c",
-    key: "platform.display.record_detail",
-    rendererKey: "platform.renderer.record_detail",
-    releaseVersion: "1.1.0",
-  },
-  SUMMARY_VALUES_BLOCK_RELEASE_1_1_0: {
+  SUMMARY_VALUES_BLOCK_RELEASE: {
     blockId: "b00f7a0f-9094-4186-b8c4-066b1df6c395",
     key: "platform.display.summary_values",
     rendererKey: "platform.renderer.summary_values",
@@ -74,7 +38,7 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     rendererKey: "platform.renderer.table",
     releaseVersion: "2.0.0",
   },
-  RECORD_DETAIL_BLOCK_RELEASE_1_2_0: {
+  RECORD_DETAIL_BLOCK_RELEASE: {
     blockId: "e2569df0-2f10-4b20-b41d-177b66cd136c",
     key: "platform.display.record_detail",
     rendererKey: "platform.renderer.record_detail",
@@ -120,18 +84,6 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     blockId: "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
     key: "platform.form.choice_input",
     rendererKey: "platform.renderer.choice_input",
-    releaseVersion: "1.0.0",
-  },
-  CHOICE_INPUT_BLOCK_RELEASE_1_1_0: {
-    blockId: "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-    key: "platform.form.choice_input",
-    rendererKey: "platform.renderer.choice_input",
-    releaseVersion: "1.1.0",
-  },
-  CHOICE_INPUT_BLOCK_RELEASE_1_2_0: {
-    blockId: "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-    key: "platform.form.choice_input",
-    rendererKey: "platform.renderer.choice_input",
     releaseVersion: "1.2.0",
   },
   VALIDATION_MESSAGE_BLOCK_RELEASE: {
@@ -150,12 +102,6 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     blockId: "a3b7065b-47ef-4c92-93d1-59300f8b059c",
     key: "platform.layout.tabs",
     rendererKey: "platform.renderer.tabs",
-    releaseVersion: "1.0.0",
-  },
-  TABS_BLOCK_RELEASE_2_0_0: {
-    blockId: "a3b7065b-47ef-4c92-93d1-59300f8b059c",
-    key: "platform.layout.tabs",
-    rendererKey: "platform.renderer.tabs",
     releaseVersion: "2.0.0",
   },
   DIALOG_BLOCK_RELEASE: {
@@ -168,24 +114,6 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     blockId: "a399ff74-5716-4411-bca8-c5ab87ec2e7d",
     key: "platform.layout.drawer",
     rendererKey: "platform.renderer.drawer",
-    releaseVersion: "1.0.0",
-  },
-  CONTAINER_BLOCK_RELEASE: {
-    blockId: "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-    key: "platform.layout.container",
-    rendererKey: "platform.renderer.container",
-    releaseVersion: "1.0.0",
-  },
-  CONTAINER_BLOCK_RELEASE_1_1_0: {
-    blockId: "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-    key: "platform.layout.container",
-    rendererKey: "platform.renderer.container",
-    releaseVersion: "1.1.0",
-  },
-  HEADING_BLOCK_RELEASE: {
-    blockId: "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-    key: "platform.layout.heading",
-    rendererKey: "platform.renderer.heading",
     releaseVersion: "1.0.0",
   },
   APPLICATION_NAVIGATION_BLOCK_RELEASE: {
@@ -254,19 +182,13 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     rendererKey: "platform.renderer.link_tiles",
     releaseVersion: "1.2.0",
   },
-  CONTAINER_BLOCK_RELEASE_1_2_0: {
-    blockId: "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-    key: "platform.layout.container",
-    rendererKey: "platform.renderer.container",
-    releaseVersion: "1.2.0",
-  },
   CALENDAR_BLOCK_RELEASE: {
     blockId: "d1125b70-e83b-4fc6-bf60-7a6e36f5f56a",
     key: "platform.display.calendar",
     rendererKey: "platform.renderer.calendar",
     releaseVersion: "1.0.0",
   },
-  CONTAINER_BLOCK_RELEASE_1_3_0: {
+  CONTAINER_BLOCK_RELEASE: {
     blockId: "11d1a889-531f-4880-a1a4-5dda5289e5ff",
     key: "platform.layout.container",
     rendererKey: "platform.renderer.container",
@@ -278,13 +200,13 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     rendererKey: "platform.renderer.attachment_list",
     releaseVersion: "1.0.0",
   },
-  NOTICE_BLOCK_RELEASE_1_1_0: {
+  NOTICE_BLOCK_RELEASE: {
     blockId: "a7c95d9b-3fc2-4e6c-bebb-7a62fa912d84",
     key: "platform.display.notice",
     rendererKey: "platform.renderer.notice",
     releaseVersion: "1.1.0",
   },
-  HEADING_BLOCK_RELEASE_1_1_0: {
+  HEADING_BLOCK_RELEASE: {
     blockId: "78bfeead-a38d-424a-81b9-7cd553b92bcc",
     key: "platform.layout.heading",
     rendererKey: "platform.renderer.heading",

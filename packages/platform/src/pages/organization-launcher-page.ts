@@ -1,6 +1,6 @@
 import {
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
-  CONTAINER_BLOCK_RELEASE_1_3_0,
+  CONTAINER_BLOCK_RELEASE,
   HEADING_BLOCK_RELEASE,
   LINK_TILES_BLOCK_RELEASE,
 } from "../definition/application-composition-catalogue";
@@ -80,7 +80,7 @@ export const organizationLauncherShell = applicationShellSchema.parse({
     root: { props: { vortex: { slotOrders: { content: sameOrder([launcherContainerId]) } } } },
     content: [
       platformPageItem(
-        CONTAINER_BLOCK_RELEASE_1_3_0,
+        CONTAINER_BLOCK_RELEASE,
         launcherContainerId,
         {
           direction: "column",
