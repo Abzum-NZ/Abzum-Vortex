@@ -81,6 +81,21 @@ export const gridCellDecorationClasses = {
 export type GridCellDecorationToken = keyof typeof gridCellDecorationClasses;
 
 /**
+ * The grid features that fill extension points of the table. Board is not one: it replaces the
+ * table with the board view as a whole, which the Data grid draws itself.
+ */
+type GridExtensionKey = Exclude<RecordsTableFeatureKey, "board">;
+
+/** Whole-grid views share the lazy registry but do not fill table extension points. */
+const viewLoaders = {
+  board: () => import("../board"),
+} satisfies Record<Exclude<RecordsTableFeatureKey, GridExtensionKey>, () => Promise<unknown>>;
+
+export const GridBoardView = lazy(async () => ({
+  default: (await viewLoaders.board()).BoardView,
+}));
+
+/**
  * The extension points a grid feature fills. The table renders each point once for every feature
  * the projection turns on, so a later feature adds its module here and never edits the table:
  * `ToolbarItems` beside the search box, `ColumnMenuItems` in a column's menu, `HeaderAdornment`
@@ -110,7 +125,7 @@ type ComponentPoint = Exclude<keyof GridFeatureModule, "cellDecoration">;
  * projection turns the feature on for this viewer. A table with every feature off loads none.
  */
 const loaders: Readonly<
-  Record<RecordsTableFeatureKey, () => Promise<{ gridFeature: GridFeatureModule }>>
+  Record<GridExtensionKey, () => Promise<{ gridFeature: GridFeatureModule }>>
 > = {
   pinning: () => import("./pinning"),
   search: () => import("./search"),
@@ -122,9 +137,7 @@ const loaders: Readonly<
   conditional_formatting: () => import("./conditional-format"),
 };
 
-const projectionKeys: Readonly<
-  Record<keyof RecordsTableFeatureProjection, RecordsTableFeatureKey>
-> = {
+const projectionKeys: Readonly<Record<keyof RecordsTableFeatureProjection, GridExtensionKey>> = {
   pinning: "pinning",
   search: "search",
   columnFilters: "column_filters",
@@ -138,10 +151,10 @@ const projectionKeys: Readonly<
 /** The features a projection turns on, in the registry's order. */
 export const projectedGridFeatures = (
   features: RecordsTableFeatureProjection | undefined,
-): readonly RecordsTableFeatureKey[] =>
+): readonly GridExtensionKey[] =>
   features === undefined
     ? []
-    : (Object.keys(loaders) as RecordsTableFeatureKey[]).filter((key) =>
+    : (Object.keys(loaders) as GridExtensionKey[]).filter((key) =>
         Object.entries(projectionKeys).some(
           ([property, feature]) =>
             feature === key &&
@@ -159,7 +172,7 @@ const PassThrough = ({ children }: Readonly<{ children?: ReactNode }>): ReactEle
 // suspends and streams) and the browser downloads the feature's chunk only when it is drawn.
 const lazyPoints = new Map<string, LazyExoticComponent<ComponentType<object>>>();
 const lazyPoint = <Props,>(
-  key: RecordsTableFeatureKey,
+  key: GridExtensionKey,
   point: ComponentPoint,
 ): LazyExoticComponent<ComponentType<Props>> => {
   const id = `${key}:${point}`;
@@ -180,7 +193,7 @@ const lazyPoint = <Props,>(
 };
 
 /** Which points each feature fills, so the table never draws a boundary for an empty point. */
-const featurePoints: Readonly<Record<RecordsTableFeatureKey, readonly ComponentPoint[]>> = {
+const featurePoints: Readonly<Record<GridExtensionKey, readonly ComponentPoint[]>> = {
   pinning: ["ColumnMenuItems"],
   search: ["ToolbarItems"],
   column_filters: ["ToolbarItems", "HeaderAdornment"],
@@ -191,12 +204,12 @@ const featurePoints: Readonly<Record<RecordsTableFeatureKey, readonly ComponentP
   conditional_formatting: ["CellAdornment", "HeaderAdornment"],
 };
 
-const activeKeys = (signature: string): readonly RecordsTableFeatureKey[] =>
-  signature === "" ? [] : (signature.split(",") as RecordsTableFeatureKey[]);
+const activeKeys = (signature: string): readonly GridExtensionKey[] =>
+  signature === "" ? [] : (signature.split(",") as GridExtensionKey[]);
 
 /** One Suspense boundary per active feature that fills the point. */
 const drawPoint = (
-  active: readonly RecordsTableFeatureKey[],
+  active: readonly GridExtensionKey[],
   point: ComponentPoint,
   context: GridFeatureContext,
   props: Record<string, unknown>,
@@ -218,7 +231,7 @@ const drawPoint = (
  * code is loaded.
  */
 export function useGridFeatures(context: GridFeatureContext | undefined): Readonly<{
-  keys: readonly RecordsTableFeatureKey[];
+  keys: readonly GridExtensionKey[];
   /** A projected feature draws a panel below an expanded row, so rows offer an expand toggle. */
   expands: boolean;
   toolbarItems: () => ReactNode;
@@ -246,9 +259,7 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   useEffect(() => {
     if (signature === "") return;
     let current = true;
-    void Promise.all(
-      signature.split(",").map((key) => loaders[key as RecordsTableFeatureKey]()),
-    ).then(
+    void Promise.all(signature.split(",").map((key) => loaders[key as GridExtensionKey]())).then(
       (modules) => {
         if (current)
           setLoadedDecorators({

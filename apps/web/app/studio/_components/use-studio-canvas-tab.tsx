@@ -941,7 +941,6 @@ export function useStudioCanvasTab({
     <>
       <StudioBlockSetupDialog
         request={blockSetup}
-        source={source}
         choices={draftChoices}
         onClose={() => setBlockSetup(null)}
       />

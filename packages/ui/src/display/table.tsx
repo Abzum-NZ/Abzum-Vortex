@@ -27,11 +27,12 @@ import {
   SelectAllControl,
   SelectionControl,
 } from "./controls";
-import { useGridFeatures, type GridFeatureContext } from "./grid-features/registry";
+import { GridBoardView, useGridFeatures, type GridFeatureContext } from "./grid-features/registry";
 import { FULL_SCREEN_CLASS, GridToolbar, useGridFullScreen } from "./grid-features/toolbar";
 import { resolveDisplayContext, rowName, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
 import type {
+  BoardPayload,
   DisplayCellValue,
   DisplayColumn,
   DisplayRow,
@@ -104,14 +105,38 @@ const useAnnouncer = (): [string, (message: string) => void] => {
 };
 
 /**
- * Shared browser-safe display component for tabular data: the one Records table block. It shows
+ * The Data grid: the one block that shows a set of records. Its Board feature turns the same grid
+ * into a board of cards in columns; every other grid shows the table below. The server projects
+ * the payload that mode needs, so a payload of the other kind is a definition error.
+ */
+export function TableDisplay(props: DisplayRenderProps<TablePayload | BoardPayload>): ReactElement {
+  const boardMode = readRecordsTableContract(props.settings)?.features.board.enabled === true;
+  const data = props.data;
+  const mismatched = data?.status === "ready" && (data.values.kind === "board") !== boardMode;
+  if (mismatched)
+    console.error("[display] The Data grid's projected values do not match its mode", {
+      placementId: props.placementId,
+    });
+  const checked = (mismatched ? { ...props, data: { status: "error" } } : props) as
+    DisplayRenderProps<BoardPayload> | DisplayRenderProps<TablePayload>;
+  return boardMode ? (
+    <Suspense fallback={null}>
+      <GridBoardView {...(checked as DisplayRenderProps<BoardPayload>)} />
+    </Suspense>
+  ) : (
+    <RecordsTableView {...(checked as DisplayRenderProps<TablePayload>)} />
+  );
+}
+
+/**
+ * Shared browser-safe display component for tabular data: the Data grid's table mode. It shows
  * exactly the permitted page the host read, as an accessible data grid on wide screens and, when
  * the definition asks for it, as cards on a phone; only the active presentation is mounted. Every
  * control reports a declared data event, and the host reads a new page on the server; the
  * component never sorts, filters, pages or fetches rows itself. Loading, empty, no-match, refused
  * and error states stay distinct, and search and filters stay usable when nothing matched.
  */
-export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElement {
+function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement {
   const { placementId, availability, settings } = props;
   const {
     title,

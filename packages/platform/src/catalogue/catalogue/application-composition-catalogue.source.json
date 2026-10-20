@@ -5732,6 +5732,113 @@
                 }
               }
             ]
+          },
+          {
+            "kind": "group",
+            "key": "board",
+            "label": "Board",
+            "help": "Show the records as cards in columns, one for each stage of a pipeline",
+            "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "properties": [
+              {
+                "kind": "boolean",
+                "key": "enabled",
+                "label": "On",
+                "help": "Show the grid as a board",
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              },
+              {
+                "kind": "field_reference",
+                "key": "column_field",
+                "label": "Column field",
+                "help": "The stage field of a pipeline: each of its stages is a column and moving a card changes its stage",
+                "required": false,
+                "fieldTypes": ["choice"]
+              },
+              {
+                "kind": "field_reference",
+                "key": "card_title_field",
+                "label": "Card title",
+                "help": "The field shown as each card's title",
+                "required": false
+              },
+              {
+                "kind": "list",
+                "key": "card_fields",
+                "label": "Card fields",
+                "help": "Up to three more fields shown on each card",
+                "required": false,
+                "minimumItems": 0,
+                "maximumItems": 3,
+                "item": {
+                  "kind": "field_reference",
+                  "key": "field",
+                  "label": "Field",
+                  "help": "Field of the bound query shown on each card",
+                  "required": true
+                }
+              },
+              {
+                "kind": "list",
+                "key": "totals",
+                "label": "Column totals",
+                "help": "Totals of the bound query shown in every column header, computed on the server",
+                "required": false,
+                "minimumItems": 0,
+                "maximumItems": 6,
+                "item": {
+                  "kind": "group",
+                  "key": "total",
+                  "label": "Total",
+                  "help": "One total of the bound query and its label",
+                  "required": true,
+                  "properties": [
+                    {
+                      "kind": "text",
+                      "key": "alias",
+                      "label": "Query total",
+                      "help": "Alias of a total declared by the bound query",
+                      "required": true,
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    {
+                      "kind": "text",
+                      "key": "label",
+                      "presentation": true,
+                      "label": "Label",
+                      "help": "Label shown for this total",
+                      "required": true,
+                      "minLength": 1,
+                      "maxLength": 60
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "number",
+                "key": "wip_limit",
+                "label": "Cards per column",
+                "help": "A column warns when it holds more cards than this",
+                "required": false,
+                "integer": true,
+                "minimum": 1,
+                "maximum": 1000
+              }
+            ]
           }
         ],
         "defaultValue": {
@@ -5808,6 +5915,15 @@
                   "value": false
                 }
               }
+            },
+            "board": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
             }
           }
         }
@@ -5843,7 +5959,8 @@
       "page_changed",
       "bulk_action",
       "inline_edit",
-      "row_expanded"
+      "row_expanded",
+      "card_moved"
     ],
     "supportedStateOperations": []
   },
@@ -6281,350 +6398,6 @@
       "accessibleNamePropertyPath": ["title"]
     },
     "supportedEvents": ["refresh", "row_action"],
-    "supportedStateOperations": []
-  },
-  "BOARD_BLOCK_RELEASE": {
-    "blockId": "626c1ff5-ae7b-47da-b0d4-370e3a262444",
-    "key": "platform.display.board",
-    "releaseVersion": "1.0.0",
-    "name": "Board",
-    "description": "A kanban board: records as cards in columns by a choice field, such as a stage.",
-    "icon": "grid",
-    "paletteGroup": "data",
-    "rendererKey": "platform.renderer.board",
-    "studioSetup": {
-      "kind": "pipeline",
-      "fieldProperty": "choice_field",
-      "titleFieldProperty": "card_title_field",
-      "label": "Pipeline",
-      "moveFlowName": "Move card",
-      "help": "Cards show every record in the column for its current stage. Moves follow the pipeline's rules and permissions.",
-      "emptyLabel": "No pipelines are available. Create one in Data, or make an existing pipeline stage field filterable.",
-      "fieldHasNoPipeline": "Create a pipeline for this field in Data before using it for board columns.",
-      "stageFilterError": "Make this pipeline's stage field filterable in Data to use it for board columns.",
-      "queryUnavailable": "This record type has reached its query limit. Remove an unused query in Data before adding the board."
-    },
-    "properties": [
-      {
-        "kind": "text",
-        "key": "title",
-        "presentation": true,
-        "label": "Title",
-        "help": "Accessible name shown as the board heading",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 120
-      },
-      {
-        "kind": "field_reference",
-        "key": "choice_field",
-        "label": "Column field",
-        "help": "The pipeline stage that determines the column for each record",
-        "required": true
-      },
-      {
-        "kind": "field_reference",
-        "key": "card_title_field",
-        "label": "Card title field",
-        "help": "The field shown as each card's title",
-        "required": true
-      },
-      {
-        "kind": "list",
-        "key": "detail_fields",
-        "presentation": true,
-        "presentationIdentity": "field",
-        "label": "Card details",
-        "help": "Optional ordered query fields shown below each card title",
-        "required": false,
-        "minimumItems": 0,
-        "maximumItems": 20,
-        "item": {
-          "kind": "group",
-          "key": "detail_field",
-          "label": "Card detail",
-          "help": "One optional labelled field shown on each card",
-          "required": true,
-          "properties": [
-            {
-              "kind": "field_reference",
-              "key": "field",
-              "label": "Field",
-              "help": "Readable field to show on each card",
-              "required": true
-            },
-            {
-              "kind": "text",
-              "key": "label",
-              "presentation": true,
-              "label": "Label",
-              "help": "Optional label for this card field",
-              "required": false,
-              "minLength": 1,
-              "maxLength": 60
-            }
-          ]
-        }
-      },
-      {
-        "kind": "list",
-        "key": "aggregates",
-        "presentation": true,
-        "presentationIdentity": "alias",
-        "label": "Board totals",
-        "help": "Optional ordered protected query totals shown above every column",
-        "required": false,
-        "minimumItems": 0,
-        "maximumItems": 20,
-        "item": {
-          "kind": "group",
-          "key": "aggregate",
-          "label": "Aggregate",
-          "help": "One declared query aggregate and its display label",
-          "required": true,
-          "properties": [
-            {
-              "kind": "text",
-              "key": "alias",
-              "label": "Query aggregate",
-              "help": "Alias of a declared aggregate in the installed Query",
-              "required": true,
-              "minLength": 1,
-              "maxLength": 80
-            },
-            {
-              "kind": "text",
-              "key": "label",
-              "presentation": true,
-              "label": "Label",
-              "help": "Safe display label for this aggregate",
-              "required": true,
-              "minLength": 1,
-              "maxLength": 60
-            }
-          ]
-        }
-      },
-      {
-        "kind": "text",
-        "key": "empty_message",
-        "presentation": true,
-        "label": "Empty message",
-        "help": "Neutral text shown when a fetched board bucket has no cards",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 500
-      },
-      {
-        "kind": "text",
-        "key": "refused_message",
-        "presentation": true,
-        "label": "Refused message",
-        "help": "Text shown when the viewer may not read this board",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 200
-      },
-      {
-        "kind": "text",
-        "key": "error_message",
-        "presentation": true,
-        "label": "Error message",
-        "help": "Text shown when the board could not be read",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 200
-      },
-      {
-        "shared": "query_parameters"
-      },
-      {
-        "shared": "awaiting_message"
-      }
-    ],
-    "slots": [],
-    "capabilities": {
-      "responsiveVisibility": true,
-      "responsiveOrder": true,
-      "gridWidth": true,
-      "height": "content_or_bounded",
-      "publicSurface": "refused",
-      "accessibleName": "optional",
-      "accessibleNamePropertyPath": ["title"]
-    },
-    "supportedEvents": ["refresh", "row_action", "page_changed"],
-    "supportedStateOperations": []
-  },
-  "BOARD_BLOCK_RELEASE_1_1_0": {
-    "blockId": "626c1ff5-ae7b-47da-b0d4-370e3a262444",
-    "key": "platform.display.board",
-    "releaseVersion": "1.1.0",
-    "name": "Board",
-    "description": "A kanban board: records as cards in columns by a choice field, such as a stage.",
-    "icon": "grid",
-    "paletteGroup": "data",
-    "rendererKey": "platform.renderer.board",
-    "studioSetup": {
-      "kind": "pipeline",
-      "fieldProperty": "choice_field",
-      "titleFieldProperty": "card_title_field",
-      "label": "Pipeline",
-      "moveFlowName": "Move card",
-      "help": "Cards show every record in the column for its current stage. Moves follow the pipeline's rules and permissions.",
-      "emptyLabel": "No pipelines are available. Create one in Data, or make an existing pipeline stage field filterable.",
-      "fieldHasNoPipeline": "Create a pipeline for this field in Data before using it for board columns.",
-      "stageFilterError": "Make this pipeline's stage field filterable in Data to use it for board columns.",
-      "queryUnavailable": "This record type has reached its query limit. Remove an unused query in Data before adding the board."
-    },
-    "properties": [
-      {
-        "kind": "text",
-        "key": "title",
-        "presentation": true,
-        "label": "Title",
-        "help": "Accessible name shown as the board heading",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 120
-      },
-      {
-        "kind": "field_reference",
-        "key": "choice_field",
-        "label": "Column field",
-        "help": "The pipeline stage that determines the column for each record",
-        "required": true
-      },
-      {
-        "kind": "field_reference",
-        "key": "card_title_field",
-        "label": "Card title field",
-        "help": "The field shown as each card's title",
-        "required": true
-      },
-      {
-        "kind": "list",
-        "key": "detail_fields",
-        "presentation": true,
-        "presentationIdentity": "field",
-        "label": "Card details",
-        "help": "Optional ordered query fields shown below each card title",
-        "required": false,
-        "minimumItems": 0,
-        "maximumItems": 20,
-        "item": {
-          "kind": "group",
-          "key": "detail_field",
-          "label": "Card detail",
-          "help": "One optional labelled field shown on each card",
-          "required": true,
-          "properties": [
-            {
-              "kind": "field_reference",
-              "key": "field",
-              "label": "Field",
-              "help": "Readable field to show on each card",
-              "required": true
-            },
-            {
-              "kind": "text",
-              "key": "label",
-              "presentation": true,
-              "label": "Label",
-              "help": "Optional label for this card field",
-              "required": false,
-              "minLength": 1,
-              "maxLength": 60
-            }
-          ]
-        }
-      },
-      {
-        "kind": "list",
-        "key": "aggregates",
-        "presentation": true,
-        "presentationIdentity": "alias",
-        "label": "Board totals",
-        "help": "Optional ordered protected query totals shown above every column",
-        "required": false,
-        "minimumItems": 0,
-        "maximumItems": 20,
-        "item": {
-          "kind": "group",
-          "key": "aggregate",
-          "label": "Aggregate",
-          "help": "One declared query aggregate and its display label",
-          "required": true,
-          "properties": [
-            {
-              "kind": "text",
-              "key": "alias",
-              "label": "Query aggregate",
-              "help": "Alias of a declared aggregate in the installed Query",
-              "required": true,
-              "minLength": 1,
-              "maxLength": 80
-            },
-            {
-              "kind": "text",
-              "key": "label",
-              "presentation": true,
-              "label": "Label",
-              "help": "Safe display label for this aggregate",
-              "required": true,
-              "minLength": 1,
-              "maxLength": 60
-            }
-          ]
-        }
-      },
-      {
-        "kind": "text",
-        "key": "empty_message",
-        "presentation": true,
-        "label": "Empty message",
-        "help": "Neutral text shown when a fetched board bucket has no cards",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 500
-      },
-      {
-        "kind": "text",
-        "key": "refused_message",
-        "presentation": true,
-        "label": "Refused message",
-        "help": "Text shown when the viewer may not read this board",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 200
-      },
-      {
-        "kind": "text",
-        "key": "error_message",
-        "presentation": true,
-        "label": "Error message",
-        "help": "Text shown when the board could not be read",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 200
-      },
-      {
-        "shared": "query_parameters"
-      },
-      {
-        "shared": "awaiting_message"
-      }
-    ],
-    "slots": [],
-    "capabilities": {
-      "responsiveVisibility": true,
-      "responsiveOrder": true,
-      "gridWidth": true,
-      "height": "content_or_bounded",
-      "publicSurface": "refused",
-      "accessibleName": "optional",
-      "accessibleNamePropertyPath": ["title"]
-    },
-    "supportedEvents": ["refresh", "row_action", "page_changed", "card_moved"],
     "supportedStateOperations": []
   },
   "CONTAINER_BLOCK_RELEASE_1_3_0": {
