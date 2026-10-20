@@ -418,7 +418,9 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         accessibleName={accessibleName}
         featureItems={state.status === "empty" ? null : gridFeatures.toolbarItems()}
         selectionBanner={
-          layoutControls !== undefined && selectable ? gridFeatures.selectionBanner() : null
+          selectable && (layoutControls !== undefined || bulkRun !== undefined)
+            ? gridFeatures.selectionBanner()
+            : null
         }
         layoutControls={layoutControls}
         fullScreen={allowFullScreen ? fullScreen : undefined}

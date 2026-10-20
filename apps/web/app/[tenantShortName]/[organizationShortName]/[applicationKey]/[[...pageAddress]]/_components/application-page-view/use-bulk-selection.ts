@@ -74,8 +74,9 @@ export function useBulkSelection({
 }>) {
   const [scopes, setScopes] = useState<Readonly<Record<string, HeldScope>>>({});
   const [runs, setRuns] = useState<Readonly<Record<string, TableBulkRun>>>({});
-  const runsRef = useRef(runs);
-  runsRef.current = runs;
+  const inFlight = useRef(new Set<string>());
+  const navigation = useRef({ key: navigationKey });
+  if (navigation.current.key !== navigationKey) navigation.current = { key: navigationKey };
   // Another page of the application starts with nothing selected and no run shown.
   useEffect(() => {
     setScopes({});
@@ -150,7 +151,8 @@ export function useBulkSelection({
       const action = table.features?.bulkActions?.find(
         (candidate) => candidate.action === actionKey,
       );
-      if (action === undefined || runsRef.current[placementId]?.status === "running") return;
+      if (action === undefined || inFlight.current.has(placementId)) return;
+      const owner = navigation.current;
       const matching = scopeOf(placementId, table);
       let selection: RecordsSelectionInput;
       let selected: number;
@@ -168,76 +170,84 @@ export function useBulkSelection({
         selected = items.length;
       }
       const label = action.label;
-      setRuns((current) => ({
-        ...current,
-        [placementId]: { status: "running", label, processed: 0 },
-      }));
-      let last: RecordsTableBulkRunLine | undefined;
+      // Acquire before scheduling React state: two gestures in one render must not submit twice.
+      inFlight.current.add(placementId);
       try {
-        const response = await fetch("/api/records-table/bulk-action", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          credentials: "same-origin",
-          cache: "no-store",
-          body: JSON.stringify({
-            ...addressOf(model),
-            placementId,
-            action: action.action,
-            commandId: crypto.randomUUID(),
-            selection,
-          }),
-        });
-        if (!response.ok || response.body === null)
-          throw new Error(`BULK_ACTION_REFUSED: ${response.status}`);
-        const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-        let buffered = "";
-        for (;;) {
-          const { value, done } = await reader.read();
-          if (value !== undefined) buffered += value;
-          const lines = buffered.split("\n");
-          buffered = lines.pop() ?? "";
-          for (const text of lines) {
-            if (text.trim() === "") continue;
-            const line = recordsTableBulkRunLineSchema.parse(JSON.parse(text));
-            last = line;
-            if (line.kind === "progress")
-              setRuns((current) => ({
-                ...current,
-                [placementId]: {
-                  status: "running",
-                  label,
-                  total: line.total,
-                  processed: line.processed,
-                },
-              }));
+        setRuns((current) => ({
+          ...current,
+          [placementId]: { status: "running", label, processed: 0 },
+        }));
+        let last: RecordsTableBulkRunLine | undefined;
+        try {
+          const response = await fetch("/api/records-table/bulk-action", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            credentials: "same-origin",
+            cache: "no-store",
+            body: JSON.stringify({
+              ...addressOf(model),
+              placementId,
+              action: action.action,
+              commandId: crypto.randomUUID(),
+              selection,
+            }),
+          });
+          if (!response.ok || response.body === null)
+            throw new Error(`BULK_ACTION_REFUSED: ${response.status}`);
+          const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+          let buffered = "";
+          for (;;) {
+            const { value, done } = await reader.read();
+            if (value !== undefined) buffered += value;
+            const lines = buffered.split("\n");
+            buffered = lines.pop() ?? "";
+            for (const text of lines) {
+              if (text.trim() === "") continue;
+              const line = recordsTableBulkRunLineSchema.parse(JSON.parse(text));
+              last = line;
+              if (line.kind === "progress" && navigation.current === owner)
+                setRuns((current) => ({
+                  ...current,
+                  [placementId]: {
+                    status: "running",
+                    label,
+                    total: line.total,
+                    processed: line.processed,
+                  },
+                }));
+            }
+            if (done) break;
           }
-          if (done) break;
+        } catch (error) {
+          console.error("[page] the bulk action did not finish", error);
         }
-      } catch (error) {
-        console.error("[page] the bulk action did not finish", error);
+        // A completed request belongs to the page that started it, even after navigation away.
+        if (navigation.current !== owner) return;
+        setRuns((current) => ({
+          ...current,
+          [placementId]:
+            last?.kind === "summary"
+              ? {
+                  status: "finished",
+                  label,
+                  selected,
+                  summary: {
+                    total: last.total,
+                    done: last.done,
+                    refused: last.refused,
+                    notProcessed: last.notProcessed,
+                    limited: last.limited,
+                  },
+                }
+              : { status: "failed", label },
+        }));
+        // The run ends the selection; the table is read once, through the ordinary read path.
+        setSelection((current) => without(current, placementId));
+        setScopes((current) => without(current, placementId));
+        await refreshPlacements([placementId]);
+      } finally {
+        inFlight.current.delete(placementId);
       }
-      setRuns((current) => ({
-        ...current,
-        [placementId]:
-          last?.kind === "summary"
-            ? {
-                status: "finished",
-                label,
-                selected,
-                summary: {
-                  total: last.total,
-                  done: last.done,
-                  refused: last.refused,
-                  notProcessed: last.notProcessed,
-                  limited: last.limited,
-                },
-              }
-            : { status: "failed", label },
-      }));
-      // The run ends the selection; the table is read once, through the ordinary read path.
-      setSelection((current) => without(current, placementId));
-      setScopes((current) => without(current, placementId));
-      await refreshPlacements([placementId]);
     },
     [model, refreshPlacements, scopeOf, setSelection],
   );

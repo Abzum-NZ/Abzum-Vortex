@@ -484,7 +484,8 @@ const RESTRICTED_CELL: ProjectedScalarCellValue = Object.freeze({ kind: "restric
  * contract, a heading is missing, a row carries no revision or capabilities, or the rows are not a
  * valid page (a repeated record identity), so the caller refuses neutrally. A continuation page
  * with no rows keeps its columns and an empty row list when `keepEmptyPage` is set, so the viewer
- * can still page back; a first page with no rows is the plain empty state.
+ * can still page back. Bulk-enabled tables also keep their projection when empty so an action's
+ * result remains visible after it removes the final row.
  */
 export const projectRecordsTableData = (
   layout: GridLayoutState,
@@ -495,7 +496,8 @@ export const projectRecordsTableData = (
   const contract = readRecordsTableContract(input.settings);
   if (contract === undefined || contract.columns.length === 0) return undefined;
   if (new Set(rows.map((row) => row.recordId)).size !== rows.length) return undefined;
-  if (rows.length === 0 && !keepEmptyPage) return { status: "empty" };
+  if (rows.length === 0 && !keepEmptyPage && !contract.features.bulkActions.enabled)
+    return { status: "empty" };
   // A list row must carry the revision and capabilities the engine decided for it; a row without
   // them is withheld whole, never displayed with an inferred or absent capability.
   const completeRows = rows.filter(isListRow);

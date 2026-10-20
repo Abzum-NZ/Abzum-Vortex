@@ -272,7 +272,7 @@ function SelectionBand({
 
 /** Bulk actions: the action menu over the selection and the selection band. */
 function BulkSelectionBanner({ context }: GridFeaturePointProps): ReactElement | null {
-  if ((context.features.bulkActions ?? []).length === 0 || context.rows.length === 0) return null;
+  if ((context.features.bulkActions ?? []).length === 0) return null;
   return (
     <>
       <BulkActionsMenu context={context} />
