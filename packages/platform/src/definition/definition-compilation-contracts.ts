@@ -80,9 +80,6 @@ export const sourceIdentityKindSchema = z.enum([
   "flow_node",
   "flow_edge",
   "flow_binding",
-  "rule_input",
-  "rule_variable",
-  "rule_node",
 ]);
 export type SourceIdentityKind = z.infer<typeof sourceIdentityKindSchema>;
 

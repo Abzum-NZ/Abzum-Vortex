@@ -675,12 +675,19 @@ const describeOperand = (
 ): string => {
   if (operand.source === "value") {
     if (operand.value === null) return "empty";
-    if (operator !== "contains" && operator !== "not_contains") {
-      const options = choiceOptionsFor(other, context);
-      const option = options?.find((option) => option.value === operand.value);
-      if (option !== undefined) return option.label;
-    }
-    return JSON.stringify(operand.value) ?? "empty";
+    const options =
+      operator !== "contains" && operator !== "not_contains"
+        ? choiceOptionsFor(other, context)
+        : undefined;
+    const word = (value: JsonValue): string =>
+      options?.find((option) => option.value === value)?.label ??
+      (typeof value === "string" ? value : (JSON.stringify(value) ?? "empty"));
+    // A list (in, not in) reads as its values, by their option labels where there are some.
+    return Array.isArray(operand.value)
+      ? operand.value.map(word).join(", ") || "nothing"
+      : options?.find((option) => option.value === operand.value)?.label ??
+          JSON.stringify(operand.value) ??
+          "empty";
   }
   const permission = context.allowedOperands.find(
     (candidate) => permissionKey(candidate) === referenceKey(operand),

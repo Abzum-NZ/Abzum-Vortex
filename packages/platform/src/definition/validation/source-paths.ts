@@ -57,7 +57,6 @@ const sourceCollectionLocationKind = {
   fields: "field",
   relationships: "relationship",
   actions: "action",
-  rules: "rule",
   events: "event",
   extension_points: "extension_point",
   pages: "page",
