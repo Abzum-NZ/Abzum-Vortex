@@ -65,9 +65,7 @@ const refusedExternalAddress = (): DefinitionRenderError =>
 
 /** True when leaving the current surface may proceed; absent guard means nothing to protect. */
 const mayDiscardUnsavedWork = async (guard: UnsavedWorkGuard | undefined): Promise<boolean> =>
-  guard === undefined ||
-  !guard.hasUnsavedWork() ||
-  (await guard.confirmDiscardUnsavedWork());
+  guard === undefined || !guard.hasUnsavedWork() || (await guard.confirmDiscardUnsavedWork());
 
 /** Opens a new browsing context with no opener access and no referrer; never a server fetch. */
 const openNewContext = (address: string): void => {
@@ -176,7 +174,10 @@ export async function activateLinkTarget(
   }
   // A same-context page link is the Navigate task, so links and flows share one navigation path.
   if (target.kind === "page" && behavior === "replace")
-    return performNavigateTask(navigateIntentForPage(target.pageId, target.parameters), environment);
+    return performNavigateTask(
+      navigateIntentForPage(target.pageId, target.parameters),
+      environment,
+    );
   if (!(await environment.recheckInternalTarget(target))) return false;
   if (behavior === "new_page") {
     const address = sameOriginAddress(environment.resolveInternalAddress(target));

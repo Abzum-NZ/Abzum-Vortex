@@ -991,20 +991,28 @@ export const compareModuleContents = (
   );
   compareKeyed(
     reasons,
-    previous.rules as RecordValue[],
-    candidate.rules as RecordValue[],
-    "ruleId",
-    "rule",
-    (left, right) => compareSimpleComponent(reasons, "rule", right.ruleId, left, right),
-    () => "major",
-  );
-  compareKeyed(
-    reasons,
     previous.flows as RecordValue[],
     candidate.flows as RecordValue[],
     "id",
     "flow",
     (left, right) => compareFlow(reasons, left, right),
+  );
+  const previousFlows = previous.flows as RecordValue[];
+  const candidateFlows = candidate.flows as RecordValue[];
+  const commonFlowIds = new Set(
+    previousFlows
+      .filter((flow) => candidateFlows.some((next) => next.id === flow.id))
+      .map((flow) => flow.id),
+  );
+  pushChange(
+    reasons,
+    previousFlows.filter((flow) => commonFlowIds.has(flow.id)).map((flow) => flow.id),
+    candidateFlows.filter((flow) => commonFlowIds.has(flow.id)).map((flow) => flow.id),
+    "major",
+    "existing_behavior_changed",
+    "flow",
+    "behavior",
+    undefined,
   );
   compareKeyed(
     reasons,

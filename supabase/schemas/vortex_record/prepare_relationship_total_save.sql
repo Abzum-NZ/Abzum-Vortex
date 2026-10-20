@@ -64,15 +64,6 @@ begin
   from pg_catalog.jsonb_array_elements(catalogue -> 'recordTypes') item(value)
   where pg_catalog.lower(item.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text);
   if root_type is null then return pg_catalog.jsonb_build_object('outcome', 'defer'); end if;
-  if exists (
-    select 1
-    from pg_catalog.jsonb_array_elements_text(
-      coalesce(catalogue -> 'applicationRuleSubjectRecordTypeIds', '[]'::jsonb)
-    ) subject(record_type_id)
-    where pg_catalog.lower(subject.record_type_id) = pg_catalog.lower(p_record_type_id::text)
-  ) then
-    return pg_catalog.jsonb_build_object('outcome', 'defer');
-  end if;
   if not exists (
     select 1 from pg_catalog.jsonb_array_elements(root_type -> 'fields') field(value)
     where field.value ->> 'type' = 'total'
@@ -113,20 +104,6 @@ begin
     catalogue, p_operation, p_record_type_id, p_record_id, p_submitted_values
   );
   if before_closure is null then return pg_catalog.jsonb_build_object('outcome', 'defer'); end if;
-  -- Application-owned rules have no executable Module rule set. Defer to the
-  -- base writer, which refuses a total change that cannot evaluate them.
-  if exists (
-    select 1
-    from pg_catalog.jsonb_array_elements(before_closure -> 'records') record(value)
-    join pg_catalog.jsonb_array_elements_text(
-      coalesce(catalogue -> 'applicationRuleSubjectRecordTypeIds', '[]'::jsonb)
-    ) subject(record_type_id)
-      on pg_catalog.lower(subject.record_type_id) =
-        pg_catalog.lower(record.value ->> 'recordTypeId')
-  ) then
-    return pg_catalog.jsonb_build_object('outcome', 'defer');
-  end if;
-
   -- Dynamic physical rows are locked in one canonical concrete identity order.
   for record_value in
     select item.value
@@ -238,7 +215,7 @@ begin
       'relationshipSources', '[]'::jsonb,
       'canRead', prepared_record ->> 'recordKey' = 'root'
         or coalesce(parent_read ->> 'outcome' = 'allowed', false),
-      'beforeSaveRules', vortex_record.before_save_rules_for_record_type_internal(
+      'beforeSaveFlows', vortex_record.before_save_flows_for_record_type_internal(
         rule_module_root_id, rule_release_revision,
         (prepared_record ->> 'recordTypeId')::uuid
       )

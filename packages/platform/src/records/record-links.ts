@@ -130,33 +130,8 @@ export const projectedRecordPinTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("unavailable") }).strict(),
 ]);
 
-/** Closed LinkTiles1.1 projection; neutral rows contain only source removal identity. */
-export const projectedRecordPinTilesSchema = z
-  .object({
-    kind: z.literal("record_pin_tiles"),
-    rows: z
-      .array(
-        z
-          .object({
-            sourceRecordId: recordIdSchema,
-            sourceRevision: revisionSchema,
-            target: projectedRecordPinTargetSchema,
-          })
-          .strict(),
-      )
-      .max(10_000),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if (
-      new Set(value.rows.map((row) => row.sourceRecordId.toLowerCase())).size !== value.rows.length
-    )
-      context.addIssue({ code: "custom", message: "Each source tile must occur once" });
-  });
-
 export type MountedRecordPinAssociation = z.infer<typeof mountedRecordPinAssociationSchema>;
 export type ProjectedRecordPinTarget = z.infer<typeof projectedRecordPinTargetSchema>;
-export type ProjectedRecordPinTiles = z.infer<typeof projectedRecordPinTilesSchema>;
 
 /** A mounted element returns membership only while its current row is actually visible. */
 export const mountedRecordPinElementProperty = "vortexRecordPinAssociation" as const;
