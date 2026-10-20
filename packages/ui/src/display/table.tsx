@@ -45,7 +45,7 @@ import type {
   TablePayload,
 } from "./projected-data";
 import { useRowExpansion } from "./row-expansion";
-import { useRowLines } from "./sub-rows";
+import { useRowLines, useRowWrites } from "./sub-rows";
 import type { CardRenderers } from "./table-cards";
 import { columnWidth, useTablePresentation } from "./table-geometry";
 import { RecordsGrid, type GridRenderers } from "./table-grid";
@@ -152,7 +152,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     emptyMessage,
     refusedMessage,
     errorMessage,
-    events,
+    events: hostEvents,
   } = resolveDisplayContext<TablePayload>(
     props,
     // A completed read carries current feature bounds even with no rows. Keep its controls so
@@ -160,6 +160,9 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     () => false,
     "No records to show",
   );
+  // Every write on a row is reported once it settles, so rows drawn beneath the page are read again.
+  const rowWritten = useRef<(recordId: string) => void>(() => undefined);
+  const events = useRowWrites(hostEvents, rowWritten);
   // Publication refuses a Records table without its contract, so a missing one is a definition
   // error: it renders the error state below, never a second way of choosing columns or controls.
   const contract = useMemo(() => readRecordsTableContract(settings), [settings]);
@@ -336,6 +339,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     lines,
     subRows,
     controller: subRowsController,
+    rowWritten: reportRowWrite,
   } = useRowLines({
     kind: gridFeatures.subRowsKind,
     enabled: events?.row_expanded !== undefined,
@@ -345,6 +349,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     announce,
     controller: gridFeatures.subRowsController,
   });
+  rowWritten.current = reportRowWrite;
 
   // Cell, selection and command renderers shared by the grid and the cards. They change only with
   // the bindings and the heading column, so the grid's memoized rows keep their identity.

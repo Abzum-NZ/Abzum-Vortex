@@ -101,7 +101,7 @@ const reachableOpen = (
  * closes, which also gives its rows back to the shared budget). It draws nothing; the entries it
  * reports are rows and notices of the table's own grid, so every level looks and acts like the page.
  */
-function Levels({ context, expandedRecordIds, publish }: GridFeatureSubRowsProps): null {
+function Levels({ context, expandedRecordIds, publish, written }: GridFeatureSubRowsProps): null {
   const tree = context.features.tree;
   if (tree === undefined) fail("A tree requires its feature projection", location);
   const pageSize = tree.pageSize;
@@ -267,6 +267,9 @@ function Levels({ context, expandedRecordIds, publish }: GridFeatureSubRowsProps
     () => reachableOpen(expandedRecordIds, pageRows, nodes),
     [expandedRecordIds, pageRows, nodes],
   );
+  // Only a new write reads a level again, never a level opened since.
+  const wantedRef = useRef(wanted);
+  wantedRef.current = wanted;
 
   useEffect(() => {
     mounted.current = true;
@@ -279,14 +282,19 @@ function Levels({ context, expandedRecordIds, publish }: GridFeatureSubRowsProps
     };
   }, []);
 
-  // A refreshed page (a saved edit or a row command read the table again) reads every opened level
-  // again, so a child row never keeps a value or a revision the server has since replaced.
-  const levelsReadFor = useRef(pageRows);
+  // A settled write on a row of an opened level (an inline edit or a row command) reads that level
+  // again: the host's refresh reads only the page, and a child row must never keep a value or a
+  // revision the server has since replaced.
   useEffect(() => {
-    if (levelsReadFor.current === pageRows) return;
-    levelsReadFor.current = pageRows;
-    for (const id of wanted) if (requests.current.has(id)) void reads.current.load(id, true);
-  }, [pageRows, wanted]);
+    if (written === undefined) return;
+    for (const id of wantedRef.current) {
+      const node = nodesRef.current.get(id);
+      if (node?.kind === "ready" && node.rows.some((row) => row.recordId === written.recordId)) {
+        void reads.current.load(id, true);
+        return;
+      }
+    }
+  }, [written]);
 
   // Opening a row reads its level once; closing it (or closing a parent, or reading the parent
   // again) drops the level and gives its rows back to the budget.

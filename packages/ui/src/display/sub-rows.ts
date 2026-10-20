@@ -1,7 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { DisplayRow } from "./projected-data";
+import { useCallback, useEffect, useMemo, useState, type ReactNode, type RefObject } from "react";
+import type {
+  DisplayEventHandler,
+  DisplayEventHandlers,
+  DisplayRow,
+  DisplaySemanticEvent,
+} from "./projected-data";
 
 /**
  * A message or control a feature draws as a full-width row of the grid (or a list item of the
@@ -59,6 +64,38 @@ export type SubRowsControls = Readonly<{
   noun: string;
   toggle: (recordId: string) => void;
 }>;
+
+/** A settled write on one row of the table (an inline edit or a row command); each is a new value. */
+export type RowWrite = Readonly<{ recordId: string }>;
+
+/**
+ * The table's event handlers, reporting each settled write on a row (an inline edit or a row
+ * command) to `written`. The host's refresh after a write reads the page only, so the rows a
+ * feature holds beneath the page are read again from this report.
+ */
+export const useRowWrites = (
+  events: DisplayEventHandlers | undefined,
+  written: RefObject<(recordId: string) => void>,
+): DisplayEventHandlers | undefined =>
+  useMemo(() => {
+    if (events === undefined) return undefined;
+    const reporting =
+      (handler: DisplayEventHandler): DisplayEventHandler =>
+      async (event: DisplaySemanticEvent) => {
+        try {
+          return await handler(event);
+        } finally {
+          if (event.event === "inline_edit" || event.event === "row_action")
+            written.current(event.recordId);
+        }
+      };
+    const { inline_edit: inlineEdit, row_action: rowAction } = events;
+    return {
+      ...events,
+      ...(inlineEdit === undefined ? {} : { inline_edit: reporting(inlineEdit) }),
+      ...(rowAction === undefined ? {} : { row_action: reporting(rowAction) }),
+    };
+  }, [events, written]);
 
 /** How far each level beneath a page row is indented, in the grid's first column and the cards. */
 export const SUB_ROW_INDENT_REM = 1.25;
@@ -147,17 +184,22 @@ export const useRowLines = (
     controller: (
       expandedRecordIds: readonly string[],
       publish: (beneath: SubRowsBeneath) => void,
+      written: RowWrite | undefined,
     ) => ReactNode;
   }>,
 ): Readonly<{
   lines: readonly RowLine[];
   subRows: SubRowsControls | undefined;
   controller: ReactNode;
+  /** Reports a settled write on a row, so the controller reads the row's level again. */
+  rowWritten: (recordId: string) => void;
 }> => {
   const { kind, enabled, rows, paged, rowName, announce, controller } = input;
   const active = enabled ? kind : undefined;
   const [expanded, setExpanded] = useState<readonly string[]>([]);
   const [beneath, setBeneath] = useState<SubRowsBeneath>(noBeneath);
+  const [written, setWritten] = useState<RowWrite | undefined>(undefined);
+  const rowWritten = useCallback((recordId: string) => setWritten({ recordId }), []);
   const lines = useMemo(
     () =>
       flatten(
@@ -200,6 +242,7 @@ export const useRowLines = (
   return {
     lines,
     subRows,
-    controller: active === undefined ? null : controller(expanded, setBeneath),
+    controller: active === undefined ? null : controller(expanded, setBeneath, written),
+    rowWritten,
   };
 };

@@ -21,7 +21,7 @@ import type {
 } from "@vortex/platform/schema";
 import type { DisplayEventHandlers, DisplayRow, TableNarrowing } from "../projected-data";
 import type { RowExpansionKind } from "../row-expansion";
-import type { SubRowsBeneath, SubRowsKind } from "../sub-rows";
+import type { RowWrite, SubRowsBeneath, SubRowsKind } from "../sub-rows";
 import type { TableSelectionParts } from "../projected-grid-features";
 import type { GridColumn, GridLayoutControls } from "../table-layout";
 
@@ -93,13 +93,15 @@ export type GridFeatureRowProps = Readonly<{
 }>;
 /**
  * What the controller of a feature that contributes sub-rows receives: the record identities the
- * person has opened, and `publish`, through which it reports the entries beneath each open record.
- * The table draws those entries as rows of its own grid (or cards of its own list).
+ * person has opened, `publish`, through which it reports the entries beneath each open record, and
+ * the latest settled write on a row of the table. The table draws those entries as rows of its own
+ * grid (or cards of its own list).
  */
 export type GridFeatureSubRowsProps = Readonly<{
   context: GridFeatureContext;
   expandedRecordIds: readonly string[];
   publish: (beneath: SubRowsBeneath) => void;
+  written: RowWrite | undefined;
 }>;
 /** A cell a feature may draw instead of the plain value; `children` is the plain value. */
 export type GridFeatureCellProps = Readonly<{
@@ -322,6 +324,7 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   subRowsController: (
     expandedRecordIds: readonly string[],
     publish: (beneath: SubRowsBeneath) => void,
+    written: RowWrite | undefined,
   ) => ReactNode;
   toolbarItems: () => ReactNode;
   interaction: (surface: GridInteractionSurface) => ReactNode;
@@ -427,7 +430,8 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
       subRowsController: (
         expandedRecordIds: readonly string[],
         publish: (beneath: SubRowsBeneath) => void,
-      ) => drawAt("SubRows", { expandedRecordIds, publish }),
+        written: RowWrite | undefined,
+      ) => drawAt("SubRows", { expandedRecordIds, publish, written }),
       decorate: (row: DisplayRow, column: GridColumn, plain: ReactNode): ReactNode => {
         const decoration = classNameOf(row, column);
         return adorn(
