@@ -1187,6 +1187,7 @@ export async function invokeInstalledFlow(
             bindingInstallation,
             binding,
             invocation.callerInputs ?? {},
+            invocation.subject,
             (operation) => requests.run(identity.session, selection, operation),
           );
     if (featureRefusal !== undefined) {

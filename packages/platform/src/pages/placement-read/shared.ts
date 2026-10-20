@@ -23,6 +23,7 @@ import {
 } from "../component-data-projection";
 import type { BoardPlacementFailureCause } from "../board-query";
 import type { RecordsTableFilterTarget } from "../records-table-query";
+import type { RecordsTableInlineEditor } from "../records-table-features";
 
 export type PlacementModule = InstalledRuntimeContext["releaseSet"]["modules"][number];
 export type PlacementQuery = PlacementModule["content"]["queries"][number];
@@ -346,6 +347,109 @@ export const fieldFilterTargetsOf = (
             ];
           default:
             return [String(field.fieldId).toLowerCase(), target];
+        }
+      }),
+    ),
+  );
+
+/**
+ * How a cell edits every field of one module that people may change in a cell (field identity to
+ * editor), from the installed field definition alone. A calculation, total, generated number,
+ * money, link, table, attachment or several-choices field has none, so it is never offered.
+ */
+export const fieldEditorsOf = (module: PlacementModule): Record<string, RecordsTableInlineEditor> =>
+  Object.fromEntries(
+    module.content.recordTypes.flatMap((recordType) =>
+      recordType.fields.flatMap((field): [string, RecordsTableInlineEditor][] => {
+        const required = field.required;
+        const id = String(field.fieldId).toLowerCase();
+        switch (field.type) {
+          case "text":
+            return [
+              [id, { kind: "text", input: "text", maxLength: field.settings.maxLength, required }],
+            ];
+          case "long_text":
+            return [
+              [
+                id,
+                { kind: "text", input: "long_text", maxLength: field.settings.maxLength, required },
+              ],
+            ];
+          case "email_address":
+            return [[id, { kind: "text", input: "email", required }]];
+          case "phone_number":
+            return [[id, { kind: "text", input: "phone", required }]];
+          case "web_address":
+            return [[id, { kind: "text", input: "web", required }]];
+          case "whole_number":
+            return [
+              [
+                id,
+                {
+                  kind: "whole_number",
+                  required,
+                  ...(field.settings.minimum === undefined
+                    ? {}
+                    : { minimum: field.settings.minimum }),
+                  ...(field.settings.maximum === undefined
+                    ? {}
+                    : { maximum: field.settings.maximum }),
+                  ...(field.settings.step === undefined ? {} : { step: field.settings.step }),
+                },
+              ],
+            ];
+          case "decimal_number":
+            return [
+              [
+                id,
+                {
+                  kind: "decimal",
+                  required,
+                  digitsBeforeDecimal: field.settings.digitsBeforeDecimal,
+                  decimalPlaces: field.settings.decimalPlaces,
+                  ...(field.settings.minimum === undefined
+                    ? {}
+                    : { minimum: field.settings.minimum }),
+                  ...(field.settings.maximum === undefined
+                    ? {}
+                    : { maximum: field.settings.maximum }),
+                },
+              ],
+            ];
+          case "yes_no":
+            return [[id, { kind: "yes_no", required }]];
+          case "choice":
+            return [
+              [
+                id,
+                {
+                  kind: "choice",
+                  required,
+                  options: field.settings.options.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                  })),
+                },
+              ],
+            ];
+          case "date":
+            return [
+              [
+                id,
+                {
+                  kind: "date",
+                  required,
+                  ...(field.settings.earliest === undefined
+                    ? {}
+                    : { earliest: field.settings.earliest }),
+                  ...(field.settings.latest === undefined ? {} : { latest: field.settings.latest }),
+                },
+              ],
+            ];
+          case "date_time":
+            return [[id, { kind: "date_time", required }]];
+          default:
+            return [];
         }
       }),
     ),

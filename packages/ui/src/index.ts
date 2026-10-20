@@ -84,6 +84,7 @@ export {
   type DisplayColumn,
   type DisplayDataState,
   type DisplayEventHandler,
+  type DisplayInlineEditResult,
   type DisplayEventHandlers,
   type DisplayField,
   type DisplayRefusalReason,
