@@ -30,6 +30,7 @@ import type {
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import type { SavedConditionLike } from "./saved-condition-revisions";
 import { DefinitionError } from "./definition-error";
+import type { ModuleExtensionPointUse } from "./module-extension-point-shape";
 
 type SourceIdentityAssignments = DefinitionResolutionSnapshot["identities"];
 export type ModuleOutput = Extract<DefinitionCompilationOutput, { kind: "module" }>;
@@ -131,6 +132,7 @@ export interface DefinitionPublicationReader {
     Readonly<{
       recordTypes: readonly string[];
       fields: readonly string[];
+      extensionPointUses: readonly ModuleExtensionPointUse[];
     }>
   >;
   /** The draft, its identities and its current release version, without the release itself. */

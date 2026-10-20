@@ -1,5 +1,6 @@
 import { moduleFieldTypeLabels, peopleDirectory, type ApplicationSourceDocument, type ModuleField, type ModuleFieldType, type ModuleQueryExposure, type RecordOwnershipMode } from "@vortex/platform/schema";
 import type { StudioQueryInput } from "@vortex/ui/studio";
+import type { ModuleExtensionPointUse } from "@vortex/platform/schema";
 import type { StudioDraft, StudioRunOptions } from "../_components/use-studio-draft";
 
 /**
@@ -35,7 +36,7 @@ export const studioEditProblem = (result: Readonly<{ kind: string }>): string | 
  * is fixed. It is read from the stored releases, so a draft that does not compile still has it; an
  * application never published has none.
  */
-export type StudioPublishedData = Readonly<{ recordTypes: readonly string[]; fields: readonly string[] }>;
+export type StudioPublishedData = Readonly<{ recordTypes: readonly string[]; fields: readonly string[]; extensionPointUses: readonly ModuleExtensionPointUse[] }>;
 
 /**
  * The compiled fields of every record type the saved draft binds (`module:record`), with their
