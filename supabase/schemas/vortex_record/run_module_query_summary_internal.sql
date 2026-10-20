@@ -640,6 +640,16 @@ begin
         'pg_catalog.jsonb_build_object(''outcome'', ''completed'', ''valueCount'', pg_catalog.count(*), ''value'', pg_catalog.to_jsonb(pg_catalog.count(*)))'
       );
     end if;
+    -- A missing projected key is withheld, whereas a readable empty field remains JSON null.
+    -- Never present a partial total (or an empty total) as the aggregate of the whole bucket.
+    if aggregate_field_id is not null then
+      aggregate_result_sql := pg_catalog.format(
+        'case when coalesce(pg_catalog.bool_or(not (candidate.projected_values ? %L)), false)
+           then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''read_forbidden'')
+           else %s end',
+        aggregate_field_id, aggregate_result_sql
+      );
+    end if;
     if aggregate_object_sql <> '' then
       aggregate_object_sql := aggregate_object_sql || ', ';
     end if;

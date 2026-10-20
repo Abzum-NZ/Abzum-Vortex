@@ -169,7 +169,10 @@ const metricValue = (
   result: ProtectedQuerySummaryAggregateResult | undefined,
 ): BoardMetric["value"] | undefined => {
   if (result === undefined) return undefined;
-  if (result.outcome === "refused") return { kind: "unavailable" };
+  if (result.outcome === "refused") {
+    console.error("[board] total refused", { part: "aggregate", reason: result.reasonCode });
+    return { kind: "unavailable" };
+  }
   if (aggregate.operation === "count" || aggregate.operation === "distinct_count")
     return typeof result.value === "number" &&
       Number.isSafeInteger(result.value) &&
