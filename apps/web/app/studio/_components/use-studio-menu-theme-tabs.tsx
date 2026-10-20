@@ -45,7 +45,7 @@ export function useStudioMenuThemeTabs({
   /** Opens Access on its Pages and menu view, where who can see an entry is set. */
   openAccessPages: () => void;
 }>) {
-  useIdlePreload(preloadThemePanel);
+  useIdlePreload(preloadThemePanel, "#studio-rail-theme");
   const { source, selected } = draft;
   const themeVisited = useStudioTabVisited(!themeHidden);
   const commandMenu = (command: StudioMenuCommand, merge?: string): StudioMenuResult => {
