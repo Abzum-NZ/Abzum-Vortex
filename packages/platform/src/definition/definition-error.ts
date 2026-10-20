@@ -6,11 +6,13 @@ import { ZodError } from "zod";
  */
 export class DefinitionError<Code extends string = string> extends Error {
   readonly code: Code;
+  readonly sentence: string | undefined;
 
-  constructor(code: Code, options?: ErrorOptions & { detail?: string }) {
+  constructor(code: Code, options?: ErrorOptions & { detail?: string; sentence?: string }) {
     super(options?.detail ? `${code}: ${options.detail}` : code, options);
     this.name = "DefinitionError";
     this.code = code;
+    this.sentence = options?.sentence;
   }
 }
 

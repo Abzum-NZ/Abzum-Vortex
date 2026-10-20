@@ -28,6 +28,7 @@ export {
   type StoredModuleDefinitionDraft,
 } from "./definition-draft-read";
 export * from "./source-identities";
+export * from "./source-identity-reservations";
 export * from "./saved-condition-revisions";
 export * from "./installed-event-catalogue";
 export {

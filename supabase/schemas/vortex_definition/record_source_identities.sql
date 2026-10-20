@@ -4,6 +4,7 @@ create or replace function vortex_definition.record_source_identities(p_root_id 
     AS $$
 declare
   root_key text;
+  retired_identity jsonb;
 begin
   if pg_catalog.jsonb_typeof(p_requirements) is distinct from 'array'
     or pg_catalog.jsonb_array_length(p_requirements) < 1 then
@@ -126,8 +127,9 @@ begin
     requirement."ownerScope", requirement."componentOwner"
   on conflict on constraint source_identity_aliases_pk do nothing;
 
-  if exists (
-    select 1
+  select pg_catalog.jsonb_build_object(
+    'kind', requirement.kind, 'componentOwner', requirement."componentOwner", 'alias', item.value
+  ) into retired_identity
     from pg_catalog.jsonb_to_recordset(p_requirements) as requirement(
       "ownerScope" text, scope text, kind text, "componentOwner" text, aliases jsonb
     )
@@ -144,9 +146,13 @@ begin
       and alias.alias = item.value
     where alias.component_owner is distinct from requirement."componentOwner"
       or alias.identity_id is distinct from identity.identity_id
-  ) then
+    order by requirement.scope, requirement.kind, item.value
+    limit 1;
+  if retired_identity is not null then
     raise exception using errcode = '23505',
-      message = 'A historical source identity alias cannot be reassigned';
+      message = 'A historical source identity alias cannot be reassigned',
+      constraint = 'source_identity_alias_retired',
+      detail = retired_identity::text;
   end if;
 
   if not exists (

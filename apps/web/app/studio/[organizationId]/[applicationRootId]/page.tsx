@@ -105,6 +105,7 @@ export default async function StudioApplicationPage({
       initialModule={module}
       applications={applications}
       initialView={{
+        identityReservations: view.identityReservations,
         request: view.request,
         catalogue: result.catalogue,
         previewShape: result.previewShape,
