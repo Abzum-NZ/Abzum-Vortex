@@ -594,6 +594,7 @@ const fieldUses = (
         "events",
         "flows",
         "extension_points",
+        "contributions",
         "sharing_conditions",
         "queries",
       ] as const

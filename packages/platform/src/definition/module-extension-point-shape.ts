@@ -5,6 +5,8 @@ import {
   type ApplicationSourceDocument,
 } from "./application-source-contracts";
 import type { ApplicationUsePlace } from "./application-uses";
+import { moduleDependencies } from "./module-dependencies";
+import { moduleSourceContractVersion } from "./module-source-contracts";
 
 /** Actual published or installed contributions, read in the owner's organisation. */
 export const moduleExtensionPointUseSchema = z
@@ -39,6 +41,32 @@ const referenced = (uses: readonly ModuleExtensionPointUse[]): Result => ({
   })),
 });
 
+/** Resolve the existing contribution dependency keys, rather than matching ordinary text. */
+const draftUses = (source: ApplicationSourceDocument): ModuleExtensionPointUse[] =>
+  source.body.modules.flatMap(({ id, key, ...body }) => {
+    if (body.contributions === undefined || body.contributions.length === 0) return [];
+    const dependencies = moduleDependencies({
+      kind: "module",
+      root_alias: id,
+      key,
+      source_contract_version: moduleSourceContractVersion,
+      body: { ...body, owner_application: source.key },
+    });
+    return (body.contributions ?? []).flatMap((contribution) => {
+      const target = dependencies.find((entry) => entry.dependency_key === contribution.dependency);
+      return target === undefined
+        ? []
+        : [
+            {
+              moduleKey: target.module,
+              extensionPointKey: contribution.extension_point,
+              kind: contribution.kind,
+              contributorName: body.name,
+            },
+          ];
+    });
+  });
+
 /** One source command for creation, editing and removal; existing identities never change. */
 export const changeInlineModuleExtensionPoint = (
   current: ApplicationSourceDocument,
@@ -61,7 +89,7 @@ export const changeInlineModuleExtensionPoint = (
   const existing = module.extension_points.find((point) => point.id === change.pointId);
   if (change.pointId !== undefined && existing === undefined)
     return { kind: "invalid", issues: ["This extension is no longer in the module."] };
-  const references = uses.filter(
+  const references = [...uses, ...draftUses(current)].filter(
     (use) => use.moduleKey === module.key && use.extensionPointKey === existing?.key,
   );
   if (change.operation === "remove") {

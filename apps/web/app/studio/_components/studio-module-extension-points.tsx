@@ -1,5 +1,5 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import {
   changeInlineModuleExtensionPoint,
   moduleExtensionPointName,
@@ -45,6 +45,7 @@ function ExtensionEditor({
     customKey ??
     `${recordKey}_${accepts.length === 1 && accepts[0] === "action" ? "actions" : "fields"}`;
   const [problem, setProblem] = useState<string>();
+  const keyProblemId = useId();
   const [field, setField] = useState<"key" | "record" | "accepts">();
   const [references, setReferences] = useState<
     Parameters<typeof StudioReferencesAlert>[0]["references"]
@@ -112,14 +113,12 @@ function ExtensionEditor({
         </StudioField>
       ))}
       <StudioInspectorGroup title="Details" defaultOpen={false}>
-        <StudioField
-          label="Extension key"
-          hint="Permanent once added. Other modules use this key."
-          error={field === "key" ? problem : undefined}
-        >
+        <StudioField label="Extension key" hint="Permanent once added. Other modules use this key.">
           {(control) => (
             <Input
               {...control}
+              aria-invalid={field === "key"}
+              aria-describedby={field === "key" ? keyProblemId : control["aria-describedby"]}
               value={key}
               maxLength={40}
               disabled={disabled || point !== undefined}
@@ -129,7 +128,7 @@ function ExtensionEditor({
         </StudioField>
       </StudioInspectorGroup>
       {(field !== undefined && field !== "key") || problem === undefined ? null : (
-        <p role="alert" className="text-sm text-destructive">
+        <p id={keyProblemId} role="alert" className="text-sm text-destructive">
           {problem}
         </p>
       )}
