@@ -97,7 +97,7 @@ export const useRowExpansion = (
         `${nameOf(recordId)} expanded. ${nameOf(oldest!)} collapsed, as at most ${maximum} rows stay open.`,
       );
     },
-    [expanded, announce, nameOf],
+    [expanded, announce, nameOf, maximum],
   );
   return useMemo(
     () =>

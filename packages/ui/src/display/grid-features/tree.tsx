@@ -100,6 +100,7 @@ type LevelProps = Readonly<{
   budget: Map<string, number>;
   /** Rows the table's own page already holds. */
   pageRows: number;
+  pageSize: number;
   parentRecordId: string;
   nodeKey: string;
   depth: number;
@@ -118,6 +119,7 @@ function TreeLevel({
   readLevel,
   budget,
   pageRows,
+  pageSize,
   parentRecordId,
   nodeKey,
   depth,
@@ -162,10 +164,11 @@ function TreeLevel({
   );
 
   const load = useCallback(async () => {
-    if (remaining() <= 0) {
+    if (remaining() < pageSize) {
       setState({ kind: "budget" });
       return;
     }
+    budget.set(nodeKey, pageSize);
     setState({ kind: "loading" });
     const outcome = await readPage(undefined);
     if (!mounted.current || outcome === undefined) return;
@@ -186,7 +189,7 @@ function TreeLevel({
       more: "idle",
       capped,
     });
-  }, [budget, keep, nodeKey, readPage, remaining]);
+  }, [budget, keep, nodeKey, pageSize, readPage, remaining]);
 
   useEffect(() => {
     mounted.current = true;
@@ -201,11 +204,17 @@ function TreeLevel({
     if (state.kind !== "ready" || state.level.next === undefined || state.more === "reading")
       return;
     const shown = state.level;
+    if (remaining() - shown.rows.length < pageSize) {
+      setState({ ...state, capped: true });
+      return;
+    }
+    budget.set(nodeKey, shown.rows.length + pageSize);
     setState({ ...state, more: "reading" });
     const outcome = await readPage(shown.next);
     if (!mounted.current) return;
     // A dropped reply leaves the shown rows as they were.
     if (outcome === undefined) {
+      budget.set(nodeKey, shown.rows.length);
       setState({ kind: "ready", level: shown, more: "idle", capped: state.capped });
       return;
     }
@@ -215,6 +224,7 @@ function TreeLevel({
       return;
     }
     if (outcome.status === "error") {
+      budget.set(nodeKey, shown.rows.length);
       setState({ kind: "ready", level: shown, more: "failed", capped: state.capped });
       return;
     }
@@ -266,10 +276,12 @@ function TreeLevel({
     );
   if (state.kind === "budget")
     return (
-      <p role="status" className="m-0 py-1 text-sm text-muted-foreground">
-        This table shows at most {TREE_ROW_BUDGET} rows at once. Close another branch to open this
-        one.
-      </p>
+      <div role="status" className="flex items-center gap-2 py-1 text-sm text-muted-foreground">
+        <span>Close another branch to make room for this page of child records.</span>
+        <Button variant="ghost" size="sm" onClick={() => void load()}>
+          Try again
+        </Button>
+      </div>
     );
   if (state.kind === "error")
     return (
@@ -364,6 +376,7 @@ function TreeLevel({
                 readLevel={readLevel}
                 budget={budget}
                 pageRows={pageRows}
+                pageSize={pageSize}
                 parentRecordId={child.recordId}
                 nodeKey={childKey}
                 depth={depth + 1}
@@ -420,6 +433,7 @@ function Beneath({ context, row }: GridFeatureRowProps): ReactElement {
       readLevel={readLevel}
       budget={budget}
       pageRows={context.rows.length}
+      pageSize={context.features.tree!.pageSize}
       parentRecordId={row.recordId}
       nodeKey={row.recordId}
       depth={2}

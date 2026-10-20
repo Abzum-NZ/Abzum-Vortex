@@ -12,7 +12,7 @@ create or replace function vortex_record.assert_relationship_acyclic_internal(
 )
 returns void
 language plpgsql
-stable
+volatile
 security invoker
 set search_path = ''
 as $function$
@@ -23,6 +23,14 @@ begin
     or p_field_id is null or p_source_record_id is null or p_target_record_id is null then
     raise exception using errcode = '22023', message = 'Relationship cycle check is invalid';
   end if;
+  -- Serialize parent changes for this relationship and organisation. Participant locks alone
+  -- cannot prevent two disjoint edges from closing the same cycle concurrently. Refuse rather
+  -- than wait while holding participant locks; the caller can retry the atomic command.
+  if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(
+    'parent:' || p_organisation_id::text || ':' || p_relationship_id::text, 0
+  )) then
+    raise exception using errcode = '40001', message = 'Concurrent parent change; retry the command';
+  end if;
   -- A record linking to its own record type with one record per link is a parent link. Linking a
   -- record to itself, or to any record that already sits below it, would make it its own ancestor.
   -- The constraint name carries the field so the save can name it; the walk follows the chain
@@ -30,10 +38,10 @@ begin
   if p_source_record_id = p_target_record_id then
     makes_cycle := true;
   else
-    with recursive ancestors(record_id, depth) as (
-      select p_target_record_id, 1
-      union all
-      select edge.to_record_id, ancestor.depth + 1
+    with recursive ancestors(record_id) as (
+      select p_target_record_id
+      union
+      select edge.to_record_id
       from ancestors as ancestor
       join vortex_record.relationship_edges as edge
         on edge.relationship_id = p_relationship_id
@@ -41,8 +49,7 @@ begin
        and edge.from_storage_contract_id = p_storage_contract_id
        and edge.from_record_id = ancestor.record_id
        and edge.to_storage_contract_id = p_storage_contract_id
-      where ancestor.depth < 10000
-        and ancestor.record_id <> p_source_record_id
+      where ancestor.record_id <> p_source_record_id
     )
     select exists (
       select 1 from ancestors as ancestor where ancestor.record_id = p_source_record_id
@@ -63,6 +70,279 @@ revoke all on function vortex_record.assert_relationship_acyclic_internal(uuid, 
 
 comment on function vortex_record.assert_relationship_acyclic_internal(uuid, uuid, uuid, uuid, uuid, uuid) is
   'Refuses a one-record link from a record type to itself that would make a record its own ancestor: it walks the relationship edges upward from the new parent and raises a check violation naming the link field when the walk reaches the record being linked. Owner-only.';
+
+create or replace function vortex_record.query_tree_selector_internal(
+  p_tree jsonb, p_record_type jsonb, p_readable_fields text[]
+)
+returns jsonb
+language plpgsql
+immutable
+security invoker
+set search_path = ''
+as $function$
+declare
+  field_id text;
+  relationship_id uuid;
+  uuid_pattern constant text := '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+begin
+  if pg_catalog.jsonb_typeof(p_tree) is distinct from 'object'
+    or p_tree - array['fieldId', 'parentRecordId']::text[] <> '{}'::jsonb
+    or not (p_tree ? 'fieldId') or not (p_tree ? 'parentRecordId')
+    or pg_catalog.jsonb_typeof(p_tree -> 'fieldId') is distinct from 'string'
+    or pg_catalog.lower(p_tree ->> 'fieldId') !~ uuid_pattern
+    or pg_catalog.jsonb_typeof(p_tree -> 'parentRecordId') not in ('string', 'null')
+    or (pg_catalog.jsonb_typeof(p_tree -> 'parentRecordId') = 'string'
+      and (pg_catalog.lower(p_tree ->> 'parentRecordId') !~ uuid_pattern
+        or p_tree ->> 'parentRecordId' = '00000000-0000-0000-0000-000000000000')) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+  field_id := pg_catalog.lower(p_tree ->> 'fieldId');
+  if not (field_id = any (p_readable_fields)) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'field_unbounded');
+  end if;
+  select (relationship.value ->> 'relationshipId')::uuid into relationship_id
+  from pg_catalog.jsonb_array_elements(coalesce(p_record_type -> 'relationships', '[]'::jsonb))
+    as relationship(value)
+  where pg_catalog.lower(relationship.value ->> 'fromFieldId') = field_id
+    and relationship.value ->> 'cardinality' = 'many_to_one'
+    and pg_catalog.lower(relationship.value #>> '{toRecordType,recordTypeId}')
+      = pg_catalog.lower(p_record_type ->> 'recordTypeId');
+  if relationship_id is null or not exists (
+    select 1 from pg_catalog.jsonb_array_elements(p_record_type -> 'fields') as field(value)
+    where pg_catalog.lower(field.value ->> 'fieldId') = field_id and field.value ->> 'type' = 'link'
+  ) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+  end if;
+  return pg_catalog.jsonb_build_object('outcome', 'completed', 'fieldId', field_id,
+    'parentRecordId', p_tree -> 'parentRecordId', 'relationshipId', relationship_id);
+end
+$function$;
+
+alter function vortex_record.query_tree_selector_internal(jsonb,jsonb,text[]) owner to vortex_record_adapter;
+revoke all on function vortex_record.query_tree_selector_internal(jsonb,jsonb,text[])
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+create or replace function vortex_record.read_query_tree_relatives_internal(
+  p_parents boolean, p_record_ids uuid[], p_relationship_id uuid,
+  p_organization_id uuid, p_application_root_id uuid, p_storage_plan jsonb,
+  p_record_type_id uuid, p_first_loaded jsonb, p_declaration jsonb,
+  p_eligibility jsonb, p_shared jsonb, p_narrowed boolean, p_validated_types jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  pending uuid[] := p_record_ids;
+  found_ids uuid[] := array[]::uuid[];
+  candidates uuid[];
+  owners uuid[];
+  decided_ids uuid[];
+  outcomes text[];
+  candidate_index integer;
+  round_number integer := 0;
+  examined integer := 0;
+  outcome text;
+  access_sql text := p_storage_plan #>> '{access,predicate}';
+  owner_groups uuid[];
+  shared_records uuid[];
+  storage_contract_id uuid := (p_storage_plan #>> '{storage,storageContractId}')::uuid;
+  owner_column text := case when p_parents then 'from_record_id' else 'to_record_id' end;
+  candidate_column text := case when p_parents then 'to_record_id' else 'from_record_id' end;
+begin
+  -- Private invocation-local facts come from the query's validated page, never caller state.
+  if p_parents is null or pg_catalog.cardinality(p_record_ids) > 201
+    or p_organization_id is null or storage_contract_id is null or access_sql is null then
+    raise exception using errcode = '22023', message = 'Tree relative read is invalid';
+  end if;
+  select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[]) into owner_groups
+  from pg_catalog.jsonb_array_elements_text(p_storage_plan #> '{access,ownerGroupIds}') as item(value);
+  select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[]) into shared_records
+  from pg_catalog.jsonb_array_elements_text(p_storage_plan #> '{access,sharedRecordIds}') as item(value);
+  -- Keep the protected scan's parameter slots; only slots 1,2,6,7,8,10 occur in access predicates.
+  while examined < 500 and pg_catalog.cardinality(pending) > 0 loop
+    round_number := round_number + 1;
+    execute pg_catalog.format(
+      'select pg_catalog.array_agg(candidate.record_id order by candidate.owner_id),
+         pg_catalog.array_agg(candidate.owner_id order by candidate.owner_id)
+       from (
+         select stored.record_id, edge.%1$I as owner_id,
+           pg_catalog.row_number() over (partition by edge.%1$I order by stored.record_id) as rank
+         from vortex_record.relationship_edges as edge
+         join record_data.%2$I as stored on stored.organisation_id = edge.from_organisation_id
+           and stored.record_id = edge.%3$I
+         where edge.relationship_id = %4$L::uuid and edge.from_organisation_id = $1
+           and edge.to_organisation_id = $1
+           and edge.from_storage_contract_id = %5$L::uuid and edge.to_storage_contract_id = %5$L::uuid
+           and edge.%1$I = any ($11) and stored.lifecycle_state = ''active''
+           and %6$s and (%7$s)
+       ) as candidate where candidate.rank = $12',
+      owner_column, p_storage_plan #>> '{storage,physicalTableToken}', candidate_column,
+      p_relationship_id, storage_contract_id,
+      case when p_storage_plan #>> '{storage,storageScope}' = 'application_contained'
+        then 'stored.application_root_id = $2' else 'stored.application_root_id is null' end,
+      access_sql)
+    into candidates, owners
+    using p_organization_id, p_application_root_id, null::text[], null::uuid, 501,
+      (p_storage_plan #>> '{access,ownerAccountId}')::uuid, owner_groups, shared_records,
+      null::jsonb, p_storage_plan #> '{access,parameters}', pending, round_number;
+    exit when candidates is null;
+    examined := examined + pg_catalog.cardinality(candidates);
+    select coalesce(pg_catalog.array_agg(decided.record_id), array[]::uuid[]),
+      coalesce(pg_catalog.array_agg(decided.decision ->> 'outcome'), array[]::text[])
+    into decided_ids, outcomes
+    from vortex_record.read_record_page_decisions_internal(
+      p_record_type_id, p_first_loaded, p_declaration, p_eligibility,
+      candidates, p_shared -> 'envelope', p_narrowed
+    ) as decided;
+    for candidate_index in 1 .. pg_catalog.cardinality(candidates) loop
+      if candidates[candidate_index] = any (decided_ids) then
+        outcome := outcomes[pg_catalog.array_position(decided_ids, candidates[candidate_index])];
+      else
+        select row_read.projection ->> 'outcome' into outcome
+        from vortex_record.read_record_projection_with_validated_types_internal(
+          p_record_type_id, candidates[candidate_index], p_declaration, p_eligibility,
+          p_validated_types, null, null, null, null, p_shared
+        ) as row_read;
+      end if;
+      if outcome = 'allowed' then
+        found_ids := pg_catalog.array_append(found_ids, owners[candidate_index]);
+      end if;
+    end loop;
+    exit when p_parents;
+    select coalesce(pg_catalog.array_agg(item.id), array[]::uuid[]) into pending
+    from pg_catalog.unnest(pending) as item(id)
+    where item.id <> all (found_ids) and item.id = any (owners);
+  end loop;
+  if not p_parents and examined >= 500 and pg_catalog.cardinality(pending) > 0 then
+    raise warning 'Tree child visibility examination budget exhausted';
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'dataset_limit_exceeded');
+  end if;
+  return pg_catalog.jsonb_build_object('outcome', 'completed', 'recordIds', pg_catalog.to_jsonb(found_ids));
+end
+$function$;
+
+alter function vortex_record.read_query_tree_relatives_internal(boolean,uuid[],uuid,uuid,uuid,jsonb,uuid,jsonb,jsonb,jsonb,jsonb,boolean,jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.read_query_tree_relatives_internal(boolean,uuid[],uuid,uuid,uuid,jsonb,uuid,jsonb,jsonb,jsonb,jsonb,boolean,jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+create or replace function vortex_record.query_group_member_fields_internal(
+  query_item jsonb, fields_by_id jsonb, group_selector jsonb, group_selector_types jsonb
+)
+returns text[]
+language plpgsql
+immutable
+security invoker
+set search_path = ''
+as $function$
+declare
+  group_by_ids text[] := array[]::text[];
+  field_item jsonb;
+  group_key text;
+  group_field_type text;
+  uuid_pattern constant text := '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+begin
+    if pg_catalog.jsonb_array_length(query_item -> 'groupByFieldIds') not between 1 and 10 then
+      return null;
+    end if;
+    for field_item in
+      select item.value from pg_catalog.jsonb_array_elements(query_item -> 'groupByFieldIds') as item(value)
+    loop
+      if pg_catalog.jsonb_typeof(field_item) is distinct from 'string'
+        or pg_catalog.lower(field_item #>> '{}') !~ uuid_pattern
+        or pg_catalog.lower(field_item #>> '{}') = '00000000-0000-0000-0000-000000000000' then
+        return null;
+      end if;
+      group_key := pg_catalog.lower(field_item #>> '{}');
+      group_field_type := coalesce(fields_by_id -> group_key ->> 'type', '');
+      if group_key = any (group_by_ids)
+        or group_field_type not in (
+          'text', 'whole_number', 'decimal_number', 'yes_no', 'date', 'date_time',
+          'choice', 'reference_number', 'email_address', 'phone_number', 'web_address',
+          'link', 'link_to_one_of_several'
+        ) then
+        return null;
+      end if;
+      group_by_ids := pg_catalog.array_append(group_by_ids, group_key);
+    end loop;
+    if pg_catalog.jsonb_array_length(group_selector) <> pg_catalog.cardinality(group_by_ids)
+      or exists (
+        select 1 from pg_catalog.jsonb_object_keys(group_selector_types) as supplied(key)
+        where supplied.key <> all (group_by_ids)
+      ) then
+      return null;
+    end if;
+    foreach group_key in array group_by_ids loop
+      if group_selector_types ->> group_key is distinct from fields_by_id -> group_key ->> 'type' then
+        return null;
+      end if;
+    end loop;
+  return group_by_ids;
+end
+$function$;
+alter function vortex_record.query_group_member_fields_internal(jsonb,jsonb,jsonb,jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.query_group_member_fields_internal(jsonb,jsonb,jsonb,jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+create or replace function vortex_record.query_search_plan_internal(
+  p_user_inputs jsonb, fields_by_id jsonb, declared_searchable_ids text[], p_exact_record_id uuid
+)
+returns jsonb
+language plpgsql
+immutable
+security invoker
+set search_path = ''
+as $function$
+declare
+  user_search text;
+  search_candidate_ids text[];
+  search_field_ids text[] := array[]::text[];
+  field_key text;
+begin
+  -- The user's search: one bounded, non-blank text term; a blank term is absent.
+  if p_user_inputs ? 'search'
+    and pg_catalog.jsonb_typeof(p_user_inputs -> 'search') not in ('string', 'null') then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+  user_search := pg_catalog.btrim(p_user_inputs ->> 'search');
+  if user_search = '' then
+    user_search := null;
+  end if;
+  if user_search is not null and pg_catalog.length(user_search) > 200 then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+  -- An exact record id resolves one identity; the search only narrows pages of a list, so it is
+  -- ignored here while the published filter and the viewer's authority still apply unchanged.
+  if p_exact_record_id is not null then
+    user_search := null;
+  end if;
+  -- Search authority: the record type's own declared search priority. A component
+  -- with only a search box declares no per-field list, so an empty declared set
+  -- searches every field the record type marks searchable; a declared set narrows
+  -- it. A row matches only through a field the reader can see on that row, so a
+  -- hidden searchable value never decides a match.
+  if pg_catalog.cardinality(declared_searchable_ids) > 0 then
+    search_candidate_ids := declared_searchable_ids;
+  else
+    select coalesce(pg_catalog.array_agg(item.key), array[]::text[])
+    into search_candidate_ids
+    from pg_catalog.jsonb_object_keys(fields_by_id) as item(key);
+  end if;
+  foreach field_key in array search_candidate_ids loop
+    if (fields_by_id ? field_key)
+      and (fields_by_id -> field_key ->> 'searchPriority') in ('first', 'normal', 'last') then
+      search_field_ids := pg_catalog.array_append(search_field_ids, field_key);
+    end if;
+  end loop;
+  return pg_catalog.jsonb_build_object('outcome', 'completed', 'search', user_search,
+    'fieldIds', pg_catalog.to_jsonb(search_field_ids));
+end
+$function$;
+alter function vortex_record.query_search_plan_internal(jsonb,jsonb,text[],uuid) owner to vortex_record_adapter;
+revoke all on function vortex_record.query_search_plan_internal(jsonb,jsonb,text[],uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 -- Private Record-adapter routine; migrations install the complete canonical body
 -- under its owner with schema CREATE granted only for that migration transaction.
@@ -839,7 +1119,6 @@ declare
   group_candidate_values jsonb;
   group_by_ids text[] := array[]::text[];
   group_key text;
-  group_field_type text;
   group_member_matches boolean;
   group_scan_predicate text;
   preview_mode boolean := false;
@@ -850,17 +1129,10 @@ declare
   tree_parent_id uuid;
   tree_relationship_id uuid;
   tree_item jsonb;
-  tree_pending uuid[];
-  tree_found uuid[] := array[]::uuid[];
-  tree_candidate_ids uuid[];
-  tree_candidate_parent_ids uuid[];
-  tree_decided_ids uuid[];
-  tree_decided_outcomes text[];
-  tree_candidate_index integer;
-  tree_round integer;
-  tree_examined integer := 0;
-  tree_outcome text;
-  tree_scope_sql text;
+  tree_candidates uuid[];
+  tree_root_child_ids uuid[] := array[]::uuid[];
+  tree_root_nonroot_ids uuid[];
+
 begin
   -- Request shape. Nothing here is authority; it only bounds the work.
   if p_direction not in ('forward', 'backward') or p_direction is null then
@@ -880,7 +1152,6 @@ begin
     end if;
     requested_ids := pg_catalog.array_append(requested_ids, pg_catalog.lower(field_item #>> '{}'));
   end loop;
-  -- Declared system values: a closed set, each named at most once.
   if p_requested_system_field_keys is null then
     p_requested_system_field_keys := '[]'::jsonb;
   end if;
@@ -898,9 +1169,7 @@ begin
     end if;
     system_field_keys := pg_catalog.array_append(system_field_keys, field_item #>> '{}');
   end loop;
-  -- User-facing sort and search, plus the user filter passed to shared
-  -- preparation. The component's declared field sets only narrow user input;
-  -- they never supply authority or replace the published query contract.
+  -- User field sets narrow the published contract; they never supply authority.
   if p_user_inputs is null then
     p_user_inputs := '{}'::jsonb;
   end if;
@@ -930,26 +1199,9 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
   tree_mode := p_user_inputs ? 'tree';
-  if tree_mode then
-    -- A tree level is its own read: one link field and either one parent record or none (the roots).
-    tree_item := p_user_inputs -> 'tree';
-    if board_member_mode or group_member_mode or p_user_inputs ? 'grouping'
-      or p_exact_record_id is not null
-      or pg_catalog.jsonb_typeof(tree_item) is distinct from 'object'
-      or tree_item - array['fieldId', 'parentRecordId']::text[] <> '{}'::jsonb
-      or not (tree_item ? 'fieldId') or not (tree_item ? 'parentRecordId')
-      or pg_catalog.jsonb_typeof(tree_item -> 'fieldId') is distinct from 'string'
-      or pg_catalog.lower(tree_item ->> 'fieldId') !~ uuid_pattern
-      or pg_catalog.jsonb_typeof(tree_item -> 'parentRecordId') not in ('string', 'null')
-      or (pg_catalog.jsonb_typeof(tree_item -> 'parentRecordId') = 'string'
-        and pg_catalog.lower(tree_item ->> 'parentRecordId') !~ uuid_pattern) then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-    end if;
-    tree_field_id := pg_catalog.lower(tree_item ->> 'fieldId');
-    tree_parent_id := (tree_item ->> 'parentRecordId')::uuid;
-    if tree_parent_id = '00000000-0000-0000-0000-000000000000'::uuid then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-    end if;
+  if tree_mode and (board_member_mode or group_member_mode or p_user_inputs ? 'grouping'
+    or p_exact_record_id is not null) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
   if group_member_mode then
     group_member := vortex_record.group_member_selector_internal(p_user_inputs -> 'groupMember');
@@ -1008,23 +1260,6 @@ begin
   end if;
   if pg_catalog.jsonb_array_length(user_sort) > 20 then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-  end if;
-  -- The user's search: one bounded, non-blank text term; a blank term is absent.
-  if p_user_inputs ? 'search'
-    and pg_catalog.jsonb_typeof(p_user_inputs -> 'search') not in ('string', 'null') then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-  end if;
-  user_search := pg_catalog.btrim(p_user_inputs ->> 'search');
-  if user_search = '' then
-    user_search := null;
-  end if;
-  if user_search is not null and pg_catalog.length(user_search) > 200 then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-  end if;
-  -- An exact record id resolves one identity; the search only narrows pages of a list, so it is
-  -- ignored here while the published filter and the viewer's authority still apply unchanged.
-  if p_exact_record_id is not null then
-    user_search := null;
   end if;
   if p_user_inputs ? 'grouping' and not group_member_mode then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
@@ -1094,41 +1329,11 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
   end if;
   if group_member_mode then
-    if pg_catalog.jsonb_array_length(query_item -> 'groupByFieldIds') not between 1 and 10 then
+    group_by_ids := vortex_record.query_group_member_fields_internal(
+      query_item, fields_by_id, group_selector, group_selector_types);
+    if group_by_ids is null then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
-    for field_item in
-      select item.value from pg_catalog.jsonb_array_elements(query_item -> 'groupByFieldIds') as item(value)
-    loop
-      if pg_catalog.jsonb_typeof(field_item) is distinct from 'string'
-        or pg_catalog.lower(field_item #>> '{}') !~ uuid_pattern
-        or pg_catalog.lower(field_item #>> '{}') = '00000000-0000-0000-0000-000000000000' then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-      end if;
-      group_key := pg_catalog.lower(field_item #>> '{}');
-      group_field_type := coalesce(fields_by_id -> group_key ->> 'type', '');
-      if group_key = any (group_by_ids)
-        or group_field_type not in (
-          'text', 'whole_number', 'decimal_number', 'yes_no', 'date', 'date_time',
-          'choice', 'reference_number', 'email_address', 'phone_number', 'web_address',
-          'link', 'link_to_one_of_several'
-        ) then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-      end if;
-      group_by_ids := pg_catalog.array_append(group_by_ids, group_key);
-    end loop;
-    if pg_catalog.jsonb_array_length(group_selector) <> pg_catalog.cardinality(group_by_ids)
-      or exists (
-        select 1 from pg_catalog.jsonb_object_keys(group_selector_types) as supplied(key)
-        where supplied.key <> all (group_by_ids)
-      ) then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-    end if;
-    foreach group_key in array group_by_ids loop
-      if group_selector_types ->> group_key is distinct from fields_by_id -> group_key ->> 'type' then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-      end if;
-    end loop;
   elsif board_member_mode then
     if pg_catalog.jsonb_array_length(coalesce(query_item -> 'groupByFieldIds', '[]'::jsonb)) <> 1 then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
@@ -1186,40 +1391,19 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'field_unbounded');
   end if;
   if tree_mode then
-    -- The parent link must be a one-record link of this record type to itself that every reader
-    -- of the type is guaranteed to see, so a hidden parent never decides which rows are listed.
-    if not (tree_field_id = any (readable_field_ids)) then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'field_unbounded');
-    end if;
-    select (relationship.value ->> 'relationshipId')::uuid into tree_relationship_id
-    from pg_catalog.jsonb_array_elements(coalesce(record_type_item -> 'relationships', '[]'::jsonb))
-      as relationship(value)
-    where pg_catalog.lower(relationship.value ->> 'fromFieldId') = tree_field_id
-      and relationship.value ->> 'cardinality' = 'many_to_one'
-      and pg_catalog.lower(relationship.value #>> '{toRecordType,recordTypeId}')
-        = pg_catalog.lower(record_type_id_value::text);
-    if tree_relationship_id is null or fields_by_id -> tree_field_id ->> 'type' is distinct from 'link' then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-    end if;
+    tree_item := vortex_record.query_tree_selector_internal(
+      p_user_inputs -> 'tree', record_type_item, readable_field_ids);
+    if tree_item ->> 'outcome' <> 'completed' then return tree_item; end if;
+    tree_field_id := tree_item ->> 'fieldId';
+    tree_parent_id := (tree_item ->> 'parentRecordId')::uuid;
+    tree_relationship_id := (tree_item ->> 'relationshipId')::uuid;
   end if;
-  -- Search authority: the record type's own declared search priority. A component
-  -- with only a search box declares no per-field list, so an empty declared set
-  -- searches every field the record type marks searchable; a declared set narrows
-  -- it. A row matches only through a field the reader can see on that row, so a
-  -- hidden searchable value never decides a match.
-  if pg_catalog.cardinality(declared_searchable_ids) > 0 then
-    search_candidate_ids := declared_searchable_ids;
-  else
-    select coalesce(pg_catalog.array_agg(item.key), array[]::text[])
-    into search_candidate_ids
-    from pg_catalog.jsonb_object_keys(fields_by_id) as item(key);
-  end if;
-  foreach field_key in array search_candidate_ids loop
-    if (fields_by_id ? field_key)
-      and (fields_by_id -> field_key ->> 'searchPriority') in ('first', 'normal', 'last') then
-      search_field_ids := pg_catalog.array_append(search_field_ids, field_key);
-    end if;
-  end loop;
+  search_plan := vortex_record.query_search_plan_internal(
+    p_user_inputs, fields_by_id, declared_searchable_ids, p_exact_record_id);
+  if search_plan ->> 'outcome' <> 'completed' then return search_plan; end if;
+  user_search := search_plan ->> 'search';
+  select coalesce(pg_catalog.array_agg(item.value), array[]::text[]) into search_field_ids
+  from pg_catalog.jsonb_array_elements_text(search_plan -> 'fieldIds') as item(value);
   -- Projection: only fields the published query selects.
   select coalesce(pg_catalog.array_agg(pg_catalog.lower(item.value #>> '{}')), array[]::text[])
   into selected_ids
@@ -1285,13 +1469,8 @@ begin
       end if;
     end if;
   end if;
-  -- Order: the published sort, or the user's chosen sort when one is supplied,
-  -- over orderable typed columns, then the record id. A published sort field the
-  -- reader is not guaranteed to see is validated but never pushed, so the scan
-  -- order never depends on a value it may withhold. A user sort must instead be a
-  -- field the component declares sortable, the record type declares sortable and
-  -- the reader is guaranteed to see: silently ordering by something else would be
-  -- wrong, so it is refused rather than pushed away.
+  -- Sort only on readable fields: validate declared keys, refuse unbounded user keys, and end
+  -- with record identity. A withheld published key never changes membership or reveals its value.
   if board_member_mode then
     effective_sort := '[]'::jsonb;
     effective_sort_is_user := false;
@@ -1467,31 +1646,13 @@ begin
     end if;
     filter_predicate := '(' || filter_predicate || ') and (' || group_scan_predicate || ')';
   end if;
-  if tree_mode then
-    -- The candidate scan of a level: the parent's children, or the records no readable parent
-    -- holds. A parent counts as readable only when the read scan's access predicate admits it,
-    -- which never admits a record the exact decision refuses, so a record whose parent the reader
-    -- cannot read is listed as a root without revealing that parent. Each row is still decided
-    -- exactly below, and a child's parent link is rechecked on its readable projection.
-    tree_scope_sql := case when storage_scope = 'application_contained'
-      then '%1$s.application_root_id = $2' else '%1$s.application_root_id is null' end;
-    filter_predicate := '(' || filter_predicate || ') and ' || case
-      when tree_parent_id is null then pg_catalog.format(
-        'not exists (select 1 from vortex_record.relationship_edges as tree_edge'
-        || ' join record_data.%1$I as parent_row on parent_row.organisation_id = tree_edge.to_organisation_id'
-        || ' and parent_row.record_id = tree_edge.to_record_id'
-        || ' where tree_edge.relationship_id = %2$L::uuid and tree_edge.from_organisation_id = stored.organisation_id'
-        || ' and tree_edge.from_storage_contract_id = %3$L::uuid and tree_edge.from_record_id = stored.record_id'
-        || ' and parent_row.lifecycle_state = ''active'' and ' || pg_catalog.format(tree_scope_sql, 'parent_row')
-        || ' and (%4$s))',
-        physical_table_token, tree_relationship_id, v_storage_contract_id,
-        pg_catalog.replace(access_sql, 'stored.', 'parent_row.'))
-      else pg_catalog.format(
-        'exists (select 1 from vortex_record.relationship_edges as tree_edge'
-        || ' where tree_edge.relationship_id = %1$L::uuid and tree_edge.from_organisation_id = stored.organisation_id'
-        || ' and tree_edge.from_storage_contract_id = %2$L::uuid and tree_edge.from_record_id = stored.record_id'
-        || ' and tree_edge.to_record_id = $16)',
-        tree_relationship_id, v_storage_contract_id) end;
+  if tree_mode and tree_parent_id is not null then
+    filter_predicate := '(' || filter_predicate || ') and ' || pg_catalog.format(
+      'exists (select 1 from vortex_record.relationship_edges as tree_edge'
+      || ' where tree_edge.relationship_id = %1$L::uuid and tree_edge.from_organisation_id = stored.organisation_id'
+      || ' and tree_edge.from_storage_contract_id = %2$L::uuid and tree_edge.from_record_id = stored.record_id'
+      || ' and tree_edge.to_record_id = $16)',
+      tree_relationship_id, v_storage_contract_id);
   end if;
   filter_exact := (prepared_plan #>> '{filter,pushedExact}')::boolean is true;
   filter_parameters := coalesce(prepared_plan #> '{filter,pushedParameters}', '[]'::jsonb);
@@ -1988,6 +2149,32 @@ begin
       end if;
       if projection ->> 'outcome' = 'allowed' then
         readable_values := projection -> 'values';
+        if tree_mode and tree_parent_id is null then
+          -- Root membership uses exact batched parent decisions, never the access superset.
+          if not (scan_record.record_id = any (tree_root_child_ids)) then
+            tree_root_child_ids := array[scan_record.record_id];
+            while pg_catalog.cardinality(tree_root_child_ids) <= p_page_size loop
+              fetch scan_cursor into lookahead_record;
+              exit when not found;
+              tree_root_child_ids := pg_catalog.array_append(tree_root_child_ids, lookahead_record.record_id);
+            end loop;
+            move absolute cursor_position from scan_cursor;
+            tree_item := vortex_record.read_query_tree_relatives_internal(
+              true, tree_root_child_ids, tree_relationship_id, context_organization_id,
+              context_application_root_id, storage_plan, record_type_id_value, page_first_loaded,
+              page_declaration, page_eligibility, page_shared, page_narrowed, validated_record_types);
+            select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[])
+            into tree_root_nonroot_ids
+            from pg_catalog.jsonb_array_elements_text(tree_item -> 'recordIds') as item(value);
+          end if;
+          if scan_record.record_id = any (tree_root_nonroot_ids) then
+            last_examined_sort_key := scan_record.sort_key;
+            last_examined_record_id := scan_record.record_id;
+            continue;
+          end if;
+          -- A root's unreadable parent must not be disclosed as a link value.
+          readable_values := pg_catalog.jsonb_set(readable_values, array[tree_field_id], 'null'::jsonb);
+        end if;
         -- Filters decide membership, so every referenced value must be readable.
         -- Sorts only decide order: the scan already drops unguaranteed sort keys
         -- and ends with record identity. A withheld published sort field must
@@ -2138,75 +2325,15 @@ begin
     from pg_catalog.jsonb_array_elements(rows_value) with ordinality as item(value, ordinality);
   end if;
   if tree_mode and row_count > 0 then
-    -- Whether each listed record has a child the reader may read, for the whole page at once. A
-    -- round takes the next candidate child of every parent still without one (the read scan's
-    -- access predicate narrows them), decides those children exactly together, and ends when
-    -- every parent has one, none has another candidate, or the examination budget is spent. A
-    -- parent whose candidates are all refused is reported without children, never counted.
-    select pg_catalog.array_agg((item.value ->> 'recordId')::uuid) into tree_pending
+    select pg_catalog.array_agg((item.value ->> 'recordId')::uuid) into tree_candidates
     from pg_catalog.jsonb_array_elements(rows_value) as item(value);
-    tree_round := 0;
-    while tree_round < 8 and tree_examined < scan_limit
-      and pg_catalog.cardinality(tree_pending) > 0 loop
-      tree_round := tree_round + 1;
-      execute pg_catalog.format(
-        'select pg_catalog.array_agg(candidate.child_id order by candidate.parent_id),
-           pg_catalog.array_agg(candidate.parent_id order by candidate.parent_id)
-         from (
-           select stored.record_id as child_id, tree_edge.to_record_id as parent_id,
-             pg_catalog.row_number() over (
-               partition by tree_edge.to_record_id order by stored.record_id) as candidate_rank
-           from vortex_record.relationship_edges as tree_edge
-           join record_data.%I as stored on stored.organisation_id = tree_edge.from_organisation_id
-             and stored.record_id = tree_edge.from_record_id
-           where tree_edge.relationship_id = %L::uuid and tree_edge.from_organisation_id = $1
-             and tree_edge.from_storage_contract_id = %L::uuid and tree_edge.to_record_id = any ($17)
-             and stored.lifecycle_state = ''active'' and %s and (%s)
-         ) as candidate
-         where candidate.candidate_rank = $18',
-        physical_table_token, tree_relationship_id, v_storage_contract_id,
-        case when storage_scope = 'application_contained'
-          then 'stored.application_root_id = $2' else 'stored.application_root_id is null' end,
-        access_sql)
-      into tree_candidate_ids, tree_candidate_parent_ids
-      using context_organization_id, context_application_root_id, after_sort_key,
-        after_record_id, scan_limit + 1, access_owner_account_id,
-        access_owner_group_ids, access_shared_record_ids,
-        filter_parameters, access_parameters, projection_batch, p_exact_record_id,
-        board_column_value, board_option_values, group_selector_values, tree_parent_id,
-        tree_pending, tree_round;
-      exit when tree_candidate_ids is null;
-      tree_examined := tree_examined + pg_catalog.cardinality(tree_candidate_ids);
-      select coalesce(pg_catalog.array_agg(decided.record_id), array[]::uuid[]),
-        coalesce(pg_catalog.array_agg(decided.decision ->> 'outcome'), array[]::text[])
-      into tree_decided_ids, tree_decided_outcomes
-      from vortex_record.read_record_page_decisions_internal(
-        record_type_id_value, page_first_loaded, page_declaration, page_eligibility,
-        tree_candidate_ids, page_shared -> 'envelope', page_narrowed
-      ) as decided;
-      for tree_candidate_index in 1 .. pg_catalog.cardinality(tree_candidate_ids) loop
-        if tree_candidate_ids[tree_candidate_index] = any (tree_decided_ids) then
-          tree_outcome := tree_decided_outcomes[
-            pg_catalog.array_position(tree_decided_ids, tree_candidate_ids[tree_candidate_index])];
-        else
-          -- A record the page pass cannot decide keeps the exact single-record decision.
-          select row_read.projection ->> 'outcome' into tree_outcome
-          from vortex_record.read_record_projection_with_validated_types_internal(
-            record_type_id_value, tree_candidate_ids[tree_candidate_index], page_declaration,
-            page_eligibility, validated_record_types, null, null, null, null, page_shared
-          ) as row_read;
-        end if;
-        if tree_outcome = 'allowed' then
-          tree_found := pg_catalog.array_append(tree_found, tree_candidate_parent_ids[tree_candidate_index]);
-        end if;
-      end loop;
-      select coalesce(pg_catalog.array_agg(pending.id), array[]::uuid[]) into tree_pending
-      from pg_catalog.unnest(tree_pending) as pending(id)
-      where pending.id <> all (tree_found)
-        and pending.id = any (tree_candidate_parent_ids);
-    end loop;
+    tree_item := vortex_record.read_query_tree_relatives_internal(
+      false, tree_candidates, tree_relationship_id, context_organization_id,
+      context_application_root_id, storage_plan, record_type_id_value, page_first_loaded,
+      page_declaration, page_eligibility, page_shared, page_narrowed, validated_record_types);
+    if tree_item ->> 'outcome' <> 'completed' then return tree_item; end if;
     select pg_catalog.jsonb_agg(item.value || pg_catalog.jsonb_build_object(
-        'hasChildren', (item.value ->> 'recordId')::uuid = any (tree_found)) order by item.ordinality)
+        'hasChildren', (tree_item -> 'recordIds') ? (item.value ->> 'recordId')) order by item.ordinality)
     into rows_value
     from pg_catalog.jsonb_array_elements(rows_value) with ordinality as item(value, ordinality);
   end if;

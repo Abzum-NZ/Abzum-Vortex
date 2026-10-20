@@ -244,6 +244,11 @@ export const checkRecordsTableFeature = (
       "definition_records_table_pinning",
       "Column pinning needs the Table preset. Lists have no scrolling columns.",
     );
+  if (key === "tree" && state.enabled && features.board.enabled)
+    return featureNotPossible(
+      "definition_records_table_tree",
+      "Turn Board off to show records as a tree.",
+    );
   // A row opens one panel: its related records or the records beneath it, never both.
   if (key === "tree" && state.enabled && features.masterDetail.enabled)
     return featureNotPossible(
