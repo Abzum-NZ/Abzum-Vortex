@@ -1,3 +1,7 @@
+import {
+  recordsTableSpreadsheetFeature,
+  type RecordsTableSpreadsheetSettings,
+} from "./spreadsheet";
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
   recordsTableBoardFeature,
@@ -103,6 +107,7 @@ export type {
   RecordsTableSearchSettings,
   RecordsTablePinningSettings,
   RecordsTablePivotSettings,
+  RecordsTableSpreadsheetSettings,
 };
 
 /**
@@ -123,10 +128,12 @@ export type RecordsTableFeatures = Readonly<{
   conditionalFormatting: RecordsTableFeatureState<RecordsTableConditionalFormattingSettings>;
   pinning: RecordsTableFeatureState<RecordsTablePinningSettings>;
   pivot: RecordsTableFeatureState<RecordsTablePivotSettings>;
+  spreadsheet: RecordsTableFeatureState<RecordsTableSpreadsheetSettings>;
   board: RecordsTableFeatureState<RecordsTableBoardSettings>;
 }>;
 
 const registry = {
+  spreadsheet: { property: "spreadsheet", definition: recordsTableSpreadsheetFeature },
   pinning: { property: "pinning", definition: recordsTablePinningFeature },
   search: { property: "search", definition: recordsTableSearchFeature },
   column_filters: { property: "columnFilters", definition: recordsTableColumnFiltersFeature },
@@ -150,6 +157,7 @@ const registry = {
 
 /** The feature keys in the order Studio lists them; each is a key of the `features` setting group. */
 export const recordsTableFeatureKeys = [
+  "spreadsheet",
   "pinning",
   "search",
   "column_filters",
@@ -193,6 +201,7 @@ export const readRecordsTableFeatures = (
       ? undefined
       : registry[key].definition.read(feature);
   };
+  const spreadsheet = read("spreadsheet");
   const search = read("search");
   const columnFilters = read("column_filters");
   const savedViews = read("saved_views");
@@ -204,6 +213,7 @@ export const readRecordsTableFeatures = (
   const pivot = read("pivot");
   const board = read("board");
   if (
+    spreadsheet === undefined ||
     search === undefined ||
     columnFilters === undefined ||
     savedViews === undefined ||
@@ -217,10 +227,11 @@ export const readRecordsTableFeatures = (
   )
     return undefined;
   return {
+    spreadsheet: spreadsheet as RecordsTableFeatures["spreadsheet"],
     search,
     pinning,
     columnFilters: columnFilters as RecordsTableFeatures["columnFilters"],
-    savedViews,
+    savedViews: savedViews as RecordsTableFeatures["savedViews"],
     bulkActions: bulkActions as RecordsTableFeatures["bulkActions"],
     inlineEdit: inlineEdit as RecordsTableFeatures["inlineEdit"],
     masterDetail: masterDetail as RecordsTableFeatures["masterDetail"],
@@ -241,6 +252,11 @@ export const checkRecordsTableFeature = (
   facts: RecordsTableQueryFacts,
   presentation: "grid" | "cards",
 ): RecordsTableFeatureCheck => {
+  if (presentation === "cards" && key === "spreadsheet")
+    return featureNotPossible(
+      "definition_records_table_spreadsheet",
+      "Spreadsheet controls need the Table preset. Lists do not have a cell range.",
+    );
   if (presentation === "cards" && key === "inline_edit")
     return featureNotPossible(
       "definition_records_table_inline_edit",

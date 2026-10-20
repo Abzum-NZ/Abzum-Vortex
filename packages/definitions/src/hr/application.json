@@ -40,7 +40,9 @@
           ]
         },
         "field_policy": {
-          "readable_fields": ["display_name"],
+          "readable_fields": [
+            "display_name"
+          ],
           "changeable_fields": []
         }
       }
@@ -536,6 +538,9 @@
                       },
                       "pivot": {
                         "enabled": false
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
@@ -971,6 +976,9 @@
                         "enabled": true
                       },
                       "pivot": {
+                        "enabled": false
+                      },
+                      "spreadsheet": {
                         "enabled": false
                       }
                     }
@@ -1477,6 +1485,9 @@
                         "enabled": true
                       },
                       "pivot": {
+                        "enabled": false
+                      },
+                      "spreadsheet": {
                         "enabled": false
                       }
                     }
@@ -2143,6 +2154,9 @@
                         "enabled": true
                       },
                       "pivot": {
+                        "enabled": false
+                      },
+                      "spreadsheet": {
                         "enabled": false
                       }
                     }
@@ -2858,6 +2872,9 @@
                       },
                       "pivot": {
                         "enabled": false
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
@@ -3352,6 +3369,9 @@
                       },
                       "pivot": {
                         "enabled": false
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
@@ -3462,7 +3482,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.hr:department"]
+            "recordTypeIds": [
+              "vortex.hr:department"
+            ]
           }
         },
         "tasks": [
@@ -3536,7 +3558,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.hr:department"]
+            "recordTypeIds": [
+              "vortex.hr:department"
+            ]
           }
         },
         "tasks": [
@@ -3621,7 +3645,9 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.hr:department"],
+            "recordTypeIds": [
+              "vortex.hr:department"
+            ],
             "value": {
               "kind": "reference",
               "reference": {
@@ -3652,7 +3678,9 @@
           "record": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.hr:department"]
+            "recordTypeIds": [
+              "vortex.hr:department"
+            ]
           },
           "values": {
             "type": "json",
@@ -3712,7 +3740,9 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.hr:department"],
+            "recordTypeIds": [
+              "vortex.hr:department"
+            ],
             "value": {
               "kind": "reference",
               "reference": {
@@ -3743,7 +3773,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.hr:position"]
+            "recordTypeIds": [
+              "vortex.hr:position"
+            ]
           }
         },
         "tasks": [
@@ -3817,7 +3849,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.hr:position"]
+            "recordTypeIds": [
+              "vortex.hr:position"
+            ]
           }
         },
         "tasks": [
@@ -3902,7 +3936,9 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.hr:position"],
+            "recordTypeIds": [
+              "vortex.hr:position"
+            ],
             "value": {
               "kind": "reference",
               "reference": {
@@ -3933,7 +3969,9 @@
           "record": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.hr:position"]
+            "recordTypeIds": [
+              "vortex.hr:position"
+            ]
           },
           "values": {
             "type": "json",
@@ -3993,7 +4031,9 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.hr:position"],
+            "recordTypeIds": [
+              "vortex.hr:position"
+            ],
             "value": {
               "kind": "reference",
               "reference": {
@@ -4024,7 +4064,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.hr:employee"]
+            "recordTypeIds": [
+              "vortex.hr:employee"
+            ]
           }
         },
         "tasks": [
@@ -4098,7 +4140,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.hr:employee"]
+            "recordTypeIds": [
+              "vortex.hr:employee"
+            ]
           }
         },
         "tasks": [
@@ -4183,7 +4227,9 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.hr:employee"],
+            "recordTypeIds": [
+              "vortex.hr:employee"
+            ],
             "value": {
               "kind": "reference",
               "reference": {
@@ -4215,7 +4261,9 @@
           "record": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.hr:employee"]
+            "recordTypeIds": [
+              "vortex.hr:employee"
+            ]
           },
           "values": {
             "type": "json",
@@ -4275,7 +4323,9 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.hr:employee"],
+            "recordTypeIds": [
+              "vortex.hr:employee"
+            ],
             "value": {
               "kind": "reference",
               "reference": {
@@ -4307,7 +4357,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.hr:leave_request"]
+            "recordTypeIds": [
+              "vortex.hr:leave_request"
+            ]
           }
         },
         "tasks": [
@@ -4381,7 +4433,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.hr:leave_request"]
+            "recordTypeIds": [
+              "vortex.hr:leave_request"
+            ]
           }
         },
         "tasks": [
@@ -4466,7 +4520,9 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.hr:leave_request"],
+            "recordTypeIds": [
+              "vortex.hr:leave_request"
+            ],
             "value": {
               "kind": "reference",
               "reference": {
@@ -4498,7 +4554,9 @@
           "record": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.hr:leave_request"]
+            "recordTypeIds": [
+              "vortex.hr:leave_request"
+            ]
           },
           "values": {
             "type": "json",
@@ -4558,7 +4616,9 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.hr:leave_request"],
+            "recordTypeIds": [
+              "vortex.hr:leave_request"
+            ],
             "value": {
               "kind": "reference",
               "reference": {
@@ -4590,7 +4650,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.hr:leave_entitlement"]
+            "recordTypeIds": [
+              "vortex.hr:leave_entitlement"
+            ]
           }
         },
         "tasks": [
@@ -4664,7 +4726,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.hr:leave_entitlement"]
+            "recordTypeIds": [
+              "vortex.hr:leave_entitlement"
+            ]
           }
         },
         "tasks": [
@@ -4749,7 +4813,9 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.hr:leave_entitlement"],
+            "recordTypeIds": [
+              "vortex.hr:leave_entitlement"
+            ],
             "value": {
               "kind": "reference",
               "reference": {
@@ -4781,7 +4847,9 @@
           "record": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.hr:leave_entitlement"]
+            "recordTypeIds": [
+              "vortex.hr:leave_entitlement"
+            ]
           },
           "values": {
             "type": "json",
@@ -4841,7 +4909,9 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.hr:leave_entitlement"],
+            "recordTypeIds": [
+              "vortex.hr:leave_entitlement"
+            ],
             "value": {
               "kind": "reference",
               "reference": {

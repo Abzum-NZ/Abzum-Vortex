@@ -291,6 +291,7 @@ export const parseTableFeatures = (
       "conditionalFormatting",
       "pinning",
       "pivot",
+      "spreadsheet",
     ],
     location,
   );
@@ -384,8 +385,28 @@ export const parseTableFeatures = (
       ...(view === undefined ? {} : { view: Object.freeze(view) }),
     });
   }
+  let spreadsheet: RecordsTableFeatureProjection["spreadsheet"];
+  if (record.spreadsheet !== undefined) {
+    const controls = requireRecord(
+      record.spreadsheet,
+      "Projected spreadsheet controls are invalid",
+      location,
+    );
+    requireExactKeys(controls, ["rangeSelect", "find"], location);
+    if (
+      typeof controls.rangeSelect !== "boolean" ||
+      typeof controls.find !== "boolean" ||
+      (!controls.rangeSelect && !controls.find)
+    )
+      fail("Projected spreadsheet controls need an enabled control", location);
+    spreadsheet = Object.freeze({
+      rangeSelect: controls.rangeSelect as boolean,
+      find: controls.find as boolean,
+    });
+  }
   return Object.freeze({
     ...(pivot === undefined ? {} : { pivot }),
+    ...(spreadsheet === undefined ? {} : { spreadsheet }),
     ...(record.pinning === true ? { pinning: true as const } : {}),
     ...(record.search === true ? { search: true as const } : {}),
     ...(columnFilters === undefined ? {} : { columnFilters }),

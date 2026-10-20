@@ -19,6 +19,7 @@ import {
   gridLayoutStateSchema,
   type GridLayout,
   type GridLayoutState,
+  type GridViewCommand,
   isRecord,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
@@ -331,7 +332,9 @@ export type DisplaySemanticEventName =
    */
   | "pivot_requested"
   | "pivot_view_changed"
-  | "pivot_drilled";
+  | "pivot_drilled"
+  /** The Saved views feature asks the host to open, store, share or delete a view. */
+  | "grid_view_requested";
 
 /**
  * One declared semantic event. Row and item events always carry stable identity;
@@ -387,6 +390,14 @@ export type DisplaySemanticEvent =
       event: "pivot_drilled";
       /** The typed filters (address spelling) that select the cell's records in the ordinary grid. */
       filters: readonly Readonly<{ fieldId: string; filter: string }>[];
+    }>
+  | Readonly<{
+      /**
+       * A person asked for a change to the grid's saved views. The host opens the view in the
+       * address or stores the change, and its handler resolves to a `GridViewCommandResult`.
+       */
+      event: "grid_view_requested";
+      command: GridViewCommand;
     }>
   | Readonly<{
       /** The whole ordered sort a header asked for; an empty list asks for the default order. */
@@ -478,6 +489,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "pivot_requested",
   "pivot_view_changed",
   "pivot_drilled",
+  "grid_view_requested",
   "search_changed",
   "sort_changed",
   "columns_changed",

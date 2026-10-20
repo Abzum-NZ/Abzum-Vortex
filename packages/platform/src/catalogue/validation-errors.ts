@@ -64,6 +64,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_conditional_formatting",
   "definition_records_table_pinning",
   "definition_records_table_pivot",
+  "definition_records_table_spreadsheet",
   "definition_records_table_board",
   "definition_query_binding",
   "definition_unknown_property",
@@ -166,6 +167,13 @@ const definitionValidationErrorCatalogueSource = {
     message: "Formatting needs rules over fields of the bound query.",
     guidance:
       "Build each rule's condition from fields of the bound query, give a status an icon or a label, or turn Formatting off.",
+  },
+  definition_records_table_spreadsheet: {
+    order: 39,
+    message:
+      "Spreadsheet controls need individual records with fields and at least one control enabled.",
+    guidance:
+      "Choose an ungrouped query and enable Range selection or Find on page, or turn Spreadsheet controls off.",
   },
   definition_records_table_pinning: {
     order: 39,

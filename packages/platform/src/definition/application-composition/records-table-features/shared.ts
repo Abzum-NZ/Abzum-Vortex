@@ -177,6 +177,8 @@ export type RecordsTableBoardFacts = Readonly<{
  * the compiled release; Studio from the draft being edited.
  */
 export type RecordsTableQueryFacts = Readonly<{
+  /** The page requires a person to sign in before using its table. */
+  signedIn: boolean;
   recordTypeLabel: string;
   fields: readonly RecordsTableFieldFacts[];
   relationships: readonly Readonly<{ key: string; label: string }>[];
@@ -219,6 +221,7 @@ export type RecordsTableFeatureRefusalCode = Extract<
   | "definition_records_table_conditional_formatting"
   | "definition_records_table_pinning"
   | "definition_records_table_pivot"
+  | "definition_records_table_spreadsheet"
   | "definition_records_table_board"
 >;
 
@@ -254,7 +257,7 @@ export type RecordsTableFeatureDefinition<Settings extends object> = Readonly<{
   label: string;
   /** One short line saying what the feature lets people do. */
   description: string;
-  read(group: SettingsRecord): RecordsTableFeatureState<Settings>;
+  read(group: SettingsRecord): RecordsTableFeatureState<Settings> | undefined;
   check(
     state: RecordsTableFeatureState<Settings>,
     facts: RecordsTableQueryFacts,

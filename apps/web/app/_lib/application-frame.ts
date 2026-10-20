@@ -17,7 +17,11 @@ import {
   type PlatformBlockRelease,
   type ProjectedApplicationFrame,
 } from "@vortex/platform/schema";
-import type { ApplicationAccount, PlatformThemeTokens, FieldInputControlReleaseMap } from "@vortex/ui";
+import type {
+  ApplicationAccount,
+  PlatformThemeTokens,
+  FieldInputControlReleaseMap,
+} from "@vortex/ui";
 import { resolveIdentitySessionWithEmail } from "../auth/_lib/session-server";
 import { resolveApplicationAddress } from "./application-address";
 import { loadApplicationSearch } from "./application-search";
@@ -33,8 +37,8 @@ type ApplicationSearchView = Awaited<ReturnType<typeof loadApplicationSearch>>;
 /** Everything the application frame shows, decided on the server for the signed-in viewer. */
 export type ApplicationFrameModel = Readonly<{
   frame: ProjectedApplicationFrame;
-  /** Every shell of the installed release, so a page with another shell can replace the frame. */
-  shells: readonly ApplicationShell[];
+  /** Presentation only; the frame's layout is already projected under the viewer's access. */
+  shells: readonly Pick<ApplicationShell, "shellId" | "key" | "name" | "presentation">[];
   theme: ApplicationPageModel["theme"];
   navigation: ProjectedNavigation;
   application: Readonly<{
@@ -169,7 +173,9 @@ export const loadApplicationFrame = cache(
         ? undefined
         : content.shells.find((candidate) => sameId(candidate.shellId, shellId));
     if (shellId !== undefined && shell === undefined)
-      throw new Error(`Compiled page '${pageDefinition.key}' references missing shell '${shellId}'`);
+      throw new Error(
+        `Compiled page '${pageDefinition.key}' references missing shell '${shellId}'`,
+      );
     const { frame } = splitProjectedPage(projected.value, shell);
 
     const switcherRead =
@@ -188,7 +194,14 @@ export const loadApplicationFrame = cache(
           : [];
 
     const query = addressed.query.getAll("q");
-    const expression = query.length === 1 ? (query[0] === "" ? undefined : query[0]) : query.length === 0 ? undefined : "";
+    const expression =
+      query.length === 1
+        ? query[0] === ""
+          ? undefined
+          : query[0]
+        : query.length === 0
+          ? undefined
+          : "";
     const search: ApplicationSearchView =
       expression === undefined
         ? content.search?.enabled === true
@@ -223,7 +236,12 @@ export const loadApplicationFrame = cache(
       `/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}/${encodeURIComponent(key)}/${encodeURIComponent(pageKey)}`;
     return {
       frame,
-      shells: content.shells,
+      shells: content.shells.map(({ shellId, key, name, presentation }) => ({
+        shellId,
+        key,
+        name,
+        presentation,
+      })),
       theme: content.theme,
       navigation: navigation.value,
       application: {

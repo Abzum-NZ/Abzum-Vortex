@@ -79,3 +79,5 @@ revoke all on function vortex_record.record_type_read_declaration_internal(jsonb
 
 comment on function vortex_record.record_type_read_declaration_internal(jsonb, uuid, uuid) is
   'Private whole-record-type read declaration over one installation access plan: every record-scoped read permission the context Application or the record type''s own Module declares for the record type, or null when none is declared.';
+
+grant execute on function vortex_record.record_type_read_declaration_internal(jsonb, uuid, uuid) to vortex_owner;

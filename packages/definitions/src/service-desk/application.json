@@ -672,6 +672,9 @@
                       },
                       "pivot": {
                         "enabled": false
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
@@ -898,6 +901,9 @@
                         "enabled": true
                       },
                       "pivot": {
+                        "enabled": false
+                      },
+                      "spreadsheet": {
                         "enabled": false
                       }
                     }
@@ -1466,6 +1472,9 @@
                       },
                       "pivot": {
                         "enabled": false
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
@@ -1618,7 +1627,13 @@
         "type": "public",
         "record_type": "vortex.service_desk.knowledge:article",
         "permission": "application.service_desk.open",
-        "public_fields": ["article_number", "title", "body", "review_date", "author"],
+        "public_fields": [
+          "article_number",
+          "title",
+          "body",
+          "review_date",
+          "author"
+        ],
         "rate_limit_per_minute": 60,
         "composition": {
           "root": {
@@ -1812,6 +1827,9 @@
                         "enabled": true
                       },
                       "pivot": {
+                        "enabled": false
+                      },
+                      "spreadsheet": {
                         "enabled": false
                       }
                     }
@@ -2144,6 +2162,9 @@
                       },
                       "pivot": {
                         "enabled": false
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
@@ -2304,6 +2325,9 @@
                       },
                       "pivot": {
                         "enabled": false
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
@@ -2416,6 +2440,9 @@
                         "enabled": true
                       },
                       "pivot": {
+                        "enabled": false
+                      },
+                      "spreadsheet": {
                         "enabled": false
                       }
                     }
@@ -3101,7 +3128,10 @@
       {
         "id": "service_desk_email",
         "connection_type": "vortex.connection.email",
-        "required_operations": ["send_message", "send_template"],
+        "required_operations": [
+          "send_message",
+          "send_template"
+        ],
         "key": "service_desk_email",
         "version": {
           "selection": "exact",
@@ -3111,7 +3141,9 @@
       {
         "id": "service_desk_webhook",
         "connection_type": "vortex.connection.webhook",
-        "required_operations": ["post_json"],
+        "required_operations": [
+          "post_json"
+        ],
         "key": "service_desk_webhook",
         "version": {
           "selection": "exact",
@@ -3157,7 +3189,10 @@
               "kind": "flow",
               "flow": "sd_named_action_case_assign"
             },
-            "error_codes": ["request_refused", "validation_failed"],
+            "error_codes": [
+              "request_refused",
+              "validation_failed"
+            ],
             "method": "POST",
             "path": "/assign-case"
           },
@@ -3186,7 +3221,10 @@
               "kind": "query",
               "key": "service_desk_open_cases"
             },
-            "error_codes": ["request_refused", "validation_failed"],
+            "error_codes": [
+              "request_refused",
+              "validation_failed"
+            ],
             "method": "GET",
             "path": "/list-cases"
           },
@@ -3222,7 +3260,10 @@
               "kind": "flow",
               "flow": "sd_named_action_case_public_comment"
             },
-            "error_codes": ["request_refused", "validation_failed"],
+            "error_codes": [
+              "request_refused",
+              "validation_failed"
+            ],
             "method": "POST",
             "path": "/add-public-comment"
           }
@@ -3701,7 +3742,9 @@
           },
           "service_level_record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.service_desk.sla:service_level"],
+            "recordTypeIds": [
+              "vortex.service_desk.sla:service_level"
+            ],
             "required": true
           },
           "selected_owner_group_id": {
@@ -3871,7 +3914,9 @@
                           "source": "task_output",
                           "task": "read_service_level",
                           "key": "values",
-                          "path": ["first_response_minutes"]
+                          "path": [
+                            "first_response_minutes"
+                          ]
                         }
                       },
                       "unit": "minutes"
@@ -3894,7 +3939,9 @@
                           "source": "task_output",
                           "task": "read_service_level",
                           "key": "values",
-                          "path": ["resolution_minutes"]
+                          "path": [
+                            "resolution_minutes"
+                          ]
                         }
                       },
                       "unit": "minutes"
@@ -3936,7 +3983,9 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.service_desk.cases:case"],
+            "recordTypeIds": [
+              "vortex.service_desk.cases:case"
+            ],
             "value": {
               "kind": "reference",
               "reference": {
@@ -3963,7 +4012,9 @@
         "inputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.service_desk.cases:case"],
+            "recordTypeIds": [
+              "vortex.service_desk.cases:case"
+            ],
             "required": true
           },
           "values": {
@@ -4024,7 +4075,9 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.service_desk.cases:case"],
+            "recordTypeIds": [
+              "vortex.service_desk.cases:case"
+            ],
             "value": {
               "kind": "reference",
               "reference": {
@@ -4123,7 +4176,9 @@
         "inputs": {
           "owner": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.system_directory:person"],
+            "recordTypeIds": [
+              "vortex.system_directory:person"
+            ],
             "required": true
           }
         },
@@ -4223,7 +4278,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.service_desk.cases:case"]
+            "recordTypeIds": [
+              "vortex.service_desk.cases:case"
+            ]
           }
         },
         "tasks": [
@@ -4266,7 +4323,9 @@
           "record": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.service_desk.cases:case"]
+            "recordTypeIds": [
+              "vortex.service_desk.cases:case"
+            ]
           },
           "values": {
             "type": "json",
@@ -4306,7 +4365,9 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.service_desk.cases:case"],
+            "recordTypeIds": [
+              "vortex.service_desk.cases:case"
+            ],
             "value": {
               "kind": "reference",
               "reference": {
@@ -4334,7 +4395,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.service_desk.knowledge:article"]
+            "recordTypeIds": [
+              "vortex.service_desk.knowledge:article"
+            ]
           }
         },
         "tasks": [
@@ -4377,7 +4440,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.service_desk.sla:service_level"]
+            "recordTypeIds": [
+              "vortex.service_desk.sla:service_level"
+            ]
           }
         },
         "tasks": [
@@ -4420,7 +4485,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.crm.organisations:company"]
+            "recordTypeIds": [
+              "vortex.crm.organisations:company"
+            ]
           }
         },
         "tasks": [
@@ -4463,7 +4530,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.crm.people:contact"]
+            "recordTypeIds": [
+              "vortex.crm.people:contact"
+            ]
           }
         },
         "tasks": [
@@ -4537,7 +4606,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.crm.organisations:company"]
+            "recordTypeIds": [
+              "vortex.crm.organisations:company"
+            ]
           }
         },
         "tasks": [
@@ -4580,7 +4651,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.service_desk.cases:case"]
+            "recordTypeIds": [
+              "vortex.service_desk.cases:case"
+            ]
           }
         },
         "tasks": [
@@ -4742,7 +4815,9 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.service_desk.sla:business_calendar"],
+            "recordTypeIds": [
+              "vortex.service_desk.sla:business_calendar"
+            ],
             "value": {
               "kind": "reference",
               "reference": {
@@ -4778,7 +4853,9 @@
           },
           "calendar_record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.service_desk.sla:business_calendar"],
+            "recordTypeIds": [
+              "vortex.service_desk.sla:business_calendar"
+            ],
             "required": true
           },
           "first_response_minutes": {
@@ -4940,7 +5017,9 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.service_desk.sla:service_level"],
+            "recordTypeIds": [
+              "vortex.service_desk.sla:service_level"
+            ],
             "value": {
               "kind": "reference",
               "reference": {

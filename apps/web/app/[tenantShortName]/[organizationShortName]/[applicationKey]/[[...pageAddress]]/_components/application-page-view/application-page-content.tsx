@@ -431,13 +431,20 @@ export function ApplicationPageViewContent({
     applyDispatch,
   });
 
-  const { commitTablePage, changeTableQuery, commitPivotView, tableQueryPending } =
-    useTablePageAddress({
-      model,
-      currentSearch,
-      refreshPlacements,
-      setSelection,
-    });
+  const {
+    commitTablePage,
+    changeTableQuery,
+    commitPivotView,
+    openTableView,
+    selectTableViewInPlace,
+    tableQueryPending,
+  } = useTablePageAddress({
+    model,
+    currentData,
+    currentSearch,
+    refreshPlacements,
+    setSelection,
+  });
   const pagedPlacementIds = useMemo(
     () =>
       Object.entries(placementEventNames)
@@ -472,7 +479,15 @@ export function ApplicationPageViewContent({
     tableQueryPending,
   });
 
-  const { commitLayout } = useGridLayout({ model, currentData });
+  const { commitLayout, runViewCommand } = useGridLayout({
+    model,
+    currentData,
+    navigationKey,
+    setRefreshedPlacementData,
+    openTableView,
+    selectTableViewInPlace,
+    refreshPlacements,
+  });
   const { readDetail: readRowDetail } = useRowDetail({
     application,
     currentPageKey,
@@ -506,6 +521,7 @@ export function ApplicationPageViewContent({
     setSelection,
     changeTableQuery,
     commitLayout,
+    runViewCommand,
     readRowDetail,
     readPivotPage,
     commitPivotView,

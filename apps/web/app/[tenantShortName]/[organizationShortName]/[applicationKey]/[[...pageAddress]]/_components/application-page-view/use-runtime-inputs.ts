@@ -18,6 +18,8 @@ import {
   type ReferenceChoiceSelectionEvidenceMap,
   type ComponentRequestGeneration,
   type GridLayoutCommitResult,
+  type GridViewCommand,
+  type GridViewCommandResult,
 } from "@vortex/platform/schema";
 import type {
   ApplicationPageModel,
@@ -61,6 +63,7 @@ export function useRuntimeInputs({
   setSelection,
   changeTableQuery,
   commitLayout,
+  runViewCommand,
   readRowDetail,
   readPivotPage,
   commitPivotView,
@@ -133,6 +136,7 @@ export function useRuntimeInputs({
     placementId: string,
     event: DisplaySemanticEvent,
   ) => Promise<GridLayoutCommitResult>;
+  runViewCommand: (placementId: string, command: GridViewCommand) => Promise<GridViewCommandResult>;
   readRowDetail: (placementId: string, event: DisplaySemanticEvent) => Promise<unknown>;
   readPivotPage: (placementId: string, event: DisplaySemanticEvent) => Promise<unknown>;
   commitPivotView: (placementId: string, view: RecordsTablePivotView | undefined) => void;
@@ -465,6 +469,13 @@ export function useRuntimeInputs({
             changeTableQuery(placementId, { kind: "drill", filters: event.filters });
           };
         }
+        // Saved views change the address and store a view; like the layout they are the person's
+        // own and need no flow, so the same declared event gates them.
+        if (supportsEvent("columns_changed") && tableData !== undefined)
+          events.grid_view_requested = (event: DisplaySemanticEvent) => {
+            if (event.event !== "grid_view_requested") return;
+            return runViewCommand(placementId, event.command);
+          };
         // An expanded row reads its related records; only a table whose rows expand offers it.
         if (supportsEvent("row_expanded") && tableData?.features?.masterDetail !== undefined)
           events.row_expanded = rowDetailHandlers(placementId);
@@ -876,6 +887,7 @@ export function useRuntimeInputs({
     selection,
     changeTableQuery,
     commitLayout,
+    runViewCommand,
     rowDetailHandlers,
     pivotHandlers,
     commitPivotView,
