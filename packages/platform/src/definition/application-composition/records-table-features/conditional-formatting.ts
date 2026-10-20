@@ -299,6 +299,24 @@ export const conditionalFormatRuleIssue = (
   const comparisons = conditionalFormatComparisons(rule.condition);
   if (comparisons.length === 0) return "Build the rule's condition.";
   for (const comparison of comparisons) {
+    if (!["contains", "not_contains"].includes(comparison.operator)) {
+      for (const [operand, other] of [
+        [comparison.left, comparison.right],
+        [comparison.right, comparison.left],
+      ] as const) {
+        if (operand?.source !== "value" || operand.value === null || other?.source !== "field")
+          continue;
+        const field = factsOf(facts, other.field);
+        if (field?.choiceValues === undefined) continue;
+        const options = field.choiceValues;
+        const values =
+          ["in", "not_in"].includes(comparison.operator) && Array.isArray(operand.value)
+            ? operand.value
+            : [operand.value];
+        if (values.some((value) => typeof value !== "string" || !options.includes(value)))
+          return `Choose one of the options of ${field.label}; this value is not one of them.`;
+      }
+    }
     const left =
       comparison.left.source === "field" ? factsOf(facts, comparison.left.field) : undefined;
     const right = comparison.right;
