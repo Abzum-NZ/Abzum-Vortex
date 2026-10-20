@@ -100,9 +100,13 @@ export type AggregateDescriptor = z.infer<typeof aggregateDescriptorSchema>;
 const aggregatesSchema = z
   .array(aggregateDescriptorSchema)
   .max(20)
-  .refine((aggregates) => new Set(aggregates.map((aggregate) => aggregate.alias)).size === aggregates.length, {
-    message: "Each aggregate alias is used once",
-  });
+  .refine(
+    (aggregates) =>
+      new Set(aggregates.map((aggregate) => aggregate.alias)).size === aggregates.length,
+    {
+      message: "Each aggregate alias is used once",
+    },
+  );
 
 /**
  * A computed value. Counts are whole numbers; sums and averages of whole and
@@ -207,9 +211,17 @@ export type ArrangementCommand = z.input<typeof arrangementCommandSchema>;
 export const summaryArrangementCommandSchema = protectedQuerySummaryCommandSchema;
 export type SummaryArrangementCommand = z.infer<typeof summaryArrangementCommandSchema>;
 
-/** One initial set of board pages, or one column page to continue. */
+/** The first page of each named column, or the next page of one column. */
 export const protectedBoardArrangementPageRequestSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("initial") }).strict(),
+  z
+    .object({
+      kind: z.literal("read"),
+      columns: z
+        .array(protectedQueryBoardSelectorSchema.shape.column)
+        .min(1)
+        .max(boardChoiceOptionLimit + 1),
+    })
+    .strict(),
   z
     .object({
       kind: z.literal("continue"),
@@ -282,9 +294,7 @@ export const protectedBoardArrangementResultSchema = z
     aggregates: protectedBoardAggregateResultsSchema,
   })
   .strict();
-export type ProtectedBoardArrangementResult = z.infer<
-  typeof protectedBoardArrangementResultSchema
->;
+export type ProtectedBoardArrangementResult = z.infer<typeof protectedBoardArrangementResultSchema>;
 
 // Results
 

@@ -63,7 +63,7 @@ const readBoardSummary = async (
       ${JSON.stringify({
         filter: command.filter ?? null,
         filterableFieldIds: command.filterableFieldIds,
-        boardSummary: { choiceFieldId: command.choiceFieldId },
+        boardSummary: { choiceFieldId: command.choiceFieldId, columns: command.columns },
       })}::text::jsonb
     ) as result
   `;

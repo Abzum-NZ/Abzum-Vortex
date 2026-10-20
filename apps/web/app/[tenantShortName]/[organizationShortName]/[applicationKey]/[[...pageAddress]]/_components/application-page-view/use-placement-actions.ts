@@ -3,7 +3,7 @@ import type { useRouter } from "next/navigation";
 import type { createFlowRuntime, parseTablePayload } from "@vortex/ui";
 import type { DisplaySemanticEvent, FlowDispatchResult } from "@vortex/ui";
 import {
-  boardColumnContinuationRequestSchema,
+  boardColumnReadRequestSchema,
   isCurrentComponentRequestGeneration,
   nextComponentRequestGeneration,
   type ComponentRequestGeneration,
@@ -19,11 +19,7 @@ import type {
 import { rereadApplicationPlacements } from "../../placement-refresh-action";
 import type { Notice, RefreshedPlacementData, TableContinuationTarget } from "./types";
 import { asComponentBinding } from "./event-values";
-import {
-  boardPayloadFor,
-  boardBucketForSelector,
-  mergeBoardContinuation,
-} from "./placement-helpers";
+import { boardPayloadFor, mergeBoardColumnRead } from "./placement-helpers";
 
 export function usePlacementActions({
   applyDispatch,
@@ -121,24 +117,20 @@ export function usePlacementActions({
     [applyDispatch, formOwners, flowRuntime],
   );
 
-  const continueBoardColumn = useCallback(
+  const readBoardColumns = useCallback(
     async (placementId: string, event: DisplaySemanticEvent): Promise<boolean> => {
-      if (
-        busy ||
-        event.event !== "page_changed" ||
-        !("column" in event) ||
-        typeof event.continuationToken !== "string"
-      )
-        return false;
+      if (busy || event.event !== "page_changed" || !("columns" in event)) return false;
       const parsedId = containedComponentIdSchema.safeParse(placementId);
-      const continuation = boardColumnContinuationRequestSchema.safeParse({
-        column: event.column,
-        continuationToken: event.continuationToken,
+      const columnRead = boardColumnReadRequestSchema.safeParse({
+        columns: event.columns,
+        ...(event.continuationToken === undefined
+          ? {}
+          : { continuationToken: event.continuationToken }),
       });
       const requestScope = placementRequestsRef.current;
       if (
         !parsedId.success ||
-        !continuation.success ||
+        !columnRead.success ||
         requestScope.key !== navigationKey ||
         currentPageKey === undefined
       )
@@ -149,15 +141,7 @@ export function usePlacementActions({
           (candidate) => candidate.toLowerCase() === parsedId.data.toLowerCase(),
         ) ?? parsedId.data;
       const currentBoard = boardPayloadFor(currentData[displayId]);
-      const currentBucket =
-        currentBoard === undefined
-          ? undefined
-          : boardBucketForSelector(currentBoard, continuation.data.column);
-      if (
-        currentBoard === undefined ||
-        currentBucket?.page?.nextContinuationToken !== continuation.data.continuationToken
-      )
-        return false;
+      if (currentBoard === undefined) return false;
 
       const serialKey = `${requestScope.key}\u0000${parsedId.data.toLowerCase()}`;
       if (boardContinuationInFlightRef.current.has(serialKey)) return false;
@@ -206,7 +190,7 @@ export function usePlacementActions({
               search: currentSearch,
             },
             [parsedId.data],
-            { placementId: parsedId.data, request: continuation.data },
+            [{ placementId: parsedId.data, request: columnRead.data }],
           );
         } catch {
           result = { kind: "temporarily_unavailable" };
@@ -232,7 +216,7 @@ export function usePlacementActions({
         const mergedBoard =
           freshBoard === undefined
             ? undefined
-            : mergeBoardContinuation(currentBoard, freshBoard, continuation.data.column);
+            : mergeBoardColumnRead(currentBoard, freshBoard, columnRead.data);
         if (mergedBoard === undefined) return clearAndReload();
 
         setRefreshedPlacementData((current) => {
@@ -282,7 +266,7 @@ export function usePlacementActions({
       if (
         busy ||
         event.event !== "page_changed" ||
-        "column" in event ||
+        "columns" in event ||
         !Number.isSafeInteger(event.page) ||
         event.page < 1 ||
         event.page > 100_000 ||
@@ -344,5 +328,5 @@ export function usePlacementActions({
     [busy, commitTablePage, currentSearch, navigationKey, refreshPlacements, tableQueryPending],
   );
 
-  return { runBinding, continueBoardColumn, continueTablePage };
+  return { runBinding, readBoardColumns, continueTablePage };
 }

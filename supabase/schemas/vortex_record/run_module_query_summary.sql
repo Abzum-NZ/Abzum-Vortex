@@ -51,8 +51,8 @@ begin
     if pg_catalog.jsonb_typeof(board_summary) is distinct from 'object' then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
-    if board_summary - array['choiceFieldId']::text[] <> '{}'::jsonb
-      or not (board_summary ? 'choiceFieldId') then
+    -- The summary and member pages share the same bounded selector contract.
+    if vortex_record.board_column_selector_internal(board_summary, true) is null then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
     if pg_catalog.jsonb_typeof(board_summary -> 'choiceFieldId') is distinct from 'string'

@@ -548,7 +548,7 @@ export const protectedQueryBoardSummaryColumnSchema = z
       .min(1)
       .max(60)
       .refine((label) => label.trim().length > 0),
-    rowCount: z.number().int().nonnegative().max(100_000),
+    rowCount: z.number().int().nonnegative().max(100_000).nullable(),
     aggregates: z.record(builderKeySchema, protectedQuerySummaryAggregateResultSchema),
   })
   .strict();
@@ -556,7 +556,7 @@ export const protectedQueryBoardSummaryColumnSchema = z
 /** Readable members whose current choice is missing, withheld, null or not installed. */
 export const protectedQueryBoardSummaryUnassignedSchema = z
   .object({
-    rowCount: z.number().int().nonnegative().max(100_000),
+    rowCount: z.number().int().nonnegative().max(100_000).nullable(),
     aggregates: z.record(builderKeySchema, protectedQuerySummaryAggregateResultSchema),
   })
   .strict();
@@ -568,6 +568,7 @@ export const protectedQueryBoardSummaryCommandSchema = z
     queryId: queryIdSchema,
     inputValues: z.record(builderKeySchema, jsonValueSchema),
     choiceFieldId: fieldIdSchema,
+    columns: z.array(protectedQueryBoardSelectorSchema.shape.column).min(1).max(13),
     /** The viewer's typed filter narrows the installed Query filter. */
     filter: conditionNodeSchema.optional(),
     /** Built by the bound component from its installed filter controls. */
@@ -604,15 +605,16 @@ export const protectedQueryBoardSummaryCompletedSchema = z
       });
 
     const aliases = Object.keys(summary.aggregates).sort();
-    const aggregateSets = [
-      ...summary.columns.map((column) => column.aggregates),
-      summary.unassigned.aggregates,
-    ];
+    const buckets = [...summary.columns, summary.unassigned];
+    const aggregateSets = buckets.map((bucket) => bucket.aggregates);
     for (const [index, aggregates] of aggregateSets.entries()) {
       const candidateAliases = Object.keys(aggregates).sort();
       if (
-        aliases.length !== candidateAliases.length ||
-        aliases.some((alias, aliasIndex) => alias !== candidateAliases[aliasIndex])
+        (buckets[index]!.rowCount === null
+          ? candidateAliases.length !== 0
+          : aliases.length !== candidateAliases.length) ||
+        (buckets[index]!.rowCount !== null &&
+          aliases.some((alias, aliasIndex) => alias !== candidateAliases[aliasIndex]))
       )
         context.addIssue({
           code: "custom",
@@ -626,8 +628,8 @@ export const protectedQueryBoardSummaryCompletedSchema = z
     }
 
     const partitionedRows =
-      summary.unassigned.rowCount +
-      summary.columns.reduce((total, column) => total + column.rowCount, 0);
+      (summary.unassigned.rowCount ?? 0) +
+      summary.columns.reduce((total, column) => total + (column.rowCount ?? 0), 0);
     if (partitionedRows !== summary.totalRowCount)
       context.addIssue({
         code: "custom",
