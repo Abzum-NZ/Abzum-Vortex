@@ -35,9 +35,15 @@ export const gridLayoutColumnSchema = z
     /** The width the person resized the column to; absent keeps the authored width. */
     width: z
       .number()
-      .int()
-      .min(RECORDS_TABLE_COLUMN_MINIMUM_WIDTH)
-      .max(RECORDS_TABLE_COLUMN_MAXIMUM_WIDTH)
+      .int("A column width is a whole number of pixels")
+      .min(
+        RECORDS_TABLE_COLUMN_MINIMUM_WIDTH,
+        `A column is at least ${RECORDS_TABLE_COLUMN_MINIMUM_WIDTH} pixels wide`,
+      )
+      .max(
+        RECORDS_TABLE_COLUMN_MAXIMUM_WIDTH,
+        `A column is at most ${RECORDS_TABLE_COLUMN_MAXIMUM_WIDTH} pixels wide`,
+      )
       .optional(),
   })
   .strict();

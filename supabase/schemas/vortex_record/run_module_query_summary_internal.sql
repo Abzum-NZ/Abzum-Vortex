@@ -17,6 +17,9 @@ declare
   uuid_pattern constant text :=
     '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   prepared_plan jsonb := p_prepared_plan;
+  user_search text := nullif(pg_catalog.btrim(p_user_inputs ->> 'search'), '');
+  search_field_ids text[] := array[]::text[];
+  declared_searchable_ids jsonb := coalesce(p_user_inputs -> 'searchableFieldIds', '[]'::jsonb);
   resolved jsonb;
   query_item jsonb;
   record_type_item jsonb;
@@ -66,6 +69,7 @@ declare
   group_by_sql text;
   group_presence_sql text;
   aggregate_object_sql text := '';
+  summary_totals_sql text;
   aggregate_result_sql text;
   aggregate_count_sql text;
   aggregate_sum_sql text;
@@ -105,6 +109,24 @@ begin
   context_organization_id := (prepared_plan #>> '{scope,organizationId}')::uuid;
   context_application_root_id := (prepared_plan #>> '{scope,applicationRootId}')::uuid;
 
+  if p_user_inputs ? 'groupingFieldId' then
+    query_item := vortex_record.grouping_query_internal(
+      query_item, record_type_item, pg_catalog.lower(p_user_inputs ->> 'groupingFieldId')
+    );
+    if query_item is null then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+    end if;
+  end if;
+  if pg_catalog.jsonb_typeof(declared_searchable_ids) is distinct from 'array' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+  if pg_catalog.jsonb_array_length(declared_searchable_ids) > 200 or exists (
+    select 1 from pg_catalog.jsonb_array_elements(declared_searchable_ids) as item(value)
+    where pg_catalog.jsonb_typeof(item.value) <> 'string' or pg_catalog.lower(item.value #>> '{}') !~ uuid_pattern
+  ) or (select pg_catalog.count(*) <> pg_catalog.count(distinct pg_catalog.lower(item.value #>> '{}'))
+        from pg_catalog.jsonb_array_elements(declared_searchable_ids) as item(value)) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
   if coalesce((query_item ->> 'relationshipHops')::integer, 0) <> 0 then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'relationship_invalid');
   end if;
@@ -126,6 +148,14 @@ begin
       pg_catalog.lower(field_item ->> 'fieldId'), field_item
     );
   end loop;
+
+  select coalesce(pg_catalog.array_agg(field.key), array[]::text[]) into search_field_ids
+  from pg_catalog.jsonb_each(fields_by_id) as field(key, value)
+  where field.value ->> 'searchPriority' in ('first', 'normal', 'last')
+    and (pg_catalog.jsonb_array_length(declared_searchable_ids) = 0 or exists (
+      select 1 from pg_catalog.jsonb_array_elements_text(declared_searchable_ids) as selected(id)
+      where pg_catalog.lower(selected.id) = field.key
+    ));
 
   for field_item in
     select item.value from pg_catalog.jsonb_array_elements(coalesce(query_item -> 'groupByFieldIds', '[]'::jsonb)) as item(value)
@@ -263,6 +293,12 @@ begin
   into readable_field_ids
   from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'readableFieldIds') as item(value);
 
+  if p_user_inputs ? 'groupingFieldId' and not (
+    pg_catalog.lower(p_user_inputs ->> 'groupingFieldId') = any (readable_field_ids)
+  ) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'field_unbounded');
+  end if;
+
   prepared_plan := vortex_record.prepare_module_query_internal(
     p_module_root_id, p_query_id, p_expected_release_revision, p_input_values,
     p_user_inputs -> 'filter', coalesce(p_user_inputs -> 'filterableFieldIds', '[]'::jsonb),
@@ -311,7 +347,9 @@ begin
   -- used by grouping, aggregates or filtering is readable on every candidate.
   -- Derived filter and aggregate fields can lose their projection on an
   -- individual record when an input is withheld, so both require read_record.
-  fast_path := pg_catalog.cardinality(readable_field_ids) > 0
+  -- A search may match through a field readable on only some records; read_record
+  -- remains authoritative for each match rather than searching hidden stored values.
+  fast_path := user_search is null and pg_catalog.cardinality(readable_field_ids) > 0
     and not exists (
       select 1 from pg_catalog.unnest(filter_ids) as required(id)
       where fields_by_id -> required.id ->> 'type' in ('calculation', 'total')
@@ -582,6 +620,14 @@ begin
     aggregate_object_sql := aggregate_object_sql || pg_catalog.format('%L, %s', aggregate_alias, aggregate_result_sql);
   end loop;
 
+  -- A count-only grouping has no authored aggregate expressions. Its totals
+  -- must still be exactly one row when the selection is empty or over budget.
+  summary_totals_sql := case when aggregate_object_sql = '' then
+    'select ''{}''::jsonb as aggregate_values'
+    else pg_catalog.format(
+      'select pg_catalog.jsonb_build_object(%s) as aggregate_values from selected as candidate',
+      aggregate_object_sql) end;
+
   foreach field_key in array group_ids loop
     group_value_pairs := pg_catalog.array_append(
       group_value_pairs,
@@ -665,6 +711,7 @@ begin
        ) as projected_values
        from readable
        where readable.result ->> ''outcome'' = ''allowed''
+         and vortex_record.query_search_matches_internal(readable.result -> ''values'', $18::text[], $19::text)
          and not exists (
            select 1 from pg_catalog.unnest($16::text[]) as required(id)
            where not (readable.result -> ''values'' ? required.id)
@@ -885,7 +932,7 @@ begin
        candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
        selected as materialized (%s),
        selected_count as (select pg_catalog.count(*)::integer as value from selected),
-       totals as (select pg_catalog.jsonb_build_object(%s) as aggregate_values from selected as candidate),
+       totals as (%s),
        grouped as (
          select %s as group_values,
            pg_catalog.count(*)::integer as row_count,
@@ -909,7 +956,7 @@ begin
        from candidate_count cross join selected_count cross join totals',
       candidate_sql,
       selected_sql,
-      aggregate_object_sql,
+      summary_totals_sql,
       group_values_sql,
       aggregate_object_sql,
       group_presence_sql,
@@ -927,7 +974,7 @@ begin
        candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
        selected as materialized (%s),
        selected_count as (select pg_catalog.count(*)::integer as value from selected),
-       totals as (select pg_catalog.jsonb_build_object(%s) as aggregate_values from selected as candidate)
+       totals as (%s)
        select case when candidate_count.value > %s
          then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
          else pg_catalog.jsonb_build_object(
@@ -943,7 +990,7 @@ begin
        from candidate_count cross join selected_count cross join totals',
       candidate_sql,
       selected_sql,
-      aggregate_object_sql,
+      summary_totals_sql,
       summary_candidate_limit,
       p_module_root_id::text,
       resolved ->> 'moduleReleaseVersion',
@@ -958,7 +1005,7 @@ begin
         summary_candidate_limit + 1, access_owner_account_id, access_owner_group_ids,
         access_shared_record_ids, filter_parameters, access_parameters, null::jsonb,
         filter_condition, filter_types, parameter_types, parameter_values,
-        filter_ids, summary_field_ids;
+        filter_ids, summary_field_ids, search_field_ids, user_search;
   exception when invalid_parameter_value then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
   end;

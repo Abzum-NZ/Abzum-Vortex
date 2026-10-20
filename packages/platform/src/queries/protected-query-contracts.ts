@@ -219,33 +219,13 @@ export const protectedQueryGroupSelectorSchema = z
   });
 export type ProtectedQueryGroupSelector = z.infer<typeof protectedQueryGroupSelectorSchema>;
 
-/** One uncached, record-identity-ordered page of currently readable members in a generic group. */
-export const protectedQueryGroupedMembersCommandSchema = z
-  .object({
-    moduleRootId: moduleRootIdSchema,
-    queryId: queryIdSchema,
-    inputValues: z.record(builderKeySchema, jsonValueSchema),
-    requestedFieldIds: z
-      .array(fieldIdSchema)
-      .min(1)
-      .max(200)
-      .refine(uniqueFieldIds, { message: "Each requested field is named once" }),
-    requestedSystemFieldKeys: z
-      .array(supportedRecordSystemFieldKeySchema)
-      .max(5)
-      .refine((keys) => new Set(keys).size === keys.length, {
-        message: "Each system field is declared once",
-      })
-      .default([]),
-    filter: conditionNodeSchema.optional(),
-    filterableFieldIds: z
-      .array(fieldIdSchema)
-      .max(200)
-      .refine(uniqueFieldIds, { message: "Each filterable field is named once" })
-      .default([]),
-    pageSize: z.number().int().min(1).max(200),
+/** One uncached, ordered, bidirectional page of currently readable members of a group. */
+export const protectedQueryGroupedMembersCommandSchema = protectedQueryCommandSchema
+  .omit({ exactRecordId: true })
+  .extend({
     selector: protectedQueryGroupSelectorSchema,
-    continuationToken: z.string().min(1).max(65_536).optional(),
+    /** A grid's authored choice grouping overrides the query's grouping defaults. */
+    groupingFieldId: fieldIdSchema.optional(),
   })
   .strict();
 export type ProtectedQueryGroupedMembersCommand = z.infer<
@@ -379,6 +359,7 @@ export const protectedQueryGroupedMembersCompletedSchema = z
     groupValues: z.record(fieldIdSchema, jsonValueSchema),
     rows: z.array(protectedQueryPageRowSchema).max(200),
     nextContinuationToken: z.string().optional(),
+    previousContinuationToken: z.string().optional(),
   })
   .strict()
   .superRefine((result, context) => {
@@ -434,12 +415,16 @@ export const protectedQueryResultSchema = z.discriminatedUnion("outcome", [
 ]);
 export type ProtectedQueryResult = z.infer<typeof protectedQueryResultSchema>;
 
-/** One database-backed summary request over the installed Query's own groups and aggregates. */
+/** One database-backed summary request over the installed Query's groups and aggregates, or a grid's choice grouping. */
 export const protectedQuerySummaryCommandSchema = z
   .object({
     moduleRootId: moduleRootIdSchema,
     queryId: queryIdSchema,
     inputValues: z.record(builderKeySchema, jsonValueSchema),
+    /** A grid's authored choice grouping overrides query grouping/totals defaults. */
+    groupingFieldId: fieldIdSchema.optional(),
+    search: protectedQueryCommandSchema.shape.search,
+    searchableFieldIds: protectedQueryCommandSchema.shape.searchableFieldIds,
     /** The viewer's typed filter narrows the installed Query filter. */
     filter: conditionNodeSchema.optional(),
     /** Built by the bound component from its installed filter controls. */
