@@ -41,6 +41,12 @@ export type RecordsTablePageRequest = Readonly<{
   continuationToken?: string;
 }>;
 
+/**
+ * The pivot view a table is opened in: absent shows the ordinary grid. `cursor` is the opaque
+ * keyset position of the first pivot row on the page; absent starts at the first row.
+ */
+export type RecordsTablePivotView = Readonly<{ cursor?: string }>;
+
 export type RecordsTableQueryState = Readonly<{
   /** The person's ordered sort; empty uses the authored default sort. */
   sort: readonly RecordsTableSortKey[];
@@ -48,6 +54,8 @@ export type RecordsTableQueryState = Readonly<{
   search: string | null;
   /** Undefined requests page one. */
   page: RecordsTablePageRequest | undefined;
+  /** Present when the table is shown as a pivot. It is a view, not a query change. */
+  pivot?: RecordsTablePivotView | undefined;
 }>;
 
 export type RecordsTableQueryStateRead =
@@ -62,6 +70,7 @@ const sortParameter = (placementId: string): string => `sort.${placementId}`;
 const filterPrefix = (placementId: string): string => `filter.${placementId}.`;
 const searchParameter = (placementId: string): string => `search.${placementId}`;
 const pageParameter = (placementId: string): string => `page.${placementId}`;
+const pivotParameter = (placementId: string): string => `pivot.${placementId}`;
 const viewParameter = (placementId: string): string => `view.${placementId}`;
 
 // The one codec of every `<kind>.<placement>` address prefix: the query state, and the saved view
@@ -98,6 +107,42 @@ const placementEntries = (
     if (!owned.has(key)) owned.set(key, value);
   }
   return owned;
+};
+
+/**
+ * The address value of a pivot view, `on` or `on.<cursor>`. The pivot is a view of the same query
+ * state, so it is not part of the query-state prefixes: opening it, paging its rows or closing it
+ * never reads the table's rows again.
+ */
+export const encodeRecordsTablePivotView = (view: RecordsTablePivotView): string =>
+  view.cursor === undefined ? "on" : `on.${view.cursor}`;
+
+/** The pivot view an address value names; undefined for anything that is not a pivot view. */
+export const parseRecordsTablePivotView = (
+  value: string | undefined,
+): RecordsTablePivotView | undefined => {
+  if (value === "on") return {};
+  if (value === undefined || !value.startsWith("on.")) return undefined;
+  const cursor = value.slice(3);
+  return TOKEN_PATTERN.test(cursor) ? { cursor } : undefined;
+};
+
+/** Sets or clears one placement's pivot view in the page address, in place. */
+export const applyRecordsTablePivotView = (
+  parameters: URLSearchParams,
+  placementId: string,
+  view: RecordsTablePivotView | undefined,
+): void => {
+  for (const held of [...parameters.keys()])
+    if (held.toLowerCase() === pivotParameter(placementId).toLowerCase()) parameters.delete(held);
+  if (view !== undefined)
+    parameters.set(pivotParameter(placementId), encodeRecordsTablePivotView(view));
+};
+
+const pivotParameterPlacement = (name: string): string | undefined => {
+  if (!name.startsWith("pivot.")) return undefined;
+  const placementId = name.slice("pivot.".length);
+  return FIELD_ID_PATTERN.test(placementId) ? placementId.toLowerCase() : undefined;
 };
 
 /** The address value of a page request, or undefined for the first page. */
@@ -201,6 +246,11 @@ export const readRecordsTableQueryState = (
       filters,
       search: searchText === undefined || searchText === "" ? null : searchText,
       page: parseRecordsTablePagePosition(owned.get(pageParameter(placementId))),
+      pivot: parseRecordsTablePivotView(
+        addressed.find(
+          ([name]) => name.toLowerCase() === pivotParameter(placementId).toLowerCase(),
+        )?.[1],
+      ),
     },
   };
 };
@@ -268,6 +318,14 @@ export type RecordsTableQueryChange =
   /** `filter` is the address spelling of the field's typed filter; empty clears the field's filter. */
   | Readonly<{ kind: "filter"; fieldId: string; filter: string }>
   | Readonly<{ kind: "search"; text: string }>
+  /**
+   * A pivot cell opens the ordinary grid on the records it counts: every filter is set at once and
+   * the pivot view is closed, so the one address change reads one bounded page.
+   */
+  | Readonly<{
+      kind: "drill";
+      filters: readonly Readonly<{ fieldId: string; filter: string }>[];
+    }>
   /** Opens a saved view (null leaves it) without touching the other parts of the query state. */
   | Readonly<{ kind: "view"; viewId: string | null }>
   | Readonly<{ kind: "page"; request: RecordsTablePageRequest }>;
@@ -292,6 +350,13 @@ export const applyRecordsTableQueryChange = (
     return;
   }
   set(pageParameter(placementId), undefined);
+  // The pivot's row position belongs to the query state it was read for.
+  const pivotValue = [...parameters].find(
+    ([name]) => name.toLowerCase() === pivotParameter(placementId).toLowerCase(),
+  )?.[1];
+  if (change.kind === "drill") set(pivotParameter(placementId), undefined);
+  else if (parseRecordsTablePivotView(pivotValue) !== undefined)
+    set(pivotParameter(placementId), "on");
   const settleView = (): void => {
     // A selected view brings its own query state only while the address names none: once the
     // person has cleared it all, the address says so explicitly.
@@ -306,6 +371,11 @@ export const applyRecordsTableQueryChange = (
     set(viewParameter(placementId), queried ? view.viewId : `${view.viewId}${VIEW_CLEARED_SUFFIX}`);
   };
   switch (change.kind) {
+    case "drill":
+      for (const { fieldId, filter } of change.filters)
+        set(`${filterPrefix(placementId)}${fieldId}`, filter === "" ? undefined : filter);
+      settleView();
+      return;
     case "sort":
       set(
         sortParameter(placementId),
@@ -377,7 +447,11 @@ export const recordsTableAddressKey = (
 export const searchWithoutRecordsTableState = (search: string): string => {
   const parameters = new URLSearchParams(search);
   for (const name of [...parameters.keys()])
-    if (recordsTableParameterPlacement(name) !== undefined) parameters.delete(name);
+    if (
+      recordsTableParameterPlacement(name) !== undefined ||
+      pivotParameterPlacement(name) !== undefined
+    )
+      parameters.delete(name);
   return parameters.toString();
 };
 
