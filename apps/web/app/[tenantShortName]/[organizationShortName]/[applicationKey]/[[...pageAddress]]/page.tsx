@@ -4,11 +4,7 @@ import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { splitProjectedPage } from "@vortex/platform/schema";
 import type { ApplicationAccount, DisplaySemanticEvent } from "@vortex/ui";
-import {
-  DEFAULT_PLATFORM_THEME_RELEASE,
-  DefinitionError,
-  FIELD_INPUT_CONTROL_RELEASES,
-} from "@vortex/platform/server";
+import { DEFAULT_PLATFORM_THEME_RELEASE, DefinitionError } from "@vortex/platform/server";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
 import { ApplicationPageView } from "./_components/application-page-view";
@@ -35,7 +31,10 @@ import { resolveApplicationAddress } from "../../../../_lib/application-address"
 import { loadApplicationPage } from "../../../../_lib/application-page";
 import { adoptApplicationRelease } from "../../../../_lib/application-release-adoption";
 import { mapWebError } from "../../../../_lib/web-error-mapper";
-import { platformBlockReleasesFor } from "../../../../_lib/platform-block-releases";
+import {
+  fieldInputControlReleasesFor,
+  platformBlockReleasesFor,
+} from "../../../../_lib/platform-block-releases";
 import {
   abandonGuidedFormDraftAction,
   advanceGuidedFormStepAction,
@@ -255,7 +254,10 @@ export default async function ApplicationAddressPage({
           organizationName={organizationShortName}
           account={account}
           platformBlockReleases={platformBlockReleasesFor(experience.page, experience.shells)}
-          fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
+          fieldInputControlReleases={fieldInputControlReleasesFor(
+            experience.page.composition,
+            ...experience.shells.map((shell) => shell.layout),
+          )}
           platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens}
         />
       </BarePage>
@@ -314,7 +316,7 @@ export default async function ApplicationAddressPage({
       content={content}
       frame={frame}
       platformBlockReleases={platformBlockReleasesFor(page.model.page)}
-      fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
+      fieldInputControlReleases={fieldInputControlReleasesFor(page.model.page.composition)}
       platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens}
       onOpenApplication={openApplication}
       adoptReleaseAction={adoptRelease}
