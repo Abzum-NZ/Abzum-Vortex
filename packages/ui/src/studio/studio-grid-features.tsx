@@ -79,6 +79,7 @@ export function StudioGridFeatures({
   query,
   compiledFields,
   tableSettings,
+  canvasArrangement,
   signedIn,
   choices,
   boardChoices,
@@ -99,6 +100,7 @@ export function StudioGridFeatures({
   compiledFields: readonly ModuleField[] | undefined;
   /** The block's choices: the bound query's fields by business name. */
   tableSettings: StudioSettingValues;
+  canvasArrangement?: GroupValue | undefined;
   signedIn: boolean;
   choices: StudioSettingChoices;
   /** Real fields of the selected pipeline's record type, including fields not yet queried. */
@@ -281,6 +283,7 @@ export function StudioGridFeatures({
                   <StudioSavedViewsEditor
                     value={current}
                     tableSettings={tableSettings}
+                    canvasArrangement={canvasArrangement}
                     roles={choices.roles}
                     disabled={disabled}
                     onChange={(next) => write(key, next)}

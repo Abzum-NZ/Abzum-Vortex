@@ -25,6 +25,7 @@ import {
   type StudioRecordReader,
   type StudioSemanticOutline,
   type StudioSemanticSelection,
+  type StudioCanvasGridArrangement,
 } from "@vortex/ui/studio";
 import { Icon, type FieldInputControlReleaseMap, type PlatformThemeTokens } from "@vortex/ui";
 import {
@@ -160,6 +161,21 @@ export function useStudioCanvasTab({
   const [paletteMessage, setPaletteMessage] = useState("");
   const [blockSetup, setBlockSetup] = useState<StudioBlockSetupRequest | null>(null);
   const [notice, setNotice] = useState("");
+  const [arrangeGrid, setArrangeGrid] = useState(false);
+  const [gridArrangements, setGridArrangements] = useState<
+    ReadonlyMap<
+      string,
+      Readonly<{ source: ApplicationSourceDocument; arrangement: StudioCanvasGridArrangement }>
+    >
+  >(new Map());
+  const onGridArrangement = useCallback(
+    (arrangement: StudioCanvasGridArrangement) => {
+      setGridArrangements((held) =>
+        new Map(held).set(arrangement.placementAlias, { source: view.source, arrangement }),
+      );
+    },
+    [view.source],
+  );
 
   // Resolving validates the whole source: once per source and selection, not on every render.
   const inspector = useMemo(
@@ -745,6 +761,11 @@ export function useStudioCanvasTab({
           disabled={draft.locked}
           choices={draftChoices}
           compiledFields={view.compiledFields}
+          canvasArrangement={
+            gridArrangements.get(selected.placementAlias)?.source === view.source
+              ? gridArrangements.get(selected.placementAlias)?.arrangement
+              : undefined
+          }
           onCommand={commandComposition}
           onNewQuery={(use) => setQuerySheet({ use })}
         />
@@ -889,6 +910,8 @@ export function useStudioCanvasTab({
                 compileFailure={view.failure}
                 onChange={applyPuckPageEdit}
                 readRecords={readCanvasRecords}
+                arrangeGrid={arrangeGrid && !draft.locked}
+                onGridArrangement={onGridArrangement}
                 updating={draft.updatingCanvas}
                 palette={
                   addTargets === null
@@ -923,6 +946,8 @@ export function useStudioCanvasTab({
       fitZoom={fitZoom}
       onZoom={setCanvasZoom}
       showsCanvas={showsCanvas && canvasPage !== undefined}
+      arrangeGrid={arrangeGrid}
+      onArrangeGrid={() => setArrangeGrid((held) => !held)}
       appearance={appearance}
       onAppearance={setAppearance}
       viewAs={{

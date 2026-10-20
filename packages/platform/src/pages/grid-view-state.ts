@@ -322,6 +322,8 @@ export const gridLayoutVisibleFieldIds = (layout: GridLayout): readonly string[]
 
 /** What storing or resetting a layout came to, as the grid's host reports it back to the grid. */
 export type GridLayoutCommitResult =
+  /** A Studio gesture stays on the canvas until captured into the definition. */
+  | Readonly<{ outcome: "previewed" }>
   | Readonly<{ outcome: "saved"; revision: number }>
   | Readonly<{ outcome: "reset" }>
   | Readonly<{

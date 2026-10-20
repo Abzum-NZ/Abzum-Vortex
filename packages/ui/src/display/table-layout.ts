@@ -362,7 +362,7 @@ export const useGridLayout = ({
     }
     const { current: snapshot, carried: loaded, events: handlers } = latest.current;
     const onColumns = handlers?.columns_changed;
-    if (snapshot === undefined || !snapshot.base.persisted || onColumns === undefined) return;
+    if (snapshot === undefined || onColumns === undefined) return;
     const loadedKeys = new Set(loaded.map((column) => column.key.toLowerCase()));
     held.busy = true;
     let result: GridLayoutCommitResult = { outcome: "unavailable" };
@@ -380,8 +380,17 @@ export const useGridLayout = ({
     }
     // A response from an earlier page must never overwrite the new page's layout or revision.
     if (latest.current.current?.base !== snapshot.base) return;
-    if (result.outcome === "saved" || result.outcome === "reset") {
-      const revision = result.outcome === "saved" ? result.revision : null;
+    if (
+      result.outcome === "saved" ||
+      result.outcome === "reset" ||
+      result.outcome === "previewed"
+    ) {
+      const revision =
+        result.outcome === "previewed"
+          ? snapshot.revision
+          : result.outcome === "saved"
+            ? result.revision
+            : null;
       updateLocal((latestLocal) =>
         latestLocal === undefined
           ? latestLocal
@@ -415,7 +424,9 @@ export const useGridLayout = ({
     }
     const pending = latest.current.current;
     if (
-      (result.outcome === "saved" || result.outcome === "reset") &&
+      (result.outcome === "saved" ||
+        result.outcome === "reset" ||
+        result.outcome === "previewed") &&
       pending !== undefined &&
       pending.commits > snapshot.commits
     ) {

@@ -17,12 +17,14 @@ const text = (value: SourceBlockPropertyValueContract | undefined): string =>
 export function StudioSavedViewsEditor({
   value,
   tableSettings,
+  canvasArrangement,
   roles,
   disabled,
   onChange,
 }: Readonly<{
   value: Group;
   tableSettings: StudioSettingValues;
+  canvasArrangement?: Group | undefined;
   roles: readonly Readonly<{ key: string; label: string }>[];
   disabled: boolean;
   onChange: (value: Group) => void;
@@ -37,25 +39,15 @@ export function StudioSavedViewsEditor({
       ...value,
       properties: { ...value.properties, default_views: { kind: "list", items: [...items] } },
     });
-  const capture = (): Group | undefined => {
-    const columns = tableSettings["columns"];
-    const density = tableSettings["density"];
-    if (columns?.kind !== "list" || density?.kind !== "choice") return undefined;
+  const capture = (previous?: SourceBlockPropertyValueContract): Group | undefined => {
+    if (canvasArrangement === undefined) return undefined;
     return {
       kind: "group",
       properties: {
-        columns: {
-          kind: "list",
-          items: columns.items.flatMap((item) => {
-            if (item.kind !== "group") return [];
-            const { field, visible, pin } = item.properties;
-            if (field === undefined || visible === undefined || pin === undefined) return [];
-            return [{ kind: "group" as const, properties: { field, visible, pin } }];
-          }),
-        },
-        density,
         sort: tableSettings["default_sort"] ?? { kind: "list", items: [] },
         filters: { kind: "list", items: [] },
+        ...(previous?.kind === "group" ? previous.properties : {}),
+        ...canvasArrangement.properties,
       },
     };
   };
@@ -65,8 +57,9 @@ export function StudioSavedViewsEditor({
         Give roles the Share table views permission in Access to let people share views.
       </p>
       <p className="text-sm">
-        Default views capture the authored columns, density and sort. Personal layouts take
-        precedence. A role default takes precedence over the app default.
+        Turn on Arrange grid columns above the canvas, then move, resize or hide columns and choose
+        a density. Capture that arrangement here. Personal layouts take precedence over defaults; a
+        role default takes precedence over the app default.
       </p>
       {views.map((view, index) => (
         <div key={text(view.properties["view_id"])} className="flex items-center gap-2">
@@ -121,11 +114,11 @@ export function StudioSavedViewsEditor({
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={`Recapture ${text(view.properties["name"])}`}
-            title="Capture current table settings"
-            disabled={disabled}
+            aria-label={`Use canvas arrangement for ${text(view.properties["name"])}`}
+            title="Use the canvas arrangement"
+            disabled={disabled || canvasArrangement === undefined}
             onClick={() => {
-              const state = capture();
+              const state = capture(view.properties["state"]);
               if (state)
                 write(
                   views.map((entry, i) =>
@@ -206,7 +199,7 @@ export function StudioSavedViewsEditor({
           setName("");
         }}
       >
-        Capture table as view
+        Use the canvas arrangement
       </Button>
     </div>
   );
