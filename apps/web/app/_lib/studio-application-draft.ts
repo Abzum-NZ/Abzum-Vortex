@@ -781,7 +781,12 @@ export const loadStudioApplicationDraft = async (
                                 sortable: field.sortable,
                                 filterable: field.filterable,
                                 searchable: field.searchPriority !== undefined,
-                                ...(options === undefined ? {} : { choiceCount: options.length }),
+                                ...(options === undefined
+                                  ? {}
+                                  : {
+                                      choiceCount: options.length,
+                                      choiceValues: options.map((option) => option.value),
+                                    }),
                                 ...(field.type === "calculation" || field.type === "total"
                                   ? { resultType: field.settings.resultType }
                                   : {}),

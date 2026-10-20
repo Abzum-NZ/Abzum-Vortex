@@ -8,7 +8,8 @@ returns table (
   shared_record_ids uuid[],
   readable_field_ids text[],
   access_predicate text,
-  access_parameters jsonb
+  access_parameters jsonb,
+  bound_field_ids text[]
 )
 language plpgsql
 volatile
@@ -101,7 +102,7 @@ begin
   );
   if declaration is null then
     return query select false, null::uuid, array[]::uuid[], array[]::uuid[],
-      array[]::text[], 'false'::text, '[]'::jsonb;
+      array[]::text[], 'false'::text, '[]'::jsonb, array[]::text[];
     return;
   end if;
 
@@ -407,7 +408,16 @@ begin
     access_routes.shared_record_ids,
     readable_field_ids_value,
     access_predicate_value,
-    access_parameters_value;
+    access_parameters_value,
+    coalesce(
+      (
+        select pg_catalog.array_agg(field.value order by field.value)
+        from pg_catalog.jsonb_array_elements_text(
+          field_bounds -> 'readableFieldIds'
+        ) as field(value)
+      ),
+      array[]::text[]
+    );
   return;
 end
 $function$;
@@ -416,6 +426,7 @@ alter function vortex_record.plan_record_read_scan_internal(uuid) owner to vorte
 
 revoke all on function vortex_record.plan_record_read_scan_internal(uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.plan_record_read_scan_internal(uuid) to vortex_owner;
 
 comment on function vortex_record.plan_record_read_scan_internal(uuid) is
-  'Private read-scan narrowing for the record query: builds the read declaration for one record type of the exact active installation and returns the owner account, owner groups and directly shared record identifiers a caller can be admitted through, the fields every eligible read alternative is guaranteed to expose, kept only when every row the scan examines is one the exact decision admits, and one scan predicate that OR-s every eligible alternative''s exact route test with its saved condition compiled into the same scan; any route without an exact stored predicate or any condition the compiler cannot express as a superset is left unrestricted or true, so the per-row decision remains the only thing that decides access.';
+  'Private read-scan narrowing for the record query: builds the read declaration for one record type of the exact active installation and returns the owner account, owner groups and directly shared record identifiers a caller can be admitted through, the fields every eligible read alternative is guaranteed to expose, kept only when every row the scan examines is one the exact decision admits, the same guaranteed fields unconditionally as the reader''s current field bound (what a list may offer to filter, search or sort by), and one scan predicate that OR-s every eligible alternative''s exact route test with its saved condition compiled into the same scan; any route without an exact stored predicate or any condition the compiler cannot express as a superset is left unrestricted or true, so the per-row decision remains the only thing that decides access.';

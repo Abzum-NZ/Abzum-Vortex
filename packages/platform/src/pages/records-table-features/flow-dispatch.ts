@@ -11,7 +11,7 @@ import {
 } from "../../definition/application-composition-catalogue";
 import { pageSubjectFromRead } from "../page-subject-read";
 import {
-  projectRecordsTableFeatures,
+  recordsTableEditableFields,
   recordsTableRequestRefusal,
   type RecordsTableRequestRefusal,
 } from ".";
@@ -153,13 +153,8 @@ export const recordsTableBindingRefusal = async (
       )
         return recordsTableRequestRefusal(event, "command_not_permitted");
       if (event === "inline_edit") {
-        const projection = projectRecordsTableFeatures(
-          contract,
-          contract.columns.map((column) => column.field),
-          [row],
-          undefined,
-        );
-        if (!projection?.inlineEdit?.fields.some((field) => sameId(field, inputs.field as string)))
+        const editable = recordsTableEditableFields(contract, [row]);
+        if (!editable.some((field) => sameId(field, inputs.field as string)))
           return recordsTableRequestRefusal(event, "field_not_permitted");
       }
     }
