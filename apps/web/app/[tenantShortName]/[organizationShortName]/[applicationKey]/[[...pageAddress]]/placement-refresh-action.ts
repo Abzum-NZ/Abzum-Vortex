@@ -1,7 +1,7 @@
 "use server";
 
 import {
-  boardColumnContinuationRequestSchema,
+  boardColumnReadRequestSchema,
   containedComponentIdSchema,
   revisionSchema,
 } from "@vortex/platform/schema";
@@ -33,12 +33,23 @@ const placementIdsSchema = z
     ...new Set(placementIds.map((placementId) => placementId.toLowerCase())),
   ]);
 
-const boardContinuationTargetSchema = z
+const boardReadTargetSchema = z
   .object({
     placementId: containedComponentIdSchema,
-    request: boardColumnContinuationRequestSchema,
+    request: boardColumnReadRequestSchema,
   })
   .strict();
+
+/** At most one read per board; a continuation is a read of a single placement. */
+const boardReadsSchema = z
+  .array(boardReadTargetSchema)
+  .max(500)
+  .refine(
+    (reads) =>
+      new Set(reads.map((read) => read.placementId.toLowerCase())).size === reads.length &&
+      reads.every((read) => read.request.continuationToken === undefined || reads.length === 1),
+    { message: "Each board is read once, and a continuation reads one board" },
+  );
 
 const tableContinuationTargetSchema = z
   .object({
@@ -91,16 +102,14 @@ const searchParametersOf = (
 export async function rereadApplicationPlacements(
   addressInput: unknown,
   placementIdsInput: unknown,
-  boardContinuationInput?: unknown,
+  boardReadsInput?: unknown,
   tableContinuationInput?: unknown,
   includeContentInput?: unknown,
 ): Promise<ApplicationPagePlacementReadResult> {
   const address = placementRefreshAddressSchema.safeParse(addressInput);
   const placementIds = placementIdsSchema.safeParse(placementIdsInput);
-  const boardContinuation =
-    boardContinuationInput === undefined
-      ? undefined
-      : boardContinuationTargetSchema.safeParse(boardContinuationInput);
+  const boardReads =
+    boardReadsInput === undefined ? undefined : boardReadsSchema.safeParse(boardReadsInput);
   const tableContinuation =
     tableContinuationInput === undefined
       ? undefined
@@ -111,15 +120,20 @@ export async function rereadApplicationPlacements(
     !placementIds.success ||
     // No placement ids is a content-only refresh: it needs the content flag.
     (placementIds.data.length === 0 && !includeContent) ||
-    boardContinuation?.success === false ||
+    boardReads?.success === false ||
     tableContinuation?.success === false ||
-    (boardContinuation?.success === true && tableContinuation?.success === true)
+    (boardReads?.success === true && tableContinuation?.success === true)
   )
     return { kind: "unavailable" };
   if (
-    boardContinuation?.success === true &&
-    (placementIds.data.length !== 1 ||
-      placementIds.data[0]?.toLowerCase() !== boardContinuation.data.placementId.toLowerCase())
+    boardReads?.success === true &&
+    boardReads.data.some(
+      (read) =>
+        (read.request.continuationToken !== undefined && placementIds.data.length !== 1) ||
+        !placementIds.data.some(
+          (placementId) => placementId.toLowerCase() === read.placementId.toLowerCase(),
+        ),
+    )
   )
     return { kind: "unavailable" };
   if (
@@ -155,7 +169,7 @@ export async function rereadApplicationPlacements(
       searchParametersOf(address.data.search),
       placementIds.data,
       address.data.installationRevision,
-      boardContinuation?.success === true ? boardContinuation.data : undefined,
+      boardReads?.success === true ? boardReads.data : undefined,
       tableContinuation?.success === true
         ? {
             placementId: tableContinuation.data.placementId,

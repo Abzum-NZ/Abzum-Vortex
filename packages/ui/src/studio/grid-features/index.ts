@@ -59,10 +59,13 @@ export const studioGridFeatureEditors: Readonly<
   },
   saved_views: { kind: "custom" },
   bulk_actions: { kind: "settings", boundRecordTypeActions: true },
-  inline_edit: { kind: "settings" },
+  inline_edit: { kind: "custom" },
+  row_edit: { kind: "custom" },
   master_detail: { kind: "settings" },
   // Only the links from a record type to itself can name a record's parent.
   tree: { kind: "settings", offers: (field) => field.parentLink === true },
+  // Only choice (and stage) fields people can filter by can be grouped; the check names the rest.
+  grouping: { kind: "settings", offers: (field) => field.type === "choice" && field.filterable },
   conditional_formatting: { kind: "custom" },
   // The catalogue restricts the row and column pickers to choice, link and date fields and the measure
   // picker to number and money fields, so Studio offers only fields a pivot can use.
@@ -79,6 +82,7 @@ export const studioGridFeatureStartSettings: Readonly<
     Record<RecordsTableFeatureKey, Readonly<Record<string, SourceBlockPropertyValueContract>>>
   >
 > = {
+  row_edit: { trigger: { kind: "choice", value: "button" }, fields: { kind: "list", items: [] } },
   spreadsheet: {
     range_select: { kind: "boolean", value: true },
     find: { kind: "boolean", value: true },
@@ -87,6 +91,8 @@ export const studioGridFeatureStartSettings: Readonly<
   master_detail: { child_page_size: { kind: "number", value: 10 } },
   // A tree reads forty records of a level at a time unless the builder chooses otherwise.
   tree: { child_page_size: { kind: "number", value: 40 } },
+  // Records with no value are named "Unassigned" unless the builder chooses otherwise.
+  grouping: { unassigned_label: { kind: "text", value: "Unassigned" } },
   // A pivot starts as a count of records, 40 rows at a time, with totals.
   pivot: {
     measure_function: { kind: "choice", value: "count" },

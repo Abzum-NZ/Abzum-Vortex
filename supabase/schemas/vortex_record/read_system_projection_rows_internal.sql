@@ -4,7 +4,8 @@ create or replace function vortex_record.read_system_projection_rows_internal(
   p_sort_key text,
   p_direction text,
   p_after jsonb,
-  p_limit integer
+  p_limit integer,
+  p_predicate jsonb
 )
 returns table (
   organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
@@ -28,22 +29,23 @@ begin
       message = 'Protected projection reader is unavailable';
   end if;
 
-  -- Every registered protected projection reader has the one bounded signature.
+  -- Every registered protected projection reader has the one bounded signature:
+  -- the keyset position and the typed predicate it applies inside its own scan.
   return query execute pg_catalog.format(
-    'select projected.* from %I.%I($1, $2, $3, $4, $5) as projected',
+    'select projected.* from %I.%I($1, $2, $3, $4, $5, $6) as projected',
     reader_schema, reader_function
-  ) using p_record_ids, p_sort_key, p_direction, p_after, p_limit;
+  ) using p_record_ids, p_sort_key, p_direction, p_after, p_limit, p_predicate;
 end
 $function$;
 
 alter function vortex_record.read_system_projection_rows_internal(
-  uuid, uuid[], text, text, jsonb, integer
+  uuid, uuid[], text, text, jsonb, integer, jsonb
 ) owner to vortex_owner;
 
 revoke all on function vortex_record.read_system_projection_rows_internal(
-  uuid, uuid[], text, text, jsonb, integer
+  uuid, uuid[], text, text, jsonb, integer, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_record.read_system_projection_rows_internal(
-  uuid, uuid[], text, text, jsonb, integer
+  uuid, uuid[], text, text, jsonb, integer, jsonb
 ) to vortex_record_adapter;

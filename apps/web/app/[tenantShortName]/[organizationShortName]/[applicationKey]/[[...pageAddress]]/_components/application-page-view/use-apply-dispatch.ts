@@ -8,7 +8,7 @@ import type {
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import { applicationPageAddressPath } from "../../../../../../_lib/address-paths";
 import type { ComponentRequestGeneration } from "@vortex/platform/schema";
-import type { Notice, TableContinuationTarget } from "./types";
+import type { DispatchOutcome, Notice, TableContinuationTarget } from "./types";
 import { unavailableNotice, finishedNotice, refusalNotices, outcomeNotices } from "./notices";
 import { visibleOwningFormFieldLabel } from "./form-surface";
 
@@ -58,7 +58,10 @@ export function useApplyDispatch({
       formPlacementId?: string,
       afterAccepted?: () => Promise<Notice | undefined>,
       sourceBindingId?: string,
-    ) => {
+      /** The gesture is shown on its own control, so its outcome is returned and not put in the page notice. */
+      reportOnControl?: true,
+    ): Promise<DispatchOutcome> => {
+      let outcome: DispatchOutcome = { notice: undefined, confirmed: false, changed: false };
       const isCurrentNavigation = (): boolean => placementRequestsRef.current.key === navigationKey;
       setBusy(true);
       setNotice(undefined);
@@ -73,6 +76,8 @@ export function useApplyDispatch({
         resultNotice: Notice,
         refusalFeedback?: Extract<FormFlowFeedback, { kind: "refusal" }>,
       ): void => {
+        outcome = { ...outcome, notice: resultNotice };
+        if (reportOnControl) return;
         // A refusal must remain visible after a flow's form dialog has closed.
         setNotice(
           formPlacementId === undefined || resultNotice.tone === "problem"
@@ -93,18 +98,19 @@ export function useApplyDispatch({
       let settles = true;
       try {
         const result = await dispatch;
-        if (!isCurrentNavigation()) return;
+        if (!isCurrentNavigation()) return outcome;
         if (result === undefined) {
           settles = false;
-          return;
+          return outcome;
         }
         if (result.ranIn === "browser") {
           showResult(unavailableNotice);
-          return;
+          return outcome;
         }
         const server = result.result;
         if (server.kind === "reload") {
-          return router.refresh();
+          router.refresh();
+          return outcome;
         }
         if (server.kind === "finished") {
           let resultNotice = finishedNotice(server.descriptor.outcome, server.failure?.code);
@@ -183,13 +189,28 @@ export function useApplyDispatch({
               resultNotice = unavailableNotice;
             }
           }
-          if (!isCurrentNavigation()) return;
+          if (!isCurrentNavigation()) return outcome;
           // Reads, navigation and initialization have no write to confirm. Authored messages
           // are already presented by the flow host; keep failures and gesture-specific feedback.
-          const silentCompletion = resultNotice === outcomeNotices.completed &&
+          const silentCompletion =
+            resultNotice === outcomeNotices.completed &&
             server.failure === undefined &&
-            server.descriptor.commit !== "confirmed" && server.descriptor.commit !== "partial";
+            server.descriptor.commit !== "confirmed" &&
+            server.descriptor.commit !== "partial";
           if (!silentCompletion) showResult(resultNotice, refusalFeedback);
+          const changedUnderPerson =
+            server.descriptor.outcome === "conflict" || diagnostic?.code === "stale_revision";
+          outcome = {
+            ...outcome,
+            confirmed:
+              server.descriptor.commit === "confirmed" &&
+              ["completed", "committed"].includes(server.descriptor.outcome) &&
+              server.failure === undefined,
+            changed: changedUnderPerson,
+            ...(diagnostic?.corrections === undefined
+              ? {}
+              : { corrections: diagnostic.corrections }),
+          };
           // A finished guided-form submission may have abandoned its draft. Keep the journey
           // visible but inactive until a new page load establishes the next draft.
           if (
@@ -202,8 +223,6 @@ export function useApplyDispatch({
           // A committed run already re-read the bound placements before its closing messages (the
           // flow runtime's committed hook). A refusal because the record changed under the person
           // leaves their view stale, so the bound placements are re-read to show it as it now is.
-          const changedUnderPerson =
-            server.descriptor.outcome === "conflict" || diagnostic?.code === "stale_revision";
           if (
             changedUnderPerson &&
             server.descriptor.commit !== "confirmed" &&
@@ -213,11 +232,11 @@ export function useApplyDispatch({
             void refreshPlacements(refreshTargetsForBinding(sourceBindingId), undefined, {
               content: true,
             });
-          return;
+          return outcome;
         }
         if (server.kind === "refused") {
           showResult(unavailableNotice);
-          return;
+          return outcome;
         }
         if (server.kind === "abandoned") {
           // The run may have committed a step before the answer was lost: never report nothing.
@@ -227,11 +246,13 @@ export function useApplyDispatch({
             void refreshPlacements(refreshTargetsForBinding(sourceBindingId), undefined, {
               content: true,
             });
-          return;
+          return outcome;
         }
         showResult(unavailableNotice);
+        return outcome;
       } catch {
         if (isCurrentNavigation()) showResult(unavailableNotice);
+        return outcome;
       } finally {
         if (settles && isCurrentNavigation()) setBusy(false);
       }

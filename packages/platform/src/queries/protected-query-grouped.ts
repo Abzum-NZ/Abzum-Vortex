@@ -210,6 +210,7 @@ export const groupedMembersCommand = async (
     groupByFieldIds: page.groupByFieldIds,
     groupValues: page.groupValues,
     rows: page.rows,
+    fieldBounds: page.fieldBounds,
   });
   // SQL's next anchor follows the scan direction; opposite is the first returned row.
   // Every token binds the actor, exact group, order, narrowing and visible projection.

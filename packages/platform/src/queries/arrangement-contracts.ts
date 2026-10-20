@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import {
+  boardColumnReadLimit,
   builderKeySchema,
   calendarMappingSchema,
   exactDecimalTextSchema,
@@ -211,9 +212,17 @@ export type ArrangementCommand = z.input<typeof arrangementCommandSchema>;
 export const summaryArrangementCommandSchema = protectedQuerySummaryCommandSchema;
 export type SummaryArrangementCommand = z.infer<typeof summaryArrangementCommandSchema>;
 
-/** One initial set of board pages, or one column page to continue. */
+/** The first page of each named column, or the next page of one column. */
 export const protectedBoardArrangementPageRequestSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("initial") }).strict(),
+  z
+    .object({
+      kind: z.literal("read"),
+      columns: z
+        .array(protectedQueryBoardSelectorSchema.shape.column)
+        .min(1)
+        .max(boardColumnReadLimit),
+    })
+    .strict(),
   z
     .object({
       kind: z.literal("continue"),
@@ -404,6 +413,10 @@ export const arrangementRefusalReasonCodes = [
   "input_invalid",
   "field_unbounded",
   "filter_invalid",
+  /** The data source declares no column for a filtered or searched field. */
+  "filter_field_not_declared",
+  /** The filter cannot be applied exactly inside the data source's own scan. */
+  "predicate_unsupported",
   "sort_invalid",
   "relationship_invalid",
   "page_size_invalid",
@@ -413,6 +426,8 @@ export const arrangementRefusalReasonCodes = [
   "time_zone_invalid",
   /** A pivot's column dimension holds more values than one pivot shows. */
   "pivot_columns_exceeded",
+  /** A date bucket (its start or its exclusive end) falls outside the supported UTC years 0001 to 9999. */
+  "value_out_of_range",
 ] as const;
 export type ArrangementRefusalReasonCode = (typeof arrangementRefusalReasonCodes)[number];
 

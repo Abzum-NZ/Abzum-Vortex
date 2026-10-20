@@ -60,8 +60,10 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_saved_views",
   "definition_records_table_bulk_actions",
   "definition_records_table_inline_edit",
+  "definition_records_table_row_edit",
   "definition_records_table_master_detail",
   "definition_records_table_tree",
+  "definition_records_table_grouping",
   "definition_records_table_conditional_formatting",
   "definition_records_table_pinning",
   "definition_records_table_pivot",
@@ -149,11 +151,17 @@ const definitionValidationErrorCatalogueSource = {
     guidance:
       "Add a named action of the bound record type that needs no input typed for one record, with a limit of at most 5,000 records, or turn Bulk actions off.",
   },
+  definition_records_table_row_edit: {
+    order: 39,
+    message: "Row editing needs at least one stored field that people may change.",
+    guidance:
+      "Choose editable columns and name the action that saves the row, or turn Row editing off.",
+  },
   definition_records_table_inline_edit: {
     order: 39,
-    message: "Inline editing needs fields people may change.",
+    message: "Inline editing needs at least one stored field that people may change.",
     guidance:
-      "Choose editable fields shown as columns and the flow that saves a change, or turn Inline editing off.",
+      "Choose stored fields shown as columns (calculated and system fields cannot be edited here) and add the workflow that saves a change, or turn Inline editing off.",
   },
   // Master/detail names its own part (the link, the query, a column or an input) in its sentence;
   // the catalogue message is what a reader without that sentence sees.
@@ -170,6 +178,12 @@ const definitionValidationErrorCatalogueSource = {
     message: "A tree needs a link from these records to themselves.",
     guidance:
       "Choose the link that points to each record's parent and how many child records to show at a time, or turn Tree off.",
+  },
+  // Grouping names its own part (the field, its choice count) in its sentence.
+  definition_records_table_grouping: {
+    order: 39,
+    message: "Group by needs a choice or stage field in the bound query.",
+    guidance: "Choose the choice or stage field the records are grouped by, or turn Group by off.",
   },
   definition_records_table_conditional_formatting: {
     order: 39,

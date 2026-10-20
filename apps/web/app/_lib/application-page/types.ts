@@ -8,7 +8,7 @@ import type {
   ApplicationShell,
   ProjectedNavigation,
   JsonValue,
-  BoardColumnContinuationRequest,
+  BoardColumnReadRequest,
   PageDefinition,
   RecordsTablePageRequest,
 } from "@vortex/platform/schema";
@@ -188,9 +188,10 @@ export type ApplicationPageLoaderAddress = Readonly<{
 
 export type SearchParameters = Readonly<Record<string, string | readonly string[] | undefined>>;
 
-export type BoardContinuationTarget = Readonly<{
+/** The columns one board shows (their first pages), or the one column it continues. */
+export type BoardReadTarget = Readonly<{
   placementId: string;
-  request: BoardColumnContinuationRequest;
+  request: BoardColumnReadRequest;
 }>;
 
 export type TableContinuationTarget = Readonly<{

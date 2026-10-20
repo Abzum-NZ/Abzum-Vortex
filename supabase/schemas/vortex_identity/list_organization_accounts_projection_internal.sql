@@ -5,7 +5,8 @@ create or replace function vortex_identity.list_organization_accounts_projection
   p_sort_key text,
   p_direction text,
   p_after jsonb,
-  p_limit integer
+  p_limit integer,
+  p_predicate jsonb
 )
 returns table (
   organization_account_id uuid,
@@ -27,6 +28,7 @@ declare
   after_value text;
   after_record_id uuid;
   scan_sql text;
+  predicate_plan jsonb;
 begin
   if p_sort_key not in ('record_id', 'display_name', 'state')
     or p_direction not in ('ascending', 'descending')
@@ -85,6 +87,14 @@ begin
       sort_column, case when p_direction = 'ascending' then 'asc' else 'desc' end,
       case when p_direction = 'ascending' then 'first' else 'last' end,
       case when p_direction = 'ascending' then 'asc' else 'desc' end) end;
+  predicate_plan := vortex_record.compile_projection_predicate_internal(
+    p_predicate,
+    $declared${
+      "state": {"sql": "account.state", "database": "text", "filter": true},
+      "display_name": {"sql": "account.display_name", "database": "text", "search": true}
+    }$declared$::jsonb,
+    7
+  );
   scan_sql := $scan$
   -- Two fixed visibility modes, chosen only by the Access-owned reader. The
   -- administration mode returns every account of the organisation. The member
@@ -115,18 +125,18 @@ begin
              where organization.organization_id = $1) is true
       )
     )
-  $scan$ || keyset_sql || pg_catalog.format(' order by %s limit $4', order_sql);
+  $scan$ || coalesce(' and ' || (predicate_plan ->> 'predicate'), '') || keyset_sql || pg_catalog.format(' order by %s limit $4', order_sql);
   return query execute scan_sql using p_organization_id, p_active_members_only,
-    p_account_ids, p_limit, after_value, after_record_id;
+    p_account_ids, p_limit, after_value, after_record_id, predicate_plan -> 'parameters';
 end
 $function$;
 
 revoke all on function vortex_identity.list_organization_accounts_projection_internal(
-  uuid, boolean, uuid[], text, text, jsonb, integer
+  uuid, boolean, uuid[], text, text, jsonb, integer, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_identity.list_organization_accounts_projection_internal(
-  uuid, boolean, uuid[], text, text, jsonb, integer
+  uuid, boolean, uuid[], text, text, jsonb, integer, jsonb
 ) to vortex_owner, postgres;
 alter function vortex_identity.list_organization_accounts_projection_internal(
-  uuid, boolean, uuid[], text, text, jsonb, integer
+  uuid, boolean, uuid[], text, text, jsonb, integer, jsonb
 ) owner to vortex_owner;

@@ -25,8 +25,13 @@ import {
 import type { HumanOrganizationRequestResult } from "../access/index";
 import {
   protectedQueryCommandSchema,
+  protectedQueryGroupedMembersCommandSchema,
+  protectedQuerySummaryCommandSchema,
   protectedQueryTreeLevelCommandSchema,
   type ProtectedQueryCommand,
+  type ProtectedQueryFieldBounds,
+  type ProtectedQueryGroupedMembersResult,
+  type ProtectedQuerySummaryResult,
   type ProtectedQueryRefusalReasonCode,
   type ProtectedQueryResult,
   type ProtectedQueryRow,
@@ -37,6 +42,7 @@ import {
   collectRecordLinks,
   projectRecordsTableData,
   type ProjectedComponentData,
+  type ProjectedTableGroups,
   type ProjectedTableValues,
   type RecordLinkResolver,
   type RecordsTableNarrowing,
@@ -48,8 +54,16 @@ import {
   recordsTableNarrowingRefusal,
   recordsTableRequestRefusal,
   type ConditionalFormattingContext,
+  type RecordsTableFeatureProjection,
+  type RecordsTableInlineEditor,
   type RecordsTableRequestRefusal,
 } from "./records-table-features";
+import {
+  projectRecordsTableGroups,
+  recordsTableGroupSelector,
+  RECORDS_TABLE_GROUP_READ_LIMIT,
+  type RecordsTableGroupRead,
+} from "./records-table-features/grouping";
 import { CalendarEndpointError, calendarAddDays, calendarStartOfDay } from "./calendar-date";
 import { recordLinkLabelKey } from "../definition/app-index";
 
@@ -64,6 +78,18 @@ export type RecordsTableQueryRunner = Readonly<{
     selection: OrganizationSelectionCandidate,
     command: ProtectedQueryCommand,
   ): Promise<HumanOrganizationRequestResult<ProtectedQueryResult>>;
+  /** The counts of a grouped table's groups, in one bounded summary read. */
+  summarise(
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    command: unknown,
+  ): Promise<HumanOrganizationRequestResult<ProtectedQuerySummaryResult>>;
+  /** One page of the currently readable members of one group. */
+  groupedMembers(
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    command: unknown,
+  ): Promise<HumanOrganizationRequestResult<ProtectedQueryGroupedMembersResult>>;
   /** One level of a tree: the roots or the children of one parent record. */
   treeLevel(
     session: IdentitySession,
@@ -119,11 +145,19 @@ export type RecordsTableQueryRequest = Readonly<{
   resolveRecordLinks?: RecordLinkResolver;
   /** What the table's formatting rules are evaluated with; supplied only when they are on. */
   formatting?: ConditionalFormattingContext;
+  /** How a cell edits each field of the installed definition; supplied only when inline editing is on. */
+  fieldEditors?: Readonly<Record<string, RecordsTableInlineEditor>>;
   /**
    * Set when the table is a tree: the read is one level of it, the roots (no parent) or the
    * children of one record, `pageSize` at a time, over the link that names each record's parent.
    */
   tree?: Readonly<{ parentFieldId: string; parentRecordId: string | null; pageSize: number }>;
+  /**
+   * Set when the table is grouped: the read counts the groups in one summary and, when a group is
+   * open, reads one page of its members through the table's own sort, filters, search and columns;
+   * the table's page size is the one row budget the open group's page shares.
+   */
+  group?: RecordsTableGroupRead;
 }>;
 
 /**
@@ -503,6 +537,154 @@ export const buildRecordsTableQueryCommand = (
     : recordsTableRequestRefusal("command", "query_command_invalid");
 };
 
+/** The table without its Group by control, for a viewer the grouped read refused the field. */
+const withoutGrouping = (values: ProjectedTableValues): ProjectedTableValues => {
+  if (values.features?.grouping === undefined) return values;
+  const features = Object.fromEntries(
+    Object.entries(values.features).filter(([key]) => key !== "grouping"),
+  ) as RecordsTableFeatureProjection;
+  const rest = Object.fromEntries(
+    Object.entries(values).filter(([key]) => key !== "features"),
+  ) as ProjectedTableValues;
+  return Object.keys(features).length === 0 ? rest : { ...rest, features };
+};
+
+/** The rows and bounds one grouped read returned, in the shape an ordinary page read has. */
+type GroupedPage = Readonly<{
+  rows: readonly ProtectedQueryRow[];
+  fieldBounds: ProtectedQueryFieldBounds;
+  nextContinuationToken?: string;
+  previousContinuationToken?: string;
+}>;
+
+type GroupedRead =
+  | Readonly<{ kind: "resolution"; resolution: RecordsTableQueryResolution }>
+  /**
+   * The groups cannot be counted for this viewer or this many records: read the page flat.
+   * `withheld` says the summary refused the grouping field for this viewer, so the flat page
+   * offers no Group by control that would only repeat the same refusal.
+   */
+  | Readonly<{ kind: "flat"; groups?: ProjectedTableGroups; withheld?: true }>
+  | Readonly<{ kind: "read"; groups?: ProjectedTableGroups; page: GroupedPage }>;
+
+/**
+ * Reads a grouped table: one summary read counts every group (unless only the open group's page
+ * is wanted), and a group that is open reads one page of its members. A closed table reads no
+ * member. A viewer who cannot read the grouping field on every record, or a filtered set above
+ * the summary's candidate limit, gets the ordinary page instead, so grouping never shows a value
+ * the viewer may not read and the table stays usable.
+ */
+const readGrouped = async (
+  runner: RecordsTableQueryRunner,
+  session: IdentitySession,
+  selection: OrganizationSelectionCandidate,
+  request: RecordsTableQueryRequest,
+  group: RecordsTableGroupRead,
+  built: RecordsTableQueryCommand,
+): Promise<GroupedRead> => {
+  let groups: ProjectedTableGroups | undefined;
+  let fieldBounds: ProtectedQueryFieldBounds | undefined;
+  if (!group.membersOnly) {
+    const summaryCommand = protectedQuerySummaryCommandSchema.safeParse({
+      moduleRootId: request.moduleRootId,
+      queryId: request.queryId,
+      inputValues: request.inputValues,
+      grouping: { fieldId: group.fieldId, limit: RECORDS_TABLE_GROUP_READ_LIMIT },
+      ...(built.command.search === undefined ? {} : { search: built.command.search }),
+      searchableFieldIds: built.command.searchableFieldIds,
+      ...(built.command.filter === undefined ? {} : { filter: built.command.filter }),
+      filterableFieldIds: built.command.filterableFieldIds,
+    });
+    if (!summaryCommand.success) {
+      logRecordsTableRequestRefusal(
+        recordsTableRequestRefusal("group", "summary_command_invalid"),
+        "table_read",
+      );
+      return { kind: "resolution", resolution: refused };
+    }
+    const summary = await runner.summarise(session, selection, summaryCommand.data);
+    if (summary.kind === "temporarily_unavailable")
+      return { kind: "resolution", resolution: unavailableResult };
+    if (summary.kind !== "available") return { kind: "resolution", resolution: refused };
+    if (summary.value.outcome === "refused") {
+      const reason = summary.value.reasonCode;
+      if (reason === "dataset_limit_exceeded")
+        return { kind: "flat", groups: { status: "too_many" } };
+      if (reason === "field_unbounded") return { kind: "flat", withheld: true };
+      return { kind: "resolution", resolution: { kind: "refused", reasonCode: reason } };
+    }
+    // More stored values than one grouped read counts (choices removed since records were saved):
+    // the groups it returned would hide the rest, so the table stays flat until it is narrowed.
+    if (summary.value.nextGroupKey !== undefined && summary.value.nextGroupKey !== null)
+      return { kind: "flat", groups: { status: "too_many" } };
+    fieldBounds = summary.value.fieldBounds;
+    groups = projectRecordsTableGroups(
+      summary.value,
+      {
+        fieldId: group.fieldId,
+        unassignedLabel: group.unassignedLabel,
+        options: request.fieldChoiceLabels?.[group.fieldId] ?? [],
+      },
+      group.expanded,
+    );
+    if (fieldBounds === undefined || groups === undefined)
+      throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+  }
+  // The open group: the one the summary counted, or the one a members-only read names.
+  const opened =
+    group.expanded === null || (groups?.status === "ready" && groups.expanded === undefined)
+      ? undefined
+      : group.expanded;
+  if (opened === undefined) {
+    if (group.membersOnly || fieldBounds === undefined)
+      return { kind: "resolution", resolution: refused };
+    return {
+      kind: "read",
+      ...(groups === undefined ? {} : { groups }),
+      page: { rows: [], fieldBounds },
+    };
+  }
+  const selector = recordsTableGroupSelector(group.fieldId, opened);
+  // A group's members are never one exact record, so the grouped command has no such part.
+  const memberBase: Record<string, unknown> = { ...built.command };
+  delete memberBase["exactRecordId"];
+  const memberCommand = protectedQueryGroupedMembersCommandSchema.safeParse({
+    ...memberBase,
+    selector,
+    grouping: { fieldId: group.fieldId, limit: RECORDS_TABLE_GROUP_READ_LIMIT },
+  });
+  if (selector === undefined || !memberCommand.success) {
+    logRecordsTableRequestRefusal(
+      recordsTableRequestRefusal("group", "member_command_invalid"),
+      "table_read",
+    );
+    return { kind: "resolution", resolution: refused };
+  }
+  const members = await runner.groupedMembers(session, selection, memberCommand.data);
+  if (members.kind === "temporarily_unavailable")
+    return { kind: "resolution", resolution: unavailableResult };
+  if (members.kind !== "available") return { kind: "resolution", resolution: refused };
+  if (members.value.outcome === "refused")
+    return {
+      kind: "resolution",
+      resolution: { kind: "refused", reasonCode: members.value.reasonCode },
+    };
+  return {
+    kind: "read",
+    ...(groups === undefined ? {} : { groups }),
+    page: {
+      rows: members.value.rows,
+      fieldBounds: members.value.fieldBounds,
+      ...(members.value.nextContinuationToken === undefined
+        ? {}
+        : { nextContinuationToken: members.value.nextContinuationToken }),
+      ...(members.value.previousContinuationToken === undefined
+        ? {}
+        : { previousContinuationToken: members.value.previousContinuationToken }),
+    },
+  };
+};
+
 /**
  * Runs a Records table's query directly through the Query engine. The component never fetches
  * data itself, and no data flow is involved unless a builder adds transform or write steps.
@@ -548,12 +730,19 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         );
         return refused;
       }
-      let result: HumanOrganizationRequestResult<
-        ProtectedQueryResult | ProtectedQueryTreeLevelResult
-      > =
-        treeCommand === undefined
-          ? await runner.run(session, selection, built.command)
-          : await runner.treeLevel(session, selection, treeCommand.data);
+      const grouped =
+        request.group === undefined
+          ? undefined
+          : await readGrouped(runner, session, selection, request, request.group, built);
+      if (grouped?.kind === "resolution") return grouped.resolution;
+      let result:
+        | HumanOrganizationRequestResult<ProtectedQueryResult | ProtectedQueryTreeLevelResult>
+        | undefined =
+        grouped?.kind === "read"
+          ? undefined
+          : treeCommand === undefined
+            ? await runner.run(session, selection, built.command)
+            : await runner.treeLevel(session, selection, treeCommand.data);
       // A viewer who may not see the parent link on every record it may read has no tree: the
       // table lists its records flat, as a table without the feature does. That viewer's next page
       // carries a flat position, which the tree read refuses as stale before it reaches the field
@@ -561,6 +750,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
       // tree position the same way.
       if (
         tree?.parentRecordId === null &&
+        result !== undefined &&
         result.kind === "available" &&
         result.value.outcome === "refused" &&
         (result.value.reasonCode === "field_unbounded" ||
@@ -569,11 +759,28 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
               result.value.reasonCode === "cursor_invalid")))
       )
         result = await runner.run(session, selection, built.command);
-      if (result.kind === "temporarily_unavailable") return unavailableResult;
-      if (result.kind !== "available") return refused;
-      if (result.value.outcome === "refused")
+      if (result?.kind === "temporarily_unavailable") return unavailableResult;
+      if (result !== undefined && result.kind !== "available") return refused;
+      if (result?.value.outcome === "refused")
         return { kind: "refused", reasonCode: result.value.reasonCode };
-      const projectedRows = visibleRows(result.value.rows, built.fieldIds);
+      const read: GroupedPage | undefined =
+        grouped?.kind === "read"
+          ? grouped.page
+          : result?.value.outcome === "completed"
+            ? {
+                rows: result.value.rows,
+                fieldBounds: result.value.fieldBounds,
+                ...(result.value.nextContinuationToken === undefined
+                  ? {}
+                  : { nextContinuationToken: result.value.nextContinuationToken }),
+                ...(result.value.previousContinuationToken === undefined
+                  ? {}
+                  : { previousContinuationToken: result.value.previousContinuationToken }),
+              }
+            : undefined;
+      if (read === undefined) return refused;
+      const groups = grouped?.groups;
+      const projectedRows = visibleRows(read.rows, built.fieldIds);
       // The records a link filter names are titled in the same batched read as the page's links.
       const filterLinks = built.narrowing.filters.flatMap(({ fieldId, filter }) => {
         const recordTypeId = request.filterTargets?.[fieldId]?.recordTypeId;
@@ -619,10 +826,12 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
             ? {}
             : { fieldLinkTypes: request.fieldLinkTypes }),
           ...(request.formatting === undefined ? {} : { formatting: request.formatting }),
+          ...(request.fieldEditors === undefined ? {} : { fieldEditors: request.fieldEditors }),
           ...(request.state.pivot === undefined ? {} : { pivotView: request.state.pivot }),
+          ...(groups === undefined ? {} : { groups }),
         },
-        result.value.rows,
-        result.value.fieldBounds,
+        read.rows,
+        read.fieldBounds,
       );
       if (projected === undefined) return refused;
       // The projection that draws the controls also decides whether this read's own search and
@@ -635,15 +844,17 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         logRecordsTableRequestRefusal(narrowingRefusal, "table_read");
         return refused;
       }
-      const nextContinuationToken = result.value.nextContinuationToken;
-      const previousContinuationToken = result.value.previousContinuationToken;
+      const nextContinuationToken = read.nextContinuationToken;
+      const previousContinuationToken = read.previousContinuationToken;
       const display: ProjectedComponentData<ProjectedTableValues> =
         projected.status === "empty"
           ? projected
           : {
               status: "ready",
               values: {
-                ...projected.values,
+                ...(grouped?.kind === "flat" && grouped.withheld === true
+                  ? withoutGrouping(projected.values)
+                  : projected.values),
                 ...(built.sort === undefined ? {} : { sort: built.sort }),
                 narrowing,
                 page,
