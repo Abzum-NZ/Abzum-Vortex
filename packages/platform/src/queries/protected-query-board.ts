@@ -201,6 +201,7 @@ const boardMemberResult = (
     moduleReleaseVersion: page.moduleReleaseVersion,
     queryId: command.queryId,
     rows: page.rows,
+    fieldBounds: page.fieldBounds,
     ...(page.next === null
       ? {}
       : {
@@ -325,6 +326,7 @@ export const boardFirstPagesCommand = async (
           rows: read.columns[index]!.rows,
           next: read.columns[index]!.next,
           opposite: null,
+          fieldBounds: read.fieldBounds,
         },
         boardMemberFingerprint(memberCommand, inputValues),
         continuationKey,
