@@ -23,31 +23,19 @@ import {
 import type { StudioDraft } from "./use-studio-draft";
 
 /**
- * The Structure tab: the application's layouts and pages as a tree, and the controls that add,
- * rename, move, remove or make home the selected one. Each control is one checked Structure
- * command through the draft's envelope.
+ * The one Structure command runner: a checked Structure command through the draft's envelope, and
+ * what one would do to the current draft for its preview. The Structure tab and the Layout
+ * inspector both edit through it.
  */
-export function useStudioStructureTab({
+export function useStudioStructureCommand({
   draft,
   catalogue,
   describePlacement,
-  outline,
-  hidden,
-  openAccessPages,
-  form,
-  onFormChange,
 }: Readonly<{
   draft: StudioDraft;
   catalogue: ImmutablePlatformBlockCatalogue;
   describePlacement: StudioPlacementDescriber;
-  outline: StudioSemanticOutline;
-  hidden: boolean;
-  form: StudioStructureForm;
-  onFormChange: (form: StudioStructureForm) => void;
-  /** Opens Access on its Pages and menu view, where who can open a page is set. */
-  openAccessPages: () => void;
 }>) {
-  const { source, selected } = draft;
   const publishedFields = useMemo(
     () => studioFieldPublication(draft.view.published, draft.parsed(draft.saved.source)).fields,
     [draft, draft.view.published, draft.saved.source],
@@ -94,6 +82,40 @@ export function useStudioStructureTab({
           },
           structureCommand,
         );
+  return { command, preview, publishedFields };
+}
+
+export type StudioStructureCommandRunner = ReturnType<typeof useStudioStructureCommand>;
+
+/**
+ * The Structure tab: the application's layouts and pages as a tree, and the controls that add,
+ * rename, move, remove or make home the selected one. Each control is one checked Structure
+ * command through the draft's envelope.
+ */
+export function useStudioStructureTab({
+  draft,
+  catalogue,
+  describePlacement,
+  structure,
+  outline,
+  hidden,
+  openAccessPages,
+  form,
+  onFormChange,
+}: Readonly<{
+  draft: StudioDraft;
+  catalogue: ImmutablePlatformBlockCatalogue;
+  describePlacement: StudioPlacementDescriber;
+  structure: StudioStructureCommandRunner;
+  outline: StudioSemanticOutline;
+  hidden: boolean;
+  form: StudioStructureForm;
+  onFormChange: (form: StudioStructureForm) => void;
+  /** Opens Access on its Pages and menu view, where who can open a page is set. */
+  openAccessPages: () => void;
+}>) {
+  const { source, selected } = draft;
+  const { command, preview, publishedFields } = structure;
   const homePage = source.body.pages.find((page) => page.key === source.body.home_page);
   const selectionKey = selected === null ? "" : studioSemanticSelectionKey(selected);
 

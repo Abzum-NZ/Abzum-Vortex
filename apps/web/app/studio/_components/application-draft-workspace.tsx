@@ -37,7 +37,7 @@ import { useStudioDraftTheme } from "./use-studio-draft-theme";
 import { useStudioFlowsTab } from "./use-studio-flows-tab";
 import { useStudioMenuThemeTabs } from "./use-studio-menu-theme-tabs";
 import { useStudioReleasesTab } from "./use-studio-releases-tab";
-import { useStudioStructureTab } from "./use-studio-structure-tab";
+import { useStudioStructureCommand, useStudioStructureTab } from "./use-studio-structure-tab";
 import {
   applyStudioAccessCommand,
   studioAccessIdentityReservations,
@@ -172,10 +172,13 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     applications,
     openFlowsTab: () => setTab("flows"),
   });
+  const structureCommand = useStudioStructureCommand({ draft, catalogue, describePlacement });
   const canvas = useStudioCanvasTab({
     draft,
     tab,
     catalogue,
+    describePlacement,
+    structure: structureCommand,
     fieldInputControlReleases: draft.view.fieldInputControlReleases,
     platformThemeTokens: draft.view.platformThemeTokens,
     outline,
@@ -233,6 +236,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     draft,
     catalogue,
     describePlacement,
+    structure: structureCommand,
     outline,
     hidden: tab !== "structure",
     openAccessPages,

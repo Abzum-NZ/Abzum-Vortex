@@ -1291,10 +1291,11 @@ export const applyStudioCompositionCommand = (
         selection?.kind === "placement" &&
         studioLayoutOutletPlacementUses(current.source, selection.placementAlias).length > 0
       )
-        throw new StoredCompositionRefusal(
-          ["content_slots"],
-          "reserves this block or a descendant; retarget its outlets in the Layout inspector before removing it",
-        );
+        return {
+          kind: "refused",
+          reason:
+            "This block holds a content outlet of its layout. Retarget the outlet in the Layout inspector before removing the block.",
+        };
       return applyRemoval(current, selection, command);
     }
     if (command.kind === "settings") return applySettings(current, selection, command);

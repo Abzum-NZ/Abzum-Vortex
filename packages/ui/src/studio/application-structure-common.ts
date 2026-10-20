@@ -35,7 +35,6 @@ export type StudioStructureResult =
       kind: "refused";
       message: string;
       where?: readonly ApplicationUsePlace[] | undefined;
-      cause?: Readonly<{ part: string; reason: string }> | undefined;
     }>;
 
 export type StudioStructureContext = Readonly<{
@@ -50,13 +49,11 @@ export type StudioStructureContext = Readonly<{
 }>;
 
 export class StructureRefusal extends Error {
-  override readonly cause: Readonly<{ part: string; reason: string }>;
   constructor(
     message: string,
     readonly where?: readonly ApplicationUsePlace[],
   ) {
     super(message);
-    this.cause = { part: "structure", reason: message };
   }
 }
 export const refuse = (message: string, where?: readonly ApplicationUsePlace[]): never => {

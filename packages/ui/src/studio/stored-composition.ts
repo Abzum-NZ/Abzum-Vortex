@@ -379,7 +379,11 @@ export const validateStoredShell = (
             (entry) => entry.key === slot.parent_slot && entry.repeats === undefined,
           );
     if (declaration === undefined)
-      refuse(["content_slots", index], "must target a fixed catalogue slot in this layout");
+      refuse(
+        ["content_slots", index],
+        "must target a fixed catalogue slot in this layout",
+        `Content outlet "${slot.label}"`,
+      );
     if (
       new Set(slot.allowed_child_categories).size !== slot.allowed_child_categories.length ||
       slot.allowed_child_categories.some(
@@ -389,6 +393,7 @@ export const validateStoredShell = (
       refuse(
         ["content_slots", index, "allowed_child_categories"],
         "must choose distinct categories admitted by the target slot",
+        `Content outlet "${slot.label}"`,
       );
   }
   validateTree(
@@ -412,7 +417,11 @@ export const validateStoredApplicationOutlets = (
       if (alias === null) continue;
       const shell = shells.get(alias);
       if (shell === undefined)
-        return refuse(["pages", page.id], "names a layout that is not in this application");
+        return refuse(
+          ["pages", page.id],
+          "names a layout that is not in this application",
+          `Page "${page.name}"`,
+        );
       const bindings = new Map(sourcePageRootSlots(data));
       for (const slot of shell.content_slots) {
         const items = bindings.get(slot.id);
@@ -420,7 +429,8 @@ export const validateStoredApplicationOutlets = (
           if (slot.required)
             refuse(
               ["pages", page.id, slot.id],
-              "must bind this required outlet (empty content is valid)",
+              `must fill the required content outlet "${slot.label}" (empty content is valid)`,
+              `Page "${page.name}"`,
             );
           continue;
         }
@@ -432,13 +442,18 @@ export const validateStoredApplicationOutlets = (
           )
             refuse(
               ["pages", page.id, slot.id],
-              "contains a block category this content outlet does not allow",
+              `has a block in the content outlet "${slot.label}" of a kind that outlet does not allow`,
+              `Page "${page.name}"`,
             );
         }
       }
       for (const id of bindings.keys())
         if (!shell.content_slots.some((slot) => slot.id === id))
-          refuse(["pages", page.id, id], "binds an outlet that is not declared by this layout");
+          refuse(
+            ["pages", page.id, id],
+            "uses a content outlet its layout no longer has",
+            `Page "${page.name}"`,
+          );
     }
 };
 

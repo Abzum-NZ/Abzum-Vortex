@@ -5,13 +5,13 @@ import type {
   ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
 import {
-  applyStudioStructureCommand,
   studioLayoutOutletTargets,
   studioLayoutOutletPlacementUses,
   StudioField,
   StudioInspectorGroup,
   StudioReferencePicker,
   StudioIconButton,
+  type StudioPlacementDescriber,
   type StudioStructureCommand,
   type StudioStructureResult,
   type StudioLayoutOutletValues,
@@ -29,7 +29,6 @@ import {
   DialogDescription,
 } from "@vortex/ui/components/dialog";
 import { toast } from "@vortex/ui/components/sonner";
-import type { StudioDraft } from "./use-studio-draft";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import { StudioPlaceList } from "./studio-used-in";
 
@@ -80,30 +79,18 @@ function OutletSettings({
   shell,
   outlet,
   catalogue,
+  describePlacement,
   disabled,
   run,
 }: Readonly<{
   shell: Shell;
   outlet: Outlet;
   catalogue: ImmutablePlatformBlockCatalogue;
+  describePlacement: StudioPlacementDescriber;
   disabled: boolean;
   run: Run;
 }>) {
-  const targets = studioLayoutOutletTargets(
-    {
-      catalogue,
-      describePlacement: ({ block, settings }) =>
-        typeof settings.title === "string" && settings.title.trim() !== ""
-          ? settings.title
-          : catalogue.releases.find(
-              (release) =>
-                String(release.blockId) === block.block_id &&
-                String(release.releaseVersion) === block.release_version,
-            )?.name,
-    },
-    shell,
-    outlet.id,
-  );
+  const targets = studioLayoutOutletTargets({ catalogue, describePlacement }, shell, outlet.id);
   const target = targets.find(
     (entry) =>
       entry.parentPlacement === outlet.parent_placement && entry.parentSlot === outlet.parent_slot,
@@ -162,7 +149,7 @@ function OutletSettings({
       </StudioField>
       <fieldset className="space-y-2" disabled={disabled}>
         <legend className="mb-2 text-sm font-medium">Allowed child categories</legend>
-        {target?.categories.map((category) => (
+        {target?.categories.map(({ value: category, label }) => (
           <label key={category} className="flex items-center gap-2 text-sm">
             <Checkbox
               disabled={disabled}
@@ -177,34 +164,27 @@ function OutletSettings({
                 })
               }
             />
-            {category.replaceAll("_", " ")}
+            {label}
           </label>
         ))}
       </fieldset>
-      <StudioInspectorGroup title="Outlet details" defaultOpen={false}>
-        <dl className="space-y-2 break-all text-xs">
-          <dt>Key</dt>
-          <dd>{outlet.key}</dd>
-          <dt>Binding</dt>
-          <dd>{outlet.id}</dd>
-          <dt>Target</dt>
-          <dd>
-            {outlet.parent_placement}.{outlet.parent_slot}
-          </dd>
-        </dl>
-      </StudioInspectorGroup>
     </div>
   );
 }
 
 /** The Layout inspector edits the open draft, with the same history and autosave as Structure. */
 export function StudioLayoutOutlets({
-  draft,
+  locked,
   catalogue,
+  describePlacement,
+  command,
   shell,
 }: Readonly<{
-  draft: StudioDraft;
+  locked: boolean;
   catalogue: ImmutablePlatformBlockCatalogue;
+  describePlacement: StudioPlacementDescriber;
+  /** The one Structure command runner, shared with the Structure tab. */
+  command: (command: StudioStructureCommand, merge?: string) => StudioStructureResult;
   shell: Shell;
 }>) {
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -213,12 +193,6 @@ export function StudioLayoutOutlets({
     { kind: "refused" }
   > | null>(null);
   const [showUses, setShowUses] = useState(false);
-  const describePlacement = ({ block }: { block: { block_id: string; release_version: string } }) =>
-    catalogue.releases.find(
-      (entry) =>
-        String(entry.blockId) === block.block_id &&
-        String(entry.releaseVersion) === block.release_version,
-    )?.name;
   const targets = studioLayoutOutletTargets({ catalogue, describePlacement }, shell);
   const [newTarget, setNewTarget] = useState("");
   if (catalogue.releases.length === 0)
@@ -229,25 +203,10 @@ export function StudioLayoutOutlets({
         </p>
       </StudioInspectorGroup>
     );
-  const run: Run = (command, merge) => {
-    const outcome = draft.run<StudioStructureResult>(
-      (source) => {
-        const result = applyStudioStructureCommand(
-          { source, catalogue, describePlacement, publishedFields: new Set() },
-          command,
-        );
-        return result.kind === "applied"
-          ? { kind: "edit", source: result.source, result }
-          : { kind: "keep", result };
-      },
-      { merge },
-    );
-    const result =
-      outcome.kind === "done"
-        ? outcome.result
-        : { kind: "refused" as const, message: outcome.message };
+  const run: Run = (outletCommand, merge) => {
+    const result = command(outletCommand, merge);
     if (result.kind === "applied") {
-      if (command.kind === "add_layout_outlet") {
+      if (outletCommand.kind === "add_layout_outlet") {
         const added = result.source.body.shells
           .find((entry) => entry.id === shell.id)
           ?.content_slots.at(-1);
@@ -297,7 +256,7 @@ export function StudioLayoutOutlets({
               <Switch
                 aria-label={`Required: ${outlet.label}`}
                 checked={outlet.required}
-                disabled={draft.locked}
+                disabled={locked}
                 onCheckedChange={(required) =>
                   run({
                     kind: "edit_layout_outlet",
@@ -309,7 +268,7 @@ export function StudioLayoutOutlets({
               />
               <StudioIconButton
                 label={`Remove outlet ${outlet.label}`}
-                disabled={draft.locked}
+                disabled={locked}
                 destructive
                 onClick={() =>
                   run({ kind: "remove_layout_outlet", shellAlias: shell.id, outletId: outlet.id })
@@ -323,7 +282,8 @@ export function StudioLayoutOutlets({
                 shell={shell}
                 outlet={outlet}
                 catalogue={catalogue}
-                disabled={draft.locked}
+                describePlacement={describePlacement}
+                disabled={locked}
                 run={run}
               />
             )}
@@ -335,7 +295,7 @@ export function StudioLayoutOutlets({
           <StudioReferencePicker
             {...control}
             value={newTarget}
-            disabled={draft.locked}
+            disabled={locked}
             unset="Choose an empty slot"
             options={targets.map((entry) => ({
               value: `${entry.parentPlacement}:${entry.parentSlot}`,
@@ -349,7 +309,7 @@ export function StudioLayoutOutlets({
         variant="secondary"
         size="sm"
         disabled={
-          draft.locked ||
+          locked ||
           !targets.some((entry) => `${entry.parentPlacement}:${entry.parentSlot}` === newTarget)
         }
         onClick={() => {
@@ -366,7 +326,7 @@ export function StudioLayoutOutlets({
                 required: false,
                 parent_placement: target.parentPlacement,
                 parent_slot: target.parentSlot,
-                allowed_child_categories: [...target.categories],
+                allowed_child_categories: target.categories.map((category) => category.value),
               },
             }) === true
           )

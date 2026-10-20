@@ -478,10 +478,8 @@ export const applyStudioStructureCommand = (
       }
     }
   } catch (error) {
-    if (error instanceof StructureRefusal) {
-      console.error("[studio] structure edit refused", error.cause);
-      return { kind: "refused", message: error.message, where: error.where, cause: error.cause };
-    }
+    if (error instanceof StructureRefusal)
+      return { kind: "refused", message: error.message, where: error.where };
     throw error;
   }
 };

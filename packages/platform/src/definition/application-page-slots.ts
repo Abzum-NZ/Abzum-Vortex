@@ -15,7 +15,6 @@ type SourcePage = ApplicationSourceDocument["body"]["pages"][number];
  */
 export type PageSlotAddress = Readonly<{
   key: string;
-  label: string;
   step?: string;
   slot?: string;
 }>;
@@ -30,7 +29,6 @@ const addressKey = (step: string | undefined, slot: string | undefined): string 
 
 const address = (step: string | undefined, slot: string | undefined): PageSlotAddress => ({
   key: addressKey(step, slot),
-  label: [step, slot].filter((part) => part !== undefined).join(" / ") || "Page content",
   ...(step === undefined ? {} : { step }),
   ...(slot === undefined ? {} : { slot }),
 });
