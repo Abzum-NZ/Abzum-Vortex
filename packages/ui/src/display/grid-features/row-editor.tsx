@@ -21,6 +21,7 @@ import { Label } from "../../components/label";
 import { NativeSelect, NativeSelectOption } from "../../components/native-select";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/popover";
 import { Textarea } from "../../components/textarea";
+import { toast } from "../../components/sonner";
 import { useUnsavedWorkRegistry } from "../../controls/unsaved-work";
 import { Pencil } from "lucide-react";
 import { useDateFormatOptions } from "../date-format-context";
@@ -233,6 +234,7 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
         typeof answer.changed === "boolean"
       ) {
         setMessage(answer.message);
+        if (!answer.changed) toast.error(answer.message);
         setConflict(answer.changed);
         // Rules without a field location apply to the row as a whole. Attach their safe message
         // to every submitted cell as well as announcing it at the row's Save control.
