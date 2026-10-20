@@ -749,10 +749,15 @@ begin
     if not found or mapping_row.state <> 'active' then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'field_unbounded');
     end if;
-    group_scan_predicate := vortex_record.grouping_member_predicate_internal(
-      mapping_row.physical_column_token, mapping_row.database_value_type,
-      fields_by_id -> group_key ->> 'type', p_user_inputs -> 'grouping', group_selector_values -> group_key
-    );
+    begin
+      group_scan_predicate := vortex_record.grouping_member_predicate_internal(
+        mapping_row.physical_column_token, mapping_row.database_value_type,
+        fields_by_id -> group_key ->> 'type', p_user_inputs -> 'grouping', group_selector_values -> group_key
+      );
+    exception when sqlstate 'V3187' then
+      -- The forged or stale selector's date bucket is outside the supported year domain.
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'value_out_of_range');
+    end;
     if group_scan_predicate is null then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;

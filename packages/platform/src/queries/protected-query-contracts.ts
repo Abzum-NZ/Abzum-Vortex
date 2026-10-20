@@ -383,6 +383,8 @@ export const protectedQueryRefusalReasonCodes = [
   "dataset_limit_exceeded",
   /** A pivot's column dimension holds more values than one pivot shows. */
   "pivot_columns_exceeded",
+  /** A date bucket falls outside the supported UTC years 0001 to 9999. */
+  "value_out_of_range",
 ] as const;
 export type ProtectedQueryRefusalReasonCode = (typeof protectedQueryRefusalReasonCodes)[number];
 

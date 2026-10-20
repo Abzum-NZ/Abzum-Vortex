@@ -429,6 +429,10 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
         return refused(
           "There are too many records to pivot at once. Narrow them with search or filters.",
         );
+      case "value_out_of_range":
+        return refused(
+          "Some dates in these records are outside the supported range (years 0001 to 9999). Narrow them with search or filters.",
+        );
       case "field_unbounded":
         return refused("You can't see every field this pivot needs.");
       default:
