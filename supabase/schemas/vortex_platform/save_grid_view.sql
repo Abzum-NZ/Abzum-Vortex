@@ -51,7 +51,7 @@ begin
     access_plan := vortex_record.resolve_installation_access_plan_internal(installation);
     if (vortex_platform.grid_view_document_for_viewer_internal(
         p_query_id, p_document, installation, access_plan) ->> 'hiddenFormatting')::integer > 0 then
-      return pg_catalog.jsonb_build_object('outcome', 'formatting_refused');
+      return pg_catalog.jsonb_build_object('outcome', 'formatting_refused', 'cause', 'field_not_readable');
     end if;
     select distinct (query.value #>> '{recordType,recordTypeId}')::uuid into record_type_id
     from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as binding(value)
@@ -93,7 +93,7 @@ begin
           '{"today":null,"start_of_week":null,"end_of_week":null,"start_of_month":null,"end_of_month":null}'::jsonb,
           true);
       exception when invalid_parameter_value then
-        return pg_catalog.jsonb_build_object('outcome', 'formatting_refused');
+        return pg_catalog.jsonb_build_object('outcome', 'formatting_refused', 'cause', 'rule_invalid');
       end;
     end loop;
   end if;

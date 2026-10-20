@@ -434,7 +434,12 @@ const viewResultSchema = z.discriminatedUnion("outcome", [
     })
     .strict(),
   z.object({ outcome: z.enum(["not_found", "forbidden", "limit", "target_unknown"]) }).strict(),
-  z.object({ outcome: z.literal("formatting_refused") }).strict(),
+  z
+    .object({
+      outcome: z.literal("formatting_refused"),
+      cause: z.enum(["field_not_readable", "rule_invalid"]),
+    })
+    .strict(),
 ]);
 
 /** What a view operation came to; every refusal is a closed outcome, never a database message. */
@@ -453,8 +458,10 @@ const viewOutcome = (rows: readonly ResultRow[]): GridViewOperationOutcome => {
   if (result.outcome === "formatting_refused")
     return refuseFormatting(
       "database",
-      "field_not_readable",
-      "A rule reads a field you cannot read.",
+      result.cause,
+      result.cause === "field_not_readable"
+        ? "A rule reads a field you cannot read."
+        : "A rule compares a field in a way its type does not allow.",
     );
   return result.outcome === "conflict" ? { outcome: "conflict" } : result;
 };
