@@ -1,5 +1,5 @@
 create or replace function vortex_platform.grid_view_document_for_viewer_internal(
-  p_query_id uuid, p_document jsonb, p_installation jsonb, p_plan jsonb
+  p_query_id uuid, p_document jsonb, p_installation jsonb, p_plan jsonb, p_visible_fields jsonb
 )
 returns jsonb
 language plpgsql
@@ -48,7 +48,9 @@ begin
       eligibility := vortex_access.resolve_record_read_field_bounds_internal(declaration);
       select coalesce(pg_catalog.array_agg(pg_catalog.lower(field.value)), '{}'::text[])
       into readable
-      from pg_catalog.jsonb_array_elements_text(eligibility -> 'readableFieldIds') as field(value);
+      from pg_catalog.jsonb_array_elements_text(eligibility -> 'readableFieldIds') as field(value)
+      where coalesce(p_visible_fields -> pg_catalog.lower(record_type_id::text), '[]'::jsonb)
+        ? pg_catalog.lower(field.value);
     end if;
   end if;
   select coalesce(pg_catalog.jsonb_agg(filter.value order by filter.ordinal), '[]'::jsonb)
@@ -77,9 +79,9 @@ begin
 end
 $function$;
 
-revoke all on function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb)
+revoke all on function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-alter function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb)
+alter function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb, jsonb)
   owner to vortex_owner;
-comment on function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb) is
+comment on function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb, jsonb) is
   'Removes saved filters and sorts outside conservative current query field bounds before a selected document leaves the database; owner-only, with counts for the omission notice.';

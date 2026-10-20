@@ -73,6 +73,7 @@ const storedViewRowsSchema = z
 
 const storedReadSchema = z
   .object({
+    visibleFields: z.record(idSchema, z.array(idSchema)),
     defaultDocuments: z
       .array(
         z
@@ -137,6 +138,8 @@ export type StoredNamedGridView = Readonly<{
 
 /** Everything one page read returns of the store: layouts keyed by placement, views by placement. */
 export type StoredGridViews = Readonly<{
+  /** One exact existential column decision per requested record type. */
+  readable: ReadonlyMap<string, ReadonlySet<string>>;
   /** Authored documents narrowed by the same current field bounds as stored shared views. */
   defaultDocuments: ReadonlyMap<
     string,
@@ -210,6 +213,7 @@ export const readGridViews = async (
   pageId: string,
   placementIds: readonly string[],
   selectedViewIds: readonly string[],
+  recordTypeIds: readonly string[],
   defaultViews: readonly Readonly<{
     viewId: string;
     queryId: string;
@@ -221,7 +225,8 @@ export const readGridViews = async (
       ${pageId}::uuid,
       array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(placementIds)}::text::jsonb)::uuid),
       array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(selectedViewIds)}::text::jsonb)::uuid),
-      ${JSON.stringify(defaultViews)}::text::jsonb
+      ${JSON.stringify(defaultViews)}::text::jsonb,
+      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(recordTypeIds)}::text::jsonb)::uuid)
     ) as result
   `;
   const read = stored("read", pageId, storedReadSchema, only(rows));
@@ -251,6 +256,12 @@ export const readGridViews = async (
     views.set(placementId, [...(views.get(placementId) ?? []), named]);
   }
   return {
+    readable: new Map(
+      Object.entries(read.visibleFields).map(([recordTypeId, ids]) => [
+        recordTypeId.toLowerCase(),
+        new Set(ids.map((id) => id.toLowerCase())),
+      ]),
+    ),
     defaultDocuments: new Map(
       read.defaultDocuments.map((row) => [
         row.viewId.toLowerCase(),
