@@ -252,7 +252,9 @@ export function useGridLayout({
         ...(query.sort.length === 0 ? {} : { sort: [...query.sort] }),
         ...(query.filters.length === 0 ? {} : { filters: [...query.filters] }),
         ...(query.search === null ? {} : { search: query.search }),
-        ...(formatting === undefined || formatting.length === 0 ? {} : { formatting: [...formatting] }),
+        ...(formatting === undefined || formatting.length === 0
+          ? {}
+          : { formatting: [...formatting] }),
       };
     },
     [],

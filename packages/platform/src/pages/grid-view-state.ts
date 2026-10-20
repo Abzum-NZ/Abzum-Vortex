@@ -137,7 +137,8 @@ export const gridViewFormatRuleSchema = z
       })
       .strict()
       .refine(
-        (style) => !(style.tint || style.text) || style.icon !== undefined || style.badgeLabel !== undefined,
+        (style) =>
+          !(style.tint || style.text) || style.icon !== undefined || style.badgeLabel !== undefined,
         "Add an icon or label so the meaning is not shown by colour alone",
       ),
     stopIfTrue: z.boolean(),
@@ -184,7 +185,10 @@ export const gridViewDocumentSchema = z
   .strict()
   .superRefine((document, context) => {
     refineColumns(document, context);
-    if (new Set(document.formatting?.map((rule) => rule.id)).size !== (document.formatting?.length ?? 0))
+    if (
+      new Set(document.formatting?.map((rule) => rule.id)).size !==
+      (document.formatting?.length ?? 0)
+    )
       context.addIssue({ code: "custom", path: ["formatting"], message: "A rule is named twice" });
     for (const part of ["sort", "filters"] as const)
       if (

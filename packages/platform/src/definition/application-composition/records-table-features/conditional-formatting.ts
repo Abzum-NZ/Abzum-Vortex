@@ -289,7 +289,9 @@ export type ConditionalFormatFacts = Readonly<{
 }>;
 
 /** A record type's fields as a rule is checked against them: a person's rule is, as an authored one. */
-export const conditionalFormatFactsOf = (fields: readonly ModuleField[]): ConditionalFormatFacts => ({
+export const conditionalFormatFactsOf = (
+  fields: readonly ModuleField[],
+): ConditionalFormatFacts => ({
   fields: fields.map((field) => {
     const settings = (field as { settings?: Readonly<Record<string, unknown>> }).settings ?? {};
     const options = settings["options"];
@@ -297,9 +299,7 @@ export const conditionalFormatFactsOf = (fields: readonly ModuleField[]): Condit
       field: String(field.fieldId),
       label: field.label,
       type: field.type,
-      ...(typeof settings["resultType"] === "string"
-        ? { resultType: settings["resultType"] }
-        : {}),
+      ...(typeof settings["resultType"] === "string" ? { resultType: settings["resultType"] } : {}),
       ...(field.type === "choice" && Array.isArray(options)
         ? { choiceValues: options.map((option: { value: string }) => String(option.value)) }
         : {}),

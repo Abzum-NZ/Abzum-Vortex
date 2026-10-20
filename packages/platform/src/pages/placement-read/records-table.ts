@@ -250,7 +250,9 @@ export const readRecordsTable = async (
         (candidate) => String(candidate.recordTypeId).toLowerCase() === recordTypeId,
       )?.fields ?? [];
     let relativeDates: ConditionalFormattingContext["relativeDates"];
-    if (conditionalFormattingUsesRelativeDates(contract, personalFormattingRules(contract, layout))) {
+    if (
+      conditionalFormattingUsesRelativeDates(contract, personalFormattingRules(contract, layout))
+    ) {
       const timeZone = await read.bindings.timeZone();
       if (timeZone === undefined)
         logPlacementFailure(address, placementId, "table_formatting_time_zone_unavailable");

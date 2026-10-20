@@ -100,8 +100,7 @@ export function PersonalFormattingDialog({
       ...(changes.style === undefined ? {} : { style: changes.style }),
       ...(changes.stopIfTrue === undefined ? {} : { stopIfTrue: changes.stopIfTrue }),
     }));
-  const summary = (rule: GridViewFormatRule): string =>
-    describeCondition(rule.condition, context);
+  const summary = (rule: GridViewFormatRule): string => describeCondition(rule.condition, context);
   return (
     <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
@@ -122,7 +121,9 @@ export function PersonalFormattingDialog({
               type="button"
               variant="outline"
               size="sm"
-              disabled={busy || initial === undefined || rules.length >= GRID_VIEW_MAXIMUM_FORMAT_RULES}
+              disabled={
+                busy || initial === undefined || rules.length >= GRID_VIEW_MAXIMUM_FORMAT_RULES
+              }
               onClick={add}
             >
               <Icon name="plus" aria-hidden="true" />

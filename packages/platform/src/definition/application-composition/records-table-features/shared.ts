@@ -113,8 +113,7 @@ export type RecordsTableFieldFacts = Readonly<{
 /** The type of value a field holds: a calculation's or total's result type, else its own type. */
 export const factsValueType = (
   field: Pick<RecordsTableFieldFacts, "type" | "resultType">,
-): string =>
-  field.resultType ?? field.type;
+): string => field.resultType ?? field.type;
 
 /**
  * One query the application may read, as a row's related records see it: the record type it reads,

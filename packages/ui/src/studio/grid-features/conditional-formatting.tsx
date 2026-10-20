@@ -4,16 +4,11 @@ import { useId, useMemo, useState, type DragEvent, type ReactElement } from "rea
 import {
   conditionalColumnFormatFieldTypes,
   conditionalColumnFormatIssue,
-  conditionalFormatIcons,
   conditionalFormatRuleIssue,
-  conditionalFormatTokens,
-  conditionalFormattingDateParameters,
   type ConditionNode,
   type ConditionalColumnFormat,
-  type ConditionalFormatIcon,
   type ConditionalFormatRule,
   type ConditionalFormatToken,
-  type ConditionalFormattingDateParameter,
   type InlineQueryFilter,
   type ModuleField,
   type RecordsTableConditionalFormattingSettings,
@@ -21,11 +16,8 @@ import {
   type RecordsTableQueryFacts,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
-import { Badge } from "../../components/badge";
 import { Button } from "../../components/button";
-import { Input } from "../../components/input";
 import { Label } from "../../components/label";
-import { NativeSelect, NativeSelectOption } from "../../components/native-select";
 import { Switch } from "../../components/switch";
 import { ToggleGroup, ToggleGroupItem } from "../../components/toggle-group";
 import { Icon } from "../../icons/icon";

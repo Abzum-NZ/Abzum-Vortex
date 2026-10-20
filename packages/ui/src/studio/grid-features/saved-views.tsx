@@ -94,8 +94,8 @@ export function StudioSavedViewsEditor({
         Allow personal formatting
       </Label>
       <p className="text-sm text-muted-foreground">
-        People add their own highlighting rules to the views they save, on the fields they can
-        read. It needs Formatting turned on for this table.
+        People add their own highlighting rules to the views they save, on the fields they can read.
+        It needs Formatting turned on for this table.
       </p>
       <p className="text-sm">
         Turn on Arrange grid columns above the canvas, then move, resize or hide columns and choose

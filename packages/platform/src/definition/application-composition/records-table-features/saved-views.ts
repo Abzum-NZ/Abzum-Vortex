@@ -108,7 +108,8 @@ export const recordsTableSavedViewsFeature: RecordsTableFeatureDefinition<Record
       return {
         enabled: true,
         defaultViews,
-        personalFormatting: group["personal_formatting"]?.kind === "boolean" && group["personal_formatting"].value,
+        personalFormatting:
+          group["personal_formatting"]?.kind === "boolean" && group["personal_formatting"].value,
       };
     },
     check: (state, facts) => {

@@ -506,9 +506,7 @@ export const buildRecordsTableQueryCommand = (
   const formattingFieldIds = conditionalFormattingFieldIds(
     contract,
     personalFormattingRules(contract, request.layout),
-  ).filter(
-    (fieldId) => !fieldIds.includes(fieldId),
-  );
+  ).filter((fieldId) => !fieldIds.includes(fieldId));
   const command = protectedQueryCommandSchema.safeParse({
     moduleRootId: request.moduleRootId,
     queryId: request.queryId,
