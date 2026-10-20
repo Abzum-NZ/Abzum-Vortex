@@ -14,7 +14,7 @@ as $function$
       and storage.state = 'active'
       and p_sort_key = any(registered.cursor_sort_keys)
       and pg_catalog.to_regprocedure(pg_catalog.format(
-        '%I.%I(uuid[],text,text,jsonb,integer)', registered.reader_schema,
+        '%I.%I(uuid[],text,text,jsonb,integer,jsonb)', registered.reader_schema,
         registered.reader_function
       )) is not null
   );
