@@ -2,6 +2,7 @@ export { parseCalendarPayload } from "./calendar-payload";
 import {
   jsonValueSchema,
   type JsonValue,
+  type FlowFieldCorrection,
   builderKeySchema,
   moduleFieldValueSchemas,
   fieldIdSchema,
@@ -324,6 +325,7 @@ export type DisplaySemanticEventName =
       | "page_changed"
       | "bulk_action"
       | "inline_edit"
+      | "row_edit"
       | "card_moved"
       | "row_expanded"
     >
@@ -441,6 +443,14 @@ export type DisplaySemanticEvent =
   /** Widens the selection to every matching record, or clears it (and a finished run's summary). */
   | Readonly<{ event: "selection_scope_changed"; scope: "matching" | "cleared" }>
   | Readonly<{
+      event: "row_edit";
+      eventId: string;
+      recordId: string;
+      revision: number;
+      values: Readonly<Record<string, JsonValue>>;
+      commandId: string;
+    }>
+  | Readonly<{
       event: "inline_edit";
       eventId: string;
       recordId: string;
@@ -485,7 +495,13 @@ export type DisplaySemanticEvent =
  * before the server confirmed it.
  */
 export type DisplayInlineEditResult =
-  Readonly<{ kind: "saved" }> | Readonly<{ kind: "refused"; message: string; changed: boolean }>;
+  | Readonly<{ kind: "saved" }>
+  | Readonly<{
+      kind: "refused";
+      message: string;
+      changed: boolean;
+      corrections?: readonly FlowFieldCorrection[];
+    }>;
 
 /** A handler may return the promise of the flow it started; the control stays busy until it settles. */
 export type DisplayEventHandler = (event: DisplaySemanticEvent) => void | Promise<unknown>;
@@ -520,6 +536,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "bulk_action",
   "selection_scope_changed",
   "inline_edit",
+  "row_edit",
   "card_moved",
   "row_expanded",
 ]);

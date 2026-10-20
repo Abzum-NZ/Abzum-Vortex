@@ -1,6 +1,12 @@
 import "server-only";
 
-import { isRecord, readRecordsTableContract, recordIdSchema, sameId } from "../../schema";
+import {
+  isRecord,
+  readRecordsTableContract,
+  recordIdSchema,
+  fieldIdSchema,
+  sameId,
+} from "../../schema";
 import type { ComponentFlowBinding } from "../../schema";
 import type { RequestDatabaseTransaction } from "../../db";
 import type { HumanOrganizationRequestResult } from "../../access";
@@ -9,8 +15,14 @@ import {
   placementSettings,
   TABLE_BLOCK_RELEASE,
 } from "../../definition/application-composition-catalogue";
+import { fieldEditorsOf } from "../placement-read/shared";
 import { pageSubjectFromRead } from "../page-subject-read";
-import { recordsTableRequestRefusal, rowMayChangeField, type RecordsTableRequestRefusal } from ".";
+import {
+  recordsTableRequestRefusal,
+  rowMayChangeField,
+  projectRecordsTableFeatures,
+  type RecordsTableRequestRefusal,
+} from ".";
 
 /** Locate the exact compiled placement; bindings of other block types keep their own gates. */
 export const installedPlacementProps = (
@@ -64,7 +76,8 @@ export const recordsTableBindingRefusal = async (
     event !== "row_action" &&
     event !== "row_clicked" &&
     event !== "bulk_action" &&
-    event !== "inline_edit"
+    event !== "inline_edit" &&
+    event !== "row_edit"
   )
     return undefined;
   const props = installedPlacementProps(installation.applicationContent, binding.controlId);
@@ -91,21 +104,28 @@ export const recordsTableBindingRefusal = async (
       !sameId(contract.rowBehaviours.rowClick.eventId, binding.eventId))
   )
     return recordsTableRequestRefusal(event, "command_not_declared");
-  const inline = contract.features.inlineEdit;
-  let editedField: string | undefined;
-  if (event === "inline_edit") {
+  const editing = event === "inline_edit" || event === "row_edit";
+  const inline = event === "row_edit" ? contract.features.rowEdit : contract.features.inlineEdit;
+  let editedFields: string[] = [];
+  if (editing) {
     if (!inline.enabled) return recordsTableRequestRefusal(event, "feature_off");
     if (inline.eventId === undefined || !sameId(inline.eventId, binding.eventId))
       return recordsTableRequestRefusal(event, "binding_not_declared");
     const values = inputs.values;
     const names = isRecord(values) ? Object.keys(values) : [];
-    if (names.length !== 1) return recordsTableRequestRefusal(event, "values_not_one_field");
-    editedField = names[0];
-    if (
-      editedField === undefined ||
-      !inline.fields.some((field) => sameId(field, editedField as string))
-    )
-      return recordsTableRequestRefusal(event, "field_not_editable");
+    if ((event === "inline_edit" && names.length !== 1) || names.length === 0 || names.length > 50)
+      return recordsTableRequestRefusal(event, "changed_fields_invalid");
+    if (new Set(names.map((name) => name.toLowerCase())).size !== names.length)
+      return recordsTableRequestRefusal(event, "changed_fields_duplicated");
+    if (names.some((field) => !fieldIdSchema.safeParse(field).success))
+      return recordsTableRequestRefusal(event, "field_identity_invalid");
+    editedFields = names;
+    for (const field of editedFields)
+      if (
+        !inline.fields.some((allowed) => sameId(allowed, field)) ||
+        !contract.columns.some((column) => sameId(column.field, field))
+      )
+        return recordsTableRequestRefusal(event, `field_not_editable:${field}`);
     if (subject === undefined) return recordsTableRequestRefusal(event, "revision_missing");
   }
   const queries = (installation.modules ?? []).flatMap((module) =>
@@ -139,7 +159,7 @@ export const recordsTableBindingRefusal = async (
     return recordsTableRequestRefusal(event, "revision_invalid");
   // Only an inline edit's subject is its row; another row gesture's subject is the page's record.
   if (
-    event === "inline_edit" &&
+    editing &&
     subject !== undefined &&
     (recordIds.length !== 1 || !sameId(subject.recordId, recordIds[0] as string))
   )
@@ -167,11 +187,36 @@ export const recordsTableBindingRefusal = async (
         !row.capabilities?.actions.includes(command.capability)
       )
         return recordsTableRequestRefusal(event, "command_not_permitted");
-      if (
-        event === "inline_edit" &&
-        (editedField === undefined || !rowMayChangeField(row, editedField))
-      )
-        return recordsTableRequestRefusal(event, "field_not_permitted");
+      if (editing) {
+        const module = installation.modules?.find((entry) => entry.content.queries.includes(query));
+        if (module === undefined) return recordsTableRequestRefusal(event, "query_module_missing");
+        const editors = fieldEditorsOf(module);
+        if (event === "row_edit") {
+          const projection = projectRecordsTableFeatures(
+            contract,
+            {
+              readableFieldIds: Object.keys(row.values).map((field) => fieldIdSchema.parse(field)),
+              searchable: false,
+            },
+            [row],
+            undefined,
+            editors,
+          );
+          if (projection?.rowEdit === undefined)
+            return recordsTableRequestRefusal(event, "feature_not_projected");
+          for (const field of editedFields)
+            if (!projection.rowEdit.fields.some((allowed) => sameId(allowed.field, field)))
+              return recordsTableRequestRefusal(event, `field_not_projected:${field}`);
+        }
+        for (const field of editedFields) {
+          if (
+            !rowMayChangeField(row, field) ||
+            !Object.keys(row.values).some((key) => sameId(key, field)) ||
+            editors[field.toLowerCase()] === undefined
+          )
+            return recordsTableRequestRefusal(event, `field_not_permitted:${field}`);
+        }
+      }
     }
     return undefined;
   });

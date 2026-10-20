@@ -347,50 +347,57 @@ export function useRuntimeInputs({
         // An inline edit commits one stored value through the bound flow at the revision the row
         // was displayed at. The cell shows what came of it: nothing is called saved until the
         // server confirmed the write, and a record that changed keeps the person's draft.
-        if (
-          tableData !== undefined &&
-          supportsEvent("inline_edit") &&
-          bindings.some((binding) => binding.event === "inline_edit")
-        )
-          events.inline_edit = async (
-            event: DisplaySemanticEvent,
-          ): Promise<DisplayInlineEditResult> => {
-            if (event.event !== "inline_edit")
-              return { kind: "refused", message: unavailableNotice.text, changed: false };
-            const binding = bindingFor(bindings, event);
-            if (binding === undefined) {
-              console.error("[page] inline edit has no binding: INLINE_EDIT_BINDING_MISSING");
-              return { kind: "refused", message: unavailableNotice.text, changed: false };
-            }
-            if (busy)
-              return {
-                kind: "refused",
-                message: "Another change is still saving. Try again in a moment.",
-                changed: false,
-              };
-            const outcome = await runBinding(
-              placementId,
-              binding,
-              suppliedValues(event),
-              event.recordId,
-              { recordId: event.recordId, revision: event.revision },
-              undefined,
-              event.commandId,
-              true,
-            );
-            // A neutral refusal may mean the viewer's access to the field ended: the table is read once more
-            // so a field no longer editable, or no longer readable, loses its editor and its draft.
-            // A changed record is already read again by the dispatch. Nothing here writes.
-            if (!outcome.confirmed && !outcome.changed && outcome.notice === unavailableNotice)
-              void refreshPlacements([placementId], undefined, { content: true });
-            return outcome.confirmed
-              ? { kind: "saved" }
-              : {
+        for (const editEvent of ["inline_edit", "row_edit"] as const)
+          if (
+            tableData !== undefined &&
+            supportsEvent(editEvent) &&
+            bindings.some((binding) => binding.event === editEvent)
+          )
+            events[editEvent] = async (
+              event: DisplaySemanticEvent,
+            ): Promise<DisplayInlineEditResult> => {
+              if (
+                event.event !== editEvent ||
+                (event.event !== "inline_edit" && event.event !== "row_edit")
+              )
+                return { kind: "refused", message: unavailableNotice.text, changed: false };
+              const binding = bindingFor(bindings, event);
+              if (binding === undefined) {
+                console.error(`[page] ${editEvent} has no binding: EDIT_BINDING_MISSING`);
+                return { kind: "refused", message: unavailableNotice.text, changed: false };
+              }
+              if (busy)
+                return {
                   kind: "refused",
-                  message: outcome.notice?.text ?? unavailableNotice.text,
-                  changed: outcome.changed,
+                  message: "Another change is still saving. Try again in a moment.",
+                  changed: false,
                 };
-          };
+              const outcome = await runBinding(
+                placementId,
+                binding,
+                suppliedValues(event),
+                event.recordId,
+                { recordId: event.recordId, revision: event.revision },
+                undefined,
+                event.commandId,
+                true,
+              );
+              // A neutral refusal may mean the viewer's access to the field ended: the table is read once more
+              // so a field no longer editable, or no longer readable, loses its editor and its draft.
+              // A changed record is already read again by the dispatch. Nothing here writes.
+              if (!outcome.confirmed && !outcome.changed && outcome.notice === unavailableNotice)
+                void refreshPlacements([placementId], undefined, { content: true });
+              return outcome.confirmed
+                ? { kind: "saved" }
+                : {
+                    kind: "refused",
+                    message: outcome.notice?.text ?? unavailableNotice.text,
+                    changed: outcome.changed,
+                    ...(outcome.corrections === undefined
+                      ? {}
+                      : { corrections: outcome.corrections }),
+                  };
+            };
         if (
           boardData !== undefined &&
           boardRowActionBinding !== undefined &&

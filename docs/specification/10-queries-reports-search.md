@@ -411,3 +411,9 @@ These reader capabilities are the execution foundation of #3027 and the date/gro
 they are refused as grid overrides until that support lands. The grid feature gate, Studio
 controls, single URL codec, group headers and active-group interactions are supplied by that
 feature's UI/runtime integration, rather than inferred by the query readers.
+
+### Row editing
+
+The Data grid can opt into Row editing. The builder chooses stored, editable columns and adds the “When a row is saved” workflow. One row opens all its currently visible, permitted fields together, with typed controls; phone cards hold the same draft inside the card. Save sends only changed fields as one record save with the displayed revision and one command identity. Server validation, before-save rules and current field access apply to the whole change. A refusal writes nothing; a conflict keeps the draft and offers Reload, which discards it before another edit. Cancel discards the draft, and leaving the page with changed values uses the page’s unsaved-work prompt. The active edited row stays mounted when the grid virtualizes its page.
+
+The contract is replaced in place. The catalogue authors Row editing off by default; shipped Opportunities enable it with an explicit save workflow. Reset development data with `pnpm demo:setup` when adopting this definition change.
