@@ -129,16 +129,16 @@ At run time a row expands only when the projection says rows expand. Each expand
 
 A column filter is typed by the field's **canonical type**, never by its display format, and each filterable field holds at most one filter:
 
-| Field type | Filter |
-| --- | --- |
-| Text, long text, email, phone, web address, reference number | Contains the text (at most 200 characters). |
-| Choice, several choices | Any of the chosen options (OR within the field); choosing none clears the filter. |
-| Whole number, decimal number | An inclusive range of exact decimals; either end may be open. Values are exact decimal text, never floating point. |
-| Money | An inclusive amount range in one named currency (the field's fixed currency when it has one); a value in another currency is outside every range. |
-| Date | An inclusive range of calendar days; either end may be open. |
-| Date and time | Whole days in the organisation's time zone: from the first instant of the start day (inclusive) to the first instant after the end day (exclusive). |
-| Link | Any of the chosen records, picked through the protected bounded record picker under the viewer's access; their titles are read in the page's one batched link read. |
-| Yes/no | Equals yes or no. |
+| Field type                                                   | Filter                                                                                                                                                              |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Text, long text, email, phone, web address, reference number | Contains the text (at most 200 characters).                                                                                                                         |
+| Choice, several choices                                      | Any of the chosen options (OR within the field); choosing none clears the filter.                                                                                   |
+| Whole number, decimal number                                 | An inclusive range of exact decimals; either end may be open. Values are exact decimal text, never floating point.                                                  |
+| Money                                                        | An inclusive amount range in one named currency (the field's fixed currency when it has one); a value in another currency is outside every range.                   |
+| Date                                                         | An inclusive range of calendar days; either end may be open.                                                                                                        |
+| Date and time                                                | Whole days in the organisation's time zone: from the first instant of the start day (inclusive) to the first instant after the end day (exclusive).                 |
+| Link                                                         | Any of the chosen records, picked through the protected bounded record picker under the viewer's access; their titles are read in the page's one batched link read. |
+| Yes/no                                                       | Equals yes or no.                                                                                                                                                   |
 
 Calculated fields, totals and other types take no filter. The filters of different fields AND together and AND the published query filter, so a filter only ever narrows the query. The page address carries each filter as `filter.<placement>.<field>=<kind>:<operand>` (one codec for the runtime, the address, saved layouts and Studio preview); a malformed, inverted, open-on-both-ends or repeated filter refuses the read rather than being dropped. The server rebuilds every condition from the installed field (type, options, currency and link target) and refuses a filter on a field the feature does not declare, a field whose filter kind does not match its type, or a feature that is not projected on. A field the viewer's current field policy withholds is not offered, and a forged filter on it is refused by the Query engine. A committed filter is one bounded read of that table only, from page one with the selection cleared; text commits after a 300 ms pause, and a reply for an earlier state is discarded. Every supported filter, money ranges included, is pushed into the indexed candidate scan when its field is readable for the whole record type.
 
@@ -150,7 +150,13 @@ The table has one toolbar in a fixed order: the projected features' items (searc
 
 ## Saved views
 
-A saved view records the query, visible columns, arrangement, grouping, sort, and display choices. A personal view is visible only to its owner. A shared view belongs to an application and requires a permission to publish or change.
+A saved view records the whole state of one table: column order, visibility and widths, density, the ordered sort, one typed filter per field and the search (grouping, pinning and the like join the same document as their features land). It stores configuration only, never rows, a cursor, a page or a permission. Views live in the one grid view store, next to the person's current layout, isolated by organisation account, application installation, page and placement; deleting the account or the installation removes them.
+
+A view is **personal** (its owner only) or **shared** with the whole organisation, chosen roles of the application, or groups. Sharing, and changing or deleting a shared view that is not one's own, requires the platform Share table views permission, granted to roles in Access; the database decides it now, for the person making the request. Recipients see a shared view read-only and can Save as their own copy. Names, shares and deletes are revision-checked: a change made in another tab is refused and the latest version is shown.
+
+Studio can author default views for a role or everyone in the app (`role: "*"`). A role default takes precedence over the app default; a personal layout or explicitly selected view takes precedence over both. Default documents remain on the server. Their filter values pass through the same current field-bound projection as stored views before the selected document reaches the viewer.
+
+Opening a view re-evaluates it under the viewer's current access, field policy and release. A column the viewer cannot see, and a filter or sort key on a field they cannot read, are left out and announced ("1 column is hidden for your role"); a stored filter that is malformed is never applied, which would widen the rows, and the viewer is told the view needs fixing. The address names the view (`view.<placement>=<id>`, with the sort, filters and search it shows), so a copied link opens the same view for anyone who may see it; the address wins over the view's own state, and a view the viewer may not see opens the table without it. The switcher lists Personal and Shared views with search, Save view, Save as, Rename, Share, Delete and Reset to default, and an unsaved-changes dot. Saving, renaming, sharing, deleting and a layout change read no records; opening another view reads the one grid again.
 
 The term **saved view** replaces the outdated terms “prepared list,” “prepared query,” and “prepared view.”
 

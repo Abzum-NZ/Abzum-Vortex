@@ -23,7 +23,8 @@ export const organisationAdministrationPlatformPermissions = [
     pinnedPermissionId: "ca5f56d4-5382-4bf8-9a91-fbfdc77642b2",
     key: "platform.organization.roles.read",
     label: "View roles",
-    description: "View the selected organisation's live roles and registered application role templates.",
+    description:
+      "View the selected organisation's live roles and registered application role templates.",
     actionKind: "read",
     administrative: true,
     stewardMinimum: true,
@@ -141,6 +142,14 @@ export const organisationAdministrationPlatformPermissions = [
     label: "Manage applications",
     description:
       "Install, upgrade or detach exact application bindings in the selected organisation without receiving business-record use or role-assignment authority.",
+    actionKind: "manage",
+    administrative: true,
+  },
+  {
+    pinnedPermissionId: "ca1fb1ae-056c-4596-9c70-36a42c0de87b",
+    key: "platform.records.views.share",
+    label: "Share table views",
+    description: "Share saved table views and change views shared with you in the organisation.",
     actionKind: "manage",
     administrative: true,
   },
@@ -1126,8 +1135,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
         id: "perm_permission_read",
         key: "vortex.organisation_administration.permission.read",
         label: "Read permissions",
-        description:
-          "Allows reading the protected permission projection as a system record.",
+        description: "Allows reading the protected permission projection as a system record.",
         record_type: "permission",
         action_kind: "read",
         administrative: false,
@@ -1216,7 +1224,9 @@ export const organisationAdministrationModule: SourceApplicationModule =
           {
             id: "set_state",
             type: "record.set_fields",
-            properties: { values: { state: { kind: "literal", literal: { type: "json", value: "published" } } } },
+            properties: {
+              values: { state: { kind: "literal", literal: { type: "json", value: "published" } } },
+            },
           },
           {
             id: "set_published_at",
@@ -1249,7 +1259,8 @@ export const organisationAdministrationModule: SourceApplicationModule =
         key: "vortex.organisation_administration.privacy_request_case.record_privacy_request",
         label: "Record privacy request case",
         record_type: "privacy_request_case",
-        permission: "vortex.organisation_administration.privacy_request_case.record_privacy_request",
+        permission:
+          "vortex.organisation_administration.privacy_request_case.record_privacy_request",
         shareable: false,
         precondition: { field: "received_at", operator: "is_empty" },
         inputs: [
@@ -1282,7 +1293,9 @@ export const organisationAdministrationModule: SourceApplicationModule =
           {
             id: "set_state",
             type: "record.set_fields",
-            properties: { values: { state: { kind: "literal", literal: { type: "json", value: "received" } } } },
+            properties: {
+              values: { state: { kind: "literal", literal: { type: "json", value: "received" } } },
+            },
           },
           {
             id: "set_received_at",
@@ -1304,7 +1317,9 @@ export const organisationAdministrationModule: SourceApplicationModule =
           {
             id: "set_state",
             type: "record.set_fields",
-            properties: { values: { state: { kind: "literal", literal: { type: "json", value: "completed" } } } },
+            properties: {
+              values: { state: { kind: "literal", literal: { type: "json", value: "completed" } } },
+            },
           },
           {
             id: "set_closed_at",
@@ -1326,7 +1341,9 @@ export const organisationAdministrationModule: SourceApplicationModule =
           {
             id: "set_state",
             type: "record.set_fields",
-            properties: { values: { state: { kind: "literal", literal: { type: "json", value: "refused" } } } },
+            properties: {
+              values: { state: { kind: "literal", literal: { type: "json", value: "refused" } } },
+            },
           },
           {
             id: "set_closed_at",
@@ -1343,106 +1360,91 @@ export const organisationAdministrationModule: SourceApplicationModule =
     queries: [
       activityQuery,
       {
-        "id": "qry_organisation_notices",
-        "key": "organisation_notices",
-        "exposure": "private",
-        "label": "Notices",
-        "record_type": "organisation_notice",
-        "inputs": [],
-        "select": [
-          "title",
-          "body",
-          "state",
-          "published_at"
-        ],
-        "filter": null,
-        "group_by": [],
-        "aggregates": [],
-        "sort": [
+        id: "qry_organisation_notices",
+        key: "organisation_notices",
+        exposure: "private",
+        label: "Notices",
+        record_type: "organisation_notice",
+        inputs: [],
+        select: ["title", "body", "state", "published_at"],
+        filter: null,
+        group_by: [],
+        aggregates: [],
+        sort: [
           {
-            "field": "title",
-            "direction": "ascending"
-          }
+            field: "title",
+            direction: "ascending",
+          },
         ],
-        "page_size": 50,
-        "relationship_hops": 0
+        page_size: 50,
+        relationship_hops: 0,
       },
       {
-        "id": "qry_privacy_request_cases",
-        "key": "privacy_request_cases",
-        "exposure": "private",
-        "label": "Privacy requests",
-        "record_type": "privacy_request_case",
-        "inputs": [],
-        "select": [
-          "subject",
-          "request_kind",
-          "state",
-          "received_at",
-          "closed_at"
-        ],
-        "filter": null,
-        "group_by": [],
-        "aggregates": [],
-        "sort": [
+        id: "qry_privacy_request_cases",
+        key: "privacy_request_cases",
+        exposure: "private",
+        label: "Privacy requests",
+        record_type: "privacy_request_case",
+        inputs: [],
+        select: ["subject", "request_kind", "state", "received_at", "closed_at"],
+        filter: null,
+        group_by: [],
+        aggregates: [],
+        sort: [
           {
-            "field": "received_at",
-            "direction": "descending"
-          }
+            field: "received_at",
+            direction: "descending",
+          },
         ],
-        "page_size": 50,
-        "relationship_hops": 0
+        page_size: 50,
+        relationship_hops: 0,
       },
       {
-        "id": "qry_organization_settings",
-        "key": "organization_settings",
-        "exposure": "private",
-        "label": "Organisation settings",
-        "record_type": "organization_settings",
-        "inputs": [],
-        "select": [
+        id: "qry_organization_settings",
+        key: "organization_settings",
+        exposure: "private",
+        label: "Organisation settings",
+        record_type: "organization_settings",
+        inputs: [],
+        select: [
           "language",
           "time_zone",
           "currency",
           "date_format",
           "number_format",
-          "default_application_root_id"
+          "default_application_root_id",
         ],
-        "filter": null,
-        "group_by": [],
-        "aggregates": [],
-        "sort": [
+        filter: null,
+        group_by: [],
+        aggregates: [],
+        sort: [
           {
-            "field": "language",
-            "direction": "ascending"
-          }
+            field: "language",
+            direction: "ascending",
+          },
         ],
-        "page_size": 50,
-        "relationship_hops": 0
+        page_size: 50,
+        relationship_hops: 0,
       },
       {
-        "id": "qry_installed_applications",
-        "key": "installed_applications",
-        "exposure": "private",
-        "label": "Installed applications",
-        "record_type": "installed_application",
-        "inputs": [],
-        "select": [
-          "key",
-          "release_revision",
-          "is_default"
-        ],
-        "filter": null,
-        "group_by": [],
-        "aggregates": [],
-        "sort": [
+        id: "qry_installed_applications",
+        key: "installed_applications",
+        exposure: "private",
+        label: "Installed applications",
+        record_type: "installed_application",
+        inputs: [],
+        select: ["key", "release_revision", "is_default"],
+        filter: null,
+        group_by: [],
+        aggregates: [],
+        sort: [
           {
-            "field": "key",
-            "direction": "ascending"
-          }
+            field: "key",
+            direction: "ascending",
+          },
         ],
-        "page_size": 50,
-        "relationship_hops": 0
+        page_size: 50,
+        relationship_hops: 0,
       },
       {
         id: "qry_application_role_templates",
@@ -1458,13 +1460,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             validation: { minimum_length: 36, maximum_length: 36 },
           },
         ],
-        select: [
-          "application_root_id",
-          "source_role_id",
-          "key",
-          "label",
-          "continuity_revision",
-        ],
+        select: ["application_root_id", "source_role_id", "key", "label", "continuity_revision"],
         filter: {
           field: "application_root_id",
           operator: "equals",

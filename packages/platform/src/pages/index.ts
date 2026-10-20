@@ -240,13 +240,22 @@ export {
   type GuidedFormStepRequest,
 } from "./guided-form-steps";
 export {
+  addressedGridView,
+  deleteGridView,
+  gridViewPlacement,
+  listGridViewShareTargets,
   readGridViews,
   resetGridView,
+  saveGridView,
+  shareGridView,
   writeGridView,
   type GridViewConflict,
+  type GridViewOperationOutcome,
   type GridViewResetOutcome,
   type GridViewWriteOutcome,
   type StoredGridView,
+  type StoredGridViews,
+  type StoredNamedGridView,
 } from "./grid-views";
 export {
   resolveQueryBindings,

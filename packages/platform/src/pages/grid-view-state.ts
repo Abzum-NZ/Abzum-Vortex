@@ -1,4 +1,10 @@
+import type { AuthoredGridView } from "../definition/application-composition/records-table-features/saved-views";
 import { z } from "zod";
+import {
+  RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
+  RECORDS_TABLE_MAXIMUM_SORT_KEYS,
+} from "./records-table-state";
+import { decodeRecordsTableFieldFilter } from "./records-table-filters";
 import {
   RECORDS_TABLE_COLUMN_MAXIMUM_WIDTH,
   RECORDS_TABLE_COLUMN_MINIMUM_WIDTH,
@@ -12,7 +18,7 @@ import {
  * they resized and the row density. It is presentation metadata the server stores per person and
  * placement; it never holds row data or a cursor. The query state (sort, filters, search, page)
  * stays in the page address (`RecordsTableQueryState`); a grid view is that query state read
- * through this layout, and named views (#3023) store both parts in the same row shape.
+ * through this layout, and named views (#3023) store both parts in one view document.
  *
  * Which columns show is decided by the layout alone: the server reads the shown columns only, so a
  * hidden column's values never reach the browser, and the browser shows or hides a column it
@@ -48,27 +54,157 @@ export const gridLayoutColumnSchema = z
   })
   .strict();
 
-export const gridLayoutSchema = z
-  .object({
-    /** Every column the layout arranges, in display order. */
-    columns: z.array(gridLayoutColumnSchema).min(1).max(GRID_LAYOUT_MAXIMUM_COLUMNS),
-    /** The row density the person chose; absent keeps the authored density. */
-    density: z.enum(recordsTableDensities).optional(),
-  })
-  .strict()
-  .superRefine((layout, context) => {
-    if (new Set(layout.columns.map((column) => column.fieldId)).size !== layout.columns.length)
-      context.addIssue({ code: "custom", path: ["columns"], message: "A column is named twice" });
-    if (!layout.columns.some((column) => column.visible))
-      context.addIssue({
-        code: "custom",
-        path: ["columns"],
-        message: "At least one column stays visible",
-      });
-  });
+const gridLayoutShape = {
+  /** Every column the layout arranges, in display order. */
+  columns: z.array(gridLayoutColumnSchema).min(1).max(GRID_LAYOUT_MAXIMUM_COLUMNS),
+  /** The row density the person chose; absent keeps the authored density. */
+  density: z.enum(recordsTableDensities).optional(),
+};
+
+const refineColumns = (
+  layout: Readonly<{ columns: readonly Readonly<{ fieldId: string; visible: boolean }>[] }>,
+  context: z.RefinementCtx,
+): void => {
+  if (new Set(layout.columns.map((column) => column.fieldId)).size !== layout.columns.length)
+    context.addIssue({ code: "custom", path: ["columns"], message: "A column is named twice" });
+  if (!layout.columns.some((column) => column.visible))
+    context.addIssue({
+      code: "custom",
+      path: ["columns"],
+      message: "At least one column stays visible",
+    });
+};
+
+export const gridLayoutSchema = z.object(gridLayoutShape).strict().superRefine(refineColumns);
 
 export type GridLayout = z.output<typeof gridLayoutSchema>;
 export type GridLayoutColumn = GridLayout["columns"][number];
+
+const fieldIdSchema = z
+  .string()
+  .regex(FIELD_ID_PATTERN)
+  .transform((fieldId) => fieldId.toLowerCase());
+
+/** The most filters one view stores. */
+export const GRID_VIEW_MAXIMUM_FILTERS = 50;
+/** The longest address spelling of one stored filter. */
+export const GRID_VIEW_MAXIMUM_FILTER_LENGTH = 4000;
+/** The longest view name. */
+export const GRID_VIEW_MAXIMUM_NAME_LENGTH = 80;
+
+/**
+ * Everything a view stores: the layout (column order, visibility, widths, density) and the query
+ * state (ordered sort, one typed filter per field in its address spelling, and the search).
+ * It never holds row data, a cursor, a page or a permission.
+ */
+export const gridViewDocumentSchema = z
+  .object({
+    ...gridLayoutShape,
+    sort: z
+      .array(
+        z
+          .object({ fieldId: fieldIdSchema, direction: z.enum(["ascending", "descending"]) })
+          .strict(),
+      )
+      .min(1)
+      .max(RECORDS_TABLE_MAXIMUM_SORT_KEYS)
+      .optional(),
+    filters: z
+      .array(
+        z
+          .object({
+            fieldId: fieldIdSchema,
+            filter: z.string().min(1).max(GRID_VIEW_MAXIMUM_FILTER_LENGTH),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(GRID_VIEW_MAXIMUM_FILTERS)
+      .optional(),
+    search: z.string().min(1).max(RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH).optional(),
+  })
+  .strict()
+  .superRefine((document, context) => {
+    refineColumns(document, context);
+    for (const part of ["sort", "filters"] as const)
+      if (
+        new Set(document[part]?.map((entry) => entry.fieldId)).size !==
+        (document[part]?.length ?? 0)
+      )
+        context.addIssue({ code: "custom", path: [part], message: "A field is named twice" });
+  });
+
+export type GridViewDocument = z.output<typeof gridViewDocumentSchema>;
+
+export const gridViewNameSchema = z
+  .string()
+  .max(GRID_VIEW_MAXIMUM_NAME_LENGTH)
+  .refine((name) => name === name.trim() && name.length > 0, "A view name is trimmed text");
+
+export const gridViewScopes = ["personal", "shared", "default"] as const;
+export type GridViewScope = (typeof gridViewScopes)[number];
+
+const revisionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
+
+/** Who a shared view is shared with: the whole organisation, roles of the application, or groups. */
+export const gridViewSharingSchema = z
+  .object({
+    organization: z.boolean(),
+    roleIds: z.array(fieldIdSchema).max(50),
+    groupIds: z.array(fieldIdSchema).max(50),
+  })
+  .strict();
+export type GridViewSharing = z.output<typeof gridViewSharingSchema>;
+
+/** One view in the switcher: a name and where it comes from, never its document. */
+export const gridViewItemSchema = z
+  .object({
+    viewId: fieldIdSchema,
+    name: gridViewNameSchema,
+    scope: z.enum(gridViewScopes),
+    /** The viewer owns it: only then (or with the share permission) can they change it. */
+    mine: z.boolean(),
+    revision: revisionSchema,
+  })
+  .strict();
+export type GridViewItem = z.output<typeof gridViewItemSchema>;
+
+/** What a selected view leaves out for this viewer, so the grid can say so. */
+export const gridViewHiddenSchema = z
+  .object({
+    columns: z.number().int().min(0),
+    filters: z.number().int().min(0),
+    sort: z.number().int().min(0),
+  })
+  .strict();
+export type GridViewHidden = z.output<typeof gridViewHiddenSchema>;
+
+/** The view in effect: its document as applied under this viewer's access, and what was left out. */
+export const selectedGridViewSchema = gridViewItemSchema
+  .extend({
+    document: gridViewDocumentSchema,
+    hidden: gridViewHiddenSchema,
+    /** Who it is shared with; present only for its owner and for someone who may share. */
+    sharing: gridViewSharingSchema.nullable(),
+  })
+  .strict();
+export type SelectedGridView = z.output<typeof selectedGridViewSchema>;
+
+/** Why an addressed view is not in effect. */
+export const gridViewNotices = ["unavailable", "needs_fixing"] as const;
+
+export const gridViewsStateSchema = z
+  .object({
+    /** The viewer holds the permission that lets them share table views. */
+    canShare: z.boolean(),
+    items: z.array(gridViewItemSchema).max(220),
+    /** The view the viewer's own stored layout derives from, when it does. */
+    basedOnViewId: fieldIdSchema.nullable(),
+    selected: selectedGridViewSchema.nullable(),
+    notice: z.enum(gridViewNotices).nullable(),
+  })
+  .strict();
+export type GridViewsState = z.output<typeof gridViewsStateSchema>;
 
 /** The layout a grid placement shows, as the server sends it with the grid's page. */
 export type GridLayoutState = Readonly<{
@@ -84,6 +220,8 @@ export type GridLayoutState = Readonly<{
   authored: GridLayout;
   /** The stored layout named a column that is no longer available, so the authored one applies. */
   reset: boolean;
+  /** The saved views of this grid; absent when the Saved views feature is off or in a preview. */
+  views?: GridViewsState | undefined;
 }>;
 
 export const gridLayoutStateSchema = z
@@ -94,6 +232,7 @@ export const gridLayoutStateSchema = z
     layout: gridLayoutSchema,
     authored: gridLayoutSchema,
     reset: z.boolean(),
+    views: gridViewsStateSchema.optional(),
   })
   .strict()
   .superRefine((state, context) => {
@@ -191,3 +330,136 @@ export type GridLayoutCommitResult =
       stored: Readonly<{ revision: number; queryId: string; layout: GridLayout }> | null;
     }>
   | Readonly<{ outcome: "unavailable" }>;
+
+/** The stored view the address selected, as the store listed it for the viewer. */
+export type AddressedGridView = Readonly<{
+  hiddenFilters: number;
+  item: GridViewItem;
+  document: GridViewDocument;
+  sharing: GridViewSharing | null;
+}>;
+
+/**
+ * The selected view as it applies to this viewer. A view stores configuration only, so it is
+ * re-evaluated under the viewer's current access: a column the viewer cannot see, and a filter or
+ * sort key on a field they cannot read, are left out and counted, never shown and never failing
+ * the view. A filter whose stored value is malformed cannot be applied without widening the rows,
+ * so the view is not applied and the viewer is told it needs fixing. `readable` is the viewer's
+ * field policy (undefined in a preview, whose builder sees every field).
+ */
+export const resolveSelectedGridView = (
+  authored: GridLayout,
+  addressed: AddressedGridView | undefined,
+  readable: ReadonlySet<string> | undefined,
+): Readonly<{
+  selected: SelectedGridView | null;
+  notice: (typeof gridViewNotices)[number] | null;
+}> => {
+  if (addressed === undefined) return { selected: null, notice: "unavailable" };
+  const { item, document, sharing } = addressed;
+  const permitted = new Set(authored.columns.map((column) => column.fieldId));
+  const kept = document.columns.filter((column) => permitted.has(column.fieldId));
+  const named = new Set(kept.map((column) => column.fieldId));
+  const arranged = [...kept, ...authored.columns.filter((column) => !named.has(column.fieldId))];
+  const readableField = (fieldId: string): boolean =>
+    readable === undefined || readable.has(fieldId);
+  const filters = (document.filters ?? []).filter((entry) => readableField(entry.fieldId));
+  if (filters.some((entry) => decodeRecordsTableFieldFilter(entry.filter) === undefined))
+    return { selected: null, notice: "needs_fixing" };
+  const sort = (document.sort ?? []).filter((entry) => readableField(entry.fieldId));
+  const applied: GridViewDocument = {
+    // A view that would show no column of this viewer's falls back to the authored arrangement.
+    columns: arranged.some((column) => column.visible) ? arranged : authored.columns,
+    ...(document.density === undefined ? {} : { density: document.density }),
+    ...(sort.length === 0 ? {} : { sort }),
+    ...(filters.length === 0 ? {} : { filters }),
+    ...(document.search === undefined ? {} : { search: document.search }),
+  };
+  return {
+    selected: {
+      ...item,
+      document: applied,
+      hidden: {
+        columns: document.columns.length - kept.length,
+        filters: addressed.hiddenFilters + (document.filters ?? []).length - filters.length,
+        sort: (document.sort ?? []).length - sort.length,
+      },
+      sharing,
+    },
+    notice: null,
+  };
+};
+
+/** The layout part of a view document: what the grid arranges, without the query state. */
+export const gridViewLayout = (document: GridViewDocument): GridLayout => ({
+  columns: document.columns,
+  ...(document.density === undefined ? {} : { density: document.density }),
+});
+
+/** One change a person asks of the saved views of a grid, as the grid reports it to its host. */
+export type GridViewCommand =
+  /** Opens a view (null leaves it); the host changes the address, nothing is stored. */
+  | Readonly<{ kind: "select"; viewId: string | null }>
+  /** Saves the grid as it is now (layout and query state) as a new personal view. */
+  | Readonly<{ kind: "create"; name: string; layout: GridLayout }>
+  /** Replaces the document of a view with the grid as it is now. */
+  | Readonly<{ kind: "save"; viewId: string; expectedRevision: number; layout: GridLayout }>
+  | Readonly<{ kind: "rename"; viewId: string; expectedRevision: number; name: string }>
+  | Readonly<{
+      kind: "share";
+      viewId: string;
+      expectedRevision: number;
+      sharing: GridViewSharing;
+    }>
+  | Readonly<{ kind: "delete"; viewId: string; expectedRevision: number }>
+  /** Returns the grid to the authored defaults: no view, no stored layout, no query state. */
+  | Readonly<{ kind: "reset" }>
+  /** Lists the roles and groups a view can be shared with. */
+  | Readonly<{ kind: "share_targets" }>;
+
+export type GridViewShareTargets = Readonly<{
+  roles: readonly Readonly<{ id: string; label: string }>[];
+  groups: readonly Readonly<{ id: string; label: string }>[];
+}>;
+
+/** What the host did with a view command, so the grid can close its dialog or say why not. */
+export type GridViewCommandResult =
+  | Readonly<{ outcome: "done"; viewId?: string; revision?: number }>
+  | Readonly<{ outcome: "targets"; targets: GridViewShareTargets }>
+  | Readonly<{ outcome: "selected"; selected: SelectedGridView; canShare: boolean }>
+  /** Another tab changed or removed the view first; the host has told the person. */
+  | Readonly<{ outcome: "conflict" }>
+  | Readonly<{ outcome: "forbidden" }>
+  | Readonly<{ outcome: "limit" }>
+  | Readonly<{ outcome: "unavailable" }>;
+
+/** Default views use the same document and projection as stored views. */
+export const addressedDefaultGridViews = (
+  views: readonly AuthoredGridView[],
+  roleKeys: ReadonlySet<string>,
+  defaultDocuments: ReadonlyMap<
+    string,
+    Readonly<{ document: GridViewDocument; hiddenFilters: number }>
+  >,
+) =>
+  views
+    .filter((view) => view.role === "*" || roleKeys.has(view.role))
+    // A role-specific default takes precedence over the application's default.
+    .sort((left, right) => Number(left.role === "*") - Number(right.role === "*"))
+    .map((view) => {
+      const sanitized = defaultDocuments.get(view.viewId.toLowerCase());
+      if (sanitized === undefined) throw new Error("GRID_DEFAULT_VIEW_DOCUMENT_MISSING");
+      return {
+        ...view,
+        item: {
+          viewId: view.viewId,
+          name: view.name,
+          scope: "default" as const,
+          mine: false,
+          revision: 1,
+        },
+        document: sanitized.document,
+        hiddenFilters: sanitized.hiddenFilters,
+        sharing: null,
+      };
+    });

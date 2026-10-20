@@ -158,6 +158,7 @@ export const grantStewardDefinitionRole = async (
     [
       "platform.organization.definition_drafts.manage",
       "platform.organization.definition_releases.manage",
+      "platform.records.views.share",
     ],
   );
   facts.state.definitionRoleGranted = true;

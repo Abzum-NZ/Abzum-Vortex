@@ -425,6 +425,8 @@ export function ApplicationCompositionEditor(props: Props) {
         <StudioGridFeatures
           idPrefix={`${settingsId}-features`}
           property={featuresProperty}
+          tableSettings={settingsInputs.settings}
+          signedIn={settingsModel.kind === "available" && settingsModel.signedIn}
           value={settingsInputs.settings[featuresProperty.key]}
           presentation={(() => {
             const setting =

@@ -40,6 +40,7 @@ export const studioGridFeatureEditors: Readonly<
   Record<RecordsTableFeatureKey, StudioGridFeatureEditor>
 > = {
   pinning: { kind: "settings" },
+  spreadsheet: { kind: "custom" },
   search: { kind: "settings" },
   // Only fields people can filter by: stored, filterable and of a type a filter fits.
   column_filters: {
@@ -55,7 +56,7 @@ export const studioGridFeatureEditors: Readonly<
         editable: false,
       }),
   },
-  saved_views: { kind: "settings" },
+  saved_views: { kind: "custom" },
   bulk_actions: { kind: "settings", boundRecordTypeActions: true },
   inline_edit: { kind: "settings" },
   master_detail: { kind: "settings" },
@@ -72,6 +73,10 @@ export const studioGridFeatureStartSettings: Readonly<
     Record<RecordsTableFeatureKey, Readonly<Record<string, SourceBlockPropertyValueContract>>>
   >
 > = {
+  spreadsheet: {
+    range_select: { kind: "boolean", value: true },
+    find: { kind: "boolean", value: true },
+  },
   // Related records read ten at a time unless the builder chooses otherwise.
   master_detail: { child_page_size: { kind: "number", value: 10 } },
 };
@@ -95,10 +100,12 @@ export type StudioRelatedRecordsChoices = Readonly<{
  */
 export const studioRecordsTableQueryFacts = (
   query: StudioQueryChoice | undefined,
+  signedIn: boolean,
   actions: readonly StudioActionChoice[],
   relationships: readonly StudioRelationshipChoice[],
   related: StudioRelatedRecordsChoices,
 ): RecordsTableQueryFacts => ({
+  signedIn,
   recordTypeLabel: query?.label ?? "",
   fields: (query?.fields ?? []).map((field) => ({
     field: field.reference,
