@@ -656,26 +656,31 @@ const applySubjects = async (
   `;
   const value = one(rows).value;
   const record =
-    typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
-  if (record.outcome === "completed" && Array.isArray(record.results)) {
-    const stored = record.results.map((item) =>
-      typeof item === "object" && item !== null
-        ? (item as Record<string, unknown>)
-        : { outcome: "refused" },
-    );
-    if (stored.length === plans.length) return { kind: "completed", stored };
-  }
-  const subject = record.subject;
-  return {
-    kind: "refused",
-    index: typeof record.index === "number" ? record.index : 0,
-    stored:
-      typeof subject === "object" && subject !== null
-        ? (subject as Record<string, unknown>)
-        : record.outcome === undefined
-          ? { outcome: "refused" }
-          : record,
-  };
+    typeof value === "object" && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : undefined;
+  const isObject = (item: unknown): item is Record<string, unknown> =>
+    typeof item === "object" && item !== null && !Array.isArray(item);
+  if (
+    record?.outcome === "completed" &&
+    Array.isArray(record.results) &&
+    record.results.length === plans.length &&
+    record.results.every(isObject)
+  )
+    return { kind: "completed", stored: record.results };
+  if (
+    record?.outcome === "refused" &&
+    Number.isInteger(record.index) &&
+    (record.index as number) >= 0 &&
+    (record.index as number) < plans.length &&
+    isObject(record.subject)
+  )
+    return { kind: "refused", index: record.index as number, stored: record.subject };
+  // A refusal of the whole call (its shape) names no subject and wrote nothing.
+  if (record?.outcome === "refused" && record.index === undefined && record.subject === undefined)
+    return { kind: "refused", index: 0, stored: record };
+  // Anything else breaks the writer's contract: throw so whatever it wrote rolls back with it.
+  throw new Error("NAMED_ACTION_WRITER_RESULT_INVALID");
 };
 
 export type NamedActionRecordPortDependencies = HumanOrganizationRequestDependencies &
@@ -1225,18 +1230,26 @@ const finishNamedAction = async (
 const isPlanned = (outcome: AttemptOutcome | PlannedApply): outcome is PlannedApply =>
   typeof outcome === "object" && "kind" in outcome && outcome.kind === "planned";
 
-/** The related records the planned subjects move, keyed by type and record. */
-const movedParentKeys = (plan: PlannedApply): readonly string[] =>
-  plan.parentMutations.map(
-    (parent) => `${parent.recordTypeId.toLowerCase()}:${parent.recordId.toLowerCase()}`,
-  );
+const recordKey = (recordTypeId: string, recordId: string) =>
+  `${recordTypeId.toLowerCase()}:${recordId.toLowerCase()}`;
+
+/** The records one planned subject writes: the subject itself and the related records it moves. */
+const writtenKeys = (plan: PlannedApply): readonly string[] => [
+  recordKey(plan.state.command.recordTypeId, plan.state.command.recordId),
+  ...plan.parentMutations.map((parent) => recordKey(parent.recordTypeId, parent.recordId)),
+];
+
+type AttemptStop = Readonly<{ kind: "stopped"; index: number; outcome: AttemptOutcome }>;
 
 /**
  * One attempt of one named action over one or more subjects inside a transaction the caller owns.
  * Every subject is planned in record identity order (the same order the writer applies them in,
- * so overlapping runs lock rows alike), then the ONE writer call applies all of them, then each
- * finishes. It stops at the first subject that does not complete and reports its index in the
- * order given; `outcomes` holds the finished subjects in the order given.
+ * so overlapping runs lock rows alike), then ONE writer call applies all of them, then each
+ * finishes. A plan reads the revisions as they stand, so a subject that writes a record an earlier
+ * planned subject also writes (a shared related record's totals) first sends the planned subjects
+ * to the writer and is then planned again against what they wrote. It stops at the first subject
+ * that does not complete and reports its index in the order given; `outcomes` holds the finished
+ * subjects in the order given.
  */
 const attemptNamedActions = async (
   transaction: RequestDatabaseTransaction,
@@ -1245,52 +1258,31 @@ const attemptNamedActions = async (
   run: ActionFlowRunner,
   ids: NamedActionIdentities,
 ): Promise<
-  | Readonly<{ kind: "completed"; outcomes: readonly ExecuteNamedActionResult[] }>
-  | Readonly<{ kind: "stopped"; index: number; outcome: AttemptOutcome }>
+  Readonly<{ kind: "completed"; outcomes: readonly ExecuteNamedActionResult[] }> | AttemptStop
 > => {
   const order = states
     .map((state, index) => ({ state, index }))
-    .sort((left, right) =>
-      left.state.command.recordId
-        .toLowerCase()
-        .localeCompare(right.state.command.recordId.toLowerCase()),
-    );
+    .sort((left, right) => {
+      const l = left.state.command.recordId.toLowerCase();
+      const r = right.state.command.recordId.toLowerCase();
+      return l < r ? -1 : l > r ? 1 : 0;
+    });
   const outcomes: ExecuteNamedActionResult[] = [];
-  const planned: Array<{ index: number; plan: PlannedApply }> = [];
-  const moved = new Set<string>();
-  for (const { state, index } of order) {
-    const outcome = await planNamedAction(transaction, issuedAt, state, run, ids);
-    if (!isPlanned(outcome)) {
-      if (outcome === restart || outcome === recordedRefusal || outcome.outcome !== "completed")
-        return { kind: "stopped", index, outcome };
-      outcomes[index] = outcome;
-      continue;
-    }
-    // Subjects are prepared against the revisions read before any of them writes, so two subjects
-    // that move one related record's totals would collide at the writer: refuse before writing.
-    const parents = movedParentKeys(outcome);
-    if (parents.some((key) => moved.has(key)))
-      return {
-        kind: "stopped",
-        index,
-        outcome: safeRefusal(
-          outcome.correlationId,
-          "operation_refused",
-          "two selected records move the same related record",
-        ),
-      };
-    for (const key of parents) moved.add(key);
-    planned.push({ index, plan: outcome });
-  }
-  if (planned.length > 0) {
+  let planned: Array<{ index: number; plan: PlannedApply }> = [];
+  let written = new Set<string>();
+  const write = async (): Promise<AttemptStop | undefined> => {
+    if (planned.length === 0) return undefined;
+    const batch = planned;
+    planned = [];
+    written = new Set();
     const applied = await applySubjects(
       transaction,
-      planned.map((item) => item.plan),
+      batch.map((item) => item.plan),
     );
     const finishing =
       applied.kind === "completed"
-        ? planned.map((item, position) => ({ ...item, stored: applied.stored[position]! }))
-        : [{ ...planned[applied.index]!, stored: applied.stored }];
+        ? batch.map((item, position) => ({ ...item, stored: applied.stored[position]! }))
+        : [{ ...batch[applied.index]!, stored: applied.stored }];
     for (const { index, plan, stored } of finishing) {
       const outcome = await finishNamedAction(transaction, issuedAt, plan, stored, ids);
       if (outcome === restart || outcome === recordedRefusal || outcome.outcome !== "completed")
@@ -1298,8 +1290,27 @@ const attemptNamedActions = async (
       outcomes[index] = outcome;
     }
     if (applied.kind === "refused") throw new Error("NAMED_ACTION_WRITER_REFUSAL_UNHANDLED");
+    return undefined;
+  };
+  for (const { state, index } of order) {
+    let outcome = await planNamedAction(transaction, issuedAt, state, run, ids);
+    if (isPlanned(outcome) && writtenKeys(outcome).some((key) => written.has(key))) {
+      const stopped = await write();
+      if (stopped !== undefined) return stopped;
+      state.attempted = { executions: [] };
+      outcome = await planNamedAction(transaction, issuedAt, state, run, ids);
+    }
+    if (!isPlanned(outcome)) {
+      if (outcome === restart || outcome === recordedRefusal || outcome.outcome !== "completed")
+        return { kind: "stopped", index, outcome };
+      outcomes[index] = outcome;
+      continue;
+    }
+    for (const key of writtenKeys(outcome)) written.add(key);
+    planned.push({ index, plan: outcome });
   }
-  return { kind: "completed", outcomes };
+  const stopped = await write();
+  return stopped ?? { kind: "completed", outcomes };
 };
 
 /** One parsed command's attempt state, with fresh per-attempt rule executions. */
@@ -1412,8 +1423,9 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
     },
 
     /**
-     * Runs one named action over several records in ONE transaction: each record's own attempt,
-     * receipt, revision check, Activity and Events, in the given order. Every record completes or
+     * Runs one named action over several records in ONE transaction and one writer call (more
+     * only when selected records share a related record whose totals they move): each record's own
+     * receipt, revision check, Activity and Events, in record identity order. Every record completes or
      * none does: the first refusal rolls the whole batch back and names the record. A command id
      * that already completed replays its result without writing again.
      */

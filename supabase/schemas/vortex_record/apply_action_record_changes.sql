@@ -87,7 +87,8 @@ begin
       (subject ->> 'activityId')::uuid, (subject ->> 'occurrenceId')::uuid,
       p_action
     );
-    if subject_result ->> 'outcome' not in ('saved', 'completed') then
+    if subject_result ->> 'outcome' is null
+      or subject_result ->> 'outcome' not in ('saved', 'completed') then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'index', subject_index, 'subject', subject_result
       );
