@@ -136,6 +136,7 @@ const excelText = (value: string): string => {
   const text = spreadsheetText(value);
   if (text.length > 32_767) throw exportError("excel_text_limit");
   // ExcelJS drops these controls; UTF-8/XML cannot preserve unpaired surrogates either.
+  // eslint-disable-next-line no-control-regex -- Refuse the controls that ExcelJS would silently remove.
   if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uD800-\uDFFF\uFFFE\uFFFF]/u.test(text))
     throw exportError("excel_text_characters");
   return text;
