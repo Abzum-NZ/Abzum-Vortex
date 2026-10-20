@@ -73,6 +73,8 @@ export {
   type ProjectedRecordLinks,
   type RecordLinkResolver,
   type TableFieldColumn,
+  type ProjectedTableGroup,
+  type ProjectedTableGroups,
   type ProjectedTableRow,
   type ProjectedTableValues,
 } from "./component-data-projection";
@@ -90,8 +92,11 @@ export {
   type RecordsTableRequestRefusal,
 } from "./records-table-features";
 export {
+  isGroupingTablePlacement,
   isTreeTablePlacement,
+  readRecordsTableGroupMembers,
   readRecordsTableTreeLevel,
+  type GroupMembersResult,
   type TreeLevelResult,
 } from "./placement-read";
 export {

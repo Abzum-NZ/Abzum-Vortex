@@ -30,10 +30,15 @@ const usePuckSelector = createUsePuck();
 
 /** A slot's items; a plain list setting is an array too, but of values, not items. */
 const isContent = (value: unknown): value is Content =>
-  Array.isArray(value) && value.every((entry) =>
-    entry !== null && typeof entry === "object" && "type" in entry && "props" in entry);
+  Array.isArray(value) &&
+  value.every(
+    (entry) => entry !== null && typeof entry === "object" && "type" in entry && "props" in entry,
+  );
 
-type SlotOrder = Readonly<{ tablet?: readonly string[] | undefined; phone?: readonly string[] | undefined }>;
+type SlotOrder = Readonly<{
+  tablet?: readonly string[] | undefined;
+  phone?: readonly string[] | undefined;
+}>;
 
 /**
  * The canvas shows a smaller screen in that screen's own order: the root slot's stored order and
@@ -47,18 +52,29 @@ export const puckDataForBreakpoint = (
 ): Data => {
   if (breakpoint === "desktop") return data;
   const reorder = (content: Content, order: SlotOrder | undefined): Content => {
-    const sequence = breakpoint === "phone" ? order?.phone ?? order?.tablet : order?.tablet;
+    const sequence = breakpoint === "phone" ? (order?.phone ?? order?.tablet) : order?.tablet;
     const position = new Map(sequence?.map((id, index) => [id, index]) ?? []);
-    const sorted = sequence === undefined ? [...content] : [...content].sort((left, right) =>
-      (position.get(String(left.props.id)) ?? 0) - (position.get(String(right.props.id)) ?? 0));
+    const sorted =
+      sequence === undefined
+        ? [...content]
+        : [...content].sort(
+            (left, right) =>
+              (position.get(String(left.props.id)) ?? 0) -
+              (position.get(String(right.props.id)) ?? 0),
+          );
     return sorted.map((item) => {
-      const orders = (item.props as { vortex?: { slot_orders?: Record<string, SlotOrder> } })
-        .vortex?.slot_orders;
+      const orders = (item.props as { vortex?: { slot_orders?: Record<string, SlotOrder> } }).vortex
+        ?.slot_orders;
       return {
         ...item,
-        props: Object.fromEntries(Object.entries(item.props).map(([key, value]) =>
-          [key, key !== "id" && key !== "vortex" && isContent(value)
-            ? reorder(value, orders?.[key]) : value])),
+        props: Object.fromEntries(
+          Object.entries(item.props).map(([key, value]) => [
+            key,
+            key !== "id" && key !== "vortex" && isContent(value)
+              ? reorder(value, orders?.[key])
+              : value,
+          ]),
+        ),
       };
     }) as Content;
   };
@@ -74,6 +90,7 @@ const sameContent = (left: Data, right: Data): boolean =>
  * source of truth; Puck only ever receives data derived from it.
  */
 export function StudioCanvasBridge({
+  arrangeGrid,
   data,
   resync,
   selectedAlias,
@@ -84,6 +101,7 @@ export function StudioCanvasBridge({
   fieldInputControlReleases,
   platformThemeTokens,
 }: Readonly<{
+  arrangeGrid: boolean;
   data: Data;
   /** Changes when Puck holds a change the draft refused, so the draft is shown again. */
   resync: number;
@@ -111,6 +129,13 @@ export function StudioCanvasBridge({
   // The canvas's own empty selection before it ever selected a block is not a click, so it is not reported.
   const everSelected = useRef(false);
 
+  useEffect(() => {
+    getPuck().dispatch({
+      type: "setUi",
+      ui: { previewMode: arrangeGrid ? "interactive" : "edit" },
+    });
+  }, [arrangeGrid, getPuck]);
+
   const puckSelection = (): string | null => {
     const id = getPuck().selectedItem?.props.id;
     return typeof id === "string" ? id : null;
@@ -129,7 +154,10 @@ export function StudioCanvasBridge({
     const { appState, dispatch } = getPuck();
     if (sameContent(appState.data, data)) return;
     const kept = puckSelection();
-    dispatch({ type: "setData", data: { ...appState.data, root: data.root, content: data.content } });
+    dispatch({
+      type: "setData",
+      data: { ...appState.data, root: data.root, content: data.content },
+    });
     showSelection(kept);
   }, [data, resync]);
 
@@ -156,43 +184,64 @@ export function StudioCanvasBridge({
   // The canvas is a design surface: no link in it (menu pages, external addresses, links inside
   // blocks) leaves Studio, so unsaved edits are never lost to a click.
   const inert = (event: SyntheticEvent) => {
-    if (event.target instanceof Element && event.target.closest("a[href]") !== null) event.preventDefault();
+    if (event.target instanceof Element && event.target.closest("a[href]") !== null)
+      event.preventDefault();
   };
   // The canvas is the frame's page outlet, edited: the frame keeps its region while the page is empty,
   // and empty slots of the page's blocks stay, so each remains a drop target.
-  const canvas = <div data-vortex-studio-canvas="" data-vortex-shell-outlet="" data-vortex-editing="" className="min-h-24">
-    <Puck.Preview id="vortex-studio-canvas" /></div>;
+  const canvas = (
+    <div
+      data-vortex-studio-canvas=""
+      data-vortex-shell-outlet=""
+      data-vortex-editing=""
+      className="min-h-24"
+    >
+      <Puck.Preview id="vortex-studio-canvas" />
+    </div>
+  );
   if (frame === undefined)
-    return <div className="contents" onClickCapture={inert} onAuxClickCapture={inert}>{canvas}</div>;
+    return (
+      <div className="contents" onClickCapture={inert} onAuxClickCapture={inert}>
+        {canvas}
+      </div>
+    );
   const shellId = frame.frame.shellId;
-  const shell = shellId === undefined ? undefined
-    : frame.shells.find((candidate) => String(candidate.shellId) === shellId);
-  const ignoreNavigation = (_pageId: string, event: MouseEvent<HTMLAnchorElement>) => event.preventDefault();
+  const shell =
+    shellId === undefined
+      ? undefined
+      : frame.shells.find((candidate) => String(candidate.shellId) === shellId);
+  const ignoreNavigation = (_pageId: string, event: MouseEvent<HTMLAnchorElement>) =>
+    event.preventDefault();
   return (
-    <div className="contents" data-vortex-studio-frame="" onClickCapture={inert} onAuxClickCapture={inert}>
-    <PagePuckRenderer
-      composition={frame.frame}
-      breakpoint={breakpoint}
-      registry={registry}
-      fieldInputControlReleases={fieldInputControlReleases}
-      platformThemeTokens={platformThemeTokens}
-      {...(shell === undefined ? {} : { shell })}
-      theme={frame.theme}
-      projectedNavigation={frame.navigation}
-      resolvePageHref={() => "#"}
-      onNavigatePage={ignoreNavigation}
-      currentPageId={frame.pageId}
-      applicationShellRuntime={{
-        applicationName: frame.applicationName,
-        applicationHref: "#",
-        organizationName: "",
-        pageName: frame.pageName,
-        // The switcher names only the application being designed.
-        applicationSwitcherState: "available",
-        applications: [{ key: frame.applicationName, name: frame.applicationName, href: "#" }],
-      }}
-      outlet={{ location: frame.frame.outlet, content: canvas as ReactNode }}
-    />
+    <div
+      className="contents"
+      data-vortex-studio-frame=""
+      onClickCapture={inert}
+      onAuxClickCapture={inert}
+    >
+      <PagePuckRenderer
+        composition={frame.frame}
+        breakpoint={breakpoint}
+        registry={registry}
+        fieldInputControlReleases={fieldInputControlReleases}
+        platformThemeTokens={platformThemeTokens}
+        {...(shell === undefined ? {} : { shell })}
+        theme={frame.theme}
+        projectedNavigation={frame.navigation}
+        resolvePageHref={() => "#"}
+        onNavigatePage={ignoreNavigation}
+        currentPageId={frame.pageId}
+        applicationShellRuntime={{
+          applicationName: frame.applicationName,
+          applicationHref: "#",
+          organizationName: "",
+          pageName: frame.pageName,
+          // The switcher names only the application being designed.
+          applicationSwitcherState: "available",
+          applications: [{ key: frame.applicationName, name: frame.applicationName, href: "#" }],
+        }}
+        outlet={{ location: frame.frame.outlet, content: canvas as ReactNode }}
+      />
     </div>
   );
 }
