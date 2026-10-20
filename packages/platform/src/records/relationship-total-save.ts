@@ -28,7 +28,7 @@ type LockedRelationshipTotalRecord = Readonly<{
   concurrencyNumber?: number;
   existingValues: Readonly<Record<string, unknown>>;
   canRead: boolean;
-  beforeSaveRules?: unknown;
+  beforeSaveFlows?: unknown;
   relationshipSources: readonly Readonly<{
     relationshipId: string;
     sourceRecordType: RecordTypeDefinition;

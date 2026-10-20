@@ -137,7 +137,11 @@ export function applicationPageRules(scope: ApplicationScope): void {
             sortable: field.sortable === true,
             filterable: field.filterable === true,
             searchable: field.searchPriority !== undefined,
-            editable: !grouped && recordsTableEditableFieldTypes.includes(String(field.type)),
+            editable:
+              !grouped &&
+              recordsTableEditableFieldTypes.includes(String(field.type)) &&
+              (field.type !== "link" ||
+                object(object(field.settings ?? {}).target).state === "resolved"),
             // A one-record link from the record type to itself names each record's parent.
             parentLink:
               field.type === "link" &&
@@ -176,6 +180,9 @@ export function applicationPageRules(scope: ApplicationScope): void {
           acceptsSelection: array(action.inputs).every((input) => input.required !== true),
         })),
       grouped,
+      exportable:
+        Array.isArray(record?.standardActions) &&
+        record.standardActions.some((action) => action === "export"),
       relatedRecords: relatedRecordsFacts(recordTypeId, page),
       board:
         record === undefined

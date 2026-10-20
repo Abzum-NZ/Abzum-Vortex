@@ -208,6 +208,8 @@ export type ProjectedTableValues = Readonly<{
   page?: number;
   hasNextPage?: boolean;
   nextContinuationToken?: string;
+  /** The read's scan budget ran out before the page filled: more records may match on the next page. */
+  scanLimited?: boolean;
   hasPreviousPage?: boolean;
   previousContinuationToken?: string;
   /**
@@ -275,6 +277,8 @@ export type ComponentDataProjectionInput = Readonly<{
   fieldEditors?: Readonly<Record<string, RecordsTableInlineEditor>>;
   /** The pivot view the address opens the table in; absent shows the ordinary grid. */
   pivotView?: Readonly<{ cursor?: string }>;
+  /** The viewer's export permission, decided in the same read; absent when Export is off. */
+  exportAllowed?: boolean;
   /** The groups a grouped read counted; absent for an ordinary read. */
   groups?: ProjectedTableGroups;
 }>;
@@ -613,6 +617,7 @@ export const projectRecordsTableData = (
     formatting?.projection,
     input.pivotView,
     input.fieldLabels,
+    input.exportAllowed,
   );
   const editableFields = [
     ...(features?.inlineEdit?.fields ?? []),

@@ -11,6 +11,7 @@ export * from "./page-composition-resolution";
 export * from "./records-table-state";
 export * from "./grid-view-state";
 export * from "./records-selection";
+export * from "./records-table-export-request";
 export * from "./named-action-availability-schema";
 export type {
   ConditionalColumnFormatProjection,

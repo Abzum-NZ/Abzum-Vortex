@@ -10,6 +10,7 @@ import {
   type RecordChoiceCommand,
   type RecordLinkResolver,
   type InstalledRuntimeContext,
+  decideRecordTypeFieldIds,
 } from "@vortex/platform/server";
 import {
   isRecord,
@@ -29,7 +30,6 @@ import {
 } from "./placement-helpers";
 import { projectReferenceChoicePage, type ReferenceChoiceAddress } from "./reference-choice";
 import type { PageDataState, SearchParameters } from "./types";
-import { decideRecordTypeFieldIds } from "./form-field-access";
 
 /** What a viewer may see of a linked record's title. */
 const titleOf = (
@@ -134,26 +134,30 @@ export const projectInitialLinkInputs = async (
 };
 
 /**
- * The record type a Records table's link filter on `fieldId` may name: the field must be one the
- * table's Column filters feature declares, and a single-target link field of the installed release.
+ * The record type a Records table's link picker on `fieldId` may offer, for one purpose. A filter
+ * needs the field declared by the table's Column filters feature; an edit needs it declared by the
+ * enabled Inline editing or Row editing feature, which names the event that saves the change. Either
+ * way it must be a single-target link field of the installed release with a resolved target.
  */
-const linkFilterTarget = (
+const tableLinkFieldTarget = (
   context: InstalledRuntimeContext,
   settings: Readonly<Record<string, unknown>>,
   fieldId: string,
+  purpose: "filter" | "edit",
 ):
   | Readonly<{ moduleRootId: string; recordTypeId: string; sourceRecordTypeId: string }>
   | undefined => {
   const contract = readRecordsTableContract(
     settings as Readonly<Record<string, BlockPropertyValueContract>>,
   );
-  const columnFilters = contract?.features.columnFilters;
-  if (
-    columnFilters === undefined ||
-    !columnFilters.enabled ||
-    !columnFilters.fields.some((field) => sameId(field, fieldId))
-  )
-    return undefined;
+  if (contract === undefined) return undefined;
+  const declared =
+    purpose === "filter"
+      ? [contract.features.columnFilters.enabled ? contract.features.columnFilters.fields : []]
+      : [contract.features.inlineEdit, contract.features.rowEdit].map((feature) =>
+          feature.enabled && feature.eventId !== undefined ? feature.fields : [],
+        );
+  if (!declared.some((fields) => fields.some((field) => sameId(field, fieldId)))) return undefined;
   for (const module of context.releaseSet.modules)
     for (const recordType of module.content.recordTypes)
       for (const field of recordType.fields)
@@ -188,8 +192,10 @@ export const loadRecordChoicePage = async (
   address: ReferenceChoiceAddress,
   request: Readonly<{
     placementId: string;
-    /** For a Records table's link filter: the declared filter field whose targets are offered. */
+    /** For a Records table's link picker: the declared field whose targets are offered. */
     fieldId?: string;
+    /** Present exactly with `fieldId`: filtering by the records, or editing a cell. */
+    purpose?: "filter" | "edit";
     installationRevision: number;
     releaseKey: string;
     subjectRecordId?: string;
@@ -207,9 +213,20 @@ export const loadRecordChoicePage = async (
   if (placement === undefined) return { kind: "refused", cause: "placement_not_found" };
   let declaredTargets: readonly Readonly<{ moduleRootId: string; recordTypeId: string }>[];
   if (request.fieldId !== undefined) {
-    // A Records table's link filter offers the target records of one declared filter field.
-    const filtered = linkFilterTarget(context, placement.settings, request.fieldId);
-    if (filtered === undefined) return { kind: "refused", cause: "field_not_a_link_filter" };
+    // A Records table's link picker offers the target records of one declared field.
+    if (request.purpose === undefined) return { kind: "refused", cause: "purpose_missing" };
+    const filtered = tableLinkFieldTarget(
+      context,
+      placement.settings,
+      request.fieldId,
+      request.purpose,
+    );
+    if (filtered === undefined)
+      return {
+        kind: "refused",
+        cause:
+          request.purpose === "filter" ? "field_not_a_link_filter" : "field_not_inline_editable",
+      };
     if (projectedUseAvailability(placement) !== "available")
       return { kind: "refused", cause: "placement_unavailable" };
     const readable = await createHumanOrganizationRequestService(dependencies).run(
@@ -220,7 +237,7 @@ export const loadRecordChoicePage = async (
     );
     if (readable.kind === "temporarily_unavailable") return readable;
     if (readable.kind !== "available" || !readable.value.has(request.fieldId.toLowerCase()))
-      return { kind: "refused", cause: "filter_field_withheld" };
+      return { kind: "refused", cause: "link_field_withheld" };
     declaredTargets = [filtered];
   } else {
     if (!isLinkInputPlacement(placement))

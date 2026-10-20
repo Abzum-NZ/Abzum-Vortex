@@ -15,8 +15,6 @@ export {
   organizationLauncherPage,
   organizationLauncherPlacementId,
   organizationLauncherShell,
-  organizationLauncherStudioPage,
-  organizationLauncherStudioPlacementId,
 } from "./organization-launcher-page";
 
 export {
@@ -104,6 +102,14 @@ export {
   type RecordsTableBulkAddress,
   type RecordsTableBulkDependencies,
 } from "./records-table-features/bulk-run";
+export {
+  createRecordsTableExportService,
+  type RecordsTableExportDependencies,
+} from "./records-table-features/export";
+export {
+  decideRecordTypeExport,
+  decideRecordTypeFieldIds,
+} from "./records-table-features/record-type-access";
 export {
   readNamedActionEligibility,
   type NamedActionEligibilityTarget,
@@ -211,7 +217,6 @@ export {
   createLinkTilesQueryResolver,
   type LinkTilesQueryBinding,
   type LinkTilesQueryResolution,
-  type ProjectedLinkTilesValues,
 } from "./link-tiles-query";
 export {
   projectCalendarPlacement,

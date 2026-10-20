@@ -399,8 +399,8 @@ function PropertyControl({
       <div className="space-y-1 text-sm">
         <p className="font-medium">{field.label}</p>
         <p className="text-muted-foreground">
-          {describeStudioFlowValue({ kind: "kept", value: value.value }, references)}. It is kept as
-          it is.
+          {describeStudioFlowValue({ kind: "kept", value: value.value }, references)}. It is kept
+          until it is changed with Import from source in the Releases tab.
         </p>
         <Button
           type="button"
@@ -455,6 +455,31 @@ function PropertyControl({
         />
       );
     case "input_map":
+      if (value?.kind === "whole")
+        return (
+          <div className="space-y-2">
+            <StudioFlowValueControl
+              id={id}
+              label={label}
+              optional={!field.required}
+              value={value.source}
+              valueType="json"
+              references={references}
+              {...(unset === undefined ? {} : { unset })}
+              disabled={disabled}
+              onChange={(source) => onChange(source === null ? null : { kind: "whole", source })}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={disabled}
+              onClick={() => onChange({ kind: "map", entries: [] })}
+            >
+              Set each value by name
+            </Button>
+          </div>
+        );
       return (
         <EntryRows
           id={id}
@@ -537,7 +562,8 @@ function ConditionControl({
       <div className="space-y-2 text-sm" id={id}>
         <p role="alert">
           This condition reads values this step can no longer read, or uses a calculation the
-          condition controls do not show. It is kept as it is.
+          condition controls do not show. Change it with Import from source in the Releases tab, or
+          replace it below.
         </p>
         <Button
           type="button"

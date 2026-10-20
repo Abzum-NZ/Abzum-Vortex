@@ -13,7 +13,7 @@ import { tokenName } from "./studio-words";
 
 /**
  * What every Structure edit shares: the draft it is applied to, how a refusal is raised and
- * worded, fresh keys, the newest catalogue release of a block, a new block item, empty page data
+ * worded, fresh keys, the catalogue release of a block, a new block item, empty page data
  * in a frame, and the source schema's judgement of the result.
  */
 
@@ -96,20 +96,12 @@ export const uniqueKey = (
   return key;
 };
 
-export const newestRelease = (
+/** The one catalogue release of a block. */
+export const blockRelease = (
   catalogue: ImmutablePlatformBlockCatalogue,
   identity: Readonly<{ blockId: string }>,
-) => {
-  const versions = catalogue.releases.filter(
-    (release) => String(release.blockId) === identity.blockId,
-  );
-  const parts = (version: string) => version.split(".").map(Number);
-  return versions.sort((left, right) => {
-    const [a, b] = [parts(String(left.releaseVersion)), parts(String(right.releaseVersion))];
-    return b[0]! - a[0]! || b[1]! - a[1]! || b[2]! - a[2]!;
-  })[0];
-};
-export type StructureRelease = NonNullable<ReturnType<typeof newestRelease>>;
+) => catalogue.releases.find((release) => String(release.blockId) === identity.blockId);
+export type StructureRelease = NonNullable<ReturnType<typeof blockRelease>>;
 
 /** A new block item: its settings as given, every fixed slot present, the default desktop layout. */
 export const blockItem = (

@@ -25,7 +25,7 @@ import {
   cleanName,
   emptyPageData,
   judged,
-  newestRelease,
+  blockRelease,
   placeNewPage,
   quoted,
   refuse,
@@ -205,11 +205,11 @@ const placeMenuShell = (
 ): Shell => {
   const body = candidate.body;
   if (body.shells.length >= 100) refuse("An application can have at most 100 layouts.");
-  const container = newestRelease(
+  const container = blockRelease(
     catalogue,
-    PLATFORM_BLOCK_RELEASE_IDENTITIES.CONTAINER_BLOCK_RELEASE_1_3_0,
+    PLATFORM_BLOCK_RELEASE_IDENTITIES.CONTAINER_BLOCK_RELEASE,
   );
-  const menu = newestRelease(
+  const menu = blockRelease(
     catalogue,
     PLATFORM_BLOCK_RELEASE_IDENTITIES.APPLICATION_NAVIGATION_BLOCK_RELEASE,
   );
@@ -317,7 +317,7 @@ export const studioStarterFrame = (
     const home = candidate.body.pages.find((page) => page.key === candidate.body.home_page);
     if (home === undefined)
       return refuse("The application's home page is missing, so it has no frame to start in.");
-    const text = newestRelease(catalogue, PLATFORM_BLOCK_RELEASE_IDENTITIES.TEXT_BLOCK_RELEASE);
+    const text = blockRelease(catalogue, PLATFORM_BLOCK_RELEASE_IDENTITIES.TEXT_BLOCK_RELEASE);
     if (text === undefined)
       return refuse("The block catalogue has no text block for the home page.");
     const items = [

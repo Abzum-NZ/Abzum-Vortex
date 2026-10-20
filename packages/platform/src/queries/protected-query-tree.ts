@@ -217,6 +217,7 @@ export const treeLevelCommand = async (
     queryId: command.queryId,
     rows: page.rows,
     fieldBounds: page.fieldBounds,
+    scanLimited: page.next !== null && page.rows.length < command.pageSize,
     ...(next === undefined ? {} : { nextContinuationToken: next }),
     ...(previous === undefined ? {} : { previousContinuationToken: previous }),
   });

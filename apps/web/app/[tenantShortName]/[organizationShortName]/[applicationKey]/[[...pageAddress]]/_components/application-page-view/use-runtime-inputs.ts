@@ -11,8 +11,7 @@ import {
   type FormFlowFeedback,
 } from "@vortex/ui";
 import {
-  projectedRecordPinTilesSchema,
-  projectedApplicationPageLinkTilesSchema,
+  projectedLinkTilesSchema,
   mountedRecordPinFrameSchema,
   type RecordsTablePivotView,
   type RecordsTableQueryChange,
@@ -48,6 +47,7 @@ import {
 } from "./published-control-data";
 import { usePageParameters } from "./use-page-parameters";
 import { useBulkSelection } from "./use-bulk-selection";
+import { useRecordsExport } from "./use-records-export";
 import { requestRecordChoices } from "./record-choices";
 
 export function useRuntimeInputs({
@@ -242,6 +242,8 @@ export function useRuntimeInputs({
     setSelection,
     refreshPlacements,
   });
+  // Export: the file of the records a person selected, streamed by the server.
+  const exported = useRecordsExport({ model, navigationKey, matchingOf: bulk.matchingOf });
   const titles = useRef<{ scope: string; values: PublishedRecordTitles }>({
     scope: navigationKey,
     values: new Map(),
@@ -471,6 +473,9 @@ export function useRuntimeInputs({
           supportsEvent("selection_changed")
         )
           Object.assign(events, bulk.eventsFor(placementId, tableData, selection[placementId]));
+        // A table's Export streams a file from the server over the same selection, never a flow.
+        if (tableData?.features?.export !== undefined)
+          Object.assign(events, exported.eventsFor(placementId, tableData, selection[placementId]));
         if (supportsEvent("selection_changed"))
           events.selection_changed = (event: DisplaySemanticEvent) => {
             if (event.event !== "selection_changed") return;
@@ -502,16 +507,22 @@ export function useRuntimeInputs({
               filter: event.value,
             });
           };
-        // A link filter's picker reads one bounded page of the field's target records under the
-        // person's access, only when it opens or is searched; nothing is preloaded.
-        if (supportsEvent("filter_changed"))
-          events.filter_records_requested = (event: DisplaySemanticEvent) => {
-            if (event.event !== "filter_records_requested") return;
+        // A link picker (a column filter, or an edited cell) reads one bounded page of the field's
+        // target records under the person's access, only when it opens, is searched or continues;
+        // nothing is preloaded. The server decides per purpose whether the field may be offered.
+        if (
+          supportsEvent("filter_changed") ||
+          supportsEvent("inline_edit") ||
+          supportsEvent("row_edit")
+        )
+          events.table_records_requested = (event: DisplaySemanticEvent) => {
+            if (event.event !== "table_records_requested") return;
             return requestRecordChoices(
               model,
               placementId,
               {
                 fieldId: event.field,
+                purpose: event.purpose,
                 ...(event.search === undefined ? {} : { search: event.search }),
                 ...(event.continuationToken === undefined
                   ? {}
@@ -745,14 +756,13 @@ export function useRuntimeInputs({
         shownTable === undefined || ready.values === undefined
           ? undefined
           : ((values: Record<string, unknown>) =>
-              bulk.decorate(placementId, shownTable, values) ?? values)(
-              held === undefined ? ready.values : { ...ready.values, selectedRecordIds: held },
-            );
+              exported.decorate(
+                placementId,
+                bulk.decorate(placementId, shownTable, values) ?? values,
+              ))(held === undefined ? ready.values : { ...ready.values, selectedRecordIds: held });
       const pins =
-        ready.status === "ready"
-          ? ready.values?.kind === "application_page_link_tiles"
-            ? projectedApplicationPageLinkTilesSchema.safeParse(ready.values)
-            : projectedRecordPinTilesSchema.safeParse(ready.values)
+        ready.status === "ready" && ready.values?.kind === "link_tiles"
+          ? projectedLinkTilesSchema.safeParse(ready.values)
           : undefined;
       const pinFrame = mountedRecordPinFrameSchema.safeParse({
         pageId: model.pageId,
@@ -791,139 +801,101 @@ export function useRuntimeInputs({
                 const row = rows[0];
                 if (rows.length !== 1 || row === undefined || row.target.kind === "unavailable")
                   return;
-                if (pins.data.kind === "application_page_link_tiles") {
-                  if (currentPageKey === undefined || typeof isVisible !== "function") return;
-                  const generation = placementRequestsRef.current.generations.get(
-                    placementId.toLowerCase(),
-                  );
-                  const visible = isVisible;
-                  const currentSource = () => {
-                    try {
-                      return (
-                        !currentBusyRef.current &&
-                        placementRequestsRef.current.key === navigationKey &&
-                        placementRequestsRef.current.generations.get(placementId.toLowerCase()) ===
-                          generation &&
-                        currentTileDataRef.current[placementId] === data &&
-                        visible()
-                      );
-                    } catch {
-                      return false;
-                    }
-                  };
-                  if (!currentSource()) return;
-                  pinActivationInFlightRef.current = true;
+                if (currentPageKey === undefined || typeof isVisible !== "function") return;
+                const generation = placementRequestsRef.current.generations.get(
+                  placementId.toLowerCase(),
+                );
+                const visible = isVisible;
+                const currentSource = () => {
                   try {
-                    // The unsaved-work wait precedes both source selection and target authority rereads.
-                    if (
-                      row.target.openBehaviour === "replace" &&
-                      unsavedWork.hasUnsavedWork() &&
-                      !(await unsavedWork.confirmDiscardUnsavedWork())
-                    )
-                      return;
-                    if (!currentSource()) return;
-                    const refreshed = await rereadApplicationPlacements(
-                      {
-                        tenantShortName: application.tenantShortName,
-                        organizationShortName: application.organizationShortName,
-                        applicationKey: application.applicationKey,
-                        pageKey: currentPageKey,
-                        installationRevision: application.installationRevision,
-                        search: currentSearch,
-                      },
-                      [placementId],
+                    return (
+                      !currentBusyRef.current &&
+                      placementRequestsRef.current.key === navigationKey &&
+                      placementRequestsRef.current.generations.get(placementId.toLowerCase()) ===
+                        generation &&
+                      currentTileDataRef.current[placementId] === data &&
+                      visible()
                     );
-                    if (!currentSource()) return;
-                    if (refreshed.kind === "reload") {
-                      router.refresh();
-                      return;
-                    }
-                    if (refreshed.kind !== "available") return;
-                    const state = Object.entries(refreshed.data).find(
-                      ([id]) => id.toLowerCase() === placementId.toLowerCase(),
-                    )?.[1];
-                    if (state?.status !== "ready") return;
-                    const fresh = projectedApplicationPageLinkTilesSchema.safeParse(state.values);
-                    if (!fresh.success) return;
-                    const selected = fresh.data.rows.filter(
-                      (entry) =>
-                        entry.sourceRecordId.toLowerCase() === sourceRecordId.toLowerCase() &&
-                        entry.sourceRevision === sourceRevision,
-                    );
-                    const current = selected[0];
-                    if (
-                      selected.length !== 1 ||
-                      current === undefined ||
-                      current.target.kind === "unavailable" ||
-                      current.target.kind !== row.target.kind ||
-                      current.target.openBehaviour !== row.target.openBehaviour
-                    )
-                      return;
-                    const target = current.target;
-                    // Only the fresh protected tuple supplies an internal address; browser-held metadata is ignored.
-                    const internal = target.kind !== "external";
-                    if (
-                      (target.kind === "application" || target.kind === "page") &&
-                      (target.tenantShortName !== application.tenantShortName ||
-                        target.organizationShortName !== application.organizationShortName)
-                    )
-                      return;
-                    const href =
-                      target.kind === "record"
-                        ? `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(target.detailAddress.applicationKey)}/${encodeURIComponent(target.detailAddress.pageKey)}?${new URLSearchParams({ record_id: target.detailAddress.recordId })}`
-                        : target.kind === "external"
-                          ? target.address
-                          : `/${encodeURIComponent(target.tenantShortName)}/${encodeURIComponent(target.organizationShortName)}/${encodeURIComponent(target.applicationKey)}/${encodeURIComponent(target.pageKey)}`;
-                    const address = new URL(href, window.location.origin);
-                    if (
-                      (internal && address.origin !== window.location.origin) ||
-                      (!internal && address.protocol !== "https:") ||
-                      !currentSource()
-                    )
-                      return;
-                    if (target.openBehaviour === "new_page")
-                      window.open(address.href, "_blank", "noopener,noreferrer");
-                    else if (internal) router.push(`${address.pathname}${address.search}`);
-                    else window.location.assign(address.href);
                   } catch {
-                    // No navigation or target metadata on a failed current protected reread.
-                  } finally {
-                    pinActivationInFlightRef.current = false;
+                    return false;
                   }
-                  return;
-                }
-                const target = row.target;
-                // The old1.1 payload is independently closed to Record/external targets.
-                if (target.kind !== "record" && target.kind !== "external") return;
-                const href =
-                  target.kind === "record"
-                    ? `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(target.detailAddress.applicationKey)}/${encodeURIComponent(target.detailAddress.pageKey)}?${new URLSearchParams({ record_id: target.detailAddress.recordId })}`
-                    : target.address;
-                const address = new URL(href, window.location.origin);
-                if (
-                  (target.kind === "record" && address.origin !== window.location.origin) ||
-                  (target.kind === "external" && address.protocol !== "https:")
-                )
-                  return;
+                };
+                if (!currentSource()) return;
                 pinActivationInFlightRef.current = true;
                 try {
+                  // The unsaved-work wait precedes both source selection and target authority rereads.
                   if (
-                    target.openBehaviour === "replace" &&
+                    row.target.openBehaviour === "replace" &&
                     unsavedWork.hasUnsavedWork() &&
                     !(await unsavedWork.confirmDiscardUnsavedWork())
                   )
                     return;
-                  // Navigation and a partial reread can each invalidate the shown row while confirmation waits.
+                  if (!currentSource()) return;
+                  const refreshed = await rereadApplicationPlacements(
+                    {
+                      tenantShortName: application.tenantShortName,
+                      organizationShortName: application.organizationShortName,
+                      applicationKey: application.applicationKey,
+                      pageKey: currentPageKey,
+                      installationRevision: application.installationRevision,
+                      search: currentSearch,
+                    },
+                    [placementId],
+                  );
+                  if (!currentSource()) return;
+                  if (refreshed.kind === "reload") {
+                    router.refresh();
+                    return;
+                  }
+                  if (refreshed.kind !== "available") return;
+                  const state = Object.entries(refreshed.data).find(
+                    ([id]) => id.toLowerCase() === placementId.toLowerCase(),
+                  )?.[1];
+                  if (state?.status !== "ready") return;
+                  const fresh = projectedLinkTilesSchema.safeParse(state.values);
+                  if (!fresh.success) return;
+                  const selected = fresh.data.rows.filter(
+                    (entry) =>
+                      entry.sourceRecordId.toLowerCase() === sourceRecordId.toLowerCase() &&
+                      entry.sourceRevision === sourceRevision,
+                  );
+                  const current = selected[0];
                   if (
-                    placementRequestsRef.current.key !== navigationKey ||
-                    currentTileDataRef.current[placementId] !== data
+                    selected.length !== 1 ||
+                    current === undefined ||
+                    current.target.kind === "unavailable" ||
+                    current.target.kind !== row.target.kind ||
+                    current.target.openBehaviour !== row.target.openBehaviour
+                  )
+                    return;
+                  const target = current.target;
+                  // Only the fresh protected tuple supplies an internal address; browser-held metadata is ignored.
+                  const internal = target.kind !== "external";
+                  if (
+                    (target.kind === "application" || target.kind === "page") &&
+                    (target.tenantShortName !== application.tenantShortName ||
+                      target.organizationShortName !== application.organizationShortName)
+                  )
+                    return;
+                  const href =
+                    target.kind === "record"
+                      ? `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(target.detailAddress.applicationKey)}/${encodeURIComponent(target.detailAddress.pageKey)}?${new URLSearchParams({ record_id: target.detailAddress.recordId })}`
+                      : target.kind === "external"
+                        ? target.address
+                        : `/${encodeURIComponent(target.tenantShortName)}/${encodeURIComponent(target.organizationShortName)}/${encodeURIComponent(target.applicationKey)}/${encodeURIComponent(target.pageKey)}`;
+                  const address = new URL(href, window.location.origin);
+                  if (
+                    (internal && address.origin !== window.location.origin) ||
+                    (!internal && address.protocol !== "https:") ||
+                    !currentSource()
                   )
                     return;
                   if (target.openBehaviour === "new_page")
                     window.open(address.href, "_blank", "noopener,noreferrer");
-                  else if (target.kind === "record")
-                    router.push(`${address.pathname}${address.search}`);
+                  else if (internal) router.push(`${address.pathname}${address.search}`);
                   else window.location.assign(address.href);
+                } catch {
+                  // No navigation or target metadata on a failed current protected reread.
                 } finally {
                   pinActivationInFlightRef.current = false;
                 }

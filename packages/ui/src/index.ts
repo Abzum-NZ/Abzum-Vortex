@@ -109,6 +109,8 @@ export {
   type SummaryData,
   type SummaryPayload,
   type TableBulkRun,
+  type TableExportRun,
+  type TableExportScope,
   type TableData,
   type TablePayload,
   type TableSelectionScope,
@@ -263,7 +265,6 @@ export { CONTROL_COMPONENT_REGISTRATIONS } from "./controls";
 // Launcher List Payload & Binding Contracts
 export {
   applicationLauncherQueryRowsToListValues,
-  linkTilesToListValues,
   parsePermittedApplicationsLauncherProjection,
   permittedApplicationsToListValues,
   readLauncherSettings,
@@ -272,8 +273,6 @@ export {
   type LauncherListContext,
   type LauncherRenderProps,
   type LauncherSettings,
-  type LinkTileRow,
-  type LinkTilesQueryBinding,
   type PermittedApplicationMetadata,
   type PermittedApplicationsLauncherProjection,
 } from "./launcher";

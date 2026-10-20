@@ -147,6 +147,8 @@ export type RecordsTableQueryRequest = Readonly<{
   formatting?: ConditionalFormattingContext;
   /** How a cell edits each field of the installed definition; supplied only when inline editing is on. */
   fieldEditors?: Readonly<Record<string, RecordsTableInlineEditor>>;
+  /** The viewer's export permission for the table's record type, supplied only when Export is on. */
+  exportAllowed?: boolean;
   /**
    * Set when the table is a tree: the read is one level of it, the roots (no parent) or the
    * children of one record, `pageSize` at a time, over the link that names each record's parent.
@@ -553,6 +555,8 @@ const withoutGrouping = (values: ProjectedTableValues): ProjectedTableValues => 
 type GroupedPage = Readonly<{
   rows: readonly ProtectedQueryRow[];
   fieldBounds: ProtectedQueryFieldBounds;
+  /** The flat read's scan budget ran out before the page filled; a group's members never are. */
+  scanLimited: boolean;
   nextContinuationToken?: string;
   previousContinuationToken?: string;
 }>;
@@ -641,7 +645,7 @@ const readGrouped = async (
     return {
       kind: "read",
       ...(groups === undefined ? {} : { groups }),
-      page: { rows: [], fieldBounds },
+      page: { rows: [], fieldBounds, scanLimited: false },
     };
   }
   const selector = recordsTableGroupSelector(group.fieldId, opened);
@@ -675,6 +679,7 @@ const readGrouped = async (
     page: {
       rows: members.value.rows,
       fieldBounds: members.value.fieldBounds,
+      scanLimited: false,
       ...(members.value.nextContinuationToken === undefined
         ? {}
         : { nextContinuationToken: members.value.nextContinuationToken }),
@@ -770,6 +775,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
             ? {
                 rows: result.value.rows,
                 fieldBounds: result.value.fieldBounds,
+                scanLimited: result.value.scanLimited,
                 ...(result.value.nextContinuationToken === undefined
                   ? {}
                   : { nextContinuationToken: result.value.nextContinuationToken }),
@@ -827,6 +833,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
             : { fieldLinkTypes: request.fieldLinkTypes }),
           ...(request.formatting === undefined ? {} : { formatting: request.formatting }),
           ...(request.fieldEditors === undefined ? {} : { fieldEditors: request.fieldEditors }),
+          ...(request.exportAllowed === undefined ? {} : { exportAllowed: request.exportAllowed }),
           ...(request.state.pivot === undefined ? {} : { pivotView: request.state.pivot }),
           ...(groups === undefined ? {} : { groups }),
         },
@@ -859,6 +866,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
                 narrowing,
                 page,
                 hasNextPage: nextContinuationToken !== undefined,
+                scanLimited: read.scanLimited,
                 hasPreviousPage: previousContinuationToken !== undefined,
                 ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
                 ...(previousContinuationToken === undefined ? {} : { previousContinuationToken }),

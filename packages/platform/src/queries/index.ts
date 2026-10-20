@@ -94,6 +94,8 @@ export {
   type RecordSystemValues,
 } from "./record-system-values";
 
+export { tableReadCandidatesPerRequest } from "./protected-query-table";
+
 export {
   createProtectedQueryService,
   type ProtectedQueryCacheContext,

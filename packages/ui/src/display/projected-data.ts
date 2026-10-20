@@ -195,6 +195,8 @@ export type TablePayload = Readonly<{
   pageCount?: number;
   hasNextPage?: boolean;
   nextContinuationToken?: string;
+  /** The read's scan budget ran out before the page filled: more records may match on the next page. */
+  scanLimited?: boolean;
   hasPreviousPage?: boolean;
   previousContinuationToken?: string;
 }> &
@@ -301,7 +303,8 @@ export type SummaryData = DisplayDataState<SummaryPayload>;
 export type BoardData = DisplayDataState<BoardPayload>;
 
 /** Fixed, data-free refusal reasons; a refused state never carries a value. */
-export type DisplayRefusalReason = "not_permitted" | "access_ended" | "not_found";
+export type DisplayRefusalReason =
+  "not_permitted" | "access_ended" | "not_found" | "value_out_of_range" | "dataset_limit_exceeded";
 
 /**
  * Explicit, data-safe state for one placement, parameterised by that block's own ready values.
@@ -337,11 +340,18 @@ export type DisplaySemanticEventName =
       | "row_expanded"
     >
   /**
-   * A Records table's link filter asks the page for one bounded page of the field's target
-   * records, and its Bulk actions widen or clear the selection; neither is a flow event.
+   * A Records table's link picker (a column filter or a cell editor) asks the page for one bounded
+   * page of the field's target records, and its Bulk actions widen or clear the selection; neither
+   * is a flow event.
    */
-  | "filter_records_requested"
+  | "table_records_requested"
   | "selection_scope_changed"
+  /**
+   * A Records table's Export asks the page to download a file of the chosen records, or to stop
+   * the download in progress. The page streams the file from the server; neither is a flow event.
+   */
+  | "export_requested"
+  | "export_cancelled"
   /**
    * A Records table's pivot asks for one page of its rows, opens the pivot or closes it, or a cell
    * opens the ordinary grid on the records it counts. These are the Pivot feature's own reads and
@@ -394,9 +404,11 @@ export type DisplaySemanticEvent =
       value: string;
     }>
   | Readonly<{
-      event: "filter_records_requested";
-      /** The link filter field whose target records the picker offers. */
+      event: "table_records_requested";
+      /** The link field whose target records the picker offers. */
       field: string;
+      /** Why the records are read: to filter by them, or to choose one in an edited cell. */
+      purpose: "filter" | "edit";
       search?: string;
       continuationToken?: string;
     }>
@@ -475,6 +487,10 @@ export type DisplaySemanticEvent =
   | Readonly<{ event: "bulk_action"; action: string }>
   /** Widens the selection to every matching record, or clears it (and a finished run's summary). */
   | Readonly<{ event: "selection_scope_changed"; scope: "matching" | "cleared" }>
+  /** Downloads the rows ticked on the page, the records of the current view, or every matching record. */
+  | Readonly<{ event: "export_requested"; scope: "selected" | "view" | "matching" }>
+  /** Stops the export in progress; no file is saved. */
+  | Readonly<{ event: "export_cancelled" }>
   | Readonly<{
       event: "row_edit";
       eventId: string;
@@ -548,6 +564,8 @@ const DISPLAY_REFUSAL_REASONS: readonly DisplayRefusalReason[] = [
   "not_permitted",
   "access_ended",
   "not_found",
+  "value_out_of_range",
+  "dataset_limit_exceeded",
 ];
 
 /** Every event name a display block accepts; each block further narrows this to its own binding. */
@@ -557,7 +575,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "row_action",
   "selection_changed",
   "filter_changed",
-  "filter_records_requested",
+  "table_records_requested",
   "pivot_requested",
   "pivot_view_changed",
   "pivot_drilled",
@@ -571,6 +589,8 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "page_changed",
   "bulk_action",
   "selection_scope_changed",
+  "export_requested",
+  "export_cancelled",
   "inline_edit",
   "row_edit",
   "card_moved",
@@ -1200,11 +1220,13 @@ export const parseTablePayload = (
       "pageCount",
       "hasNextPage",
       "nextContinuationToken",
+      "scanLimited",
       "hasPreviousPage",
       "previousContinuationToken",
       "selectionToken",
       "selectionScope",
       "bulkRun",
+      "exportRun",
       "actionAvailability",
     ],
     location,
@@ -1242,6 +1264,9 @@ export const parseTablePayload = (
   if (record.hasPreviousPage !== undefined && typeof record.hasPreviousPage !== "boolean")
     fail("Projected hasPreviousPage must be a boolean", location);
   const hasPreviousPage = record.hasPreviousPage as boolean | undefined;
+  if (record.scanLimited !== undefined && typeof record.scanLimited !== "boolean")
+    fail("Projected scanLimited must be a boolean", location);
+  const scanLimited = record.scanLimited as boolean | undefined;
   let nextContinuationToken: string | undefined;
   if (record.nextContinuationToken !== undefined) {
     nextContinuationToken = requireNonEmptyString(
@@ -1252,6 +1277,8 @@ export const parseTablePayload = (
     if (nextContinuationToken.length > 65_536)
       fail("A table continuation token is too long", location);
   }
+  if (scanLimited === true && !hasNextPage)
+    fail("A scan-limited page requires a next page", location);
   if (
     (hasNextPage === true) !== (nextContinuationToken !== undefined) ||
     ((hasNextPage !== undefined || nextContinuationToken !== undefined) && page === undefined)
@@ -1317,6 +1344,7 @@ export const parseTablePayload = (
     ...(pageCount === undefined ? {} : { pageCount }),
     ...(hasNextPage === undefined ? {} : { hasNextPage }),
     ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
+    ...(scanLimited === undefined ? {} : { scanLimited }),
     ...(hasPreviousPage === undefined ? {} : { hasPreviousPage }),
     ...(previousContinuationToken === undefined ? {} : { previousContinuationToken }),
   });

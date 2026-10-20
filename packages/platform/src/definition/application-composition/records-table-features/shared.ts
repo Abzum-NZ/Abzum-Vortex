@@ -201,6 +201,8 @@ export type RecordsTableQueryFacts = Readonly<{
   actions: readonly Readonly<{ key: string; label: string; acceptsSelection: boolean }>[];
   /** The query groups or aggregates its rows, so rows are not records a person can act on. */
   grouped: boolean;
+  /** The record type declares the standard export action, so its records can be exported. */
+  exportable: boolean;
   relatedRecords: RecordsTableRelatedRecordsFacts;
   /** What a Board needs; undefined when the query's record type is judged only at publication. */
   board: RecordsTableBoardFacts | undefined;
@@ -210,8 +212,9 @@ export type RecordsTableQueryFacts = Readonly<{
 
 /**
  * The field types whose stored value people change directly in a cell: text, numbers, yes/no,
- * choices, dates and the address types. Calculations, totals, generated numbers, money, formatted
- * text, several choices, links, tables and attachments are never edited in a cell.
+ * choices, dates, the address types and single-target links. Calculations, totals, generated
+ * numbers, money, formatted text, several choices, links to one of several record types, tables and
+ * attachments are never edited in a cell.
  */
 export const recordsTableEditableFieldTypes: readonly string[] = Object.freeze([
   "text",
@@ -225,6 +228,7 @@ export const recordsTableEditableFieldTypes: readonly string[] = Object.freeze([
   "email_address",
   "phone_number",
   "web_address",
+  "link",
 ]);
 
 /** Why a field of the bound query cannot be edited in a cell, as a business sentence; undefined when it can. */
@@ -238,6 +242,8 @@ export const recordsTableFieldNotEditableReason = (
       return `${field.label} is calculated, so it cannot be edited here`;
     case "reference_number":
       return `${field.label} is numbered by the system, so it cannot be edited here`;
+    case "link_to_one_of_several":
+      return `${field.label} links to one of several record types, so it cannot be edited here`;
     default:
       return `${field.label} cannot be edited in a cell`;
   }
@@ -260,6 +266,7 @@ export type RecordsTableFeatureRefusalCode = Extract<
   | "definition_records_table_pivot"
   | "definition_records_table_spreadsheet"
   | "definition_records_table_board"
+  | "definition_records_table_export"
 >;
 
 /** The outcome of one feature check: available, or not possible with its one business sentence. */

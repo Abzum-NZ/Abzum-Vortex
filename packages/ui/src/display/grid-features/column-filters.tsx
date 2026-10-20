@@ -15,14 +15,6 @@ import { Badge } from "../../components/badge";
 import { Button } from "../../components/button";
 import { Calendar, calendarDay } from "../../components/calendar";
 import { Checkbox } from "../../components/checkbox";
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-} from "../../components/combobox";
 import { Input } from "../../components/input";
 import { InputGroup, InputGroupAddon, InputGroupText } from "../../components/input-group";
 import { Label } from "../../components/label";
@@ -31,8 +23,8 @@ import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "../../com
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/tooltip";
 import { Icon } from "../../icons/icon";
 import { FormattedDate } from "../date-format-context";
-import { parseRecordChoicePage, type RecordChoiceOption } from "../../controls/projected-data";
 import type { DisplayEventHandlers, TableNarrowing } from "../projected-data";
+import { RecordChoicePicker } from "./record-choice-picker";
 import type { GridFeatureColumnProps, GridFeatureModule, GridFeaturePointProps } from "./registry";
 
 /** A text filter commits once typing pauses this long, so a typed word is one read, not one per key. */
@@ -454,11 +446,6 @@ function LinkEditor({
   events: DisplayEventHandlers | undefined;
   onCommit: (filter: RecordsTableFieldFilter | undefined) => void;
 }>): ReactElement {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [choices, setChoices] = useState<readonly RecordChoiceOption[]>([]);
-  const [state, setState] = useState<"idle" | "loading" | "failed">("idle");
-  const generation = useRef(0);
   const incoming = JSON.stringify(applied?.recordIds ?? []);
   const [shown, setShown] = useState(incoming);
   const [chosen, setChosen] = useState<readonly string[]>(applied?.recordIds ?? []);
@@ -466,45 +453,6 @@ function LinkEditor({
     setShown(incoming);
     setChosen(applied?.recordIds ?? []);
   }
-  const latestEvents = useRef(events);
-  latestEvents.current = events;
-  useEffect(() => {
-    if (!open) {
-      generation.current += 1;
-      return;
-    }
-    const request = ++generation.current;
-    const timeout = setTimeout(
-      () => {
-        const handler = latestEvents.current?.filter_records_requested;
-        if (handler === undefined) return;
-        setState("loading");
-        const bounded = search.trim().slice(0, 100);
-        void Promise.resolve(
-          handler({
-            event: "filter_records_requested",
-            field: field.fieldId,
-            ...(bounded === "" ? {} : { search: bounded }),
-          }),
-        )
-          .then((answer) => {
-            if (generation.current !== request) return;
-            setChoices(parseRecordChoicePage(answer).choices);
-            setState("idle");
-          })
-          .catch((cause: unknown) => {
-            if (generation.current !== request) return;
-            console.error("[column-filters] records unavailable", cause);
-            setState("failed");
-          });
-      },
-      search.trim() === "" ? 0 : TEXT_COMMIT_DELAY_MS,
-    );
-    return () => {
-      clearTimeout(timeout);
-      generation.current += 1;
-    };
-  }, [open, search, field.fieldId]);
   const remove = (recordId: string): void => {
     const next = chosen.filter((held) => held !== recordId);
     setChosen(next);
@@ -531,21 +479,15 @@ function LinkEditor({
           ))}
         </ul>
       )}
-      <Combobox
-        items={choices}
-        value={null}
-        inputValue={search}
-        onOpenChange={(next: boolean) => {
-          setOpen(next);
-          if (!next) {
-            setSearch("");
-            setChoices([]);
-          }
-        }}
-        onInputValueChange={(next: string) => setSearch(next)}
-        onValueChange={(item: RecordChoiceOption | null) => {
+      <RecordChoicePicker
+        fieldId={field.fieldId}
+        purpose="filter"
+        label={field.label}
+        events={events}
+        placeholder={`Find ${field.label}`}
+        maxed={chosen.length >= RECORDS_TABLE_MAXIMUM_FILTER_RECORDS}
+        onPick={(item) => {
           if (
-            item === null ||
             chosen.includes(item.recordId.toLowerCase()) ||
             chosen.length >= RECORDS_TABLE_MAXIMUM_FILTER_RECORDS
           )
@@ -554,34 +496,7 @@ function LinkEditor({
           setChosen(next);
           onCommit({ kind: "link", recordIds: next });
         }}
-        itemToStringLabel={(item: RecordChoiceOption) => item.title}
-        itemToStringValue={(item: RecordChoiceOption) => item.recordId}
-        // The server already searched; every record it returned is offered.
-        filter={() => true}
-      >
-        <ComboboxInput
-          placeholder={`Find ${field.label}`}
-          aria-label={`Find ${field.label} records`}
-          disabled={chosen.length >= RECORDS_TABLE_MAXIMUM_FILTER_RECORDS}
-          onKeyDown={(event) => event.stopPropagation()}
-        />
-        <ComboboxContent>
-          <ComboboxList>
-            {(item: RecordChoiceOption) => (
-              <ComboboxItem key={item.recordId} value={item}>
-                <span className="truncate">{item.title}</span>
-              </ComboboxItem>
-            )}
-          </ComboboxList>
-          <ComboboxEmpty role="status">
-            {state === "loading"
-              ? "Searching…"
-              : state === "failed"
-                ? "Records could not be loaded. Try again."
-                : "No matching records"}
-          </ComboboxEmpty>
-        </ComboboxContent>
-      </Combobox>
+      />
     </div>
   );
 }

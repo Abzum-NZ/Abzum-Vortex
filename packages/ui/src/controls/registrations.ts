@@ -16,7 +16,6 @@ import {
   parseBooleanInputPayload,
   parseButtonPayload,
   parseChoiceInputPayload,
-  parseDependentChoiceInputPayload,
   parseControlData,
   parseControlEventHandlers,
   parseDateInputPayload,
@@ -356,14 +355,6 @@ export const CONTROL_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       parsePayload: controlPayloadParser<ChoiceInputPayload>(parseChoiceInputPayload),
     }),
     Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
-      parsePayload: controlPayloadParser<ChoiceInputPayload>(parseChoiceInputPayload),
-    }),
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
-      parsePayload: controlPayloadParser<ChoiceInputPayload>(parseDependentChoiceInputPayload),
-    }),
-    Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.ATTACHMENT_INPUT_BLOCK_RELEASE,
       parsePayload: controlPayloadParser<AttachmentInputPayload>(parseAttachmentInputPayload),
     }),
@@ -385,10 +376,6 @@ export const CONTROL_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABS_BLOCK_RELEASE,
-      parsePayload: controlPayloadParser<TabsPayload>(parseTabsPayload),
-    }),
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABS_BLOCK_RELEASE_2_0_0,
       parsePayload: controlPayloadParser<TabsPayload>(parseTabsPayload),
     }),
     Object.freeze({
