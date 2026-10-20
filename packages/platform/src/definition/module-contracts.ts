@@ -62,7 +62,6 @@ import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-opera
 import { protectedReadModelKeySchema } from "./application-composition/protected-read-models";
 import { flowSchema } from "../workflows/flow-contracts";
 import { recordOwnershipModeSchema } from "../records/record-ownership-mode";
-import { ruleGraphSchema } from "../rules/rule-graph-contracts";
 import {
   maximumRecordTypePipelines,
   pipelineShapeProblems,
@@ -1355,11 +1354,8 @@ export const actionDefinitionSchema = z
 
 /**
  * A Module's canonical content. `flows` is the one home of its behaviour (architecture decision 1):
- * every save rule is a flow with a `BeforeSave` trigger and `transaction` execution.
- *
- * `rules` is derived from the authored `BeforeSave` flows because the save path still evaluates
- * rule graphs. Each flow has one matching rule with the same identity, record type and priority;
- * no rule exists without its flow.
+ * every save rule is a flow with a `BeforeSave` trigger and `transaction` execution, and the
+ * save transaction runs it with the flow interpreter.
  */
 export const moduleContentSchema = z
   .object({
@@ -1384,7 +1380,6 @@ export const moduleContentSchema = z
         .strict(),
     ),
     flows: z.array(flowSchema).max(100),
-    rules: z.array(ruleGraphSchema).max(100),
     queries: z.array(moduleQueryDefinitionSchema).max(100).default([]),
     contributions: z.array(moduleContributionSchema).max(100).optional(),
   })
@@ -1404,34 +1399,6 @@ export const moduleDraftSchema = z
       flowIds.add(flow.id);
       flowKeys.add(flow.key);
     });
-    const beforeSave = new Map(
-      draft.content.flows.flatMap((flow) =>
-        flow.triggers.some((trigger) => trigger.type === "BeforeSave")
-          ? [[String(flow.id), flow] as const]
-          : [],
-      ),
-    );
-    const ruleIds = new Set<string>();
-    draft.content.rules.forEach((rule, index) => {
-      ruleIds.add(String(rule.ruleId));
-      const flow = beforeSave.get(String(rule.ruleId));
-      const trigger = flow?.triggers[0];
-      if (
-        flow === undefined ||
-        flow.triggers.length !== 1 ||
-        trigger?.type !== "BeforeSave" ||
-        trigger.recordTypeId !== rule.subjectRecordTypeId ||
-        trigger.priority !== rule.priority ||
-        flow.key !== rule.key
-      )
-        invalid("A rule is the executable form of exactly one BeforeSave flow", ["rules", index]);
-    });
-    for (const flowId of beforeSave.keys())
-      if (!ruleIds.has(flowId))
-        invalid("Every BeforeSave flow needs its executable rule", [
-          "flows",
-          draft.content.flows.findIndex((flow) => String(flow.id) === flowId),
-        ]);
     // Every named action on a system projection targets a registered protected operation, and no
     // other record type's action may target one; standard update is governed by the closed registry.
     const projections = new Set(

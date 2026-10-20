@@ -64,7 +64,8 @@ export const flowJsonMemberType = (
 ): "text" | "yes_no" | "whole_number" | "decimal_number" | "json" => {
   if (typeof value === "string") return "text";
   if (typeof value === "boolean") return "yes_no";
-  if (typeof value === "number") return Number.isSafeInteger(value) ? "whole_number" : "decimal_number";
+  if (typeof value === "number")
+    return Number.isSafeInteger(value) ? "whole_number" : "decimal_number";
   return "json";
 };
 export const flowMaximumForEachItemsDurable = 1_000;
@@ -212,7 +213,11 @@ const refineDeclaration = (
     const checked = flowLiteralSchema.safeParse({ type: value.type, value: value.default });
     if (!checked.success)
       for (const issue of checked.error.issues)
-        context.addIssue({ code: "custom", path: ["default", ...issue.path.slice(1)], message: issue.message });
+        context.addIssue({
+          code: "custom",
+          path: ["default", ...issue.path.slice(1)],
+          message: issue.message,
+        });
   }
 };
 
@@ -312,7 +317,7 @@ export const flowTriggerSchema = z.discriminatedUnion("type", [
       type: z.literal("BeforeSave"),
       recordTypeId: recordTypeIdSchema,
       operations: z.array(flowBeforeSaveOperationSchema).min(1).max(20),
-      /** Applicable rules run in ascending priority, then by permanent flow id. */
+      /** Applicable flows run in ascending priority, then in their authored source order. */
       priority: z.number().int().min(0).max(1_000),
     })
     .strict()
@@ -389,9 +394,7 @@ export const flowRunAsSchema = z.discriminatedUnion("kind", [
       executionBindingId: containedComponentIdSchema,
     })
     .strict(),
-  z
-    .object({ kind: z.literal("system"), executionBindingId: containedComponentIdSchema })
-    .strict(),
+  z.object({ kind: z.literal("system"), executionBindingId: containedComponentIdSchema }).strict(),
 ]);
 export type FlowRunAs = z.infer<typeof flowRunAsSchema>;
 
@@ -670,7 +673,9 @@ export const isFlowControlTask = (task: FlowTask): boolean =>
   (flowControlTaskTypeKeys as readonly string[]).includes(task.type);
 
 /** The nested task lists a task owns, with the path segments that reach each. */
-export const flowTaskChildLists = (task: FlowTask): { path: (string | number)[]; tasks: FlowTask[] }[] => {
+export const flowTaskChildLists = (
+  task: FlowTask,
+): { path: (string | number)[]; tasks: FlowTask[] }[] => {
   const lists: { path: (string | number)[]; tasks: FlowTask[] }[] = [];
   if (!isFlowControlTask(task)) return lists;
   const control = task as Extract<FlowTask, { type: (typeof flowControlTaskTypeKeys)[number] }>;
@@ -725,8 +730,7 @@ const collectValueFormulas = (value: FlowValue, into: FlowFormula[]): void => {
   if (value.kind === "formula") into.push(value.formula);
   else if (value.kind === "map")
     for (const entry of Object.values(value.entries)) collectValueFormulas(entry, into);
-  else if (value.kind === "array")
-    for (const item of value.items) collectValueFormulas(item, into);
+  else if (value.kind === "array") for (const item of value.items) collectValueFormulas(item, into);
 };
 
 // ─── The flow ────────────────────────────────────────────────────────────────────────────────
@@ -798,8 +802,7 @@ const refineFlow = (flow: FlowShape, context: z.RefinementCtx) => {
   // record of every other flow that has one.
   if (flow.recordInput !== undefined) {
     const declaration = flow.inputs[flow.recordInput] as
-      | Readonly<{ type?: unknown; required?: unknown; recordTypeIds?: unknown }>
-      | undefined;
+      Readonly<{ type?: unknown; required?: unknown; recordTypeIds?: unknown }> | undefined;
     if (flow.execution !== "interactive")
       issue(["recordInput"], "Only an interactive flow names the input that carries its record");
     else if (
@@ -855,8 +858,15 @@ const refineFlow = (flow: FlowShape, context: z.RefinementCtx) => {
   if (!durable && flow.retry !== undefined)
     issue(["retry"], "Retries are allowed only in durable flows");
   if (!durable && flow.timeout !== undefined && flow.timeout.seconds > flowMaximumServerSeconds)
-    issue(["timeout", "seconds"], `Only durable flows may time out after more than ${flowMaximumServerSeconds} seconds`);
-  if (flow.concurrency !== undefined && flow.execution !== "durable" && flow.execution !== "background")
+    issue(
+      ["timeout", "seconds"],
+      `Only durable flows may time out after more than ${flowMaximumServerSeconds} seconds`,
+    );
+  if (
+    flow.concurrency !== undefined &&
+    flow.execution !== "durable" &&
+    flow.execution !== "background"
+  )
     issue(["concurrency"], "Concurrency limits apply only to background and durable flows");
 
   // Tasks: identity, count, nesting, placement and limits.
@@ -872,37 +882,47 @@ const refineFlow = (flow: FlowShape, context: z.RefinementCtx) => {
         issue(taskPath, `Tasks cannot nest deeper than ${flowMaximumTaskNestingDepth} levels`);
       if (seenTaskIds.has(task.id)) issue([...taskPath, "id"], "Task ids must be unique in a flow");
       seenTaskIds.add(task.id);
-      if (
-        !durable &&
-        (flowDurableOnlyTaskTypeKeys as readonly string[]).includes(task.type)
-      )
+      if (!durable && (flowDurableOnlyTaskTypeKeys as readonly string[]).includes(task.type))
         issue([...taskPath, "type"], `${task.type} is allowed only in durable flows`);
       if (!durable && task.retry !== undefined)
         issue([...taskPath, "retry"], "Retries are allowed only in durable flows");
       if (!durable && task.timeout !== undefined && task.timeout.seconds > flowMaximumServerSeconds)
-        issue([...taskPath, "timeout", "seconds"], `Only durable flows may time out after more than ${flowMaximumServerSeconds} seconds`);
-      if (task.type === "for_each" && (task as { maximumItems: number }).maximumItems > forEachMaximum)
+        issue(
+          [...taskPath, "timeout", "seconds"],
+          `Only durable flows may time out after more than ${flowMaximumServerSeconds} seconds`,
+        );
+      if (
+        task.type === "for_each" &&
+        (task as { maximumItems: number }).maximumItems > forEachMaximum
+      )
         issue(
           [...taskPath, "maximumItems"],
           `For each allows at most ${forEachMaximum.toLocaleString("en-NZ")} items in ${durable ? "durable" : "non-durable"} flows`,
         );
       if (!timeAllowed && taskFormulas(task).some(flowFormulaUsesNow))
         issue(taskPath, "The now operator is allowed only in interactive and background flows");
-      for (const child of flowTaskChildLists(task)) visit(child.tasks, [...taskPath, ...child.path], depth + 1);
+      for (const child of flowTaskChildLists(task))
+        visit(child.tasks, [...taskPath, ...child.path], depth + 1);
     });
   };
   visit(flow.tasks, ["tasks"], 1);
   visit(flow.errors, ["errors"], 1);
   visit(flow.finally, ["finally"], 1);
   if (taskCount > flowMaximumTaskCount)
-    issue(["tasks"], `A flow can hold at most ${flowMaximumTaskCount} tasks including nested tasks`);
+    issue(
+      ["tasks"],
+      `A flow can hold at most ${flowMaximumTaskCount} tasks including nested tasks`,
+    );
 
   for (const [name, output] of Object.entries(flow.outputs)) {
     if (timeAllowed) continue;
     const formulas: FlowFormula[] = [];
     collectValueFormulas(output.value, formulas);
     if (formulas.some(flowFormulaUsesNow))
-      issue(["outputs", name, "value"], "The now operator is allowed only in interactive and background flows");
+      issue(
+        ["outputs", name, "value"],
+        "The now operator is allowed only in interactive and background flows",
+      );
   }
 };
 

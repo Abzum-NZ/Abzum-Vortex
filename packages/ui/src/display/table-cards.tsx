@@ -9,6 +9,8 @@ import { cellValueToText } from "./cell";
 import { useRowEntrance } from "./row-entrance";
 import type { RowExpansionControls } from "./row-expansion";
 import { RowExpansionToggle } from "./row-expansion-toggle";
+import { SubRowNoticeView } from "./sub-row-notice";
+import { SUB_ROW_INDENT_REM, type RowLine, type SubRowsControls } from "./sub-rows";
 import type { GridColumn } from "./table-layout";
 import { CARD_SPACING } from "./table-geometry";
 
@@ -39,24 +41,27 @@ export type CardRenderers = Readonly<{
  * page carries. The first shown column is the card's heading; the others follow as labelled values,
  * essential and high priority first. A card opens through the same declared row click, and its
  * selection and row commands send the same events as the grid's. A card that expands shows its
- * related records below it. Only this presentation is mounted.
+ * related records below it, or the cards of the records beneath it, indented. Only this
+ * presentation is mounted.
  */
 export function RecordsCards({
   accessibleName,
   columns,
-  rows,
+  lines,
   selectedRecordIds,
   selectable,
   showActions,
   activateRow,
   renderers,
   expansion,
+  subRows,
   fill,
   density,
 }: Readonly<{
   accessibleName: string;
   columns: readonly GridColumn[];
-  rows: readonly DisplayRow[];
+  /** Every card drawn, in order: the page's records and the records beneath the open ones. */
+  lines: readonly RowLine[];
   selectedRecordIds: readonly string[];
   selectable: boolean;
   showActions: boolean;
@@ -64,6 +69,8 @@ export function RecordsCards({
   renderers: CardRenderers;
   /** Cards expand to a panel of related records; undefined when no projected feature draws one. */
   expansion: RowExpansionControls | undefined;
+  /** Cards open to the cards beneath them; undefined when no feature contributes any. */
+  subRows: SubRowsControls | undefined;
   fill: boolean;
   density: RecordsTableDensity;
 }>): ReactElement {
@@ -91,7 +98,7 @@ export function RecordsCards({
     }
   };
   const listRef = useRowEntrance<HTMLUListElement>(
-    rows.map((row) => row.recordId),
+    lines.map((line) => line.id),
     "li[data-vortex-record-id]",
   );
   return (
@@ -103,7 +110,19 @@ export function RecordsCards({
         fill && "min-h-0 flex-1 overflow-auto",
       )}
     >
-      {rows.map((row) => {
+      {lines.map((line) => {
+        if (line.kind === "notice") {
+          return (
+            <li
+              key={line.id}
+              data-vortex-sub-rows-of={line.parentId}
+              style={{ marginInlineStart: `${(line.level - 1) * SUB_ROW_INDENT_REM}rem` }}
+            >
+              <SubRowNoticeView notice={line.notice} />
+            </li>
+          );
+        }
+        const row = line.row;
         const selected = selectedRecordIds.includes(row.recordId);
         const headingId = `record-${row.recordId}-heading`;
         const expanded = expansion?.isExpanded(row.recordId) === true;
@@ -132,6 +151,11 @@ export function RecordsCards({
             data-vortex-record-id={row.recordId}
             data-state={selected ? "selected" : undefined}
             aria-labelledby={headingId}
+            style={
+              subRows === undefined
+                ? undefined
+                : { marginInlineStart: `${(line.level - 1) * SUB_ROW_INDENT_REM}rem` }
+            }
             aria-busy={pending === row.recordId ? true : undefined}
             className={cn(
               activateRow !== undefined && "cursor-pointer",
@@ -153,7 +177,7 @@ export function RecordsCards({
               className={cn(CARD_SPACING[density], selected && "ring-2 ring-primary")}
             >
               <div className="flex min-w-0 items-center gap-2">
-                {selectable ? renderers.select(row, selected) : null}
+                {selectable && line.level === 1 ? renderers.select(row, selected) : null}
                 <h3
                   id={headingId}
                   data-vortex-field-key={heading?.key}
@@ -174,6 +198,14 @@ export function RecordsCards({
                   )}
                 </h3>
                 {showActions ? renderers.actions(row) : null}
+                {subRows === undefined || !line.expandable ? null : (
+                  <RowExpansionToggle
+                    name={name}
+                    noun={subRows.noun}
+                    expanded={line.expanded}
+                    onToggle={() => subRows.toggle(row.recordId)}
+                  />
+                )}
                 {expansion === undefined || !expandable ? null : (
                   <RowExpansionToggle
                     name={name}

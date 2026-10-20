@@ -294,7 +294,7 @@ export function GroupedBody({
   /** The skeleton the open group shows while its first page is read, sized to the page. */
   loading: ReactNode;
   /** Draws a page of the open group's rows. */
-  members: (rows: readonly DisplayRow[]) => ReactNode;
+  members: () => ReactNode;
 }>): ReactElement {
   const { groups, expanded } = grouped;
   const state = grouped.members;
@@ -345,7 +345,7 @@ export function GroupedBody({
                   </EmptyHeader>
                 </Empty>
               ) : (
-                members(state.page.rows)
+                members()
               )}
               <GroupPager grouped={grouped} group={group} />
             </div>

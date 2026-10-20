@@ -13,7 +13,6 @@ import {
 } from "../schema";
 import { describeFailure } from "../catalogue/runtime-primitives";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
-import { isBeforeSaveFlow, lowerBeforeSaveFlow } from "./before-save-flow-rules";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json-definition";
 import { compileParsedDefinition } from "./compiler";
 import { DefinitionCompilationError } from "./compilation-error";
@@ -24,7 +23,7 @@ import { moduleDependencies } from "./module-dependencies";
 /** One reason a shipped source would be refused at publication, located on the offending part. */
 export type OfflineSourceFailure = Readonly<{
   definitionKey: string;
-  stage: "source_schema" | "before_save_lowering" | "compile" | "validation" | "resolution";
+  stage: "source_schema" | "compile" | "validation" | "resolution";
   /** A stable reason code: a compiler rule code, or `offline_unexpected_failure`. */
   code: string;
   /** Where in the source the refusal is located, as readable keys. */
@@ -77,24 +76,6 @@ export const unexpected = (
   location: "(source)",
   detail: describeFailure(error),
 });
-
-/** Every BeforeSave flow must lower to a rule graph; each refusal names its flow and task. */
-const lowerBeforeSaveFlows = (source: ModuleSourceDocument): OfflineSourceFailure[] =>
-  source.body.flows.flatMap((flow) => {
-    if (!isBeforeSaveFlow(flow)) return [];
-    const lowered = lowerBeforeSaveFlow(flow);
-    if (lowered.ok) return [];
-    const { refusal } = lowered;
-    return [
-      {
-        definitionKey: source.key,
-        stage: "before_save_lowering" as const,
-        code: refusal.ruleCode,
-        location: `flow ${flow.key}${refusal.taskId === undefined ? "" : ` > task ${refusal.taskId}`}`,
-        detail: refusal.detail ?? `at ${refusal.path.join(".") || "flow"} (${refusal.family})`,
-      },
-    ];
-  });
 
 /**
  * Compiles one Module the way publication does, with identities derived from the source instead
@@ -216,7 +197,7 @@ const compileModule = (
 
 /**
  * Runs the publication checks that need no database over shipped Module sources and reports every
- * failure, not the first: the source schema, the lowering of every BeforeSave flow, the Module
+ * failure, not the first: the source schema, every BeforeSave flow, the Module
  * compile and the publish-stage definition rules. The compiled Modules are returned so Applications
  * that bind them compile against the same outputs.
  */
@@ -226,8 +207,6 @@ export const compileModulesOffline = (
 ): { failures: OfflineSourceFailure[]; compiled: ReadonlyMap<string, CompiledModule> } => {
   const failures: OfflineSourceFailure[] = [];
   const modules = new Map<string, ModuleSourceDocument>();
-  /** Modules whose lowering already failed: compiling them would only repeat the same refusal. */
-  const notCompilable = new Set<string>();
   for (const source of sources) {
     if (source.kind !== "module") continue;
     const parsed = moduleSourceDocumentSchema.safeParse(source);
@@ -236,9 +215,6 @@ export const compileModulesOffline = (
       continue;
     }
     modules.set(source.key, parsed.data);
-    const refused = lowerBeforeSaveFlows(parsed.data);
-    failures.push(...refused);
-    if (refused.length > 0) notCompilable.add(source.key);
   }
   const compiled = new Map<string, CompiledModule>();
   const started = new Set<string>();
@@ -248,7 +224,6 @@ export const compileModulesOffline = (
     started.add(key);
     const declared = moduleDependencies(source);
     for (const dependency of declared) visit(dependency.module);
-    if (notCompilable.has(key)) return;
     const missing = declared.filter((entry) => !compiled.has(entry.module));
     if (missing.length > 0) {
       failures.push({
