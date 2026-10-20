@@ -1270,30 +1270,14 @@
       }
     }
   }
-  &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
+  &:is([data-state="checked"], [data-checked]:not([data-checked="false"]), [aria-checked="mixed"]) {
     border-color: var(--primary);
-  }
-  &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
     background-color: var(--primary);
-  }
-  &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
     color: var(--primary-foreground);
   }
   &:is(:where(.group\/field-label):has(*:is(:focus-visible)) *) {
     &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
       border-color: var(--primary);
-    }
-  }
-  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
-    &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
-      background-color: var(--primary);
-    }
-  }
-  @media (prefers-color-scheme: dark) {
-    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
-      &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
-        background-color: var(--primary);
-      }
     }
   }
 }
@@ -1343,7 +1327,7 @@
     }
   }
 }
-:scope .cn-checkbox-aria:where([data-selected="true"]) {
+:scope .cn-checkbox-aria:is([data-selected="true"], [data-checked]:not([data-checked="false"]), [aria-checked="mixed"]) {
   border-color: var(--primary);
   background-color: var(--primary);
   color: var(--primary-foreground);
