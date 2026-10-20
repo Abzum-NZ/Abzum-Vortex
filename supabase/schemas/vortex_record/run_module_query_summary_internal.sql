@@ -490,7 +490,9 @@ begin
   -- stored values, so every record whose readable values match also matches here: the
   -- narrowing is a superset and read_record stays the decision for each counted match.
   -- A searched field without an active column, or derived (calculation, total), has no
-  -- such proof, so the scan is then not narrowed at all.
+  -- such proof, so the scan is then not narrowed at all. Nor is it when a searched field
+  -- is not readable on every scanned row: a withheld stored value must never decide
+  -- whether the ceiling refuses, or the refusal would reveal it.
   if user_search is not null and pg_catalog.cardinality(search_field_ids) > 0 and not exists (
     select 1
     from pg_catalog.unnest(search_field_ids) as searched(id)
@@ -500,6 +502,7 @@ begin
     where mapping.storage_contract_id is null
       or mapping.state <> 'active'
       or fields_by_id -> searched.id ->> 'type' in ('calculation', 'total')
+      or searched.id <> all (readable_field_ids)
   ) then
     search_prefilter_sql := pg_catalog.format(
       'vortex_record.query_search_matches_internal(pg_catalog.jsonb_build_object(%s), $18::text[], $19::text)',

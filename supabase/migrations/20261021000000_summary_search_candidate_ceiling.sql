@@ -37,6 +37,7 @@ declare
   access_owner_group_ids uuid[] := array[]::uuid[];
   access_shared_record_ids uuid[] := array[]::uuid[];
   readable_field_ids text[] := array[]::text[];
+  bound_field_ids text[] := array[]::text[];
   filter_condition jsonb;
   filter_types jsonb := '{}'::jsonb;
   parameter_types jsonb := '{}'::jsonb;
@@ -337,6 +338,12 @@ begin
   into readable_field_ids
   from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'readableFieldIds') as item(value);
 
+  -- The fields the reader is guaranteed to see on every record it may read: the bound a grouped
+  -- table offers its filter, search and sort controls by, as a plain page read reports it.
+  select coalesce(pg_catalog.array_agg(item.value order by item.value), array[]::text[])
+  into bound_field_ids
+  from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'fieldBoundIds') as item(value)
+  where fields_by_id ? item.value;
   if p_user_inputs ? 'grouping' and not (
     pg_catalog.lower(p_user_inputs #>> '{grouping,fieldId}') = any (readable_field_ids)
   ) then
@@ -485,7 +492,9 @@ begin
   -- stored values, so every record whose readable values match also matches here: the
   -- narrowing is a superset and read_record stays the decision for each counted match.
   -- A searched field without an active column, or derived (calculation, total), has no
-  -- such proof, so the scan is then not narrowed at all.
+  -- such proof, so the scan is then not narrowed at all. Nor is it when a searched field
+  -- is not readable on every scanned row: a withheld stored value must never decide
+  -- whether the ceiling refuses, or the refusal would reveal it.
   if user_search is not null and pg_catalog.cardinality(search_field_ids) > 0 and not exists (
     select 1
     from pg_catalog.unnest(search_field_ids) as searched(id)
@@ -495,6 +504,7 @@ begin
     where mapping.storage_contract_id is null
       or mapping.state <> 'active'
       or fields_by_id -> searched.id ->> 'type' in ('calculation', 'total')
+      or searched.id <> all (readable_field_ids)
   ) then
     search_prefilter_sql := pg_catalog.format(
       'vortex_record.query_search_matches_internal(pg_catalog.jsonb_build_object(%s), $18::text[], $19::text)',
@@ -1273,9 +1283,23 @@ begin
         access_shared_record_ids, filter_parameters, access_parameters, null::jsonb,
         filter_condition, filter_types, parameter_types, parameter_values,
         filter_ids, summary_field_ids, search_field_ids, user_search;
-  exception when invalid_parameter_value then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
+  exception
+    when invalid_parameter_value then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
+    when sqlstate 'V3187' then
+      -- A readable date bucket left the supported year domain (grouping_value_internal).
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'value_out_of_range');
   end;
+  -- A grid's grouped read carries the reader's field bound, as its plain page read does, so the
+  -- collapsed table offers the same controls without reading a member page.
+  if p_user_inputs ? 'grouping' and result_value ->> 'outcome' = 'completed' then
+    result_value := result_value || pg_catalog.jsonb_build_object(
+      'fieldBounds', pg_catalog.jsonb_build_object(
+        'readableFieldIds', pg_catalog.to_jsonb(bound_field_ids),
+        'searchable', search_field_ids && bound_field_ids
+      )
+    );
+  end if;
   return result_value;
 end
 $function$;
@@ -1288,6 +1312,6 @@ grant execute on function vortex_record.run_module_query_summary_internal(uuid,u
   to vortex_record_adapter;
 
 comment on function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb) is
-  'Owner-only summary execution over the access plan prepared by the protected adapter entry point; explicit organisation and application scope and the exact read plan bound every aggregate scan, including a pivot crossed in one grouping-sets statement.';
+  'Owner-only summary execution over the access plan prepared by the protected adapter entry point; explicit organisation and application scope and the exact read plan bound every aggregate scan, including a pivot crossed in one grouping-sets statement; a grid''s grouped read also returns the reader''s guaranteed field bound.';
 
 reset role;
