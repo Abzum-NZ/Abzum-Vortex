@@ -306,8 +306,12 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
         // panel later does not introduce another asynchronous boundary and Suspense delay.
         modules.forEach((module, index) => {
           const key = activeKeys(signature)[index]!;
-          for (const point of featurePoints[key])
-            pointComponents.set(`${key}:${point}`, pointComponentOf(module.gridFeature, point));
+          for (const point of featurePoints[key]) {
+            const id = `${key}:${point}`;
+            // Keep an already mounted editor's component identity and local edit state.
+            if (!pointComponents.has(id))
+              pointComponents.set(id, pointComponentOf(module.gridFeature, point));
+          }
         });
         if (current)
           setLoadedDecorators({
