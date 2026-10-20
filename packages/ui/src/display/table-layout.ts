@@ -57,6 +57,8 @@ export type GridLayoutControls = Readonly<{
   reset: () => void;
   /** Whether the layout differs from the authored one. */
   arranged: boolean;
+  /** The layout as the person has it now, including a change not yet stored. */
+  arrangement: GridLayout;
 }>;
 
 /** Changes from one gesture are stored together once the person pauses (keyboard resizes repeat). */
@@ -462,5 +464,6 @@ export const useGridLayout = ({
     setPin,
     reset,
     arranged,
+    arrangement: layout,
   };
 };

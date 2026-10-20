@@ -8,6 +8,7 @@ import {
   describeFailure,
   organizationIdSchema,
   roleIdSchema,
+  type FlowRefusalFeedback,
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
@@ -56,7 +57,14 @@ export type ApplicationStoreEnvironment = FirstInstallFlowEnvironment & UpgradeR
 type Outputs = Readonly<Record<string, JsonValue>>;
 
 /** A result the protected operation executor maps: available outputs, a refusal, a failure or a conflict. */
-export type ApplicationStoreResult = HumanOrganizationRequestResult<Outputs> | "conflict";
+export type ApplicationStoreResult =
+  | HumanOrganizationRequestResult<Outputs>
+  | "conflict"
+  | Readonly<{
+      kind: "confirmed_failure";
+      outcome: "refused";
+      diagnostic: FlowRefusalFeedback;
+    }>;
 
 /** Why the latest version can be neither installed nor upgraded to here, as the review names it. */
 type UnavailableReason =
@@ -131,6 +139,12 @@ const reviewFailure = (error: unknown): ApplicationStoreResult => {
 
 /** A command's failure: a conflict, a refusal (permission or eligibility) or a temporary failure. */
 const commandFailure = (problem: InstallationProblemShape): ApplicationStoreResult => {
+  if (problem.unavailableReason === "storage_incompatible")
+    return {
+      kind: "confirmed_failure",
+      outcome: "refused",
+      diagnostic: { code: "application_storage_incompatible" },
+    };
   if (problem.kind === "conflict") return "conflict";
   if (problem.kind === "authentication_required")
     return { kind: "unavailable", code: "recent_authentication_required" };

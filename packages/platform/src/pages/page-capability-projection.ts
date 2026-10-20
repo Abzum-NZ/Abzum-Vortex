@@ -1,6 +1,7 @@
 import "server-only";
 
-import type { CompiledLayout, PageDefinition } from "../schema";
+import { isRecord, type CompiledLayout, type PageDefinition } from "../schema";
+import { TABLE_BLOCK_RELEASE } from "../definition/application-composition-catalogue";
 import type { ResolvedPageComposition } from "./page-composition-resolution";
 import { placementViewShown } from "./projected-navigation";
 
@@ -112,7 +113,17 @@ const projectItems = (
     for (const [key, value] of Object.entries(props)) {
       if (reservedProps.has(key)) continue;
       if (!slotKeys.has(key)) {
-        projectedProps[key] = value;
+        // Default documents are server configuration, including potentially sensitive filter
+        // values. Only the selected document, projected under current access, reaches the grid.
+        projectedProps[key] =
+          key === "features" &&
+          isRecord(vortex.block) &&
+          vortex.block.blockId === TABLE_BLOCK_RELEASE.blockId &&
+          isRecord(value) &&
+          isRecord(value.saved_views) &&
+          value.saved_views.enabled === true
+            ? { ...value, saved_views: { ...value.saved_views, default_views: [] } }
+            : value;
         continue;
       }
       const children = projectItems(value, states);

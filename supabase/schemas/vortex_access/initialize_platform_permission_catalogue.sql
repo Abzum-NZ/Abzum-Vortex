@@ -21,7 +21,7 @@ declare
   -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   platform_owner_id constant uuid := 'cabe121e-0baf-4084-9471-cce915d460a8';
   catalogue_fingerprint constant text :=
-    'sha256:1e5cceb04465d940f163ec926af7423efc9b37788551b00766d768fe9089195b';
+    'sha256:60d2c42cab03723fda56198083a70e8703792587546379372334d99609b15538';
 begin
   if p_organization_id is null
     or p_organization_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -72,7 +72,7 @@ begin
 
   select pg_catalog.count(*) into expected_count
   from vortex_access.read_platform_permission_declaration_catalogue_internal(6);
-  if expected_count <> 22 then
+  if expected_count <> 23 then
     raise exception using errcode = '55000',
       message = 'Platform permission declarations are invalid';
   end if;

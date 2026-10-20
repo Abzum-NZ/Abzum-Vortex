@@ -3,16 +3,23 @@ import {
   readGridViews,
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
-  type StoredGridView,
+  type StoredGridViews,
 } from "@vortex/platform/server";
-import type { IdentitySession, OrganizationSelectionCandidate } from "@vortex/platform/schema";
+import type {
+  GridViewDocument,
+  IdentitySession,
+  OrganizationSelectionCandidate,
+} from "@vortex/platform/schema";
 import { decideRecordTypeFieldIds } from "./form-field-access";
 
-/** The person's stored layouts of a page's data grids, read once before any grid reads its rows. */
+/**
+ * The person's stored layouts and saved views of a page's data grids, read once before any grid
+ * reads its rows.
+ */
 export type PageGridLayouts = Readonly<{
   /** False in a preview: changes then stay on screen only. */
   persisted: boolean;
-  stored: ReadonlyMap<string, StoredGridView>;
+  stored: StoredGridViews;
   /**
    * The fields the person can read on at least one record, by lower-cased record type identity:
    * a grid lists, reads and offers only these columns. Undefined in a preview, whose builder sees
@@ -21,7 +28,26 @@ export type PageGridLayouts = Readonly<{
   readable: ReadonlyMap<string, ReadonlySet<string>> | undefined;
 }>;
 
-const NONE: ReadonlyMap<string, StoredGridView> = new Map();
+const NONE: StoredGridViews = {
+  roleKeys: new Set(),
+  shareable: new Set(),
+  layouts: new Map(),
+  views: new Map(),
+  defaultDocuments: new Map(),
+};
+
+/** One data grid of the page whose layout and views are read. */
+export type PageGrid = Readonly<{
+  placementId: string;
+  recordTypeId: string;
+  /** The saved view the address selects for this grid, when it names one. */
+  selectedViewId: string | undefined;
+  defaultViews: readonly Readonly<{
+    viewId: string;
+    queryId: string;
+    document: GridViewDocument;
+  }>[];
+}>;
 
 /**
  * Reads every stored layout of the named grid placements, and the person's current field policy
@@ -35,7 +61,7 @@ export const readPageGridLayouts = async (
   selection: OrganizationSelectionCandidate,
   context: InstalledRuntimeContext,
   pageId: string,
-  grids: readonly Readonly<{ placementId: string; recordTypeId: string }>[],
+  grids: readonly PageGrid[],
 ): Promise<PageGridLayouts> => {
   if (selection.previewInstallationId !== undefined)
     return { persisted: false, stored: NONE, readable: undefined };
@@ -49,6 +75,8 @@ export const readPageGridLayouts = async (
         transaction,
         pageId,
         grids.map((grid) => grid.placementId),
+        grids.flatMap((grid) => (grid.selectedViewId === undefined ? [] : [grid.selectedViewId])),
+        grids.flatMap((grid) => grid.defaultViews),
       );
       const readable = new Map<string, ReadonlySet<string>>();
       for (const recordTypeId of recordTypeIds)

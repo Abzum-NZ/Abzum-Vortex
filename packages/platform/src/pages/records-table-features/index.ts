@@ -32,6 +32,7 @@ export {
  */
 export type RecordsTableFeatureProjection = Readonly<{
   pinning?: true;
+  spreadsheet?: Readonly<{ rangeSelect: boolean; find: boolean }>;
   /** Present when the viewer can read some field the record type marks searchable. */
   search?: true;
   /**
@@ -152,6 +153,17 @@ export const projectRecordsTableFeatures = (
   // rows expand; a viewer who cannot read the related records sees the panel's neutral refusal.
   const masterDetail = features.masterDetail;
   const projection: RecordsTableFeatureProjection = {
+    ...(features.spreadsheet.enabled &&
+    typeof features.spreadsheet.rangeSelect === "boolean" &&
+    typeof features.spreadsheet.find === "boolean" &&
+    contract.columns.some((column) => readable(column.field))
+      ? {
+          spreadsheet: {
+            rangeSelect: features.spreadsheet.rangeSelect,
+            find: features.spreadsheet.find,
+          },
+        }
+      : {}),
     ...(features.pinning.enabled ? { pinning: true as const } : {}),
     ...(search ? { search: true as const } : {}),
     ...(columnFilters.length === 0 ? {} : { columnFilters }),

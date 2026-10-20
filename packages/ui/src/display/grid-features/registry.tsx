@@ -11,10 +11,14 @@ import {
   type LazyExoticComponent,
   type ReactElement,
   type ReactNode,
+  type RefObject,
 } from "react";
 import type {
+  GridLayout,
+  GridViewsState,
   RecordsTableFeatureKey,
   RecordsTableFeatureProjection,
+  RecordsTableSortState,
 } from "@vortex/platform/schema";
 import type { DisplayEventHandlers, DisplayRow, TableNarrowing } from "../projected-data";
 import type { TableSelectionParts } from "../projected-grid-features";
@@ -39,10 +43,26 @@ export type GridFeatureContext = Readonly<{
   selection: TableSelectionParts;
   paged: boolean;
   narrowing: TableNarrowing | undefined;
+  /** The order the page was read in, when it is the viewer's own or the authored default. */
+  sort: RecordsTableSortState | undefined;
+  /** The layout as the person has it now, including a change not yet stored. */
+  arrangement: GridLayout;
+  /** The saved views of this grid; absent when the grid is not stored for the person. */
+  views: GridViewsState | undefined;
   events: DisplayEventHandlers | undefined;
   /** The person's pin per lower-cased field identity, and the one way to change it. */
   pins: GridLayoutControls["state"]["pins"];
   setPin: GridLayoutControls["setPin"];
+}>;
+
+/** The one grid focus model, shared with optional page interactions. */
+export type GridInteractionSurface = Readonly<{
+  rootRef: RefObject<HTMLDivElement | null>;
+  focusCell: (row: number, columnId: string, focus?: boolean) => void;
+}>;
+export type GridFeatureInteractionProps = Readonly<{
+  context: GridFeatureContext;
+  surface: GridInteractionSurface;
 }>;
 
 export type GridFeaturePointProps = Readonly<{ context: GridFeatureContext }>;
@@ -95,6 +115,7 @@ export const GridBoardView = lazy(async () => ({
  * and `SelectionBanner` over the selected rows.
  */
 export type GridFeatureModule = Readonly<{
+  GridInteraction?: ComponentType<GridFeatureInteractionProps>;
   ToolbarItems?: ComponentType<GridFeaturePointProps>;
   ColumnMenuItems?: ComponentType<GridFeatureColumnProps>;
   HeaderAdornment?: ComponentType<GridFeatureColumnProps>;
@@ -119,6 +140,7 @@ const loaders: Readonly<
   Record<GridExtensionKey, () => Promise<{ gridFeature: GridFeatureModule }>>
 > = {
   pinning: () => import("./pinning"),
+  spreadsheet: () => import("./range-selection"),
   search: () => import("./search"),
   column_filters: () => import("./column-filters"),
   saved_views: () => import("./saved-views"),
@@ -130,6 +152,7 @@ const loaders: Readonly<
 
 const projectionKeys: Readonly<Record<keyof RecordsTableFeatureProjection, GridExtensionKey>> = {
   pinning: "pinning",
+  spreadsheet: "spreadsheet",
   search: "search",
   columnFilters: "column_filters",
   savedViews: "saved_views",
@@ -186,10 +209,10 @@ const lazyPoint = <Props,>(
 /** Which points each feature fills, so the table never draws a boundary for an empty point. */
 const featurePoints: Readonly<Record<GridExtensionKey, readonly ComponentPoint[]>> = {
   pinning: ["ColumnMenuItems"],
+  spreadsheet: ["GridInteraction"],
   search: ["ToolbarItems"],
   column_filters: ["ToolbarItems", "HeaderAdornment"],
-  // Saved views add their toolbar menu with the views store (#3020); the switch already gates them.
-  saved_views: [],
+  saved_views: ["ToolbarItems"],
   bulk_actions: ["SelectionBanner"],
   inline_edit: ["CellEditor"],
   master_detail: ["RowExpansion"],
@@ -227,6 +250,7 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   /** A projected feature draws a panel below an expanded row, so rows offer an expand toggle. */
   expands: boolean;
   toolbarItems: () => ReactNode;
+  interaction: (surface: GridInteractionSurface) => ReactNode;
   selectionBanner: () => ReactNode;
   headerAdornment: (column: GridColumn) => ReactNode;
   columnMenuItems: (column: GridColumn) => ReactNode;
@@ -308,6 +332,7 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
       return current === undefined ? null : drawPoint(active, point, current, props);
     };
     return {
+      interaction: (surface: GridInteractionSurface) => drawAt("GridInteraction", { surface }),
       headerAdornment: (column: GridColumn) => drawAt("HeaderAdornment", { column }),
       columnMenuItems: (column: GridColumn) => drawAt("ColumnMenuItems", { column }),
       rowExpansion: (row: DisplayRow) => drawAt("RowExpansion", { row }),

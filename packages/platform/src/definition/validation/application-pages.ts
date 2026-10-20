@@ -7,6 +7,7 @@ import {
 import { registeredBlockReleases, type JsonObject } from "./context";
 import {
   readRecordsTableContract,
+  gridViewDocumentSchema,
   readRecordDetailContract,
   recordsTableBoardFactsOf,
   calendarMappingSchema,
@@ -111,6 +112,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
   const recordsTableQueryFacts = (
     bound: JsonObject,
     page: RecordsTableRelatedRecordsFacts["page"],
+    signedIn: boolean,
   ): RecordsTableQueryFacts => {
     const recordTypeId = String(object(bound.recordType).recordTypeId);
     const record = records.get(recordTypeId);
@@ -121,6 +123,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
       ),
     );
     return {
+      signedIn,
       recordTypeLabel: String(record?.singularLabel ?? ""),
       fields: array(record?.fields)
         .filter((field) => offered.has(String(field.fieldId).toLowerCase()))
@@ -196,6 +199,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
   };
 
   for (const page of pages.values()) {
+    const defaultViewIds = new Set<string>();
     const pageRecordId = page.recordType ? String(object(page.recordType).recordTypeId) : undefined;
     const pageQuery = page.queryId ? moduleQueries.get(String(page.queryId)) : undefined;
     const pageQueryRecordId = pageQuery
@@ -512,7 +516,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
         // own business sentence, the one Studio shows beside its switch.
         for (const feature of checkRecordsTableFeatures(
           table.features,
-          recordsTableQueryFacts(bound, bindingFacts),
+          recordsTableQueryFacts(bound, bindingFacts, page.type !== "public"),
           table.presentation,
         ))
           // A grid in Board mode shows none of the table's other features, so only the board is judged.
@@ -531,6 +535,46 @@ export function applicationPageRules(scope: ApplicationScope): void {
                 feature.check.reason,
               ),
             );
+      }
+      if (table?.features.savedViews.enabled) {
+        const roles = new Set(array(content.roles).map((role) => String(role.key)));
+        for (const view of table.features.savedViews.defaultViews) {
+          const viewId = view.viewId.toLowerCase();
+          if (defaultViewIds.has(viewId))
+            failures.push(
+              failure(
+                output,
+                "vortex.definition.application_block_settings",
+                "unsupported_choice",
+                undefined,
+                "definition_records_table_saved_views",
+                "Each default view on this page needs a unique identity.",
+              ),
+            );
+          defaultViewIds.add(viewId);
+          if (!gridViewDocumentSchema.safeParse(view.document).success)
+            failures.push(
+              failure(
+                output,
+                "vortex.definition.application_block_settings",
+                "unsupported_choice",
+                undefined,
+                "definition_records_table_saved_views",
+                `${view.name}: This view needs fixing`,
+              ),
+            );
+          if (view.role !== "*" && !roles.has(view.role))
+            failures.push(
+              failure(
+                output,
+                "vortex.definition.application_block_settings",
+                "unsupported_choice",
+                undefined,
+                "definition_records_table_saved_views",
+                `${view.role} is not a role of this application`,
+              ),
+            );
+        }
       }
       if (release !== undefined) {
         const boundRecord = records.get(String(object(bound.recordType).recordTypeId));

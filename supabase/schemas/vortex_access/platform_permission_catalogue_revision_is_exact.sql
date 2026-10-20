@@ -26,8 +26,8 @@ as $function$
     p_organization_id is not null
     and p_organization_id <> '00000000-0000-0000-0000-000000000000'::uuid
     and p_registration_revision = 6
-    and (select pg_catalog.count(*) from expected) = 22
-    and (select pg_catalog.count(*) from entries) = 22
+    and (select pg_catalog.count(*) from expected) = 23
+    and (select pg_catalog.count(*) from entries) = 23
     and exists (
       select 1
       from vortex_access.permission_registrations as registration
@@ -47,7 +47,7 @@ as $function$
         and registration.source_revision is null
         and registration.validation_contract_version is null
         and registration.permission_catalogue_fingerprint =
-          'sha256:1e5cceb04465d940f163ec926af7423efc9b37788551b00766d768fe9089195b'
+          'sha256:60d2c42cab03723fda56198083a70e8703792587546379372334d99609b15538'
         and registration.candidate_fingerprint = registration.permission_catalogue_fingerprint
         and registration.changed_by is not null
         and registration.change_correlation_id is not null
@@ -96,7 +96,7 @@ as $function$
       where continuity.organization_id = p_organization_id
         and continuity.registration_kind = 'platform'
         -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-        and continuity.registration_owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid) = 22
+        and continuity.registration_owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid) = 23
     and not exists (
       select 1 from expected
       where not exists (

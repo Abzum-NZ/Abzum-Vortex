@@ -19,6 +19,7 @@ import {
   gridLayoutStateSchema,
   type GridLayout,
   type GridLayoutState,
+  type GridViewCommand,
   isRecord,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
@@ -323,7 +324,9 @@ export type DisplaySemanticEventName =
    * records, and its Bulk actions widen or clear the selection; neither is a flow event.
    */
   | "filter_records_requested"
-  | "selection_scope_changed";
+  | "selection_scope_changed"
+  /** The Saved views feature asks the host to open, store, share or delete a view. */
+  | "grid_view_requested";
 
 /**
  * One declared semantic event. Row and item events always carry stable identity;
@@ -365,6 +368,14 @@ export type DisplaySemanticEvent =
       continuationToken?: string;
     }>
   | Readonly<{ event: "search_changed"; query: string }>
+  | Readonly<{
+      /**
+       * A person asked for a change to the grid's saved views. The host opens the view in the
+       * address or stores the change, and its handler resolves to a `GridViewCommandResult`.
+       */
+      event: "grid_view_requested";
+      command: GridViewCommand;
+    }>
   | Readonly<{
       /** The whole ordered sort a header asked for; an empty list asks for the default order. */
       event: "sort_changed";
@@ -452,6 +463,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "selection_changed",
   "filter_changed",
   "filter_records_requested",
+  "grid_view_requested",
   "search_changed",
   "sort_changed",
   "columns_changed",
