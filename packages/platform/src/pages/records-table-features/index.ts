@@ -43,8 +43,8 @@ export type RecordsTableFeatureProjection = Readonly<{
   /** Present when the viewer can filter by some field or sort by some field it can read. */
   savedViews?: true;
   /**
-   * The declared bulk actions. Whether the viewer may run one on a record is decided per record when
-   * it runs, under current access, and every refused record is reported.
+   * The declared bulk actions. A bounded on-intent availability read decides each action's own
+   * permission and precondition for the visible selection; execution rechecks current authority.
    */
   bulkActions?: readonly RecordsTableBulkActionContract[];
   /** The fields the viewer may change on at least one row, and the flow binding that commits a change. */
@@ -123,6 +123,12 @@ export const recordsTableEditableFields = (
     : [];
 };
 
+/** The one bulk-action projection; a disabled feature offers neither actions nor availability reads. */
+export const recordsTableBulkActions = (
+  contract: RecordsTableContract,
+): readonly RecordsTableBulkActionContract[] =>
+  contract.features.bulkActions.enabled ? contract.features.bulkActions.actions : [];
+
 /**
  * Projects the enabled features for the viewer of one read. `bounds` is the viewer's current field
  * bound from the same read, carried even when no row was returned, so it decides filters, search
@@ -155,7 +161,7 @@ export const projectRecordsTableFeatures = (
   const savedViews =
     features.savedViews.enabled &&
     (columnFilters.length > 0 || contract.sortableFields.some((field) => readable(field)));
-  const bulkActions = features.bulkActions.enabled ? features.bulkActions.actions : [];
+  const bulkActions = recordsTableBulkActions(contract);
   const inlineEdit = features.inlineEdit;
   const editableFields = recordsTableEditableFields(contract, rows);
   // Every expanded row is read again under the viewer's current access: the projection only says

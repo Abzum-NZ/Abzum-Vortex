@@ -50,7 +50,6 @@ import { useApplyDispatch } from "./use-apply-dispatch";
 import { useGuidedFormSteps } from "./use-guided-form-steps";
 import { usePlacementActions } from "./use-placement-actions";
 import { useTablePageAddress } from "./use-table-page-address";
-import { useTableNextPage, useTableNextPageReadAhead } from "./use-table-next-page";
 import { useRuntimeInputs } from "./use-runtime-inputs";
 import { useGridLayout } from "./use-grid-layout";
 import { useRowDetail } from "./use-row-detail";
@@ -234,13 +233,6 @@ export function ApplicationPageViewContent({
     },
     [basePath, pageKeyOf],
   );
-  const nextPage = useTableNextPage({
-    navigationKey,
-    accessVersion: model.accessVersion,
-    application,
-    pageKey: currentPageKey,
-    search: currentSearch,
-  });
   const {
     currentData,
     refreshPlacements,
@@ -262,7 +254,6 @@ export function ApplicationPageViewContent({
     setDialogChoicePages,
     setRefreshedPlacementData,
     refreshedPlacementData,
-    nextPage,
   });
 
   useEffect(() => {
@@ -444,20 +435,6 @@ export function ApplicationPageViewContent({
     currentSearch,
     refreshPlacements,
     setSelection,
-  });
-  const pagedPlacementIds = useMemo(
-    () =>
-      Object.entries(placementEventNames)
-        .filter(([, names]) => names.has("page_changed"))
-        .map(([placementId]) => placementId),
-    [placementEventNames],
-  );
-  useTableNextPageReadAhead({
-    nextPage,
-    currentData,
-    pagedPlacementIds,
-    busy,
-    pending: tableQueryPending,
   });
   const { runBinding, continueBoardColumn, continueTablePage } = usePlacementActions({
     applyDispatch,
