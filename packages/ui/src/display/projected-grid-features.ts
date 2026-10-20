@@ -137,7 +137,7 @@ export type TableBulkRun =
  */
 export type TableExportRun =
   | Readonly<{ status: "running"; scope: TableExportScope; expected?: number; bytes: number }>
-  | Readonly<{ status: "finished"; scope: TableExportScope; filename: string; expected: number }>
+  | Readonly<{ status: "finished"; scope: TableExportScope; filename: string }>
   | Readonly<{ status: "refused"; message: string }>
   | Readonly<{ status: "incomplete" }>
   | Readonly<{ status: "cancelled" }>;
@@ -243,7 +243,6 @@ const parseExportRun = (
         status: "finished",
         scope: scope(),
         filename: requireNonEmptyString(run.filename, "A finished export needs its file", location),
-        expected: wholeCount(run.expected, location),
       });
     case "refused":
       return Object.freeze({

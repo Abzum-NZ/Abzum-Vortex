@@ -181,7 +181,7 @@ export function useRecordsExport({
         link.click();
         link.remove();
         window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
-        record(placementId, { status: "finished", scope, filename, expected: expected ?? 0 });
+        record(placementId, { status: "finished", scope, filename });
       } catch (error) {
         if (controller.signal.aborted) record(placementId, { status: "cancelled" });
         else {

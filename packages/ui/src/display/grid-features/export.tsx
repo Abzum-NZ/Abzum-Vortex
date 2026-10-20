@@ -46,8 +46,8 @@ function useExportToast(run: TableExportRun | undefined): void {
   useEffect(() => {
     if (run === undefined || run.status === "running" || announced.current === run) return;
     announced.current = run;
-    if (run.status === "finished")
-      toast.success(`Exported ${records(run.expected)} to ${run.filename}`);
+    // The file holds the records still readable now, so the count is never promised here.
+    if (run.status === "finished") toast.success(`Export saved as ${run.filename}`);
     else if (run.status === "refused") toast.error(run.message);
     else if (run.status === "cancelled") toast("Export cancelled. No file was saved.");
     else

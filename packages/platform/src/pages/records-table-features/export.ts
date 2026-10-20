@@ -514,10 +514,13 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           ? request.selection.excluded.map((recordId) => recordId.toLowerCase())
           : [],
       );
-      const selectedIds =
+      // The rows the person ticked, each with the revision they saw it at.
+      const selectedRevisions = new Map(
         request.selection.kind === "ids"
-          ? [...new Set(request.selection.items.map((item) => item.recordId.toLowerCase()))]
-          : [];
+          ? request.selection.items.map((item) => [item.recordId.toLowerCase(), item.revision])
+          : [],
+      );
+      const selectedIds = [...selectedRevisions.keys()];
       if (request.selection.kind === "ids") expected = selectedIds.length;
       else {
         const counted = await bulk.count(session, address, {
@@ -536,7 +539,32 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           await audit(session, address, recordTypeId, columnIds, "refused");
           return { kind: "refused", reason: "too_many", limit: maxRows };
         }
-        expected = Math.max(0, counted.count - excluded.size);
+        let stillExcluded = excluded.size;
+        // Near the row limit, only unticked records the read still matches may bring the count
+        // under it: one gone or changed since would otherwise end the stream short of the limit.
+        if (counted.count > maxRows && counted.count - excluded.size <= maxRows) {
+          if (descriptor.search !== null) {
+            // A single record's read does not apply the search, so its exclusions cannot be
+            // confirmed: the selection is judged by what the read matches.
+            refuse("selection_over_row_limit", "exclusions_unconfirmed");
+            await audit(session, address, recordTypeId, columnIds, "refused");
+            return { kind: "refused", reason: "too_many", limit: maxRows, count: counted.count };
+          }
+          stillExcluded = 0;
+          for (const recordId of excluded) {
+            const read = await queries.run(session, address.selection, {
+              ...command,
+              pageSize: 1,
+              exactRecordId: recordId,
+            });
+            if (read.kind !== "available" || read.value.outcome !== "completed") {
+              refuse("exclusion_unreadable");
+              return unavailable;
+            }
+            if (read.value.rows.length > 0) stillExcluded += 1;
+          }
+        }
+        expected = Math.max(0, counted.count - stillExcluded);
       }
       if (expected > maxRows) {
         refuse("selection_over_row_limit", `expected=${expected} limit=${maxRows}`);
@@ -619,6 +647,10 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         return { rows: result.value.rows, next: result.value.nextContinuationToken };
       };
 
+      // Shown rows that changed since the person ticked them: exported as they are now, and
+      // reported as drift with the outcome.
+      let changed = 0;
+
       async function* pages(pageSignal: AbortSignal): AsyncGenerator<RecordsExportPage> {
         if (request.selection.kind === "ids") {
           // The rows the person ticked, each read under their current access in the order they
@@ -628,7 +660,11 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
             for (const recordId of selectedIds.slice(start, start + selectedRowsPageSize)) {
               pageSignal.throwIfAborted();
               if (rows.length === 0) await recheck();
-              rows.push(...(await readPage({ exactRecordId: recordId })).rows);
+              const read = (await readPage({ exactRecordId: recordId })).rows;
+              for (const row of read)
+                if (row.revision !== undefined && row.revision !== selectedRevisions.get(recordId))
+                  changed += 1;
+              rows.push(...read);
             }
             if (rows.length > 0) yield await toPage(rows);
           }
@@ -682,7 +718,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       void prepared.outcome
         .then(async (outcome: RecordsExportOutcome) => {
           console.info(
-            `[records-export] ${outcome.kind} exported=${outcome.exported} expected=${expected} withheld=${Math.max(0, expected - outcome.exported)} placement=${request.placementId} columns=${columnIds.length}${outcome.kind === "incomplete" ? ` reason=${outcome.reason}` : ""}`,
+            `[records-export] ${outcome.kind} exported=${outcome.exported} expected=${expected} withheld=${Math.max(0, expected - outcome.exported)} changed=${changed} placement=${request.placementId} columns=${columnIds.length}${outcome.kind === "incomplete" ? ` reason=${outcome.reason}` : ""}`,
           );
           await audit(
             session,

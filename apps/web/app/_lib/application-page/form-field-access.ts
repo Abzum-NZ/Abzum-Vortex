@@ -98,8 +98,6 @@ export const flowCreatedRecordTypeIds = (
   return created;
 };
 
-export { decideRecordTypeFieldIds };
-
 /**
  * The fields this viewer may set when they create a record of one type. A draft preview gives its
  * builder every field, so it narrows nothing (`undefined`).

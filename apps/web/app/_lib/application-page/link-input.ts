@@ -10,6 +10,7 @@ import {
   type RecordChoiceCommand,
   type RecordLinkResolver,
   type InstalledRuntimeContext,
+  decideRecordTypeFieldIds,
 } from "@vortex/platform/server";
 import {
   isRecord,
@@ -29,7 +30,6 @@ import {
 } from "./placement-helpers";
 import { projectReferenceChoicePage, type ReferenceChoiceAddress } from "./reference-choice";
 import type { PageDataState, SearchParameters } from "./types";
-import { decideRecordTypeFieldIds } from "./form-field-access";
 
 /** What a viewer may see of a linked record's title. */
 const titleOf = (
