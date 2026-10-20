@@ -14,17 +14,17 @@ import { DefinitionRenderError } from "../definition-error";
 import {
   parseDisplayData,
   parseDisplayEventHandlers,
-  parseListPayload,
+  parseLauncherRowsPayload,
 } from "../display/projected-data";
 
 /**
- * The launcher and tile blocks are read-only display surfaces over the one `list` payload they
+ * The launcher and tile blocks are read-only display surfaces over the one `launcher_rows` payload they
  * declare, so each supplies that one parser. The view filter binds nothing: it only narrows rows
  * its content slot already received, so its parser refuses every supplied input.
  */
-const LIST_PAYLOAD_PARSER: PlatformComponentPayloadParser = createPayloadParser({
+const LAUNCHER_ROWS_PAYLOAD_PARSER: PlatformComponentPayloadParser = createPayloadParser({
   data: (value, location: DefinitionRenderErrorLocation) =>
-    parseDisplayData(value, parseListPayload, location),
+    parseDisplayData(value, parseLauncherRowsPayload, location),
   events: (value, location) => parseDisplayEventHandlers(value, location),
 });
 
@@ -68,7 +68,7 @@ const RECORD_PIN_PAYLOAD_INPUTS = createPayloadParser({
   },
 });
 
-// Component-specific inputs keep the original list renderer's data type and parser intact.
+// Record-pin tiles declare their protected payload separately from launcher rows.
 const RECORD_PIN_PAYLOAD_PARSER: PlatformComponentPayloadParser = (value, location) => {
   const parsed = RECORD_PIN_PAYLOAD_INPUTS(value, location);
   return Object.freeze({
@@ -139,11 +139,11 @@ export const LAUNCHER_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistr
   Object.freeze([
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.APPLICATION_LAUNCHER_BLOCK_RELEASE,
-      parsePayload: LIST_PAYLOAD_PARSER,
+      parsePayload: LAUNCHER_ROWS_PAYLOAD_PARSER,
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.LINK_TILES_BLOCK_RELEASE,
-      parsePayload: LIST_PAYLOAD_PARSER,
+      parsePayload: LAUNCHER_ROWS_PAYLOAD_PARSER,
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_PIN_LINK_TILES_BLOCK_RELEASE,

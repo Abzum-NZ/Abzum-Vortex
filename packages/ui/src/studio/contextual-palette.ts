@@ -100,6 +100,11 @@ const choiceFor = (
   const setup: BlockPropertySchemaContract[] = [];
   let unavailable: string | undefined;
   for (const property of release.properties) {
+    // A preset is selected inside the one Data grid tile. It writes ordinary grid settings.
+    if (release.key === "platform.display.table" && property.key === "presentation") {
+      setup.push(property);
+      continue;
+    }
     if (!property.required || property.defaultValue !== undefined) continue;
     if (studioSettingEditable(property)) setup.push(property);
     else unavailable ??= `It needs its ${property.label} setting, which Studio can't set yet.`;

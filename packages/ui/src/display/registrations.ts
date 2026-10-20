@@ -11,8 +11,6 @@ import {
   parseCalendarPayload,
   parseDisplayData,
   parseDisplayEventHandlers,
-  parseGroupedPayload,
-  parseListPayload,
   parseRecordDetailPayload,
   parseRichTextPayload,
   parseSummaryPayload,
@@ -20,8 +18,6 @@ import {
   parseTextPayload,
   type CalendarPayload,
   type BoardPayload,
-  type GroupedPayload,
-  type ListPayload,
   type RecordDetailPayload,
   type RichTextPayload,
   type SummaryPayload,
@@ -45,13 +41,11 @@ const displayPayloadParser = <Payload>(
 
 const TEXT_PAYLOAD_PARSER = displayPayloadParser<TextPayload>(parseTextPayload);
 const RICH_TEXT_PAYLOAD_PARSER = displayPayloadParser<RichTextPayload>(parseRichTextPayload);
-const LIST_PAYLOAD_PARSER = displayPayloadParser<ListPayload>(parseListPayload);
 const TABLE_PAYLOAD_PARSER = displayPayloadParser<TablePayload>(parseTablePayload);
 const CALENDAR_PAYLOAD_PARSER = displayPayloadParser<CalendarPayload>(parseCalendarPayload);
 const BOARD_PAYLOAD_PARSER = displayPayloadParser<BoardPayload>(parseBoardPayload);
 const RECORD_DETAIL_PAYLOAD_PARSER =
   displayPayloadParser<RecordDetailPayload>(parseRecordDetailPayload);
-const GROUPED_DATA_PAYLOAD_PARSER = displayPayloadParser<GroupedPayload>(parseGroupedPayload);
 const SUMMARY_VALUES_PAYLOAD_PARSER = displayPayloadParser<SummaryPayload>(parseSummaryPayload);
 
 /** Exact registrations pairing each display block release with its React renderer. */
@@ -66,16 +60,8 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       parsePayload: RICH_TEXT_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.LIST_BLOCK_RELEASE,
-      parsePayload: LIST_PAYLOAD_PARSER,
-    }),
-    Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE,
       parsePayload: RECORD_DETAIL_PAYLOAD_PARSER,
-    }),
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.GROUPED_DATA_BLOCK_RELEASE,
-      parsePayload: GROUPED_DATA_PAYLOAD_PARSER,
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.SUMMARY_VALUES_BLOCK_RELEASE,
@@ -104,16 +90,8 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       parsePayload: RICH_TEXT_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.LIST_BLOCK_RELEASE_1_1_0,
-      parsePayload: LIST_PAYLOAD_PARSER,
-    }),
-    Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
       parsePayload: RECORD_DETAIL_PAYLOAD_PARSER,
-    }),
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.GROUPED_DATA_BLOCK_RELEASE_1_1_0,
-      parsePayload: GROUPED_DATA_PAYLOAD_PARSER,
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
