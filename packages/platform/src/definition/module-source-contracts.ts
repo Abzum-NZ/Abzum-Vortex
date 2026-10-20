@@ -959,6 +959,9 @@ const moduleSourceBodyFields = {
       )
       .max(100),
   ),
+  contributions: sourceProvenanceUnchanged(
+    z.array(moduleSourceContributionSchema).max(100).optional(),
+  ),
   sharing_conditions: sourceProvenanceUnchanged(
     z.array(moduleSourceSharingConditionSchema).max(100),
   ),
@@ -1017,11 +1020,6 @@ const moduleSourceBodySchema = z
   .object({
     ...moduleSourceBodyFields,
     owner_application: sourceProvenanceUnchanged(namespacedKeySchema),
-    // Optional rather than defaulted so an authored source that declares no contributions
-    // keeps the exact fingerprint it had before contributions existed.
-    contributions: sourceProvenanceUnchanged(
-      z.array(moduleSourceContributionSchema).max(100).optional(),
-    ),
   })
   .strict()
   .superRefine(refineModuleSourceBody);

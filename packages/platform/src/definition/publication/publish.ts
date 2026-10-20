@@ -25,6 +25,7 @@ import {
   selectApplicationContractPair,
   stableDefinitionReleaseVersionSchema,
   sourceIdentityAssignmentSchema,
+  moduleExtensionPointUseSchema,
   storedDefinitionDraftSchema,
   timestampSchema,
   versionImpactReasonSchema,
@@ -412,6 +413,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
             .object({
               recordTypes: z.array(z.string().min(1)),
               fields: z.array(z.string().min(1)),
+              extensionPointUses: z.array(moduleExtensionPointUseSchema),
             })
             .strict(),
         })
