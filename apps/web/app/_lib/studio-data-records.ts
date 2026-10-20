@@ -15,6 +15,7 @@ import {
   isRecord,
   namespacedKeySchema,
   organizationIdSchema,
+  queryTotalOperationLabels,
   revisionSchema,
   sameId,
   type IdentitySession,
@@ -110,14 +111,6 @@ const plainQueryOf = (module: ModuleRelease, record: ModuleRecordType): ModuleQu
       query.groupByFieldIds.length === 0 &&
       query.aggregates.length === 0,
   );
-
-const totalLabels = {
-  count: "Number of records",
-  sum: "Sum",
-  average: "Average",
-  minimum: "Lowest",
-  maximum: "Highest",
-} as const;
 
 /** A total's value as plain text: a number, an amount of money, a date. */
 const totalText = (result: Readonly<{ outcome: string; value?: JsonValue }>): string => {
@@ -277,8 +270,8 @@ export const readStudioDataRecords = async (
             alias: aggregate.alias,
             label:
               field === undefined
-                ? totalLabels[aggregate.operation]
-                : `${totalLabels[aggregate.operation]} of ${field.label}`,
+                ? queryTotalOperationLabels[aggregate.operation]
+                : `${queryTotalOperationLabels[aggregate.operation]} of ${field.label}`,
             value: result === undefined ? "None" : totalText(result),
           };
         });
