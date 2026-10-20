@@ -1129,6 +1129,9 @@
                       "pinning": {
                         "enabled": true
                       },
+                      "pivot": {
+                        "enabled": false
+                      },
                       "spreadsheet": {
                         "enabled": false
                       }
@@ -1341,6 +1344,9 @@
                       "pinning": {
                         "enabled": true
                       },
+                      "pivot": {
+                        "enabled": false
+                      },
                       "spreadsheet": {
                         "enabled": false
                       }
@@ -1418,6 +1424,9 @@
                       "pinning": {
                         "enabled": true
                       },
+                      "pivot": {
+                        "enabled": false
+                      },
                       "spreadsheet": {
                         "enabled": false
                       }
@@ -1489,6 +1498,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       },
                       "spreadsheet": {
                         "enabled": false
@@ -2238,6 +2250,9 @@
                       "pinning": {
                         "enabled": true
                       },
+                      "pivot": {
+                        "enabled": false
+                      },
                       "spreadsheet": {
                         "enabled": false
                       }
@@ -2309,6 +2324,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       },
                       "spreadsheet": {
                         "enabled": false
@@ -2762,6 +2780,9 @@
                       "pinning": {
                         "enabled": true
                       },
+                      "pivot": {
+                        "enabled": false
+                      },
                       "spreadsheet": {
                         "enabled": false
                       }
@@ -2859,6 +2880,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       },
                       "spreadsheet": {
                         "enabled": false
