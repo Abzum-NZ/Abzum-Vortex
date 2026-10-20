@@ -1,9 +1,9 @@
 "use client";
-import { useIdlePreload } from "../_lib/use-idle-preload";
+import { useIntentPreload } from "../_lib/use-intent-preload";
 import dynamic from "next/dynamic";
 import { useCallback, useMemo, type ReactNode } from "react";
 import { describeFailure, type ApplicationSourceDocument, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
-import { useAppearanceMode } from "@vortex/ui";
+import { useAppearanceMode } from "@vortex/ui/appearance";
 import {
   applyStudioFlowCommand, applyStudioFlowCreate, applyStudioFlowStart, describeStudioFlowStarts,
   projectStudioFlowCreateChoices, projectStudioFlowDraftChoices, projectStudioFlowStart, projectStudioFlowStepActions,
@@ -36,7 +36,7 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
   applications: readonly StudioModuleOwnerApplication[];
   openFlowsTab: () => void;
 }>) {
-  useIdlePreload(preloadFlowCanvas, "#studio-rail-flows");
+  useIntentPreload(preloadFlowCanvas, "#studio-rail-flows");
   const { state, source, selected } = draft;
   const appearance = useAppearanceMode();
   const disabled = draft.locked;

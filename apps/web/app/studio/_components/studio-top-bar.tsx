@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
-import { AppearanceToggle, Icon } from "@vortex/ui";
+import { AppearanceToggle } from "@vortex/ui/appearance-toggle";
+import { Icon } from "@vortex/ui/icons";
 import { Spinner } from "@vortex/ui/components/spinner";
 import { Button } from "@vortex/ui/components/button";
 import {

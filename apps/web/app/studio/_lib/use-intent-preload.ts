@@ -8,7 +8,7 @@ const idleTimeoutMs = 3000;
  * target or workspace cancels queued work. A visible editor still owns its normal dynamic import;
  * this only brings forward the next likely action's code, never its data.
  */
-export function useIdlePreload(load: () => Promise<unknown>, selector: string): void {
+export function useIntentPreload(load: () => Promise<unknown>, selector: string): void {
   useEffect(() => {
     let idle: number | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -28,7 +28,7 @@ export function useIdlePreload(load: () => Promise<unknown>, selector: string): 
       target = null;
       if (intended === null || !intended.isConnected) return;
       requested = true;
-      load().catch((error: unknown) => {
+      load().then(detach, (error: unknown) => {
         requested = false;
         console.error("[studio] preloading an editor failed", error);
       });
@@ -49,16 +49,18 @@ export function useIdlePreload(load: () => Promise<unknown>, selector: string): 
       if (event.relatedTarget instanceof Node && target.contains(event.relatedTarget)) return;
       cancel();
     };
-    document.addEventListener("pointerover", enter, true);
-    document.addEventListener("focusin", enter, true);
-    document.addEventListener("pointerout", leave, true);
-    document.addEventListener("focusout", leave, true);
-    return () => {
+    // A loaded editor needs no more intent, so the listeners go with it.
+    function detach() {
       cancel();
       document.removeEventListener("pointerover", enter, true);
       document.removeEventListener("focusin", enter, true);
       document.removeEventListener("pointerout", leave, true);
       document.removeEventListener("focusout", leave, true);
-    };
+    }
+    document.addEventListener("pointerover", enter, true);
+    document.addEventListener("focusin", enter, true);
+    document.addEventListener("pointerout", leave, true);
+    document.addEventListener("focusout", leave, true);
+    return detach;
   }, [load, selector]);
 }
