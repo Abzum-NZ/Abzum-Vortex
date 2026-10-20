@@ -3743,7 +3743,8 @@
                     "date_time",
                     "email_address",
                     "phone_number",
-                    "web_address"
+                    "web_address",
+                    "link"
                   ]
                 }
               }
@@ -3810,7 +3811,8 @@
                     "date_time",
                     "email_address",
                     "phone_number",
-                    "web_address"
+                    "web_address",
+                    "link"
                   ]
                 }
               },
