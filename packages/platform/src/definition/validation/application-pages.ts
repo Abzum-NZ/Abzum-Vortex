@@ -176,6 +176,9 @@ export function applicationPageRules(scope: ApplicationScope): void {
           acceptsSelection: array(action.inputs).every((input) => input.required !== true),
         })),
       grouped,
+      exportable:
+        Array.isArray(record?.standardActions) &&
+        record.standardActions.some((action) => action === "export"),
       relatedRecords: relatedRecordsFacts(recordTypeId, page),
       board:
         record === undefined

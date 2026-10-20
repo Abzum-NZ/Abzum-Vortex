@@ -1,8 +1,7 @@
 import {
   type InstalledRuntimeContext,
   type ProtectedQueryRow,
-  type RequestDatabaseTransaction,
-  evaluateOrganizationRecordPermissionAvailability,
+  decideRecordTypeFieldIds,
   runtimePreviewOf,
 } from "@vortex/platform/server";
 import {
@@ -10,8 +9,6 @@ import {
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
-  type SelectedOrganizationScope,
-  organizationRecordAccessDeclarationSchema,
   flowTaskChildLists,
   isRecord,
   sameId,
@@ -101,70 +98,7 @@ export const flowCreatedRecordTypeIds = (
   return created;
 };
 
-/**
- * The fields one kind of permission on a record type gives this viewer now: the changeable fields
- * of every create permission (as the record writer unions them), or the readable fields of every
- * read permission (the fields they can read on at least one record; a record's own route or share
- * may still withhold one, which its read decides). Each permission is decided on its own, without
- * a row, through the record permission availability the record decisions start from.
- */
-export const decideRecordTypeFieldIds = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  context: InstalledRuntimeContext,
-  recordTypeId: string,
-  action: "create" | "read",
-): Promise<ReadonlySet<string>> => {
-  const entries = context.permissionRegistration.entries.filter(
-    (entry) =>
-      entry.permission.actionKind === action &&
-      entry.permission.namedAction === undefined &&
-      entry.permission.recordTypeId !== undefined &&
-      sameId(String(entry.permission.recordTypeId), recordTypeId),
-  );
-  const targets = context.releaseSet.modules.flatMap((module) =>
-    module.content.recordTypes
-      .filter((record) => sameId(String(record.recordTypeId), recordTypeId))
-      .map((record) => ({ module, record })),
-  );
-  const target = targets.length === 1 ? targets[0] : undefined;
-  const fieldIds = new Set<string>();
-  if (target === undefined) return fieldIds;
-  for (const entry of entries) {
-    const availability = await evaluateOrganizationRecordPermissionAvailability(
-      transaction,
-      scope,
-      organizationRecordAccessDeclarationSchema.parse({
-        operationKey: `application.page.record_fields.${action}`,
-        action: { actionKind: action },
-        target: { kind: "application", applicationRootId: context.applicationRootId },
-        requiredPermissions: [
-          {
-            applicationRootId: entry.applicationRootId,
-            ownerKind: entry.ownerKind,
-            ownerId: entry.ownerId,
-            permissionId: entry.permission.permissionId,
-          },
-        ],
-        recordBinding: {
-          moduleRootId: target.module.rootId,
-          recordTypeId: target.record.recordTypeId,
-          storageContractId: target.record.storageContractId,
-          storageScope: target.record.storageScope,
-        },
-        recentAuthentication: { kind: "none" },
-        authority: { kind: "permission" },
-      }),
-    );
-    if (availability.outcome !== "eligible") continue;
-    const policy = entry.permission.fieldPolicy;
-    for (const fieldId of (action === "create"
-      ? policy?.changeableFieldIds
-      : policy?.readableFieldIds) ?? [])
-      fieldIds.add(String(fieldId).toLowerCase());
-  }
-  return fieldIds;
-};
+export { decideRecordTypeFieldIds };
 
 /**
  * The fields this viewer may set when they create a record of one type. A draft preview gives its

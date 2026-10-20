@@ -147,6 +147,8 @@ export type RecordsTableQueryRequest = Readonly<{
   formatting?: ConditionalFormattingContext;
   /** How a cell edits each field of the installed definition; supplied only when inline editing is on. */
   fieldEditors?: Readonly<Record<string, RecordsTableInlineEditor>>;
+  /** The viewer's export permission for the table's record type, supplied only when Export is on. */
+  exportAllowed?: boolean;
   /**
    * Set when the table is a tree: the read is one level of it, the roots (no parent) or the
    * children of one record, `pageSize` at a time, over the link that names each record's parent.
@@ -827,6 +829,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
             : { fieldLinkTypes: request.fieldLinkTypes }),
           ...(request.formatting === undefined ? {} : { formatting: request.formatting }),
           ...(request.fieldEditors === undefined ? {} : { fieldEditors: request.fieldEditors }),
+          ...(request.exportAllowed === undefined ? {} : { exportAllowed: request.exportAllowed }),
           ...(request.state.pivot === undefined ? {} : { pivotView: request.state.pivot }),
           ...(groups === undefined ? {} : { groups }),
         },

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { logRefusal, type IdentitySession } from "@vortex/platform/schema";
 import {
   createRecordsTableBulkService,
+  createRecordsTableExportService,
   type RecordsTableBulkAddress,
 } from "@vortex/platform/server";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
@@ -34,11 +35,21 @@ export const recordsTableBulkService = () =>
     continuationKey: getQueryContinuationKey(),
   });
 
+/** The one export service of a Records table, composed for this request. */
+export const recordsTableExportService = () =>
+  createRecordsTableExportService({
+    ...humanOrganizationRequestDependencies(),
+    channel: "web",
+    continuationKey: getQueryContinuationKey(),
+  });
+
 export type ResolvedBulkRequest<Body> =
   | Readonly<{
       kind: "resolved";
       session: IdentitySession;
       address: RecordsTableBulkAddress;
+      /** The organisation's address names, for the links a page of records shows. */
+      names: Readonly<{ tenantShortName: string; organizationShortName: string }>;
       body: Body;
     }>
   | Readonly<{ kind: "response"; response: NextResponse }>;
@@ -107,6 +118,10 @@ export const resolveBulkRequest = async <Body extends { pageKey: string }>(
   return {
     kind: "resolved",
     session: identity.session,
+    names: {
+      tenantShortName: addressPart.data.tenantShortName,
+      organizationShortName: addressPart.data.organizationShortName,
+    },
     address: {
       selection: {
         organizationId: address.read.organizationId,

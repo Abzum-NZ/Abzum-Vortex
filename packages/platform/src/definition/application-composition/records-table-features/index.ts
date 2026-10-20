@@ -48,6 +48,7 @@ import { recordsTableSearchFeature, type RecordsTableSearchSettings } from "./se
 import { recordsTablePinningFeature, type RecordsTablePinningSettings } from "./pinning";
 import { recordsTablePivotFeature, type RecordsTablePivotSettings } from "./pivot";
 import { recordsTableGroupingFeature, type RecordsTableGroupingSettings } from "./grouping";
+import { recordsTableExportFeature, type RecordsTableExportSettings } from "./export";
 import {
   featureNotPossible,
   settingGroup,
@@ -73,6 +74,11 @@ export {
   type RecordsTableRelatedQueryFacts,
   type RecordsTableRelatedRecordsFacts,
 } from "./shared";
+export {
+  RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
+  recordsTableExportFormats,
+  type RecordsTableExportFormat,
+} from "./export";
 export { RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE } from "./master-detail";
 export { RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE } from "./tree";
 export {
@@ -112,6 +118,7 @@ export type {
   RecordsTableBoardMode,
   RecordsTableBoardSettings,
   RecordsTableConditionalFormattingSettings,
+  RecordsTableExportSettings,
   RecordsTableBulkActionsSettings,
   RecordsTableColumnFiltersSettings,
   RecordsTableInlineEditSettings,
@@ -149,6 +156,7 @@ export type RecordsTableFeatures = Readonly<{
   pivot: RecordsTableFeatureState<RecordsTablePivotSettings>;
   spreadsheet: RecordsTableFeatureState<RecordsTableSpreadsheetSettings>;
   board: RecordsTableFeatureState<RecordsTableBoardSettings>;
+  export: RecordsTableFeatureState<RecordsTableExportSettings>;
 }>;
 
 const registry = {
@@ -169,6 +177,7 @@ const registry = {
   },
   pivot: { property: "pivot", definition: recordsTablePivotFeature },
   board: { property: "board", definition: recordsTableBoardFeature },
+  export: { property: "export", definition: recordsTableExportFeature },
 } as const satisfies Record<
   string,
   Readonly<{
@@ -193,6 +202,7 @@ export const recordsTableFeatureKeys = [
   "conditional_formatting",
   "pivot",
   "board",
+  "export",
 ] as const satisfies readonly (keyof typeof registry)[];
 export type RecordsTableFeatureKey = (typeof recordsTableFeatureKeys)[number];
 
@@ -240,6 +250,7 @@ export const readRecordsTableFeatures = (
   const pinning = read("pinning");
   const pivot = read("pivot");
   const board = read("board");
+  const exported = read("export");
   if (
     spreadsheet === undefined ||
     search === undefined ||
@@ -254,7 +265,8 @@ export const readRecordsTableFeatures = (
     conditionalFormatting === undefined ||
     pinning === undefined ||
     pivot === undefined ||
-    board === undefined
+    board === undefined ||
+    exported === undefined
   )
     return undefined;
   return {
@@ -272,6 +284,7 @@ export const readRecordsTableFeatures = (
     conditionalFormatting: conditionalFormatting as RecordsTableFeatures["conditionalFormatting"],
     pivot: pivot as RecordsTableFeatures["pivot"],
     board: board as RecordsTableFeatures["board"],
+    export: exported as RecordsTableFeatures["export"],
   };
 };
 

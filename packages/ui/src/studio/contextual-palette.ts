@@ -294,6 +294,8 @@ export type StudioQueryChoice = Readonly<{
   inputs: readonly StudioQueryInput[];
   /** The most rows one read of the query returns. */
   pageSize: number;
+  /** The record type declares the standard export action, so its records can be exported. */
+  exportable: boolean;
   /** What a Board needs of the query; absent for a query of a Module the application only uses. */
   board?: RecordsTableBoardFacts;
   /** Whether the Applications that use its Module may read it. A borrowed query is always exposed. */
@@ -479,6 +481,7 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
         inputs: Object.freeze(inputs),
         pageSize: query.page_size,
         exposure: query.exposure,
+        exportable: record?.standard_actions.includes("export") === true,
         ...(record === undefined ? {} : { board: studioBoardFacts(module.key, query, record) }),
       });
     }),

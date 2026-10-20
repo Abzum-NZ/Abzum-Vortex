@@ -302,6 +302,8 @@ export const readStudioCanvasRecords = async (
         queryNotices: services.queryNotices,
         tables: services.tables,
         resolveRecordLinks: services.recordLinkResolver(context),
+        // The canvas designs the table; downloading records belongs to the running app.
+        exportAllowed: async () => false,
         readCalendarSettings: services.readCalendarSettings,
         readSubject,
         launcherValues: applicationLauncherQueryRowsToListValues,

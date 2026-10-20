@@ -1092,6 +1092,11 @@
                           }
                         ]
                       },
+                      "export": {
+                        "enabled": true,
+                        "formats": ["csv"],
+                        "max_rows": 10000
+                      },
                       "conditional_formatting": {
                         "enabled": true,
                         "rules": [
