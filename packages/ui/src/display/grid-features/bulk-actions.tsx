@@ -177,7 +177,7 @@ const scopeMessage = (scope: TableSelectionScope | undefined): string | undefine
   if (scope?.kind === "counting") return "Counting the matching records...";
   if (scope?.kind !== "not_counted") return undefined;
   return scope.reason === "too_many"
-    ? "More than 100,000 records match; narrow the filter."
+    ? "More than 100,000 records match the filters; narrow the filter."
     : scope.reason === "changed"
       ? "The table changed. Select the matching records again."
       : "The matching records could not be counted. Try again.";
