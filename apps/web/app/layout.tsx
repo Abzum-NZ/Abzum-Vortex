@@ -10,6 +10,7 @@ import {
 } from "@vortex/ui";
 import { loadDocumentTheme, PLATFORM_ROOT_CSS } from "./_lib/document-theme";
 import "@vortex/ui/styles/globals.css";
+import { HistoryRefresh } from "./_components/history-refresh";
 
 export const metadata: Metadata = {
   title: "Vortex",
@@ -35,7 +36,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <style>{PLATFORM_ROOT_CSS}</style>
       </head>
       <body>
-        <AppearanceProvider initial={appearance}>{children}</AppearanceProvider>
+        <AppearanceProvider initial={appearance}>
+          <HistoryRefresh />
+          {children}
+        </AppearanceProvider>
       </body>
     </html>
   );

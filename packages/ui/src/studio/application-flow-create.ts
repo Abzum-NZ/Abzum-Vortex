@@ -597,17 +597,21 @@ export const applyStudioFlowCreate = (
     } else if (command.kind === "action") {
       flow = interactiveFlow(key, name, {
         outputs: {},
-        ...(command.recordType === null ? {} : { recordInput: "record_id" }),
+        ...(command.recordType === null || command.event === "card_added"
+          ? {}
+          : { recordInput: "record_id" }),
         inputs:
-          command.recordType === null
-            ? {}
-            : {
-                record_id: {
-                  type: "record_reference",
-                  required: true,
-                  recordTypeIds: [command.recordType],
+          command.event === "card_added"
+            ? { stage: { type: "text", required: true } }
+            : command.recordType === null
+              ? {}
+              : {
+                  record_id: {
+                    type: "record_reference",
+                    required: true,
+                    recordTypeIds: [command.recordType],
+                  },
                 },
-              },
         tasks: [
           {
             id: "show_message",
@@ -632,9 +636,11 @@ export const applyStudioFlowCreate = (
                 ? {}
                 : { record_id: { kind: "caller" as const, name: "record" } }),
             }
-          : command.recordType === null
-            ? {}
-            : { record_id: { kind: "caller", name: "record_id" } },
+          : command.event === "card_added"
+            ? { stage: { kind: "caller", name: "value" } }
+            : command.recordType === null
+              ? {}
+              : { record_id: { kind: "caller", name: "record_id" } },
         borrowed,
         command.rowActionLabel,
       );

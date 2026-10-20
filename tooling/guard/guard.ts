@@ -945,7 +945,7 @@ for (const file of files.filter(
   // switched off. Keep this invariant with the registry and its one lazy command renderer.
   if (platformKeys.includes("row_actions")) {
     const platformRegistry = read(platformFile);
-    if (!/row_action:\s*"row_actions"/.test(platformRegistry))
+    if (!/row_action:\s*\{\s*feature:\s*"row_actions"\s*\}/.test(platformRegistry))
       add(
         "grid-feature-registry",
         platformFile,

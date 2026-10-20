@@ -384,6 +384,12 @@ export const validateStoredShell = (
         "must target a fixed catalogue slot in this layout",
         `Content outlet "${slot.label}"`,
       );
+    if (declaration!.required && !slot.required)
+      refuse(
+        ["content_slots", index, "required"],
+        "must remain required because its target slot is required",
+        `Content outlet "${slot.label}"`,
+      );
     if (
       new Set(slot.allowed_child_categories).size !== slot.allowed_child_categories.length ||
       slot.allowed_child_categories.some(
@@ -777,7 +783,10 @@ export const removeFlowBindingsOf = (
  * An event declared only for bindings that left goes with them; one that another binding or a
  * remaining block's setting still names stays.
  */
-export const pruneUnboundEvents = (body: ApplicationSourceDocument["body"], candidates: ReadonlySet<string>): void => {
+export const pruneUnboundEvents = (
+  body: ApplicationSourceDocument["body"],
+  candidates: ReadonlySet<string>,
+): void => {
   const unbound = new Set(candidates);
   for (const binding of body.flow_bindings) unbound.delete(binding.event_id);
   if (unbound.size === 0) return;
