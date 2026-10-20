@@ -196,12 +196,7 @@ export function StudioGridFeatures({
               ) : null}
               {enabled && key === "saved_views" ? (
                 <div className="pb-2">
-                  <StudioSavedViewsEditor
-                    value={current}
-                    permissions={choices.permissions}
-                    disabled={disabled}
-                    onChange={(next) => write(key, next)}
-                  />
+                  <StudioSavedViewsEditor />
                 </div>
               ) : null}
               {!enabled || settings.length === 0 || editor.kind !== "settings" ? null : (

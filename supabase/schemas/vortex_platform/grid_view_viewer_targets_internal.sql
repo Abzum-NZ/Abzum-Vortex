@@ -27,6 +27,11 @@ as $function$
     join vortex_access.organization_roles as assigned_role
       on assigned_role.organization_id = assignment.organization_id
       and assigned_role.role_id = assignment.role_id
+    join vortex_access.organization_role_revisions as revision
+      on revision.organization_id = assigned_role.organization_id
+      and revision.role_id = assigned_role.role_id
+      and revision.revision = assigned_role.live_revision
+      and revision.lifecycle in ('active', 'acceptance_required')
     where assignment.organization_id = p_organization_id
       and assignment.state = 'live'
       and assignment.assignment_kind = 'standing'

@@ -3713,7 +3713,7 @@
         "key": "maximum_size_mb",
         "label": "Maximum size (MiB)",
         "required": true,
-        "minimum": 0.000001,
+        "minimum": 1e-6,
         "maximum": 5000,
         "integer": false
       },
@@ -4905,15 +4905,6 @@
                   "kind": "boolean",
                   "value": false
                 }
-              },
-              {
-                "kind": "text",
-                "key": "share_permission",
-                "label": "Who may share views",
-                "help": "The permission that lets people share views and change shared views; without it views stay personal",
-                "required": false,
-                "minLength": 1,
-                "maxLength": 120
               }
             ]
           },
@@ -7463,7 +7454,7 @@
         "key": "maximum_size_mb",
         "label": "Maximum size (MiB)",
         "required": true,
-        "minimum": 0.000001,
+        "minimum": 1e-6,
         "maximum": 5000,
         "integer": false
       },

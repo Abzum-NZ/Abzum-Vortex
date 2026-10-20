@@ -5,8 +5,7 @@ create or replace function vortex_platform.share_grid_view(
   p_expected_revision bigint,
   p_share_organization boolean,
   p_role_ids uuid[],
-  p_group_ids uuid[],
-  p_share_permission jsonb
+  p_group_ids uuid[]
 )
 returns jsonb
 language plpgsql
@@ -38,8 +37,7 @@ begin
   select context.* into strict scope from vortex_platform.grid_view_scope_internal() as context;
 
   -- Sharing is the permission's to give: nobody shares a table view without it.
-  if not vortex_platform.grid_view_may_share_internal(
-    scope.application_root_id, p_share_permission) then
+  if not vortex_platform.grid_view_may_share_internal() then
     return pg_catalog.jsonb_build_object('outcome', 'forbidden');
   end if;
 
@@ -106,13 +104,13 @@ begin
 end
 $function$;
 
-revoke all on function vortex_platform.share_grid_view(uuid, uuid, uuid, bigint, boolean, uuid[], uuid[], jsonb)
+revoke all on function vortex_platform.share_grid_view(uuid, uuid, uuid, bigint, boolean, uuid[], uuid[])
   from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
-grant execute on function vortex_platform.share_grid_view(uuid, uuid, uuid, bigint, boolean, uuid[], uuid[], jsonb)
+grant execute on function vortex_platform.share_grid_view(uuid, uuid, uuid, bigint, boolean, uuid[], uuid[])
   to vortex_request;
 
-comment on function vortex_platform.share_grid_view(uuid, uuid, uuid, bigint, boolean, uuid[], uuid[], jsonb) is
+comment on function vortex_platform.share_grid_view(uuid, uuid, uuid, bigint, boolean, uuid[], uuid[]) is
   'Shares a grid view with the organisation, roles or groups, or makes it personal again, at the expected revision, for someone who may share table views.';
 
-alter function vortex_platform.share_grid_view(uuid, uuid, uuid, bigint, boolean, uuid[], uuid[], jsonb)
+alter function vortex_platform.share_grid_view(uuid, uuid, uuid, bigint, boolean, uuid[], uuid[])
   owner to vortex_owner;

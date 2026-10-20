@@ -46,7 +46,12 @@ const sameKey = (left: string, right: string): boolean =>
 
 const columnsKey = (layout: GridLayout): string =>
   JSON.stringify([
-    layout.columns.map((column) => [column.fieldId, column.visible, column.width ?? null]),
+    layout.columns.map((column) => [
+      column.fieldId,
+      column.visible,
+      column.pin,
+      column.width ?? null,
+    ]),
     layout.density ?? null,
   ]);
 

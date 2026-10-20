@@ -1,5 +1,4 @@
 create or replace function vortex_platform.list_grid_view_share_targets(
-  p_share_permission jsonb
 )
 returns jsonb
 language plpgsql
@@ -13,8 +12,7 @@ begin
   select context.* into strict scope from vortex_platform.grid_view_scope_internal() as context;
 
   -- Only someone who may share table views is offered who to share with.
-  if not vortex_platform.grid_view_may_share_internal(
-    scope.application_root_id, p_share_permission) then
+  if not vortex_platform.grid_view_may_share_internal() then
     return pg_catalog.jsonb_build_object('outcome', 'forbidden');
   end if;
 
@@ -54,11 +52,11 @@ begin
 end
 $function$;
 
-revoke all on function vortex_platform.list_grid_view_share_targets(jsonb)
+revoke all on function vortex_platform.list_grid_view_share_targets()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
-grant execute on function vortex_platform.list_grid_view_share_targets(jsonb) to vortex_request;
+grant execute on function vortex_platform.list_grid_view_share_targets() to vortex_request;
 
-comment on function vortex_platform.list_grid_view_share_targets(jsonb) is
+comment on function vortex_platform.list_grid_view_share_targets() is
   'Lists the roles of the application and the groups a table view can be shared with, for someone who may share table views.';
 
-alter function vortex_platform.list_grid_view_share_targets(jsonb) owner to vortex_owner;
+alter function vortex_platform.list_grid_view_share_targets() owner to vortex_owner;

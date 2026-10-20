@@ -7,7 +7,7 @@ language sql
 immutable
 set search_path = ''
 as $function$
-  select p_document is not null
+  select coalesce(p_document is not null
     and pg_catalog.jsonb_typeof(p_document) = 'object'
     and pg_catalog.octet_length(p_document::text) <= 32768
     -- A current layout holds the arrangement only; a named view adds the query state.
@@ -75,7 +75,7 @@ as $function$
         = pg_catalog.jsonb_array_length(p_document -> 'filters')))
     and (not p_document ? 'search' or (
       pg_catalog.jsonb_typeof(p_document -> 'search') = 'string'
-      and pg_catalog.char_length(p_document ->> 'search') between 1 and 200))
+      and pg_catalog.char_length(p_document ->> 'search') between 1 and 200)), false)
 $function$;
 
 revoke all on function vortex_platform.grid_view_document_valid_internal(jsonb, text)

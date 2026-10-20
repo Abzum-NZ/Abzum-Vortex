@@ -91,7 +91,6 @@ import {
   pageQueryBindingContext,
   placementParameterDependencies,
   resolvedQueryRecordTypeId,
-  gridViewSharePermissionOf,
 } from "@vortex/platform/server";
 import {
   applicationLauncherQueryRowsToListValues,
@@ -696,9 +695,6 @@ const loadApplicationPageJoined = async (
                   return text === undefined ? [] : [[name, text]];
                 }),
               )
-            : undefined,
-          sharePermission: viewsOn
-            ? gridViewSharePermissionOf(context, savedViews.sharePermission)
             : undefined,
         },
       ];

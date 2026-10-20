@@ -245,15 +245,6 @@
         "action_kind": "named",
         "named_action": "opportunity_create",
         "administrative": false
-      },
-      {
-        "id": "app_permission_22",
-        "key": "application.crm.views.share",
-        "label": "Share table views",
-        "description": "Allows sharing saved table views with roles, groups or the organisation.",
-        "action_kind": "named",
-        "named_action": "share_views",
-        "administrative": false
       }
     ],
     "roles": [
@@ -320,7 +311,6 @@
         "permissions": [
           "application.crm.open",
           "application.crm.manage",
-          "application.crm.views.share",
           "vortex.crm.organisations.company.create",
           "application.crm.company.create",
           "vortex.crm.organisations.company.read",
@@ -969,8 +959,7 @@
                     "id": "content_4",
                     "features": {
                       "saved_views": {
-                        "enabled": true,
-                        "share_permission": "application.crm.views.share"
+                        "enabled": true
                       },
                       "conditional_formatting": {
                         "enabled": true,

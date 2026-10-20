@@ -240,12 +240,12 @@ export async function commitGridView(
   if (!change.success) return { outcome: "unavailable" };
   const opened = await openGridPage(addressInput);
   if (opened === undefined) return { outcome: "unavailable" };
-  const { page, context } = opened;
+  const { page } = opened;
   const requested = change.data;
-  const placement = gridViewPlacement(page, context, requested.placementId);
+  const placement = gridViewPlacement(page, requested.placementId);
   if (placement === undefined) return { outcome: "unavailable" };
   const pageId = String(page.pageId);
-  const { queryId, sharePermission } = placement;
+  const { queryId } = placement;
 
   const result = await opened.run(async (transaction): Promise<GridViewCommandResult> => {
     switch (requested.kind) {
@@ -259,7 +259,6 @@ export async function commitGridView(
             expectedRevision: null,
             name: requested.name,
             document: requested.document,
-            sharePermission,
           }),
         );
       case "save":
@@ -272,7 +271,6 @@ export async function commitGridView(
             expectedRevision: requested.expectedRevision,
             name: null,
             document: requested.document,
-            sharePermission,
           }),
         );
       case "rename":
@@ -285,7 +283,6 @@ export async function commitGridView(
             expectedRevision: requested.expectedRevision,
             name: requested.name,
             document: null,
-            sharePermission,
           }),
         );
       case "share":
@@ -296,7 +293,6 @@ export async function commitGridView(
             viewId: requested.viewId,
             expectedRevision: requested.expectedRevision,
             sharing: requested.sharing,
-            sharePermission,
           }),
         );
       case "delete":
@@ -306,11 +302,10 @@ export async function commitGridView(
             placementId: requested.placementId,
             viewId: requested.viewId,
             expectedRevision: requested.expectedRevision,
-            sharePermission,
           }),
         );
       case "share_targets": {
-        const targets = await listGridViewShareTargets(transaction, sharePermission);
+        const targets = await listGridViewShareTargets(transaction);
         return targets === null ? { outcome: "forbidden" } : { outcome: "targets", targets };
       }
     }

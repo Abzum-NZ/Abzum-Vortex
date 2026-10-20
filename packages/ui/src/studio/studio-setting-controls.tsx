@@ -81,8 +81,6 @@ export type StudioSettingChoices = Readonly<{
   recordTypes: readonly Readonly<{ key: string; label: string }>[];
   actions: readonly StudioActionChoice[];
   relationships: readonly StudioRelationshipChoice[];
-  /** The application's own named permissions, which a setting that names who may do something picks from. */
-  permissions: readonly Readonly<{ key: string; label: string }>[];
   records: StudioRecordReader | null;
 }>;
 
@@ -109,9 +107,6 @@ export const studioDraftChoices = (
     recordTypes: studioSourceRecordTypes(source),
     actions: studioActionChoices(source, borrowed).map(named),
     relationships: studioRelationshipChoices(source, borrowed).map(named),
-    permissions: source.body.permissions
-      .filter((permission) => permission.record_type === undefined)
-      .map((permission) => ({ key: permission.key, label: permission.label })),
     records,
   };
 };

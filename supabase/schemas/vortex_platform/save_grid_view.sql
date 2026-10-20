@@ -5,8 +5,7 @@ create or replace function vortex_platform.save_grid_view(
   p_view_id uuid,
   p_expected_revision bigint,
   p_name text,
-  p_document jsonb,
-  p_share_permission jsonb
+  p_document jsonb
 )
 returns jsonb
 language plpgsql
@@ -93,8 +92,7 @@ begin
 
   -- Only the owner, or someone who may share table views, changes a view.
   if stored.organization_account_id <> scope.organization_account_id
-    and not vortex_platform.grid_view_may_share_internal(
-      scope.application_root_id, p_share_permission) then
+    and not vortex_platform.grid_view_may_share_internal() then
     return pg_catalog.jsonb_build_object('outcome', 'forbidden');
   end if;
 
@@ -122,13 +120,13 @@ begin
 end
 $function$;
 
-revoke all on function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb, jsonb)
+revoke all on function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
-grant execute on function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb, jsonb)
+grant execute on function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb)
   to vortex_request;
 
-comment on function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb, jsonb) is
+comment on function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb) is
   'Creates a named grid view of the current person, or renames or replaces one at the expected revision (the owner, or someone who may share table views), or returns the stored revision as a conflict.';
 
-alter function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb, jsonb)
+alter function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb)
   owner to vortex_owner;

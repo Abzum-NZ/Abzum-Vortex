@@ -62,6 +62,372 @@ comment on table vortex_platform.grid_views is
 drop function vortex_platform.read_grid_views(uuid, uuid[]);
 drop function vortex_platform.write_grid_view(uuid, uuid, uuid, bigint, jsonb);
 
+insert into vortex_access.platform_permission_declarations (
+  owner_kind, owner_id, permission_id, permission_key, action_kind, label, description,
+  meaning_fingerprint, source_module_key, steward_minimum, first_revision
+)
+select 'platform', declaration.owner_id, 'ca1fb1ae-056c-4596-9c70-36a42c0de87b'::uuid,
+  'platform.records.views.share', 'manage', 'Share table views',
+  'Share saved table views and change views shared with you in the organisation.',
+  'sha256:e27ea30745aee8351f5f0b62fb47319477c76c4cfa73cbaf8fa8edbdbb1c8e9d',
+  declaration.source_module_key, false, 6
+from vortex_access.platform_permission_declarations as declaration
+where declaration.permission_key = 'platform.organization.permissions.read';
+
+create or replace function vortex_access.read_platform_permission_declaration_catalogue_internal(
+  p_registration_revision bigint
+)
+returns table (
+  declared_current_revision bigint,
+  registration_revision bigint,
+  source_version text,
+  catalogue_fingerprint text,
+  permission_id uuid,
+  permission_key text,
+  action_kind text,
+  label text,
+  description text,
+  meaning_fingerprint text,
+  steward_minimum boolean,
+  first_revision bigint
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $function$
+  with declarations as materialized (
+    select declaration.*
+    from vortex_access.platform_permission_declarations as declaration
+    where declaration.owner_kind = 'platform'
+      -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
+      and declaration.owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
+  ),
+  valid as (
+    select p_registration_revision = 6
+      and pg_catalog.count(*) = 23
+      and pg_catalog.count(distinct permission_id) = 23
+      and pg_catalog.count(distinct permission_key) = 23
+      and pg_catalog.count(*) filter (where action_kind = 'named') = 0
+      and pg_catalog.bool_and(first_revision between 1 and 6)
+      as is_valid
+    from declarations
+  )
+  select 6::bigint, 6::bigint, '1.4.0'::text,
+    'sha256:60d2c42cab03723fda56198083a70e8703792587546379372334d99609b15538'::text,
+    declaration.permission_id, declaration.permission_key,
+    declaration.action_kind, declaration.label, declaration.description,
+    declaration.meaning_fingerprint, declaration.steward_minimum,
+    declaration.first_revision
+  from declarations as declaration
+  cross join valid
+  where valid.is_valid
+$function$;
+
+alter function vortex_access.read_platform_permission_declaration_catalogue_internal(bigint)
+  owner to vortex_owner;
+
+revoke all on function vortex_access.read_platform_permission_declaration_catalogue_internal(bigint)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+grant execute on function vortex_access.read_platform_permission_declaration_catalogue_internal(bigint)
+  to postgres;
+comment on function vortex_access.read_platform_permission_declaration_catalogue_internal(bigint) is
+  'Returns the trusted current platform permission declaration catalogue to the authorized postgres caller.';
+
+create or replace function vortex_access.platform_permission_catalogue_revision_is_exact(
+  p_organization_id uuid,
+  p_registration_revision bigint
+)
+returns boolean
+language sql
+stable
+security invoker
+set search_path = ''
+as $function$
+  with expected as materialized (
+    select declaration.*
+    from vortex_access.read_platform_permission_declaration_catalogue_internal(6)
+      as declaration
+  ),
+  entries as materialized (
+    select entry.*
+    from vortex_access.permission_catalogue_entries as entry
+    where entry.organization_id = p_organization_id
+      and entry.registration_kind = 'platform'
+      -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
+      and entry.registration_owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
+      and entry.registration_revision = 6
+  )
+  select coalesce(
+    p_organization_id is not null
+    and p_organization_id <> '00000000-0000-0000-0000-000000000000'::uuid
+    and p_registration_revision = 6
+    and (select pg_catalog.count(*) from expected) = 23
+    and (select pg_catalog.count(*) from entries) = 23
+    and exists (
+      select 1
+      from vortex_access.permission_registrations as registration
+      join vortex_access.permission_registration_revisions as history
+        on history.organization_id = registration.organization_id
+        and history.registration_kind = registration.registration_kind
+        and history.registration_owner_id = registration.registration_owner_id
+        and history.revision = registration.revision
+      where registration.organization_id = p_organization_id
+        and registration.registration_kind = 'platform'
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
+        and registration.registration_owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
+        and registration.state = 'active'
+        and registration.revision = 6
+        and registration.source_definition_key is null
+        and registration.source_version = '1.4.0'
+        and registration.source_revision is null
+        and registration.validation_contract_version is null
+        and registration.permission_catalogue_fingerprint =
+          'sha256:60d2c42cab03723fda56198083a70e8703792587546379372334d99609b15538'
+        and registration.candidate_fingerprint = registration.permission_catalogue_fingerprint
+        and registration.changed_by is not null
+        and registration.change_correlation_id is not null
+        and history.operation = 'platform_initialize'
+        and row(history.state, history.source_definition_key, history.source_version,
+          history.source_revision, history.validation_contract_version,
+          history.permission_catalogue_fingerprint, history.candidate_fingerprint,
+          history.changed_at, history.changed_by, history.change_correlation_id)
+          is not distinct from row(registration.state, registration.source_definition_key,
+          registration.source_version, registration.source_revision,
+          registration.validation_contract_version,
+          registration.permission_catalogue_fingerprint, registration.candidate_fingerprint,
+          registration.changed_at, registration.changed_by, registration.change_correlation_id)
+    )
+    and not exists (
+      select 1
+      from vortex_access.permission_registration_revisions as history
+      where history.organization_id = p_organization_id
+        and history.registration_kind = 'platform'
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
+        and history.registration_owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
+        and history.revision <> 6
+    )
+    and not exists (
+      select entry.application_root_id, entry.owner_kind, entry.owner_id,
+        entry.permission_id, entry.permission_key, entry.label, entry.description,
+        entry.record_type_id, entry.record_scope, entry.field_policy,
+        entry.action_kind, entry.named_action, entry.administrative,
+        entry.source_kind, entry.source_definition_key, entry.source_root_id,
+        entry.source_version, entry.source_revision,
+        entry.source_validation_contract_version, entry.source_catalogue_fingerprint,
+        entry.meaning_fingerprint
+      from entries as entry
+      except all
+      select null::uuid, 'platform'::text,
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
+        'cabe121e-0baf-4084-9471-cce915d460a8'::uuid,
+        expected.permission_id, expected.permission_key, expected.label,
+        expected.description, null::uuid, null::jsonb, null::jsonb,
+        expected.action_kind, null::text, true, 'platform_catalogue'::text,
+        null::text, null::uuid, expected.source_version, null::bigint,
+        null::text, expected.catalogue_fingerprint, expected.meaning_fingerprint
+      from expected
+    )
+    and (select pg_catalog.count(*) from vortex_access.permission_continuities as continuity
+      where continuity.organization_id = p_organization_id
+        and continuity.registration_kind = 'platform'
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
+        and continuity.registration_owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid) = 23
+    and not exists (
+      select 1 from expected
+      where not exists (
+        select 1 from vortex_access.permission_continuities as continuity
+        where continuity.organization_id = p_organization_id
+          and continuity.application_root_id is null
+          and continuity.registration_kind = 'platform'
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
+          and continuity.registration_owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
+          and continuity.owner_kind = 'platform'
+          and continuity.owner_id = continuity.registration_owner_id
+          and continuity.permission_id = expected.permission_id
+          and continuity.meaning_fingerprint = expected.meaning_fingerprint
+          and continuity.state = 'available'
+          and continuity.continuity_revision > 0
+          and continuity.last_processed_registration_revision = 6
+      )
+    ), false
+  )
+$function$;
+
+revoke all on function
+  vortex_access.platform_permission_catalogue_revision_is_exact(uuid, bigint)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+comment on function vortex_access.platform_permission_catalogue_revision_is_exact(uuid, bigint) is
+  'Owner-only assertion for the current platform catalogue registration, entries and continuities.';
+
+alter function vortex_access.platform_permission_catalogue_revision_is_exact(uuid, bigint)
+  owner to vortex_owner;
+
+grant execute on function vortex_access.platform_permission_catalogue_revision_is_exact(uuid, bigint)
+  to postgres;
+
+create or replace function vortex_access.initialize_platform_permission_catalogue(
+  p_organization_id uuid,
+  p_changed_by uuid,
+  p_correlation_id uuid
+)
+returns table (
+  organization_id uuid,
+  registration_revision bigint,
+  access_version bigint
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  operation_at timestamptz := pg_catalog.statement_timestamp();
+  current_registration vortex_access.permission_registrations%rowtype;
+  resulting_version bigint;
+  expected_count bigint;
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
+  platform_owner_id constant uuid := 'cabe121e-0baf-4084-9471-cce915d460a8';
+  catalogue_fingerprint constant text :=
+    'sha256:60d2c42cab03723fda56198083a70e8703792587546379372334d99609b15538';
+begin
+  if p_organization_id is null
+    or p_organization_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_changed_by is null
+    or p_changed_by = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_correlation_id is null
+    or p_correlation_id = '00000000-0000-0000-0000-000000000000'::uuid then
+    raise exception using errcode = '22023',
+      message = 'Platform permission registration input is invalid';
+  end if;
+
+  perform 1
+  from vortex_access.organization_access_versions as version
+  join vortex_identity.organizations as organization
+    on organization.organization_id = version.organization_id
+  join vortex_identity.tenants as tenant on tenant.tenant_id = organization.tenant_id
+  where version.organization_id = p_organization_id
+    and organization.state = 'active'
+    and tenant.state = 'active'
+  for update of version;
+  if not found then
+    raise exception using errcode = '42501',
+      message = 'Platform permission registration scope is unavailable';
+  end if;
+
+  perform pg_catalog.set_config(
+    'vortex_access.exclusive_organization_id', p_organization_id::text, true
+  );
+
+  select registration.* into current_registration
+  from vortex_access.permission_registrations as registration
+  where registration.organization_id = p_organization_id
+    and registration.registration_kind = 'platform'
+    and registration.registration_owner_id = platform_owner_id
+  for update;
+  if found then
+    if not vortex_access.platform_permission_catalogue_revision_is_exact(
+      p_organization_id, 6
+    ) then
+      raise exception using errcode = '55000',
+        message = 'Platform permission registration evidence is invalid';
+    end if;
+    return query select p_organization_id, 6::bigint, version.current_version
+    from vortex_access.organization_access_versions as version
+    where version.organization_id = p_organization_id;
+    return;
+  end if;
+
+  select pg_catalog.count(*) into expected_count
+  from vortex_access.read_platform_permission_declaration_catalogue_internal(6);
+  if expected_count <> 23 then
+    raise exception using errcode = '55000',
+      message = 'Platform permission declarations are invalid';
+  end if;
+
+  insert into vortex_access.permission_registration_revisions (
+    organization_id, registration_kind, registration_owner_id, revision,
+    state, operation, source_definition_key, source_version, source_revision,
+    validation_contract_version, permission_catalogue_fingerprint,
+    candidate_fingerprint, changed_at, changed_by, change_correlation_id
+  ) values (
+    p_organization_id, 'platform', platform_owner_id, 6,
+    'active', 'platform_initialize', null, '1.4.0', null, null,
+    catalogue_fingerprint, catalogue_fingerprint, operation_at, p_changed_by,
+    p_correlation_id
+  );
+
+  insert into vortex_access.permission_catalogue_entries (
+    organization_id, registration_kind, registration_owner_id,
+    registration_revision, application_root_id, owner_kind, owner_id,
+    permission_id, permission_key, label, description, record_type_id,
+    record_scope, field_policy, action_kind, named_action, administrative,
+    source_kind, source_definition_key, source_root_id, source_version,
+    source_revision, source_validation_contract_version,
+    source_catalogue_fingerprint, meaning_fingerprint
+  )
+  select p_organization_id, 'platform', platform_owner_id, 6,
+    null, 'platform', platform_owner_id, declaration.permission_id,
+    declaration.permission_key, declaration.label, declaration.description,
+    null, null, null, declaration.action_kind, null, true,
+    'platform_catalogue', null, null, declaration.source_version,
+    null, null, declaration.catalogue_fingerprint,
+    declaration.meaning_fingerprint
+  from vortex_access.read_platform_permission_declaration_catalogue_internal(6)
+    as declaration;
+
+  insert into vortex_access.permission_registrations (
+    organization_id, registration_kind, registration_owner_id, state, revision,
+    source_definition_key, source_version, source_revision,
+    validation_contract_version, permission_catalogue_fingerprint,
+    candidate_fingerprint, changed_at, changed_by, change_correlation_id
+  ) values (
+    p_organization_id, 'platform', platform_owner_id, 'active', 6,
+    null, '1.4.0', null, null, catalogue_fingerprint,
+    catalogue_fingerprint, operation_at, p_changed_by, p_correlation_id
+  );
+
+  insert into vortex_access.permission_continuities (
+    organization_id, application_root_id, owner_kind, owner_id,
+    permission_id, registration_kind, registration_owner_id, state,
+    continuity_revision, meaning_fingerprint,
+    last_processed_registration_revision, changed_at
+  )
+  select p_organization_id, null, 'platform', platform_owner_id,
+    declaration.permission_id, 'platform', platform_owner_id, 'available',
+    1, declaration.meaning_fingerprint, 6, operation_at
+  from vortex_access.read_platform_permission_declaration_catalogue_internal(6)
+    as declaration;
+
+  if not vortex_access.platform_permission_catalogue_revision_is_exact(
+    p_organization_id, 6
+  ) then
+    raise exception using errcode = '55000',
+      message = 'Platform permission registration evidence is invalid';
+  end if;
+
+  select incremented.current_version into strict resulting_version
+  from vortex_access.increment_organization_access_version(
+    p_organization_id, p_changed_by, p_correlation_id,
+    'application_access_changed'
+  ) as incremented;
+  return query select p_organization_id, 6::bigint, resulting_version;
+end
+$function$;
+
+revoke all on function vortex_access.initialize_platform_permission_catalogue(uuid, uuid, uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+comment on function vortex_access.initialize_platform_permission_catalogue(uuid, uuid, uuid) is
+  'Owner-only initializer for the current platform permission catalogue.';
+
+alter function vortex_access.initialize_platform_permission_catalogue(uuid, uuid, uuid)
+  owner to vortex_owner;
+
+grant execute on function vortex_access.initialize_platform_permission_catalogue(uuid, uuid, uuid)
+  to postgres;
+
 create or replace function vortex_platform.grid_view_document_valid_internal(
   p_document jsonb,
   p_kind text
@@ -71,7 +437,7 @@ language sql
 immutable
 set search_path = ''
 as $function$
-  select p_document is not null
+  select coalesce(p_document is not null
     and pg_catalog.jsonb_typeof(p_document) = 'object'
     and pg_catalog.octet_length(p_document::text) <= 32768
     -- A current layout holds the arrangement only; a named view adds the query state.
@@ -139,7 +505,7 @@ as $function$
         = pg_catalog.jsonb_array_length(p_document -> 'filters')))
     and (not p_document ? 'search' or (
       pg_catalog.jsonb_typeof(p_document -> 'search') = 'string'
-      and pg_catalog.char_length(p_document ->> 'search') between 1 and 200))
+      and pg_catalog.char_length(p_document ->> 'search') between 1 and 200)), false)
 $function$;
 
 revoke all on function vortex_platform.grid_view_document_valid_internal(jsonb, text)
@@ -150,10 +516,7 @@ comment on function vortex_platform.grid_view_document_valid_internal(jsonb, tex
 
 alter function vortex_platform.grid_view_document_valid_internal(jsonb, text) owner to vortex_owner;
 
-create or replace function vortex_platform.grid_view_may_share_internal(
-  p_application_root_id uuid,
-  p_share_permission jsonb
-)
+create or replace function vortex_platform.grid_view_may_share_internal()
 returns boolean
 language plpgsql
 volatile
@@ -163,32 +526,13 @@ as $function$
 declare
   decided text;
 begin
-  -- The permission the table names for sharing is decided now, for the person of this request.
-  if p_share_permission is null
-    or pg_catalog.jsonb_typeof(p_share_permission) <> 'object'
-    or not p_share_permission ?& array['ownerKind', 'ownerId', 'permissionId', 'actionKind']
-    or p_share_permission ->> 'ownerKind' not in ('application', 'module')
-    or not vortex_platform.is_non_nil_uuid(p_share_permission ->> 'ownerId')
-    or not vortex_platform.is_non_nil_uuid(p_share_permission ->> 'permissionId')
-    or p_share_permission ->> 'applicationRootId' is distinct from p_application_root_id::text then
-    return false;
-  end if;
-
   select decision.outcome into decided
   from vortex_access.evaluate_organization_permission_eligibility(
     pg_catalog.jsonb_build_object(
-      'operationKey', 'application.grid_view.share',
-      'action', pg_catalog.jsonb_build_object('actionKind', p_share_permission ->> 'actionKind')
-        || case when p_share_permission ? 'namedAction'
-          then pg_catalog.jsonb_build_object('namedAction', p_share_permission ->> 'namedAction')
-          else '{}'::jsonb end,
-      'target', pg_catalog.jsonb_build_object(
-        'kind', 'application', 'applicationRootId', p_application_root_id),
-      'requiredPermission', pg_catalog.jsonb_build_object(
-        'applicationRootId', p_application_root_id,
-        'ownerKind', p_share_permission ->> 'ownerKind',
-        'ownerId', p_share_permission ->> 'ownerId',
-        'permissionId', p_share_permission ->> 'permissionId'),
+      'operationKey', 'platform.records.views.share',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', vortex_access.required_platform_permission('platform.records.views.share'),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object('kind', 'permission')
     )
@@ -197,13 +541,9 @@ begin
 end
 $function$;
 
-revoke all on function vortex_platform.grid_view_may_share_internal(uuid, jsonb)
+revoke all on function vortex_platform.grid_view_may_share_internal()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-
-comment on function vortex_platform.grid_view_may_share_internal(uuid, jsonb) is
-  'Whether the person of this request holds the application permission that lets them share table views now; owner-only.';
-
-alter function vortex_platform.grid_view_may_share_internal(uuid, jsonb) owner to vortex_owner;
+alter function vortex_platform.grid_view_may_share_internal() owner to vortex_owner;
 
 create or replace function vortex_platform.grid_view_viewer_targets_internal(
   p_organization_id uuid,
@@ -234,6 +574,11 @@ as $function$
     join vortex_access.organization_roles as assigned_role
       on assigned_role.organization_id = assignment.organization_id
       and assigned_role.role_id = assignment.role_id
+    join vortex_access.organization_role_revisions as revision
+      on revision.organization_id = assigned_role.organization_id
+      and revision.role_id = assigned_role.role_id
+      and revision.revision = assigned_role.live_revision
+      and revision.lifecycle in ('active', 'acceptance_required')
     where assignment.organization_id = p_organization_id
       and assignment.state = 'live'
       and assignment.assignment_kind = 'standing'
@@ -306,8 +651,7 @@ alter function vortex_platform.grid_view_visible_internal(uuid, uuid, uuid, uuid
 create or replace function vortex_platform.read_grid_views(
   p_page_id uuid,
   p_placement_ids uuid[],
-  p_selected_view_ids uuid[],
-  p_share_permissions jsonb
+  p_selected_view_ids uuid[]
 )
 returns jsonb
 language plpgsql
@@ -318,7 +662,6 @@ as $function$
 declare
   scope record;
   targets record;
-  declared record;
   shareable uuid[] := '{}'::uuid[];
 begin
   if p_page_id is null or not vortex_platform.is_non_nil_uuid(p_page_id::text)
@@ -328,12 +671,7 @@ begin
     or p_selected_view_ids is null
     or pg_catalog.cardinality(p_selected_view_ids) > 500
     or pg_catalog.array_position(p_selected_view_ids, null) is not null
-    or p_share_permissions is null
-    or pg_catalog.jsonb_typeof(p_share_permissions) <> 'object'
-    or exists (
-      select 1 from pg_catalog.jsonb_object_keys(p_share_permissions) as supplied(key)
-      where not vortex_platform.is_non_nil_uuid(supplied.key)
-    ) then
+ then
     raise exception using errcode = '22023', message = 'Grid view read is invalid';
   end if;
 
@@ -342,16 +680,9 @@ begin
     scope.organization_id, scope.organization_account_id, scope.application_root_id
   ) as viewer;
 
-  -- The placements whose tables name a share permission the person holds now.
-  for declared in
-    select named.key, named.value from pg_catalog.jsonb_each(p_share_permissions) as named
-    limit 500
-  loop
-    if declared.key::uuid = any (p_placement_ids)
-      and vortex_platform.grid_view_may_share_internal(scope.application_root_id, declared.value) then
-      shareable := pg_catalog.array_append(shareable, declared.key::uuid);
-    end if;
-  end loop;
+  if vortex_platform.grid_view_may_share_internal() then
+    shareable := p_placement_ids;
+  end if;
 
   -- The person's current layouts and every named view they may see, for all the page's grids, in
   -- one bounded read. Only the views the address selected carry their document.
@@ -411,14 +742,14 @@ begin
 end
 $function$;
 
-revoke all on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb)
+revoke all on function vortex_platform.read_grid_views(uuid, uuid[], uuid[])
   from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
-grant execute on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb) to vortex_request;
+grant execute on function vortex_platform.read_grid_views(uuid, uuid[], uuid[]) to vortex_request;
 
-comment on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb) is
+comment on function vortex_platform.read_grid_views(uuid, uuid[], uuid[]) is
   'Reads the current person''s current grid layouts and the named views they may see for the named placements of one page of the selected application, in one bounded call.';
 
-alter function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb) owner to vortex_owner;
+alter function vortex_platform.read_grid_views(uuid, uuid[], uuid[]) owner to vortex_owner;
 
 create or replace function vortex_platform.write_grid_view(
   p_page_id uuid,
@@ -610,8 +941,7 @@ create or replace function vortex_platform.save_grid_view(
   p_view_id uuid,
   p_expected_revision bigint,
   p_name text,
-  p_document jsonb,
-  p_share_permission jsonb
+  p_document jsonb
 )
 returns jsonb
 language plpgsql
@@ -698,8 +1028,7 @@ begin
 
   -- Only the owner, or someone who may share table views, changes a view.
   if stored.organization_account_id <> scope.organization_account_id
-    and not vortex_platform.grid_view_may_share_internal(
-      scope.application_root_id, p_share_permission) then
+    and not vortex_platform.grid_view_may_share_internal() then
     return pg_catalog.jsonb_build_object('outcome', 'forbidden');
   end if;
 
@@ -727,15 +1056,15 @@ begin
 end
 $function$;
 
-revoke all on function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb, jsonb)
+revoke all on function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
-grant execute on function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb, jsonb)
+grant execute on function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb)
   to vortex_request;
 
-comment on function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb, jsonb) is
+comment on function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb) is
   'Creates a named grid view of the current person, or renames or replaces one at the expected revision (the owner, or someone who may share table views), or returns the stored revision as a conflict.';
 
-alter function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb, jsonb)
+alter function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb)
   owner to vortex_owner;
 
 create or replace function vortex_platform.share_grid_view(
@@ -745,8 +1074,7 @@ create or replace function vortex_platform.share_grid_view(
   p_expected_revision bigint,
   p_share_organization boolean,
   p_role_ids uuid[],
-  p_group_ids uuid[],
-  p_share_permission jsonb
+  p_group_ids uuid[]
 )
 returns jsonb
 language plpgsql
@@ -778,8 +1106,7 @@ begin
   select context.* into strict scope from vortex_platform.grid_view_scope_internal() as context;
 
   -- Sharing is the permission's to give: nobody shares a table view without it.
-  if not vortex_platform.grid_view_may_share_internal(
-    scope.application_root_id, p_share_permission) then
+  if not vortex_platform.grid_view_may_share_internal() then
     return pg_catalog.jsonb_build_object('outcome', 'forbidden');
   end if;
 
@@ -846,23 +1173,22 @@ begin
 end
 $function$;
 
-revoke all on function vortex_platform.share_grid_view(uuid, uuid, uuid, bigint, boolean, uuid[], uuid[], jsonb)
+revoke all on function vortex_platform.share_grid_view(uuid, uuid, uuid, bigint, boolean, uuid[], uuid[])
   from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
-grant execute on function vortex_platform.share_grid_view(uuid, uuid, uuid, bigint, boolean, uuid[], uuid[], jsonb)
+grant execute on function vortex_platform.share_grid_view(uuid, uuid, uuid, bigint, boolean, uuid[], uuid[])
   to vortex_request;
 
-comment on function vortex_platform.share_grid_view(uuid, uuid, uuid, bigint, boolean, uuid[], uuid[], jsonb) is
+comment on function vortex_platform.share_grid_view(uuid, uuid, uuid, bigint, boolean, uuid[], uuid[]) is
   'Shares a grid view with the organisation, roles or groups, or makes it personal again, at the expected revision, for someone who may share table views.';
 
-alter function vortex_platform.share_grid_view(uuid, uuid, uuid, bigint, boolean, uuid[], uuid[], jsonb)
+alter function vortex_platform.share_grid_view(uuid, uuid, uuid, bigint, boolean, uuid[], uuid[])
   owner to vortex_owner;
 
 create or replace function vortex_platform.delete_grid_view(
   p_page_id uuid,
   p_placement_id uuid,
   p_view_id uuid,
-  p_expected_revision bigint,
-  p_share_permission jsonb
+  p_expected_revision bigint
 )
 returns jsonb
 language plpgsql
@@ -905,8 +1231,7 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'not_found');
   end if;
   if stored.organization_account_id <> scope.organization_account_id
-    and not vortex_platform.grid_view_may_share_internal(
-      scope.application_root_id, p_share_permission) then
+    and not vortex_platform.grid_view_may_share_internal() then
     return pg_catalog.jsonb_build_object('outcome', 'forbidden');
   end if;
   if stored.revision <> p_expected_revision then
@@ -921,19 +1246,18 @@ begin
 end
 $function$;
 
-revoke all on function vortex_platform.delete_grid_view(uuid, uuid, uuid, bigint, jsonb)
+revoke all on function vortex_platform.delete_grid_view(uuid, uuid, uuid, bigint)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
-grant execute on function vortex_platform.delete_grid_view(uuid, uuid, uuid, bigint, jsonb)
+grant execute on function vortex_platform.delete_grid_view(uuid, uuid, uuid, bigint)
   to vortex_request;
 
-comment on function vortex_platform.delete_grid_view(uuid, uuid, uuid, bigint, jsonb) is
+comment on function vortex_platform.delete_grid_view(uuid, uuid, uuid, bigint) is
   'Deletes a named grid view at the expected revision for its owner or someone who may share table views.';
 
-alter function vortex_platform.delete_grid_view(uuid, uuid, uuid, bigint, jsonb)
+alter function vortex_platform.delete_grid_view(uuid, uuid, uuid, bigint)
   owner to vortex_owner;
 
 create or replace function vortex_platform.list_grid_view_share_targets(
-  p_share_permission jsonb
 )
 returns jsonb
 language plpgsql
@@ -947,8 +1271,7 @@ begin
   select context.* into strict scope from vortex_platform.grid_view_scope_internal() as context;
 
   -- Only someone who may share table views is offered who to share with.
-  if not vortex_platform.grid_view_may_share_internal(
-    scope.application_root_id, p_share_permission) then
+  if not vortex_platform.grid_view_may_share_internal() then
     return pg_catalog.jsonb_build_object('outcome', 'forbidden');
   end if;
 
@@ -988,13 +1311,13 @@ begin
 end
 $function$;
 
-revoke all on function vortex_platform.list_grid_view_share_targets(jsonb)
+revoke all on function vortex_platform.list_grid_view_share_targets()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
-grant execute on function vortex_platform.list_grid_view_share_targets(jsonb) to vortex_request;
+grant execute on function vortex_platform.list_grid_view_share_targets() to vortex_request;
 
-comment on function vortex_platform.list_grid_view_share_targets(jsonb) is
+comment on function vortex_platform.list_grid_view_share_targets() is
   'Lists the roles of the application and the groups a table view can be shared with, for someone who may share table views.';
 
-alter function vortex_platform.list_grid_view_share_targets(jsonb) owner to vortex_owner;
+alter function vortex_platform.list_grid_view_share_targets() owner to vortex_owner;
 
 reset role;

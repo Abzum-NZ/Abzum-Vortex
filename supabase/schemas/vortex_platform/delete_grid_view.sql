@@ -2,8 +2,7 @@ create or replace function vortex_platform.delete_grid_view(
   p_page_id uuid,
   p_placement_id uuid,
   p_view_id uuid,
-  p_expected_revision bigint,
-  p_share_permission jsonb
+  p_expected_revision bigint
 )
 returns jsonb
 language plpgsql
@@ -46,8 +45,7 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'not_found');
   end if;
   if stored.organization_account_id <> scope.organization_account_id
-    and not vortex_platform.grid_view_may_share_internal(
-      scope.application_root_id, p_share_permission) then
+    and not vortex_platform.grid_view_may_share_internal() then
     return pg_catalog.jsonb_build_object('outcome', 'forbidden');
   end if;
   if stored.revision <> p_expected_revision then
@@ -62,13 +60,13 @@ begin
 end
 $function$;
 
-revoke all on function vortex_platform.delete_grid_view(uuid, uuid, uuid, bigint, jsonb)
+revoke all on function vortex_platform.delete_grid_view(uuid, uuid, uuid, bigint)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
-grant execute on function vortex_platform.delete_grid_view(uuid, uuid, uuid, bigint, jsonb)
+grant execute on function vortex_platform.delete_grid_view(uuid, uuid, uuid, bigint)
   to vortex_request;
 
-comment on function vortex_platform.delete_grid_view(uuid, uuid, uuid, bigint, jsonb) is
+comment on function vortex_platform.delete_grid_view(uuid, uuid, uuid, bigint) is
   'Deletes a named grid view at the expected revision for its owner or someone who may share table views.';
 
-alter function vortex_platform.delete_grid_view(uuid, uuid, uuid, bigint, jsonb)
+alter function vortex_platform.delete_grid_view(uuid, uuid, uuid, bigint)
   owner to vortex_owner;

@@ -15,7 +15,6 @@ import {
 } from "./grid-view-state";
 import { readRecordsTableContract } from "../definition/application-composition/records-display";
 import { placementSettings } from "../definition/application-composition-catalogue";
-import type { InstalledRuntimeContext } from "../definition/app-index";
 import { walkPageComposition } from "./placement-walk";
 import type { PageDefinition } from "../schema";
 
@@ -174,65 +173,23 @@ const conflictOf = (
         },
 });
 
-/** The application permission that lets a person share table views, as the database decides it. */
-export type GridViewSharePermission = Readonly<{
-  applicationRootId: string;
-  ownerKind: "application" | "module";
-  ownerId: string;
-  permissionId: string;
-  actionKind: string;
-  namedAction?: string;
-}>;
-
-/**
- * The share permission a Saved views setting names, from the installed release's prepared
- * permission registration; undefined when the table names none or the release does not declare it
- * (publication refuses the latter, so a missing one only means views stay personal).
- */
-export const gridViewSharePermissionOf = (
-  context: InstalledRuntimeContext,
-  permissionKey: string | undefined,
-): GridViewSharePermission | undefined => {
-  if (permissionKey === undefined) return undefined;
-  const matches = context.permissionRegistration.entries.filter(
-    (entry) => entry.permission.key === permissionKey,
-  );
-  const entry = matches.length === 1 ? matches[0] : undefined;
-  if (entry === undefined) return undefined;
-  return {
-    applicationRootId: String(entry.applicationRootId),
-    ownerKind: entry.ownerKind,
-    ownerId: String(entry.ownerId),
-    permissionId: String(entry.permission.permissionId),
-    actionKind: entry.permission.actionKind,
-    ...(entry.permission.namedAction === undefined
-      ? {}
-      : { namedAction: entry.permission.namedAction }),
-  };
-};
-
-const permissionJson = (permission: GridViewSharePermission | undefined): string | null =>
-  permission === undefined ? null : JSON.stringify(permission);
-
 /**
  * Reads the person's current layouts and every named view they may see for the named placements of
  * one page in one call, keyed by lower-cased placement identity. Only the views named in
- * `selectedViewIds` (the page address) carry their document. `sharePermissions` names, per
- * placement, the permission its table gives for sharing; the database says which the person holds.
+ * `selectedViewIds` (the page address) carry their document. The database checks the fixed platform
+ * sharing permission for the current person.
  */
 export const readGridViews = async (
   transaction: RequestDatabaseTransaction,
   pageId: string,
   placementIds: readonly string[],
   selectedViewIds: readonly string[],
-  sharePermissions: Readonly<Record<string, GridViewSharePermission>>,
 ): Promise<StoredGridViews> => {
   const rows = await transaction.query<ResultRow>`
     select vortex_platform.read_grid_views(
       ${pageId}::uuid,
       array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(placementIds)}::text::jsonb)::uuid),
-      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(selectedViewIds)}::text::jsonb)::uuid),
-      ${JSON.stringify(sharePermissions)}::text::jsonb
+      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(selectedViewIds)}::text::jsonb)::uuid)
     ) as result
   `;
   const read = stored("read", pageId, storedReadSchema, only(rows));
@@ -304,19 +261,15 @@ export const addressedGridView = (
 };
 
 /**
- * The query a grid placement reads and the share permission its Saved views setting names, read
+ * The query a grid placement reads, read
  * from the installed page; undefined when the page has no such grid with Saved views on. Every
- * view operation takes these from here, never from the request.
+ * view operation takes it from here, never from the request.
  */
 export const gridViewPlacement = (
   page: PageDefinition,
-  context: InstalledRuntimeContext,
   placementId: string,
-):
-  | Readonly<{ queryId: string; sharePermission: GridViewSharePermission | undefined }>
-  | undefined => {
-  let found:
-    Readonly<{ queryId: string; sharePermission: GridViewSharePermission | undefined }> | undefined;
+): Readonly<{ queryId: string }> | undefined => {
+  let found: Readonly<{ queryId: string }> | undefined;
   walkPageComposition(page.composition, (placement) => {
     if (placement.placementId.toLowerCase() !== placementId.toLowerCase()) return;
     const contract = readRecordsTableContract(placementSettings(placement.props));
@@ -328,10 +281,6 @@ export const gridViewPlacement = (
       return;
     found = {
       queryId: placement.vortex.queryId.toLowerCase(),
-      sharePermission: gridViewSharePermissionOf(
-        context,
-        contract.features.savedViews.sharePermission,
-      ),
     };
   });
   return found;
@@ -461,7 +410,6 @@ export const saveGridView = async (
     expectedRevision: number | null;
     name: string | null;
     document: GridViewDocument | null;
-    sharePermission: GridViewSharePermission | undefined;
   }>,
 ): Promise<GridViewOperationOutcome> => {
   const document = save.document === null ? null : gridViewDocumentSchema.parse(save.document);
@@ -484,8 +432,7 @@ export const saveGridView = async (
       ${save.viewId}::uuid,
       ${save.expectedRevision}::bigint,
       ${name}::text,
-      ${document === null ? null : JSON.stringify(document)}::text::jsonb,
-      ${permissionJson(save.sharePermission)}::text::jsonb
+      ${document === null ? null : JSON.stringify(document)}::text::jsonb
     ) as result
   `;
   return viewOutcome(rows);
@@ -500,7 +447,6 @@ export const shareGridView = async (
     viewId: string;
     expectedRevision: number;
     sharing: GridViewSharing;
-    sharePermission: GridViewSharePermission | undefined;
   }>,
 ): Promise<GridViewOperationOutcome> => {
   const rows = await transaction.query<ResultRow>`
@@ -511,8 +457,7 @@ export const shareGridView = async (
       ${share.expectedRevision}::bigint,
       ${share.sharing.organization}::boolean,
       array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(share.sharing.roleIds)}::text::jsonb)::uuid),
-      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(share.sharing.groupIds)}::text::jsonb)::uuid),
-      ${permissionJson(share.sharePermission)}::text::jsonb
+      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(share.sharing.groupIds)}::text::jsonb)::uuid)
     ) as result
   `;
   return viewOutcome(rows);
@@ -526,7 +471,6 @@ export const deleteGridView = async (
     placementId: string;
     viewId: string;
     expectedRevision: number;
-    sharePermission: GridViewSharePermission | undefined;
   }>,
 ): Promise<GridViewOperationOutcome> => {
   const rows = await transaction.query<ResultRow>`
@@ -534,8 +478,7 @@ export const deleteGridView = async (
       ${remove.pageId}::uuid,
       ${remove.placementId}::uuid,
       ${remove.viewId}::uuid,
-      ${remove.expectedRevision}::bigint,
-      ${permissionJson(remove.sharePermission)}::text::jsonb
+      ${remove.expectedRevision}::bigint
     ) as result
   `;
   return viewOutcome(rows);
@@ -555,12 +498,9 @@ const shareTargetsSchema = z.discriminatedUnion("outcome", [
 /** The roles and groups a view can be shared with; null for someone who may not share. */
 export const listGridViewShareTargets = async (
   transaction: RequestDatabaseTransaction,
-  sharePermission: GridViewSharePermission | undefined,
 ): Promise<GridViewShareTargets | null> => {
   const rows = await transaction.query<ResultRow>`
-    select vortex_platform.list_grid_view_share_targets(
-      ${permissionJson(sharePermission)}::text::jsonb
-    ) as result
+    select vortex_platform.list_grid_view_share_targets() as result
   `;
   const result = shareTargetsSchema.parse(only(rows));
   if (result.outcome === "forbidden") return null;

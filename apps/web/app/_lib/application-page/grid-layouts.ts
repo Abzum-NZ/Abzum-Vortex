@@ -3,7 +3,6 @@ import {
   readGridViews,
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
-  type GridViewSharePermission,
   type StoredGridViews,
 } from "@vortex/platform/server";
 import type { IdentitySession, OrganizationSelectionCandidate } from "@vortex/platform/schema";
@@ -33,8 +32,6 @@ export type PageGrid = Readonly<{
   recordTypeId: string;
   /** The saved view the address selects for this grid, when it names one. */
   selectedViewId: string | undefined;
-  /** The permission the grid's Saved views setting gives for sharing, when it names one. */
-  sharePermission: GridViewSharePermission | undefined;
 }>;
 
 /**
@@ -64,13 +61,6 @@ export const readPageGridLayouts = async (
         pageId,
         grids.map((grid) => grid.placementId),
         grids.flatMap((grid) => (grid.selectedViewId === undefined ? [] : [grid.selectedViewId])),
-        Object.fromEntries(
-          grids.flatMap((grid) =>
-            grid.sharePermission === undefined
-              ? []
-              : [[grid.placementId.toLowerCase(), grid.sharePermission]],
-          ),
-        ),
       );
       const readable = new Map<string, ReadonlySet<string>>();
       for (const recordTypeId of recordTypeIds)

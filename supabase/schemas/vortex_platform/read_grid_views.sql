@@ -1,8 +1,7 @@
 create or replace function vortex_platform.read_grid_views(
   p_page_id uuid,
   p_placement_ids uuid[],
-  p_selected_view_ids uuid[],
-  p_share_permissions jsonb
+  p_selected_view_ids uuid[]
 )
 returns jsonb
 language plpgsql
@@ -13,7 +12,6 @@ as $function$
 declare
   scope record;
   targets record;
-  declared record;
   shareable uuid[] := '{}'::uuid[];
 begin
   if p_page_id is null or not vortex_platform.is_non_nil_uuid(p_page_id::text)
@@ -23,12 +21,7 @@ begin
     or p_selected_view_ids is null
     or pg_catalog.cardinality(p_selected_view_ids) > 500
     or pg_catalog.array_position(p_selected_view_ids, null) is not null
-    or p_share_permissions is null
-    or pg_catalog.jsonb_typeof(p_share_permissions) <> 'object'
-    or exists (
-      select 1 from pg_catalog.jsonb_object_keys(p_share_permissions) as supplied(key)
-      where not vortex_platform.is_non_nil_uuid(supplied.key)
-    ) then
+ then
     raise exception using errcode = '22023', message = 'Grid view read is invalid';
   end if;
 
@@ -37,16 +30,9 @@ begin
     scope.organization_id, scope.organization_account_id, scope.application_root_id
   ) as viewer;
 
-  -- The placements whose tables name a share permission the person holds now.
-  for declared in
-    select named.key, named.value from pg_catalog.jsonb_each(p_share_permissions) as named
-    limit 500
-  loop
-    if declared.key::uuid = any (p_placement_ids)
-      and vortex_platform.grid_view_may_share_internal(scope.application_root_id, declared.value) then
-      shareable := pg_catalog.array_append(shareable, declared.key::uuid);
-    end if;
-  end loop;
+  if vortex_platform.grid_view_may_share_internal() then
+    shareable := p_placement_ids;
+  end if;
 
   -- The person's current layouts and every named view they may see, for all the page's grids, in
   -- one bounded read. Only the views the address selected carry their document.
@@ -106,11 +92,11 @@ begin
 end
 $function$;
 
-revoke all on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb)
+revoke all on function vortex_platform.read_grid_views(uuid, uuid[], uuid[])
   from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
-grant execute on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb) to vortex_request;
+grant execute on function vortex_platform.read_grid_views(uuid, uuid[], uuid[]) to vortex_request;
 
-comment on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb) is
+comment on function vortex_platform.read_grid_views(uuid, uuid[], uuid[]) is
   'Reads the current person''s current grid layouts and the named views they may see for the named placements of one page of the selected application, in one bounded call.';
 
-alter function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb) owner to vortex_owner;
+alter function vortex_platform.read_grid_views(uuid, uuid[], uuid[]) owner to vortex_owner;
