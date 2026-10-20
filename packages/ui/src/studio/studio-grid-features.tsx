@@ -252,8 +252,8 @@ export function StudioGridFeatures({
                     checked={enabled}
                     disabled={disabled || features === undefined}
                     onCheckedChange={(on: boolean) => {
-                      // The workflow bound to the feature stays in the draft while it is off, so
-                      // its event identity goes with the feature both ways.
+                      // A disabled feature holds only its catalogue default. Its workflow stays
+                      // in the draft; the settings command restores that binding when enabled.
                       const bound = current.properties["event_id"];
                       const kept = bound === undefined ? {} : { event_id: bound };
                       write(
@@ -271,10 +271,7 @@ export function StudioGridFeatures({
                               const defaultValue = declaration?.defaultValue;
                               if (defaultValue?.kind !== "group")
                                 throw new Error(`Grid feature ${key} has no catalogue default`);
-                              return {
-                                ...(defaultValue as GroupValue),
-                                properties: { ...(defaultValue as GroupValue).properties, ...kept },
-                              };
+                              return defaultValue as GroupValue;
                             })(),
                       );
                     }}
