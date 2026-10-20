@@ -3322,6 +3322,10 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "personal_formatting": {
+                  "kind": "boolean",
+                  "value": false
                 }
               }
             },
@@ -3331,6 +3335,17 @@
                 "key": "enabled",
                 "label": "On",
                 "help": "Let people save views",
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              },
+              {
+                "kind": "boolean",
+                "key": "personal_formatting",
+                "label": "Personal formatting",
+                "help": "Let people add their own highlighting rules to the views they save; needs Formatting on",
                 "required": false,
                 "defaultValue": {
                   "kind": "boolean",

@@ -18,6 +18,8 @@ declare
   stored vortex_platform.grid_views%rowtype;
   held_found boolean;
   owned_count bigint;
+  installation jsonb;
+  access_plan jsonb;
   written_at timestamptz := pg_catalog.clock_timestamp();
 begin
   if p_page_id is null or not vortex_platform.is_non_nil_uuid(p_page_id::text)
@@ -37,6 +39,17 @@ begin
   end if;
 
   select context.* into strict scope from vortex_platform.grid_view_scope_internal() as context;
+
+  -- A personal rule reads fields that exist and that the author can read now; the projection that
+  -- recipients receive is the check, so a rule it would omit for the author is refused here.
+  if p_document is not null and p_document ? 'formatting' then
+    installation := vortex_definition.read_current_active_installation();
+    access_plan := vortex_record.resolve_installation_access_plan_internal(installation);
+    if (vortex_platform.grid_view_document_for_viewer_internal(
+        p_query_id, p_document, installation, access_plan) ->> 'hiddenFormatting')::integer > 0 then
+      return pg_catalog.jsonb_build_object('outcome', 'formatting_refused');
+    end if;
+  end if;
 
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
     scope.organization_id::text || ':' || scope.application_root_id::text || ':' ||

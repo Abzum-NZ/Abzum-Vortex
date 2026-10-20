@@ -17,6 +17,11 @@ import {
   readRecordsTableContract,
   type RecordsTableContract,
 } from "../definition/application-composition/records-display";
+import {
+  conditionalFormatRuleIssue,
+  type ConditionalFormatFacts,
+} from "../definition/application-composition/records-table-features/conditional-formatting";
+import type { ModuleField } from "../definition/module-contracts";
 import { placementSettings } from "../definition/application-composition-catalogue";
 import { walkPageComposition } from "./placement-walk";
 import type { PageDefinition } from "../schema";
@@ -65,6 +70,7 @@ const storedViewRowsSchema = z
         shareGroupIds: z.array(idSchema),
         document: z.unknown().optional(),
         hiddenFilters: z.number().int().min(0).optional(),
+        hiddenFormatting: z.number().int().min(0).optional(),
       })
       .strict(),
   )
@@ -79,6 +85,7 @@ const storedReadSchema = z
             viewId: idSchema,
             document: z.unknown(),
             hiddenFilters: z.number().int().min(0),
+            hiddenFormatting: z.number().int().min(0),
           })
           .strict(),
       )
@@ -130,6 +137,7 @@ export type StoredNamedGridView = Readonly<{
   sharing: GridViewSharing;
   document: GridViewDocument | undefined;
   hiddenFilters: number;
+  hiddenFormatting: number;
 }>;
 
 /** Everything one page read returns of the store: layouts keyed by placement, views by placement. */
@@ -137,7 +145,7 @@ export type StoredGridViews = Readonly<{
   /** Authored documents narrowed by the same current field bounds as stored shared views. */
   defaultDocuments: ReadonlyMap<
     string,
-    Readonly<{ document: GridViewDocument; hiddenFilters: number }>
+    Readonly<{ document: GridViewDocument; hiddenFilters: number; hiddenFormatting: number }>
   >;
   roleKeys: ReadonlySet<string>;
   /** The placements (lower-cased) whose tables name a share permission the person holds now. */
@@ -239,6 +247,7 @@ export const readGridViews = async (
         groupIds: row.shareGroupIds.map((id) => id.toLowerCase()),
       },
       hiddenFilters: row.hiddenFilters ?? 0,
+      hiddenFormatting: row.hiddenFormatting ?? 0,
       document:
         row.document === undefined
           ? undefined
@@ -253,6 +262,7 @@ export const readGridViews = async (
         {
           document: stored("default view", row.viewId, gridViewDocumentSchema, row.document),
           hiddenFilters: row.hiddenFilters,
+          hiddenFormatting: row.hiddenFormatting,
         },
       ]),
     ),
@@ -298,6 +308,7 @@ export const addressedGridView = (
     },
     document: view.document,
     hiddenFilters: view.hiddenFilters,
+    hiddenFormatting: view.hiddenFormatting,
     sharing: view.mine || canShare ? view.sharing : null,
   };
 };
@@ -421,7 +432,11 @@ const viewResultSchema = z.discriminatedUnion("outcome", [
       queryId: idSchema,
     })
     .strict(),
-  z.object({ outcome: z.enum(["not_found", "forbidden", "limit", "target_unknown"]) }).strict(),
+  z
+    .object({
+      outcome: z.enum(["not_found", "forbidden", "limit", "target_unknown", "formatting_refused"]),
+    })
+    .strict(),
 ]);
 
 /** What a view operation came to; every refusal is a closed outcome, never a database message. */
@@ -429,13 +444,47 @@ export type GridViewOperationOutcome =
   | Readonly<{ outcome: "saved"; viewId: string; revision: number }>
   | Readonly<{ outcome: "deleted" }>
   | Readonly<{ outcome: "conflict" }>
-  | Readonly<{ outcome: "not_found" | "forbidden" | "limit" | "target_unknown" }>;
+  | Readonly<{ outcome: "not_found" | "forbidden" | "limit" | "target_unknown" }>
+  /** A personal rule is not allowed here, reads a field the person cannot read, or does not fit. */
+  | Readonly<{ outcome: "formatting_refused"; reason: string }>;
 
 const viewOutcome = (rows: readonly ResultRow[]): GridViewOperationOutcome => {
   const result = viewResultSchema.parse(only(rows));
   if (result.outcome === "saved")
     return { outcome: "saved", viewId: result.viewId.toLowerCase(), revision: result.revision };
+  if (result.outcome === "formatting_refused")
+    return { outcome: "formatting_refused", reason: "A rule reads a field you cannot read." };
   return result.outcome === "conflict" ? { outcome: "conflict" } : result;
+};
+
+/** A record type's fields as a rule is checked against them. */
+const formattingFacts = (fields: readonly ModuleField[]): ConditionalFormatFacts => ({
+  fields: fields.map((field) => {
+    const settings = (field as { settings?: Record<string, unknown> }).settings ?? {};
+    const options = settings["options"];
+    return {
+      field: String(field.fieldId),
+      label: field.label,
+      type: field.type,
+      ...(typeof settings["resultType"] === "string"
+        ? { resultType: settings["resultType"] }
+        : {}),
+      ...(field.type === "choice" && Array.isArray(options)
+        ? { choiceValues: options.map((option: { value: string }) => String(option.value)) }
+        : {}),
+    };
+  }),
+});
+
+const refuseFormatting = (
+  placementId: string,
+  cause: string,
+  reason: string,
+): GridViewOperationOutcome => {
+  console.error(
+    `[grid-views] save refused code=GRID_VIEW_FORMATTING_REFUSED placement=${placementId.toLowerCase()} cause=${cause}`,
+  );
+  return { outcome: "formatting_refused", reason };
 };
 
 /**
@@ -453,6 +502,8 @@ export const saveGridView = async (
     expectedRevision: number | null;
     name: string | null;
     document: GridViewDocument | null;
+    /** The bound record type's fields, to check a personal rule's operators against their types. */
+    recordFields: readonly ModuleField[];
   }>,
 ): Promise<GridViewOperationOutcome> => {
   const document = save.document === null ? null : gridViewDocumentSchema.parse(save.document);
@@ -467,6 +518,26 @@ export const saveGridView = async (
     )
   )
     throw new Error("GRID_VIEW_PLACEMENT_INVALID");
+  if (document?.formatting !== undefined) {
+    const features = gridViewPlacement(save.page, save.placementId)?.contract.features;
+    if (
+      features === undefined ||
+      !features.savedViews.enabled ||
+      !features.savedViews.personalFormatting ||
+      !features.conditionalFormatting.enabled
+    )
+      return refuseFormatting(
+        save.placementId,
+        "personal_formatting_off",
+        "Personal formatting is not turned on for this table.",
+      );
+    const facts = formattingFacts(save.recordFields);
+    for (const rule of document.formatting) {
+      const issue = conditionalFormatRuleIssue(rule, facts);
+      if (issue !== undefined)
+        return refuseFormatting(save.placementId, `rule_invalid rule=${rule.id}`, issue);
+    }
+  }
   const rows = await transaction.query<ResultRow>`
     select vortex_platform.save_grid_view(
       ${save.page.pageId}::uuid,
