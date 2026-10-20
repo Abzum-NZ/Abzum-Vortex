@@ -1,5 +1,5 @@
 import type {
-  RecordsTableActionContract,
+  RecordsTableBulkActionContract,
   RecordsTableContract,
   RecordsTableFilterField,
 } from "../../schema";
@@ -33,8 +33,11 @@ export type RecordsTableFeatureProjection = Readonly<{
    */
   columnFilters?: readonly RecordsTableFilterField[];
   savedViews?: true;
-  /** The bulk commands at least one row of the page lets the viewer run. */
-  bulkActions?: readonly RecordsTableActionContract[];
+  /**
+   * The declared bulk actions. Whether the viewer may run one on a record is decided per record when
+   * it runs, under current access, and every refused record is reported.
+   */
+  bulkActions?: readonly RecordsTableBulkActionContract[];
   /** The fields the viewer may change on at least one row, and the flow binding that commits a change. */
   inlineEdit?: Readonly<{ eventId: string; fields: readonly string[] }>;
   /** The styles the page's rows name and the numeric columns drawn as bars or scales. */
@@ -86,8 +89,8 @@ const sameField = (left: string, right: string): boolean =>
 /**
  * Projects the enabled features for the viewer of one read. `visibleFieldIds` are the columns the
  * read requested; a requested column that every returned row withholds is a field the viewer may
- * not read, so it is not offered as a filter. `filterFields` describes each filterable field. A bulk command that names a capability is offered
- * when some row allows it, and inline editing keeps only fields some row lets the viewer change.
+ * not read, so it is not offered as a filter. `filterFields` describes each filterable field. Inline
+ * editing keeps only fields some row lets the viewer change.
  * Every request a projected control makes is still re-checked by the server.
  */
 export const projectRecordsTableFeatures = (
@@ -110,13 +113,7 @@ export const projectRecordsTableFeatures = (
         return described === undefined || withheld(field) ? [] : [described];
       })
     : [];
-  const bulkActions = features.bulkActions.enabled
-    ? features.bulkActions.actions.filter(
-        (action) =>
-          action.capability === undefined ||
-          rows.some((row) => row.capabilities?.actions.includes(action.capability!) === true),
-      )
-    : [];
+  const bulkActions = features.bulkActions.enabled ? features.bulkActions.actions : [];
   const inlineEdit = features.inlineEdit;
   const editableFields =
     inlineEdit.enabled && inlineEdit.eventId !== undefined

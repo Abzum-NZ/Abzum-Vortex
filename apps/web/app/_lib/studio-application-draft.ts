@@ -797,6 +797,8 @@ export const loadStudioApplicationDraft = async (
                     borrowedActions.push({
                       reference: action.key,
                       label: action.label,
+                      recordType: recordTypeKeys.get(String(action.subjectRecordTypeId)) ?? "",
+                      acceptsSelection: action.inputs.every((input) => !input.required),
                       borrowedFrom: use.application,
                     });
                   for (const record of records)

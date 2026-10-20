@@ -293,6 +293,10 @@ export type StudioQueryChoice = Readonly<{
 export type StudioActionChoice = Readonly<{
   reference: string;
   label: string;
+  /** The record type the action runs on, as `<module>:<record>`. */
+  recordType: string;
+  /** It needs no input a person types for one record, so it can run on several records. */
+  acceptsSelection: boolean;
   /** For an action of a Module the application only uses, the application that owns it. */
   borrowedFrom?: string;
 }>;
@@ -436,7 +440,14 @@ export function studioActionChoices(
   borrowed: StudioBorrowedChoices | null,
 ): readonly StudioActionChoice[] {
   const own = (source.body.modules ?? []).flatMap((module) =>
-    module.actions.map((action) => Object.freeze({ reference: action.key, label: action.label })),
+    module.actions.map((action) =>
+      Object.freeze({
+        reference: action.key,
+        label: action.label,
+        recordType: `${module.key}:${action.record_type}`,
+        acceptsSelection: action.inputs.every((input) => !input.required),
+      }),
+    ),
   );
   return Object.freeze([...own, ...(borrowedFor(source, borrowed)?.actions ?? [])]);
 }

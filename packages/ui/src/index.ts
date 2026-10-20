@@ -112,8 +112,10 @@ export {
   type RichTextPayload,
   type SummaryData,
   type SummaryPayload,
+  type TableBulkRun,
   type TableData,
   type TablePayload,
+  type TableSelectionScope,
   type TextData,
   type TextPayload,
 } from "./display";

@@ -199,11 +199,21 @@ export function StudioGridFeatures({
                     idPrefix={`${switchId}-settings`}
                     properties={settings}
                     values={settingValues}
-                    choices={
-                      editor.offers === undefined
-                        ? choices
-                        : { ...choices, fields: choices.fields.filter(editor.offers) }
-                    }
+                    choices={{
+                      ...choices,
+                      ...(editor.offers === undefined
+                        ? {}
+                        : { fields: choices.fields.filter(editor.offers) }),
+                      ...(editor.offersAction === undefined
+                        ? {}
+                        : {
+                            actions: choices.actions.filter(
+                              (action) =>
+                                action.recordType === query?.recordType &&
+                                editor.offersAction!(action),
+                            ),
+                          }),
+                    }}
                     disabled={disabled}
                     onChange={(next) =>
                       write(key, {

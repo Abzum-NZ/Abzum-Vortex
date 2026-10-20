@@ -677,6 +677,517 @@ const composeFromFlow = (
     : { kind: "composed", composition };
 };
 
+/** The identities one named-action command holds across its attempts, and what its last attempt saw. */
+type NamedActionAttemptState = {
+  readonly command: ExecuteNamedActionCommand;
+  readonly activityId: string;
+  standardOccurrenceId?: string;
+  declaredOccurrenceIds?: readonly string[];
+  creationOccurrenceIds?: readonly string[];
+  deleteActivityId?: string;
+  deleteOccurrenceId?: string;
+  /** A failed subject delete discards the whole command, receipt included. */
+  deleteSettlement?: Settled<unknown> | undefined;
+  attempted: { rules?: BeforeSaveRuleExecution; executions: BeforeSaveRuleExecution[] };
+};
+
+type NamedActionIdentities = Readonly<{ activity: () => string; occurrence: () => string }>;
+
+/**
+ * One attempt of one named action inside a transaction the caller owns: the preview, the locked
+ * preparation, the flow run, the relationship totals, the before-save rules and the one apply
+ * record changes call. It returns the result, `restart` when the record moved between the preview
+ * and the locked preparation, or `recordedRefusal` when the database recorded the refusal itself.
+ */
+const attemptNamedAction = async (
+  transaction: RequestDatabaseTransaction,
+  issuedAt: string,
+  state: NamedActionAttemptState,
+  run: ActionFlowRunner,
+  ids: NamedActionIdentities,
+): Promise<ExecuteNamedActionResult | typeof restart | typeof recordedRefusal> => {
+  const preview = await prepare(transaction, state.command, state.activityId, true);
+  if (preview.outcome === "completed") return preview.result;
+  if (preview.outcome === "refused_recorded") return recordedRefusal;
+  if (preview.outcome === "conflict")
+    return preview.correlationId
+      ? safeRefusal(
+          preview.correlationId,
+          "conflict",
+          "the subject record's revision moved before the preview",
+        )
+      : recordedRefusal;
+  if (preview.outcome === "permission_refused") {
+    const denied = await prepare(transaction, state.command, state.activityId, false);
+    return denied.outcome === "refused_recorded"
+      ? recordedRefusal
+      : "correlationId" in denied && denied.correlationId
+        ? safeRefusal(
+            denied.correlationId,
+            "operation_refused",
+            "the action's permission was not granted for the subject record",
+          )
+        : recordedRefusal;
+  }
+  if (preview.outcome !== "previewed") {
+    const reasonCode = "reasonCode" in preview ? preview.reasonCode : undefined;
+    return preview.correlationId
+      ? safeRefusal(
+          preview.correlationId,
+          "operation_refused",
+          `the preview was ${preview.outcome}, not previewed (${reasonCode ?? "no reason code"})`,
+          preparationReason(reasonCode),
+        )
+      : recordedRefusal;
+  }
+  const previewRun = composeFromFlow(preview, state.command.inputs, issuedAt, run);
+  if (previewRun.kind === "invalid")
+    return safeRefusal(preview.correlationId, "invalid_request", previewRun.reason);
+  const previewInputs =
+    previewRun.kind === "composed"
+      ? previewRun.composition.normalizedInputs
+      : previewRun.normalizedInputs;
+  if (!(await validateReferenceInputs(transaction, state.command, previewInputs)))
+    return safeRefusal(
+      preview.correlationId,
+      "operation_refused",
+      "a record reference input does not name a record the action may use",
+    );
+
+  // A refused precondition writes nothing, so it has no totals to prepare.
+  const totalPreparation: RelationshipTotalPreparationOutcome =
+    previewRun.kind === "composed"
+      ? await prepareTotals(
+          transaction,
+          state.command,
+          previewRun.composition.submittedValues,
+          previewRun.composition.creations,
+          state.activityId,
+        )
+      : { outcome: "not_required" };
+  if (totalPreparation.outcome === "restart") return restart;
+  if (totalPreparation.outcome === "refused_recorded") return recordedRefusal;
+  if (totalPreparation.outcome === "conflict")
+    return safeRefusal(
+      preview.correlationId,
+      "conflict",
+      "the relationship totals preparation found a revision conflict",
+    );
+  if (totalPreparation.outcome === "refused")
+    return safeRefusal(
+      preview.correlationId,
+      "operation_refused",
+      `the relationship totals preparation refused the change (${totalPreparation.reasonCode ?? "no reason code"})`,
+    );
+
+  const prepared = await prepare(transaction, state.command, state.activityId, false);
+  if (prepared.outcome === "completed") return prepared.result;
+  if (prepared.outcome === "refused_recorded") return recordedRefusal;
+  if (prepared.outcome === "conflict")
+    return prepared.correlationId
+      ? safeRefusal(
+          prepared.correlationId,
+          "conflict",
+          "the subject record's revision moved before the locked preparation",
+        )
+      : recordedRefusal;
+  if (prepared.outcome !== "prepared") {
+    const reasonCode = "reasonCode" in prepared ? prepared.reasonCode : undefined;
+    return prepared.correlationId
+      ? safeRefusal(
+          prepared.correlationId,
+          "operation_refused",
+          `the locked preparation was ${prepared.outcome}, not prepared (${reasonCode ?? "no reason code"})`,
+          preparationReason(reasonCode),
+        )
+      : recordedRefusal;
+  }
+  const preparedRun = composeFromFlow(prepared, state.command.inputs, issuedAt, run);
+  if (preparedRun.kind === "invalid")
+    return safeRefusal(prepared.correlationId, "invalid_request", preparedRun.reason);
+  // The record moved between the preview and the locked preparation: run again.
+  if (preparedRun.kind !== previewRun.kind) return restart;
+  if (preparedRun.kind === "refused") {
+    const refusal = await refusePrecondition(transaction, state.command, state.activityId);
+    return refusal.outcome === "refused_recorded"
+      ? recordedRefusal
+      : safeRefusal(
+          prepared.correlationId,
+          "operation_refused",
+          "the action's precondition refused the subject record",
+        );
+  }
+  const composition = preparedRun.composition;
+  const previewComposition = (previewRun as Extract<FlowComposition, { kind: "composed" }>)
+    .composition;
+  if (
+    JSON.stringify(composition.submittedValues) !==
+      JSON.stringify(previewComposition.submittedValues) ||
+    JSON.stringify(composition.creations) !== JSON.stringify(previewComposition.creations) ||
+    JSON.stringify(composition.relationshipCopies) !==
+      JSON.stringify(previewComposition.relationshipCopies) ||
+    composition.softDeletesSubject !== previewComposition.softDeletesSubject ||
+    JSON.stringify(composition.announcedEventKeys) !==
+      JSON.stringify(previewComposition.announcedEventKeys)
+  )
+    return restart;
+
+  const subjectRuleSet = parseBeforeSaveRuleSet(
+    prepared.beforeSaveRules,
+    prepared.recordType.recordTypeId,
+  );
+  if (subjectRuleSet === undefined)
+    return safeRefusal(
+      prepared.correlationId,
+      "operation_refused",
+      "the subject's before-save rules are unavailable",
+    );
+  const settings = await readOrganizationRuntimeSettings(transaction);
+  for (const target of prepared.copyTargets) {
+    const execution = beginBeforeSaveRuleExecution(subjectRuleSet);
+    const calculated = calculateAndFinalize({
+      operation: "update",
+      submittedValues: target.submittedValues,
+      recordType: prepared.recordType,
+      existingValues: target.existingValues,
+      issuedAt,
+      organizationCurrency: settings?.currency,
+      timeZone: settings?.timeZone,
+      rules: execution,
+    });
+    if (!calculated.success)
+      return safeRefusal(
+        prepared.correlationId,
+        "operation_refused",
+        `the relationship copy target ${target.recordId} did not calculate: ${describeIssues(calculated.issues)}`,
+        ruleReasonFromIssues(calculated.issues),
+      );
+    if (
+      calculated.pendingChecks.some(
+        (check) => !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
+      )
+    )
+      return safeRefusal(
+        prepared.correlationId,
+        "operation_refused",
+        `a pending check on relationship copy target ${target.recordId} is not authorised`,
+      );
+    if (
+      calculated.clearFieldIds.length > 0 ||
+      Object.entries(calculated.setValues).some(([fieldId, value]) => {
+        const planned = recordLinkValueSchema.safeParse(target.submittedValues[fieldId]);
+        const actual = recordLinkValueSchema.safeParse(value);
+        return (
+          !planned.success ||
+          !actual.success ||
+          planned.data.recordTypeId.toLowerCase() !== actual.data.recordTypeId.toLowerCase() ||
+          planned.data.recordId.toLowerCase() !== actual.data.recordId.toLowerCase()
+        );
+      })
+    )
+      return safeRefusal(
+        prepared.correlationId,
+        "operation_refused",
+        `the relationship copy target ${target.recordId}'s rules changed values outside the copy plan`,
+      );
+  }
+  let closureRules: Map<string, BeforeSaveRuleExecution> | undefined;
+  if (totalPreparation.outcome === "prepared") {
+    closureRules = new Map();
+    for (const record of totalPreparation.records) {
+      const ruleSet = parseBeforeSaveRuleSet(
+        record.beforeSaveRules,
+        record.recordType.recordTypeId,
+      );
+      if (ruleSet === undefined)
+        return safeRefusal(
+          prepared.correlationId,
+          "operation_refused",
+          `the before-save rules for ${record.recordKey} are unavailable`,
+        );
+      // A create-only action must not acquire a subject write solely
+      // from a subject rule effect. Derived subject changes are checked
+      // below and refused until their rule evaluation can be ordered.
+      if (record.recordKey !== "root" || Object.keys(composition.submittedValues).length > 0) {
+        const execution = beginBeforeSaveRuleExecution(ruleSet);
+        closureRules.set(record.recordKey, execution);
+        if (record.recordKey === "root") state.attempted.executions.push(execution);
+      }
+    }
+  } else if (Object.keys(composition.submittedValues).length > 0) {
+    state.attempted.rules = beginBeforeSaveRuleExecution(subjectRuleSet);
+    state.attempted.executions.push(state.attempted.rules);
+  }
+
+  let finalValues: Record<string, unknown> = {};
+  let parentMutations: readonly RelationshipTotalParentMutation[] = [];
+  let creations: readonly Readonly<{
+    ordinal: number;
+    recordTypeId: string;
+    values: Readonly<Record<string, JsonValue | null>>;
+    finalValues: Readonly<Record<string, JsonValue | null>>;
+  }>[] = [];
+  // Read unconditionally: even an action with no record.set_fields task and
+  // no creation can still leave a stale due row in place unless its
+  // deadline transition is re-derived from the record's unchanged
+  // existing values below.
+  if (Object.keys(composition.submittedValues).length > 0 || composition.creations.length > 0) {
+    const saveCommand = saveRecordCommandSchema.parse({
+      contractVersion: "2.0.0",
+      commandId: state.command.commandId,
+      operation: "update",
+      recordTypeId: state.command.recordTypeId,
+      recordId: state.command.recordId,
+      expectedConcurrencyNumber: state.command.expectedConcurrencyNumber,
+      submittedValues: composition.submittedValues,
+    });
+    const root =
+      totalPreparation.outcome === "prepared"
+        ? totalPreparation.records.find((record) => record.recordKey === "root")
+        : undefined;
+    const clock =
+      totalPreparation.outcome === "prepared"
+        ? operationClock(
+            totalPreparation.records.map((record) => record.recordType),
+            issuedAt,
+            settings?.timeZone,
+          )
+        : undefined;
+    const calculated =
+      totalPreparation.outcome === "prepared" && clock !== undefined
+        ? calculateLockedRelationshipTotalSave({
+            command: saveCommand,
+            preparation: totalPreparation,
+            creations: composition.creations,
+            ...(settings?.currency ? { organizationCurrency: settings.currency } : {}),
+            clock,
+            ...(closureRules === undefined ? {} : { rules: closureRules }),
+          })
+        : totalPreparation.outcome === "prepared"
+          ? { success: false as const, issues: [] }
+          : calculateAndFinalize({
+              operation: saveCommand.operation,
+              submittedValues: saveCommand.submittedValues,
+              recordType: prepared.recordType,
+              existingValues: prepared.existingValues,
+              issuedAt,
+              organizationCurrency: settings?.currency,
+              timeZone: settings?.timeZone,
+              rules: state.attempted.rules,
+            });
+    if (!calculated.success)
+      return safeRefusal(
+        prepared.correlationId,
+        "operation_refused",
+        totalPreparation.outcome === "prepared" && clock === undefined
+          ? "the relationship totals have no operation clock for the records' time zone"
+          : `the subject values the action writes did not calculate: ${describeIssues(calculated.issues)}`,
+        ruleReasonFromIssues(
+          calculated.issues,
+          totalPreparation.outcome === "prepared" ? totalPreparation : undefined,
+        ),
+      );
+    if (totalPreparation.outcome === "prepared" && root === undefined)
+      return safeRefusal(
+        prepared.correlationId,
+        "operation_refused",
+        "the prepared relationship totals hold no root record for the subject",
+      );
+    if (
+      calculated.pendingChecks.some(
+        (check) => !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
+      )
+    )
+      return safeRefusal(
+        prepared.correlationId,
+        "operation_refused",
+        "a pending check on the subject values is not authorised",
+      );
+    if (
+      "creationPendingChecks" in calculated &&
+      Object.values(calculated.creationPendingChecks).some((checks) =>
+        checks.some(
+          (check) => !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
+        ),
+      )
+    ) {
+      return safeRefusal(
+        prepared.correlationId,
+        "operation_refused",
+        "a pending check on a created record is not authorised",
+      );
+    }
+    finalValues =
+      "sourceFinalValues" in calculated
+        ? { ...calculated.sourceFinalValues }
+        : { ...calculated.setValues };
+    if ("clearFieldIds" in calculated)
+      for (const fieldId of calculated.clearFieldIds) finalValues[fieldId] = null;
+    if ("parentMutations" in calculated) parentMutations = calculated.parentMutations;
+    // The merged closure recomputes every derived subject field. An
+    // action with no record.set_fields task may therefore still carry a
+    // changed total; one whose derived values are unchanged must not
+    // fabricate a subject write, a revision bump or an occurrence.
+    if (Object.keys(composition.submittedValues).length === 0)
+      finalValues = Object.fromEntries(
+        Object.entries(finalValues).filter(
+          ([fieldId, value]) =>
+            JSON.stringify(value ?? null) !==
+            JSON.stringify(prepared.existingValues[fieldId] ?? null),
+        ),
+      );
+    if (
+      totalPreparation.outcome === "prepared" &&
+      Object.keys(composition.submittedValues).length === 0 &&
+      Object.keys(finalValues).length > 0 &&
+      subjectRuleSet.rules.length > 0
+    )
+      return safeRefusal(
+        prepared.correlationId,
+        "operation_refused",
+        "the created records changed derived subject values that require its before-save rules",
+      );
+    const createdFinalValues =
+      "creationFinalValues" in calculated
+        ? { values: calculated.creationFinalValues }
+        : creationFinalValues(
+            prepared,
+            composition.creations,
+            issuedAt,
+            settings?.currency,
+            settings?.timeZone,
+          );
+    if ("reason" in createdFinalValues)
+      return safeRefusal(
+        prepared.correlationId,
+        "operation_refused",
+        createdFinalValues.reason,
+        createdFinalValues.ruleReason,
+      );
+    // `values` stays the composed authored field map, which the
+    // database re-derives from the installed action; `finalValues`
+    // adds the generated fields the evaluator produced, exactly as
+    // the subject's submitted/final split works.
+    creations = composition.creations.map((creation) => ({
+      ordinal: creation.ordinal,
+      recordTypeId: creation.recordTypeId,
+      values: creation.values,
+      finalValues: createdFinalValues.values[creation.ordinal] ?? creation.values,
+    }));
+  }
+  try {
+    state.standardOccurrenceId ??= eventOccurrenceIdSchema.parse(ids.occurrence());
+    state.declaredOccurrenceIds ??= Array.from({ length: prepared.eventDescriptorCount }, () =>
+      eventOccurrenceIdSchema.parse(ids.occurrence()),
+    );
+    state.creationOccurrenceIds ??= Array.from({ length: creations.length }, () =>
+      eventOccurrenceIdSchema.parse(ids.occurrence()),
+    );
+  } catch {
+    throw new Error("NAMED_ACTION_OCCURRENCE_ID_INVALID");
+  }
+  if (state.creationOccurrenceIds.length !== creations.length) return restart;
+  const stored = await applyChanges(
+    transaction,
+    state.command,
+    composition,
+    finalValues,
+    creations,
+    state.activityId,
+    state.standardOccurrenceId,
+    state.declaredOccurrenceIds,
+    state.creationOccurrenceIds,
+    parentMutations,
+  );
+  if (stored.outcome === "restart") return restart;
+  if (stored.outcome === "refused_recorded") return recordedRefusal;
+  if (stored.outcome === "conflict")
+    return safeRefusal(
+      prepared.correlationId,
+      "conflict",
+      "the record changes were refused for a revision conflict",
+    );
+  if (stored.outcome !== "saved" && stored.outcome !== "completed")
+    return safeRefusal(
+      prepared.correlationId,
+      stored.reasonCode === "command_invalid" ? "invalid_request" : "operation_refused",
+      `the record changes were ${String(stored.outcome)} (${String(stored.reasonCode ?? "no reason code")})`,
+    );
+  const storedResult = completedResult(stored);
+  // A writer replay means this command already completed, its delete
+  // included, so the subject is never deleted a second time.
+  if (storedResult === undefined || !composition.softDeletesSubject || stored.replayed === true)
+    return storedResult ?? recordedRefusal;
+
+  // The subject delete is the shared protected lifecycle delete, run
+  // last in this same transaction against the revision the action
+  // left the subject at: the action's own tasks write nothing to a
+  // subject it deletes. It carries an identity derived from the action's command and
+  // its own Activity and `deleted` Event identities, and any refusal
+  // throws so the receipt, Activity and Events roll back with it.
+  try {
+    state.deleteActivityId ??= activityIdSchema.parse(ids.activity());
+    state.deleteOccurrenceId ??= eventOccurrenceIdSchema.parse(ids.occurrence());
+  } catch {
+    throw new Error("NAMED_ACTION_OCCURRENCE_ID_INVALID");
+  }
+  try {
+    const deleted = await performProtectedRecordDelete(transaction, issuedAt, {
+      commandId: deleteLifecycleCommandId(state.command.commandId),
+      recordTypeId: state.command.recordTypeId,
+      recordId: state.command.recordId,
+      expectedConcurrencyNumber: state.command.expectedConcurrencyNumber,
+      activityId: state.deleteActivityId,
+      occurrenceId: state.deleteOccurrenceId,
+    });
+    const deletedResult =
+      deleted.outcome === "deleted" && !deleted.replayed
+        ? completedResult({
+            recordId: deleted.recordId,
+            concurrencyNumber: deleted.concurrencyNumber,
+            // A deleted subject exposes no values.
+            values: {},
+            correlationId: deleted.correlationId,
+            backgroundDelivery: "pending",
+          })
+        : undefined;
+    if (deletedResult === undefined) throw new Error("NAMED_ACTION_DELETE_RESULT_INVALID");
+    return deletedResult;
+  } catch (error) {
+    state.deleteSettlement = settleRecordLifecycleError(error);
+    throw error;
+  }
+};
+
+/** One parsed command's attempt state, with fresh per-attempt rule executions. */
+const attemptStateOf = (
+  command: ExecuteNamedActionCommand,
+  activityId: string,
+): NamedActionAttemptState => ({ command, activityId, attempted: { executions: [] } });
+
+/** The refusal of a subject delete that settled with a result, as the person sees it. */
+const deleteRefusal = (
+  settlement: Extract<Settled<unknown>, { kind: "result" }>,
+): ExecuteNamedActionResult => {
+  const refused = settlement.value as RecordDeleteResult;
+  return safeRefusal(
+    refused.correlationId,
+    refused.outcome === "conflict" ? "conflict" : "operation_refused",
+    `the subject delete was ${refused.outcome}`,
+    refused.outcome === "refused" ? refused.ruleReason : undefined,
+  );
+};
+
+/** What one run of a named action over several records ended with. */
+export type NamedActionBatchResult =
+  | Readonly<{ kind: "completed"; results: readonly ExecuteNamedActionResult[] }>
+  /** One record refused, so the whole batch rolled back; `index` names it in the given order. */
+  | Readonly<{ kind: "refused"; index: number; result: ExecuteNamedActionResult | undefined }>
+  | Readonly<{ kind: "unavailable" | "temporarily_unavailable" }>;
+
+/** The most records one transaction of a named action changes. */
+export const namedActionBatchMaximum = 200;
+
 /**
  * The record port of the flow runner for named actions (#1063). The runner has already resolved the
  * exact release's action flow, checked its invocation permission and supplied the flow run; this
@@ -686,8 +1197,26 @@ const composeFromFlow = (
  */
 export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortDependencies) => {
   const requests = createHumanOrganizationRequestService(dependencies);
-  const newActivityId = dependencies.activityId ?? randomUUID;
-  const newOccurrenceId = dependencies.occurrenceId ?? randomUUID;
+  const ids: NamedActionIdentities = {
+    activity: dependencies.activityId ?? randomUUID,
+    occurrence: dependencies.occurrenceId ?? randomUUID,
+  };
+  const parsedCommand = (candidate: unknown): ExecuteNamedActionCommand | undefined => {
+    const command = executeNamedActionCommandSchema.safeParse(candidate);
+    if (command.success) return command.data;
+    console.error(
+      `[named-action] refused NAMED_ACTION_COMMAND_INVALID: ${describeFailure(command.error)}`,
+    );
+    return undefined;
+  };
+  const newActivityId = (): string | undefined => {
+    try {
+      return activityIdSchema.parse(ids.activity());
+    } catch (error) {
+      console.error(`[named-action] identity generation failed: ${describeFailure(error)}`);
+      return undefined;
+    }
+  };
   return Object.freeze({
     async execute(
       session: IdentitySession,
@@ -695,523 +1224,29 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
       commandCandidate: unknown,
       run: ActionFlowRunner,
     ): Promise<NamedActionServiceResult> {
-      const command = executeNamedActionCommandSchema.safeParse(commandCandidate);
-      if (!command.success) {
-        console.error(
-          `[named-action] refused NAMED_ACTION_COMMAND_INVALID: ${describeFailure(command.error)}`,
-        );
-        return { kind: "unavailable" };
-      }
+      const command = parsedCommand(commandCandidate);
+      if (command === undefined) return { kind: "unavailable" };
       if (selection.applicationRootId === undefined) {
         console.error("[named-action] refused NAMED_ACTION_APPLICATION_NOT_SELECTED");
         return { kind: "unavailable" };
       }
-      let activityId: string;
-      try {
-        activityId = activityIdSchema.parse(newActivityId());
-      } catch (error) {
-        console.error(`[named-action] identity generation failed: ${describeFailure(error)}`);
-        return { kind: "temporarily_unavailable" };
-      }
-      let standardOccurrenceId: string | undefined;
-      let declaredOccurrenceIds: readonly string[] | undefined;
-      let creationOccurrenceIds: readonly string[] | undefined;
-      let deleteActivityId: string | undefined;
-      let deleteOccurrenceId: string | undefined;
+      const activityId = newActivityId();
+      if (activityId === undefined) return { kind: "temporarily_unavailable" };
+      const state = attemptStateOf(command, activityId);
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        // A failed subject delete discards the whole command, receipt included.
-        let deleteSettlement: Settled<unknown> | undefined;
-        const attempted: {
-          rules?: BeforeSaveRuleExecution;
-          executions: BeforeSaveRuleExecution[];
-        } = {
-          executions: [],
-        };
+        state.deleteSettlement = undefined;
+        state.attempted = { executions: [] };
         const result = await requests.runChange(
           session,
           selection,
-          async (transaction, _scope, issuedAt) => {
-            const preview = await prepare(transaction, command.data, activityId, true);
-            if (preview.outcome === "completed") return preview.result;
-            if (preview.outcome === "refused_recorded") return recordedRefusal;
-            if (preview.outcome === "conflict")
-              return preview.correlationId
-                ? safeRefusal(
-                    preview.correlationId,
-                    "conflict",
-                    "the subject record's revision moved before the preview",
-                  )
-                : recordedRefusal;
-            if (preview.outcome === "permission_refused") {
-              const denied = await prepare(transaction, command.data, activityId, false);
-              return denied.outcome === "refused_recorded"
-                ? recordedRefusal
-                : "correlationId" in denied && denied.correlationId
-                  ? safeRefusal(
-                      denied.correlationId,
-                      "operation_refused",
-                      "the action's permission was not granted for the subject record",
-                    )
-                  : recordedRefusal;
-            }
-            if (preview.outcome !== "previewed") {
-              const reasonCode = "reasonCode" in preview ? preview.reasonCode : undefined;
-              return preview.correlationId
-                ? safeRefusal(
-                    preview.correlationId,
-                    "operation_refused",
-                    `the preview was ${preview.outcome}, not previewed (${reasonCode ?? "no reason code"})`,
-                    preparationReason(reasonCode),
-                  )
-                : recordedRefusal;
-            }
-            const previewRun = composeFromFlow(preview, command.data.inputs, issuedAt, run);
-            if (previewRun.kind === "invalid")
-              return safeRefusal(preview.correlationId, "invalid_request", previewRun.reason);
-            const previewInputs =
-              previewRun.kind === "composed"
-                ? previewRun.composition.normalizedInputs
-                : previewRun.normalizedInputs;
-            if (!(await validateReferenceInputs(transaction, command.data, previewInputs)))
-              return safeRefusal(
-                preview.correlationId,
-                "operation_refused",
-                "a record reference input does not name a record the action may use",
-              );
-
-            // A refused precondition writes nothing, so it has no totals to prepare.
-            const totalPreparation: RelationshipTotalPreparationOutcome =
-              previewRun.kind === "composed"
-                ? await prepareTotals(
-                    transaction,
-                    command.data,
-                    previewRun.composition.submittedValues,
-                    previewRun.composition.creations,
-                    activityId,
-                  )
-                : { outcome: "not_required" };
-            if (totalPreparation.outcome === "restart") return restart;
-            if (totalPreparation.outcome === "refused_recorded") return recordedRefusal;
-            if (totalPreparation.outcome === "conflict")
-              return safeRefusal(
-                preview.correlationId,
-                "conflict",
-                "the relationship totals preparation found a revision conflict",
-              );
-            if (totalPreparation.outcome === "refused")
-              return safeRefusal(
-                preview.correlationId,
-                "operation_refused",
-                `the relationship totals preparation refused the change (${totalPreparation.reasonCode ?? "no reason code"})`,
-              );
-
-            const prepared = await prepare(transaction, command.data, activityId, false);
-            if (prepared.outcome === "completed") return prepared.result;
-            if (prepared.outcome === "refused_recorded") return recordedRefusal;
-            if (prepared.outcome === "conflict")
-              return prepared.correlationId
-                ? safeRefusal(
-                    prepared.correlationId,
-                    "conflict",
-                    "the subject record's revision moved before the locked preparation",
-                  )
-                : recordedRefusal;
-            if (prepared.outcome !== "prepared") {
-              const reasonCode = "reasonCode" in prepared ? prepared.reasonCode : undefined;
-              return prepared.correlationId
-                ? safeRefusal(
-                    prepared.correlationId,
-                    "operation_refused",
-                    `the locked preparation was ${prepared.outcome}, not prepared (${reasonCode ?? "no reason code"})`,
-                    preparationReason(reasonCode),
-                  )
-                : recordedRefusal;
-            }
-            const preparedRun = composeFromFlow(prepared, command.data.inputs, issuedAt, run);
-            if (preparedRun.kind === "invalid")
-              return safeRefusal(prepared.correlationId, "invalid_request", preparedRun.reason);
-            // The record moved between the preview and the locked preparation: run again.
-            if (preparedRun.kind !== previewRun.kind) return restart;
-            if (preparedRun.kind === "refused") {
-              const refusal = await refusePrecondition(transaction, command.data, activityId);
-              return refusal.outcome === "refused_recorded"
-                ? recordedRefusal
-                : safeRefusal(
-                    prepared.correlationId,
-                    "operation_refused",
-                    "the action's precondition refused the subject record",
-                  );
-            }
-            const composition = preparedRun.composition;
-            const previewComposition = (
-              previewRun as Extract<FlowComposition, { kind: "composed" }>
-            ).composition;
-            if (
-              JSON.stringify(composition.submittedValues) !==
-                JSON.stringify(previewComposition.submittedValues) ||
-              JSON.stringify(composition.creations) !==
-                JSON.stringify(previewComposition.creations) ||
-              JSON.stringify(composition.relationshipCopies) !==
-                JSON.stringify(previewComposition.relationshipCopies) ||
-              composition.softDeletesSubject !== previewComposition.softDeletesSubject ||
-              JSON.stringify(composition.announcedEventKeys) !==
-                JSON.stringify(previewComposition.announcedEventKeys)
-            )
-              return restart;
-
-            const subjectRuleSet = parseBeforeSaveRuleSet(
-              prepared.beforeSaveRules,
-              prepared.recordType.recordTypeId,
-            );
-            if (subjectRuleSet === undefined)
-              return safeRefusal(
-                prepared.correlationId,
-                "operation_refused",
-                "the subject's before-save rules are unavailable",
-              );
-            const settings = await readOrganizationRuntimeSettings(transaction);
-            for (const target of prepared.copyTargets) {
-              const execution = beginBeforeSaveRuleExecution(subjectRuleSet);
-              const calculated = calculateAndFinalize({
-                operation: "update",
-                submittedValues: target.submittedValues,
-                recordType: prepared.recordType,
-                existingValues: target.existingValues,
-                issuedAt,
-                organizationCurrency: settings?.currency,
-                timeZone: settings?.timeZone,
-                rules: execution,
-              });
-              if (!calculated.success)
-                return safeRefusal(
-                  prepared.correlationId,
-                  "operation_refused",
-                  `the relationship copy target ${target.recordId} did not calculate: ${describeIssues(calculated.issues)}`,
-                  ruleReasonFromIssues(calculated.issues),
-                );
-              if (
-                calculated.pendingChecks.some(
-                  (check) => !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
-                )
-              )
-                return safeRefusal(
-                  prepared.correlationId,
-                  "operation_refused",
-                  `a pending check on relationship copy target ${target.recordId} is not authorised`,
-                );
-              if (
-                calculated.clearFieldIds.length > 0 ||
-                Object.entries(calculated.setValues).some(([fieldId, value]) => {
-                  const planned = recordLinkValueSchema.safeParse(target.submittedValues[fieldId]);
-                  const actual = recordLinkValueSchema.safeParse(value);
-                  return (
-                    !planned.success ||
-                    !actual.success ||
-                    planned.data.recordTypeId.toLowerCase() !==
-                      actual.data.recordTypeId.toLowerCase() ||
-                    planned.data.recordId.toLowerCase() !== actual.data.recordId.toLowerCase()
-                  );
-                })
-              )
-                return safeRefusal(
-                  prepared.correlationId,
-                  "operation_refused",
-                  `the relationship copy target ${target.recordId}'s rules changed values outside the copy plan`,
-                );
-            }
-            let closureRules: Map<string, BeforeSaveRuleExecution> | undefined;
-            if (totalPreparation.outcome === "prepared") {
-              closureRules = new Map();
-              for (const record of totalPreparation.records) {
-                const ruleSet = parseBeforeSaveRuleSet(
-                  record.beforeSaveRules,
-                  record.recordType.recordTypeId,
-                );
-                if (ruleSet === undefined)
-                  return safeRefusal(
-                    prepared.correlationId,
-                    "operation_refused",
-                    `the before-save rules for ${record.recordKey} are unavailable`,
-                  );
-                // A create-only action must not acquire a subject write solely
-                // from a subject rule effect. Derived subject changes are checked
-                // below and refused until their rule evaluation can be ordered.
-                if (
-                  record.recordKey !== "root" ||
-                  Object.keys(composition.submittedValues).length > 0
-                ) {
-                  const execution = beginBeforeSaveRuleExecution(ruleSet);
-                  closureRules.set(record.recordKey, execution);
-                  if (record.recordKey === "root") attempted.executions.push(execution);
-                }
-              }
-            } else if (Object.keys(composition.submittedValues).length > 0) {
-              attempted.rules = beginBeforeSaveRuleExecution(subjectRuleSet);
-              attempted.executions.push(attempted.rules);
-            }
-
-            let finalValues: Record<string, unknown> = {};
-            let parentMutations: readonly RelationshipTotalParentMutation[] = [];
-            let creations: readonly Readonly<{
-              ordinal: number;
-              recordTypeId: string;
-              values: Readonly<Record<string, JsonValue | null>>;
-              finalValues: Readonly<Record<string, JsonValue | null>>;
-            }>[] = [];
-            // Read unconditionally: even an action with no record.set_fields task and
-            // no creation can still leave a stale due row in place unless its
-            // deadline transition is re-derived from the record's unchanged
-            // existing values below.
-            if (
-              Object.keys(composition.submittedValues).length > 0 ||
-              composition.creations.length > 0
-            ) {
-              const saveCommand = saveRecordCommandSchema.parse({
-                contractVersion: "2.0.0",
-                commandId: command.data.commandId,
-                operation: "update",
-                recordTypeId: command.data.recordTypeId,
-                recordId: command.data.recordId,
-                expectedConcurrencyNumber: command.data.expectedConcurrencyNumber,
-                submittedValues: composition.submittedValues,
-              });
-              const root =
-                totalPreparation.outcome === "prepared"
-                  ? totalPreparation.records.find((record) => record.recordKey === "root")
-                  : undefined;
-              const clock =
-                totalPreparation.outcome === "prepared"
-                  ? operationClock(
-                      totalPreparation.records.map((record) => record.recordType),
-                      issuedAt,
-                      settings?.timeZone,
-                    )
-                  : undefined;
-              const calculated =
-                totalPreparation.outcome === "prepared" && clock !== undefined
-                  ? calculateLockedRelationshipTotalSave({
-                      command: saveCommand,
-                      preparation: totalPreparation,
-                      creations: composition.creations,
-                      ...(settings?.currency ? { organizationCurrency: settings.currency } : {}),
-                      clock,
-                      ...(closureRules === undefined ? {} : { rules: closureRules }),
-                    })
-                  : totalPreparation.outcome === "prepared"
-                    ? { success: false as const, issues: [] }
-                    : calculateAndFinalize({
-                        operation: saveCommand.operation,
-                        submittedValues: saveCommand.submittedValues,
-                        recordType: prepared.recordType,
-                        existingValues: prepared.existingValues,
-                        issuedAt,
-                        organizationCurrency: settings?.currency,
-                        timeZone: settings?.timeZone,
-                        rules: attempted.rules,
-                      });
-              if (!calculated.success)
-                return safeRefusal(
-                  prepared.correlationId,
-                  "operation_refused",
-                  totalPreparation.outcome === "prepared" && clock === undefined
-                    ? "the relationship totals have no operation clock for the records' time zone"
-                    : `the subject values the action writes did not calculate: ${describeIssues(calculated.issues)}`,
-                  ruleReasonFromIssues(
-                    calculated.issues,
-                    totalPreparation.outcome === "prepared" ? totalPreparation : undefined,
-                  ),
-                );
-              if (totalPreparation.outcome === "prepared" && root === undefined)
-                return safeRefusal(
-                  prepared.correlationId,
-                  "operation_refused",
-                  "the prepared relationship totals hold no root record for the subject",
-                );
-              if (
-                calculated.pendingChecks.some(
-                  (check) => !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
-                )
-              )
-                return safeRefusal(
-                  prepared.correlationId,
-                  "operation_refused",
-                  "a pending check on the subject values is not authorised",
-                );
-              if (
-                "creationPendingChecks" in calculated &&
-                Object.values(calculated.creationPendingChecks).some((checks) =>
-                  checks.some(
-                    (check) =>
-                      !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
-                  ),
-                )
-              ) {
-                return safeRefusal(
-                  prepared.correlationId,
-                  "operation_refused",
-                  "a pending check on a created record is not authorised",
-                );
-              }
-              finalValues =
-                "sourceFinalValues" in calculated
-                  ? { ...calculated.sourceFinalValues }
-                  : { ...calculated.setValues };
-              if ("clearFieldIds" in calculated)
-                for (const fieldId of calculated.clearFieldIds) finalValues[fieldId] = null;
-              if ("parentMutations" in calculated) parentMutations = calculated.parentMutations;
-              // The merged closure recomputes every derived subject field. An
-              // action with no record.set_fields task may therefore still carry a
-              // changed total; one whose derived values are unchanged must not
-              // fabricate a subject write, a revision bump or an occurrence.
-              if (Object.keys(composition.submittedValues).length === 0)
-                finalValues = Object.fromEntries(
-                  Object.entries(finalValues).filter(
-                    ([fieldId, value]) =>
-                      JSON.stringify(value ?? null) !==
-                      JSON.stringify(prepared.existingValues[fieldId] ?? null),
-                  ),
-                );
-              if (
-                totalPreparation.outcome === "prepared" &&
-                Object.keys(composition.submittedValues).length === 0 &&
-                Object.keys(finalValues).length > 0 &&
-                subjectRuleSet.rules.length > 0
-              )
-                return safeRefusal(
-                  prepared.correlationId,
-                  "operation_refused",
-                  "the created records changed derived subject values that require its before-save rules",
-                );
-              const createdFinalValues =
-                "creationFinalValues" in calculated
-                  ? { values: calculated.creationFinalValues }
-                  : creationFinalValues(
-                      prepared,
-                      composition.creations,
-                      issuedAt,
-                      settings?.currency,
-                      settings?.timeZone,
-                    );
-              if ("reason" in createdFinalValues)
-                return safeRefusal(
-                  prepared.correlationId,
-                  "operation_refused",
-                  createdFinalValues.reason,
-                  createdFinalValues.ruleReason,
-                );
-              // `values` stays the composed authored field map, which the
-              // database re-derives from the installed action; `finalValues`
-              // adds the generated fields the evaluator produced, exactly as
-              // the subject's submitted/final split works.
-              creations = composition.creations.map((creation) => ({
-                ordinal: creation.ordinal,
-                recordTypeId: creation.recordTypeId,
-                values: creation.values,
-                finalValues: createdFinalValues.values[creation.ordinal] ?? creation.values,
-              }));
-            }
-            try {
-              standardOccurrenceId ??= eventOccurrenceIdSchema.parse(newOccurrenceId());
-              declaredOccurrenceIds ??= Array.from({ length: prepared.eventDescriptorCount }, () =>
-                eventOccurrenceIdSchema.parse(newOccurrenceId()),
-              );
-              creationOccurrenceIds ??= Array.from({ length: creations.length }, () =>
-                eventOccurrenceIdSchema.parse(newOccurrenceId()),
-              );
-            } catch {
-              throw new Error("NAMED_ACTION_OCCURRENCE_ID_INVALID");
-            }
-            if (creationOccurrenceIds.length !== creations.length) return restart;
-            const stored = await applyChanges(
-              transaction,
-              command.data,
-              composition,
-              finalValues,
-              creations,
-              activityId,
-              standardOccurrenceId,
-              declaredOccurrenceIds,
-              creationOccurrenceIds,
-              parentMutations,
-            );
-            if (stored.outcome === "restart") return restart;
-            if (stored.outcome === "refused_recorded") return recordedRefusal;
-            if (stored.outcome === "conflict")
-              return safeRefusal(
-                prepared.correlationId,
-                "conflict",
-                "the record changes were refused for a revision conflict",
-              );
-            if (stored.outcome !== "saved" && stored.outcome !== "completed")
-              return safeRefusal(
-                prepared.correlationId,
-                stored.reasonCode === "command_invalid" ? "invalid_request" : "operation_refused",
-                `the record changes were ${String(stored.outcome)} (${String(stored.reasonCode ?? "no reason code")})`,
-              );
-            const storedResult = completedResult(stored);
-            // A writer replay means this command already completed, its delete
-            // included, so the subject is never deleted a second time.
-            if (
-              storedResult === undefined ||
-              !composition.softDeletesSubject ||
-              stored.replayed === true
-            )
-              return storedResult ?? recordedRefusal;
-
-            // The subject delete is the shared protected lifecycle delete, run
-            // last in this same transaction against the revision the action
-            // left the subject at: the action's own tasks write nothing to a
-            // subject it deletes. It carries an identity derived from the action's command and
-            // its own Activity and `deleted` Event identities, and any refusal
-            // throws so the receipt, Activity and Events roll back with it.
-            try {
-              deleteActivityId ??= activityIdSchema.parse(newActivityId());
-              deleteOccurrenceId ??= eventOccurrenceIdSchema.parse(newOccurrenceId());
-            } catch {
-              throw new Error("NAMED_ACTION_OCCURRENCE_ID_INVALID");
-            }
-            try {
-              const deleted = await performProtectedRecordDelete(transaction, issuedAt, {
-                commandId: deleteLifecycleCommandId(command.data.commandId),
-                recordTypeId: command.data.recordTypeId,
-                recordId: command.data.recordId,
-                expectedConcurrencyNumber: command.data.expectedConcurrencyNumber,
-                activityId: deleteActivityId,
-                occurrenceId: deleteOccurrenceId,
-              });
-              const deletedResult =
-                deleted.outcome === "deleted" && !deleted.replayed
-                  ? completedResult({
-                      recordId: deleted.recordId,
-                      concurrencyNumber: deleted.concurrencyNumber,
-                      // A deleted subject exposes no values.
-                      values: {},
-                      correlationId: deleted.correlationId,
-                      backgroundDelivery: "pending",
-                    })
-                  : undefined;
-              if (deletedResult === undefined)
-                throw new Error("NAMED_ACTION_DELETE_RESULT_INVALID");
-              return deletedResult;
-            } catch (error) {
-              deleteSettlement = settleRecordLifecycleError(error);
-              throw error;
-            }
-          },
+          (transaction, _scope, issuedAt) =>
+            attemptNamedAction(transaction, issuedAt, state, run, ids),
         );
-        if (deleteSettlement?.kind === "restart") continue;
-        if (deleteSettlement?.kind === "result") {
-          const refused = deleteSettlement.value as RecordDeleteResult;
-          return {
-            kind: "available",
-            value: safeRefusal(
-              refused.correlationId,
-              refused.outcome === "conflict" ? "conflict" : "operation_refused",
-              `the subject delete was ${refused.outcome}`,
-              refused.outcome === "refused" ? refused.ruleReason : undefined,
-            ),
-          };
-        }
+        // The attempt sets the settlement inside the transaction, after this loop cleared it.
+        const settlement = state.deleteSettlement as Settled<unknown> | undefined;
+        if (settlement?.kind === "restart") continue;
+        if (settlement?.kind === "result")
+          return { kind: "available", value: deleteRefusal(settlement) };
         if (result.kind !== "available") return result;
         if (result.value === restart) continue;
         if (result.value === recordedRefusal) {
@@ -1220,13 +1255,81 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
         }
         const value = result.value as ExecuteNamedActionResult;
         return value.outcome === "completed" &&
-          attempted.executions.some((execution) => execution.warnings.length > 0)
+          state.attempted.executions.some((execution) => execution.warnings.length > 0)
           ? {
               kind: "available",
               value,
-              warnings: attempted.executions.flatMap((execution) => execution.warnings),
+              warnings: state.attempted.executions.flatMap((execution) => execution.warnings),
             }
           : { kind: "available", value };
+      }
+      return { kind: "temporarily_unavailable" };
+    },
+
+    /**
+     * Runs one named action over several records in ONE transaction: each record's own attempt,
+     * receipt, revision check, Activity and Events, in the given order. Every record completes or
+     * none does: the first refusal rolls the whole batch back and names the record. A command id
+     * that already completed replays its result without writing again.
+     */
+    async executeMany(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      commandCandidates: readonly unknown[],
+      run: ActionFlowRunner,
+    ): Promise<NamedActionBatchResult> {
+      if (commandCandidates.length === 0 || commandCandidates.length > namedActionBatchMaximum)
+        return { kind: "unavailable" };
+      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      const states: NamedActionAttemptState[] = [];
+      for (const candidate of commandCandidates) {
+        const command = parsedCommand(candidate);
+        const activityId = command === undefined ? undefined : newActivityId();
+        if (command === undefined || activityId === undefined) return { kind: "unavailable" };
+        states.push(attemptStateOf(command, activityId));
+      }
+      const rollback = new Error("NAMED_ACTION_BATCH_ROLLED_BACK");
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        let refused:
+          Readonly<{ index: number; result: ExecuteNamedActionResult | undefined }> | undefined;
+        let restarted = false;
+        for (const state of states) {
+          state.deleteSettlement = undefined;
+          state.attempted = { executions: [] };
+        }
+        const result = await requests.runChange(
+          session,
+          selection,
+          async (transaction, _scope, issuedAt) => {
+            const results: ExecuteNamedActionResult[] = [];
+            for (const [index, state] of states.entries()) {
+              const outcome = await attemptNamedAction(transaction, issuedAt, state, run, ids);
+              // A record that moved, or refused, throws through the transaction so every record
+              // of the batch rolls back with it.
+              if (outcome === restart) {
+                restarted = true;
+                throw rollback;
+              }
+              if (outcome === recordedRefusal || outcome.outcome !== "completed") {
+                refused = { index, result: outcome === recordedRefusal ? undefined : outcome };
+                throw rollback;
+              }
+              results.push(outcome);
+            }
+            return results;
+          },
+        );
+        const settled = states.findIndex((state) => state.deleteSettlement !== undefined);
+        const settlement =
+          settled === -1
+            ? undefined
+            : (states[settled]?.deleteSettlement as Settled<unknown> | undefined);
+        if (settlement?.kind === "restart" || restarted) continue;
+        if (settlement?.kind === "result")
+          return { kind: "refused", index: settled, result: deleteRefusal(settlement) };
+        if (refused !== undefined) return { kind: "refused", ...refused };
+        if (result.kind !== "available") return result;
+        return { kind: "completed", results: result.value };
       }
       return { kind: "temporarily_unavailable" };
     },
@@ -1258,6 +1361,35 @@ const availabilityFromPreview = (
   return outcome.kind === "collected"
     ? { kind: "available" }
     : { kind: "undecided", reason: outcome.reason };
+};
+
+/** Whether a named action can run on one selected record now, as a bulk run decides it. */
+export type NamedActionEligibility =
+  | "eligible"
+  /** The same command already completed on the record: running it again replays that change. */
+  | "replayed"
+  | "not_applicable"
+  | "not_permitted"
+  | "changed"
+  | "refused";
+
+/** Decides one record's eligibility from its action preview (no inputs), writing nothing. */
+export const namedActionPreviewEligibility = (
+  previewCandidate: unknown,
+  issuedAt: string,
+  run: ActionFlowRunner,
+): NamedActionEligibility => {
+  const preview = parsePreparation(previewCandidate);
+  if (preview.outcome === "completed") return "replayed";
+  if (preview.outcome === "permission_refused") return "not_permitted";
+  if (preview.outcome === "conflict") return "changed";
+  if (preview.outcome !== "previewed") return "refused";
+  const outcome = run(actionFlowSeed(preview, {}, issuedAt));
+  return outcome.kind === "collected"
+    ? "eligible"
+    : outcome.kind === "refused"
+      ? "not_applicable"
+      : "refused";
 };
 
 /** A page subject read together with the availability of every named action bound to it. */

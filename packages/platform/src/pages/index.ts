@@ -84,6 +84,20 @@ export {
   type RecordsTableRequestPart,
   type RecordsTableRequestRefusal,
 } from "./records-table-features";
+export {
+  createRecordsTableBulkService,
+  type RecordsTableBulkAddress,
+  type RecordsTableBulkDependencies,
+} from "./records-table-features/bulk-run";
+export {
+  readNamedActionEligibility,
+  type NamedActionEligibilityTarget,
+  type NamedActionRecordEligibility,
+} from "./records-table-features/named-action-eligibility";
+export {
+  createRecordsSelectionSealer,
+  type RecordsSelectionSealer,
+} from "./records-selection-seal";
 export { readPageSubjectInTransaction } from "./page-subject-read";
 export {
   createPageSubjectReader,
