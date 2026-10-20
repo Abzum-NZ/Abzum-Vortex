@@ -79,7 +79,7 @@ export {
   RECORDS_TABLE_GROUPING_MAXIMUM_CHOICES,
   RECORDS_TABLE_GROUPING_MAXIMUM_LABEL_LENGTH,
 } from "./grouping";
-export { boardProblem, recordsTableBoardFactsOf } from "./board";
+export { boardAggregateLabel, boardProblem, recordsTableBoardFactsOf } from "./board";
 export {
   RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS,
   RECORDS_TABLE_PIVOT_MAXIMUM_ROW_PAGE_SIZE,
