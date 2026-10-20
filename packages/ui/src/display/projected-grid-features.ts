@@ -1,4 +1,7 @@
 import {
+  recordsTableRowActionIcons,
+  recordsTableActionCapabilities,
+  type RecordsTableActionContract,
   type RecordsTableInlineEditField,
   type RecordsTableInlineEditor,
   type RecordsTableBulkActionContract,
@@ -10,6 +13,7 @@ import {
   recordsTableBulkActionRecordLimit,
   recordsTableBulkRefusalReasons,
   recordsTableFilterKinds,
+  RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
   RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
   namedActionAvailabilitySchema,
   type NamedActionAvailability,
@@ -129,13 +133,30 @@ export type TableBulkRun =
   | Readonly<{ status: "failed"; label: string }>;
 
 /**
+ * One export of a table, as the page runtime follows it. `running` is a file being received (the
+ * bytes so far); `finished` is a whole file the person has; `refused` is a message instead of a
+ * file; `incomplete` is a file that stopped short, which is never saved; `cancelled` is the
+ * person's own stop.
+ */
+export type TableExportRun =
+  | Readonly<{ status: "running"; scope: TableExportScope; expected?: number; bytes: number }>
+  | Readonly<{ status: "finished"; scope: TableExportScope; filename: string }>
+  | Readonly<{ status: "refused"; message: string }>
+  | Readonly<{ status: "incomplete" }>
+  | Readonly<{ status: "cancelled" }>;
+
+/** What an export covers: the rows ticked on the page, the current view, or every matching record. */
+export type TableExportScope = "selected" | "view" | "matching";
+
+/**
  * The selection parts of a table payload: the server's sealed descriptor of every matching record
- * of the read, and the selection scope and bulk run the page runtime adds.
+ * of the read, and the selection scope, bulk run and export the page runtime adds.
  */
 export type TableSelectionParts = Readonly<{
   selectionToken?: string;
   selectionScope?: TableSelectionScope;
   bulkRun?: TableBulkRun;
+  exportRun?: TableExportRun;
   actionAvailability?: NamedActionAvailability | "unavailable";
 }>;
 
@@ -202,6 +223,43 @@ const parseBulkRun = (value: unknown, location: DefinitionRenderErrorLocation): 
   });
 };
 
+const parseExportRun = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): TableExportRun => {
+  const run = requireRecord(value, "A table export is invalid", location);
+  const scope = (): TableExportScope => {
+    if (run.scope !== "selected" && run.scope !== "view" && run.scope !== "matching")
+      fail("A table export names an unknown scope", location);
+    return run.scope as TableExportScope;
+  };
+  switch (run.status) {
+    case "running":
+      return Object.freeze({
+        status: "running",
+        scope: scope(),
+        bytes: wholeCount(run.bytes, location),
+        ...(run.expected === undefined ? {} : { expected: wholeCount(run.expected, location) }),
+      });
+    case "finished":
+      return Object.freeze({
+        status: "finished",
+        scope: scope(),
+        filename: requireNonEmptyString(run.filename, "A finished export needs its file", location),
+      });
+    case "refused":
+      return Object.freeze({
+        status: "refused",
+        message: requireNonEmptyString(run.message, "A refused export needs its message", location),
+      });
+    case "incomplete":
+    case "cancelled":
+      return Object.freeze({ status: run.status });
+    default:
+      return fail("A table export has an unknown status", location);
+  }
+};
+
 /** The selection parts of a projected table payload; each is absent unless present. */
 export const parseTableSelectionParts = (
   record: Readonly<Record<string, unknown>>,
@@ -222,6 +280,9 @@ export const parseTableSelectionParts = (
       ? {}
       : { selectionScope: parseSelectionScope(record.selectionScope, location) }),
     ...(record.bulkRun === undefined ? {} : { bulkRun: parseBulkRun(record.bulkRun, location) }),
+    ...(record.exportRun === undefined
+      ? {}
+      : { exportRun: parseExportRun(record.exportRun, location) }),
     ...(availability?.success === true ? { actionAvailability: availability.data } : {}),
     ...(record.actionAvailability === "unavailable"
       ? { actionAvailability: "unavailable" as const }
@@ -421,6 +482,7 @@ export const parseTableFeatures = (
       "bulkActions",
       "inlineEdit",
       "rowEdit",
+      "rowActions",
       "masterDetail",
       "tree",
       "grouping",
@@ -428,6 +490,7 @@ export const parseTableFeatures = (
       "pinning",
       "pivot",
       "spreadsheet",
+      "export",
     ],
     location,
   );
@@ -461,6 +524,59 @@ export const parseTableFeatures = (
         );
   if (bulkActions !== undefined && bulkActions.length === 0)
     fail("Projected bulk actions are empty", location);
+  let rowActions: RecordsTableFeatureProjection["rowActions"];
+  if (record.rowActions !== undefined) {
+    const value = requireRecord(record.rowActions, "Projected row actions are invalid", location);
+    requireExactKeys(value, ["actions", "availability"], location);
+    const actions = requireArray(value.actions, "Row actions must be a list", location).map(
+      (item): RecordsTableActionContract => {
+        const action = requireRecord(item, "A row action is invalid", location);
+        requireExactKeys(action, ["eventId", "label", "icon", "placement", "capability"], location);
+        if (
+          !(recordsTableRowActionIcons as readonly unknown[]).includes(action.icon) ||
+          !["inline", "menu"].includes(action.placement as string) ||
+          (action.capability !== undefined &&
+            !(recordsTableActionCapabilities as readonly unknown[]).includes(action.capability))
+        )
+          fail("A row action has invalid settings", location);
+        return {
+          eventId: requireNonEmptyString(action.eventId, "A row action needs its event", location),
+          label: requireNonEmptyString(action.label, "A row action needs its label", location),
+          icon: action.icon as RecordsTableActionContract["icon"],
+          placement: action.placement as RecordsTableActionContract["placement"],
+          ...(action.capability === undefined
+            ? {}
+            : {
+                capability: action.capability as NonNullable<
+                  RecordsTableActionContract["capability"]
+                >,
+              }),
+        };
+      },
+    );
+    const availability = namedActionAvailabilitySchema.safeParse(value.availability);
+    if (
+      !availability.success ||
+      actions.length === 0 ||
+      actions.length > 20 ||
+      new Set(actions.map((action) => action.eventId)).size !== actions.length
+    )
+      fail("Projected row action availability is invalid", location);
+    rowActions = { actions, availability: availability.data! };
+  }
+  let exportFeature: RecordsTableFeatureProjection["export"];
+  if (record.export !== undefined) {
+    const exported = requireRecord(record.export, "Projected export is invalid", location);
+    requireExactKeys(exported, ["maxRows"], location);
+    if (
+      typeof exported.maxRows !== "number" ||
+      !Number.isInteger(exported.maxRows) ||
+      exported.maxRows < 1 ||
+      exported.maxRows > RECORDS_TABLE_EXPORT_MAXIMUM_ROWS
+    )
+      fail("Projected export has an invalid row limit", location);
+    exportFeature = Object.freeze({ maxRows: exported.maxRows as number });
+  }
   let rowEdit: RecordsTableFeatureProjection["rowEdit"];
   if (record.rowEdit !== undefined) {
     const row = requireRecord(record.rowEdit, "Projected row editing is invalid", location);
@@ -581,8 +697,10 @@ export const parseTableFeatures = (
     ...(columnFilters === undefined ? {} : { columnFilters }),
     ...(record.savedViews === true ? { savedViews: true as const } : {}),
     ...(bulkActions === undefined ? {} : { bulkActions: Object.freeze(bulkActions) }),
+    ...(exportFeature === undefined ? {} : { export: exportFeature }),
     ...(inlineEdit === undefined ? {} : { inlineEdit }),
     ...(rowEdit === undefined ? {} : { rowEdit }),
+    ...(rowActions === undefined ? {} : { rowActions }),
     ...(masterDetail === undefined ? {} : { masterDetail }),
     ...(tree === undefined ? {} : { tree }),
     ...(grouping === undefined ? {} : { grouping }),

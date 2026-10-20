@@ -5,6 +5,7 @@ import {
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
   type StoredGridViews,
+  decideRecordTypeFieldIds,
 } from "@vortex/platform/server";
 import { readRecordsTableViewId, type GridLayoutStorage } from "@vortex/platform/schema";
 import type {
@@ -12,7 +13,6 @@ import type {
   IdentitySession,
   OrganizationSelectionCandidate,
 } from "@vortex/platform/schema";
-import { decideRecordTypeFieldIds } from "./form-field-access";
 import { first } from "./placement-helpers";
 import type { SearchParameters } from "./types";
 

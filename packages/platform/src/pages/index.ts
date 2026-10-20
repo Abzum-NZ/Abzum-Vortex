@@ -1,4 +1,8 @@
 import "server-only";
+export {
+  projectRowActionAvailability,
+  type RowActionInstallation,
+} from "./records-table-features/row-actions";
 
 export {
   readRecordsTableNamedActionAvailability,
@@ -102,6 +106,14 @@ export {
   type RecordsTableBulkAddress,
   type RecordsTableBulkDependencies,
 } from "./records-table-features/bulk-run";
+export {
+  createRecordsTableExportService,
+  type RecordsTableExportDependencies,
+} from "./records-table-features/export";
+export {
+  decideRecordTypeExport,
+  decideRecordTypeFieldIds,
+} from "./records-table-features/record-type-access";
 export {
   readNamedActionEligibility,
   type NamedActionEligibilityTarget,

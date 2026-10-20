@@ -105,7 +105,7 @@ and its real storage path, not to a browser-only correction after rows are paged
 
 ## Records table grid features
 
-The Records table grid itself (columns, sorting, density, sticky headings, resizing, reordering and showing or hiding columns) is always available. Everything else is an optional **grid feature**, authored in the table's one `features` setting group as `{ enabled, ...its settings }` and off by default: search, column filters, saved views, bulk actions, inline editing, related records (master/detail), tree data, column pinning, conditional formatting, pivot and board. Later features (grouping, totals, conditional formatting, export) join the same gate.
+The Records table grid itself (columns, sorting, density, sticky headings, resizing, reordering and showing or hiding columns) is always available. Everything else is an optional **grid feature**, authored in the table's one `features` setting group as `{ enabled, ...its settings }` and off by default: search, column filters, saved views, bulk actions, export, inline editing, related records (master/detail), tree data, grouping, column pinning, conditional formatting, pivot and board. Later features join the same gate. Export reads its rows through the protected query path in keyset pages of at most 200 and takes its count from the one capped selection count; the [record export flow](16-copying-sharing-import-export.md#grid-export-csv) describes its authority, columns and audit.
 
 One gate decides every feature, in three places that cannot disagree:
 

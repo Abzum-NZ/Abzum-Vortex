@@ -63,6 +63,7 @@ export const studioGridFeatureEditors: Readonly<
   bulk_actions: { kind: "settings", boundRecordTypeActions: true },
   inline_edit: { kind: "custom" },
   row_edit: { kind: "custom" },
+  row_actions: { kind: "custom" },
   master_detail: { kind: "settings" },
   // Only the links from a record type to itself can name a record's parent.
   tree: { kind: "settings", offers: (field) => field.parentLink === true },
@@ -73,6 +74,7 @@ export const studioGridFeatureEditors: Readonly<
   // picker to number and money fields, so Studio offers only fields a pivot can use.
   pivot: { kind: "settings" },
   board: { kind: "custom" },
+  export: { kind: "custom" },
 };
 
 /**
@@ -95,6 +97,11 @@ export const studioGridFeatureStartSettings: Readonly<
   tree: { child_page_size: { kind: "number", value: 40 } },
   // Records with no value are named "Unassigned" unless the builder chooses otherwise.
   grouping: { unassigned_label: { kind: "text", value: "Unassigned" } },
+  // Export starts as CSV with the authored default row limit.
+  export: {
+    formats: { kind: "list", items: [{ kind: "choice", value: "csv" }] },
+    max_rows: { kind: "number", value: 10000 },
+  },
   // A pivot starts as a count of records, 40 rows at a time, with totals.
   pivot: {
     measure_function: { kind: "choice", value: "count" },
@@ -154,6 +161,7 @@ export const studioRecordsTableQueryFacts = (
       acceptsSelection: action.acceptsSelection,
     })),
   grouped: query?.grouped === true,
+  exportable: query?.exportable === true,
   board: query?.board,
   relatedRecords: {
     recordType: query?.recordType ?? "",

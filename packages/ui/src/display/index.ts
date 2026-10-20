@@ -46,6 +46,8 @@ export {
 export type {
   TableBulkRun,
   TableBulkRunSummary,
+  TableExportRun,
+  TableExportScope,
   TableSelectionParts,
   TableSelectionScope,
 } from "./projected-grid-features";

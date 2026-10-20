@@ -5,6 +5,9 @@ import type { ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
 import {
   StudioIconButton,
+  StudioRowActionsBindings,
+  type StudioActionChoice,
+  type StudioRowAction,
   StudioInspectorGroup,
   studioFlowLabel,
   type StudioFlowCreateChoices,
@@ -35,6 +38,9 @@ export function StudioPlacementWorkflows({
   disabled,
   onOpen,
   onCreate,
+  namedActions,
+  onAddRowAction,
+  onChangeRowActions,
 }: Readonly<{
   source: ApplicationSourceDocument;
   placementAlias: string;
@@ -42,6 +48,12 @@ export function StudioPlacementWorkflows({
   disabled: boolean;
   onOpen: (selection: StudioFlowSelection) => void;
   onCreate: (command: StudioFlowCreateCommand) => string | true;
+  namedActions: readonly StudioActionChoice[];
+  onAddRowAction: (command: StudioFlowCreateCommand) => true | string;
+  onChangeRowActions: (
+    expected: readonly StudioRowAction[],
+    next: readonly StudioRowAction[],
+  ) => true | string;
 }>) {
   const [creating, setCreating] = useState(false);
   const bindings = source.body.flow_bindings.filter(
@@ -51,6 +63,15 @@ export function StudioPlacementWorkflows({
   if (bindings.length === 0 && !canCreate) return null;
   return (
     <StudioInspectorGroup title="Workflow">
+      <StudioRowActionsBindings
+        source={source}
+        placementAlias={placementAlias}
+        createChoices={createChoices}
+        namedActions={namedActions}
+        disabled={disabled}
+        onCreate={onAddRowAction}
+        onChange={onChangeRowActions}
+      />
       {bindings.map((binding) => {
         const flow = source.body.flows.find(
           (entry) => entry.id === binding.flow || entry.key === binding.flow,

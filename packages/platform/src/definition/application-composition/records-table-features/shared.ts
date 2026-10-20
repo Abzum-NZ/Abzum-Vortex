@@ -40,38 +40,6 @@ export const settingOptionalChoice = <Choice extends string>(
 export const fieldList = (value: ComponentSettingValue | undefined): string[] =>
   (settingItems(value) ?? []).flatMap((item) => settingField(item) ?? []);
 
-/** The record action kinds a configured row or bulk action may require of the viewer. */
-export const recordsTableActionCapabilities = ["update", "delete", "restore"] as const;
-export type RecordsTableActionCapability = (typeof recordsTableActionCapabilities)[number];
-
-/**
- * One named row action or bulk action. `eventId` is the stable identity of the flow binding the
- * command runs; it is unique across one placement's declared behaviours, so a click reaches
- * exactly one flow. `capability`, when declared, names the record action the command needs: the
- * renderer hides it for a row whose per-row capabilities do not include that kind. A command that
- * declares no capability (an open, read or custom command) stays shown, and the server still
- * re-checks every action it runs.
- */
-export type RecordsTableActionContract = Readonly<{
-  eventId: string;
-  label: string;
-  capability?: RecordsTableActionCapability;
-}>;
-
-/** Reads one declared row-action or bulk-action list, keeping only entries with both parts. */
-export const readActionList = (
-  value: ComponentSettingValue | undefined,
-): RecordsTableActionContract[] =>
-  (settingItems(value) ?? []).flatMap((item): RecordsTableActionContract[] => {
-    const action = settingGroup(item);
-    if (action === undefined) return [];
-    const eventId = settingText(action["event_id"]);
-    const label = settingText(action["label"]);
-    if (eventId === undefined || label === undefined) return [];
-    const capability = settingOptionalChoice(action["capability"], recordsTableActionCapabilities);
-    return [{ eventId, label, ...(capability === undefined ? {} : { capability }) }];
-  });
-
 /**
  * A feature is off, holding nothing else, or on with its own typed settings. Only an enabled feature
  * carries settings, so a feature that is off compiles to nothing.
@@ -201,6 +169,8 @@ export type RecordsTableQueryFacts = Readonly<{
   actions: readonly Readonly<{ key: string; label: string; acceptsSelection: boolean }>[];
   /** The query groups or aggregates its rows, so rows are not records a person can act on. */
   grouped: boolean;
+  /** The record type declares the standard export action, so its records can be exported. */
+  exportable: boolean;
   relatedRecords: RecordsTableRelatedRecordsFacts;
   /** What a Board needs; undefined when the query's record type is judged only at publication. */
   board: RecordsTableBoardFacts | undefined;
@@ -256,6 +226,7 @@ export type RecordsTableFeatureRefusalCode = Extract<
   | "definition_records_table_bulk_actions"
   | "definition_records_table_inline_edit"
   | "definition_records_table_row_edit"
+  | "definition_records_table_row_actions"
   | "definition_records_table_master_detail"
   | "definition_records_table_tree"
   | "definition_records_table_grouping"
@@ -264,6 +235,7 @@ export type RecordsTableFeatureRefusalCode = Extract<
   | "definition_records_table_pivot"
   | "definition_records_table_spreadsheet"
   | "definition_records_table_board"
+  | "definition_records_table_export"
 >;
 
 /** The outcome of one feature check: available, or not possible with its one business sentence. */

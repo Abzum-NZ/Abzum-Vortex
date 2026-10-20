@@ -353,6 +353,12 @@ export type DisplaySemanticEventName =
   | "table_records_requested"
   | "selection_scope_changed"
   /**
+   * A Records table's Export asks the page to download a file of the chosen records, or to stop
+   * the download in progress. The page streams the file from the server; neither is a flow event.
+   */
+  | "export_requested"
+  | "export_cancelled"
+  /**
    * A Records table's pivot asks for one page of its rows, opens the pivot or closes it, or a cell
    * opens the ordinary grid on the records it counts. These are the Pivot feature's own reads and
    * address changes, not flow events.
@@ -487,6 +493,10 @@ export type DisplaySemanticEvent =
   | Readonly<{ event: "bulk_action"; action: string }>
   /** Widens the selection to every matching record, or clears it (and a finished run's summary). */
   | Readonly<{ event: "selection_scope_changed"; scope: "matching" | "cleared" }>
+  /** Downloads the rows ticked on the page, the records of the current view, or every matching record. */
+  | Readonly<{ event: "export_requested"; scope: "selected" | "view" | "matching" }>
+  /** Stops the export in progress; no file is saved. */
+  | Readonly<{ event: "export_cancelled" }>
   | Readonly<{
       event: "row_edit";
       eventId: string;
@@ -594,6 +604,8 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "page_changed",
   "bulk_action",
   "selection_scope_changed",
+  "export_requested",
+  "export_cancelled",
   "inline_edit",
   "row_edit",
   "card_moved",
@@ -1230,6 +1242,7 @@ export const parseTablePayload = (
       "selectionToken",
       "selectionScope",
       "bulkRun",
+      "exportRun",
       "actionAvailability",
     ],
     location,

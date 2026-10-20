@@ -47,6 +47,7 @@ import {
 } from "./published-control-data";
 import { usePageParameters } from "./use-page-parameters";
 import { useBulkSelection } from "./use-bulk-selection";
+import { useRecordsExport } from "./use-records-export";
 import { requestRecordChoices } from "./record-choices";
 
 export function useRuntimeInputs({
@@ -241,6 +242,8 @@ export function useRuntimeInputs({
     setSelection,
     refreshPlacements,
   });
+  // Export: the file of the records a person selected, streamed by the server.
+  const exported = useRecordsExport({ model, navigationKey, matchingOf: bulk.matchingOf });
   const titles = useRef<{ scope: string; values: PublishedRecordTitles }>({
     scope: navigationKey,
     values: new Map(),
@@ -347,6 +350,14 @@ export function useRuntimeInputs({
                   event.event === "row_clicked" || event.event === "row_action"
                     ? event.recordId
                     : undefined,
+                  tableData !== undefined &&
+                    event.event === "row_action" &&
+                    event.revision !== undefined
+                    ? { recordId: event.recordId, revision: event.revision }
+                    : undefined,
+                  undefined,
+                  undefined,
+                  tableData !== undefined && event.event === "row_action" ? true : undefined,
                 );
             };
         // An inline edit commits one stored value through the bound flow at the revision the row
@@ -415,6 +426,9 @@ export function useRuntimeInputs({
               boardRowActionBinding,
               suppliedValues(event),
               event.recordId,
+              event.revision === undefined
+                ? undefined
+                : { recordId: event.recordId, revision: event.revision },
             );
           };
         // A moved card saves the record's choice field through the bound flow. The handler reports
@@ -488,6 +502,9 @@ export function useRuntimeInputs({
           supportsEvent("selection_changed")
         )
           Object.assign(events, bulk.eventsFor(placementId, tableData, selection[placementId]));
+        // A table's Export streams a file from the server over the same selection, never a flow.
+        if (tableData?.features?.export !== undefined)
+          Object.assign(events, exported.eventsFor(placementId, tableData, selection[placementId]));
         if (supportsEvent("selection_changed"))
           events.selection_changed = (event: DisplaySemanticEvent) => {
             if (event.event !== "selection_changed") return;
@@ -768,9 +785,10 @@ export function useRuntimeInputs({
         shownTable === undefined || ready.values === undefined
           ? undefined
           : ((values: Record<string, unknown>) =>
-              bulk.decorate(placementId, shownTable, values) ?? values)(
-              held === undefined ? ready.values : { ...ready.values, selectedRecordIds: held },
-            );
+              exported.decorate(
+                placementId,
+                bulk.decorate(placementId, shownTable, values) ?? values,
+              ))(held === undefined ? ready.values : { ...ready.values, selectedRecordIds: held });
       const pins =
         ready.status === "ready" && ready.values?.kind === "link_tiles"
           ? projectedLinkTilesSchema.safeParse(ready.values)

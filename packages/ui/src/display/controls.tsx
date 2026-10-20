@@ -1,17 +1,9 @@
 "use client";
 
 import type { ReactElement } from "react";
-import { Icon } from "../icons/icon";
-import type { RecordsTableActionContract } from "@vortex/platform/schema";
 import { Button } from "../components/button";
 import { Card, CardContent } from "../components/card";
 import { Checkbox } from "../components/checkbox";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../components/dropdown-menu";
 import { Empty, EmptyHeader, EmptyTitle } from "../components/empty";
 import { Pagination, PaginationContent, PaginationItem } from "../components/pagination";
 import { Skeleton } from "../components/skeleton";
@@ -243,69 +235,6 @@ export function RowActionControl({
       {gesture.pending ? <Spinner data-icon="inline-start" aria-hidden="true" /> : null}
       {text}
     </Button>
-  );
-}
-
-/**
- * Every row command the row shows, as one Dropdown Menu bound to the declared `row_action` event.
- * Each declared action carries the stable identity of its own binding, so several named commands on
- * one table reach different flows. An empty action list shows no command. Every
- * command carries the row's current revision, so the bound flow acts on the record as it was read.
- */
-export function RowActionsMenu({
-  recordId,
-  revision,
-  name,
-  actions,
-  events,
-}: Readonly<{
-  recordId: string;
-  revision?: number;
-  name: string;
-  actions: readonly RecordsTableActionContract[];
-  events: DisplayEventHandlers | undefined;
-}>): ReactElement | null {
-  // The chosen command's flow keeps the menu's button busy until it settles.
-  const gesture = usePendingGesture();
-  const onRowAction = events?.row_action;
-  if (onRowAction === undefined) return null;
-  const identity = { recordId, ...(revision === undefined ? {} : { revision }) };
-  if (actions.length === 0) return null;
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label={`Actions for ${name}`}
-            disabled={gesture.pending}
-            aria-busy={gesture.pending}
-            // Opening the commands of a row is not a request to open the row itself.
-            onClick={(event) => event.stopPropagation()}
-          />
-        }
-      >
-        {gesture.pending ? <Spinner aria-hidden="true" /> : <Icon name="more-horizontal" />}
-      </DropdownMenuTrigger>
-      {/* The menu is portalled, but React still bubbles its clicks through the row; choosing a
-          command is not a request to open the row itself. */}
-      <DropdownMenuContent onClick={(event) => event.stopPropagation()}>
-        {actions.map((command) => (
-          <DropdownMenuItem
-            key={command.eventId}
-            onClick={() => {
-              if (gesture.running()) return;
-              gesture.track(
-                onRowAction({ event: "row_action", eventId: command.eventId, ...identity }),
-              );
-            }}
-          >
-            {command.label}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 

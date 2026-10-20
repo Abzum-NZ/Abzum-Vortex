@@ -403,7 +403,10 @@ export function ApplicationCompositionEditor(props: Props) {
             <StudioSettingFields
               idPrefix={settingsId}
               properties={settingsModel.properties.filter(
-                (property) => property !== featuresProperty && property.key !== "query_parameters",
+                (property) =>
+                  property !== featuresProperty &&
+                  property.key !== "query_parameters" &&
+                  property.key !== "row_actions",
               )}
               values={settingsInputs.settings}
               choices={choices}

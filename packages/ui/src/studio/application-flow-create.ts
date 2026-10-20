@@ -205,7 +205,7 @@ export const projectStudioFlowCreateChoices = (
       const placed = placements.get(alias);
       if (
         release?.supportedEvents.includes(event) !== true ||
-        bound.has(`${alias} ${event}`) ||
+        (bound.has(`${alias} ${event}`) && !(event === "row_action" && hasRowActionMenu(placed))) ||
         (event === "action" && node.settings.action_kind === "submit") ||
         // The action that saves an inline edit belongs to the feature, so it is offered while on;
         // a card added from a column is offered while the board's quick add is on.
@@ -274,7 +274,16 @@ const bindControl = (
   rowActionLabel?: string,
 ): Readonly<{ id: string; eventId: string }> => {
   const body = source.body;
+  const page = body.pages.find((candidate) =>
+    sourcePageItems(candidate.composition).some((item) => item.props.id === controlAlias),
+  );
+  const item =
+    page === undefined
+      ? undefined
+      : sourcePageItems(page.composition).find((entry) => entry.props.id === controlAlias);
+  const rowActionMenu = event === "row_action" && hasRowActionMenu(item);
   if (
+    !rowActionMenu &&
     body.flow_bindings.some(
       (binding) => binding.control === controlAlias && binding.event === event,
     )
@@ -293,17 +302,9 @@ const bindControl = (
   const id = keyFrom(`binding_${flowKey}`, aliases);
   if (id === undefined)
     return refuse("No free name could be made for the binding. Choose another name.");
-  const page = body.pages.find((candidate) =>
-    sourcePageItems(candidate.composition).some((item) => item.props.id === controlAlias),
-  );
-  const item =
-    page === undefined
-      ? undefined
-      : sourcePageItems(page.composition).find((entry) => entry.props.id === controlAlias);
   const label = rowActionLabel?.trim();
   if (event === "row_action" && item === undefined)
     return refuse("The row action's control is no longer on the page.");
-  const rowActionMenu = event === "row_action" && hasRowActionMenu(item);
   if (rowActionMenu && item !== undefined) {
     if (label === undefined || label.length === 0 || label.length > 60)
       return refuse("Name the row action menu item, in at most 60 characters.");
@@ -337,7 +338,7 @@ const bindControl = (
     body.events.filter((entry) => entry.record_type === recordType).map((entry) => entry.id),
   );
   const shared =
-    recordType === undefined
+    rowActionMenu || recordType === undefined
       ? undefined
       : body.flow_bindings.find(
           (binding) => binding.event === event && declared.has(binding.event_id),
@@ -345,7 +346,7 @@ const bindControl = (
   const eventId =
     shared ??
     keyFrom(
-      recordType === undefined
+      rowActionMenu || recordType === undefined
         ? `event_${flowKey}`
         : `event_${recordType.slice(recordType.lastIndexOf(":") + 1)}_${event}`,
       aliases,
@@ -384,9 +385,11 @@ const bindControl = (
     props.features = { ...features, [event]: { ...feature, event_id: eventId } };
   }
   if (rowActionMenu && item !== undefined) {
+    const features = isPlainRecord(item.props.features) ? item.props.features : {};
+    item.props.features = { ...features, row_actions: { enabled: true } };
     item.props.row_actions = [
       ...(Array.isArray(item.props.row_actions) ? item.props.row_actions : []),
-      { event_id: eventId, label },
+      { event_id: eventId, label, icon: "workflow", placement: "menu" },
     ];
   }
   return { id, eventId };
