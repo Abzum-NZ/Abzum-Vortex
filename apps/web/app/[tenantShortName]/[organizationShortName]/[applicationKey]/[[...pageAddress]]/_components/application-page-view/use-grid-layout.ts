@@ -40,6 +40,7 @@ export function useGridLayout({
   setRefreshedPlacementData,
   openTableView,
   selectTableViewInPlace,
+  refreshPlacements,
 }: Readonly<{
   model: ApplicationPageModel;
   currentData: ApplicationPageModel["data"];
@@ -47,6 +48,7 @@ export function useGridLayout({
   setRefreshedPlacementData: Dispatch<SetStateAction<RefreshedPlacementData | undefined>>;
   openTableView: (placementId: string, viewId: string | null) => void;
   selectTableViewInPlace: (placementId: string, viewId: string) => void;
+  refreshPlacements: (placementIds: readonly string[]) => Promise<void>;
 }>) {
   const { tenantShortName, organizationShortName, applicationKey, pageKey } = model.invocation;
   const address = useRef({ tenantShortName, organizationShortName, applicationKey, pageKey });
@@ -346,9 +348,9 @@ export function useGridLayout({
   /** Another tab changed the view first: the grid reads it again once, so the latest shows. */
   const reopenAfterConflict = useCallback(
     (placementId: string): void => {
-      openTableView(placementId, layoutOf(placementId)?.views?.selected?.viewId ?? null);
+      void refreshPlacements([placementId]);
     },
-    [layoutOf, openTableView],
+    [refreshPlacements],
   );
 
   const runViewCommand = useCallback(

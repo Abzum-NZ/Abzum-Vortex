@@ -483,6 +483,7 @@ export function ApplicationPageViewContent({
     setRefreshedPlacementData,
     openTableView,
     selectTableViewInPlace,
+    refreshPlacements,
   });
 
   const { runtimeInputs } = useRuntimeInputs({
