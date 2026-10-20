@@ -14,7 +14,7 @@ as $function$
     and vortex_platform.grid_view_condition_field_ids_internal(p_rule -> 'condition', 1) is not null
     and pg_catalog.jsonb_typeof(p_rule -> 'target') = 'object'
     and (p_rule -> 'target' = '{"kind": "row"}'::jsonb or (
-      p_rule -> 'target' - array['kind', 'fields'] = '{}'::jsonb
+      (p_rule -> 'target') - array['kind', 'fields'] = '{}'::jsonb
       and p_rule -> 'target' ->> 'kind' = 'cells'
       and pg_catalog.jsonb_typeof(p_rule -> 'target' -> 'fields') = 'array'
       and pg_catalog.jsonb_array_length(p_rule -> 'target' -> 'fields') between 1 and 20
@@ -24,7 +24,7 @@ as $function$
           or not vortex_platform.is_non_nil_uuid(field.value #>> '{}')
       )))
     and pg_catalog.jsonb_typeof(p_rule -> 'style') = 'object'
-    and p_rule -> 'style' - array['token', 'tint', 'text', 'bold', 'strike', 'icon', 'badgeLabel'] = '{}'::jsonb
+    and (p_rule -> 'style') - array['token', 'tint', 'text', 'bold', 'strike', 'icon', 'badgeLabel'] = '{}'::jsonb
     and pg_catalog.jsonb_typeof(p_rule -> 'style' -> 'token') = 'string'
     and p_rule -> 'style' ->> 'token' = any (array['success', 'warning', 'info', 'destructive', 'muted'])
     and pg_catalog.jsonb_typeof(p_rule -> 'style' -> 'tint') = 'boolean'
