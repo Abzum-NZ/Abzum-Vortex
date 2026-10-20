@@ -234,6 +234,8 @@ export const protectedQueryGroupingSchema = z
           .refine(
             (zone) => {
               try {
+                // Calendar buckets use named zones from the database timezone catalogue.
+                if (/^[+-]/.test(zone)) return false;
                 new Intl.DateTimeFormat("en", { timeZone: zone });
                 return true;
               } catch {
