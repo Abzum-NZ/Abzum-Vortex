@@ -131,6 +131,8 @@ function ColumnMetrics({
 
 function BoardColumn({
   bucket,
+  wipLimit,
+  active,
   cardFieldIds,
   emptyMessage,
   events,
@@ -142,6 +144,10 @@ function BoardColumn({
   choiceFieldId,
 }: Readonly<{
   bucket: BoardBucket;
+  /** The cards the column should not exceed; undefined when the board sets no limit. */
+  wipLimit: number | undefined;
+  /** On a phone only the active column shows; a wider screen shows them all. */
+  active: boolean;
   cardFieldIds: readonly string[];
   emptyMessage: string;
   events: DisplayRenderProps<BoardPayload>["events"];
@@ -161,9 +167,9 @@ function BoardColumn({
   const dropRefused = from !== undefined && from.key !== bucket.key && !dropAllowed;
   return (
     <div
-      className={`flex min-w-64 flex-1 basis-64 flex-col gap-3 transition-opacity ${
-        dropRefused ? "opacity-50" : dropAllowed ? "ring-2 ring-ring" : ""
-      }`}
+      className={`flex min-w-64 flex-1 basis-64 flex-col gap-3 transition-opacity max-md:min-w-0 max-md:basis-full ${
+        active ? "" : "max-md:hidden"
+      } ${dropRefused ? "opacity-50" : dropAllowed ? "ring-2 ring-ring" : ""}`}
       data-vortex-board-column="true"
       data-vortex-board-drop={dropAllowed ? "allowed" : dropRefused ? "refused" : undefined}
       {...(mover === undefined || bucket.selector.kind !== "option"
@@ -199,7 +205,17 @@ function BoardColumn({
         )}
         <p className="m-0 text-muted-foreground">
           {countText(bucket.values.rowCount)} {bucket.values.rowCount === 1 ? "record" : "records"}
+          {wipLimit === undefined || bucket.selector.kind !== "option"
+            ? null
+            : ` of ${countText(wipLimit)}`}
         </p>
+        {wipLimit !== undefined &&
+        bucket.selector.kind === "option" &&
+        bucket.values.rowCount > wipLimit ? (
+          <Badge variant="destructive" role="status" data-vortex-board-over-limit="true">
+            Over the limit of {countText(wipLimit)} cards
+          </Badge>
+        ) : null}
         <ColumnMetrics metrics={bucket.values.aggregates} />
         {dropRefused ? (
           <p role="status" className="m-0 text-sm text-muted-foreground">
@@ -408,8 +424,11 @@ function CardActionsMenu({
 const bucketCardTitle = (cardFieldIds: readonly string[]): string =>
   cardFieldIds[0]?.toLowerCase() ?? "";
 
-/** Installed query-bound board; it renders projected values and requests one declared bucket page. */
-export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElement {
+/**
+ * The Data grid in Board mode: a card board of the projected columns that requests one declared
+ * column page at a time. It is the grid's own view, not a second block.
+ */
+export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement {
   const { placementId, availability } = props;
   const {
     title,
@@ -433,6 +452,7 @@ export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElem
   const focusAfterMoveRef = useRef<string | undefined>(undefined);
   const draggedRef = useRef<BoardMoveCard | undefined>(undefined);
   const [draggingFrom, setDraggingFrom] = useState<BoardBucket>();
+  const [chosenKey, setChosenKey] = useState<string>();
 
   const buckets: BoardBucket[] =
     values === undefined
@@ -449,14 +469,23 @@ export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElem
               ...(column.gatedBy === undefined ? {} : { gatedBy: column.gatedBy }),
             },
           })),
-          ...(!values.choiceFieldRequired || values.unassigned.rowCount > 0 ? [{
-            key: "unassigned",
-            label: "Unassigned",
-            selector: { kind: "unassigned" as const },
-            values: values.unassigned,
-            moves: values.unassigned.moves,
-          }] : []),
+          ...(!values.choiceFieldRequired || values.unassigned.rowCount > 0
+            ? [
+                {
+                  key: "unassigned",
+                  label: "Unassigned",
+                  selector: { kind: "unassigned" as const },
+                  values: values.unassigned,
+                  moves: values.unassigned.moves,
+                },
+              ]
+            : []),
         ];
+
+  // A phone shows one column at a time; the chosen column stays while it still exists.
+  const activeKey = buckets.some((bucket) => bucket.key === chosenKey)
+    ? chosenKey
+    : buckets[0]?.key;
 
   const cardsRef = useRowEntrance<HTMLElement>(
     buckets.flatMap((bucket) => bucket.values.page?.rows.map((row) => row.recordId) ?? []),
@@ -580,16 +609,36 @@ export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElem
           </p>
           <BoardMetrics metrics={values.aggregates} />
           <div
+            className="flex gap-2 overflow-x-auto md:hidden"
+            role="group"
+            aria-label={`${accessibleName} column`}
+          >
+            {buckets.map((bucket) => (
+              <Button
+                key={bucket.key}
+                type="button"
+                size="sm"
+                variant={bucket.key === activeKey ? "default" : "outline"}
+                aria-pressed={bucket.key === activeKey}
+                onClick={() => setChosenKey(bucket.key)}
+              >
+                {bucket.label} ({countText(bucket.values.rowCount)})
+              </Button>
+            ))}
+          </div>
+          <div
             className="relative min-w-0 overflow-x-auto"
             role="region"
             aria-label={`${accessibleName} columns`}
             tabIndex={0}
           >
-            <div className="flex min-w-max items-start gap-3 pb-2">
+            <div className="flex min-w-max items-start gap-3 pb-2 max-md:min-w-0">
               {buckets.map((bucket) => (
                 <BoardColumn
                   key={bucket.key}
                   bucket={bucket}
+                  wipLimit={values.wipLimit}
+                  active={bucket.key === activeKey}
                   cardFieldIds={values.cardFieldIds}
                   emptyMessage={emptyMessage}
                   events={events}

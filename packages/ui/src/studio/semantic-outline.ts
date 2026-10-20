@@ -1,9 +1,4 @@
-import {
-  PLATFORM_BLOCK_RELEASE_IDENTITIES,
-  sourcePageItems,
-  type ApplicationSourceDocument,
-  type VortexIconName,
-} from "@vortex/platform/schema";
+import type { ApplicationSourceDocument, VortexIconName } from "@vortex/platform/schema";
 import type {
   StudioApplicationSelectionDraft,
   StudioSemanticSelection,
@@ -85,16 +80,7 @@ export const projectStudioSemanticOutline = (
     public: "eye",
   } satisfies Record<ApplicationSourceDocument["body"]["pages"][number]["type"], VortexIconName>;
   const pageIcons = new Map<string, VortexIconName>(
-    draft.source.body.pages.map((page) => [
-      page.id,
-      sourcePageItems(page.composition).some(
-        (item) =>
-          item.props.vortex.block.block_id ===
-          PLATFORM_BLOCK_RELEASE_IDENTITIES.BOARD_BLOCK_RELEASE.blockId,
-      )
-        ? "panel-left"
-        : pageKindIcons[page.type],
-    ]),
+    draft.source.body.pages.map((page) => [page.id, pageKindIcons[page.type]]),
   );
   let root: MutableOutlineNode | undefined;
   const stack: MutableOutlineNode[] = [];

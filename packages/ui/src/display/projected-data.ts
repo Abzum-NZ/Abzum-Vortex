@@ -267,10 +267,9 @@ export type BoardColumnPayload = BoardBucketPayload &
     gatedBy?: string;
   }>;
 
-/** The ready values a query-bound board block renders. */
+/** The ready values a Data grid in Board mode renders. */
 export type BoardPayload = Readonly<{
   kind: "board";
-  title?: string;
   plan: Readonly<{
     moduleRootId: string;
     moduleReleaseVersion: string;
@@ -280,6 +279,8 @@ export type BoardPayload = Readonly<{
   /** The key a card move names the choice field by when it asks for the record to be saved. */
   choiceFieldKey: string;
   choiceFieldRequired: boolean;
+  /** The cards a column should not exceed; a column holding more warns. */
+  wipLimit?: number;
   cardTitleFieldId: string;
   /** The only field identities a card may carry; readable values and labels may be omitted. */
   cardFieldIds: readonly string[];

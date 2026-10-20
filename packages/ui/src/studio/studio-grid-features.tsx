@@ -32,6 +32,8 @@ import {
   studioRecordsTableQueryFacts,
   type StudioRelatedRecordsChoices,
 } from "./grid-features";
+import type { StudioBoardPipeline } from "./board-source";
+import { StudioBoardEditor } from "./grid-features/board";
 import { StudioConditionalFormattingEditor } from "./grid-features/conditional-formatting";
 import { StudioInspectorGroup } from "./studio-inspector-group";
 import { StudioQueryBindings } from "./studio-query-bindings";
@@ -75,6 +77,7 @@ export function StudioGridFeatures({
   compiledFields,
   choices,
   related,
+  pipelines,
   disabled,
   onChange,
 }: Readonly<{
@@ -91,6 +94,8 @@ export function StudioGridFeatures({
   choices: StudioSettingChoices;
   /** What the draft offers the rows' related records. */
   related: StudioRelatedRecordsChoices;
+  /** The pipelines of the draft's record types, which a board takes its columns from. */
+  pipelines: readonly StudioBoardPipeline[];
   disabled: boolean;
   onChange: (next: SourceBlockPropertyValueContract) => void;
 }>): ReactElement {
@@ -245,6 +250,17 @@ export function StudioGridFeatures({
                     onChange={(next) => write(key, next)}
                   />
                 </div>
+              ) : null}
+              {enabled && key === "board" ? (
+                <StudioBoardEditor
+                  idPrefix={`${switchId}-editor`}
+                  value={current}
+                  declarations={settings}
+                  pipelines={pipelines}
+                  choices={choices}
+                  disabled={disabled}
+                  onChange={(next) => write(key, next)}
+                />
               ) : null}
               {!enabled || settings.length === 0 || editor.kind !== "settings" ? null : (
                 <div className="space-y-3 pb-2">

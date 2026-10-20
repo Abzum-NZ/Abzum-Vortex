@@ -175,11 +175,11 @@ export const parseBoardPayload = (
     record,
     [
       "kind",
-      "title",
       "plan",
       "choiceFieldId",
       "choiceFieldKey",
       "choiceFieldRequired",
+      "wipLimit",
       "cardTitleFieldId",
       "cardFieldIds",
       "totalRowCount",
@@ -189,12 +189,6 @@ export const parseBoardPayload = (
     ],
     location,
   );
-
-  let title: string | undefined;
-  if (record.title !== undefined) {
-    title = requireNonEmptyString(record.title, "A board title must be non-empty", location);
-    if (title.length > 120) fail("A board title exceeds its bound", location);
-  }
 
   const planRecord = requireRecord(record.plan, "A board requires its exact source plan", location);
   requireExactKeys(planRecord, ["moduleRootId", "moduleReleaseVersion", "queryId"], location);
@@ -212,6 +206,15 @@ export const parseBoardPayload = (
   if (!choiceFieldKey.success) fail("A board requires the key of its choice field", location);
   if (typeof record.choiceFieldRequired !== "boolean")
     fail("A board requires its stage field's required setting", location);
+  let wipLimit: number | undefined;
+  if (record.wipLimit !== undefined) {
+    wipLimit = requirePositiveInteger(
+      record.wipLimit,
+      "A board's card limit must be a positive integer",
+      location,
+    );
+    if (wipLimit > 1_000) fail("A board's card limit exceeds its bound", location);
+  }
   if (!choiceFieldId.success || !cardTitleFieldId.success)
     fail("A board requires valid choice and card-title field identities", location);
   const cardFieldCandidates = requireArray(
@@ -219,8 +222,8 @@ export const parseBoardPayload = (
     "A board requires its closed card-field allow-list",
     location,
   );
-  if (cardFieldCandidates.length < 1 || cardFieldCandidates.length > 21)
-    fail("A board declares one card title and at most twenty detail fields", location);
+  if (cardFieldCandidates.length < 1 || cardFieldCandidates.length > 4)
+    fail("A board declares one card title and at most three detail fields", location);
   const cardFieldIds = cardFieldCandidates.map((candidate) => {
     const fieldId = fieldIdSchema.safeParse(candidate);
     return fieldId.success
@@ -358,7 +361,6 @@ export const parseBoardPayload = (
 
   return Object.freeze({
     kind: "board",
-    ...(title === undefined ? {} : { title }),
     plan: Object.freeze({
       moduleRootId: moduleRootId.data,
       moduleReleaseVersion: moduleReleaseVersion.data,
@@ -367,6 +369,7 @@ export const parseBoardPayload = (
     choiceFieldId: choiceFieldId.data,
     choiceFieldKey: choiceFieldKey.data,
     choiceFieldRequired: record.choiceFieldRequired as boolean,
+    ...(wipLimit === undefined ? {} : { wipLimit }),
     cardTitleFieldId: cardTitleFieldId.data,
     cardFieldIds: Object.freeze(cardFieldIds),
     totalRowCount,

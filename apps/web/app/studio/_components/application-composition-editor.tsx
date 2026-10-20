@@ -30,6 +30,7 @@ import {
   studioRecordBindingFields,
   StudioSettingFields,
   StudioGridFeatures,
+  studioBoardPipelines,
   studioGridFeaturesProperty,
   type StudioCompositionBreakpoint,
   type StudioCompositionCommand,
@@ -411,6 +412,7 @@ export function ApplicationCompositionEditor(props: Props) {
               : props.compiledFields?.recordTypes[query.recordType];
           })()}
           choices={choices}
+          pipelines={studioBoardPipelines(props.context.source)}
           related={{
             queries: props.choices.queries,
             relationships: props.choices.relationships,
