@@ -381,6 +381,8 @@ export const studioBoardFacts = (
     groupBy: query.group_by.map(reference),
     aggregates: query.aggregates.map((aggregate) => ({
       alias: aggregate.alias,
+      operation: aggregate.operation,
+      ...(aggregate.field === undefined ? {} : { field: reference(aggregate.field) }),
       label: boardAggregateLabel(
         aggregate.operation,
         record.fields.find((field) => field.key === aggregate.field)?.label,

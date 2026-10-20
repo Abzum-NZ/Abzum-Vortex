@@ -1,6 +1,9 @@
 import {
+  boardAggregateLabel,
+  queryNumericTotalFieldTypes,
   readRecordsTableFeatures,
   type ApplicationSourceDocument,
+  type RecordsTableBoardFacts,
   type RecordsTableBoardMode,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
@@ -106,6 +109,21 @@ export const studioBoardPipelines = (
     ),
   );
 
+/** The draft query a qualified query reference names, with its Module and record type. */
+const draftQueryOf = (source: ApplicationSourceDocument, queryReference: string) => {
+  const separator = queryReference.indexOf(":");
+  const module = source.body.modules.find(
+    (candidate) => candidate.key === queryReference.slice(0, separator),
+  );
+  const query = module?.queries.find(
+    (candidate) => candidate.key === queryReference.slice(separator + 1),
+  );
+  const record = module?.record_types.find((candidate) => candidate.key === query?.record_type);
+  return module === undefined || query === undefined || record === undefined
+    ? undefined
+    : { module, query, record };
+};
+
 /**
  * Whether the query already groups by exactly the board's stage field, reads no linked records and
  * selects every field the board shows, so the board keeps the query it has.
@@ -115,16 +133,9 @@ export const studioBoardQueryFits = (
   board: RecordsTableBoardMode,
   queryReference: string,
 ): boolean => {
-  const separator = queryReference.indexOf(":");
-  const module = source.body.modules.find(
-    (candidate) => candidate.key === queryReference.slice(0, separator),
-  );
-  const query = module?.queries.find(
-    (candidate) => candidate.key === queryReference.slice(separator + 1),
-  );
-  const record = module?.record_types.find((candidate) => candidate.key === query?.record_type);
-  if (module === undefined || query === undefined || record === undefined) return true;
-  const facts = studioBoardFacts(module.key, query, record);
+  const draft = draftQueryOf(source, queryReference);
+  if (draft === undefined) return true;
+  const facts = studioBoardFacts(draft.module.key, draft.query, draft.record);
   const same = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
   const shown = [board.columnField, board.cardTitleField, ...board.cardFields];
   return (
@@ -135,39 +146,81 @@ export const studioBoardQueryFits = (
   );
 };
 
-/** The numeric field types a column total can add up. */
-const summableTypes: readonly string[] = ["whole_number", "decimal_number", "money"];
-
-/** The alias of the sum a board total of a numeric field gets when its query has none yet. */
-export const boardSumAlias = (fieldKey: string): string => `sum_${fieldKey}`.slice(0, 60);
+/** The most totals a query holds, as the query contract allows. */
+const queryMaximumTotals = 20;
 
 /**
- * Adds to the board's query the sum of every numeric field a column total names by its sum alias
- * and the query does not total yet, so a total can be chosen from a number field itself. A total
- * that names neither a query total nor a number field is left for the capability check to refuse.
+ * The alias of the sum a board total of a number field adds to its query: `sum_` and the field key,
+ * shortened with a stable suffix when that would pass the 40 characters a query key may have.
+ */
+const boardSumAlias = (fieldKey: string): string => {
+  const alias = `sum_${fieldKey}`;
+  if (alias.length <= 40) return alias;
+  let hash = 0x811c9dc5;
+  for (const character of fieldKey) hash = Math.imul(hash ^ character.charCodeAt(0), 0x01000193);
+  const suffix = (hash >>> 0).toString(36).padStart(7, "0").slice(-6);
+  return `${alias.slice(0, 33).replace(/_+$/, "")}_${suffix}`;
+};
+
+/** One total a board column can show: a total of its query, or the sum of a number field. */
+export type StudioBoardTotalChoice = Readonly<{
+  alias: string;
+  label: string;
+  /** The key of the number field whose sum is added to the query when the board is saved. */
+  sumOf?: string;
+}>;
+
+/**
+ * What a column total can be chosen from: the query's own totals, then the sum of every number
+ * field the query does not sum yet, while the query has room for one more total and the sum's
+ * column name is used by neither a field nor another total.
+ */
+export const studioBoardTotalChoices = (
+  facts: RecordsTableBoardFacts,
+): readonly StudioBoardTotalChoice[] => {
+  const keyOf = (reference: string): string => reference.slice(reference.lastIndexOf(".") + 1);
+  const taken = new Set([
+    ...facts.fields.map((field) => keyOf(field.field)),
+    ...facts.aggregates.map((aggregate) => aggregate.alias),
+  ]);
+  const sums =
+    facts.aggregates.length >= queryMaximumTotals
+      ? []
+      : facts.fields.flatMap((field) => {
+          const alias = boardSumAlias(keyOf(field.field));
+          return queryNumericTotalFieldTypes.has(field.type) &&
+            !taken.has(alias) &&
+            !facts.aggregates.some(
+              (aggregate) => aggregate.operation === "sum" && aggregate.field === field.field,
+            )
+            ? [{ alias, label: boardAggregateLabel("sum", field.label), sumOf: keyOf(field.field) }]
+            : [];
+        });
+  return [
+    ...facts.aggregates.map((aggregate) => ({ alias: aggregate.alias, label: aggregate.label })),
+    ...sums,
+  ];
+};
+
+/**
+ * Adds to the board's query the sum of every number field a column total chose by its sum alias,
+ * so a total can be chosen from a number field itself. A total that names neither a query total
+ * nor an offered sum is left for the capability check to refuse.
  */
 export const ensureStudioBoardTotals = (
   source: ApplicationSourceDocument,
   board: RecordsTableBoardMode,
   queryReference: string,
 ): void => {
-  const separator = queryReference.indexOf(":");
-  const module = source.body.modules.find(
-    (candidate) => candidate.key === queryReference.slice(0, separator),
-  );
-  const query = module?.queries.find(
-    (candidate) => candidate.key === queryReference.slice(separator + 1),
-  );
-  const record = module?.record_types.find((candidate) => candidate.key === query?.record_type);
-  if (query === undefined || record === undefined) return;
+  const draft = draftQueryOf(source, queryReference);
+  if (draft === undefined) return;
   for (const total of board.totals) {
-    if (query.aggregates.some((aggregate) => aggregate.alias === total.alias)) continue;
-    const field = record.fields.find(
-      (candidate) =>
-        summableTypes.includes(candidate.type) && boardSumAlias(candidate.key) === total.alias,
-    );
-    if (field !== undefined && query.aggregates.length < 20)
-      query.aggregates.push({ operation: "sum", field: field.key, alias: total.alias });
+    const facts = studioBoardFacts(draft.module.key, draft.query, draft.record);
+    const sumOf = studioBoardTotalChoices(facts).find(
+      (choice) => choice.alias === total.alias,
+    )?.sumOf;
+    if (sumOf !== undefined)
+      draft.query.aggregates.push({ operation: "sum", field: sumOf, alias: total.alias });
   }
 };
 

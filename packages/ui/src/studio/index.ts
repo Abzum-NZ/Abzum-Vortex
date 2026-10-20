@@ -1,7 +1,6 @@
 export * from "./contextual-palette";
 export {
   boardModeOf,
-  boardSumAlias,
   boardSettingChoices,
   studioBoardPipelines,
   type StudioBoardPipeline,

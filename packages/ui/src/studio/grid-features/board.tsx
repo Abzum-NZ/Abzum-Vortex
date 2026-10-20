@@ -10,7 +10,7 @@ import type {
 import { Button } from "../../components/button";
 import { Input } from "../../components/input";
 import { Label } from "../../components/label";
-import { boardSumAlias, type StudioBoardPipeline } from "../board-source";
+import { studioBoardTotalChoices, type StudioBoardPipeline } from "../board-source";
 import {
   StudioReferencePicker,
   type StudioReferencePickerOption,
@@ -26,9 +26,6 @@ type GroupValue = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
 
 /** The settings the pipeline choice and the totals picker leave to the usual typed controls. */
 const cardSettings = ["card_title_field", "card_fields", "wip_limit"] as const;
-
-/** The number field types a column total can add up. */
-const summableTypes: readonly string[] = ["whole_number", "decimal_number", "money"];
 
 type TotalRow = Readonly<{ alias: string; label: string }>;
 
@@ -65,35 +62,24 @@ function StudioBoardTotals({
   idPrefix,
   rows,
   facts,
-  numberFields,
   disabled,
   onChange,
 }: Readonly<{
   idPrefix: string;
   rows: readonly TotalRow[];
   facts: RecordsTableBoardFacts | undefined;
-  numberFields: StudioSettingChoices["fields"];
   disabled: boolean;
   onChange: (rows: readonly TotalRow[]) => void;
 }>): ReactElement {
-  const options: StudioReferencePickerOption[] = [
-    ...(facts?.aggregates ?? []).map((aggregate) => ({
-      value: aggregate.alias,
-      label: aggregate.label,
-      group: "Totals of the query",
-    })),
-    ...numberFields
-      .filter((field) => summableTypes.includes(field.type))
-      .map((field) => ({
-        value: boardSumAlias(field.reference.slice(field.reference.lastIndexOf(".") + 1)),
-        label: `Sum of ${field.label.slice(field.label.lastIndexOf(": ") + 2)}`,
-        group: "Number fields",
-      })),
-  ].filter(
-    (option, index, all) => all.findIndex((other) => other.value === option.value) === index,
-  );
+  const options: StudioReferencePickerOption[] = (
+    facts === undefined ? [] : studioBoardTotalChoices(facts)
+  ).map((choice) => ({
+    value: choice.alias,
+    label: choice.label,
+    group: choice.sumOf === undefined ? "Totals of the query" : "Number fields",
+  }));
   const labelOf = (alias: string): string =>
-    options.find((option) => option.value === alias)?.label ?? alias;
+    (options.find((option) => option.value === alias)?.label ?? alias).slice(0, 60);
   const unchosen = options.filter((option) => !rows.some((row) => row.alias === option.value));
   return (
     <div className="space-y-2" data-vortex-board-totals="">
@@ -247,7 +233,6 @@ export function StudioBoardEditor({
           idPrefix={`${idPrefix}-${ownId}-totals`}
           rows={totalRows(value)}
           facts={boardFacts}
-          numberFields={choices.fields}
           disabled={disabled}
           onChange={(rows) => commit({ ...value.properties, totals: totalsValue(rows) })}
         />

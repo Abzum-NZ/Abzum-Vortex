@@ -216,7 +216,7 @@ export const recordsTableBoardFactsOf = (
         : {}),
     });
   }
-  const aggregates: Readonly<{ alias: string; label: string }>[] = [];
+  const aggregates: RecordsTableBoardFacts["aggregates"][number][] = [];
   for (const aggregate of query["aggregates"]) {
     const held = record(aggregate);
     if (typeof held?.["alias"] !== "string" || typeof held["operation"] !== "string")
@@ -224,6 +224,8 @@ export const recordsTableBoardFactsOf = (
     const fieldId = held["fieldId"];
     aggregates.push({
       alias: held["alias"],
+      operation: held["operation"],
+      ...(typeof fieldId === "string" ? { field: fieldId } : {}),
       label: boardAggregateLabel(
         held["operation"],
         typeof fieldId === "string"
