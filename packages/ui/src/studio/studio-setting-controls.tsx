@@ -13,6 +13,7 @@ import {
 import { Button } from "../components/button";
 import { Checkbox } from "../components/checkbox";
 import { Switch } from "../components/switch";
+import { ToggleGroup, ToggleGroupItem } from "../components/toggle-group";
 import { Input } from "../components/input";
 import {
   InputGroup,
@@ -506,6 +507,30 @@ function SettingControl(props: ControlProps): ReactElement {
     case "choice": {
       const defaultKey =
         property.defaultValue?.kind === "choice" ? property.defaultValue.value : undefined;
+      // A short choice that always has a value (its definition default) reads at a glance as a
+      // segmented control; it shows the default as selected until the person picks another.
+      if (defaultKey !== undefined && property.options.length <= 4)
+        return (
+          <ToggleGroup
+            id={id}
+            aria-label={property.label}
+            aria-describedby={descriptionId}
+            variant="outline"
+            size="sm"
+            className="w-full"
+            disabled={disabled}
+            value={[value?.kind === "choice" ? value.value : defaultKey]}
+            onValueChange={(next) => {
+              if (next[0] !== undefined) onChange({ kind: "choice", value: next[0] });
+            }}
+          >
+            {property.options.map((option) => (
+              <ToggleGroupItem key={option.key} value={option.key} className="flex-1">
+                {option.label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        );
       return (
         <StudioOptionControl
           id={id}

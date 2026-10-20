@@ -113,7 +113,10 @@ export function StudioQueryBindings({
           ...(parameters.length ? ["page_parameter" as const] : []),
           ...(fields.length ? ["record_field" as const] : []),
           ...(controls.length ? ["control" as const] : []),
-          ...(input.type?.kind === "person" ? ["current_person" as const] : []),
+          ...(facts.currentPersonRecordType !== undefined &&
+          fit({ kind: "record", recordTypes: [facts.currentPersonRecordType] })
+            ? ["current_person" as const]
+            : []),
           ...(input.type?.kind === "date" || input.type?.kind === "date_time"
             ? ["relative_date" as const]
             : []),

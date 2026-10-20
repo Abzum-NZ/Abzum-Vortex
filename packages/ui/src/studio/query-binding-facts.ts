@@ -1,6 +1,7 @@
 import {
   fieldBindingValueType,
   pageBindingFacts,
+  peopleDirectory,
   recordPageTypes,
   sourceItemTree,
   sourcePageItems,
@@ -80,9 +81,16 @@ export function studioQueryBindingFacts(
     );
   const named = (value: unknown): string | undefined =>
     typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+  // The people directory is usually another application's record type, so it is named here.
   const recordTypeLabel = (reference: string) =>
-    records.find((record) => record.reference === reference)?.record.name ?? "record";
+    records.find((record) => record.reference === reference)?.record.name ??
+    (reference === peopleDirectory.recordType ? "person" : "record");
   const page = pageBindingFacts({
+    currentPersonRecordType:
+      source.body.uses.some((use) => use.module === peopleDirectory.module) ||
+      records.some((record) => record.reference === peopleDirectory.recordType)
+        ? peopleDirectory.recordType
+        : undefined,
     subject: hasSubject ? { recordType: subject, label: recordTypeLabel(subject) } : undefined,
     placements: (owner?.items ?? []).map(({ props }): QueryBindingPlacement => {
       const release = releaseOf(props);

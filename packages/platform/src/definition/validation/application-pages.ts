@@ -361,11 +361,19 @@ export function applicationPageRules(scope: ApplicationScope): void {
         failures.push(
           failure(output, "vortex.definition.application_block_settings", "required_value"),
         );
-      // A Records table always declares a readable contract: columns with their default
-      // visibility and a page size.
+      // A Records table always declares a readable contract: every column with all of its
+      // settings (format, width, alignment, responsive priority, default visibility, auto-size)
+      // and a page size.
       if (blockKey === "platform.display.table" && table === undefined)
         failures.push(
-          failure(output, "vortex.definition.application_block_settings", "required_value"),
+          failure(
+            output,
+            "vortex.definition.application_block_settings",
+            "required_value",
+            undefined,
+            "definition_query_binding",
+            `${release?.name ?? "This block"} needs every column to state its format, width, alignment, responsive priority and whether it shows by default, and a page size`,
+          ),
         );
       if (blockKey === "platform.display.board") {
         const board = readBoardPlacementContract(settings);

@@ -45,6 +45,7 @@ import {
   BuilderAuthorityError,
   DefinitionError,
   readApplicationDefinitionDraft,
+  readSourceIdentityReservations,
   requireApplicationDefinitionDraftConsistency,
   readLiveHumanContext,
   requireBuilderAuthority,
@@ -153,6 +154,7 @@ export type StudioViewResources = Readonly<{
 /** What one requested editor view draws from, projected from the saved revision's one compile. */
 export type StudioLoadedView = StudioViewResources &
   Readonly<{
+    identityReservations: Awaited<ReturnType<typeof readSourceIdentityReservations>> | null;
     compiledFields: StudioCompiledFields | null;
     borrowedChoices: StudioBorrowedChoices | null;
     usedModules: readonly StudioDataModule[] | null;
@@ -464,6 +466,9 @@ export const loadStudioApplicationDraft = async (
           rootId: root.data,
           ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
         });
+        const identityReservations = requests.some((request) => request.kind === "access")
+          ? await readSourceIdentityReservations(transaction, draft.rootId)
+          : null;
         if (
           requests.some(
             (request) =>
@@ -886,6 +891,7 @@ export const loadStudioApplicationDraft = async (
             catalogue,
             views: requests.map((request, index) => ({
               ...resourcesOf(request),
+              identityReservations: request.kind === "access" ? identityReservations : null,
               compiledFields: dataOf(request) || canvasOf(request) ? compiledFields : null,
               borrowedChoices: choicesOf(request) ? borrowedChoices : null,
               usedModules: dataOf(request) ? usedModules : null,

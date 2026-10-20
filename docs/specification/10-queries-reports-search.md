@@ -307,4 +307,35 @@ Every query-bound page block maps query inputs through `query_parameters`. Each 
 
 The server resolves each binding per request. Record fields reuse the authorised subject read; a withheld field is logged without its value and yields `awaiting_input`. Missing required values render the authored awaiting message and make no query. Missing optional values omit their comparison from the query condition, including within conjunctions, alternatives and negation. Additional grid filters only narrow the resulting query. Relative dates use the organisation time zone; date-time inputs receive the start-of-day instant.
 
-The currently supported person part is the organisation account representing the signed-in person. Organisation and team parts require corresponding typed query inputs and an authoritative session selection before they can be offered.
+Current person supplies a record reference to the signed-in viewer's directory person. Studio offers it only for record inputs accepting that directory type, and publication uses the same type check. The server derives both the installed person type and its record identity from the verified human context, never from a page address or control. A viewer without a directory person is refused, including for optional inputs, so a missing person cannot broaden a "My records" query. Organisation-account-valued inputs are not supported by page bindings.
+
+### Grid grouping execution
+
+Grid grouping is state of the Data grid, executed by `run_module_query_summary` and the protected
+`groupedMembers` reader. Query-authored grouping and totals supply defaults; they are not a second
+grid engine. The separate `grouped_data` block converges to a Data grid preset in #3085.
+
+The protected readers accept `groupingFieldId` to replace those defaults with one query-selected,
+filterable choice field with at most 50 options. A lifecycle stage uses its canonical choice field
+identity, never its label. Both readers refuse this override unless the field is guaranteed readable
+under the current read plan. The summary retains the 100,000-candidate ceiling and returns a neutral
+`dataset_limit_exceeded` refusal above it. Counts describe the currently read result, independently
+of a later member page.
+
+Summary and member requests carry the same resolved query inputs, narrowing filter and search.
+Search matches only the current readable scalar or choice-array values of fields the record type
+marks searchable. A component's searchable-field set may narrow that set; an empty set searches all
+searchable fields. Summary search uses per-record access decisions, retaining the candidate ceiling
+before it reads records. It does not derive counts from a loaded member page.
+
+Generic member pages take the ordinary ordered sort contract and forward/backward keysets. They
+carry at most 200 records, with only the requested field projection. Choice grouping narrows the
+candidate scan by its stored key only after guaranteed readability is established, then rechecks
+membership from the current readable record. JSON null denotes the unassigned group; a missing or
+withheld value never establishes generic group membership. Continuations bind the actor, scope,
+release, query, resolved inputs, exact selector, grouping field, sort, filters, search, projection,
+page size and direction. Member reads remain uncached.
+
+These reader capabilities are the execution foundation of #3027. The grid feature gate, Studio
+controls, single URL codec, group headers and active-group interactions are supplied by that
+feature's UI/runtime integration, rather than inferred by the query readers.
