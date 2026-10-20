@@ -5658,7 +5658,8 @@
       "columns_changed",
       "page_changed",
       "bulk_action",
-      "inline_edit"
+      "inline_edit",
+      "row_expanded"
     ],
     "supportedStateOperations": []
   },

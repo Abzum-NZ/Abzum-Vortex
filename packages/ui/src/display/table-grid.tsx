@@ -1052,11 +1052,13 @@ export function RecordsGrid({
     >
       <span id={instructionsId} className="sr-only">
         Use the arrow keys to move between cells. Enter opens a row or uses the controls in a cell,
-        F2 edits them and Escape returns to the cell. Space selects a row. On a row's expand button,
-        the right arrow shows its related records and the left arrow hides them; F2 or Tab moves
-        into them and Escape returns to the row. On a column heading, Enter or Alt with the down
-        arrow opens the column menu, Shift and Enter adds to the sort, Alt with the left or right
-        arrow resizes the column and Alt, Shift with the left or right arrow moves it.
+        F2 edits them and Escape returns to the cell. Space selects a row.{" "}
+        {expansion === undefined
+          ? null
+          : "On a row's expand button, the right arrow shows its related records and the left arrow hides them; F2 or Tab moves into them and Escape returns to the row. "}
+        On a column heading, Enter or Alt with the down arrow opens the column menu, Shift and Enter
+        adds to the sort, Alt with the left or right arrow resizes the column and Alt, Shift with
+        the left or right arrow moves it.
       </span>
       <div
         ref={gridRef}

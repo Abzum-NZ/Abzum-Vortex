@@ -110,6 +110,11 @@ export const recordsTableMasterDetailFeature: RecordsTableFeatureDefinition<Reco
       for (const column of state.childColumns)
         if (!query.fields.some((field) => same(field.field, column)))
           return featureNotPossible(code, `A chosen column is not in ${query.label}.`);
+      if (
+        new Set(state.childColumns.map((column) => column.toLowerCase())).size !==
+        state.childColumns.length
+      )
+        return featureNotPossible(code, "Choose each related column once.");
       if (state.childPageSize === undefined)
         return featureNotPossible(code, "Choose how many related records to show at a time.");
       if (
