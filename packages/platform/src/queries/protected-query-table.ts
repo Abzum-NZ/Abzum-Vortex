@@ -215,6 +215,16 @@ export const runCommand = async (
     // The request's scan budget ran out before the page filled: the rows found so far are the
     // page and the continuation (sealed at the last examined key) resumes the search.
     const scanLimited = rows.length < command.pageSize && nextAnchor !== null;
+    // A page with no rows has no first row to turn back from: it turns back from the last key it
+    // examined, or (at the end of the data) from the key it started after, so a person who paged
+    // into an empty stretch of a sparse search can still go back.
+    if (rows.length === 0 && after !== undefined)
+      oppositeAnchor = nextAnchor ?? {
+        sortKey: after.sortKey,
+        sort: after.sort,
+        phase: after.phase,
+        recordId: after.recordId,
+      };
     // Only the declared system values may appear; a row carrying any other is a
     // contract breach, not something to pass on.
     const declaredSystemKeys = new Set<string>(command.requestedSystemFieldKeys);

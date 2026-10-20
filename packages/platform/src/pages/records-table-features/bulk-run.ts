@@ -85,12 +85,12 @@ type BulkPlacement = Readonly<{
 }>;
 
 /**
- * The most reader requests one "matching" enumeration makes: it examines the same candidate
- * ceiling the count does (`recordsSelectionCountCeiling`), and one reader request examines at most
- * `tableReadCandidatesPerRequest` candidates, so a sparse search is followed through short pages
- * only this far before the run refuses as "too many".
+ * The most scan-limited reader requests one "matching" enumeration follows. A full page is bounded
+ * by the run's own limit; a scan-limited page spent its whole budget of
+ * `tableReadCandidatesPerRequest` candidates, so this many of them examine the candidate ceiling
+ * the count uses (`recordsSelectionCountCeiling`) before the run refuses as "too many".
  */
-const enumerationRequestCeiling = Math.ceil(
+const enumerationScanLimitedCeiling = Math.ceil(
   recordsSelectionCountCeiling / tableReadCandidatesPerRequest,
 );
 
@@ -259,8 +259,8 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
    * Every record the descriptor matches now, in the table's order, minus the exclusions, read in
    * keyset pages of the bound query's own page size (at most 200 identities) under the person's
    * current access; at most `limit` + 1, so a run past its limit is known without reading further.
-   * A short page that still has a continuation (the reader's scan budget ran out) is followed,
-   * up to `enumerationRequestCeiling` requests; past it the enumeration is "too_many".
+   * A scan-limited page (the reader's budget ran out before the page filled) is followed, up to
+   * `enumerationScanLimitedCeiling` of them; past it the enumeration is "too_many".
    */
   const resolveMatching = async (
     session: IdentitySession,
@@ -273,15 +273,8 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
     const recordIds: string[] = [];
     const seen = new Set<string>();
     let continuationToken: string | undefined;
-    let requestCount = 0;
+    let scanLimitedCount = 0;
     do {
-      if (requestCount === enumerationRequestCeiling) {
-        console.error(
-          `[records-table] bulk request refused cause=matching_enumeration_ceiling requests=${requestCount}`,
-        );
-        return "too_many";
-      }
-      requestCount += 1;
       const result = await queries.run(session, selection, {
         ...command,
         pageSize: Math.min(namedActionBatchMaximum, queryPageSize),
@@ -300,6 +293,13 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         recordIds.push(recordId);
       }
       continuationToken = result.value.nextContinuationToken;
+      if (result.value.scanLimited) scanLimitedCount += 1;
+      if (continuationToken !== undefined && scanLimitedCount === enumerationScanLimitedCeiling) {
+        console.error(
+          `[records-table] bulk request refused cause=matching_enumeration_ceiling scanLimited=${scanLimitedCount}`,
+        );
+        return "too_many";
+      }
     } while (continuationToken !== undefined && recordIds.length <= limit);
     return recordIds;
   };

@@ -579,7 +579,13 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
             values.scanLimited === true ? "searching" : narrowed(narrowing) ? "no-match" : "empty"
           }
           className="border border-border text-muted-foreground"
-          aria-label={`${accessibleName}: ${narrowed(narrowing) ? "no matches" : "empty"}`}
+          aria-label={`${accessibleName}: ${
+            values.scanLimited === true
+              ? "no matches yet"
+              : narrowed(narrowing)
+                ? "no matches"
+                : "empty"
+          }`}
         >
           <EmptyHeader>
             <EmptyTitle>
