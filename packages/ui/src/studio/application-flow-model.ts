@@ -453,6 +453,8 @@ const eventWords: Readonly<Record<string, string>> = {
   form_reset: "form is reset",
   form_submit: "is submitted",
   tab_changed: "tab changes",
+  row_expanded: "row is expanded",
+
   guided_step_changed: "step changes",
 };
 

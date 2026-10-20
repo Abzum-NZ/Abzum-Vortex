@@ -98,6 +98,13 @@ export {
   createRecordsSelectionSealer,
   type RecordsSelectionSealer,
 } from "./records-selection-seal";
+export {
+  readRecordsTableRowDetail,
+  type RowDetailRequest,
+  type RowDetailResult,
+  type RowDetailRow,
+} from "./records-table-features/master-detail";
+
 export { readPageSubjectInTransaction } from "./page-subject-read";
 export {
   createPageSubjectReader,

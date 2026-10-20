@@ -41,6 +41,7 @@ export const moduleRuleCodes = [
   "vortex.definition.module_query_derived_aggregate_source",
   "vortex.definition.module_query_numeric_aggregate_field_type",
   "vortex.definition.module_query_extrema_field_type",
+  "vortex.definition.module_query_distinct_field_filterable",
 ] as const;
 
 export const applicationRuleCodes = [

@@ -21,6 +21,10 @@ export {
 } from "./column-filters";
 import { recordsTableInlineEditFeature, type RecordsTableInlineEditSettings } from "./inline-edit";
 import {
+  recordsTableMasterDetailFeature,
+  type RecordsTableMasterDetailSettings,
+} from "./master-detail";
+import {
   recordsTableConditionalFormattingFeature,
   type RecordsTableConditionalFormattingSettings,
 } from "./conditional-formatting";
@@ -46,7 +50,10 @@ export {
   type RecordsTableFeatureState,
   type RecordsTableFieldFacts,
   type RecordsTableQueryFacts,
+  type RecordsTableRelatedQueryFacts,
+  type RecordsTableRelatedRecordsFacts,
 } from "./shared";
+export { RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE } from "./master-detail";
 export {
   conditionalColumnFormatFieldTypes,
   conditionalColumnFormatIssue,
@@ -71,6 +78,7 @@ export type {
   RecordsTableBulkActionsSettings,
   RecordsTableColumnFiltersSettings,
   RecordsTableInlineEditSettings,
+  RecordsTableMasterDetailSettings,
   RecordsTableSavedViewsSettings,
   RecordsTableSearchSettings,
   RecordsTablePinningSettings,
@@ -90,6 +98,7 @@ export type RecordsTableFeatures = Readonly<{
   savedViews: RecordsTableFeatureState<RecordsTableSavedViewsSettings>;
   bulkActions: RecordsTableFeatureState<RecordsTableBulkActionsSettings>;
   inlineEdit: RecordsTableFeatureState<RecordsTableInlineEditSettings>;
+  masterDetail: RecordsTableFeatureState<RecordsTableMasterDetailSettings>;
   conditionalFormatting: RecordsTableFeatureState<RecordsTableConditionalFormattingSettings>;
   pinning: RecordsTableFeatureState<RecordsTablePinningSettings>;
 }>;
@@ -101,6 +110,7 @@ const registry = {
   saved_views: { property: "savedViews", definition: recordsTableSavedViewsFeature },
   bulk_actions: { property: "bulkActions", definition: recordsTableBulkActionsFeature },
   inline_edit: { property: "inlineEdit", definition: recordsTableInlineEditFeature },
+  master_detail: { property: "masterDetail", definition: recordsTableMasterDetailFeature },
   conditional_formatting: {
     property: "conditionalFormatting",
     definition: recordsTableConditionalFormattingFeature,
@@ -121,6 +131,7 @@ export const recordsTableFeatureKeys = [
   "saved_views",
   "bulk_actions",
   "inline_edit",
+  "master_detail",
   "conditional_formatting",
 ] as const satisfies readonly (keyof typeof registry)[];
 export type RecordsTableFeatureKey = (typeof recordsTableFeatureKeys)[number];
@@ -160,6 +171,7 @@ export const readRecordsTableFeatures = (
   const savedViews = read("saved_views");
   const bulkActions = read("bulk_actions");
   const inlineEdit = read("inline_edit");
+  const masterDetail = read("master_detail");
   const conditionalFormatting = read("conditional_formatting");
   const pinning = read("pinning");
   if (
@@ -168,6 +180,7 @@ export const readRecordsTableFeatures = (
     savedViews === undefined ||
     bulkActions === undefined ||
     inlineEdit === undefined ||
+    masterDetail === undefined ||
     conditionalFormatting === undefined ||
     pinning === undefined
   )
@@ -179,6 +192,7 @@ export const readRecordsTableFeatures = (
     savedViews,
     bulkActions: bulkActions as RecordsTableFeatures["bulkActions"],
     inlineEdit: inlineEdit as RecordsTableFeatures["inlineEdit"],
+    masterDetail: masterDetail as RecordsTableFeatures["masterDetail"],
     conditionalFormatting: conditionalFormatting as RecordsTableFeatures["conditionalFormatting"],
   };
 };

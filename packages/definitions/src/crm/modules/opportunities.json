@@ -1300,6 +1300,46 @@
       "relationship_hops": 0
     },
     {
+      "id": "qry_crm_company_opportunities",
+      "key": "crm_company_opportunities",
+      "exposure": "private",
+      "label": "Opportunities of one company",
+      "record_type": "opportunity",
+      "inputs": [
+        {
+          "key": "company",
+          "label": "Company",
+          "required": true,
+          "type": "record_reference",
+          "record_types": [
+            "vortex.crm.organisations:company"
+          ]
+        }
+      ],
+      "select": [
+        "opportunity_number",
+        "name",
+        "stage",
+        "value",
+        "expected_close_date"
+      ],
+      "filter": {
+        "field": "company",
+        "operator": "equals",
+        "parameter": "company"
+      },
+      "group_by": [],
+      "aggregates": [],
+      "sort": [
+        {
+          "field": "expected_close_date",
+          "direction": "ascending"
+        }
+      ],
+      "page_size": 40,
+      "relationship_hops": 0
+    },
+    {
       "id": "qry_crm_pipeline_by_stage",
       "key": "crm_pipeline_by_stage",
       "exposure": "private",

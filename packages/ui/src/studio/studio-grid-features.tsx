@@ -26,9 +26,15 @@ import {
 import { Label } from "../components/label";
 import { Switch } from "../components/switch";
 import type { StudioQueryChoice } from "./contextual-palette";
-import { studioGridFeatureEditors, studioRecordsTableQueryFacts } from "./grid-features";
+import {
+  studioGridFeatureEditors,
+  studioGridFeatureStartSettings,
+  studioRecordsTableQueryFacts,
+  type StudioRelatedRecordsChoices,
+} from "./grid-features";
 import { StudioConditionalFormattingEditor } from "./grid-features/conditional-formatting";
 import { StudioInspectorGroup } from "./studio-inspector-group";
+import { StudioQueryBindings } from "./studio-query-bindings";
 import {
   StudioSettingFields,
   type StudioSettingChoices,
@@ -68,6 +74,7 @@ export function StudioGridFeatures({
   query,
   compiledFields,
   choices,
+  related,
   disabled,
   onChange,
 }: Readonly<{
@@ -82,6 +89,8 @@ export function StudioGridFeatures({
   compiledFields: readonly ModuleField[] | undefined;
   /** The block's choices: the bound query's fields by business name. */
   choices: StudioSettingChoices;
+  /** What the draft offers the rows' related records. */
+  related: StudioRelatedRecordsChoices;
   disabled: boolean;
   onChange: (next: SourceBlockPropertyValueContract) => void;
 }>): ReactElement {
@@ -99,7 +108,48 @@ export function StudioGridFeatures({
     properties: Object.fromEntries(recordsTableFeatureKeys.map((key) => [key, featureValue(key)])),
   };
   const features = readRecordsTableFeatures(whole);
-  const facts = studioRecordsTableQueryFacts(query, choices.actions, choices.relationships);
+  const facts = studioRecordsTableQueryFacts(
+    query,
+    choices.actions,
+    choices.relationships,
+    related,
+  );
+  // Related records pick a link to this table's record type, a query of the linked record type and
+  // that query's fields, never the table's own fields; This row binds the query's input.
+  const relatedSettings = (current: GroupValue) => {
+    const settingReference = (key: string): string | undefined => {
+      const value = current.properties[key];
+      return value?.kind === "relationship_reference"
+        ? value.relationship
+        : value?.kind === "query_reference"
+          ? value.query
+          : undefined;
+    };
+    const links = facts.relatedRecords.links;
+    const link = links.find(
+      (candidate) => candidate.relationship === settingReference("relationship"),
+    );
+    const childTypes =
+      link === undefined
+        ? links.map((candidate) => candidate.childRecordType)
+        : [link.childRecordType];
+    const childQuery = related.queries.find(
+      (candidate) => candidate.reference === settingReference("child_query"),
+    );
+    return {
+      choices: {
+        ...choices,
+        relationships: related.relationships.filter((relationship) =>
+          links.some((candidate) => candidate.relationship === relationship.reference),
+        ),
+        queries: related.queries.filter(
+          (candidate) => !candidate.grouped && childTypes.includes(candidate.recordType),
+        ),
+        fields: childQuery?.fields ?? [],
+      } satisfies StudioSettingChoices,
+      childQuery,
+    };
+  };
   const write = (key: RecordsTableFeatureKey, next: GroupValue): void => {
     const candidate = { ...whole, properties: { ...whole.properties, [key]: next } };
     // New list entries need their catalogue defaults before the composition command checks the
@@ -166,7 +216,10 @@ export function StudioGridFeatures({
                         on
                           ? {
                               kind: "group",
-                              properties: { enabled: { kind: "boolean", value: true } },
+                              properties: {
+                                ...studioGridFeatureStartSettings[key],
+                                enabled: { kind: "boolean", value: true },
+                              },
                             }
                           : (() => {
                               const defaultValue = declaration?.defaultValue;
@@ -195,31 +248,67 @@ export function StudioGridFeatures({
               ) : null}
               {!enabled || settings.length === 0 || editor.kind !== "settings" ? null : (
                 <div className="space-y-3 pb-2">
-                  <StudioSettingFields
-                    idPrefix={`${switchId}-settings`}
-                    properties={settings}
-                    values={settingValues}
-                    choices={{
-                      ...choices,
-                      ...(editor.offers === undefined
-                        ? {}
-                        : { fields: choices.fields.filter(editor.offers) }),
-                      ...(editor.boundRecordTypeActions === undefined
-                        ? {}
-                        : {
-                            actions: choices.actions.filter(
-                              (action) => action.recordType === query?.recordType,
-                            ),
-                          }),
-                    }}
-                    disabled={disabled}
-                    onChange={(next) =>
+                  {(() => {
+                    const own = key === "master_detail" ? relatedSettings(current) : undefined;
+                    const commit = (next: StudioSettingValues) =>
                       write(key, {
                         kind: "group",
                         properties: { ...next, enabled: { kind: "boolean", value: true } },
-                      })
-                    }
-                  />
+                      });
+                    return (
+                      <>
+                        <StudioSettingFields
+                          idPrefix={`${switchId}-settings`}
+                          properties={settings.filter(
+                            (setting) => setting.key !== "query_parameters",
+                          )}
+                          values={settingValues}
+                          choices={
+                            own?.choices ?? {
+                              ...choices,
+                              ...(editor.offers === undefined
+                                ? {}
+                                : { fields: choices.fields.filter(editor.offers) }),
+                              ...(editor.boundRecordTypeActions === undefined
+                                ? {}
+                                : {
+                                    actions: choices.actions.filter(
+                                      (action) => action.recordType === query?.recordType,
+                                    ),
+                                  }),
+                            }
+                          }
+                          disabled={disabled}
+                          onChange={(next) =>
+                            commit({
+                              ...next,
+                              ...(settingValues["query_parameters"] === undefined
+                                ? {}
+                                : { query_parameters: settingValues["query_parameters"] }),
+                            })
+                          }
+                        />
+                        {own === undefined ||
+                        !settings.some((setting) => setting.key === "query_parameters") ? null : (
+                          <StudioQueryBindings
+                            query={own.childQuery}
+                            value={settingValues["query_parameters"]}
+                            facts={{
+                              ...related.page,
+                              blockLabel: own.childQuery?.label ?? label,
+                              rowFields: related.rowFields,
+                              ...(query === undefined ? {} : { rowRecordType: query.recordType }),
+                            }}
+                            choices={own.choices}
+                            disabled={disabled}
+                            onChange={(bindings) =>
+                              commit({ ...settingValues, query_parameters: bindings })
+                            }
+                          />
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               )}
             </div>

@@ -4272,7 +4272,7 @@
     "blockId": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
     "key": "platform.display.table",
     "releaseVersion": "2.0.0",
-    "name": "Records table",
+    "name": "Data grid",
     "description": "Records in rows and columns, with sorting, search, filters and row actions.",
     "icon": "table",
     "paletteGroup": "data",
@@ -5523,6 +5523,78 @@
           },
           {
             "kind": "group",
+            "key": "master_detail",
+            "label": "Related records",
+            "help": "Expand a row to the records of another record type that link to it",
+            "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "properties": [
+              {
+                "kind": "boolean",
+                "key": "enabled",
+                "label": "On",
+                "help": "Let people expand a row to its related records",
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              },
+              {
+                "kind": "relationship_reference",
+                "key": "relationship",
+                "label": "Link",
+                "help": "The link from the related record type to this table's record type",
+                "required": false
+              },
+              {
+                "kind": "query_reference",
+                "key": "child_query",
+                "label": "Related records query",
+                "help": "The query that reads the related records; one input is bound to This row",
+                "required": false
+              },
+              {
+                "shared": "query_parameters"
+              },
+              {
+                "kind": "list",
+                "key": "child_columns",
+                "label": "Related columns",
+                "help": "Fields of the related records query each related record shows",
+                "required": false,
+                "minimumItems": 0,
+                "maximumItems": 12,
+                "item": {
+                  "kind": "field_reference",
+                  "key": "field",
+                  "label": "Field",
+                  "help": "Field of the related records query",
+                  "required": true
+                }
+              },
+              {
+                "kind": "number",
+                "key": "child_page_size",
+                "label": "Related records at a time",
+                "help": "How many related records an expanded row reads at a time, at most 40",
+                "required": false,
+                "integer": true,
+                "minimum": 1,
+                "maximum": 40
+              }
+            ]
+          },
+          {
+            "kind": "group",
             "key": "pinning",
             "label": "Column pinning",
             "help": "Keep columns in view while scrolling; set each column's default pin in Columns",
@@ -5608,6 +5680,15 @@
                 }
               }
             },
+            "master_detail": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
             "pinning": {
               "kind": "group",
               "properties": {
@@ -5650,7 +5731,8 @@
       "columns_changed",
       "page_changed",
       "bulk_action",
-      "inline_edit"
+      "inline_edit",
+      "row_expanded"
     ],
     "supportedStateOperations": []
   },
