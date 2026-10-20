@@ -32,7 +32,7 @@ import {
   beforeSaveRuleRefusedIssueCode,
   beforeSaveRuleUnavailableIssueCode,
   beginBeforeSaveRuleExecution,
-  parseBeforeSaveRuleSet,
+  parseBeforeSaveFlowSet,
   type BeforeSaveRuleExecution,
 } from "./before-save-rules";
 import {
@@ -60,7 +60,7 @@ export type PreparedSave = Readonly<{
   readableFieldIds: ReadonlySet<string>;
   correlationId: string;
   /** The exact release's compiled before-save rules as the preparation returned them, unparsed. */
-  beforeSaveRules?: unknown;
+  beforeSaveFlows?: unknown;
 }>;
 
 type PreparationOutcome =
@@ -214,7 +214,7 @@ const parsePreparation = (candidate: unknown): PreparationOutcome => {
       readableFieldIds.flatMap((fieldId) => (fieldId.success ? [fieldId.data] : [])),
     ),
     correlationId,
-    ...(value.beforeSaveRules === undefined ? {} : { beforeSaveRules: value.beforeSaveRules }),
+    ...(value.beforeSaveFlows === undefined ? {} : { beforeSaveFlows: value.beforeSaveFlows }),
   };
 };
 
@@ -431,7 +431,7 @@ export const parseRelationshipTotalPreparation = (
       canRead: record.canRead as boolean,
       ...(concurrencyNumber === undefined ? {} : { concurrencyNumber }),
       existingValues: record.existingValues as Readonly<Record<string, unknown>>,
-      ...(record.beforeSaveRules === undefined ? {} : { beforeSaveRules: record.beforeSaveRules }),
+      ...(record.beforeSaveFlows === undefined ? {} : { beforeSaveFlows: record.beforeSaveFlows }),
       relationshipSources,
     });
   }
@@ -754,8 +754,8 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
             if (totalPreparation.outcome === "prepared") {
               closureRules = new Map();
               for (const record of totalPreparation.records) {
-                const ruleSet = parseBeforeSaveRuleSet(
-                  record.beforeSaveRules,
+                const ruleSet = parseBeforeSaveFlowSet(
+                  record.beforeSaveFlows,
                   record.recordType.recordTypeId,
                 );
                 if (ruleSet === undefined) {
@@ -769,8 +769,8 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               }
               attempted.rules = closureRules.get("root")!;
             } else {
-              const ruleSet = parseBeforeSaveRuleSet(
-                prepared.beforeSaveRules,
+              const ruleSet = parseBeforeSaveFlowSet(
+                prepared.beforeSaveFlows,
                 prepared.recordType.recordTypeId,
               );
               if (ruleSet === undefined) {

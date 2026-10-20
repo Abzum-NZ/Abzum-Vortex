@@ -62,6 +62,14 @@ const SUMMARY_VALUES_PAYLOAD_PARSER = displayPayloadParser<SummaryPayload>(parse
 export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistration[] =
   Object.freeze([
     Object.freeze({
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.NOTICE_BLOCK_RELEASE,
+      parsePayload: noRuntimeInputs,
+    }),
+    Object.freeze({
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.QUERY_NOTICE_BLOCK_RELEASE,
+      parsePayload: QUERY_NOTICE_PAYLOAD_PARSER,
+    }),
+    Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TEXT_BLOCK_RELEASE,
       parsePayload: TEXT_PAYLOAD_PARSER,
     }),
@@ -77,45 +85,10 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.SUMMARY_VALUES_BLOCK_RELEASE,
       parsePayload: SUMMARY_VALUES_PAYLOAD_PARSER,
     }),
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.NOTICE_BLOCK_RELEASE,
-      parsePayload: noRuntimeInputs,
-    }),
-    // Release 1.1.0 adds authored defaults only; the same parser serves both releases.
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.NOTICE_BLOCK_RELEASE_1_1_0,
-      parsePayload: noRuntimeInputs,
-    }),
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.QUERY_NOTICE_BLOCK_RELEASE,
-      parsePayload: QUERY_NOTICE_PAYLOAD_PARSER,
-    }),
-    // Release 1.1.0 adds the optional authored empty message; the same parser serves both releases.
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TEXT_BLOCK_RELEASE_1_1_0,
-      parsePayload: TEXT_PAYLOAD_PARSER,
-    }),
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RICH_TEXT_BLOCK_RELEASE_1_1_0,
-      parsePayload: RICH_TEXT_PAYLOAD_PARSER,
-    }),
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
-      parsePayload: RECORD_DETAIL_PAYLOAD_PARSER,
-    }),
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
-      parsePayload: SUMMARY_VALUES_PAYLOAD_PARSER,
-    }),
     // The one Data grid release: its data contract, row behaviours, interactive controls and Board mode.
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE,
       parsePayload: TABLE_PAYLOAD_PARSER,
-    }),
-    // Release 1.2.0 of the record detail declares its detail fields as settings.
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
-      parsePayload: RECORD_DETAIL_PAYLOAD_PARSER,
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CALENDAR_BLOCK_RELEASE,

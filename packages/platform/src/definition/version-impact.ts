@@ -51,9 +51,6 @@ export const versionImpactComponentKinds = [
   "action_input",
   "event",
   "rule",
-  "rule_input",
-  "rule_variable",
-  "rule_node",
   "sharing_condition",
   "extension_point",
   "module_binding",
@@ -293,11 +290,7 @@ export type DefinitionVersionImpactFailureCode = z.infer<
   typeof definitionVersionImpactFailureCodeSchema
 >;
 export type DefinitionVersionImpactRequest = z.infer<typeof definitionVersionImpactRequestSchema>;
-export type ApplicationVersionImpactRequest = z.infer<
-  typeof applicationVersionImpactRequestSchema
->;
+export type ApplicationVersionImpactRequest = z.infer<typeof applicationVersionImpactRequestSchema>;
 export type ModuleVersionImpactRequest = z.infer<typeof moduleVersionImpactRequestSchema>;
-export type ModuleVersionImpactHistoryEntry = z.infer<
-  typeof moduleVersionImpactHistoryEntrySchema
->;
+export type ModuleVersionImpactHistoryEntry = z.infer<typeof moduleVersionImpactHistoryEntrySchema>;
 export type DefinitionVersionImpactResult = z.infer<typeof definitionVersionImpactResultSchema>;
