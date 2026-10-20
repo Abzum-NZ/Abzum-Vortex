@@ -43,8 +43,14 @@ begin
   start_instant := (p_value #>> '{}')::timestamptz;
   end_instant := (pg_catalog.date_trunc(bucket ->> 'unit', start_instant at time zone (bucket ->> 'timeZone'))
     + (case when bucket ->> 'unit' = 'quarter' then '3 months' else '1 ' || (bucket ->> 'unit') end)::interval) at time zone (bucket ->> 'timeZone');
-  return pg_catalog.format('stored.%I >= %L::timestamptz and stored.%I < %L::timestamptz',
-    p_column, start_instant, p_column, end_instant);
+  -- A repeated local midnight resolves to its later instant. Keep the indexable
+  -- range broad enough for both occurrences, then match the exact bucket before
+  -- the candidate page budget is applied. The readable projection is rechecked.
+  return pg_catalog.format(
+    'stored.%I >= %L::timestamptz and stored.%I < %L::timestamptz and pg_catalog.date_trunc(%L, stored.%I, %L) = %L::timestamptz',
+    p_column, start_instant - interval '24 hours',
+    p_column, end_instant + interval '24 hours',
+    bucket ->> 'unit', p_column, bucket ->> 'timeZone', start_instant);
 end
 $function$;
 

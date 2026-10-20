@@ -52,7 +52,8 @@ begin
       or pg_catalog.jsonb_typeof(bucket -> 'unit') is distinct from 'string'
       or bucket ->> 'unit' not in ('day', 'week', 'month', 'quarter', 'year')
       or pg_catalog.jsonb_typeof(bucket -> 'timeZone') is distinct from 'string'
-      or not exists (select 1 from pg_catalog.pg_timezone_names as zone where zone.name = bucket ->> 'timeZone') then
+      or not exists (select 1 from pg_catalog.pg_timezone_names as zone
+        where pg_catalog.lower(zone.name) = pg_catalog.lower(bucket ->> 'timeZone')) then
       return null;
     end if;
   end if;

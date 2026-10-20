@@ -77,8 +77,14 @@ begin
   start_instant := (p_value #>> '{}')::timestamptz;
   end_instant := (pg_catalog.date_trunc(bucket ->> 'unit', start_instant at time zone (bucket ->> 'timeZone'))
     + (case when bucket ->> 'unit' = 'quarter' then '3 months' else '1 ' || (bucket ->> 'unit') end)::interval) at time zone (bucket ->> 'timeZone');
-  return pg_catalog.format('stored.%I >= %L::timestamptz and stored.%I < %L::timestamptz',
-    p_column, start_instant, p_column, end_instant);
+  -- A repeated local midnight resolves to its later instant. Keep the indexable
+  -- range broad enough for both occurrences, then match the exact bucket before
+  -- the candidate page budget is applied. The readable projection is rechecked.
+  return pg_catalog.format(
+    'stored.%I >= %L::timestamptz and stored.%I < %L::timestamptz and pg_catalog.date_trunc(%L, stored.%I, %L) = %L::timestamptz',
+    p_column, start_instant - interval '24 hours',
+    p_column, end_instant + interval '24 hours',
+    bucket ->> 'unit', p_column, bucket ->> 'timeZone', start_instant);
 end
 $function$;
 
@@ -144,7 +150,8 @@ begin
       or pg_catalog.jsonb_typeof(bucket -> 'unit') is distinct from 'string'
       or bucket ->> 'unit' not in ('day', 'week', 'month', 'quarter', 'year')
       or pg_catalog.jsonb_typeof(bucket -> 'timeZone') is distinct from 'string'
-      or not exists (select 1 from pg_catalog.pg_timezone_names as zone where zone.name = bucket ->> 'timeZone') then
+      or not exists (select 1 from pg_catalog.pg_timezone_names as zone
+        where pg_catalog.lower(zone.name) = pg_catalog.lower(bucket ->> 'timeZone')) then
       return null;
     end if;
   end if;
@@ -2716,6 +2723,102 @@ grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jso
   to vortex_request;
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid) is
   'One bounded keyset page of rows readable through read_record for one installed Module query, or one exact current human-owned preview query over isolated preview storage, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; returns with every plain page and board column read, even an empty one, the reader''s current field bound (the fields it is guaranteed to see on every record it may read, and whether any searchable field is among them) so a list offers and accepts its filter, search and sort controls from the same read; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows an installed scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the installed scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; validates every preview stage against the current human, candidate revision and exact release and storage pins, uses only active preview catalogue mappings and preview field bounds, and never falls through to installed resolution; works out read-time fields, such as a deadline-passed calculation, inside an installed query at one statement timestamp in the organisation time zone, so no installed query is refused for freshness; admits board members only through a separately validated board selector over the sole filterable choice grouping key, reads one column''s member page or, for a board''s first pages, the first page of every requested column in one invocation with its own budget and position per column, classifies those columns from current readable values and, when the choice field is guaranteed readable on every scanned row, narrows each column''s candidate scan to its own stored choice value so a column reads only its own cards, and admits generic grouped members only when every installed grouping value is present in the current readable projection and JSONB-equal to the closed typed selector; missing or withheld values belong to no generic group while JSON null is a value, and generic group membership never uses hidden stored values, and a grid dimension narrows the stored candidate scan only after the field is proven guaranteed readable, with date bucket membership using the same authored-zone canonical value as the summary and typed half-open calendar ranges; orders board pages by record identity and generic members by the requested or query order with bidirectional keysets, returns generic group identity even for empty pages, and binds each member operation, selector and projection in its own uncached continuation; reads the copied records of a preview like installed ones and refuses a system projection in a preview.';
+
+create or replace function vortex_record.run_module_query_summary(
+  p_module_root_id uuid,
+  p_query_id uuid,
+  p_expected_release_revision bigint,
+  p_input_values jsonb,
+  p_user_inputs jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  uuid_pattern constant text :=
+    '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+  prepared_plan jsonb;
+  board_summary_mode boolean := false;
+  board_summary jsonb;
+begin
+  if p_module_root_id is null or p_query_id is null
+    or p_module_root_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_query_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_input_values is null or pg_catalog.jsonb_typeof(p_input_values) <> 'object'
+    or (p_expected_release_revision is not null
+      and p_expected_release_revision not between 1 and 9007199254740991) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+  if p_user_inputs is null then
+    p_user_inputs := '{}'::jsonb;
+  end if;
+  board_summary_mode := p_user_inputs ? 'boardSummary';
+  if pg_catalog.jsonb_typeof(p_user_inputs) <> 'object'
+    or exists (
+      select 1 from pg_catalog.jsonb_object_keys(p_user_inputs) as supplied(key)
+      where supplied.key not in ('filter', 'filterableFieldIds', 'boardSummary', 'grouping', 'groupAfter', 'search', 'searchableFieldIds')
+    ) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+  if (p_user_inputs ? 'groupAfter' and (
+      not (p_user_inputs ? 'grouping')
+      or pg_catalog.jsonb_typeof(p_user_inputs -> 'groupAfter') is distinct from 'string'
+      or pg_catalog.length(p_user_inputs ->> 'groupAfter') not between 1 and 4096
+    )) or (p_user_inputs ? 'grouping' and board_summary_mode)
+    or (p_user_inputs ? 'search' and pg_catalog.jsonb_typeof(p_user_inputs -> 'search') not in ('string', 'null'))
+    or pg_catalog.length(pg_catalog.btrim(p_user_inputs ->> 'search')) > 200 then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+  if board_summary_mode then
+    board_summary := p_user_inputs -> 'boardSummary';
+    if pg_catalog.jsonb_typeof(board_summary) is distinct from 'object' then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+    end if;
+    if board_summary - array['choiceFieldId']::text[] <> '{}'::jsonb
+      or not (board_summary ? 'choiceFieldId') then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+    end if;
+    if pg_catalog.jsonb_typeof(board_summary -> 'choiceFieldId') is distinct from 'string'
+      or pg_catalog.lower(board_summary ->> 'choiceFieldId') !~ uuid_pattern then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+    end if;
+  end if;
+
+  prepared_plan := vortex_record.prepare_module_query_internal(
+    p_module_root_id, p_query_id, p_expected_release_revision, p_input_values,
+    p_user_inputs -> 'filter', coalesce(p_user_inputs -> 'filterableFieldIds', '[]'::jsonb),
+    'resolution', null
+  );
+  if prepared_plan ->> 'outcome' is distinct from 'prepared' then
+    return prepared_plan;
+  end if;
+  prepared_plan := vortex_record.prepare_module_query_internal(
+    p_module_root_id, p_query_id, p_expected_release_revision, p_input_values,
+    p_user_inputs -> 'filter', coalesce(p_user_inputs -> 'filterableFieldIds', '[]'::jsonb),
+    'storage', prepared_plan
+  );
+  if prepared_plan ->> 'outcome' is distinct from 'prepared' then
+    return prepared_plan;
+  end if;
+  return vortex_record.run_module_query_summary_internal(
+    p_module_root_id, p_query_id, p_expected_release_revision,
+    p_input_values, p_user_inputs, prepared_plan
+  );
+end
+$function$;
+
+alter function vortex_record.run_module_query_summary(uuid,uuid,bigint,jsonb,jsonb) owner to vortex_record_adapter;
+
+revoke all on function vortex_record.run_module_query_summary(uuid, uuid, bigint, jsonb, jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime;
+grant execute on function vortex_record.run_module_query_summary(uuid, uuid, bigint, jsonb, jsonb)
+  to vortex_request, vortex_owner;
+
+comment on function vortex_record.run_module_query_summary(uuid, uuid, bigint, jsonb, jsonb) is
+  'Runs one bounded database-backed installed Module query summary or protected board summary. It validates the request, prepares one protected read-scan access plan, and delegates the summary to the owner-only aggregate function, normalizes unreadable board choices to one unassigned bucket, summarises the own records of a preview for a preview request, caps authored group pages at 200 with keysets over canonical group keys while keeping full readable totals, and refuses neutrally above 100000 candidate rows.';
 
 set local role vortex_owner;
 
