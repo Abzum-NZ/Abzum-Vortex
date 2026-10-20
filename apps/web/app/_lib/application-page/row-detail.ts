@@ -24,7 +24,7 @@ import {
 } from "@vortex/platform/schema";
 import { getQueryContinuationKey } from "../query-continuation-key";
 import { loadInstalledContext, readPageProjections, requestDependencies } from "./load";
-import { readPageGridLayouts } from "./grid-layouts";
+import { pageGridLayoutRequest, readPageGridLayouts } from "./grid-layouts";
 import {
   collectPlacements,
   first,
@@ -199,7 +199,14 @@ export const loadApplicationRowDetail = async (
                 selection,
                 context,
                 String(pageDefinition.pageId),
-                [{ placementId: placement.placementId, recordTypeId }],
+                [
+                  pageGridLayoutRequest(
+                    pageDefinition,
+                    placement.placementId,
+                    recordTypeId,
+                    parameters,
+                  ),
+                ],
               ),
               markSubjectUnreadable: () => undefined,
             } satisfies PlacementReadInput,
