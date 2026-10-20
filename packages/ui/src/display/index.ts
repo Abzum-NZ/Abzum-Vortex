@@ -5,8 +5,7 @@ export {
   DISPLAY_EVENT_NAMES,
   parseDisplayData,
   parseDisplayEventHandlers,
-  parseGroupedPayload,
-  parseListPayload,
+  parseLauncherRowsPayload,
   parseRecordDetailPayload,
   parseRichTextPayload,
   parseSummaryPayload,
@@ -18,7 +17,6 @@ export {
   type DisplayEventHandler,
   type DisplayEventHandlers,
   type DisplayField,
-  type DisplayGroup,
   type DisplayRefusalReason,
   type DisplayRichTextBlock,
   type DisplayRichTextDocument,
@@ -26,16 +24,13 @@ export {
   type DisplayRow,
   type DisplaySemanticEvent,
   type DisplaySemanticEventName,
-  type DisplaySummaryValue,
   type BoardBucketPayload,
   type BoardColumnPayload,
   type BoardData,
   type BoardPage,
   type BoardPayload,
-  type GroupedData,
-  type GroupedPayload,
-  type ListData,
-  type ListPayload,
+  type LauncherRowsData,
+  type LauncherRowsPayload,
   type RecordDetailData,
   type RecordDetailPayload,
   type RichTextData,
@@ -72,7 +67,6 @@ export {
 export { PlainTextDisplay } from "./text";
 export { NoticeBlock } from "./notice";
 export { RichTextDisplay } from "./rich-text-component";
-export { ListDisplay } from "./list";
 export { TableDisplay } from "./table";
 export { RecordDetailDisplay } from "./record-detail";
 export { SummaryValuesDisplay } from "./summary-values";
