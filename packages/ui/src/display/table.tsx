@@ -113,8 +113,9 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     events,
   } = resolveDisplayContext<TablePayload>(
     props,
-    // A narrowed page or a later page that matched nothing keeps its controls and columns.
-    (table) => table.rows.length === 0 && !narrowed(table.narrowing) && (table.page ?? 1) <= 1,
+    // A completed read carries current feature bounds even with no rows. Keep its controls so
+    // empty queries offer the same permitted features as populated queries.
+    () => false,
     "No records to show",
   );
   // Publication refuses a Records table without its contract, so a missing one is a definition
@@ -465,7 +466,9 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
             <EmptyTitle>
               {narrowed(narrowing)
                 ? "No records match the search or filters"
-                : "No records on this page"}
+                : (values.page ?? 1) > 1
+                  ? "No records on this page"
+                  : emptyMessage}
             </EmptyTitle>
           </EmptyHeader>
           {!narrowed(narrowing) ? null : (
