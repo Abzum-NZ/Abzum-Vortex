@@ -207,6 +207,9 @@ export function useApplyDispatch({
               ["completed", "committed"].includes(server.descriptor.outcome) &&
               server.failure === undefined,
             changed: changedUnderPerson,
+            ...(diagnostic?.corrections === undefined
+              ? {}
+              : { corrections: diagnostic.corrections }),
           };
           // A finished guided-form submission may have abandoned its draft. Keep the journey
           // visible but inactive until a new page load establishes the next draft.

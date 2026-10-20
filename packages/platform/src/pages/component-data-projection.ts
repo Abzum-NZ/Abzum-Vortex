@@ -614,7 +614,10 @@ export const projectRecordsTableData = (
     input.pivotView,
     input.fieldLabels,
   );
-  const editableFields = features?.inlineEdit?.fields ?? [];
+  const editableFields = [
+    ...(features?.inlineEdit?.fields ?? []),
+    ...(features?.rowEdit?.fields ?? []),
+  ];
 
   return {
     status: "ready",

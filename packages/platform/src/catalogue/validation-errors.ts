@@ -60,6 +60,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_saved_views",
   "definition_records_table_bulk_actions",
   "definition_records_table_inline_edit",
+  "definition_records_table_row_edit",
   "definition_records_table_master_detail",
   "definition_records_table_tree",
   "definition_records_table_grouping",
@@ -149,6 +150,12 @@ const definitionValidationErrorCatalogueSource = {
     message: "Bulk actions need a named action of the record type that accepts several records.",
     guidance:
       "Add a named action of the bound record type that needs no input typed for one record, with a limit of at most 5,000 records, or turn Bulk actions off.",
+  },
+  definition_records_table_row_edit: {
+    order: 39,
+    message: "Row editing needs at least one stored field that people may change.",
+    guidance:
+      "Choose editable columns and name the action that saves the row, or turn Row editing off.",
   },
   definition_records_table_inline_edit: {
     order: 39,

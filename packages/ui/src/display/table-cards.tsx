@@ -31,6 +31,7 @@ export type CardRenderers = Readonly<{
   heading: (row: DisplayRow, column: GridColumn) => ReactNode;
   select: (row: DisplayRow, selected: boolean) => ReactNode;
   actions: (row: DisplayRow) => ReactNode;
+  rowEditor: (row: DisplayRow) => ReactNode;
 }>;
 
 /**
@@ -198,6 +199,7 @@ export function RecordsCards({
                   ))}
                 </dl>
               )}
+              {renderers.rowEditor(row)}
             </Card>
             {!expanded || expansion === undefined || !expandable ? null : (
               <div

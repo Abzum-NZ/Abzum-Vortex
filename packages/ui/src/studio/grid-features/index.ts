@@ -60,6 +60,7 @@ export const studioGridFeatureEditors: Readonly<
   saved_views: { kind: "custom" },
   bulk_actions: { kind: "settings", boundRecordTypeActions: true },
   inline_edit: { kind: "custom" },
+  row_edit: { kind: "custom" },
   master_detail: { kind: "settings" },
   // Only the links from a record type to itself can name a record's parent.
   tree: { kind: "settings", offers: (field) => field.parentLink === true },
@@ -81,6 +82,7 @@ export const studioGridFeatureStartSettings: Readonly<
     Record<RecordsTableFeatureKey, Readonly<Record<string, SourceBlockPropertyValueContract>>>
   >
 > = {
+  row_edit: { trigger: { kind: "choice", value: "button" }, fields: { kind: "list", items: [] } },
   spreadsheet: {
     range_select: { kind: "boolean", value: true },
     find: { kind: "boolean", value: true },

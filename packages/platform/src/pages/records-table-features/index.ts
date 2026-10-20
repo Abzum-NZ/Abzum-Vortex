@@ -52,6 +52,11 @@ export type RecordsTableFeatureProjection = Readonly<{
    * flow binding that commits a change.
    */
   inlineEdit?: Readonly<{ eventId: string; fields: readonly RecordsTableInlineEditField[] }>;
+  rowEdit?: Readonly<{
+    eventId: string;
+    trigger: "button";
+    fields: readonly RecordsTableInlineEditField[];
+  }>;
   /** Rows expand to their related records, read this many at a time. */
   masterDetail?: Readonly<{ pageSize: number }>;
   /** Rows expand to the records that name them as their parent, read this many at a time. */
@@ -114,6 +119,7 @@ export type RecordsTableRequestPart =
   | "command"
   | "bulk_action"
   | "inline_edit"
+  | "row_edit"
   | "row_action"
   | "row_clicked"
   | "row_detail"
@@ -167,9 +173,18 @@ export const recordsTableEditableFields = (
   bounds: ProtectedQueryFieldBounds,
   editors: Readonly<Record<string, RecordsTableInlineEditor>> | undefined,
 ): readonly RecordsTableInlineEditField[] => {
-  const inlineEdit = contract.features.inlineEdit;
-  if (!inlineEdit.enabled || inlineEdit.eventId === undefined) return [];
-  return inlineEdit.fields.flatMap((field): RecordsTableInlineEditField[] => {
+  return projectedEditableFields(contract.features.inlineEdit, rows, bounds, editors);
+};
+
+const projectedEditableFields = (
+  feature:
+    RecordsTableContract["features"]["inlineEdit"] | RecordsTableContract["features"]["rowEdit"],
+  rows: readonly ProtectedQueryRow[],
+  bounds: ProtectedQueryFieldBounds,
+  editors: Readonly<Record<string, RecordsTableInlineEditor>> | undefined,
+): readonly RecordsTableInlineEditField[] => {
+  if (!feature.enabled || feature.eventId === undefined) return [];
+  return feature.fields.flatMap((field): RecordsTableInlineEditField[] => {
     const editor = editors?.[field.toLowerCase()];
     return editor !== undefined &&
       bounds.readableFieldIds.some((fieldId) => sameField(fieldId, field)) &&
@@ -222,6 +237,8 @@ export const projectRecordsTableFeatures = (
   const bulkActions = recordsTableBulkActions(contract);
   const inlineEdit = features.inlineEdit;
   const editableFields = recordsTableEditableFields(contract, rows, bounds, editors);
+  const rowEdit = features.rowEdit;
+  const rowFields = projectedEditableFields(rowEdit, rows, bounds, editors);
   // Every expanded row is read again under the viewer's current access: the projection only says
   // rows expand; a viewer who cannot read the related records sees the panel's neutral refusal.
   const masterDetail = features.masterDetail;
@@ -260,6 +277,12 @@ export const projectRecordsTableFeatures = (
         }
       : undefined;
   const projection: RecordsTableFeatureProjection = {
+    ...(rowEdit.enabled &&
+    rowEdit.eventId !== undefined &&
+    rowEdit.trigger === "button" &&
+    rowFields.length > 0
+      ? { rowEdit: { eventId: rowEdit.eventId, trigger: rowEdit.trigger, fields: rowFields } }
+      : {}),
     ...(features.spreadsheet.enabled &&
     typeof features.spreadsheet.rangeSelect === "boolean" &&
     typeof features.spreadsheet.find === "boolean" &&

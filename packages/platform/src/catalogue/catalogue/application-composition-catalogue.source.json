@@ -5186,6 +5186,86 @@
           },
           {
             "kind": "group",
+            "key": "row_edit",
+            "label": "Row editing",
+            "help": "Edit the visible allowed fields of a row and save all changes together",
+            "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "properties": [
+              {
+                "kind": "boolean",
+                "key": "enabled",
+                "label": "On",
+                "help": "Let people edit one row at a time",
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              },
+              {
+                "kind": "text",
+                "key": "event_id",
+                "label": "Event identity",
+                "help": "The action that saves a row; set by the workflow for a saved row",
+                "required": false,
+                "minLength": 1,
+                "maxLength": 60
+              },
+              {
+                "kind": "list",
+                "key": "fields",
+                "label": "Editable fields",
+                "help": "Fields a person may change in place; each must be a column of the table",
+                "required": false,
+                "minimumItems": 0,
+                "maximumItems": 50,
+                "item": {
+                  "kind": "field_reference",
+                  "key": "field",
+                  "label": "Field",
+                  "help": "Field of the bound query edited in place",
+                  "required": true,
+                  "fieldTypes": [
+                    "text",
+                    "long_text",
+                    "whole_number",
+                    "decimal_number",
+                    "yes_no",
+                    "choice",
+                    "date",
+                    "date_time",
+                    "email_address",
+                    "phone_number",
+                    "web_address"
+                  ]
+                }
+              },
+              {
+                "kind": "choice",
+                "key": "trigger",
+                "label": "Start editing",
+                "help": "The row button opens all editable fields",
+                "required": false,
+                "options": [
+                  {
+                    "key": "button",
+                    "label": "Edit button"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "group",
             "key": "conditional_formatting",
             "label": "Formatting",
             "help": "Highlight rows and cells that match conditions, and show number columns as data bars or colour scales",
@@ -6262,6 +6342,15 @@
                   "value": false
                 }
               }
+            },
+            "row_edit": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
             }
           }
         }
@@ -6297,6 +6386,7 @@
       "page_changed",
       "bulk_action",
       "inline_edit",
+      "row_edit",
       "row_expanded",
       "card_moved"
     ],

@@ -339,6 +339,19 @@ export function validateApplicationSourceCatalogue(
           "invalid_value",
         );
       }
+      if (features.rowEdit.enabled) {
+        if (features.rowEdit.eventId !== undefined)
+          checkRowBehaviour("features", features.rowEdit.eventId, "row_edit", "record_reference");
+        // An editable field must be one the bound query selects and one of the declared columns;
+        // a field that is never shown could never be edited in place.
+        const columnFields = new Set(table.columns.map((column) => column.field));
+        checkFields(
+          "features",
+          features.rowEdit.fields,
+          (field) => columnFields.has(field),
+          "invalid_value",
+        );
+      }
     } else if (detail !== undefined) {
       checkFields(
         "detail_fields",
