@@ -341,16 +341,30 @@ export const boardColumnSelectorSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("unassigned") }).strict(),
 ]);
 
-/** The browser may name one bucket and its opaque token; every source/authority fact is rebound. */
-export const boardColumnContinuationRequestSchema = z
+/** The most columns one board read names: every installed option plus the unassigned bucket. */
+export const boardColumnReadLimit = 13;
+
+/**
+ * The browser names the columns it is showing and, to continue one column, that column's opaque
+ * token; every source/authority fact is rebound. Without a token each named column's first page is
+ * read.
+ */
+export const boardColumnReadRequestSchema = z
   .object({
-    column: boardColumnSelectorSchema,
-    continuationToken: z.string().min(1).max(65_536),
+    columns: z.array(boardColumnSelectorSchema).min(1).max(boardColumnReadLimit),
+    continuationToken: z.string().min(1).max(65_536).optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (request) =>
+      new Set(request.columns.map((column) => JSON.stringify(column))).size ===
+        request.columns.length &&
+      (request.continuationToken === undefined || request.columns.length === 1),
+    { message: "A board read names each column once, and a continuation names exactly one" },
+  );
 
 export type BoardColumnSelector = z.infer<typeof boardColumnSelectorSchema>;
-export type BoardColumnContinuationRequest = z.infer<typeof boardColumnContinuationRequestSchema>;
+export type BoardColumnReadRequest = z.infer<typeof boardColumnReadRequestSchema>;
 
 /** Query shapes and title fields that a query-bound Calendar block can display. */
 export const calendarBlockSourceIsSupported = (

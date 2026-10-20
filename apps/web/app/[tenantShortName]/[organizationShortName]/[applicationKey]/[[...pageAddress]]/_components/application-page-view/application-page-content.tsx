@@ -436,7 +436,7 @@ export function ApplicationPageViewContent({
     refreshPlacements,
     setSelection,
   });
-  const { runBinding, continueBoardColumn, continueTablePage } = usePlacementActions({
+  const { runBinding, readBoardColumns, continueTablePage } = usePlacementActions({
     applyDispatch,
     flowRuntime,
     formOwners,
@@ -492,7 +492,7 @@ export function ApplicationPageViewContent({
     unsavedWork,
     onOpenApplication,
     runBinding,
-    continueBoardColumn,
+    readBoardColumns,
     continueTablePage,
     refreshPlacements,
     setSelection,

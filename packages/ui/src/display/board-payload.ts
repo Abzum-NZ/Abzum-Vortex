@@ -143,25 +143,36 @@ const parseBoardPage = (
 
 const parseBoardBucket = (
   value: unknown,
-  globalMetrics: readonly DisplaySummaryMetric[],
   declaredCardFields: ReadonlySet<string>,
   seenRecordIds: Set<string>,
   location: DefinitionRenderErrorLocation,
 ): BoardBucketPayload => {
   const record = requireRecord(value, "A board bucket must be an object", location);
-  requireExactKeys(record, ["rowCount", "aggregates", "page"], location);
+  requireExactKeys(record, ["state", "rowCount", "aggregates", "page"], location);
+  if (record.state !== "unread" && record.state !== "reading" && record.state !== "read")
+    return fail("A board bucket requires an explicit read state", location);
+  if (record.state !== "read") {
+    if (
+      record.rowCount !== null ||
+      record.page !== null ||
+      !Array.isArray(record.aggregates) ||
+      record.aggregates.length !== 0
+    )
+      return fail("An unread board bucket carries no counts, totals or cards", location);
+    return Object.freeze({ state: record.state, rowCount: null, aggregates: [], page: null });
+  }
+  if (record.page === null) return fail("A read board bucket requires its page", location);
   const rowCount = parseBoardCount(
     record.rowCount,
     "A board bucket requires a safe protected row count",
     location,
   );
   const aggregates = parseBoardMetrics(record.aggregates, location);
-  requireMatchingBoardMetrics(globalMetrics, aggregates, location);
   const page =
     record.page === null
       ? null
       : parseBoardPage(record.page, declaredCardFields, seenRecordIds, location);
-  return Object.freeze({ rowCount, aggregates, page });
+  return Object.freeze({ state: "read", rowCount, aggregates, page });
 };
 
 export const parseBoardPayload = (
@@ -182,8 +193,6 @@ export const parseBoardPayload = (
       "wipLimit",
       "cardTitleFieldId",
       "cardFieldIds",
-      "totalRowCount",
-      "aggregates",
       "columns",
       "unassigned",
     ],
@@ -237,12 +246,6 @@ export const parseBoardPayload = (
   )
     fail("Board card field identities are unique and start with the card title", location);
 
-  const totalRowCount = parseBoardCount(
-    record.totalRowCount,
-    "A board requires a safe protected total row count",
-    location,
-  );
-  const aggregates = parseBoardMetrics(record.aggregates, location);
   const seenRecordIds = new Set<string>();
   const columnCandidates = requireArray(record.columns, "Board columns must be an array", location);
   if (columnCandidates.length < 1 || columnCandidates.length > maximumBoardColumns)
@@ -253,7 +256,7 @@ export const parseBoardPayload = (
     const column = requireRecord(candidate, "A board column must be an object", columnLocation);
     requireExactKeys(
       column,
-      ["value", "label", "tone", "moves", "gatedBy", "rowCount", "aggregates", "page"],
+      ["value", "label", "tone", "moves", "gatedBy", "state", "rowCount", "aggregates", "page"],
       columnLocation,
     );
     const optionValue = requireString(
@@ -296,11 +299,11 @@ export const parseBoardPayload = (
     }
     const bucket = parseBoardBucket(
       {
+        state: column.state,
         rowCount: column.rowCount,
         aggregates: column.aggregates,
         page: column.page,
       },
-      aggregates,
       declaredCardFields,
       seenRecordIds,
       columnLocation,
@@ -326,7 +329,7 @@ export const parseBoardPayload = (
   );
   requireExactKeys(
     unassignedRecord,
-    ["moves", "rowCount", "aggregates", "page"],
+    ["moves", "state", "rowCount", "aggregates", "page"],
     unassignedLocation,
   );
   const unassignedMoves = requireArray(
@@ -344,20 +347,19 @@ export const parseBoardPayload = (
     moves: Object.freeze(unassignedMoves as string[]),
     ...parseBoardBucket(
       {
+        state: unassignedRecord.state,
         rowCount: unassignedRecord.rowCount,
         aggregates: unassignedRecord.aggregates,
         page: unassignedRecord.page,
       },
-      aggregates,
       declaredCardFields,
       seenRecordIds,
       unassignedLocation,
     ),
   });
-  const partitionedCount =
-    columns.reduce((total, column) => total + column.rowCount, 0) + unassigned.rowCount;
-  if (!Number.isSafeInteger(partitionedCount) || partitionedCount !== totalRowCount)
-    fail("Board bucket row counts partition the protected total exactly", location);
+  const readBuckets = [...columns, unassigned].filter((bucket) => bucket.state === "read");
+  for (const bucket of readBuckets.slice(1))
+    requireMatchingBoardMetrics(readBuckets[0]!.aggregates, bucket.aggregates, location);
 
   return Object.freeze({
     kind: "board",
@@ -372,8 +374,6 @@ export const parseBoardPayload = (
     ...(wipLimit === undefined ? {} : { wipLimit }),
     cardTitleFieldId: cardTitleFieldId.data,
     cardFieldIds: Object.freeze(cardFieldIds),
-    totalRowCount,
-    aggregates,
     columns: Object.freeze(columns),
     unassigned,
   });
