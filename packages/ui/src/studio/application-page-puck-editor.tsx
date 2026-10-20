@@ -74,7 +74,11 @@ import {
 } from "./studio-canvas-bridge";
 import { studioPuckStyle } from "./studio-puck-style";
 import { StudioCanvasActions, studioCanvasOverrides } from "./studio-canvas-actions";
-import { StudioCanvasGridContext, type StudioCanvasGridArrangement } from "./studio-canvas-grid";
+import {
+  StudioCanvasGridContext,
+  type StudioCanvasGridChange,
+  type StudioCanvasGridRead,
+} from "./studio-canvas-grid";
 import { StudioBlockPalette, type StudioCanvasAddRequest } from "./studio-block-palette";
 import type {
   StudioCompositionAddTargetsModel,
@@ -223,6 +227,7 @@ export type ApplicationPagePuckEditorProps = Readonly<{
         area: string,
         signal: AbortSignal,
         controlValues: Readonly<Record<string, string>>,
+        tableStates: Readonly<Record<string, StudioCanvasGridRead>>,
       ) => Promise<StudioCanvasRecordsRead>)
     | undefined;
   /** A newer saved revision than `compiledSource` is being compiled. */
@@ -231,7 +236,10 @@ export type ApplicationPagePuckEditorProps = Readonly<{
   viewer?: StudioCanvasViewer | null | undefined;
   /** Lets the normal grid controls arrange its live canvas preview. */
   arrangeGrid?: boolean | undefined;
-  onGridArrangement?: ((arrangement: StudioCanvasGridArrangement) => void) | undefined;
+  /** The one channel the grid's layout, sort, filter, search and refresh events arrive on. */
+  onGridChange?: ((change: StudioCanvasGridChange) => void) | undefined;
+  /** The query state and projection each grid is read with; changes only when a grid is read again. */
+  gridReads?: Readonly<Record<string, StudioCanvasGridRead>> | undefined;
 }>;
 
 /** Edits one content slot of a page; a page with several slots or guided steps lets the person pick. */
@@ -401,7 +409,8 @@ function ApplicationPageSlotPuckEditor({
   updating,
   viewer,
   arrangeGrid,
-  onGridArrangement,
+  onGridChange,
+  gridReads,
 }: ApplicationPagePuckEditorProps & { at: PageSlotAddress }) {
   const well = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -516,7 +525,7 @@ function ApplicationPageSlotPuckEditor({
   // One read per content area and compiled revision, and one more (debounced, the earlier one
   // cancelled) per control change: the workspace sends it once the preview runs this revision's
   // data shape, so it is never re-sent on a timer.
-  const readValues = useRef(controlValues);
+  const readValues = useRef({ controlValues, gridReads });
   useEffect(() => {
     if (!visible || readRecords === undefined || savedKeys.size === 0) return;
     let cancelled = false;
@@ -527,10 +536,20 @@ function ApplicationPageSlotPuckEditor({
         itemsHold(originalSlot?.items ?? [], alias),
       ),
     );
-    const delay = readValues.current === controlValues ? 0 : 300;
-    readValues.current = controlValues;
+    // Likewise only the query state of grids still on this area.
+    const tables = Object.fromEntries(
+      Object.entries(gridReads ?? {}).filter(([alias]) =>
+        itemsHold(originalSlot?.items ?? [], alias),
+      ),
+    );
+    const delay =
+      readValues.current.controlValues === controlValues &&
+      readValues.current.gridReads === gridReads
+        ? 0
+        : 300;
+    readValues.current = { controlValues, gridReads };
     const timer = setTimeout(() => {
-      readRecords(at.key, controller.signal, chosen).then(
+      readRecords(at.key, controller.signal, chosen, tables).then(
         (read) => {
           if (cancelled || controller.signal.aborted) return;
           // A newer saved revision replaced this one: its own read follows, and what is shown stays.
@@ -555,7 +574,7 @@ function ApplicationPageSlotPuckEditor({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [readRecords, compiledSource, at.key, visible, controlValues]);
+  }, [readRecords, compiledSource, at.key, visible, controlValues, gridReads]);
   // Records read for another saved revision are never shown as this one's, except while this
   // revision's own read runs after a presentation edit: every data block is still exactly as it
   // was read (same release, settings and query), so its records are the same.
@@ -730,9 +749,7 @@ function ApplicationPageSlotPuckEditor({
             <StudioCanvasRecordsProvider records={canvasRecords}>
               <StudioCanvasControlsProvider onValue={chooseControlValue}>
                 <StudioCanvasViewerProvider viewer={viewer ?? null}>
-                  <StudioCanvasGridContext.Provider
-                    value={arrangeGrid ? onGridArrangement : undefined}
-                  >
+                  <StudioCanvasGridContext.Provider value={arrangeGrid ? onGridChange : undefined}>
                     <Puck
                       config={config}
                       data={shown}
