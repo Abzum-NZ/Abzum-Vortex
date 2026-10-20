@@ -61,6 +61,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_bulk_actions",
   "definition_records_table_inline_edit",
   "definition_records_table_master_detail",
+  "definition_records_table_tree",
   "definition_records_table_conditional_formatting",
   "definition_records_table_pinning",
   "definition_records_table_pivot",
@@ -161,6 +162,14 @@ const definitionValidationErrorCatalogueSource = {
     message: "Related records need a link from another record type to this table's records.",
     guidance:
       "Choose a link to this record type, a query of the linked records with an input bound to This row, and its columns, or turn Related records off.",
+  },
+  // The tree names its own part (the link or the page size) in its sentence; the catalogue message
+  // is what a reader without that sentence sees.
+  definition_records_table_tree: {
+    order: 39,
+    message: "A tree needs a link from these records to themselves.",
+    guidance:
+      "Choose the link that points to each record's parent and how many child records to show at a time, or turn Tree off.",
   },
   definition_records_table_conditional_formatting: {
     order: 39,

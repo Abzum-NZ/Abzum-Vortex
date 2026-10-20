@@ -790,11 +790,30 @@ export const loadStudioApplicationDraft = async (
                                 ...(field.type === "calculation" || field.type === "total"
                                   ? { resultType: field.settings.resultType }
                                   : {}),
+                                // A one-record link from the record type to itself names each
+                                // record's parent, judged as publication judges it.
+                                ...(field.type === "link" &&
+                                recordType.relationships.some(
+                                  (relationship) =>
+                                    sameId(
+                                      String(relationship.fromFieldId),
+                                      String(field.fieldId),
+                                    ) &&
+                                    relationship.cardinality === "many_to_one" &&
+                                    relationship.toRecordType?.state === "resolved" &&
+                                    sameId(
+                                      String(relationship.toRecordType.recordTypeId),
+                                      String(recordType.recordTypeId),
+                                    ),
+                                )
+                                  ? { parentLink: true }
+                                  : {}),
                               },
                             ];
                       }),
                       grouped: query.groupByFieldIds.length > 0 || query.aggregates.length > 0,
                       inputs: queryInputs(query),
+                      pageSize: query.pageSize,
                       exposure: query.exposure,
                     });
                   }

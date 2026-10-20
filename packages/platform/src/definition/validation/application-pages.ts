@@ -125,6 +125,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
     return {
       signedIn,
       recordTypeLabel: String(record?.singularLabel ?? ""),
+      maximumPageSize: typeof bound.pageSize === "number" ? bound.pageSize : undefined,
       fields: array(record?.fields)
         .filter((field) => offered.has(String(field.fieldId).toLowerCase()))
         .map((field) => {
@@ -137,6 +138,17 @@ export function applicationPageRules(scope: ApplicationScope): void {
             filterable: field.filterable === true,
             searchable: field.searchPriority !== undefined,
             editable: !grouped && recordsTableEditableFieldTypes.includes(String(field.type)),
+            // A one-record link from the record type to itself names each record's parent.
+            parentLink:
+              field.type === "link" &&
+              array(record?.relationships).some(
+                (relationship) =>
+                  String(relationship.fromFieldId).toLowerCase() ===
+                    String(field.fieldId).toLowerCase() &&
+                  relationship.cardinality === "many_to_one" &&
+                  String(object(relationship.toRecordType ?? {}).recordTypeId).toLowerCase() ===
+                    recordTypeId.toLowerCase(),
+              ),
             ...(field.type === "choice" && Array.isArray(options)
               ? {
                   choiceCount: options.length,
@@ -518,6 +530,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
           table.features,
           recordsTableQueryFacts(bound, bindingFacts, page.type !== "public"),
           table.presentation,
+          table.pageSize,
         ))
           // A grid in Board mode shows none of the table's other features, so only the board is judged.
           if (

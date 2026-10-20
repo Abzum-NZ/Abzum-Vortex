@@ -28,6 +28,7 @@ import {
   placementReleaseVersion,
   placementSettingsOf,
   projectedUseAvailability,
+  type PageDataState,
   type PlacementReadEntry,
 } from "./shared";
 import { readSummaryOrChart } from "./summary-chart";
@@ -133,6 +134,58 @@ export const readQueryPlacement = async (
   else if (tableContract !== undefined)
     await readRecordsTable(read, placement, bound, tableContract, inputValues);
   else await readQueryDetail(read, placement, bound, inputValues);
+};
+
+/** One page of one level of a tree table: the records beneath one record, as the table shows rows. */
+export type TreeLevelResult =
+  | Readonly<{ status: "ready"; values: unknown }>
+  | Readonly<{ status: "empty" | "refused" | "error" }>;
+
+/** Whether a placement is a Records table whose rows open to the records beneath them. */
+export const isTreeTablePlacement = (placement: PlacementReadEntry): boolean =>
+  readRecordsTableContract(placementSettingsOf(placement))?.features.tree.enabled === true;
+
+/**
+ * Reads one level of a tree table: the children of one record, a page at a time, through the
+ * table's own read, so they show the table's columns, formatting and the viewer's search, filters
+ * and sort. Every child is decided under the viewer's current access as any row of the table is;
+ * the parent needs no read of its own, because a child whose parent the viewer cannot read is
+ * already a root, so naming such a parent shows nothing the viewer could not list anyway.
+ * Undefined when the placement is not a tree table.
+ */
+export const readRecordsTableTreeLevel = async (
+  read: PlacementReadInput,
+  placement: PlacementReadEntry,
+  request: Readonly<{ parentRecordId: string; continuationToken?: string; pageSize?: number }>,
+): Promise<TreeLevelResult | undefined> => {
+  if (!isTreeTablePlacement(placement)) return undefined;
+  const { placementId } = placement;
+  const data: Record<string, PageDataState> = {};
+  await readQueryPlacement(
+    {
+      ...read,
+      data,
+      treeLevel: {
+        placementId,
+        parentRecordId: request.parentRecordId,
+        ...(request.pageSize === undefined ? {} : { pageSize: request.pageSize }),
+        ...(request.continuationToken === undefined
+          ? {}
+          : { continuationToken: request.continuationToken }),
+      },
+    },
+    placement,
+  );
+  const state = data[placementId];
+  switch (state?.status) {
+    case "ready":
+      return { status: "ready", values: state.values };
+    case "empty":
+    case "refused":
+      return { status: state.status };
+    default:
+      return { status: "error" };
+  }
 };
 
 export { pageQueryBindingContext, placementParameterDependencies } from "./bindings";
