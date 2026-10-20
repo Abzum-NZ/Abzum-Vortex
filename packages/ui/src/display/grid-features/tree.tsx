@@ -380,6 +380,9 @@ function Levels({ context, expandedRecordIds, publish, written }: GridFeatureSub
           break;
         case "ready": {
           const entries: SubRowEntry[] = state.rows.map((row) => ({ kind: "row", row }));
+          // A level read with no readable rows says so, as an empty reply does.
+          if (state.rows.length === 0 && state.next === undefined)
+            entries.push(notice("empty", "info", "No child records"));
           if (state.next !== undefined)
             entries.push({
               kind: "notice",
