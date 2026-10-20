@@ -18,6 +18,7 @@ import {
   type GridViewsState,
 } from "../grid-view-state";
 import { addressedGridView, gridViewPlacement } from "../grid-views";
+import type { RecordsTableGroupRead } from "../records-table-features/grouping";
 import {
   conditionalFormattingRelativeDates,
   conditionalFormattingUsesRelativeDates,
@@ -273,6 +274,49 @@ export const readRecordsTable = async (
               : Math.min(treeFeature.childPageSize, level.pageSize ?? treeFeature.childPageSize),
         }
       : undefined;
+  // A grouped table counts its groups and reads one open group's page. The grouping field is the
+  // authored one: the address may only switch grouping on or off, never name another field. A
+  // members-only read (an open group's own pages) counts no group and takes its page position
+  // from the group read, never from the address.
+  const groupingFeature = contract.features.grouping;
+  if (
+    groupingFeature.enabled &&
+    (groupingFeature.field === undefined || groupingFeature.unassignedLabel === undefined)
+  ) {
+    logPlacementFailure(address, placementId, "table_grouping_invalid");
+    data[placementId] = { status: "error" };
+    return;
+  }
+  const groupMembers =
+    read.groupMembers !== undefined && sameId(read.groupMembers.placementId, placementId)
+      ? read.groupMembers
+      : undefined;
+  const addressedGroup = addressed.state.group;
+  if (
+    (addressedGroup !== undefined || groupMembers !== undefined) &&
+    !(
+      groupingFeature.enabled &&
+      groupingFeature.field !== undefined &&
+      addressedGroup !== undefined &&
+      sameId(addressedGroup.fieldId, groupingFeature.field)
+    )
+  ) {
+    logPlacementFailure(address, placementId, "table_grouping_refused");
+    data[placementId] = { status: "refused", reason: "not_permitted" };
+    return;
+  }
+  const group: RecordsTableGroupRead | undefined =
+    groupingFeature.enabled &&
+    groupingFeature.field !== undefined &&
+    groupingFeature.unassignedLabel !== undefined &&
+    addressedGroup !== undefined
+      ? {
+          fieldId: groupingFeature.field.toLowerCase(),
+          unassignedLabel: groupingFeature.unassignedLabel,
+          expanded: groupMembers?.groupKey ?? addressedGroup.expanded,
+          membersOnly: groupMembers !== undefined,
+        }
+      : undefined;
   const effectiveState = selectedQuery ?? addressed.state;
   const continuation = read.tableContinuation;
   const explicitRequest =
@@ -300,6 +344,7 @@ export const readRecordsTable = async (
       layout,
       ...(formatting === undefined ? {} : { formatting }),
       ...(tree === undefined ? {} : { tree }),
+      ...(group === undefined ? {} : { group }),
     });
   const fromAddress =
     (explicitRequest === undefined && addressed.state.page !== undefined) ||
@@ -313,7 +358,17 @@ export const readRecordsTable = async (
             ? {}
             : { continuationToken: level.continuationToken }),
         }
-      : (explicitRequest ?? addressed.state.page),
+      : groupMembers !== undefined
+        ? {
+            page: groupMembers.continuationToken === undefined ? 1 : 2,
+            pageDirection: groupMembers.direction ?? "forward",
+            ...(groupMembers.continuationToken === undefined
+              ? {}
+              : { continuationToken: groupMembers.continuationToken }),
+          }
+        : group !== undefined
+          ? undefined
+          : (explicitRequest ?? addressed.state.page),
   );
   // A shared link opened by another account, or after an access, release, sort, filter or column
   // change, no longer matches its sealed cursor (invalid or stale): it opens the first page
