@@ -13,6 +13,7 @@ import {
   projectedRecordPinTilesSchema,
   projectedApplicationPageLinkTilesSchema,
   mountedRecordPinFrameSchema,
+  type RecordsTablePivotView,
   type RecordsTableQueryChange,
   type ReferenceChoiceSelectionEvidenceMap,
   type ComponentRequestGeneration,
@@ -64,6 +65,8 @@ export function useRuntimeInputs({
   commitLayout,
   runViewCommand,
   readRowDetail,
+  readPivotPage,
+  commitPivotView,
   requestChoicePageRef,
   changeChoiceField,
   subject,
@@ -135,6 +138,8 @@ export function useRuntimeInputs({
   ) => Promise<GridLayoutCommitResult>;
   runViewCommand: (placementId: string, command: GridViewCommand) => Promise<GridViewCommandResult>;
   readRowDetail: (placementId: string, event: DisplaySemanticEvent) => Promise<unknown>;
+  readPivotPage: (placementId: string, event: DisplaySemanticEvent) => Promise<unknown>;
+  commitPivotView: (placementId: string, view: RecordsTablePivotView | undefined) => void;
   requestChoicePageRef: RefObject<
     (
       placementId: string,
@@ -240,6 +245,19 @@ export function useRuntimeInputs({
       return handler;
     };
   }, [readRowDetail]);
+
+  // A pivot's reads keep one handler per table while the page stays the same.
+  const pivotHandlers = useMemo(() => {
+    const handlers = new Map<string, (event: DisplaySemanticEvent) => Promise<unknown>>();
+    return (placementId: string) => {
+      let handler = handlers.get(placementId);
+      if (handler === undefined) {
+        handler = (event) => readPivotPage(placementId, event);
+        handlers.set(placementId, handler);
+      }
+      return handler;
+    };
+  }, [readPivotPage]);
 
   const runtimeInputs = useMemo(() => {
     const search = new URLSearchParams(currentSearch);
@@ -444,6 +462,20 @@ export function useRuntimeInputs({
         if (supportsEvent("columns_changed") && tableData !== undefined)
           events.columns_changed = (event: DisplaySemanticEvent) =>
             commitLayout(placementId, event);
+        // A pivot reads its rows on the server, keeps its view in the address without reading the
+        // table again, and a cell opens the ordinary grid on the records it counts in one address
+        // change. Only a table whose projection carries a pivot offers them.
+        if (tableData?.features?.pivot !== undefined && supportsEvent("page_changed")) {
+          events.pivot_requested = pivotHandlers(placementId);
+          events.pivot_view_changed = (event: DisplaySemanticEvent) => {
+            if (event.event !== "pivot_view_changed") return;
+            commitPivotView(placementId, event.view);
+          };
+          events.pivot_drilled = (event: DisplaySemanticEvent) => {
+            if (event.event !== "pivot_drilled") return;
+            changeTableQuery(placementId, { kind: "drill", filters: event.filters });
+          };
+        }
         // Saved views change the address and store a view; like the layout they are the person's
         // own and need no flow, so the same declared event gates them.
         if (supportsEvent("columns_changed") && tableData !== undefined)
@@ -864,6 +896,8 @@ export function useRuntimeInputs({
     commitLayout,
     runViewCommand,
     rowDetailHandlers,
+    pivotHandlers,
+    commitPivotView,
     subject,
     onOpenApplication,
     unsavedWork,

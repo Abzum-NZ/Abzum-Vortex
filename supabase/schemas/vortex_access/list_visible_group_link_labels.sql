@@ -34,3 +34,4 @@ comment on function vortex_access.list_visible_group_link_labels(uuid[]) is
 
 alter function vortex_access.list_visible_group_link_labels(uuid[]) owner to vortex_owner;
 grant execute on function vortex_access.list_visible_group_link_labels(uuid[]) to postgres;
+grant execute on function vortex_access.list_visible_group_link_labels(uuid[]) to vortex_record_adapter;
