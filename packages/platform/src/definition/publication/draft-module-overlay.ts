@@ -119,6 +119,10 @@ export const createDraftModuleOverlay = (
       once(["candidate", rootId.toLowerCase()], () => storedReader.readCandidate(rootId)),
     readDraftCandidate: (rootId) => storedReader.readDraftCandidate(rootId),
     isApplicationDraftCurrent: (candidate) => storedReader.isApplicationDraftCurrent(candidate),
+    readModuleReleaseAnchors: (organizationId, keys) =>
+      once(["anchors", organizationId, keys], () =>
+        storedReader.readModuleReleaseAnchors(organizationId, keys),
+      ),
     readOwnedModulePublication: (rootId) => storedReader.readOwnedModulePublication(rootId),
     readOwnedModuleRoots: (applicationRootId) =>
       once(["owned", String(applicationRootId).toLowerCase()], () =>
@@ -202,6 +206,20 @@ export const createDraftModuleOverlay = (
 
   const transaction: DefinitionPublicationTransaction = {
     isApplicationDraftCurrent: (candidate) => reader.isApplicationDraftCurrent(candidate),
+    async readModuleReleaseAnchors(organizationId, keys) {
+      const missing = keys.filter((key) => !releasesByKey.has(key));
+      const stored = await reader.readModuleReleaseAnchors(organizationId, missing);
+      let index = 0;
+      return keys.map((key) => {
+        const held = releasesByKey.get(key);
+        return held === undefined
+          ? stored[index++]!
+          : {
+              rootId: held.rootId,
+              anchorReleaseRevision: held.releaseRevision,
+            };
+      });
+    },
     async readCandidate(rootId) {
       return candidates.get(key(rootId)) ?? reader.readCandidate(rootId);
     },

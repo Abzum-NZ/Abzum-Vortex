@@ -7,7 +7,6 @@ import type {
 } from "../schema";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import { applicationModuleKeys } from "./application-module-sources";
-import { applicationModuleSources } from "./application-module-lowering";
 import type { ApplicationReleasePlan } from "./application-publication";
 import { assertReleasable } from "./definition-publication-compilation";
 import {
@@ -192,10 +191,11 @@ export const planApplicationPreview = async (
       usedRoots: [],
       releases: [],
     };
-  const inlineKeys = new Set(applicationModuleSources(source).map((source) => source.key));
+  const inlineKeys = new Set(source.body.modules.map((source) => source.key));
   const usedKeys = applicationModuleKeys(source).filter((key) => !inlineKeys.has(key));
-  const usedPages = await Promise.all(
-    usedKeys.map((key) => snapshot.readModuleReleasePage(candidate.draft.organizationId, key)),
+  const usedPages = await snapshot.readModuleReleaseAnchors(
+    candidate.draft.organizationId,
+    usedKeys,
   );
   const usedRoots = usedPages.map((page) => {
     if (page.rootId === null || page.anchorReleaseRevision === null)

@@ -141,6 +141,11 @@ export interface DefinitionPublicationReader {
   readDraftCandidate(rootId: string): Promise<DefinitionDraftCandidate | undefined>;
   /** Rechecks a retained Application draft's revision, source and publication anchor only. */
   isApplicationDraftCurrent(candidate: DefinitionDraftCandidate): Promise<boolean>;
+  /** Current immutable release identities, without reading the release outputs. */
+  readModuleReleaseAnchors(
+    organizationId: OrganizationId,
+    keys: readonly string[],
+  ): Promise<readonly Pick<ResolvableModuleReleasePage, "rootId" | "anchorReleaseRevision">[]>;
   readModuleReleasePage(
     organizationId: OrganizationId,
     key: string,
