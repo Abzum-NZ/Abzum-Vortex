@@ -33,8 +33,25 @@ const partLabels: Record<(typeof personParts)[number], string> = {
   person: "Person",
   organisation: "Organisation",
 };
-/** A date and time is written in UTC, as `2026-10-20T09:30`, and kept as an exact instant. */
-const instantToInput = (instant: string): string => instant.slice(0, 16);
+/**
+ * A date and time is written in UTC, as `2026-10-20T09:30`, and kept as an exact instant. An instant
+ * stored with another offset is shown as its UTC time, so the next edit keeps the same instant.
+ */
+const instantToInput = (instant: string): string => {
+  const parsed = new Date(instant);
+  return Number.isNaN(parsed.getTime()) ? instant.slice(0, 16) : parsed.toISOString().slice(0, 16);
+};
+/** A fixed source keeps one value: a chosen `record`, or a written `value`, never both. */
+const fixedWith = (
+  props: Readonly<Record<string, Value>>,
+  key: "record" | "value",
+  value: Value | undefined,
+): Record<string, Value> => ({
+  ...Object.fromEntries(
+    Object.entries(props).filter(([existing]) => existing !== "record" && existing !== "value"),
+  ),
+  ...(value === undefined ? {} : { [key]: value }),
+});
 const inputToInstant = (written: string): string => (written === "" ? "" : `${written}:00Z`);
 const choice = (value: string): Value => ({ kind: "choice", value });
 const labels: Record<QueryBindingSourceKind, string> = {
@@ -307,21 +324,17 @@ export function StudioQueryBindings({
                   }
                   onChange={(value) =>
                     change(
-                      Object.fromEntries([
-                        ...Object.entries(props).filter(([key]) => key !== "record"),
-                        ...(value === undefined
-                          ? []
-                          : [
-                              [
-                                "record",
-                                {
-                                  kind: "record_reference",
-                                  record_type: value.recordType,
-                                  record_id: value.recordId,
-                                } as Value,
-                              ],
-                            ]),
-                      ]),
+                      fixedWith(
+                        props,
+                        "record",
+                        value === undefined
+                          ? undefined
+                          : {
+                              kind: "record_reference",
+                              record_type: value.recordType,
+                              record_id: value.recordId,
+                            },
+                      ),
                     )
                   }
                 />
@@ -329,7 +342,7 @@ export function StudioQueryBindings({
                 <Select
                   value={props.value?.kind === "text" ? props.value.value : "false"}
                   disabled={disabled}
-                  onValueChange={(value) => change({ ...props, value: text(value ?? "") })}
+                  onValueChange={(value) => change(fixedWith(props, "value", text(value ?? "")))}
                 >
                   <SelectTrigger aria-label={`${input.label} value`}>
                     <SelectValue>
@@ -365,14 +378,17 @@ export function StudioQueryBindings({
                       : ""
                   }
                   onChange={(event) =>
-                    change({
-                      ...props,
-                      value: text(
-                        input.type?.kind === "date_time"
-                          ? inputToInstant(event.target.value)
-                          : event.target.value,
+                    change(
+                      fixedWith(
+                        props,
+                        "value",
+                        text(
+                          input.type?.kind === "date_time"
+                            ? inputToInstant(event.target.value)
+                            : event.target.value,
+                        ),
                       ),
-                    })
+                    )
                   }
                 />
               ))}
