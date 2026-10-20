@@ -17,8 +17,9 @@ import {
 } from "../display/projected-data";
 
 /**
- * The application launcher is a read-only display surface over the `launcher_rows` payload. The view filter binds nothing: it only narrows rows
- * its content slot already received, so its parser refuses every supplied input.
+ * The application launcher is a read-only display surface over the `launcher_rows` payload. The
+ * view filter binds nothing: it only narrows rows its content slot already received, so its parser
+ * refuses every supplied input.
  */
 const LAUNCHER_ROWS_PAYLOAD_PARSER: PlatformComponentPayloadParser = createPayloadParser({
   data: (value, location: DefinitionRenderErrorLocation) =>

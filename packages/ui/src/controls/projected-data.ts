@@ -752,7 +752,6 @@ export const parseChoiceInputPayload = (
   });
 };
 
-
 /** Parses a multi-choice value as a bounded list of exact declared option values. */
 const parseSeveralChoicesInputPayload = (
   value: unknown,
