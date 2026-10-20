@@ -458,6 +458,22 @@ export const useGridLayout = ({
       void handlers?.refresh?.({ event: "refresh" });
     }
   }, [updateLocal]);
+  // Entering canvas arrangement accepts its starting layout too, including a grid with no rows.
+  // It uses the same event as later gestures, so capture never falls back to inspector settings.
+  const previewSource =
+    source?.persisted === false && events?.columns_changed !== undefined
+      ? `${source.queryId}:${previewDefinition}`
+      : undefined;
+  const reportedPreview = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (previewSource === undefined) {
+      reportedPreview.current = undefined;
+      return;
+    }
+    if (reportedPreview.current === previewSource) return;
+    reportedPreview.current = previewSource;
+    void store();
+  }, [previewSource, store]);
   const commits = current?.commits ?? 0;
   useEffect(() => {
     if (commits === 0) return;
