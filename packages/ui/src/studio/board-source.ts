@@ -135,15 +135,55 @@ export const studioBoardQueryFits = (
   );
 };
 
+/** The numeric field types a column total can add up. */
+const summableTypes: readonly string[] = ["whole_number", "decimal_number", "money"];
+
+/** The alias of the sum a board total of a numeric field gets when its query has none yet. */
+export const boardSumAlias = (fieldKey: string): string => `sum_${fieldKey}`.slice(0, 60);
+
+/**
+ * Adds to the board's query the sum of every numeric field a column total names by its sum alias
+ * and the query does not total yet, so a total can be chosen from a number field itself. A total
+ * that names neither a query total nor a number field is left for the capability check to refuse.
+ */
+export const ensureStudioBoardTotals = (
+  source: ApplicationSourceDocument,
+  board: RecordsTableBoardMode,
+  queryReference: string,
+): void => {
+  const separator = queryReference.indexOf(":");
+  const module = source.body.modules.find(
+    (candidate) => candidate.key === queryReference.slice(0, separator),
+  );
+  const query = module?.queries.find(
+    (candidate) => candidate.key === queryReference.slice(separator + 1),
+  );
+  const record = module?.record_types.find((candidate) => candidate.key === query?.record_type);
+  if (query === undefined || record === undefined) return;
+  for (const total of board.totals) {
+    if (query.aggregates.some((aggregate) => aggregate.alias === total.alias)) continue;
+    const field = record.fields.find(
+      (candidate) =>
+        summableTypes.includes(candidate.type) && boardSumAlias(candidate.key) === total.alias,
+    );
+    if (field !== undefined && query.aggregates.length < 20)
+      query.aggregates.push({ operation: "sum", field: field.key, alias: total.alias });
+  }
+};
+
 /**
  * Writes an ordinary unfiltered query grouped by the board's stage field, editable in Data like any
- * other query, or reuses one that already reads exactly the board's fields. Returns the query's
- * reference, or the sentence saying why no such query can be made.
+ * other query, or reuses one that already reads exactly the board's fields. When the board already
+ * reads a query of the same record type and stage, the new query keeps that query's totals,
+ * filter, inputs, sort, page size and selected fields and only adds what the board now shows, so
+ * changing the card never drops the totals. Returns the query's reference, or the sentence saying
+ * why no such query can be made.
  */
 export const createStudioBoardQuery = (
   source: ApplicationSourceDocument,
   board: RecordsTableBoardMode,
   taken: ReadonlySet<string>,
+  previous: string | null,
 ): Readonly<{ query: string }> | Readonly<{ problem: string }> => {
   const pipeline = studioBoardPipelines(source).find(
     (candidate) => candidate.reference === board.columnField,
@@ -171,19 +211,35 @@ export const createStudioBoardQuery = (
   const selected = [...new Set(requestedKeys.filter((key): key is string => key !== undefined))];
   const selectsExactly = (candidate: readonly string[]): boolean =>
     candidate.length === selected.length && selected.every((key) => candidate.includes(key));
-  const existing = module.queries.find(
-    (query) =>
-      query.record_type === record.key &&
-      query.filter === null &&
-      query.inputs.length === 0 &&
-      query.group_by.length === 1 &&
-      query.group_by[0] === stageKey &&
-      query.relationship_hops === 0 &&
-      query.aggregates.length === 0 &&
-      selectsExactly(
-        query.select.length === 0 ? record.fields.map((candidate) => candidate.key) : query.select,
-      ),
-  );
+  const seed =
+    previous === null || !previous.startsWith(`${module.key}:`)
+      ? undefined
+      : module.queries.find(
+          (query) =>
+            `${module.key}:${query.key}` === previous &&
+            query.record_type === record.key &&
+            query.group_by.length === 1 &&
+            query.group_by[0] === stageKey &&
+            query.relationship_hops === 0,
+        );
+  const existing =
+    seed !== undefined
+      ? undefined
+      : module.queries.find(
+          (query) =>
+            query.record_type === record.key &&
+            query.filter === null &&
+            query.inputs.length === 0 &&
+            query.group_by.length === 1 &&
+            query.group_by[0] === stageKey &&
+            query.relationship_hops === 0 &&
+            query.aggregates.length === 0 &&
+            selectsExactly(
+              query.select.length === 0
+                ? record.fields.map((candidate) => candidate.key)
+                : query.select,
+            ),
+        );
   if (existing !== undefined) return { query: `${module.key}:${existing.key}` };
   if (module.queries.length >= 100) return { problem: studioBoardQueryUnavailable };
   const key = uniqueKey(
@@ -199,13 +255,21 @@ export const createStudioBoardQuery = (
     label: pipeline.label,
     exposure: "private",
     record_type: record.key,
-    inputs: [],
-    select: selected,
-    filter: null,
+    inputs: seed === undefined ? [] : structuredClone(seed.inputs),
+    select:
+      seed === undefined
+        ? selected
+        : seed.select.length === 0
+          ? []
+          : [...new Set([...seed.select, ...selected])],
+    filter: seed === undefined ? null : structuredClone(seed.filter),
     group_by: [stageKey!],
-    aggregates: [],
-    sort: [{ field: stageKey!, direction: "ascending" }],
-    page_size: 40,
+    aggregates: seed === undefined ? [] : structuredClone(seed.aggregates),
+    sort:
+      seed === undefined
+        ? [{ field: stageKey!, direction: "ascending" }]
+        : structuredClone(seed.sort),
+    page_size: seed === undefined ? 40 : seed.page_size,
     relationship_hops: 0,
   });
   return { query: `${module.key}:${key}` };

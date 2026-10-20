@@ -72,7 +72,7 @@ export {
 } from "./shared";
 export { RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE } from "./master-detail";
 export { RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE } from "./tree";
-export { boardProblem, recordsTableBoardFactsOf } from "./board";
+export { boardAggregateLabel, boardProblem, recordsTableBoardFactsOf } from "./board";
 export {
   RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS,
   RECORDS_TABLE_PIVOT_MAXIMUM_ROW_PAGE_SIZE,

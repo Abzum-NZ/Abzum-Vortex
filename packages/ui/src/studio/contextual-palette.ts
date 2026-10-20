@@ -7,6 +7,7 @@ import {
   type PlatformBlockRelease,
   type PlatformBlockReleaseSummary,
   type ModuleQueryExposure,
+  boardAggregateLabel,
   type RecordsTableBoardFacts,
 } from "@vortex/platform/schema";
 import { PALETTE_GROUP_TITLES } from "../palette-groups";
@@ -378,7 +379,13 @@ export const studioBoardFacts = (
       : query.select
     ).map(reference),
     groupBy: query.group_by.map(reference),
-    aggregates: query.aggregates.map((aggregate) => aggregate.alias),
+    aggregates: query.aggregates.map((aggregate) => ({
+      alias: aggregate.alias,
+      label: boardAggregateLabel(
+        aggregate.operation,
+        record.fields.find((field) => field.key === aggregate.field)?.label,
+      ),
+    })),
     relationshipHops: query.relationship_hops,
     pageSize: query.page_size,
     stageFields: record.pipelines.map((pipeline) => reference(pipeline.stage_field)),

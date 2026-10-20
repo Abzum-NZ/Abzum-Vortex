@@ -165,8 +165,8 @@ export type RecordsTableBoardFacts = Readonly<{
   }>[];
   selected: readonly string[];
   groupBy: readonly string[];
-  /** The aliases of the query's own totals. */
-  aggregates: readonly string[];
+  /** The query's own totals: each alias with the business label it is offered under. */
+  aggregates: readonly Readonly<{ alias: string; label: string }>[];
   relationshipHops: number;
   pageSize: number;
   stageFields: readonly string[];

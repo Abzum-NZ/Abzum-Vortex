@@ -1,12 +1,20 @@
 "use client";
 
 import { useId, type ReactElement } from "react";
+import { Trash2 } from "lucide-react";
 import type {
   BlockPropertySchemaContract,
+  RecordsTableBoardFacts,
   SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
+import { Button } from "../../components/button";
+import { Input } from "../../components/input";
 import { Label } from "../../components/label";
-import type { StudioBoardPipeline } from "../board-source";
+import { boardSumAlias, type StudioBoardPipeline } from "../board-source";
+import {
+  StudioReferencePicker,
+  type StudioReferencePickerOption,
+} from "../studio-reference-picker";
 import {
   StudioOptionControl,
   StudioSettingFields,
@@ -16,8 +24,139 @@ import {
 
 type GroupValue = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
 
-/** The settings the pipeline choice leaves to the usual typed controls. */
-const cardSettings = ["card_title_field", "card_fields", "totals", "wip_limit"] as const;
+/** The settings the pipeline choice and the totals picker leave to the usual typed controls. */
+const cardSettings = ["card_title_field", "card_fields", "wip_limit"] as const;
+
+/** The number field types a column total can add up. */
+const summableTypes: readonly string[] = ["whole_number", "decimal_number", "money"];
+
+type TotalRow = Readonly<{ alias: string; label: string }>;
+
+const totalRows = (value: GroupValue): readonly TotalRow[] => {
+  const held = value.properties["totals"];
+  if (held?.kind !== "list") return [];
+  return held.items.flatMap((item) => {
+    if (item.kind !== "group") return [];
+    const alias = item.properties["alias"];
+    const label = item.properties["label"];
+    return alias?.kind === "text" && label?.kind === "text"
+      ? [{ alias: alias.value, label: label.value }]
+      : [];
+  });
+};
+
+const totalsValue = (rows: readonly TotalRow[]): SourceBlockPropertyValueContract => ({
+  kind: "list",
+  items: rows.map((row) => ({
+    kind: "group",
+    properties: {
+      alias: { kind: "text", value: row.alias },
+      label: { kind: "text", value: row.label },
+    },
+  })),
+});
+
+/**
+ * The column totals of a board, each chosen from what the bound query really totals or from a
+ * number field of the record type (its sum, added to the query when the board is saved), never
+ * typed as an alias. The sums stay server-computed.
+ */
+function StudioBoardTotals({
+  idPrefix,
+  rows,
+  facts,
+  numberFields,
+  disabled,
+  onChange,
+}: Readonly<{
+  idPrefix: string;
+  rows: readonly TotalRow[];
+  facts: RecordsTableBoardFacts | undefined;
+  numberFields: StudioSettingChoices["fields"];
+  disabled: boolean;
+  onChange: (rows: readonly TotalRow[]) => void;
+}>): ReactElement {
+  const options: StudioReferencePickerOption[] = [
+    ...(facts?.aggregates ?? []).map((aggregate) => ({
+      value: aggregate.alias,
+      label: aggregate.label,
+      group: "Totals of the query",
+    })),
+    ...numberFields
+      .filter((field) => summableTypes.includes(field.type))
+      .map((field) => ({
+        value: boardSumAlias(field.reference.slice(field.reference.lastIndexOf(".") + 1)),
+        label: `Sum of ${field.label.slice(field.label.lastIndexOf(": ") + 2)}`,
+        group: "Number fields",
+      })),
+  ].filter(
+    (option, index, all) => all.findIndex((other) => other.value === option.value) === index,
+  );
+  const labelOf = (alias: string): string =>
+    options.find((option) => option.value === alias)?.label ?? alias;
+  const unchosen = options.filter((option) => !rows.some((row) => row.alias === option.value));
+  return (
+    <div className="space-y-2" data-vortex-board-totals="">
+      <Label htmlFor={`${idPrefix}-add`}>Column totals</Label>
+      {rows.map((row, index) => (
+        <div key={row.alias} className="flex items-start gap-2">
+          <div className="min-w-0 flex-1 space-y-1">
+            <StudioReferencePicker
+              aria-label={`Total ${index + 1}`}
+              value={row.alias}
+              disabled={disabled}
+              options={[...unchosen, ...options.filter((option) => option.value === row.alias)]}
+              onChange={(alias) =>
+                onChange(
+                  rows.map((other, at) =>
+                    at === index && alias !== "" ? { alias, label: labelOf(alias) } : other,
+                  ),
+                )
+              }
+            />
+            <Input
+              aria-label={`Label of ${labelOf(row.alias)}`}
+              value={row.label}
+              disabled={disabled}
+              maxLength={60}
+              onChange={(event) =>
+                onChange(
+                  rows.map((other, at) =>
+                    at === index ? { ...other, label: event.target.value } : other,
+                  ),
+                )
+              }
+            />
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={disabled}
+            aria-label={`Remove ${row.label || labelOf(row.alias)}`}
+            onClick={() => onChange(rows.filter((_, at) => at !== index))}
+          >
+            <Trash2 aria-hidden="true" />
+          </Button>
+        </div>
+      ))}
+      {rows.length >= 6 ? null : (
+        <StudioReferencePicker
+          id={`${idPrefix}-add`}
+          value=""
+          disabled={disabled || unchosen.length === 0}
+          unset={unchosen.length === 0 ? "Nothing more to total" : "Add a total"}
+          options={unchosen}
+          onChange={(alias) => {
+            if (alias !== "") onChange([...rows, { alias, label: labelOf(alias) }]);
+          }}
+        />
+      )}
+      <p className="text-sm text-muted-foreground">
+        Each column header shows these totals of its cards, computed on the server.
+      </p>
+    </div>
+  );
+}
 
 /**
  * The Board editor of a Data grid: the pipeline whose stages are the columns, then the card title,
@@ -31,6 +170,7 @@ export function StudioBoardEditor({
   declarations,
   pipelines,
   choices,
+  boardFacts,
   disabled,
   onChange,
 }: Readonly<{
@@ -42,6 +182,8 @@ export function StudioBoardEditor({
   pipelines: readonly StudioBoardPipeline[];
   /** The bound query's fields, by business name. */
   choices: StudioSettingChoices;
+  /** What the bound query offers a board, so totals are picked from its real totals. */
+  boardFacts: RecordsTableBoardFacts | undefined;
   disabled: boolean;
   onChange: (next: GroupValue) => void;
 }>): ReactElement {
@@ -61,6 +203,10 @@ export function StudioBoardEditor({
       (cardSettings as readonly string[]).includes(key),
     ),
   );
+  const held = (key: string): Readonly<Record<string, SourceBlockPropertyValueContract>> => {
+    const setting = value.properties[key];
+    return setting === undefined ? {} : { [key]: setting };
+  };
   const unset =
     pipelines.length === 0
       ? "No pipelines are available. Create one in Data."
@@ -97,6 +243,16 @@ export function StudioBoardEditor({
         </p>
       </div>
       {pipeline === undefined ? null : (
+        <StudioBoardTotals
+          idPrefix={`${idPrefix}-${ownId}-totals`}
+          rows={totalRows(value)}
+          facts={boardFacts}
+          numberFields={choices.fields}
+          disabled={disabled}
+          onChange={(rows) => commit({ ...value.properties, totals: totalsValue(rows) })}
+        />
+      )}
+      {pipeline === undefined ? null : (
         <StudioSettingFields
           idPrefix={`${idPrefix}-${ownId}-settings`}
           properties={declarations.filter((setting) =>
@@ -106,7 +262,11 @@ export function StudioBoardEditor({
           choices={choices}
           disabled={disabled}
           onChange={(next) =>
-            commit({ ...next, ...(column === undefined ? {} : { column_field: column }) })
+            commit({
+              ...next,
+              ...(column === undefined ? {} : { column_field: column }),
+              ...held("totals"),
+            })
           }
         />
       )}
