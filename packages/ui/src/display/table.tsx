@@ -431,11 +431,13 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   }
 
   const ready = state.status === "ready" && values !== undefined;
+  // While the pivot is open it takes the place of the rows: the grid and its pages are not drawn.
+  const pivotOpen = pivot?.view !== undefined && ready;
   // The search and filter controls start from what the first shown page was read with, and start
   // again when the person clears them; their own commits keep the controls (and their focus).
   const controlsKey = `${clearCount}:${values === undefined ? "reading" : "read"}`;
   const layoutControls =
-    !ready || rows.length === 0
+    !ready || rows.length === 0 || pivotOpen
       ? undefined
       : {
           layout,
@@ -476,8 +478,6 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     />
   );
 
-  // While the pivot is open it takes the place of the rows: the grid and its pages are not drawn.
-  const pivotOpen = pivot?.view !== undefined && ready;
   const body = ((): ReactElement => {
     if (pivotOpen) return <>{gridFeatures.viewBody()}</>;
     if (state.status === "loading") return loading;

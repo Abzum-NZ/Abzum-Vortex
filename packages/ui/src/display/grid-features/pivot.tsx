@@ -356,7 +356,7 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
         </caption>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead scope="col" className="sticky left-0 z-10 bg-card">
+            <TableHead scope="col">
               {page.rowLabel}
               <span className="font-normal text-muted-foreground"> by {page.columnLabel}</span>
             </TableHead>
@@ -412,9 +412,7 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
         {totals && page.columnTotals !== undefined ? (
           <TableFooter>
             <TableRow>
-              <TableHead scope="row" className="sticky left-0 z-10 bg-card">
-                Total
-              </TableHead>
+              <TableHead scope="row">Total</TableHead>
               {page.columnTotals.map((cell, index) => (
                 <TableCell key={page.columns[index]!.key} className="text-right tabular-nums">
                   <Value cell={cell} />

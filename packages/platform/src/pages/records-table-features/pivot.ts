@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   describeFailure,
+  moneyValueSchema,
   readQueryBindings,
   readRecordsTableContract,
   type IdentitySession,
@@ -26,7 +27,7 @@ import { summaryAggregateCellValue } from "../placement-read/summary-chart";
 import { resolveQueryBindings, type QueryBindingContext } from "../query-binding-resolver";
 import { buildRecordsTableNarrowing } from "../records-table-query";
 import { encodeRecordsTableFieldFilter, readRecordsTableQueryState } from "../records-table-state";
-import { formatDecimal } from "../value-format";
+import { formatDecimal, formatMoney } from "../value-format";
 import { logRecordsTableRequestRefusal, recordsTableRequestRefusal } from "./index";
 
 /** The measure's alias in the summary; the pivot defines exactly one. */
@@ -411,6 +412,11 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
   ): PivotCell => {
     const measured = aggregates[MEASURE_ALIAS];
     if (measured === undefined) return { kind: "unavailable" };
+    // Money shows as the viewer's formatted amount, like every other money value.
+    if (measure?.type === "money" && measured.outcome === "completed" && measured.valueCount > 0) {
+      const money = moneyValueSchema.safeParse(measured.value);
+      if (money.success) return { kind: "text", text: formatMoney(money.data) };
+    }
     const cell = summaryAggregateCellValue(aggregate, measure, measured);
     if (cell === undefined) {
       console.error("[records-table] pivot measure invalid where=pivot");
