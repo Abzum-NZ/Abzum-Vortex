@@ -375,6 +375,10 @@ export const protectedQueryRefusalReasonCodes = [
   "input_invalid",
   "field_unbounded",
   "filter_invalid",
+  /** The data source declares no column for a filtered or searched field. */
+  "filter_field_not_declared",
+  /** The filter cannot be applied exactly inside the data source's own scan. */
+  "predicate_unsupported",
   "sort_invalid",
   "relationship_invalid",
   "page_size_invalid",
