@@ -25,17 +25,20 @@ export interface StudioApplicationDefinitionDraftPort {
 }
 
 /** What the person can act on when a save is refused; absent when the writer gave no reason. */
-export type StudioApplicationDraftRefusalReason = "permission_missing" | "source_invalid" | "context_changed" | "session_ended" | "recent_authentication_required";
+export type StudioApplicationDraftRefusalReason =
+  | "permission_missing"
+  | "source_invalid"
+  | "context_changed"
+  | "session_ended"
+  | "recent_authentication_required"
+  | "identity_retired";
 export type StudioApplicationDraftConflictReason =
-  | "draft_changed"
-  | "key_exists"
-  | "alias_conflict"
-  | "draft_missing";
+  "draft_changed" | "key_exists" | "alias_conflict" | "draft_missing";
 
 export type StudioApplicationDraftSaveOutcome =
   | Readonly<{ kind: "saved"; draftRevision: number }>
   | Readonly<{ kind: "conflict"; reason?: StudioApplicationDraftConflictReason }>
-  | Readonly<{ kind: "refused"; reason?: StudioApplicationDraftRefusalReason }>
+  | Readonly<{ kind: "refused"; reason?: StudioApplicationDraftRefusalReason; sentence?: string }>
   | Readonly<{ kind: "failed" }>
   | Readonly<{ kind: "busy" }>;
 
@@ -147,9 +150,20 @@ const saveFailureOutcome = (error: unknown): StudioApplicationDraftSaveOutcome =
   if (code === "DEFINITION_CONTEXT_REFUSED")
     return Object.freeze({
       kind: "refused",
-      ...(reason === "permission_missing" || reason === "source_invalid" || reason === "context_changed" ||
-        reason === "session_ended" || reason === "recent_authentication_required"
+      ...(reason === "permission_missing" ||
+      reason === "source_invalid" ||
+      reason === "context_changed" ||
+      reason === "session_ended" ||
+      reason === "recent_authentication_required" ||
+      reason === "identity_retired"
         ? { reason }
+        : {}),
+      ...(reason === "identity_retired" &&
+      error !== null &&
+      typeof error === "object" &&
+      "sentence" in error &&
+      typeof error.sentence === "string"
+        ? { sentence: error.sentence }
         : {}),
     });
   return Object.freeze({ kind: "failed" });
@@ -209,7 +223,10 @@ export const createStudioApplicationDraftHistoryController = (
       const next = snapshotSource(parsed.data);
       if (sameValue(next, history[historyIndex])) return false;
 
-      const extendsNewest = merge !== undefined && merge === mergeKey && historyIndex > 0 &&
+      const extendsNewest =
+        merge !== undefined &&
+        merge === mergeKey &&
+        historyIndex > 0 &&
         historyIndex === history.length - 1;
       history = history.slice(0, extendsNewest ? historyIndex : historyIndex + 1);
       history.push(next);
