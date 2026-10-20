@@ -28,6 +28,11 @@ declare
   search_key text;
   search_index integer;
   predicates text[] := array[]::text[];
+  equality_stack jsonb[];
+  equality_node jsonb;
+  equality_child jsonb;
+  equality_field_id text;
+  equality_index integer;
 begin
   -- The one typed predicate every bounded system-projection reader applies
   -- inside its keyset scan. A reader declares, per attribute key, the SQL
@@ -90,6 +95,37 @@ begin
     end if;
     predicates := pg_catalog.array_append(predicates, filter_plan ->> 'predicate');
     filter_parameters := filter_plan -> 'parameters';
+    -- The compiled equality is null-safe, which no B-tree can serve. Every equality
+    -- between a text column and a text value that the whole filter requires (the
+    -- value is never null) also implies a plain column = value term, which the
+    -- reader's index serves; it adds no row and removes none.
+    equality_stack := array[condition_item];
+    while pg_catalog.cardinality(equality_stack) > 0 loop
+      equality_node := equality_stack[pg_catalog.cardinality(equality_stack)];
+      equality_stack := equality_stack[1:pg_catalog.cardinality(equality_stack) - 1];
+      if equality_node ->> 'kind' = 'all' then
+        for equality_child in
+          select item.value
+          from pg_catalog.jsonb_array_elements(equality_node -> 'conditions') as item(value)
+        loop
+          equality_stack := pg_catalog.array_append(equality_stack, equality_child);
+        end loop;
+      elsif equality_node ->> 'kind' = 'comparison'
+        and equality_node ->> 'operator' = 'equals'
+        and equality_node #>> '{left,source}' = 'field'
+        and equality_node #>> '{right,source}' = 'value'
+        and pg_catalog.jsonb_typeof(equality_node #> '{right,value}') = 'string' then
+        equality_field_id := pg_catalog.lower(equality_node #>> '{left,fieldId}');
+        if field_types ->> equality_field_id = 'text'
+          and field_database_types ->> equality_field_id = 'text' then
+          filter_parameters := filter_parameters || pg_catalog.jsonb_build_array(equality_node #> '{right,value}');
+          equality_index := pg_catalog.jsonb_array_length(filter_parameters) - 1;
+          predicates := pg_catalog.array_append(predicates, pg_catalog.format(
+            '(%s = ($%s::jsonb #>> ''{%s}''))',
+            field_expressions ->> equality_field_id, p_parameter_slot, equality_index));
+        end if;
+      end if;
+    end loop;
   end if;
 
   if p_predicate ? 'search' and p_predicate -> 'search' <> 'null'::jsonb then
