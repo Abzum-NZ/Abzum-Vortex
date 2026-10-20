@@ -85,7 +85,7 @@ alter function vortex_record.run_module_query_summary(uuid,uuid,bigint,jsonb,jso
 revoke all on function vortex_record.run_module_query_summary(uuid, uuid, bigint, jsonb, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime;
 grant execute on function vortex_record.run_module_query_summary(uuid, uuid, bigint, jsonb, jsonb)
-  to vortex_request;
+  to vortex_request, vortex_owner;
 
 comment on function vortex_record.run_module_query_summary(uuid, uuid, bigint, jsonb, jsonb) is
   'Runs one bounded database-backed installed Module query summary or protected board summary. It validates the request, prepares one protected read-scan access plan, and delegates the summary to the owner-only aggregate function, normalizes unreadable board choices to one unassigned bucket, summarises the own records of a preview for a preview request, and refuses neutrally above 100000 candidate rows.';
