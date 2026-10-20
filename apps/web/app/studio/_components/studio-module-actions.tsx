@@ -159,7 +159,9 @@ export function ActionDialog({
     valid: boolean,
   ) => {
     setCondition(next);
-    const built = valid ? studioActionConditionSource(next, record, nextInputs) : { ok: false as const };
+    const built = valid
+      ? studioActionConditionSource(next, record, nextInputs)
+      : { ok: false as const };
     setConditionProblem(built.ok ? "" : "Finish every comparison, with a value on both sides.");
     if (built.ok) setPrecondition(built.condition);
   };

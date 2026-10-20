@@ -56,7 +56,11 @@ export function StudioActionInputs({
     index: number,
     input: Inputs[number],
     renamed?: Readonly<{ from: string; to: string }>,
-  ) => onChange(inputs.map((entry, at) => (at === index ? input : entry)), renamed);
+  ) =>
+    onChange(
+      inputs.map((entry, at) => (at === index ? input : entry)),
+      renamed,
+    );
   return (
     <fieldset className="space-y-3">
       <legend className="text-sm font-medium">Inputs</legend>

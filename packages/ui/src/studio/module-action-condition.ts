@@ -221,11 +221,11 @@ export const remapStudioActionCondition = (
   after: Inputs,
   renamed?: Readonly<{ from: string; to: string }>,
 ): ConditionNode | undefined => {
-  const keys = new Map(
+  const keys = new Map<string, string>(
     before.map((input, index) => {
       const key = input.key === renamed?.from ? renamed.to : input.key;
       const at = after.findIndex((entry) => entry.key === key);
-      return [`input_${index + 1}`, at === -1 ? "input_removed" : `input_${at + 1}`] as const;
+      return [`input_${index + 1}`, at === -1 ? "input_removed" : `input_${at + 1}`];
     }),
   );
   const side = (operand: Comparison["left"]): Comparison["left"] =>
@@ -234,12 +234,13 @@ export const remapStudioActionCondition = (
       : operand;
   const remap = (node: ConditionNode): ConditionNode => {
     if (node.kind === "all" || node.kind === "any")
-      return { ...node, conditions: node.conditions.map(remap) };
-    if (node.kind === "not") return { ...node, condition: remap(node.condition) };
+      return { kind: node.kind, conditions: node.conditions.map(remap) };
+    if (node.kind === "not") return { kind: "not", condition: remap(node.condition) };
+    const comparison = node as Comparison;
     return {
-      ...node,
-      left: side(node.left),
-      ...(node.right === undefined ? {} : { right: side(node.right) }),
+      ...comparison,
+      left: side(comparison.left),
+      ...(comparison.right === undefined ? {} : { right: side(comparison.right) }),
     };
   };
   return condition === undefined ? undefined : remap(condition);
