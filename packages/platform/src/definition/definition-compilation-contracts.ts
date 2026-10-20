@@ -96,6 +96,11 @@ export const sourceIdentityAssignmentSchema = z
     identifier: platformIdSchema,
   })
   .strict();
+/** Historical names remain reserved even when their item has left the draft. */
+export const sourceIdentityReservationSchema = sourceIdentityAssignmentSchema.omit({
+  identifier: true,
+});
+export type SourceIdentityReservation = z.infer<typeof sourceIdentityReservationSchema>;
 export const resolvedDefinitionSchema = z.discriminatedUnion("kind", [
   z
     .object({
@@ -384,17 +389,17 @@ export const applicationCompilationOutputSchema = z
   });
 
 export const moduleCompilationOutputSchema = z
-    .object({
-      kind: z.literal("module"),
-      validationContractVersion: z.literal(moduleValidationContractVersion),
-      canonical: moduleDraftSchema,
-      artifact: compiledModuleArtifactSchema,
-      provenance: z.array(definitionProvenanceEntrySchema),
-      dependencyOrder: z.array(namespacedKeySchema),
-      resolvedDependencies: z.array(resolvedDefinitionSchema),
-      resolutionFingerprint: fingerprintSchema,
-    })
-    .strict();
+  .object({
+    kind: z.literal("module"),
+    validationContractVersion: z.literal(moduleValidationContractVersion),
+    canonical: moduleDraftSchema,
+    artifact: compiledModuleArtifactSchema,
+    provenance: z.array(definitionProvenanceEntrySchema),
+    dependencyOrder: z.array(namespacedKeySchema),
+    resolvedDependencies: z.array(resolvedDefinitionSchema),
+    resolutionFingerprint: fingerprintSchema,
+  })
+  .strict();
 
 export const definitionCompilationOutputSchema = z.union([
   moduleCompilationOutputSchema,

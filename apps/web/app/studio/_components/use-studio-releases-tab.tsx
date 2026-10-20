@@ -73,6 +73,7 @@ const publicationProblemText = (
   compileProblem?: string,
   sentence?: string,
 ): string => {
+  if (reason === "identity_retired" && sentence !== undefined) return sentence;
   // A compilation refusal names what it is about (the field, query or block) so it can be fixed.
   if (reason?.startsWith("compilation_") === true) {
     if (compileProblem !== undefined)
