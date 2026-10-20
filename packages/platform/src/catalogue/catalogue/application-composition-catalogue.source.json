@@ -5913,6 +5913,52 @@
           },
           {
             "kind": "group",
+            "key": "grouping",
+            "label": "Group by",
+            "help": "Group the records by a choice or stage field, counted on the server",
+            "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "properties": [
+              {
+                "kind": "boolean",
+                "key": "enabled",
+                "label": "On",
+                "help": "Let people group the table by the chosen field",
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              },
+              {
+                "kind": "field_reference",
+                "key": "field",
+                "label": "Group by",
+                "help": "A choice or stage field people can filter by, with at most 50 choices",
+                "required": false,
+                "fieldTypes": ["choice"]
+              },
+              {
+                "kind": "text",
+                "key": "unassigned_label",
+                "label": "Name for records with no value",
+                "help": "Shown on the group of records that have no value, or whose value the viewer cannot see",
+                "required": false,
+                "minLength": 1,
+                "maxLength": 40
+              }
+            ]
+          },
+          {
+            "kind": "group",
             "key": "pinning",
             "label": "Column pinning",
             "help": "Keep columns in view while scrolling; set each column's default pin in Columns",
@@ -6343,6 +6389,15 @@
               }
             },
             "tree": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "grouping": {
               "kind": "group",
               "properties": {
                 "enabled": {

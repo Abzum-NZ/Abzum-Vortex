@@ -29,8 +29,10 @@ import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../de
 import { parseRowFormat } from "./projected-format";
 import {
   parseTableFeatures,
+  parseTableGroups,
   parseTableNarrowing,
   parseTableSelectionParts,
+  type TableGroups,
   type TableSelectionParts,
 } from "./projected-grid-features";
 
@@ -167,6 +169,11 @@ export type TablePayload = Readonly<{
   /** The person's layout of the grid: column order, shown columns, widths and density. */
   layout: GridLayoutState;
   rows: readonly DisplayRow[];
+  /**
+   * Present when the table is grouped: the groups and their counts. The rows are then the open
+   * group's members only, so a closed table carries none.
+   */
+  groups?: TableGroups;
   /**
    * The grid features the server projected for this viewer and read; absent when every feature is
    * off. The table draws a feature only from this projection, never from its settings alone.
@@ -343,6 +350,14 @@ export type DisplaySemanticEventName =
   | "pivot_requested"
   | "pivot_view_changed"
   | "pivot_drilled"
+  /**
+   * A grouped table's person groups or ungroups it (an address change that reads the groups), asks
+   * for one page of an open group's members, or opens or closes a group (kept in the address
+   * without a read). These are the Group by feature's own reads and address changes, not flow events.
+   */
+  | "group_changed"
+  | "group_requested"
+  | "group_opened"
   /** The Saved views feature asks the host to open, store, share or delete a view. */
   | "grid_view_requested";
 
@@ -395,6 +410,24 @@ export type DisplaySemanticEvent =
       event: "pivot_view_changed";
       /** The view to keep in the address: absent shows the ordinary grid. */
       view: Readonly<{ cursor?: string }> | undefined;
+    }>
+  | Readonly<{
+      /** Groups the table by its authored field, or (null) shows the records ungrouped. */
+      event: "group_changed";
+      grouped: boolean;
+    }>
+  | Readonly<{
+      /** Asks for one page of the members of one group; its handler resolves to that page. */
+      event: "group_requested";
+      key: string;
+      /** The token of the page before, to read another page; absent for the first page. */
+      continuationToken?: string;
+      direction?: "forward" | "backward";
+    }>
+  | Readonly<{
+      /** The group that is open now (null when every group is closed), to keep in the address. */
+      event: "group_opened";
+      key: string | null;
     }>
   | Readonly<{
       event: "pivot_drilled";
@@ -528,6 +561,9 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "pivot_requested",
   "pivot_view_changed",
   "pivot_drilled",
+  "group_changed",
+  "group_requested",
+  "group_opened",
   "grid_view_requested",
   "search_changed",
   "sort_changed",
@@ -1155,6 +1191,7 @@ export const parseTablePayload = (
       "hiddenColumns",
       "layout",
       "rows",
+      "groups",
       "features",
       "selectedRecordIds",
       "sort",
@@ -1261,6 +1298,8 @@ export const parseTablePayload = (
     record.narrowing === undefined ? undefined : parseTableNarrowing(record.narrowing, location);
   const features =
     record.features === undefined ? undefined : parseTableFeatures(record.features, location);
+  const groups =
+    record.groups === undefined ? undefined : parseTableGroups(record.groups, location);
   const selectionParts = parseTableSelectionParts(record, location);
   return Object.freeze({
     kind: "table",
@@ -1268,6 +1307,7 @@ export const parseTablePayload = (
     hiddenColumns,
     layout: layout.data,
     rows,
+    ...(groups === undefined ? {} : { groups }),
     ...(features === undefined ? {} : { features }),
     ...selectionParts,
     ...(selection === undefined ? {} : { selectedRecordIds: selection }),

@@ -339,6 +339,7 @@ export function StudioGridFeatures({
                   declarations={settings}
                   pipelines={pipelines}
                   choices={boardChoices}
+                  boardFacts={query?.board}
                   disabled={disabled}
                   onChange={(next) => write(key, next)}
                 />

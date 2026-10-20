@@ -65,6 +65,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_row_action_limit",
   "definition_records_table_master_detail",
   "definition_records_table_tree",
+  "definition_records_table_grouping",
   "definition_records_table_conditional_formatting",
   "definition_records_table_pinning",
   "definition_records_table_pivot",
@@ -189,6 +190,12 @@ const definitionValidationErrorCatalogueSource = {
     message: "A tree needs a link from these records to themselves.",
     guidance:
       "Choose the link that points to each record's parent and how many child records to show at a time, or turn Tree off.",
+  },
+  // Grouping names its own part (the field, its choice count) in its sentence.
+  definition_records_table_grouping: {
+    order: 39,
+    message: "Group by needs a choice or stage field in the bound query.",
+    guidance: "Choose the choice or stage field the records are grouped by, or turn Group by off.",
   },
   definition_records_table_conditional_formatting: {
     order: 39,

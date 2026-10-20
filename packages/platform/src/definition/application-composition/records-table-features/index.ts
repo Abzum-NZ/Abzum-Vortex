@@ -48,6 +48,7 @@ import { recordsTableSavedViewsFeature, type RecordsTableSavedViewsSettings } fr
 import { recordsTableSearchFeature, type RecordsTableSearchSettings } from "./search";
 import { recordsTablePinningFeature, type RecordsTablePinningSettings } from "./pinning";
 import { recordsTablePivotFeature, type RecordsTablePivotSettings } from "./pivot";
+import { recordsTableGroupingFeature, type RecordsTableGroupingSettings } from "./grouping";
 import {
   featureNotPossible,
   settingGroup,
@@ -78,7 +79,11 @@ export {
 } from "./row-actions";
 export { RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE } from "./master-detail";
 export { RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE } from "./tree";
-export { boardProblem, recordsTableBoardFactsOf } from "./board";
+export {
+  RECORDS_TABLE_GROUPING_MAXIMUM_CHOICES,
+  RECORDS_TABLE_GROUPING_MAXIMUM_LABEL_LENGTH,
+} from "./grouping";
+export { boardAggregateLabel, boardProblem, recordsTableBoardFactsOf } from "./board";
 export {
   RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS,
   RECORDS_TABLE_PIVOT_MAXIMUM_ROW_PAGE_SIZE,
@@ -117,6 +122,7 @@ export type {
   RecordsTableRowEditSettings,
   RecordsTableMasterDetailSettings,
   RecordsTableTreeSettings,
+  RecordsTableGroupingSettings,
   RecordsTableSavedViewsSettings,
   RecordsTableSearchSettings,
   RecordsTablePinningSettings,
@@ -142,6 +148,7 @@ export type RecordsTableFeatures = Readonly<{
   rowActions: RecordsTableFeatureState<object>;
   masterDetail: RecordsTableFeatureState<RecordsTableMasterDetailSettings>;
   tree: RecordsTableFeatureState<RecordsTableTreeSettings>;
+  grouping: RecordsTableFeatureState<RecordsTableGroupingSettings>;
   conditionalFormatting: RecordsTableFeatureState<RecordsTableConditionalFormattingSettings>;
   pinning: RecordsTableFeatureState<RecordsTablePinningSettings>;
   pivot: RecordsTableFeatureState<RecordsTablePivotSettings>;
@@ -161,6 +168,7 @@ const registry = {
   row_actions: { property: "rowActions", definition: recordsTableRowActionsFeature },
   master_detail: { property: "masterDetail", definition: recordsTableMasterDetailFeature },
   tree: { property: "tree", definition: recordsTableTreeFeature },
+  grouping: { property: "grouping", definition: recordsTableGroupingFeature },
   conditional_formatting: {
     property: "conditionalFormatting",
     definition: recordsTableConditionalFormattingFeature,
@@ -188,6 +196,7 @@ export const recordsTableFeatureKeys = [
   "row_actions",
   "master_detail",
   "tree",
+  "grouping",
   "conditional_formatting",
   "pivot",
   "board",
@@ -234,6 +243,7 @@ export const readRecordsTableFeatures = (
   const rowActions = read("row_actions");
   const masterDetail = read("master_detail");
   const tree = read("tree");
+  const grouping = read("grouping");
   const conditionalFormatting = read("conditional_formatting");
   const pinning = read("pinning");
   const pivot = read("pivot");
@@ -249,6 +259,7 @@ export const readRecordsTableFeatures = (
     rowActions === undefined ||
     masterDetail === undefined ||
     tree === undefined ||
+    grouping === undefined ||
     conditionalFormatting === undefined ||
     pinning === undefined ||
     pivot === undefined ||
@@ -267,6 +278,7 @@ export const readRecordsTableFeatures = (
     rowActions,
     masterDetail: masterDetail as RecordsTableFeatures["masterDetail"],
     tree: tree as RecordsTableFeatures["tree"],
+    grouping: grouping as RecordsTableFeatures["grouping"],
     conditionalFormatting: conditionalFormatting as RecordsTableFeatures["conditionalFormatting"],
     pivot: pivot as RecordsTableFeatures["pivot"],
     board: board as RecordsTableFeatures["board"],
@@ -313,6 +325,22 @@ export const checkRecordsTableFeature = (
       "definition_records_table_tree",
       "A row shows either its related records or the records beneath it; turn Related records off to use a tree.",
     );
+  // Groups, a board's columns, a tree's levels and a pivot's cells each arrange the records
+  // their own way, so the table shows one of them at a time.
+  if (key === "grouping" && state.enabled) {
+    const other = features.board.enabled
+      ? "Board"
+      : features.tree.enabled
+        ? "Tree"
+        : features.pivot.enabled
+          ? "Pivot"
+          : undefined;
+    if (other !== undefined)
+      return featureNotPossible(
+        "definition_records_table_grouping",
+        `Turn ${other} off to group the records.`,
+      );
+  }
   const check = (registry[key].definition as RecordsTableFeatureDefinition<object>).check(
     state,
     facts,

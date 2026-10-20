@@ -143,7 +143,10 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
         >
           {gesture.pending ? <Spinner aria-hidden="true" /> : <Icon name="more-horizontal" />}
         </DropdownMenuTrigger>
-        <DropdownMenuContent onClick={(event) => event.stopPropagation()}>
+        <DropdownMenuContent
+          className="w-auto min-w-64 max-w-[calc(100vw-2rem)]"
+          onClick={(event) => event.stopPropagation()}
+        >
           {menu.map(({ action, reason }) => (
             <DropdownMenuItem
               key={action.eventId}
@@ -155,7 +158,7 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
               <span className="flex min-w-0 flex-col">
                 <span>{action.label}</span>
                 {reason === undefined ? null : (
-                  <span className="max-w-64 text-xs text-muted-foreground whitespace-normal">
+                  <span className="max-w-64 text-xs text-foreground normal-case whitespace-normal">
                     {reason}
                   </span>
                 )}
