@@ -261,6 +261,8 @@ export type StudioQueryInput = Readonly<{
   required: boolean;
   /** For a record input, the record types it accepts, as `<module>:<record>`. */
   recordTypes?: readonly string[];
+  /** For a text input limited to a list, the choices a person picks from. */
+  choices?: readonly Readonly<{ value: string; label: string }>[];
 }>;
 
 /** A query a data block can read, and the fields it reads. */

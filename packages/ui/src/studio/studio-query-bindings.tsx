@@ -338,6 +338,30 @@ export function StudioQueryBindings({
                     )
                   }
                 />
+              ) : input.choices !== undefined ? (
+                <Select
+                  value={props.value?.kind === "text" ? props.value.value : ""}
+                  disabled={disabled}
+                  onValueChange={(value) => change(fixedWith(props, "value", text(value ?? "")))}
+                >
+                  <SelectTrigger aria-label={`${input.label} value`}>
+                    <SelectValue>
+                      {input.choices.find(
+                        (option) =>
+                          props.value?.kind === "text" && option.value === props.value.value,
+                      )?.label ??
+                        (props.value?.kind === "text" && props.value.value) ??
+                        "Choose a value"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {input.choices.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               ) : input.type?.kind === "yes_no" ? (
                 <Select
                   value={props.value?.kind === "text" ? props.value.value : "false"}

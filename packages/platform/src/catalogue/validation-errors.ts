@@ -73,6 +73,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_board",
   "definition_records_table_export",
   "definition_query_binding",
+  "definition_query_binding_choice",
   "definition_unknown_property",
   "definition_too_few_items",
   "definition_too_many_items",
@@ -245,6 +246,11 @@ const definitionValidationErrorCatalogueSource = {
     message: "A query input of a block has no valid source.",
     guidance:
       "Open the block's Query inputs and choose a source of the input's type for each input.",
+  },
+  definition_query_binding_choice: {
+    order: 39,
+    message: "A fixed value is not one of the choices of its query input.",
+    guidance: "Open the block's Query inputs and pick one of the choices the input now offers.",
   },
   definition_unknown_property: {
     order: 40,

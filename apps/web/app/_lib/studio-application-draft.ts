@@ -614,6 +614,9 @@ export const loadStudioApplicationDraft = async (
                 label: input.label,
                 type: input.type,
                 required: input.required,
+                ...(input.type === "text" && input.validation?.choices !== undefined
+                  ? { choices: input.validation.choices }
+                  : {}),
                 ...(input.type === "record_reference"
                   ? {
                       recordTypes: input.recordTypes.flatMap((type) =>

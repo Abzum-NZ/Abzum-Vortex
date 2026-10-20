@@ -552,6 +552,18 @@ const compareActionInput = (
       );
       compareDateBound(reasons, before.latest, after.latest, "maximum", actionId, "action_input");
     }
+    if (!same(before.choices, after.choices)) {
+      const widened = after.choices === undefined;
+      reasons.push(
+        makeReason(
+          widened ? "minor" : "major",
+          widened ? "constraint_widened" : "constraint_narrowed",
+          "action_input",
+          "constraint",
+          actionId,
+        ),
+      );
+    }
     if (!same(before.pattern, after.pattern)) {
       const widened = after.pattern === undefined;
       reasons.push(

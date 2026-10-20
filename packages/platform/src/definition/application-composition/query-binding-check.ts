@@ -20,6 +20,8 @@ export type QueryBindingInput = Readonly<{
   /** Undefined for an input type no binding can fill. */
   type: QueryBindingValueType | undefined;
   required: boolean;
+  /** The values a text input is limited to, with their business labels; absent when unlimited. */
+  choices?: readonly Readonly<{ value: string; label: string }>[];
 }>;
 
 /** A record field a binding may name: of the page's subject, or of the row of a row panel. */
@@ -71,7 +73,12 @@ export type QueryBindingPageFacts = Readonly<{
 }>;
 
 /** One binding problem: the business sentence, and the input it is about when there is one. */
-export type QueryBindingProblem = Readonly<{ input?: string; sentence: string }>;
+export type QueryBindingProblem = Readonly<{
+  input?: string;
+  sentence: string;
+  /** The typed cause when it is more than a type mismatch; publication logs it with the refusal. */
+  reason?: "fixed_value_not_a_choice";
+}>;
 
 type SourceFacts =
   | Readonly<{
@@ -161,7 +168,7 @@ const bindingProblem = (
   binding: QueryBinding,
   input: QueryBindingInput,
   facts: QueryBindingPageFacts,
-): string | undefined => {
+): Pick<QueryBindingProblem, "sentence" | "reason"> | string | undefined => {
   const name = (type: QueryBindingValueType): string =>
     queryBindingTypeName(type, facts.recordTypeLabel);
   if (input.type === undefined) return `${input.label} cannot take a value from a binding.`;
@@ -174,7 +181,13 @@ const bindingProblem = (
         ? `Write a value for ${input.label}.`
         : parseQueryBindingText(source.value, input.type) === undefined
           ? `${source.value} is not a valid ${name(input.type)} for ${input.label}.`
-          : undefined;
+          : input.choices !== undefined &&
+              !input.choices.some((choice) => choice.value === source.value)
+            ? {
+                reason: "fixed_value_not_a_choice",
+                sentence: `${source.value} is no longer one of the choices for ${input.label}.`,
+              }
+            : undefined;
   if (source.type === undefined)
     return `${input.label} needs ${withArticle(name(input.type))}; ${source.description} gives no value a query can use.`;
   if (queryBindingTypesFit(input.type, source.type, binding.source.kind === "relative_date"))
@@ -211,8 +224,12 @@ export const checkQueryBindings = (
       continue;
     }
     bound.add(input.key);
-    const sentence = bindingProblem(binding, input, facts);
-    if (sentence !== undefined) problems.push({ input: input.key, sentence });
+    const found = bindingProblem(binding, input, facts);
+    if (found !== undefined)
+      problems.push({
+        input: input.key,
+        ...(typeof found === "string" ? { sentence: found } : found),
+      });
   }
   for (const input of inputs)
     if (input.required && !bound.has(input.key))
