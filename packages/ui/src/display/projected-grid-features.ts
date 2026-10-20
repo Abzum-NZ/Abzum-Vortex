@@ -17,6 +17,7 @@ import {
   requireArray,
   requireFieldKey,
   requireNonEmptyString,
+  requirePositiveInteger,
   type TableNarrowing,
 } from "./projected-data";
 
@@ -164,6 +165,7 @@ export const parseTableFeatures = (
       "savedViews",
       "bulkActions",
       "inlineEdit",
+      "masterDetail",
       "conditionalFormatting",
       "pinning",
     ],
@@ -212,6 +214,22 @@ export const parseTableFeatures = (
       fields: parseFieldKeys(inline.fields, "Projected editable fields are invalid", location),
     });
   }
+  let masterDetail: RecordsTableFeatureProjection["masterDetail"];
+  if (record.masterDetail !== undefined) {
+    const related = requireRecord(
+      record.masterDetail,
+      "Projected related records are invalid",
+      location,
+    );
+    requireExactKeys(related, ["pageSize"], location);
+    masterDetail = Object.freeze({
+      pageSize: requirePositiveInteger(
+        related.pageSize,
+        "Related records need their page size",
+        location,
+      ),
+    });
+  }
   return Object.freeze({
     ...(record.pinning === true ? { pinning: true as const } : {}),
     ...(record.search === true ? { search: true as const } : {}),
@@ -219,6 +237,7 @@ export const parseTableFeatures = (
     ...(record.savedViews === true ? { savedViews: true as const } : {}),
     ...(bulkActions === undefined ? {} : { bulkActions: Object.freeze(bulkActions) }),
     ...(inlineEdit === undefined ? {} : { inlineEdit }),
+    ...(masterDetail === undefined ? {} : { masterDetail }),
     ...(record.conditionalFormatting === undefined
       ? {}
       : {

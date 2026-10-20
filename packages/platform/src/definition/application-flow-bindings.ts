@@ -67,6 +67,7 @@ export const componentSemanticEventKindSchema = z.enum([
   "search_changed",
   "sort_changed",
   "columns_changed",
+  "row_expanded",
   "page_changed",
   "selection_changed",
   "field_changed",

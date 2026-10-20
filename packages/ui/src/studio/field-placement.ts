@@ -18,6 +18,7 @@ import {
   describeStudioCompositionSettings,
   type StudioCompositionContext,
 } from "./application-composition-commands";
+import { studioQueryChoices } from "./contextual-palette";
 
 /**
  * "Also show it on": the places a new field can be shown in the same draft edit that adds it. A
@@ -111,6 +112,12 @@ export const studioFieldPlacements = (
 ): readonly StudioFieldPlacement[] => {
   const qualified = `${moduleKey}:${recordKey}`;
   const reference = fieldKey === undefined ? undefined : `${qualified}.${fieldKey}`;
+  const queryRecordTypes = new Map(
+    studioQueryChoices(context.source, context.borrowed).map((query) => [
+      query.reference,
+      query.recordType,
+    ]),
+  );
   const result: StudioFieldPlacement[] = [];
   for (const page of context.source.body.pages) {
     if (
@@ -126,6 +133,9 @@ export const studioFieldPlacements = (
       for (const item of sourceItemTree(zone.items)) {
         const release = releaseOf(context, item);
         if (release === undefined) continue;
+        // A related-record table reads its query's record type, not the page's record type.
+        const query = item.props.vortex.query;
+        if (query !== undefined && queryRecordTypes.get(query) !== qualified) continue;
         for (const setting of fieldListSettings(release)) {
           const entries = item.props[setting.key];
           result.push({
