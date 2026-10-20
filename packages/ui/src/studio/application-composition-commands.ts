@@ -14,7 +14,6 @@ import {
   applicationSourceDocumentSchema,
   organizationIdSchema,
   plainSourceSettingValue,
-  recordsTableFeatureOfEvent,
   readSourceItem,
   setSourcePageSlot,
   sourceItemChildSlots,
@@ -65,6 +64,7 @@ import {
   validateStoredShell,
   validateStoredZone,
 } from "./stored-composition";
+import { restoreStudioGridFeatureBindings } from "./grid-features";
 import { resolveStudioSelectionInspectorContext } from "./selection-inspector";
 import type { StudioSemanticSelection } from "./semantic-selection";
 
@@ -1079,36 +1079,7 @@ const applySettings = (
   if (resolved.kind !== "available") return resolved;
   const { source, target, alias, release } = resolved;
   const settings = commandSettings(input.settings, release.properties);
-  // Disabled features contain only their defaults, while their workflows remain authored in the
-  // draft. Restore the event from the existing binding when a feature is enabled again.
-  const features = settings.features;
-  const featureDeclarations = release.properties.find((property) => property.key === "features");
-  if (features?.kind === "group" && featureDeclarations?.kind === "group") {
-    const properties = { ...features.properties };
-    for (const binding of source.body.flow_bindings) {
-      if (binding.control !== alias) continue;
-      const key = recordsTableFeatureOfEvent(binding.event);
-      if (key === undefined) continue;
-      const feature = features.properties[key];
-      const declaration = featureDeclarations.properties.find((property) => property.key === key);
-      if (
-        feature?.kind !== "group" ||
-        feature.properties.enabled?.kind !== "boolean" ||
-        !feature.properties.enabled.value ||
-        declaration?.kind !== "group" ||
-        !declaration.properties.some((property) => property.key === "event_id")
-      )
-        continue;
-      properties[key] = {
-        ...feature,
-        properties: {
-          ...feature.properties,
-          event_id: { kind: "text", value: binding.event_id },
-        },
-      };
-    }
-    settings.features = { ...features, properties };
-  }
+  restoreStudioGridFeatureBindings(settings, release.properties, source.body.flow_bindings, alias);
   let query = input.query;
   if (
     query !== null &&
