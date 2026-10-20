@@ -1,15 +1,15 @@
 import type { ReactNode } from "react";
-import { ALL_UI_STYLES_CSS, VortexStyleRoot } from "@vortex/ui";
+import { VortexStyleRoot } from "@vortex/ui/theme";
 import { Toaster } from "@vortex/ui/components/sonner";
 import { TooltipProvider } from "@vortex/ui/components/tooltip";
 import { STUDIO_DOCUMENT_THEME } from "../_lib/document-theme";
+import { documentStylesheetHref } from "../_lib/document-styles";
 
 export default function StudioLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <VortexStyleRoot documentTheme {...STUDIO_DOCUMENT_THEME}>
-      <style href="vortex-ui-styles" precedence="default">
-        {ALL_UI_STYLES_CSS}
-      </style>
+      <link rel="stylesheet" href={documentStylesheetHref("studio")} precedence="platform" />
+      <link rel="stylesheet" href={documentStylesheetHref("components")} precedence="default" />
       <TooltipProvider>
         {children}
         <Toaster position="bottom-right" visibleToasts={3} closeButton />

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { VORTEX_ICON_NAMES } from "@vortex/platform/schema";
 import type { OrganizationBuilderRoot } from "@vortex/platform/server";
-import { AppearanceToggle, FormattedTime, Icon } from "@vortex/ui";
+import { AppearanceToggle } from "@vortex/ui/appearance-toggle";
+import { FormattedTime } from "@vortex/ui/display/date-format-context";
+import { Icon } from "@vortex/ui/icons";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@vortex/ui/components/card";

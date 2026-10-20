@@ -97,10 +97,10 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Static Next assets, immutable component bundles, images and the exact public health check
+  // Static Next assets, immutable component bundles and document styles, images and the public health check
   // bypass the session proxy; keep application paths covered even when a tenant is named "api"
   // or "health".
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/components/|health$|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/components/|api/document-styles/[a-z]+-[a-f0-9]{16}\\.css$|health$|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
