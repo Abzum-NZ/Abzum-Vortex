@@ -113,7 +113,12 @@ export function StudioRowActionsBindings({
   const recordType = control.recordType;
   const named = namedActions.filter((action) => action.recordType === recordType);
   const flows = source.body.flows.filter(
-    (flow) => flow.execution === "interactive" && flow.runAs.kind === "initiator",
+    (flow) =>
+      flow.execution === "interactive" &&
+      flow.runAs.kind === "initiator" &&
+      Object.values(flow.inputs).some(
+        (input) => input.type === "record_reference" && input.recordTypeIds?.includes(recordType),
+      ),
   );
   const flowReason = (flow: (typeof flows)[number]): string | undefined => {
     const record = Object.entries(flow.inputs).find(

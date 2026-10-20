@@ -49,6 +49,7 @@ import {
   GRID_COLUMN_MAX_WIDTH,
   GRID_COLUMN_MIN_WIDTH,
   GRID_CONTROL_COLUMN_WIDTH,
+  gridActionsWidth,
   GRID_ROW_HEIGHT,
   virtualizesRows,
 } from "./table-geometry";
@@ -317,17 +318,7 @@ export function RecordsGrid({
   const rowHeight = GRID_ROW_HEIGHT[layout.density];
   const virtual = virtualizesRows(rows.length);
   const bounded = contract.viewport === "bounded";
-  const actionsWidth = contract.features.rowActions.enabled
-    ? 16 +
-      36 *
-        (Math.min(
-          3,
-          contract.rowBehaviours.rowActions.filter((action) => action.placement === "inline")
-            .length,
-        ) +
-          1 +
-          Number(contract.features.rowEdit.enabled))
-    : GRID_CONTROL_COLUMN_WIDTH;
+  const actionsWidth = gridActionsWidth(contract);
   const { columns } = layout;
   const columnsById = useMemo(
     () => new Map(columns.map((column) => [column.key, column])),
@@ -471,7 +462,9 @@ export function RecordsGrid({
               flex:
                 kind === "data"
                   ? `var(${sizeVariable(id)}) 0 calc(var(${sizeVariable(id)}) * 1px)`
-                  : `0 0 ${GRID_CONTROL_COLUMN_WIDTH}px`,
+                  : kind === "actions"
+                    ? `0 0 calc(var(${sizeVariable(id)}) * 1px)`
+                    : `0 0 ${GRID_CONTROL_COLUMN_WIDTH}px`,
               ...(sticky ? pinStyle(id, pin as "start" | "end") : {}),
             },
           },

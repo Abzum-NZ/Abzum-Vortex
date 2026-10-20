@@ -418,6 +418,9 @@ export function useRuntimeInputs({
               boardRowActionBinding,
               suppliedValues(event),
               event.recordId,
+              event.revision === undefined
+                ? undefined
+                : { recordId: event.recordId, revision: event.revision },
             );
           };
         // A moved card saves the record's choice field through the bound flow. The handler reports

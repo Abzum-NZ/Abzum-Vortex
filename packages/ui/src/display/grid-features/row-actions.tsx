@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   isRecord,
   type RecordsTableBulkRefusalReason,
@@ -37,6 +37,8 @@ const reasons: Readonly<Record<RecordsTableBulkRefusalReason, string>> = {
 function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | null {
   const gesture = usePendingGesture();
   const [open, setOpen] = useState(false);
+  const [allInMenu, setAllInMenu] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const projection = context.features.rowActions;
   const handler = context.events?.row_action;
   if (projection === undefined || handler === undefined || row.revision === undefined) return null;
@@ -60,7 +62,9 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
       ? []
       : commands.filter(({ action }) => action.placement === "inline").slice(0, 3);
   // The menu also holds inline commands so a context-menu gesture can always reach every action.
-  const menu = commands;
+  const overflow = commands.filter((command) => !inline.includes(command));
+  const menu =
+    allInMenu || context.presentation === "cards" || overflow.length === 0 ? commands : overflow;
   const name = rowName(row, context.columns[0]?.key);
   const run = (action: RecordsTableActionContract): void => {
     if (gesture.running()) return;
@@ -73,7 +77,11 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
       }),
     )
       .then((result) => {
-        if (!isRecord(result)) return;
+        // A gesture ignored while another flow is busy has no outcome. Every returned outcome is
+        // ours, so a malformed one is logged and shown as an error rather than quietly discarded.
+        if (result === undefined) return;
+        if (!isRecord(result) || typeof result.confirmed !== "boolean")
+          throw new Error("ROW_ACTION_OUTCOME_INVALID");
         const notice =
           isRecord(result.notice) && typeof result.notice.text === "string"
             ? result.notice.text
@@ -109,13 +117,23 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
           </TooltipContent>
         </Tooltip>
       ))}
-      <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenu
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (nextOpen) {
+            setAllInMenu(triggerRef.current?.dataset.rowActionMenuAll === "true");
+            if (triggerRef.current !== null) delete triggerRef.current.dataset.rowActionMenuAll;
+          }
+          setOpen(nextOpen);
+        }}
+      >
         <DropdownMenuTrigger
           render={
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
+              ref={triggerRef}
               data-row-action-menu=""
               aria-label={`Actions for ${name}`}
               disabled={gesture.pending}
@@ -131,7 +149,7 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
               key={action.eventId}
               disabled={gesture.pending || reason !== undefined}
               onClick={() => run(action)}
-              className="items-start"
+              className="items-start data-disabled:opacity-100"
             >
               <Icon name={action.icon} />
               <span className="flex min-w-0 flex-col">
@@ -168,6 +186,7 @@ function GridInteraction({ surface }: GridFeatureInteractionProps): null {
       if (trigger === null || trigger === undefined || trigger.disabled) return;
       event.preventDefault();
       event.stopPropagation();
+      trigger.dataset.rowActionMenuAll = "true";
       trigger.focus();
       trigger.click();
     };
