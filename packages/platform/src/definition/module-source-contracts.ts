@@ -812,7 +812,9 @@ const moduleSourceQuerySortSchema = z
 
 const moduleSourceQueryAggregateSchema = z
   .object({
-    operation: sourceProvenanceUnchanged(z.enum(["count", "sum", "minimum", "maximum", "average"])),
+    operation: sourceProvenanceUnchanged(
+      z.enum(["count", "sum", "minimum", "maximum", "average", "distinct_count"]),
+    ),
     field: sourceProvenanceTarget(builderKeySchema.optional(), ["fieldId"]),
     alias: sourceProvenanceUnchanged(builderKeySchema),
   })

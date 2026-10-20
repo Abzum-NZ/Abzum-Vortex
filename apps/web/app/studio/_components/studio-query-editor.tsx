@@ -10,6 +10,8 @@ import {
   inlineQueryRecordType,
   maximumQueryPageSize,
   queryGroupFieldTypes,
+  queryDistinctFieldAccepts,
+  readTimeCalculations,
   queryTotalAccepts,
   queryTotalOperationLabels,
   type ApplicationSourceDocument,
@@ -349,6 +351,7 @@ export function StudioQueryEditor({
     );
 
   const fields = record.fields;
+  const readTime = readTimeCalculations(new Map(fields.map((field) => [field.key, field])));
   const labelOf = (key: string) => fields.find((field) => field.key === key)?.label ?? key;
   const fieldOptions = (keys: readonly string[]) =>
     keys.map((key) => ({ value: key, label: labelOf(key) }));
@@ -365,7 +368,13 @@ export function StudioQueryEditor({
   const takenColumns = () =>
     new Set([...query.select, ...query.aggregates.map((total) => total.alias)]);
   const totalFields = (operation: Operation) =>
-    fields.filter((field) => queryTotalAccepts(operation, field.type)).map((field) => field.key);
+    fields
+      .filter((field) =>
+        operation === "distinct_count"
+          ? queryDistinctFieldAccepts(field, readTime)
+          : queryTotalAccepts(operation, field.type),
+      )
+      .map((field) => field.key);
 
   const changeFilter = (condition: ConditionNode | undefined, valid: boolean) => {
     if (!valid) {

@@ -174,7 +174,7 @@ const metricValue = (
 ): BoardMetric["value"] | undefined => {
   if (result === undefined) return undefined;
   if (result.outcome === "refused") return { kind: "unavailable" };
-  if (aggregate.operation === "count")
+  if (aggregate.operation === "count" || aggregate.operation === "distinct_count")
     return typeof result.value === "number" &&
       Number.isSafeInteger(result.value) &&
       result.value >= 0

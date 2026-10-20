@@ -4,6 +4,7 @@ import { useLayoutEffect, useState, type CSSProperties, type RefObject } from "r
 import { GRID_COLUMN_MIN_WIDTH, GRID_CONTROL_COLUMN_WIDTH } from "./table-geometry";
 import type { GridLayoutControls } from "./table-layout";
 
+export const EXPAND_COLUMN = "vortex-expand";
 export const SELECT_COLUMN = "vortex-select";
 export const ACTIONS_COLUMN = "vortex-actions";
 
@@ -33,6 +34,8 @@ export function useGridPinning(
   enabled: boolean,
   selection: boolean,
   actions: boolean,
+  /** Rows expand to their related records, so the expand column pins first at the start. */
+  expansion: boolean,
 ): Readonly<{ variables: CSSProperties; scrollPadding: CSSProperties }> {
   const [viewport, setViewport] = useState(0);
   // A grid without pinning never observes its width, so a plain table never re-renders on resize.
@@ -46,7 +49,8 @@ export function useGridPinning(
   }, [scroll, enabled]);
 
   const style: Record<string, string | number> = {};
-  const utilityWidth = (Number(selection) + Number(actions)) * GRID_CONTROL_COLUMN_WIDTH;
+  const utilityWidth =
+    (Number(expansion) + Number(selection) + Number(actions)) * GRID_CONTROL_COLUMN_WIDTH;
   let budget = Math.max(
     0,
     viewport - Math.min(viewport, Math.max(viewport / 2, GRID_COLUMN_MIN_WIDTH * 2)) - utilityWidth,
@@ -71,6 +75,7 @@ export function useGridPinning(
     const ids =
       side === "start"
         ? [
+            ...(expansion ? [EXPAND_COLUMN] : []),
             ...(selection ? [SELECT_COLUMN] : []),
             ...layout.state.order.filter((id) => layout.state.pins[id.toLowerCase()] === side),
           ]
@@ -82,7 +87,7 @@ export function useGridPinning(
           ];
     const offsets: string[] = [];
     for (const id of ids) {
-      const utility = id === SELECT_COLUMN || id === ACTIONS_COLUMN;
+      const utility = id === EXPAND_COLUMN || id === SELECT_COLUMN || id === ACTIONS_COLUMN;
       const active = utility ? utilityPins : accepted.has(id);
       style[`${pinVariable(id)}-position`] = active ? "sticky" : "relative";
       style[`${pinVariable(id)}-layer`] = active ? 10 : "auto";
