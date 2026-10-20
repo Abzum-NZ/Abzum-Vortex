@@ -5,9 +5,12 @@ import {
   canonicalJson,
   isRecord,
   readRecordsTableContract,
+  plainSourceSettingValue,
+  typedSourceSettings,
   type GridLayout,
   type GridLayoutCommitResult,
   type SourceBlockPropertyValueContract,
+  type PlatformBlockRelease,
 } from "@vortex/platform/schema";
 import type { DisplayEventHandlers } from "../display/projected-data";
 
@@ -32,9 +35,10 @@ export const StudioCanvasGridContext = createContext<
 export function useStudioCanvasGridEvents(
   props: Readonly<Record<string, unknown>>,
   compiled: Readonly<Record<string, unknown>> | undefined,
+  release: PlatformBlockRelease | undefined,
 ): DisplayEventHandlers | undefined {
   const arrange = useContext(StudioCanvasGridContext);
-  if (arrange === undefined || compiled === undefined) return undefined;
+  if (arrange === undefined || compiled === undefined || release === undefined) return undefined;
   const contract = readRecordsTableContract(
     compiled as Parameters<typeof readRecordsTableContract>[0],
   );
@@ -51,6 +55,21 @@ export function useStudioCanvasGridEvents(
     }),
   );
   const vortex = isRecord(props.vortex) ? props.vortex : {};
+  // The inspector reads catalogue defaults too, including defaults inside each column group.
+  const declarations = release.properties.filter(
+    ({ key }) => key === "columns" || key === "density",
+  );
+  const normalized = typedSourceSettings(
+    Object.fromEntries(
+      declarations.flatMap(({ key }) => (props[key] === undefined ? [] : [[key, props[key]]])),
+    ),
+    declarations,
+  );
+  if (normalized.failures.length > 0) throw new Error("STUDIO_CANVAS_GRID_SETTINGS_INVALID");
+  const plain = (key: string) =>
+    normalized.settings[key] === undefined
+      ? undefined
+      : plainSourceSettingValue(normalized.settings[key]);
   return {
     columns_changed: async (event): Promise<GridLayoutCommitResult> => {
       if (event.event !== "columns_changed") return { outcome: "unavailable" };
@@ -64,7 +83,7 @@ export function useStudioCanvasGridEvents(
         }));
       arrange({
         placementAlias: String(props.id),
-        key: studioCanvasGridKey(vortex.query, props.columns, props.density),
+        key: studioCanvasGridKey(vortex.query, plain("columns"), plain("density")),
         state: {
           kind: "group",
           properties: {
