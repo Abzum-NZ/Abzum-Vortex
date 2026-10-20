@@ -129,7 +129,7 @@ const previewRows = (append: DefinitionReleaseAppend, context: SessionContext) =
           ),
         ),
         // A save runs only the BeforeSave flows, so only those travel with the record content.
-        beforeSaveFlows: ("flows" in content ? content.flows : []).filter((flow) =>
+        flows: ("flows" in content ? content.flows : []).filter((flow) =>
           flow.triggers.some((trigger) => trigger.type === "BeforeSave"),
         ),
       },
