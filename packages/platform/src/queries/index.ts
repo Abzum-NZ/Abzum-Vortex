@@ -47,6 +47,7 @@ export {
   type ProtectedQueryRowActionKind,
   type ProtectedQueryRefusalReasonCode,
   type ProtectedQueryRefusal,
+  type ProtectedQueryFieldBounds,
   type ProtectedQueryPage,
   type ProtectedQueryResult,
   type ProtectedQuerySummaryCommand,
