@@ -525,7 +525,20 @@ function ApplicationPageSlotPuckEditor({
   // One read per content area and compiled revision, and one more (debounced, the earlier one
   // cancelled) per control change: the workspace sends it once the preview runs this revision's
   // data shape, so it is never re-sent on a timer.
-  const readValues = useRef({ controlValues, gridReads });
+  // Only the controls and the query state of grids still on this area are sent, and only a
+  // change to them re-reads this area: a grid change elsewhere leaves it as it is.
+  const areaChosen = Object.fromEntries(
+    Object.entries(controlValues).filter(([alias]) => itemsHold(originalSlot?.items ?? [], alias)),
+  );
+  const areaTables = Object.fromEntries(
+    Object.entries(gridReads ?? {}).filter(([alias]) =>
+      itemsHold(originalSlot?.items ?? [], alias),
+    ),
+  );
+  const areaKey = canonicalJson([areaChosen, areaTables]);
+  const areaValues = useRef({ chosen: areaChosen, tables: areaTables });
+  areaValues.current = { chosen: areaChosen, tables: areaTables };
+  const readKey = useRef(areaKey);
   const gridContext = useMemo(
     () => ({ report: onGridChange, interactive: arrangeGrid === true }),
     [onGridChange, arrangeGrid],
@@ -534,24 +547,9 @@ function ApplicationPageSlotPuckEditor({
     if (!visible || readRecords === undefined || savedKeys.size === 0) return;
     let cancelled = false;
     const controller = new AbortController();
-    // Only the controls still on this area are sent.
-    const chosen = Object.fromEntries(
-      Object.entries(controlValues).filter(([alias]) =>
-        itemsHold(originalSlot?.items ?? [], alias),
-      ),
-    );
-    // Likewise only the query state of grids still on this area.
-    const tables = Object.fromEntries(
-      Object.entries(gridReads ?? {}).filter(([alias]) =>
-        itemsHold(originalSlot?.items ?? [], alias),
-      ),
-    );
-    const delay =
-      readValues.current.controlValues === controlValues &&
-      readValues.current.gridReads === gridReads
-        ? 0
-        : 300;
-    readValues.current = { controlValues, gridReads };
+    const { chosen, tables } = areaValues.current;
+    const delay = readKey.current === areaKey ? 0 : 300;
+    readKey.current = areaKey;
     const timer = setTimeout(() => {
       readRecords(at.key, controller.signal, chosen, tables).then(
         (read) => {
@@ -578,7 +576,7 @@ function ApplicationPageSlotPuckEditor({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [readRecords, compiledSource, at.key, visible, controlValues, gridReads]);
+  }, [readRecords, compiledSource, at.key, visible, areaKey]);
   // Records read for another saved revision are never shown as this one's, except while this
   // revision's own read runs after a presentation edit: every data block is still exactly as it
   // was read (same release, settings and query), so its records are the same.

@@ -269,8 +269,10 @@ export function useStudioCanvasGridEvents(
     report === undefined || compiled === undefined || release === undefined
       ? undefined
       : gridSetup(props, compiled, release);
-  // Source settings invalidate held reads before the next compilation/row response arrives.
-  const key = release === undefined ? undefined : gridSource(props, release).key;
+  // Source settings invalidate held reads before the next compilation/row response arrives; a
+  // draft whose settings do not read (the inspector names why) holds no canvas state at all.
+  const key =
+    release === undefined ? undefined : (gridSource(props, release)?.key ?? UNREADABLE_GRID_KEY);
   const alias = String(props.id);
   // The held state follows the settings the grid has now.
   useEffect(() => {
@@ -329,7 +331,13 @@ export function useStudioCanvasGridEvents(
   };
 }
 
-/** The authored settings identify held state even while its compiled rows are being replaced. */
+/** The key of a grid whose draft settings do not read; no held state ever carries it. */
+const UNREADABLE_GRID_KEY = "unreadable";
+
+/**
+ * The authored settings identify held state even while its compiled rows are being replaced.
+ * Undefined while the draft holds settings that do not read, which the inspector already reports.
+ */
 const gridSource = (props: Readonly<Record<string, unknown>>, release: PlatformBlockRelease) => {
   const declarations = release.properties.filter(({ key }) =>
     [
@@ -347,7 +355,7 @@ const gridSource = (props: Readonly<Record<string, unknown>>, release: PlatformB
     ),
     declarations,
   );
-  if (normalized.failures.length > 0) throw new Error("STUDIO_CANVAS_GRID_SETTINGS_INVALID");
+  if (normalized.failures.length > 0) return undefined;
   const vortex = isRecord(props.vortex) ? props.vortex : {};
   return {
     settings: normalized.settings,
@@ -363,7 +371,10 @@ const gridSource = (props: Readonly<Record<string, unknown>>, release: PlatformB
   };
 };
 
-/** The grid's table contract and field names, or undefined for a non-table block. */
+/**
+ * The grid's table contract and field names; undefined for a non-table block, and while the
+ * compiled table is behind its draft settings (it catches up on the next compilation).
+ */
 const gridSetup = (
   props: Readonly<Record<string, unknown>>,
   compiled: Readonly<Record<string, unknown>>,
@@ -373,17 +384,16 @@ const gridSetup = (
   if (contract === undefined) return undefined;
   const sourceColumns = props.columns;
   if (!Array.isArray(sourceColumns) || sourceColumns.length !== contract.columns.length)
-    throw new Error("STUDIO_CANVAS_GRID_COLUMNS_MISMATCH");
-  const fields = new Map(
-    contract.columns.map((column, index) => {
-      const source = sourceColumns[index];
-      if (!isRecord(source) || typeof source.field !== "string")
-        throw new Error("STUDIO_CANVAS_GRID_FIELD_MISSING");
-      return [column.field.toLowerCase(), source.field] as const;
-    }),
-  );
+    return undefined;
+  const fields = new Map<string, string>();
+  for (const [index, column] of contract.columns.entries()) {
+    const source: unknown = sourceColumns[index];
+    if (!isRecord(source) || typeof source.field !== "string") return undefined;
+    fields.set(column.field.toLowerCase(), source.field);
+  }
   // The inspector reads catalogue defaults too, including defaults inside each column group.
   const source = gridSource(props, release);
+  if (source === undefined) return undefined;
   // A filter may name a field the table does not show; the feature lists its fields in the same order.
   const filterFields = contract.features.columnFilters.enabled
     ? contract.features.columnFilters.fields
@@ -395,12 +405,12 @@ const gridSetup = (
       : undefined;
   if (filterFields.length > 0) {
     if (sourceFilters?.kind !== "list" || sourceFilters.items.length !== filterFields.length)
-      throw new Error("STUDIO_CANVAS_GRID_FILTER_FIELDS_MISMATCH");
-    filterFields.forEach((filterField, index) => {
+      return undefined;
+    for (const [index, filterField] of filterFields.entries()) {
       const item = sourceFilters.items[index];
-      if (item?.kind !== "field_reference") throw new Error("STUDIO_CANVAS_GRID_FIELD_MISSING");
+      if (item?.kind !== "field_reference") return undefined;
       fields.set(filterField.toLowerCase(), item.field);
-    });
+    }
   }
   return {
     contract,

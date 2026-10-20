@@ -432,10 +432,11 @@ export const readStudioCanvasRecords = async (
         contract === undefined ||
         typeof queryId !== "string"
       ) {
+        // Nothing is read for it: the other tables of the area still show their held state.
         console.error(
-          `[studio] canvas table state ignored: STUDIO_CANVAS_TABLE_STATE_REFUSED cause=not_a_table placement=${alias}`,
+          `[studio] canvas table state ignored: STUDIO_CANVAS_TABLE_STATE_IGNORED cause=not_a_table placement=${alias}`,
         );
-        return { kind: "refused" };
+        continue;
       }
       if (state.layout !== undefined) {
         const authored = authoredGridLayout(contract);
