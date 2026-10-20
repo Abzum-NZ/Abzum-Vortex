@@ -135,6 +135,9 @@ const excelDate = (value: string, type: "date" | "date_time", timeZone: string):
 const excelText = (value: string): string => {
   const text = spreadsheetText(value);
   if (text.length > 32_767) throw exportError("excel_text_limit");
+  // ExcelJS drops these controls; UTF-8/XML cannot preserve unpaired surrogates either.
+  if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uD800-\uDFFF\uFFFE\uFFFF]/u.test(text))
+    throw exportError("excel_text_characters");
   return text;
 };
 
