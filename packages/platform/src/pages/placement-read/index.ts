@@ -29,7 +29,6 @@ import {
   placementReleaseVersion,
   placementSettingsOf,
   projectedUseAvailability,
-  resolvedQueryRecordTypeId,
   type PageDataState,
   type PlacementReadEntry,
 } from "./shared";
@@ -151,8 +150,10 @@ export const isTreeTablePlacement = (placement: PlacementReadEntry): boolean =>
 /**
  * Reads one level of a tree table: the children of one record, a page at a time, through the
  * table's own read, so they show the table's columns, formatting and the viewer's search, filters
- * and sort. The parent is read again under the viewer's current access, so a record the viewer
- * cannot read opens nothing. Undefined when the placement is not a tree table.
+ * and sort. Every child is decided under the viewer's current access as any row of the table is;
+ * the parent needs no read of its own, because a child whose parent the viewer cannot read is
+ * already a root, so naming such a parent shows nothing the viewer could not list anyway.
+ * Undefined when the placement is not a tree table.
  */
 export const readRecordsTableTreeLevel = async (
   read: PlacementReadInput,
@@ -161,17 +162,6 @@ export const readRecordsTableTreeLevel = async (
 ): Promise<TreeLevelResult | undefined> => {
   if (!isTreeTablePlacement(placement)) return undefined;
   const { placementId } = placement;
-  const recordTypeId =
-    typeof placement.vortex.queryId === "string"
-      ? resolvedQueryRecordTypeId(read.context, placement.vortex.queryId)
-      : undefined;
-  if (recordTypeId === undefined) {
-    logPlacementFailure(read.address, placementId, "query_not_bound");
-    return { status: "error" };
-  }
-  const parent = await read.services.readSubject(recordTypeId, request.parentRecordId);
-  if (parent.kind === "temporarily_unavailable") return { status: "error" };
-  if (parent.kind !== "read") return { status: "refused" };
   const data: Record<string, PageDataState> = {};
   await readQueryPlacement(
     {
