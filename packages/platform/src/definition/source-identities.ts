@@ -136,9 +136,7 @@ export function extractSourceIdentityRequirements(
 }
 
 /**
- * Adds the identities a Module's flows own to the shared vocabulary computed above: each flow, and,
- * for a `BeforeSave` flow, the nodes of the rule graph it is lowered to. A flow that cannot be
- * lowered lists no nodes; compiling it refuses with the located reason.
+ * Adds the identities a Module's flows own to the shared vocabulary computed above: each flow.
  */
 export function extractModuleSourceIdentityRequirements(
   source: ModuleSourceDocument,
