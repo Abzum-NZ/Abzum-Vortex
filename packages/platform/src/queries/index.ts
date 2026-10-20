@@ -7,6 +7,7 @@ export {
   protectedQueryBoardMembersCommandSchema,
   protectedQueryGroupValueSchema,
   protectedQueryGroupSelectorSchema,
+  protectedQueryGroupingSchema,
   protectedQueryGroupedMembersCommandSchema,
   protectedQueryGroupedMembersCompletedSchema,
   protectedQueryGroupedMembersResultSchema,

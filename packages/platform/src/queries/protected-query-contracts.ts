@@ -219,13 +219,42 @@ export const protectedQueryGroupSelectorSchema = z
   });
 export type ProtectedQueryGroupSelector = z.infer<typeof protectedQueryGroupSelectorSchema>;
 
+/** One authored grid dimension. Date fields require an explicit calendar unit and time zone. */
+export const protectedQueryGroupingSchema = z
+  .object({
+    fieldId: fieldIdSchema,
+    limit: z.number().int().min(1).max(200),
+    dateBucket: z
+      .object({
+        unit: z.enum(["day", "week", "month", "quarter", "year"]),
+        timeZone: z
+          .string()
+          .min(1)
+          .max(100)
+          .refine(
+            (zone) => {
+              try {
+                new Intl.DateTimeFormat("en", { timeZone: zone });
+                return true;
+              } catch {
+                return false;
+              }
+            },
+            { message: "Choose a recognised time zone for date groups" },
+          ),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
 /** One uncached, ordered, bidirectional page of currently readable members of a group. */
 export const protectedQueryGroupedMembersCommandSchema = protectedQueryCommandSchema
   .omit({ exactRecordId: true })
   .extend({
     selector: protectedQueryGroupSelectorSchema,
-    /** A grid's authored choice grouping overrides the query's grouping defaults. */
-    groupingFieldId: fieldIdSchema.optional(),
+    /** A grid's authored dimension overrides the query's grouping defaults. */
+    grouping: protectedQueryGroupingSchema.optional(),
   })
   .strict();
 export type ProtectedQueryGroupedMembersCommand = z.infer<
@@ -415,14 +444,16 @@ export const protectedQueryResultSchema = z.discriminatedUnion("outcome", [
 ]);
 export type ProtectedQueryResult = z.infer<typeof protectedQueryResultSchema>;
 
-/** One database-backed summary request over the installed Query's groups and aggregates, or a grid's choice grouping. */
+/** One database-backed summary request over the installed Query's groups and aggregates, or a grid's authored dimension. */
 export const protectedQuerySummaryCommandSchema = z
   .object({
     moduleRootId: moduleRootIdSchema,
     queryId: queryIdSchema,
     inputValues: z.record(builderKeySchema, jsonValueSchema),
-    /** A grid's authored choice grouping overrides query grouping/totals defaults. */
-    groupingFieldId: fieldIdSchema.optional(),
+    /** A grid's authored dimension overrides query grouping/totals defaults. */
+    grouping: protectedQueryGroupingSchema.optional(),
+    /** Last visible summary key; each page recomputes counts under current access. */
+    groupAfter: z.string().min(1).max(4096).optional(),
     search: protectedQueryCommandSchema.shape.search,
     searchableFieldIds: protectedQueryCommandSchema.shape.searchableFieldIds,
     /** The viewer's typed filter narrows the installed Query filter. */
@@ -434,7 +465,15 @@ export const protectedQuerySummaryCommandSchema = z
       .refine(uniqueFieldIds, { message: "Each filterable field is named once" })
       .default([]),
   })
-  .strict();
+  .strict()
+  .superRefine((command, context) => {
+    if (command.groupAfter !== undefined && command.grouping === undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["groupAfter"],
+        message: "Choose a grouping dimension before paging groups",
+      });
+  });
 export type ProtectedQuerySummaryCommand = z.infer<typeof protectedQuerySummaryCommandSchema>;
 
 export const protectedQuerySummaryAggregateResultSchema = z.discriminatedUnion("outcome", [
@@ -466,6 +505,8 @@ export const protectedQuerySummaryCompletedSchema = z
     groupByFieldIds: z.array(fieldIdSchema).max(10),
     totalRowCount: z.number().int().nonnegative().max(100_000),
     groups: z.array(protectedQuerySummaryGroupSchema).max(100_000),
+    /** Null when this is the last group page; totals still cover the full filtered set. */
+    nextGroupKey: z.string().nullable().optional(),
     aggregates: z.record(builderKeySchema, protectedQuerySummaryAggregateResultSchema),
   })
   .strict();
