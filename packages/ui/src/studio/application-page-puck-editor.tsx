@@ -52,6 +52,7 @@ import {
   storedItemRelease,
   storedZoneFromPuck,
   validateStoredZone,
+  validateStoredApplicationOutlets,
   storedZoneAliases,
   withCopiedFlowBindings,
   removeFlowBindingsOf,
@@ -626,6 +627,7 @@ function ApplicationPageSlotPuckEditor({
       syncStoredBlockDependencies(next);
       const parsed = applicationSourceDocumentSchema.safeParse(next);
       if (!parsed.success) throw parsed.error;
+      validateStoredApplicationOutlets(catalogue, parsed.data);
       setMessage("");
       onChange(current, parsed.data);
     } catch (error: unknown) {
