@@ -167,7 +167,8 @@ begin
     execute pg_catalog.format(
       'select pg_catalog.array_agg(candidate.record_id order by pending_item.owner_id),
          pg_catalog.array_agg(pending_item.owner_id order by pending_item.owner_id)
-       from pg_catalog.unnest($11::uuid[], $12::uuid[]) as pending_item(owner_id, after_id)
+       from rows from (pg_catalog.unnest($11::uuid[]), pg_catalog.unnest($12::uuid[]))
+         as pending_item(owner_id, after_id)
        cross join lateral (
          select stored.record_id
          from vortex_record.relationship_edges as edge
@@ -220,7 +221,8 @@ begin
     select coalesce(pg_catalog.array_agg(item.owner_id order by item.owner_id), array[]::uuid[]),
       coalesce(pg_catalog.array_agg(item.record_id order by item.owner_id), array[]::uuid[])
     into pending, pending_after
-    from pg_catalog.unnest(owners, candidates) as item(owner_id, record_id)
+    from rows from (pg_catalog.unnest(owners), pg_catalog.unnest(candidates))
+      as item(owner_id, record_id)
     where item.owner_id <> all (found_ids);
   end loop;
   if not p_parents and examined >= 500 and pg_catalog.cardinality(pending) > 0 then
