@@ -27,7 +27,12 @@ import {
   SelectAllControl,
   SelectionControl,
 } from "./controls";
-import { GridBoardView, useGridFeatures, type GridFeatureContext } from "./grid-features/registry";
+import {
+  GridBoardView,
+  useGridFeatures,
+  type GridFeatureContext,
+  type GridPivotView,
+} from "./grid-features/registry";
 import { FULL_SCREEN_CLASS, GridToolbar, useGridFullScreen } from "./grid-features/toolbar";
 import { resolveDisplayContext, rowName, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
@@ -211,6 +216,32 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
   const [message, announce] = useAnnouncer();
   const [clearCount, setClearCount] = useState(0);
 
+  // The pivot view: the address opened the table in it, or the person opened it here. It is a view
+  // of the same query state, so changing it reads no rows; the host keeps it in the address.
+  const pivotOffered = features?.pivot !== undefined;
+  const addressedPivot = features?.pivot?.view;
+  const addressedPivotKey = addressedPivot === undefined ? "" : `on:${addressedPivot.cursor ?? ""}`;
+  const [pivotView, setPivotView] = useState<GridPivotView["view"]>(addressedPivot);
+  const [seenPivotKey, setSeenPivotKey] = useState(addressedPivotKey);
+  if (seenPivotKey !== addressedPivotKey) {
+    setSeenPivotKey(addressedPivotKey);
+    setPivotView(addressedPivot);
+  }
+  const pivotChanged = events?.pivot_view_changed;
+  const pivot = useMemo(
+    (): GridPivotView | undefined =>
+      pivotOffered
+        ? {
+            view: pivotView,
+            setView: (view) => {
+              setPivotView(view);
+              void pivotChanged?.({ event: "pivot_view_changed", view });
+            },
+          }
+        : undefined,
+    [pivotOffered, pivotView, pivotChanged],
+  );
+
   // The optional grid features draw through their extension points; each feature's code loads only
   // when the projection turns it on.
   const featureColumns = useMemo(
@@ -236,6 +267,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
             arrangement: layout.arrangement,
             views: values?.layout.views,
             events,
+            pivot,
           },
     [
       accessibleName,
@@ -252,6 +284,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
       values?.sort,
       values?.layout.views,
       events,
+      pivot,
     ],
   );
   const gridFeatures = useGridFeatures(featureContext);
@@ -446,11 +479,13 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
   }
 
   const ready = state.status === "ready" && values !== undefined;
+  // While the pivot is open it takes the place of the rows: the grid and its pages are not drawn.
+  const pivotOpen = pivot?.view !== undefined && ready;
   // The search and filter controls start from what the first shown page was read with, and start
   // again when the person clears them; their own commits keep the controls (and their focus).
   const controlsKey = `${clearCount}:${values === undefined ? "reading" : "read"}`;
   const layoutControls =
-    !ready || rows.length === 0
+    !ready || rows.length === 0 || pivotOpen
       ? undefined
       : {
           layout,
@@ -493,6 +528,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
   );
 
   const body = ((): ReactElement => {
+    if (pivotOpen) return <>{gridFeatures.viewBody()}</>;
     if (state.status === "loading") return loading;
     if (state.status === "empty")
       return <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />;
@@ -622,7 +658,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
       ) : (
         body
       )}
-      {!ready || values === undefined ? null : (
+      {!ready || values === undefined || pivotOpen ? null : (
         <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
           <p className="m-0 text-xs text-muted-foreground tabular-nums">
             {values.page === undefined ? "" : `Page ${values.page} · `}

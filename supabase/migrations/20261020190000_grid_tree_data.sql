@@ -1313,7 +1313,7 @@ begin
   end loop;
   if p_user_inputs ? 'grouping' then
     query_item := vortex_record.grouping_query_internal(
-      query_item, record_type_item, p_user_inputs -> 'grouping'
+      query_item, record_type_item, p_user_inputs -> 'grouping', 50
     );
     if query_item is null then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');

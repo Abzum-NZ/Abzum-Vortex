@@ -64,6 +64,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_tree",
   "definition_records_table_conditional_formatting",
   "definition_records_table_pinning",
+  "definition_records_table_pivot",
   "definition_records_table_spreadsheet",
   "definition_records_table_board",
   "definition_query_binding",
@@ -187,6 +188,14 @@ const definitionValidationErrorCatalogueSource = {
     order: 39,
     message: "Column pinning needs a field from the bound query.",
     guidance: "Choose a query with fields, then set each column's pin position in Columns.",
+  },
+  // Pivot names its own part (the rows, the columns or the measure) in its sentence; the catalogue
+  // message is what a reader without that sentence sees.
+  definition_records_table_pivot: {
+    order: 39,
+    message: "A pivot needs two choice, link or date fields and what each cell shows.",
+    guidance:
+      "Choose the field for the rows, the field for the columns (at most 50 values) and what to total, or turn Pivot off.",
   },
   // Board names its own part (the stage field, a card field, a total) in its sentence; the
   // catalogue message is what a reader without that sentence sees.

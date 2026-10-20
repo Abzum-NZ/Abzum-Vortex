@@ -64,6 +64,9 @@ export const studioGridFeatureEditors: Readonly<
   // Only the links from a record type to itself can name a record's parent.
   tree: { kind: "settings", offers: (field) => field.parentLink === true },
   conditional_formatting: { kind: "custom" },
+  // The catalogue restricts the row and column pickers to choice, link and date fields and the measure
+  // picker to number and money fields, so Studio offers only fields a pivot can use.
+  pivot: { kind: "settings" },
   board: { kind: "custom" },
 };
 
@@ -84,6 +87,12 @@ export const studioGridFeatureStartSettings: Readonly<
   master_detail: { child_page_size: { kind: "number", value: 10 } },
   // A tree reads forty records of a level at a time unless the builder chooses otherwise.
   tree: { child_page_size: { kind: "number", value: 40 } },
+  // A pivot starts as a count of records, 40 rows at a time, with totals.
+  pivot: {
+    measure_function: { kind: "choice", value: "count" },
+    row_page_size: { kind: "number", value: 40 },
+    totals: { kind: "boolean", value: true },
+  },
 };
 
 /**

@@ -100,9 +100,13 @@ export type AggregateDescriptor = z.infer<typeof aggregateDescriptorSchema>;
 const aggregatesSchema = z
   .array(aggregateDescriptorSchema)
   .max(20)
-  .refine((aggregates) => new Set(aggregates.map((aggregate) => aggregate.alias)).size === aggregates.length, {
-    message: "Each aggregate alias is used once",
-  });
+  .refine(
+    (aggregates) =>
+      new Set(aggregates.map((aggregate) => aggregate.alias)).size === aggregates.length,
+    {
+      message: "Each aggregate alias is used once",
+    },
+  );
 
 /**
  * A computed value. Counts are whole numbers; sums and averages of whole and
@@ -282,9 +286,7 @@ export const protectedBoardArrangementResultSchema = z
     aggregates: protectedBoardAggregateResultsSchema,
   })
   .strict();
-export type ProtectedBoardArrangementResult = z.infer<
-  typeof protectedBoardArrangementResultSchema
->;
+export type ProtectedBoardArrangementResult = z.infer<typeof protectedBoardArrangementResultSchema>;
 
 // Results
 
@@ -409,6 +411,8 @@ export const arrangementRefusalReasonCodes = [
   "cursor_stale",
   /** The calendar time zone is not a known IANA zone. */
   "time_zone_invalid",
+  /** A pivot's column dimension holds more values than one pivot shows. */
+  "pivot_columns_exceeded",
 ] as const;
 export type ArrangementRefusalReasonCode = (typeof arrangementRefusalReasonCodes)[number];
 

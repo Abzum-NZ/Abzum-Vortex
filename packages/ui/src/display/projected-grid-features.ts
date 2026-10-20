@@ -291,6 +291,7 @@ export const parseTableFeatures = (
       "tree",
       "conditionalFormatting",
       "pinning",
+      "pivot",
       "spreadsheet",
     ],
     location,
@@ -362,6 +363,37 @@ export const parseTableFeatures = (
       pageSize: requirePositiveInteger(beneath.pageSize, "A tree needs its page size", location),
     });
   }
+  let pivot: RecordsTableFeatureProjection["pivot"];
+  if (record.pivot !== undefined) {
+    const held = requireRecord(record.pivot, "Projected pivot is invalid", location);
+    requireExactKeys(held, ["rowPageSize", "totals", "view"], location);
+    if (typeof held.totals !== "boolean")
+      fail("A projected pivot says whether it totals", location);
+    let view: { cursor?: string } | undefined;
+    if (held.view !== undefined) {
+      const opened = requireRecord(held.view, "A projected pivot view is invalid", location);
+      requireExactKeys(opened, ["cursor"], location);
+      view =
+        opened.cursor === undefined
+          ? {}
+          : {
+              cursor: requireNonEmptyString(
+                opened.cursor,
+                "A pivot view position must be text",
+                location,
+              ),
+            };
+    }
+    pivot = Object.freeze({
+      rowPageSize: requirePositiveInteger(
+        held.rowPageSize,
+        "A pivot needs its rows at a time",
+        location,
+      ),
+      totals: held.totals as boolean,
+      ...(view === undefined ? {} : { view: Object.freeze(view) }),
+    });
+  }
   let spreadsheet: RecordsTableFeatureProjection["spreadsheet"];
   if (record.spreadsheet !== undefined) {
     const controls = requireRecord(
@@ -382,6 +414,7 @@ export const parseTableFeatures = (
     });
   }
   return Object.freeze({
+    ...(pivot === undefined ? {} : { pivot }),
     ...(spreadsheet === undefined ? {} : { spreadsheet }),
     ...(record.pinning === true ? { pinning: true as const } : {}),
     ...(record.search === true ? { search: true as const } : {}),
