@@ -14,13 +14,21 @@ export type NamedActionEligibilityTarget = Readonly<{ recordId: string; commandI
 export type NamedActionRecordEligibility = Readonly<{
   recordId: string;
   revision?: number;
-  eligibility: NamedActionEligibility | "removed";
+  actions: readonly Readonly<{
+    actionId: string;
+    eligibility: NamedActionEligibility | "removed";
+  }>[];
+}>;
+
+export type NamedActionEligibilityAction = Readonly<{
+  action: InstalledNamedActionReference;
+  run: ActionFlowRunner;
 }>;
 
 type EligibilityRow = DatabaseRow & { readonly record_id: string; readonly value: unknown };
 
 /**
- * The batched eligibility of one named action over many records (at most 200): ONE database call
+ * The batched eligibility of declared named actions over many records (at most 200): ONE database call
  * reads each record under the caller's current access and previews the action for it with no
  * inputs, writing nothing, inside a transaction the caller already verified. Each preview carries
  * the command identity the record's change would run with, so a record that command already
@@ -30,25 +38,24 @@ type EligibilityRow = DatabaseRow & { readonly record_id: string; readonly value
 export const readNamedActionEligibility = async (
   transaction: RequestDatabaseTransaction,
   recordTypeId: string,
-  action: InstalledNamedActionReference,
+  actions: readonly NamedActionEligibilityAction[],
   targets: readonly NamedActionEligibilityTarget[],
   issuedAt: string,
-  run: ActionFlowRunner,
 ): Promise<readonly NamedActionRecordEligibility[]> => {
   if (targets.length === 0) return [];
   if (targets.length > 200) throw new Error("NAMED_ACTION_ELIGIBILITY_BATCH_TOO_LARGE");
+  if (actions.length === 0 || actions.length > 20)
+    throw new Error("NAMED_ACTION_ELIGIBILITY_ACTIONS_INVALID");
   const requests = targets.map((target) => ({
     recordId: target.recordId,
-    actions: [
-      {
-        commandId: target.commandId,
-        activityId: randomUUID(),
-        ownerKind: action.ownerKind,
-        ownerId: action.ownerId,
-        releaseRevision: action.releaseRevision,
-        actionId: action.actionId,
-      },
-    ],
+    actions: actions.map(({ action }) => ({
+      commandId: target.commandId,
+      activityId: randomUUID(),
+      ownerKind: action.ownerKind,
+      ownerId: action.ownerId,
+      releaseRevision: action.releaseRevision,
+      actionId: action.actionId,
+    })),
   }));
   let rows: readonly EligibilityRow[];
   await transaction.query`set local role vortex_runtime`;
@@ -65,19 +72,40 @@ export const readNamedActionEligibility = async (
     await transaction.query`set local role vortex_request`;
   }
   if (rows.length !== targets.length) throw new Error("NAMED_ACTION_ELIGIBILITY_ROWS_MISSING");
-  return rows.map((row): NamedActionRecordEligibility => {
+  const byId = new Map(rows.map((row) => [row.record_id.toLowerCase(), row]));
+  if (byId.size !== targets.length) throw new Error("NAMED_ACTION_ELIGIBILITY_ROWS_DUPLICATED");
+  return targets.map((target): NamedActionRecordEligibility => {
+    const row = byId.get(target.recordId.toLowerCase());
+    if (row === undefined) throw new Error("NAMED_ACTION_ELIGIBILITY_ROW_MISSING");
     if (typeof row.value !== "object" || row.value === null)
       throw new Error("NAMED_ACTION_ELIGIBILITY_RESULT_INVALID");
     const read = row.value as Record<string, unknown>;
     const subject = pageSubjectFromRead(read.record, read.capabilities, row.record_id);
-    if (subject.kind !== "read") return { recordId: row.record_id, eligibility: "removed" };
-    const previews = Array.isArray(read.previews) ? (read.previews as unknown[]) : [];
-    const entry = previews[0] as Record<string, unknown> | undefined;
-    if (entry === undefined) throw new Error("NAMED_ACTION_ELIGIBILITY_PREVIEW_MISSING");
+    if (!Array.isArray(read.previews)) throw new Error("NAMED_ACTION_ELIGIBILITY_PREVIEWS_INVALID");
+    const previews = read.previews as unknown[];
+    if (previews.length !== (subject.kind === "read" ? actions.length : 0))
+      throw new Error("NAMED_ACTION_ELIGIBILITY_PREVIEWS_INVALID");
     return {
       recordId: row.record_id,
-      ...(subject.row.revision === undefined ? {} : { revision: subject.row.revision }),
-      eligibility: namedActionPreviewEligibility(entry.preview, issuedAt, run),
+      ...(subject.kind !== "read" || subject.row.revision === undefined
+        ? {}
+        : { revision: subject.row.revision }),
+      actions: actions.map(({ action, run }, index) => {
+        if (subject.kind !== "read") return { actionId: action.actionId, eligibility: "removed" };
+        const entry = previews[index];
+        if (
+          typeof entry !== "object" ||
+          entry === null ||
+          !("actionId" in entry) ||
+          String(entry.actionId).toLowerCase() !== action.actionId.toLowerCase() ||
+          !("preview" in entry)
+        )
+          throw new Error("NAMED_ACTION_ELIGIBILITY_PREVIEW_INVALID");
+        return {
+          actionId: action.actionId,
+          eligibility: namedActionPreviewEligibility(entry.preview, issuedAt, run),
+        };
+      }),
     };
   });
 };

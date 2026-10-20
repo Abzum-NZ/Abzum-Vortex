@@ -10,6 +10,7 @@ import {
 import {
   recordsSelectionCountResultSchema,
   recordsTableBulkRunLineSchema,
+  type NamedActionAvailability,
   type RecordsSelectionInput,
   type RecordsTableBulkRunLine,
 } from "@vortex/platform/schema";
@@ -20,6 +21,7 @@ import type {
   TableSelectionScope,
 } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
+import { tablePayloadFor } from "./placement-helpers";
 
 /**
  * "Every matching record" of one table: the read's sealed descriptor it was chosen on, its count
@@ -64,16 +66,34 @@ const addressOf = (model: ApplicationPageModel) => ({
 export function useBulkSelection({
   model,
   navigationKey,
+  currentData,
+  selection,
   setSelection,
   refreshPlacements,
 }: Readonly<{
   model: ApplicationPageModel;
   navigationKey: string;
+  currentData: ApplicationPageModel["data"];
+  selection: Readonly<Record<string, readonly string[]>>;
   setSelection: Dispatch<SetStateAction<Readonly<Record<string, readonly string[]>>>>;
   refreshPlacements: (placementIds: readonly string[]) => Promise<void>;
 }>) {
   const [scopes, setScopes] = useState<Readonly<Record<string, HeldScope>>>({});
   const [runs, setRuns] = useState<Readonly<Record<string, TableBulkRun>>>({});
+  const [availability, setAvailability] = useState<
+    Readonly<
+      Record<
+        string,
+        Readonly<{
+          data: unknown;
+          selected: readonly string[];
+          records: NamedActionAvailability | "unavailable";
+        }>
+      >
+    >
+  >({});
+  const heldAvailability = useRef(availability);
+  heldAvailability.current = availability;
   const inFlight = useRef(new Set<string>());
   const navigation = useRef({ key: navigationKey });
   if (navigation.current.key !== navigationKey) navigation.current = { key: navigationKey };
@@ -81,7 +101,69 @@ export function useBulkSelection({
   useEffect(() => {
     setScopes({});
     setRuns({});
+    setAvailability({});
   }, [navigationKey]);
+
+  // One debounced, cancellable request per active selection, never per row or action. The module
+  // and response parser are downloaded only after a bulk-enabled table has a visible selection.
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      for (const [placementId, selected] of Object.entries(selection)) {
+        if (selected.length === 0 || scopes[placementId] !== undefined) continue;
+        const held = heldAvailability.current[placementId];
+        // A table whose selection and rows did not change keeps its decisions; no second read.
+        if (
+          held !== undefined &&
+          held.data === currentData[placementId] &&
+          held.selected === selected
+        )
+          continue;
+        const table = tablePayloadFor(currentData[placementId]);
+        if (table?.features?.bulkActions === undefined || table.rows.length === 0) continue;
+        const visible = table.rows.filter((row) => selected.includes(row.recordId));
+        const targets = visible.flatMap((row) =>
+          row.revision === undefined ? [] : [{ recordId: row.recordId, revision: row.revision }],
+        );
+        if (targets.length === 0 || targets.length !== visible.length) {
+          if (targets.length !== visible.length)
+            console.error("[page] action availability needs every selected row's revision");
+          setAvailability((current) => ({
+            ...current,
+            [placementId]: { data: currentData[placementId], selected, records: "unavailable" },
+          }));
+          continue;
+        }
+        void import("./read-action-availability")
+          .then(({ readActionAvailability }) =>
+            readActionAvailability(
+              { ...addressOf(model), placementId, targets },
+              controller.signal,
+            ),
+          )
+          .then((records) => {
+            if (!controller.signal.aborted)
+              setAvailability((current) => ({
+                ...current,
+                [placementId]: { data: currentData[placementId], selected, records },
+              }));
+          })
+          .catch((error: unknown) => {
+            if (!controller.signal.aborted) {
+              console.error("[page] action availability could not be read", error);
+              setAvailability((current) => ({
+                ...current,
+                [placementId]: { data: currentData[placementId], selected, records: "unavailable" },
+              }));
+            }
+          });
+      }
+    }, 180);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [currentData, model, navigationKey, scopes, selection]);
 
   const clear = useCallback(
     (placementId: string) => {
@@ -304,7 +386,14 @@ export function useBulkSelection({
       const matching = scopeOf(placementId, table);
       const changed = scopes[placementId] !== undefined && matching === undefined;
       const run = runs[placementId];
-      if (matching === undefined && run === undefined && !changed) return undefined;
+      const held = availability[placementId];
+      const selected = selection[placementId] ?? [];
+      const records =
+        held !== undefined && held.data === currentData[placementId] && held.selected === selected
+          ? held.records
+          : undefined;
+      if (matching === undefined && run === undefined && !changed && records === undefined)
+        return undefined;
       const scope: TableSelectionScope | undefined = changed
         ? { kind: "not_counted", reason: "changed" }
         : matching === undefined
@@ -324,9 +413,10 @@ export function useBulkSelection({
             }
           : {}),
         ...(run === undefined ? {} : { bulkRun: run }),
+        ...(records === undefined ? {} : { actionAvailability: records }),
       };
     },
-    [runs, scopeOf, scopes],
+    [availability, currentData, runs, scopeOf, scopes, selection],
   );
 
   return useMemo(
