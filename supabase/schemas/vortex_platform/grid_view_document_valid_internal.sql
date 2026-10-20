@@ -51,7 +51,7 @@ as $function$
           or entry.value - array['fieldId', 'direction'] <> '{}'::jsonb
           or pg_catalog.jsonb_typeof(entry.value -> 'fieldId') is distinct from 'string'
           or not vortex_platform.is_non_nil_uuid(entry.value ->> 'fieldId')
-          or entry.value ->> 'direction' is distinct from all (array['ascending', 'descending'])
+          or coalesce(entry.value ->> 'direction' <> all (array['ascending', 'descending']), true)
       )
       and (select pg_catalog.count(distinct pg_catalog.lower(entry.value ->> 'fieldId'))
         from pg_catalog.jsonb_array_elements(p_document -> 'sort') as entry(value))
