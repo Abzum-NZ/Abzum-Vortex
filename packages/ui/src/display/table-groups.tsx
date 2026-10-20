@@ -32,6 +32,11 @@ const location = { propertyPath: ["groups"] };
 type MemberPage = Readonly<{
   key: string;
   rows: readonly DisplayRow[];
+  /**
+   * The grid features the server projected with this page: a feature that depends on the rows
+   * read (such as inline editing) follows the open group's page, not the collapsed groups' read.
+   */
+  features: TablePayload["features"];
   next?: string;
   previous?: string;
   /** The page number within the open group, for the footer; the group is read a page at a time. */
@@ -70,6 +75,7 @@ const parseMembers = (
         page: {
           key,
           rows: payload.rows,
+          features: payload.features,
           page,
           ...(payload.nextContinuationToken === undefined
             ? {}
@@ -96,6 +102,8 @@ export type GroupedTable = Readonly<{
   members: Members | undefined;
   /** The open group's rows as the table shows them; empty while closed or reading. */
   rows: readonly DisplayRow[];
+  /** The features projected with the open group's page; undefined while no page is shown. */
+  memberFeatures: TablePayload["features"] | undefined;
   toggle: (key: string) => void;
   /** Reads the open group's next or previous page. */
   move: (direction: "next" | "previous") => void;
@@ -121,6 +129,7 @@ export function useGroupedTable(
       page: {
         key: serverExpanded,
         rows: values.rows,
+        features: values.features,
         page: 1,
         ...(values.nextContinuationToken === undefined
           ? {}
@@ -241,6 +250,7 @@ export function useGroupedTable(
             expanded: current.expanded,
             members,
             rows: members?.status === "ready" ? members.page.rows : [],
+            memberFeatures: members?.status === "ready" ? members.page.features : undefined,
             toggle,
             move,
           },

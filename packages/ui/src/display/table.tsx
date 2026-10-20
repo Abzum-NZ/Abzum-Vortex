@@ -195,8 +195,10 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
   const rows = grouped === undefined ? (values?.rows ?? []) : grouped.rows;
   // The grid features this viewer may use on this read, as the server projected them. While the
   // next page is being read the last projection stays, so the search box and filters keep focus.
+  // An open group's page carries its own projection, which follows the rows it shows.
   const lastFeatures = useRef(values?.features);
-  if (values !== undefined) lastFeatures.current = values.features;
+  if (grouped?.memberFeatures !== undefined) lastFeatures.current = grouped.memberFeatures;
+  else if (values !== undefined) lastFeatures.current = values.features;
   const features = lastFeatures.current;
   // Rows are selectable only for bulk commands over the selection.
   const selectable =
@@ -668,8 +670,8 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
       <div className="flex flex-col gap-2">
         <Alert>
           <AlertDescription>
-            There are too many matching records to count in groups. Narrow the table with search or
-            filters to group it.
+            There are too many matching records or values to count in groups. Narrow the table with
+            search or filters to group it.
           </AlertDescription>
         </Alert>
         {membersView(rows)}

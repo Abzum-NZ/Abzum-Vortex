@@ -54,6 +54,7 @@ import {
   recordsTableNarrowingRefusal,
   recordsTableRequestRefusal,
   type ConditionalFormattingContext,
+  type RecordsTableFeatureProjection,
   type RecordsTableInlineEditor,
   type RecordsTableRequestRefusal,
 } from "./records-table-features";
@@ -536,6 +537,18 @@ export const buildRecordsTableQueryCommand = (
     : recordsTableRequestRefusal("command", "query_command_invalid");
 };
 
+/** The table without its Group by control, for a viewer the grouped read refused the field. */
+const withoutGrouping = (values: ProjectedTableValues): ProjectedTableValues => {
+  if (values.features?.grouping === undefined) return values;
+  const features = Object.fromEntries(
+    Object.entries(values.features).filter(([key]) => key !== "grouping"),
+  ) as RecordsTableFeatureProjection;
+  const rest = Object.fromEntries(
+    Object.entries(values).filter(([key]) => key !== "features"),
+  ) as ProjectedTableValues;
+  return Object.keys(features).length === 0 ? rest : { ...rest, features };
+};
+
 /** The rows and bounds one grouped read returned, in the shape an ordinary page read has. */
 type GroupedPage = Readonly<{
   rows: readonly ProtectedQueryRow[];
@@ -546,8 +559,12 @@ type GroupedPage = Readonly<{
 
 type GroupedRead =
   | Readonly<{ kind: "resolution"; resolution: RecordsTableQueryResolution }>
-  /** The groups cannot be counted for this viewer or this many records: read the page flat. */
-  | Readonly<{ kind: "flat"; groups?: ProjectedTableGroups }>
+  /**
+   * The groups cannot be counted for this viewer or this many records: read the page flat.
+   * `withheld` says the summary refused the grouping field for this viewer, so the flat page
+   * offers no Group by control that would only repeat the same refusal.
+   */
+  | Readonly<{ kind: "flat"; groups?: ProjectedTableGroups; withheld?: true }>
   | Readonly<{ kind: "read"; groups?: ProjectedTableGroups; page: GroupedPage }>;
 
 /**
@@ -593,9 +610,13 @@ const readGrouped = async (
       const reason = summary.value.reasonCode;
       if (reason === "dataset_limit_exceeded")
         return { kind: "flat", groups: { status: "too_many" } };
-      if (reason === "field_unbounded") return { kind: "flat" };
+      if (reason === "field_unbounded") return { kind: "flat", withheld: true };
       return { kind: "resolution", resolution: { kind: "refused", reasonCode: reason } };
     }
+    // More stored values than one grouped read counts (choices removed since records were saved):
+    // the groups it returned would hide the rest, so the table stays flat until it is narrowed.
+    if (summary.value.nextGroupKey !== undefined && summary.value.nextGroupKey !== null)
+      return { kind: "flat", groups: { status: "too_many" } };
     fieldBounds = summary.value.fieldBounds;
     groups = projectRecordsTableGroups(
       summary.value,
@@ -831,7 +852,9 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
           : {
               status: "ready",
               values: {
-                ...projected.values,
+                ...(grouped?.kind === "flat" && grouped.withheld === true
+                  ? withoutGrouping(projected.values)
+                  : projected.values),
                 ...(built.sort === undefined ? {} : { sort: built.sort }),
                 narrowing,
                 page,
