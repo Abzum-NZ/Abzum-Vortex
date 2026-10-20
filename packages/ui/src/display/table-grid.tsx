@@ -605,7 +605,14 @@ export function RecordsGrid({
     revealRequested.current = false;
     if (activeColumn >= 0) {
       const element = cellElement(activeRow, active.columnId);
+      // A pinned cell is always in view across; revealing it at its unpinned place would scroll
+      // the grid sideways to the far edge, so only its row is brought into view.
+      const across: [HTMLElement, number][] = [];
+      if (element !== null && getComputedStyle(element).position === "sticky")
+        for (let node = element.parentElement; node !== null; node = node.parentElement)
+          if (node.scrollWidth > node.clientWidth) across.push([node, node.scrollLeft]);
       element?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      for (const [node, left] of across) node.scrollLeft = left;
       if (focus) element?.focus({ preventScroll: true });
     }
   });

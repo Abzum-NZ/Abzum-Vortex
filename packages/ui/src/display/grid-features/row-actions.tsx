@@ -190,7 +190,7 @@ function GridInteraction({ surface }: GridFeatureInteractionProps): null {
       event.preventDefault();
       event.stopPropagation();
       trigger.dataset.rowActionMenuAll = "true";
-      trigger.focus();
+      trigger.focus({ preventScroll: true });
       trigger.click();
     };
     root.addEventListener("keydown", open, true);

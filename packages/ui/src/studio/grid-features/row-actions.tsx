@@ -29,6 +29,18 @@ export type StudioRowAction = Readonly<{
   capability?: string;
 }>;
 
+/** The business names of the row-button symbols, as the catalogue's Icon setting names them. */
+const iconLabels: Readonly<Record<(typeof recordsTableRowActionIcons)[number], string>> = {
+  workflow: "Run",
+  check: "Check",
+  close: "Close",
+  info: "Details",
+  minus: "Remove",
+  eye: "Open",
+  plus: "Install",
+  undo: "Restore",
+};
+
 const placementOf = (source: ApplicationSourceDocument, alias: string) =>
   source.body.pages
     .flatMap((page) => sourcePageItems(page.composition))
@@ -276,7 +288,7 @@ export function StudioRowActionsEditor({
               >
                 {recordsTableRowActionIcons.map((icon) => (
                   <NativeSelectOption key={icon} value={icon}>
-                    {icon.replaceAll("-", " ")}
+                    {iconLabels[icon]}
                   </NativeSelectOption>
                 ))}
               </NativeSelect>
