@@ -1,5 +1,6 @@
-import type { RecordsTableFeatureProjection } from "../records-table-features";
 import "server-only";
+
+import type { RecordsTableFeatureProjection } from "../records-table-features";
 
 import type { BoardColumnReadRequest, PageDefinition } from "../../schema";
 import type {

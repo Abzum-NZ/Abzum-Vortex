@@ -15,6 +15,7 @@ import { Input } from "../../components/input";
 import { Label } from "../../components/label";
 import { NativeSelect, NativeSelectOption } from "../../components/native-select";
 import { StudioEntryList } from "../studio-entry-list";
+import { pruneUnboundEvents } from "../stored-composition";
 import {
   StudioReferencePicker,
   type StudioReferencePickerOption,
@@ -46,7 +47,10 @@ export const studioRowActionsFor = (
   return (item.props.row_actions ?? []) as readonly StudioRowAction[];
 };
 
-/** Removing a declaration removes its binding in the same draft edit, never a dangling reference. */
+/**
+ * Removing a declaration removes its binding, and the event only it used, in the same draft edit:
+ * repeated add/remove never leaves dangling or unreachable declarations.
+ */
 export const applyStudioRowActionChange = (
   source: ApplicationSourceDocument,
   alias: string,
@@ -78,6 +82,7 @@ export const applyStudioRowActionChange = (
     (binding) =>
       binding.control !== alias || binding.event !== "row_action" || !removed.has(binding.event_id),
   );
+  pruneUnboundEvents(candidate.body, removed);
   const parsed = applicationSourceDocumentSchema.safeParse(candidate);
   return parsed.success
     ? { kind: "applied", source: parsed.data }

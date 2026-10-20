@@ -4887,7 +4887,7 @@
             "kind": "group",
             "key": "row_actions",
             "label": "Row actions",
-            "help": "Buttons and a menu that run the row?s declared workflows",
+            "help": "Buttons and a menu that run each row's declared workflows",
             "required": false,
             "defaultValue": {
               "kind": "group",

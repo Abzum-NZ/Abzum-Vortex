@@ -4,7 +4,6 @@ import type { ReactElement } from "react";
 import { Button } from "../components/button";
 import { Card, CardContent } from "../components/card";
 import { Checkbox } from "../components/checkbox";
-
 import { Empty, EmptyHeader, EmptyTitle } from "../components/empty";
 import { Pagination, PaginationContent, PaginationItem } from "../components/pagination";
 import { Skeleton } from "../components/skeleton";

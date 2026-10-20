@@ -207,12 +207,21 @@ export const recordsTableBindingRefusal = async (
         )?.rowActions;
         if (projected === undefined || installation.namedActions === undefined)
           return recordsTableRequestRefusal(event, "feature_not_projected");
+        // Only the invoked command is re-decided; the row's other commands are not this request's.
+        const invoked = <Decision extends { action: string }>(actions: readonly Decision[]) =>
+          actions.filter((action) => sameId(action.action, binding.eventId));
         const current = await projectRowActionAvailability(
           transaction,
           { ...installation, namedActions: installation.namedActions },
           binding.controlId,
           recordTypeId,
-          projected,
+          {
+            actions: projected.actions.filter((action) => sameId(action.eventId, binding.eventId)),
+            availability: projected.availability.map((entry) => ({
+              ...entry,
+              actions: invoked(entry.actions),
+            })),
+          },
           new Date().toISOString(),
         );
         const decision = current.availability[0]?.actions.find((action) =>
