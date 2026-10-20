@@ -54,6 +54,7 @@ import { useRuntimeInputs } from "./use-runtime-inputs";
 import { useGridLayout } from "./use-grid-layout";
 import { useRowDetail } from "./use-row-detail";
 import { usePivot } from "./use-pivot";
+import { useGroupMembers } from "./use-group-members";
 import { WebMcpAdapter } from "../../../../../../_components/webmcp-adapter";
 import {
   useApplicationFrame,
@@ -478,6 +479,14 @@ export function ApplicationPageViewContent({
     onReload: router.refresh,
   });
 
+  const { groupEventsFor } = useGroupMembers({
+    application,
+    currentPageKey,
+    currentSearch,
+    onReload: router.refresh,
+    changeTableQuery,
+  });
+
   const { runtimeInputs } = useRuntimeInputs({
     currentData,
     model,
@@ -502,6 +511,7 @@ export function ApplicationPageViewContent({
     readRowDetail,
     readPivotPage,
     commitPivotView,
+    groupEventsFor,
     requestChoicePageRef,
     changeChoiceField,
     subject,

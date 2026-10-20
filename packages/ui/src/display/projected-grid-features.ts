@@ -300,6 +300,7 @@ export const parseTableFeatures = (
       "inlineEdit",
       "masterDetail",
       "tree",
+      "grouping",
       "conditionalFormatting",
       "pinning",
       "pivot",
@@ -374,6 +375,20 @@ export const parseTableFeatures = (
       pageSize: requirePositiveInteger(beneath.pageSize, "A tree needs its page size", location),
     });
   }
+  let grouping: RecordsTableFeatureProjection["grouping"];
+  if (record.grouping !== undefined) {
+    const held = requireRecord(record.grouping, "Projected grouping is invalid", location);
+    requireExactKeys(held, ["fieldId", "label", "unassignedLabel"], location);
+    grouping = Object.freeze({
+      fieldId: requireNonEmptyString(held.fieldId, "Grouping needs its field", location),
+      label: requireNonEmptyString(held.label, "Grouping needs its field's name", location),
+      unassignedLabel: requireNonEmptyString(
+        held.unassignedLabel,
+        "Grouping needs the name of the records with no value",
+        location,
+      ),
+    });
+  }
   let pivot: RecordsTableFeatureProjection["pivot"];
   if (record.pivot !== undefined) {
     const held = requireRecord(record.pivot, "Projected pivot is invalid", location);
@@ -435,10 +450,80 @@ export const parseTableFeatures = (
     ...(inlineEdit === undefined ? {} : { inlineEdit }),
     ...(masterDetail === undefined ? {} : { masterDetail }),
     ...(tree === undefined ? {} : { tree }),
+    ...(grouping === undefined ? {} : { grouping }),
     ...(record.conditionalFormatting === undefined
       ? {}
       : {
           conditionalFormatting: parseConditionalFormatting(record.conditionalFormatting, location),
         }),
+  });
+};
+
+/** One group of a grouped table: its key, its label and how many records it holds right now. */
+export type TableGroup = Readonly<{
+  key: string;
+  label: string;
+  count: number;
+  unassigned?: true;
+}>;
+
+/**
+ * The groups a grouped table was read with: one bounded count per group from the same read as the
+ * table's filters and search, or the statement that there are too many filtered records to count
+ * them in groups. The open group's key is one of the groups.
+ */
+export type TableGroups =
+  | Readonly<{
+      status: "ready";
+      fieldId: string;
+      groups: readonly TableGroup[];
+      total: number;
+      expanded?: string;
+    }>
+  | Readonly<{ status: "too_many" }>;
+
+export const parseTableGroups = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): TableGroups => {
+  const record = requireRecord(value, "Projected groups are invalid", location);
+  if (record.status === "too_many") {
+    requireExactKeys(record, ["status"], location);
+    return Object.freeze({ status: "too_many" as const });
+  }
+  if (record.status !== "ready") return fail("Projected groups need a status", location);
+  requireExactKeys(record, ["status", "fieldId", "groups", "total", "expanded"], location);
+  const groups = requireArray(record.groups, "Projected groups must be an array", location).map(
+    (item): TableGroup => {
+      const group = requireRecord(item, "A projected group must be an object", location);
+      requireExactKeys(group, ["key", "label", "count", "unassigned"], location);
+      if (group.unassigned !== undefined && group.unassigned !== true)
+        fail("A projected group is only ever unassigned", location);
+      if (typeof group.count !== "number" || !Number.isInteger(group.count) || group.count < 0)
+        fail("A projected group count must be a whole number", location);
+      return Object.freeze({
+        key: requireNonEmptyString(group.key, "A projected group needs its key", location),
+        label: requireNonEmptyString(group.label, "A projected group needs its label", location),
+        count: group.count as number,
+        ...(group.unassigned === true ? { unassigned: true as const } : {}),
+      });
+    },
+  );
+  if (new Set(groups.map((group) => group.key)).size !== groups.length)
+    fail("Projected groups name each group once", location);
+  if (typeof record.total !== "number" || !Number.isInteger(record.total) || record.total < 0)
+    fail("Projected groups need their total", location);
+  const expanded =
+    record.expanded === undefined
+      ? undefined
+      : requireNonEmptyString(record.expanded, "The open group must be named by its key", location);
+  if (expanded !== undefined && !groups.some((group) => group.key === expanded))
+    fail("The open group must be one of the groups", location);
+  return Object.freeze({
+    status: "ready" as const,
+    fieldId: requireNonEmptyString(record.fieldId, "Projected groups need their field", location),
+    groups: Object.freeze(groups),
+    total: record.total as number,
+    ...(expanded === undefined ? {} : { expanded }),
   });
 };

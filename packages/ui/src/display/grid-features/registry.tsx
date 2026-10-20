@@ -60,6 +60,16 @@ export type GridFeatureContext = Readonly<{
    * shown, and `setView` opens, pages or closes the pivot and keeps it in the address.
    */
   pivot: GridPivotView | undefined;
+  /**
+   * The grouping, when the grouping feature is on: whether the table is grouped now, and the one
+   * way to group it by the authored field or to show the records ungrouped. The address keeps it.
+   */
+  grouping: GridGroupingView | undefined;
+}>;
+
+export type GridGroupingView = Readonly<{
+  grouped: boolean;
+  setGrouped: (grouped: boolean) => void;
 }>;
 
 export type GridPivotView = Readonly<{
@@ -172,6 +182,7 @@ const loaders: Readonly<
   inline_edit: () => import("./inline-edit"),
   master_detail: () => import("./master-detail"),
   tree: () => import("./tree"),
+  grouping: () => import("./grouping"),
   conditional_formatting: () => import("./conditional-format"),
   pivot: () => import("./pivot"),
 };
@@ -186,6 +197,7 @@ const projectionKeys: Readonly<Record<keyof RecordsTableFeatureProjection, GridE
   inlineEdit: "inline_edit",
   masterDetail: "master_detail",
   tree: "tree",
+  grouping: "grouping",
   conditionalFormatting: "conditional_formatting",
   pivot: "pivot",
 };
@@ -245,6 +257,7 @@ const featurePoints: Readonly<Record<GridExtensionKey, readonly ComponentPoint[]
   inline_edit: ["CellEditor"],
   master_detail: ["RowExpansion"],
   tree: ["RowExpansion"],
+  grouping: ["ToolbarItems", "ColumnMenuItems"],
   conditional_formatting: ["CellAdornment", "HeaderAdornment"],
   pivot: ["ToolbarItems", "ViewBody"],
 };

@@ -67,6 +67,7 @@ export function useRuntimeInputs({
   readRowDetail,
   readPivotPage,
   commitPivotView,
+  groupEventsFor,
   requestChoicePageRef,
   changeChoiceField,
   subject,
@@ -140,6 +141,11 @@ export function useRuntimeInputs({
   readRowDetail: (placementId: string, event: DisplaySemanticEvent) => Promise<unknown>;
   readPivotPage: (placementId: string, event: DisplaySemanticEvent) => Promise<unknown>;
   commitPivotView: (placementId: string, view: RecordsTablePivotView | undefined) => void;
+  /** The events a grouped table reports, for the table's own grouping field. */
+  groupEventsFor: (
+    placementId: string,
+    fieldId: string,
+  ) => Readonly<Record<string, (event: DisplaySemanticEvent) => unknown>>;
   requestChoicePageRef: RefObject<
     (
       placementId: string,
@@ -476,6 +482,11 @@ export function useRuntimeInputs({
             changeTableQuery(placementId, { kind: "drill", filters: event.filters });
           };
         }
+        // A grouped table counts its groups in the page read, reads an open group's members on
+        // demand and keeps the open group in the address; only a table whose projection carries
+        // grouping offers them.
+        if (tableData?.features?.grouping !== undefined && supportsEvent("page_changed"))
+          Object.assign(events, groupEventsFor(placementId, tableData.features.grouping.fieldId));
         // Saved views change the address and store a view; like the layout they are the person's
         // own and need no flow, so the same declared event gates them.
         if (supportsEvent("columns_changed") && tableData !== undefined)
@@ -902,6 +913,7 @@ export function useRuntimeInputs({
     rowDetailHandlers,
     pivotHandlers,
     commitPivotView,
+    groupEventsFor,
     subject,
     onOpenApplication,
     unsavedWork,
