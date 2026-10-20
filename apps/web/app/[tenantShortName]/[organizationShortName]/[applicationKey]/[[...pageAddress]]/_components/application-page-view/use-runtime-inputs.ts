@@ -131,10 +131,7 @@ export function useRuntimeInputs({
     placementId: string,
     event: DisplaySemanticEvent,
   ) => Promise<GridLayoutCommitResult>;
-  runViewCommand: (
-    placementId: string,
-    command: GridViewCommand,
-  ) => Promise<GridViewCommandResult>;
+  runViewCommand: (placementId: string, command: GridViewCommand) => Promise<GridViewCommandResult>;
   requestChoicePageRef: RefObject<
     (
       placementId: string,

@@ -429,7 +429,13 @@ export function ApplicationPageViewContent({
     applyDispatch,
   });
 
-  const { commitTablePage, changeTableQuery, openTableView, tableQueryPending } = useTablePageAddress({
+  const {
+    commitTablePage,
+    changeTableQuery,
+    openTableView,
+    selectTableViewInPlace,
+    tableQueryPending,
+  } = useTablePageAddress({
     model,
     currentData,
     currentSearch,
@@ -473,9 +479,10 @@ export function ApplicationPageViewContent({
   const { commitLayout, runViewCommand } = useGridLayout({
     model,
     currentData,
+    navigationKey,
+    setRefreshedPlacementData,
     openTableView,
-    changeTableQuery,
-    refreshPlacements,
+    selectTableViewInPlace,
   });
 
   const { runtimeInputs } = useRuntimeInputs({

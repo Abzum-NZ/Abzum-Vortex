@@ -145,6 +145,20 @@ export function useTablePageAddress({
     [clearSelection],
   );
 
+  /**
+   * Selects a view the table already shows (the person just saved the grid as it): the address
+   * names it without a reread, because the rows on screen are exactly the view's.
+   */
+  const selectTableViewInPlace = useCallback((placementId: string, viewId: string) => {
+    const parameters = new URLSearchParams(window.location.search);
+    applyRecordsTableQueryChange(parameters, placementId, { kind: "view", viewId });
+    shownRef.current.keys.set(
+      placementId.toLowerCase(),
+      recordsTableAddressKey(placementId, [...parameters]),
+    );
+    push(parameters);
+  }, []);
+
   // A view opened by its address alone (a shared link, or a view just chosen) shows its own sort,
   // filters and search from the server. Once the page lands they are written into the address,
   // replacing the entry, so every control, a copied link and Back agree with what is shown. The
@@ -166,7 +180,10 @@ export function useTablePageAddress({
       const held = Object.keys(currentData).find(
         (candidate) => candidate.toLowerCase() === placementId.toLowerCase(),
       );
-      if (held === undefined || (shownRef.current.keys.get(placementId.toLowerCase()) ?? "") !== key)
+      if (
+        held === undefined ||
+        (shownRef.current.keys.get(placementId.toLowerCase()) ?? "") !== key
+      )
         continue;
       const selected = tablePayloadFor(currentData[held])?.layout.views?.selected;
       if (selected === null || selected === undefined || selected.viewId !== view.viewId) continue;
@@ -240,5 +257,11 @@ export function useTablePageAddress({
     }
   }, [clearSelection, currentSearch, model, refreshPlacements]);
 
-  return { commitTablePage, changeTableQuery, openTableView, tableQueryPending };
+  return {
+    commitTablePage,
+    changeTableQuery,
+    openTableView,
+    selectTableViewInPlace,
+    tableQueryPending,
+  };
 }

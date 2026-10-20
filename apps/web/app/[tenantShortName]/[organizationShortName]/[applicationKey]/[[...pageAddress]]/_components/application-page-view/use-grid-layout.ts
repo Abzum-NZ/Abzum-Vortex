@@ -1,18 +1,21 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import { toast } from "@vortex/ui/components/sonner";
 import type { DisplaySemanticEvent } from "@vortex/ui";
 import {
   readRecordsTableAddressedQuery,
+  type GridLayout,
   type GridLayoutCommitResult,
+  type GridLayoutState,
   type GridViewCommand,
   type GridViewCommandResult,
-  type GridLayout,
   type GridViewDocument,
-  type RecordsTableQueryChange,
+  type GridViewItem,
+  type SelectedGridView,
 } from "@vortex/platform/schema";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import { commitGridLayout, commitGridView } from "../../grid-layout-action";
 import { tablePayloadFor } from "./placement-helpers";
+import type { RefreshedPlacementData } from "./types";
 
 const UNAVAILABLE: GridLayoutCommitResult = Object.freeze({ outcome: "unavailable" });
 const VIEW_UNAVAILABLE: GridViewCommandResult = Object.freeze({ outcome: "unavailable" });
@@ -24,25 +27,25 @@ const VIEW_UNAVAILABLE: GridViewCommandResult = Object.freeze({ outcome: "unavai
  * newer layout from another tab) and a failed write are told in a notice. A stored layout the
  * current release can no longer apply is reset through that same writer, with a notice saying why.
  *
- * Saved views are opened by the address (the table rereads on the server), and created, replaced,
- * renamed, shared and deleted through one scoped write each; none of them reads records except the
- * grid's own placement reread that follows.
+ * Saved views are opened by the address (the table rereads once on the server, because the view
+ * changes the query or the projection), and created, replaced, renamed, shared and deleted through
+ * one scoped write each. None of those reads records: the page's own copy of the views list is
+ * updated from what the write answered.
  */
 export function useGridLayout({
   model,
   currentData,
+  navigationKey,
+  setRefreshedPlacementData,
   openTableView,
-  changeTableQuery,
-  refreshPlacements,
+  selectTableViewInPlace,
 }: Readonly<{
   model: ApplicationPageModel;
   currentData: ApplicationPageModel["data"];
+  navigationKey: string;
+  setRefreshedPlacementData: Dispatch<SetStateAction<RefreshedPlacementData | undefined>>;
   openTableView: (placementId: string, viewId: string | null) => void;
-  changeTableQuery: (
-    placementId: string,
-    change: Exclude<RecordsTableQueryChange, { kind: "page" }>,
-  ) => void;
-  refreshPlacements: (placementIds: readonly string[]) => Promise<void>;
+  selectTableViewInPlace: (placementId: string, viewId: string) => void;
 }>) {
   const { tenantShortName, organizationShortName, applicationKey, pageKey } = model.invocation;
   const address = useRef({ tenantShortName, organizationShortName, applicationKey, pageKey });
@@ -57,6 +60,44 @@ export function useGridLayout({
     );
     return held === undefined ? undefined : tablePayloadFor(latestData.current[held])?.layout;
   }, []);
+
+  /**
+   * Changes the grid's layout state in the page's own copy of its data, so the views list, the
+   * selected view and the stored layout's revision follow a write without reading any record.
+   */
+  const patchLayoutState = useCallback(
+    (placementId: string, update: (layout: GridLayoutState) => GridLayoutState): void => {
+      const held = Object.keys(latestData.current).find(
+        (candidate) => candidate.toLowerCase() === placementId.toLowerCase(),
+      );
+      if (held === undefined) return;
+      setRefreshedPlacementData((current) => {
+        // Successive patches build on one another, so the latest patched copy wins over the read.
+        const prior = current?.navigationKey === navigationKey ? current : undefined;
+        const data = prior?.data[held] ?? latestData.current[held];
+        if (
+          data === undefined ||
+          data.status !== "ready" ||
+          typeof data.values !== "object" ||
+          data.values === null ||
+          !("layout" in data.values)
+        )
+          return current;
+        const values = data.values as Readonly<{ layout: GridLayoutState }>;
+        return {
+          navigationKey,
+          data: {
+            ...(prior?.data ?? {}),
+            [held]: { ...data, values: { ...values, layout: update(values.layout) } },
+          },
+          editFormBaselines: { ...(prior?.editFormBaselines ?? {}) },
+          ...(prior?.subject === undefined ? {} : { subject: prior.subject }),
+          ...(prior?.content === undefined ? {} : { content: prior.content }),
+        };
+      });
+    },
+    [navigationKey, setRefreshedPlacementData],
+  );
 
   const commitLayout = useCallback(
     async (placementId: string, event: DisplaySemanticEvent): Promise<GridLayoutCommitResult> => {
@@ -164,26 +205,77 @@ export function useGridLayout({
     [layoutOf],
   );
 
-  /** Records that the person's arrangement now is the view they just saved. */
+  /**
+   * Records that the person's arrangement now is the view they just saved, and keeps the page's
+   * copy of the layout's revision current so the grid's next layout write is made from it.
+   */
   const adoptOwnLayout = useCallback(
     async (placementId: string, viewId: string, document: GridViewDocument): Promise<void> => {
       const state = layoutOf(placementId);
       if (state === undefined) return;
-      await commitGridLayout(address.current, {
+      const arranged: GridLayout = {
+        columns: document.columns,
+        ...(document.density === undefined ? {} : { density: document.density }),
+      };
+      const stored = await commitGridLayout(address.current, {
         kind: "write",
         placementId,
         queryId: state.queryId,
         expectedRevision: state.revision,
         basedOnViewId: viewId,
-        layout: {
-          columns: document.columns,
-          ...(document.density === undefined ? {} : { density: document.density }),
-        },
+        layout: arranged,
       }).catch((error: unknown) => {
         console.error("[page] grid layout not stored", error);
+        return UNAVAILABLE;
       });
+      if (stored.outcome === "saved")
+        patchLayoutState(placementId, (layout) => ({
+          ...layout,
+          revision: stored.revision,
+          layout: arranged,
+          ...(layout.views === undefined
+            ? {}
+            : { views: { ...layout.views, basedOnViewId: viewId } }),
+        }));
     },
-    [layoutOf],
+    [layoutOf, patchLayoutState],
+  );
+
+  /** Applies a view's new revision (and changes) to its list entry and, if open, to the selected view. */
+  const patchViewState = useCallback(
+    (
+      placementId: string,
+      viewId: string,
+      revision: number,
+      selectedChange: (selected: SelectedGridView) => SelectedGridView,
+      itemChange: Partial<GridViewItem> = {},
+    ): void =>
+      patchLayoutState(placementId, (layout) => {
+        if (layout.views === undefined) return layout;
+        const { selected } = layout.views;
+        return {
+          ...layout,
+          views: {
+            ...layout.views,
+            items: layout.views.items.map((item) =>
+              item.viewId === viewId ? { ...item, ...itemChange, revision } : item,
+            ),
+            selected:
+              selected !== null && selected.viewId === viewId
+                ? { ...selectedChange(selected), revision }
+                : selected,
+          },
+        };
+      }),
+    [patchLayoutState],
+  );
+
+  /** Another tab changed the view first: the grid reads it again once, so the latest shows. */
+  const reopenAfterConflict = useCallback(
+    (placementId: string): void => {
+      openTableView(placementId, layoutOf(placementId)?.views?.selected?.viewId ?? null);
+    },
+    [layoutOf, openTableView],
   );
 
   const runViewCommand = useCallback(
@@ -211,9 +303,39 @@ export function useGridLayout({
           if (document === undefined) return VIEW_UNAVAILABLE;
           const result = await send({ kind: "create", name: command.name, document });
           tellOutcome(result, "View saved.");
-          if (result.outcome === "done" && result.viewId !== undefined) {
+          if (
+            result.outcome === "done" &&
+            result.viewId !== undefined &&
+            result.revision !== undefined
+          ) {
+            const item: GridViewItem = {
+              viewId: result.viewId,
+              name: command.name,
+              scope: "personal",
+              mine: true,
+              revision: result.revision,
+            };
             await adoptOwnLayout(placementId, result.viewId, document);
-            changeTableQuery(placementId, { kind: "view", viewId: result.viewId });
+            // The grid already shows exactly this view, so it is selected without a read.
+            patchLayoutState(placementId, (layout) =>
+              layout.views === undefined
+                ? layout
+                : {
+                    ...layout,
+                    views: {
+                      ...layout.views,
+                      items: [...layout.views.items, item],
+                      selected: {
+                        ...item,
+                        document,
+                        hidden: { columns: 0, filters: 0, sort: 0 },
+                        sharing: { organization: false, roleIds: [], groupIds: [] },
+                      },
+                      notice: null,
+                    },
+                  },
+            );
+            selectTableViewInPlace(placementId, result.viewId);
           }
           return result;
         }
@@ -227,8 +349,14 @@ export function useGridLayout({
             document,
           });
           tellOutcome(result, "View saved.");
-          if (result.outcome === "done") await adoptOwnLayout(placementId, command.viewId, document);
-          if (result.outcome !== "unavailable") await refreshPlacements([placementId]);
+          if (result.outcome === "done" && result.revision !== undefined) {
+            patchViewState(placementId, command.viewId, result.revision, (selected) => ({
+              ...selected,
+              document,
+              hidden: { columns: 0, filters: 0, sort: 0 },
+            }));
+            await adoptOwnLayout(placementId, command.viewId, document);
+          } else if (result.outcome === "conflict") reopenAfterConflict(placementId);
           return result;
         }
         case "rename": {
@@ -239,7 +367,15 @@ export function useGridLayout({
             name: command.name,
           });
           tellOutcome(result, "View renamed.");
-          if (result.outcome !== "unavailable") await refreshPlacements([placementId]);
+          if (result.outcome === "done" && result.revision !== undefined)
+            patchViewState(
+              placementId,
+              command.viewId,
+              result.revision,
+              (selected) => ({ ...selected, name: command.name }),
+              { name: command.name },
+            );
+          else if (result.outcome === "conflict") reopenAfterConflict(placementId);
           return result;
         }
         case "share": {
@@ -250,7 +386,21 @@ export function useGridLayout({
             sharing: command.sharing,
           });
           tellOutcome(result, "Sharing updated.");
-          if (result.outcome !== "unavailable") await refreshPlacements([placementId]);
+          if (result.outcome === "done" && result.revision !== undefined) {
+            const scope =
+              command.sharing.organization ||
+              command.sharing.roleIds.length > 0 ||
+              command.sharing.groupIds.length > 0
+                ? ("shared" as const)
+                : ("personal" as const);
+            patchViewState(
+              placementId,
+              command.viewId,
+              result.revision,
+              (selected) => ({ ...selected, scope, sharing: command.sharing }),
+              { scope },
+            );
+          } else if (result.outcome === "conflict") reopenAfterConflict(placementId);
           return result;
         }
         case "delete": {
@@ -260,9 +410,21 @@ export function useGridLayout({
             expectedRevision: command.expectedRevision,
           });
           tellOutcome(result, "View deleted.");
-          if (result.outcome === "done" && state.views.selected?.viewId === command.viewId)
-            openTableView(placementId, null);
-          else if (result.outcome !== "unavailable") await refreshPlacements([placementId]);
+          if (result.outcome === "done") {
+            if (state.views.selected?.viewId === command.viewId) openTableView(placementId, null);
+            else
+              patchLayoutState(placementId, (layout) =>
+                layout.views === undefined
+                  ? layout
+                  : {
+                      ...layout,
+                      views: {
+                        ...layout.views,
+                        items: layout.views.items.filter((item) => item.viewId !== command.viewId),
+                      },
+                    },
+              );
+          } else if (result.outcome === "conflict") reopenAfterConflict(placementId);
           return result;
         }
         case "share_targets":
@@ -271,12 +433,14 @@ export function useGridLayout({
     },
     [
       adoptOwnLayout,
-      changeTableQuery,
       documentOf,
       dropOwnLayout,
       layoutOf,
       openTableView,
-      refreshPlacements,
+      patchLayoutState,
+      patchViewState,
+      reopenAfterConflict,
+      selectTableViewInPlace,
       tellOutcome,
     ],
   );

@@ -159,7 +159,10 @@ const stored = <Parsed>(
   throw new Error("GRID_VIEW_MALFORMED", { cause: parsed.error });
 };
 
-const conflictOf = (result: z.infer<typeof conflictSchema>, placementId: string): GridViewConflict => ({
+const conflictOf = (
+  result: z.infer<typeof conflictSchema>,
+  placementId: string,
+): GridViewConflict => ({
   outcome: "conflict",
   stored:
     result.revision === null || result.queryId === null
@@ -309,10 +312,11 @@ export const gridViewPlacement = (
   page: PageDefinition,
   context: InstalledRuntimeContext,
   placementId: string,
-): Readonly<{ queryId: string; sharePermission: GridViewSharePermission | undefined }> | undefined => {
+):
+  | Readonly<{ queryId: string; sharePermission: GridViewSharePermission | undefined }>
+  | undefined => {
   let found:
-    | Readonly<{ queryId: string; sharePermission: GridViewSharePermission | undefined }>
-    | undefined;
+    Readonly<{ queryId: string; sharePermission: GridViewSharePermission | undefined }> | undefined;
   walkPageComposition(page.composition, (placement) => {
     if (placement.placementId.toLowerCase() !== placementId.toLowerCase()) return;
     const contract = readRecordsTableContract(placementSettings(placement.props));
@@ -324,7 +328,10 @@ export const gridViewPlacement = (
       return;
     found = {
       queryId: placement.vortex.queryId.toLowerCase(),
-      sharePermission: gridViewSharePermissionOf(context, contract.features.savedViews.sharePermission),
+      sharePermission: gridViewSharePermissionOf(
+        context,
+        contract.features.savedViews.sharePermission,
+      ),
     };
   });
   return found;

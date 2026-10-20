@@ -152,7 +152,8 @@ export const readRecordsTable = async (
           search: selected.document.search ?? null,
         };
       // A layout the person arranged from this view is theirs; otherwise the view's shows.
-      if (stored?.basedOnViewId !== selected.viewId) selectedLayout = gridViewLayout(selected.document);
+      if (stored?.basedOnViewId !== selected.viewId)
+        selectedLayout = gridViewLayout(selected.document);
     }
   }
   const resolvedLayout =

@@ -346,8 +346,7 @@ export const applyRecordsTableView = (
   }> | null,
 ): void => {
   for (const name of [...parameters.keys()])
-    if (recordsTableParameterPlacement(name) === placementId.toLowerCase())
-      parameters.delete(name);
+    if (recordsTableParameterPlacement(name) === placementId.toLowerCase()) parameters.delete(name);
   if (view === null) return;
   applyRecordsTableQueryChange(parameters, placementId, { kind: "view", viewId: view.viewId });
   if (view.sort.length > 0)

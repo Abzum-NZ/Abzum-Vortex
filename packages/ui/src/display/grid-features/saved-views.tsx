@@ -219,8 +219,8 @@ function ShareDialog({
         <DialogHeader>
           <DialogTitle>Share “{selected.name}”</DialogTitle>
           <DialogDescription>
-            People you share with can open the view and save their own copy. They see it under
-            their own access, so anything their role cannot see is left out.
+            People you share with can open the view and save their own copy. They see it under their
+            own access, so anything their role cannot see is left out.
           </DialogDescription>
         </DialogHeader>
         <div className="flex max-h-80 flex-col gap-3 overflow-y-auto">
@@ -404,7 +404,11 @@ function ViewSwitcher({
                 onKeyDown={(event) => event.stopPropagation()}
               />
             </div>
-            <div role="listbox" aria-label="Views" className="flex max-h-64 flex-col gap-1 overflow-y-auto">
+            <div
+              role="listbox"
+              aria-label="Views"
+              className="flex max-h-64 flex-col gap-1 overflow-y-auto"
+            >
               <Button
                 variant={selected === null ? "secondary" : "ghost"}
                 size="sm"
