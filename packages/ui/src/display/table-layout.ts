@@ -130,7 +130,14 @@ export const useGridLayout = ({
     // Before the page is read there is nothing to store; the authored layout shows.
     return authored === undefined
       ? undefined
-      : { storage: "preview", queryId: "", revision: null, layout: authored, authored, reset: false };
+      : {
+          storage: "preview",
+          queryId: "",
+          revision: null,
+          layout: authored,
+          authored,
+          reset: false,
+        };
   }, [contract]);
   const source = stored ?? fallback;
   const canvasDefinition =
