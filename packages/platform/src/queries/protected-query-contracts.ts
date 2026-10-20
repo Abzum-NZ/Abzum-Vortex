@@ -501,7 +501,12 @@ export const protectedQuerySummaryAggregateResultSchema = z.discriminatedUnion("
       valueCount: z.number().int().nonnegative().max(100_000),
     })
     .strict(),
-  z.object({ outcome: z.literal("refused"), reasonCode: z.literal("mixed_currency") }).strict(),
+  z
+    .object({
+      outcome: z.literal("refused"),
+      reasonCode: z.enum(["mixed_currency", "read_forbidden"]),
+    })
+    .strict(),
 ]);
 
 export const protectedQuerySummaryGroupSchema = z
