@@ -140,6 +140,7 @@ function OutletSettings({
               // the command explains the refusal; it never silently changes this selection.
               edit({
                 ...outlet,
+                required: outlet.required || next.required,
                 parent_placement: next.parentPlacement,
                 parent_slot: next.parentSlot,
               });
@@ -194,6 +195,13 @@ export function StudioLayoutOutlets({
   > | null>(null);
   const [showUses, setShowUses] = useState(false);
   const targets = studioLayoutOutletTargets({ catalogue, describePlacement }, shell);
+  const requiredTarget = (outlet: Outlet) =>
+    studioLayoutOutletTargets({ catalogue, describePlacement }, shell, outlet.id).some(
+      (entry) =>
+        entry.required &&
+        entry.parentPlacement === outlet.parent_placement &&
+        entry.parentSlot === outlet.parent_slot,
+    );
   const [newTarget, setNewTarget] = useState("");
   if (catalogue.releases.length === 0)
     return (
@@ -255,8 +263,13 @@ export function StudioLayoutOutlets({
               <span className="text-xs text-muted-foreground">Required</span>
               <Switch
                 aria-label={`Required: ${outlet.label}`}
+                title={
+                  requiredTarget(outlet)
+                    ? "This target always needs page content, so the outlet stays Required."
+                    : undefined
+                }
                 checked={outlet.required}
-                disabled={locked}
+                disabled={locked || (outlet.required && requiredTarget(outlet))}
                 onCheckedChange={(required) =>
                   run({
                     kind: "edit_layout_outlet",
