@@ -58,6 +58,8 @@ export function PersonalFormattingDialog({
   const [rules, setRules] = useState<readonly GridViewFormatRule[]>(
     selected.document.formatting ?? [],
   );
+  // The revision these rules were read from: a save never claims a newer one it has not shown.
+  const [baseRevision] = useState(selected.revision);
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | undefined>(undefined);
@@ -273,13 +275,18 @@ export function PersonalFormattingDialog({
               void request({
                 kind: "save",
                 viewId: selected.viewId,
-                expectedRevision: selected.revision,
+                expectedRevision: baseRevision,
                 layout: arrangement,
                 formatting: rules,
               }).then((result) => {
                 setBusy(false);
                 if (result.outcome === "formatting_refused") setRefused(result.reason);
+                else if (result.outcome === "conflict")
+                  setRefused(
+                    "Someone changed this view while you were editing. Close and open Formatting again to see their rules.",
+                  );
                 else if (result.outcome === "done") onClose();
+                else setRefused("The formatting could not be saved. Try again.");
               });
             }}
           >
