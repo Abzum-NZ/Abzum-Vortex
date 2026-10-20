@@ -19,6 +19,7 @@ import {
   type ApplicationUsePlace,
   type RecordOwnershipMode,
   type RecordSettingsContext,
+  type ModuleExtensionPointUse,
 } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
 import {
@@ -46,6 +47,7 @@ import { StudioRecordTypeSearch, StudioSearchOverview } from "./studio-search-se
 import { StudioRelationshipsSection } from "./studio-relationships-section";
 import { StudioModuleEvents } from "./studio-module-events";
 import { StudioModuleActions } from "./studio-module-actions";
+import { StudioModuleExtensionPoints } from "./studio-module-extension-points";
 import { StudioRecordPipelines } from "./studio-record-pipelines";
 import { StudioRecordRules } from "./studio-record-rules";
 import { StudioRecordStorageOwnership } from "./studio-record-storage-ownership";
@@ -96,11 +98,13 @@ function ModuleInspector({
   moduleKey,
   disabled,
   edit,
+  extensionPointUses,
 }: Readonly<{
   source: Source;
   moduleKey: string;
   disabled: boolean;
   edit: StudioDataEdit;
+  extensionPointUses: readonly ModuleExtensionPointUse[] | null;
 }>) {
   const module = source.body.modules.find((item) => item.key === moduleKey)!;
   const name = useStudioDraftText(
@@ -129,7 +133,16 @@ function ModuleInspector({
           />
         )}
       </StudioField>
-      <p className="text-sm text-muted-foreground">Key: {module.key}. It is permanent.</p>
+      <StudioModuleExtensionPoints
+        source={source}
+        moduleKey={moduleKey}
+        disabled={disabled}
+        edit={edit}
+        uses={extensionPointUses}
+      />
+      <StudioInspectorGroup title="Details" defaultOpen={false}>
+        <p className="text-xs font-mono">{module.key}</p>
+      </StudioInspectorGroup>
     </div>
   );
 }
@@ -847,6 +860,7 @@ export function useStudioDataTab({
         moduleKey={current.moduleKey}
         disabled={disabled}
         edit={edit}
+        extensionPointUses={view.published?.extensionPointUses ?? null}
       />
     ) : current.kind === "record_type" ? (
       adding?.scope === scope ? (
