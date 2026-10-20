@@ -115,6 +115,7 @@ const suppliedByEvent: Readonly<
     { name: "values", label: "The card's new values" },
     { name: "value", label: "The column it was dropped in" },
   ],
+  card_added: [{ name: "value", label: "The column the card is added to" }],
   row_edit: [
     { name: "record_id", label: "The edited record" },
     { name: "values", label: "All changed fields of the row" },

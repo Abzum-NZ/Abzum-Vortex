@@ -284,6 +284,8 @@ type BoardStageValues = Readonly<{
   tone: PipelineStageTone;
   moves: readonly string[];
   gatedBy?: string;
+  /** A new record may start in this stage: the start stage or one it moves to, owned by no action. */
+  addable: boolean;
 }>;
 
 /** The board's ready values; the caller validates them with the board payload parser. */
@@ -296,6 +298,7 @@ export type BoardPlacementValues = Readonly<{
   choiceFieldRequired: boolean;
   /** The cards a column should not exceed; a column over it warns. */
   wipLimit?: number;
+  quickAdd: boolean;
   cardTitleFieldId: string;
   cardFieldIds: readonly string[];
   columns: readonly (BoardBucketValues & BoardStageValues)[];
@@ -381,6 +384,7 @@ export const projectBoardPlacement = async (
     if (
       board.columnField === undefined ||
       board.cardTitleField === undefined ||
+      board.quickAdd === undefined ||
       binding === undefined
     )
       return unavailable("board_settings_invalid");
@@ -456,7 +460,10 @@ export const projectBoardPlacement = async (
       return unavailable("board_arrangement_mismatch");
 
     // Columns follow the pipeline's stage order; each carries its colour role, the stages a card
-    // in it may move to and the named action that owns it, if one does.
+    // in it may move to, the named action that owns it, if one does, and whether a new record may
+    // start there: a record with no stage moves as if from the start stage, never into a stage an
+    // action owns.
+    const starts = pipelineMovesFrom(pipeline, undefined);
     const stageOrder = new Map(pipeline.stages.map((stage, index) => [stage.option, index]));
     const owners = binding.module.content.actions.filter(
       (action) =>
@@ -487,6 +494,7 @@ export const projectBoardPlacement = async (
               arranged.columns.some((candidate) => candidate.value === target),
             ),
             ...(owner === undefined ? {} : { gatedBy: owner.label }),
+            addable: owner === undefined && starts.includes(column.value),
             state: column.rowCount === null ? ("unread" as const) : ("read" as const),
             rowCount: column.rowCount,
             aggregates: bucketAggregates,
@@ -518,11 +526,12 @@ export const projectBoardPlacement = async (
         choiceFieldKey: String(choiceField.key),
         choiceFieldRequired: choiceField.required,
         ...(board.wipLimit === undefined ? {} : { wipLimit: board.wipLimit }),
+        quickAdd: board.quickAdd,
         cardTitleFieldId: board.cardTitleField,
         cardFieldIds: requestedFieldIds,
         columns,
         unassigned: {
-          moves: pipelineMovesFrom(pipeline, undefined).filter((target) =>
+          moves: starts.filter((target) =>
             arranged.columns.some((candidate) => candidate.value === target),
           ),
           state: arranged.unassigned.rowCount === null ? "unread" : "read",

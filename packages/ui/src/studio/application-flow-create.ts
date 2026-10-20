@@ -1,6 +1,6 @@
 import {
   applicationSourceDocumentSchema,
-  authoredRecordsTableFeatureEnabled,
+  authoredRecordsTableEventAvailable,
   builderKeySchema,
   flowContractVersion,
   sourcePageItems,
@@ -47,6 +47,7 @@ export type StudioFlowAuthoringEvent = Extract<
   StudioFlowControlEvent,
   | "action"
   | "card_moved"
+  | "card_added"
   | "form_submit"
   | "row_clicked"
   | "row_action"
@@ -57,6 +58,7 @@ export type StudioFlowAuthoringEvent = Extract<
 export const studioFlowEventLabels: Readonly<Record<StudioFlowAuthoringEvent, string>> = {
   action: "When used",
   card_moved: "When a card is moved",
+  card_added: "When a card is added to a column",
   form_submit: "When submitted",
   row_clicked: "When a row is clicked",
   row_action: "Row action",
@@ -82,7 +84,7 @@ const controlEventRecordType = (
     typeof choiceField === "string" && choiceField.includes(".")
       ? choiceField.slice(0, choiceField.lastIndexOf("."))
       : undefined;
-  if (event === "card_moved") return boardRecord;
+  if (event === "card_moved" || event === "card_added") return boardRecord;
   if (
     event === "row_clicked" ||
     event === "row_action" ||
@@ -205,9 +207,10 @@ export const projectStudioFlowCreateChoices = (
         release?.supportedEvents.includes(event) !== true ||
         (bound.has(`${alias} ${event}`) && !(event === "row_action" && hasRowActionMenu(placed))) ||
         (event === "action" && node.settings.action_kind === "submit") ||
-        // The action that saves an inline edit belongs to the feature, so it is offered while on.
-        ((event === "inline_edit" || event === "row_edit") &&
-          (placed === undefined || !authoredRecordsTableFeatureEnabled(placed.props, event)))
+        // The action that saves an inline edit belongs to the feature, so it is offered while on;
+        // a card added from a column is offered while the board's quick add is on.
+        ((event === "inline_edit" || event === "row_edit" || event === "card_added") &&
+          (placed === undefined || !authoredRecordsTableEventAvailable(placed.props, event)))
       )
         continue;
       const recordType = controlEventRecordType(event, placements.get(alias), pageRecord, queries);
@@ -324,7 +327,7 @@ const bindControl = (
   );
   if (resolved === undefined)
     return refuse(
-      event === "card_moved"
+      event === "card_moved" || event === "card_added"
         ? "Choose the board's choice field first."
         : "The row's query could not be resolved. Reload the draft and choose its query before binding a flow.",
     );
@@ -594,17 +597,21 @@ export const applyStudioFlowCreate = (
     } else if (command.kind === "action") {
       flow = interactiveFlow(key, name, {
         outputs: {},
-        ...(command.recordType === null ? {} : { recordInput: "record_id" }),
+        ...(command.recordType === null || command.event === "card_added"
+          ? {}
+          : { recordInput: "record_id" }),
         inputs:
-          command.recordType === null
-            ? {}
-            : {
-                record_id: {
-                  type: "record_reference",
-                  required: true,
-                  recordTypeIds: [command.recordType],
+          command.event === "card_added"
+            ? { stage: { type: "text", required: true } }
+            : command.recordType === null
+              ? {}
+              : {
+                  record_id: {
+                    type: "record_reference",
+                    required: true,
+                    recordTypeIds: [command.recordType],
+                  },
                 },
-              },
         tasks: [
           {
             id: "show_message",
@@ -629,9 +636,11 @@ export const applyStudioFlowCreate = (
                 ? {}
                 : { record_id: { kind: "caller" as const, name: "record" } }),
             }
-          : command.recordType === null
-            ? {}
-            : { record_id: { kind: "caller", name: "record_id" } },
+          : command.event === "card_added"
+            ? { stage: { kind: "caller", name: "value" } }
+            : command.recordType === null
+              ? {}
+              : { record_id: { kind: "caller", name: "record_id" } },
         borrowed,
         command.rowActionLabel,
       );

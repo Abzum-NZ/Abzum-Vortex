@@ -42,8 +42,8 @@ type BoardBucket = Readonly<{
   values: BoardBucketPayload;
   /** The stages a card in this bucket may move to. */
   moves: readonly string[];
-  /** The pipeline stage a column is: its colour role and its owning action. */
-  stage?: Readonly<{ tone: PipelineStageTone; gatedBy?: string }>;
+  /** The pipeline stage a column is: its colour role, its owning action and whether a new record may start there. */
+  stage?: Readonly<{ tone: PipelineStageTone; gatedBy?: string; addable: boolean }>;
 }>;
 
 /** Each stage colour role as its theme token; never a colour value. */
@@ -128,6 +128,7 @@ function BoardColumn({
   mover,
   choiceFieldId,
   onRetry,
+  onAdd,
 }: Readonly<{
   bucket: BoardBucket;
   /** The cards the column should not exceed; undefined when the board sets no limit. */
@@ -144,6 +145,8 @@ function BoardColumn({
   mover: BoardMover | undefined;
   choiceFieldId: string;
   onRetry: (bucket: BoardBucket) => void;
+  /** Adds a card with this column's stage chosen; absent unless the board offers quick add. */
+  onAdd: ((bucket: BoardBucket) => void) | undefined;
 }>): ReactElement {
   const page = bucket.values.page;
   const canContinue =
@@ -186,6 +189,19 @@ function BoardColumn({
             />
           )}
           {bucket.label}
+          {onAdd === undefined || bucket.stage?.addable !== true ? null : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="ml-auto"
+              aria-label={`Add a card to ${bucket.label}`}
+              data-vortex-board-add={bucket.key}
+              onClick={() => onAdd(bucket)}
+            >
+              <Icon name="plus" />
+            </Button>
+          )}
         </h3>
         {bucket.stage?.gatedBy === undefined ? null : (
           <Badge variant="outline" title={`Moving a card here runs ${bucket.stage.gatedBy}`}>
@@ -443,6 +459,8 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
     ((event: DisplaySemanticEvent) => void | boolean | Promise<void | boolean>) | undefined;
   const cardMoved = events?.card_moved as
     ((event: DisplaySemanticEvent) => void | boolean | Promise<void | boolean>) | undefined;
+  const cardAdded = events?.card_added as
+    ((event: DisplaySemanticEvent) => void | boolean | Promise<void | boolean>) | undefined;
   const [moving, setMoving] = useState<BoardMoveCard>();
   const movingRef = useRef(false);
   const focusAfterMoveRef = useRef<string | undefined>(undefined);
@@ -463,6 +481,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
             stage: {
               tone: column.tone,
               ...(column.gatedBy === undefined ? {} : { gatedBy: column.gatedBy }),
+              addable: column.addable,
             },
           })),
           // A required stage hides Unassigned once a read finds it empty; until then it is unknown.
@@ -629,6 +648,25 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
     };
   });
 
+  const addCard = (bucket: BoardBucket): void => {
+    if (
+      cardAdded === undefined ||
+      values === undefined ||
+      bucket.selector.kind !== "option" ||
+      bucket.stage?.addable !== true
+    )
+      return;
+    void Promise.resolve(
+      cardAdded({
+        event: "card_added",
+        field: values.choiceFieldKey,
+        value: bucket.selector.value,
+      }),
+    ).catch((error: unknown) =>
+      console.error(`[board] card add failed: ${describeFailure(error)}`),
+    );
+  };
+
   const continueBucket = (bucket: BoardBucket, continuationToken: string): Promise<void> =>
     readBuckets([bucket], continuationToken);
 
@@ -690,6 +728,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
                   failed={failedKeys.has(bucket.key)}
                   onContinue={continueBucket}
                   onRetry={(bucket) => void readBuckets([bucket])}
+                  onAdd={values.quickAdd && cardAdded !== undefined ? addCard : undefined}
                   mover={mover}
                   choiceFieldId={values.choiceFieldId}
                 />

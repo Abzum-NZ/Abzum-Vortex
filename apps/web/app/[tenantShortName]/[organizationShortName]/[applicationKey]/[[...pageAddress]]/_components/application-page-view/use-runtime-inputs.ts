@@ -467,6 +467,24 @@ export function useRuntimeInputs({
             );
             return accepted;
           };
+        // Adding a card from a column runs the bound flow with the column's stage; the create form
+        // it opens saves through the normal record save, so nothing is written here.
+        if (
+          boardData !== undefined &&
+          supportsEvent("card_added") &&
+          bindings.some((binding) => binding.event === "card_added")
+        )
+          events.card_added = async (event: DisplaySemanticEvent): Promise<boolean> => {
+            if (event.event !== "card_added" || busy) return false;
+            const binding = bindingFor(bindings, event);
+            if (binding === undefined) {
+              console.error("[page] card add has no binding: BOARD_CARD_ADD_BINDING_MISSING");
+              setNotice(unavailableNotice);
+              return false;
+            }
+            const outcome = await runBinding(placementId, binding, suppliedValues(event));
+            return outcome.confirmed;
+          };
         if (boardData !== undefined && supportsEvent("page_changed"))
           events.page_changed = (event: DisplaySemanticEvent) =>
             readBoardColumns(placementId, event);
@@ -965,6 +983,7 @@ export function useRuntimeInputs({
     readBoardColumns,
     continueTablePage,
     bulk,
+    exported,
   ]);
 
   runtimeInputsRef.current = runtimeInputs;

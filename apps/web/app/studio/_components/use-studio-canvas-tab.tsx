@@ -43,9 +43,9 @@ import type {
   StudioCanvasFrame,
 } from "@vortex/ui/studio/page-puck-editor";
 import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-empty-state";
-import { readStudioCanvasRecords, readStudioDataRecords } from "../_lib/studio-reads";
+import { readStudioCanvasRecords, readStudioDataRecords } from "../_lib/studio-preview-reader";
 import { readWhenPreviewReady } from "../_lib/studio-preview-gate";
-import { applyStudioItemLabels } from "@vortex/ui/studio";
+import { applyStudioItemLabels, type StudioPlacementDescriber } from "@vortex/ui/studio";
 import { studioDraftNavigation } from "../_lib/studio-draft-navigation";
 import { studioUseTargetOf } from "../_lib/studio-places";
 import type { StudioApplicationCanvasFrames } from "../../_lib/studio-application-draft";
@@ -57,6 +57,8 @@ import { StudioQuerySheet } from "./studio-query-sheet";
 import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-toolbar";
 import { StudioPanelShell } from "./studio-frame";
 import { StudioInspector } from "./studio-inspector";
+import { StudioLayoutOutlets, StudioLayoutOutletUses } from "./studio-layout-outlets";
+import type { StudioStructureCommandRunner } from "./use-studio-structure-tab";
 import { StudioUsedIn } from "./studio-used-in";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import { StudioBlockOutlinePanel } from "./studio-outline-panels";
@@ -115,6 +117,8 @@ export function useStudioCanvasTab({
   draft,
   tab,
   catalogue,
+  describePlacement,
+  structure,
   fieldInputControlReleases,
   platformThemeTokens,
   outline,
@@ -128,6 +132,9 @@ export function useStudioCanvasTab({
   draft: StudioDraft;
   tab: StudioRailKey;
   catalogue: ImmutablePlatformBlockCatalogue;
+  describePlacement: StudioPlacementDescriber;
+  /** The Structure command runner the Layout inspector edits through. */
+  structure: StudioStructureCommandRunner;
   fieldInputControlReleases: FieldInputControlReleaseMap | null;
   platformThemeTokens: PlatformThemeTokens | null;
   outline: StudioSemanticOutline;
@@ -736,18 +743,33 @@ export function useStudioCanvasTab({
               ? undefined
               : selected.kind === "navigation"
                 ? "Change this menu entry in the Menu tab."
-                : selected.kind === "role"
-                  ? tab === "access"
-                    ? undefined
-                    : "Change this role in the Access tab."
-                  : selected.kind === "module" ||
-                      selected.kind === "record_type" ||
-                      selected.kind === "field" ||
-                      selected.kind === "query"
-                    ? "Change this in the Data tab."
-                    : "This item cannot be edited here."
+                : selected.kind === "shell"
+                  ? undefined
+                  : selected.kind === "role"
+                    ? tab === "access"
+                      ? undefined
+                      : "Change this role in the Access tab."
+                    : selected.kind === "module" ||
+                        selected.kind === "record_type" ||
+                        selected.kind === "field" ||
+                        selected.kind === "query"
+                      ? "Change this in the Data tab."
+                      : "This item cannot be edited here."
       }
     >
+      {selected?.kind === "shell" &&
+        source.body.shells
+          .filter((shell) => shell.id === selected.shellAlias)
+          .map((shell) => (
+            <StudioLayoutOutlets
+              key={shell.id}
+              locked={draft.locked}
+              catalogue={catalogue}
+              describePlacement={describePlacement}
+              command={structure.command}
+              shell={shell}
+            />
+          ))}
       {(selected?.kind === "flow" || selected?.kind === "flow_step") &&
         tab === "flows" &&
         inspector.status === "resolved" &&
@@ -780,6 +802,9 @@ export function useStudioCanvasTab({
         />
       )}
       {inspector.status === "resolved" && placementWorkflows}
+      {selected?.kind === "placement" && (
+        <StudioLayoutOutletUses source={source} placementAlias={selected.placementAlias} />
+      )}
       {usedIn !== null && (
         <StudioUsedIn source={source} target={usedIn} name={selectedName ?? "it"} />
       )}

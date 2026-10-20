@@ -34,6 +34,8 @@ import {
   type PlacementReaderInput,
 } from "./application-page/placement-reader";
 import { openStudioPreviewRead } from "./studio-preview-read";
+import { studioPreviewDemand } from "./studio-preview-demand";
+import { beginStudioPreviewRead } from "./studio-preview-work";
 import type { PageDataState } from "./application-page/types";
 
 const requestSchema = z
@@ -64,6 +66,8 @@ const requestSchema = z
 export type StudioCanvasRecordsResult =
   | Readonly<{
       kind: "available";
+      /** The builder's preview this was read from; its idle fill names the same preview. */
+      previewInstallationId: string;
       draftRevision: number;
       sourceFingerprint: string;
       pageAlias: string;
@@ -182,6 +186,7 @@ export const readStudioCanvasRecords = async (
   const parsed = requestSchema.safeParse(candidate);
   if (!organization.success || !parsed.success) return { kind: "refused" };
   const request = parsed.data;
+  const release = beginStudioPreviewRead(session, organization.data, request.rootId);
   try {
     const preview = await openStudioPreviewRead(
       session,
@@ -225,6 +230,23 @@ export const readStudioCanvasRecords = async (
       ...compiledPage,
       composition: { root: { props: {} }, content: slot },
     };
+    const demanded = await preview.demand(
+      studioPreviewDemand(
+        context.releaseSet.application.content,
+        context.releaseSet.modules.map((module) => ({
+          key: module.definitionKey,
+          content: module.content,
+        })),
+        {
+          kind: "placements",
+          page: compiledPage,
+          readSubject: compiledPage.type === "detail",
+          placements: collectPlacements(areaPage),
+        },
+      ),
+    );
+    if (demanded.kind !== "ready")
+      return demanded.kind === "refused" ? { kind: "refused" } : demanded;
     // A detail page shows one record, named by its address in the running application. The canvas
     // shows the first record of its type the builder can read in the preview, as if it were opened.
     const subjectType =
@@ -347,6 +369,7 @@ export const readStudioCanvasRecords = async (
     }
     return {
       kind: "available",
+      previewInstallationId: preview.selection.previewInstallationId,
       draftRevision: request.draftRevision,
       sourceFingerprint: request.sourceFingerprint,
       pageAlias: request.pageAlias,
@@ -369,5 +392,7 @@ export const readStudioCanvasRecords = async (
       `[studio] canvas records unavailable: STUDIO_CANVAS_RECORDS_FAILED cause=${describeFailure(error)}`,
     );
     return { kind: "temporarily_unavailable" };
+  } finally {
+    release();
   }
 };

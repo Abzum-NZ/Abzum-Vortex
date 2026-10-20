@@ -3082,7 +3082,8 @@
                           "vortex.service_desk.cases:case.case_number",
                           "vortex.service_desk.cases:case.priority",
                           "vortex.service_desk.cases:case.resolution_due_at"
-                        ]
+                        ],
+                        "quick_add": false
                       },
                       "pivot": {
                         "enabled": false

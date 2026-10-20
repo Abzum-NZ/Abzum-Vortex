@@ -276,7 +276,16 @@ function CanvasBlock({
         </ItemContent>
       </Item>
     );
-  const drawn = renderProps(props, release, Object.hasOwn(compiled, id) ? compiled[id] : undefined);
+  // Data blocks use this revision's compiled settings even before their records arrive. Authored
+  // groups can omit nested catalogue defaults and must never replace the compiled contract.
+  const drawn = renderProps(
+    props,
+    release,
+    Object.hasOwn(compiled, id) ? compiled[id] : undefined,
+    current &&
+      release !== undefined &&
+      (studioReleaseReadsQuery(release) || release.paletteGroup === "record"),
+  );
   // A control that publishes a page parameter reports its chosen value, so the blocks bound to it
   // are read again for that value, exactly as the running page reads them for its address.
   if (
@@ -318,7 +327,7 @@ function CanvasBlock({
   // No wrapper around the block itself: its own layout wrapper stays the child of its slot.
   return note === undefined ? (
     render({
-      ...renderProps(props, release, Object.hasOwn(compiled, id) ? compiled[id] : undefined, true),
+      ...drawn,
       puck: {
         ...puck,
         metadata: {

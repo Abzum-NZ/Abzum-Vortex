@@ -261,7 +261,8 @@ export type BoardBucketPayload = Readonly<{
 
 /**
  * One installed choice column in its pipeline's stage order: its colour role from the theme, the
- * stages a card in it may move to, and the named action that owns it, if one does.
+ * stages a card in it may move to, the named action that owns it, if one does, and whether a new
+ * record may start in it.
  */
 export type BoardColumnPayload = BoardBucketPayload &
   Readonly<{
@@ -270,6 +271,8 @@ export type BoardColumnPayload = BoardBucketPayload &
     tone: PipelineStageTone;
     moves: readonly string[];
     gatedBy?: string;
+    /** A new record may start in this stage, so quick add offers it. */
+    addable: boolean;
   }>;
 
 /** The ready values a Data grid in Board mode renders. */
@@ -286,6 +289,8 @@ export type BoardPayload = Readonly<{
   choiceFieldRequired: boolean;
   /** The cards a column should not exceed; a column holding more warns. */
   wipLimit?: number;
+  /** Each stage column offers adding a card there. */
+  quickAdd: boolean;
   cardTitleFieldId: string;
   /** The only field identities a card may carry; readable values and labels may be omitted. */
   cardFieldIds: readonly string[];
@@ -337,6 +342,7 @@ export type DisplaySemanticEventName =
       | "inline_edit"
       | "row_edit"
       | "card_moved"
+      | "card_added"
       | "row_expanded"
     >
   /**
@@ -526,6 +532,15 @@ export type DisplaySemanticEvent =
     }>
   | Readonly<{
       /**
+       * A person asked to add a card to a column. It carries the column's option value; the bound
+       * flow opens the create form with that stage chosen, and the record is created there.
+       */
+      event: "card_added";
+      field: string;
+      value: string;
+    }>
+  | Readonly<{
+      /**
        * A person expanded a row (or asked for more of its related records). The host reads one page
        * of that row's related records on the server; its handler resolves to that page.
        */
@@ -594,6 +609,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "inline_edit",
   "row_edit",
   "card_moved",
+  "card_added",
   "row_expanded",
 ]);
 

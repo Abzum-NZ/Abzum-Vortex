@@ -394,33 +394,43 @@ export const checkRecordsTableFeatures = (
     };
   });
 
-const featureEvents: Readonly<Record<string, RecordsTableFeatureKey>> = {
-  search_changed: "search",
-  filter_changed: "column_filters",
-  inline_edit: "inline_edit",
-  row_edit: "row_edit",
-  row_action: "row_actions",
-  card_moved: "board",
+/**
+ * The feature whose controls raise each Records table event it owns, and the switch of that
+ * feature that offers the control when only part of the feature raises it.
+ */
+const featureEvents: Readonly<
+  Record<string, Readonly<{ feature: RecordsTableFeatureKey; offeredBy?: string }>>
+> = {
+  search_changed: { feature: "search" },
+  filter_changed: { feature: "column_filters" },
+  inline_edit: { feature: "inline_edit" },
+  row_edit: { feature: "row_edit" },
+  row_action: { feature: "row_actions" },
+  card_moved: { feature: "board" },
+  card_added: { feature: "board", offeredBy: "quick_add" },
 };
 
 /** The feature whose controls raise this Records table event, for the events a feature owns. */
 export const recordsTableFeatureOfEvent = (event: string): RecordsTableFeatureKey | undefined =>
-  Object.hasOwn(featureEvents, event) ? featureEvents[event] : undefined;
+  Object.hasOwn(featureEvents, event) ? featureEvents[event]!.feature : undefined;
 
 /**
- * Whether an authored placement's plain `features` setting turns a feature on. The catalogue
- * default leaves every feature off, so a placement that sets no features has none on.
+ * Whether an authored placement's plain `features` setting raises this event: its feature is on
+ * and, for an event only part of the feature raises, that part's switch is on. The catalogue
+ * default leaves every feature off, so a placement that sets no features raises none. An event no
+ * feature owns is always raised. A binding compiles only while its event is raised, so the server
+ * starts no flow for an event the placement does not raise, and Studio offers the event by it.
  */
-export const authoredRecordsTableFeatureEnabled = (
+export const authoredRecordsTableEventAvailable = (
   props: Readonly<Record<string, unknown>>,
-  key: RecordsTableFeatureKey,
+  event: string,
 ): boolean => {
+  if (!Object.hasOwn(featureEvents, event)) return true;
+  const { feature: key, offeredBy } = featureEvents[event]!;
   const features = props["features"];
   if (features === null || typeof features !== "object") return false;
   const feature = (features as Record<string, unknown>)[key];
-  return (
-    feature !== null &&
-    typeof feature === "object" &&
-    (feature as Record<string, unknown>)["enabled"] === true
-  );
+  if (feature === null || typeof feature !== "object") return false;
+  const group = feature as Record<string, unknown>;
+  return group["enabled"] === true && (offeredBy === undefined || group[offeredBy] === true);
 };

@@ -702,18 +702,6 @@
       }
     }
   }
-  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
-    &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
-      background-color: var(--primary);
-    }
-  }
-  @media (prefers-color-scheme: dark) {
-    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
-      &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
-        background-color: var(--primary);
-      }
-    }
-  }
 }
 }
 
@@ -1620,18 +1608,6 @@
         @supports (color: color-mix(in lab, red, red)) {
           --tw-ring-color: color-mix(in oklab, var(--destructive) 40%, transparent);
         }
-      }
-    }
-  }
-  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
-    &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
-      background-color: var(--primary);
-    }
-  }
-  @media (prefers-color-scheme: dark) {
-    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
-      &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
-        background-color: var(--primary);
       }
     }
   }

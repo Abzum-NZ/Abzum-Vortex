@@ -23,6 +23,8 @@ import {
 } from "@vortex/platform/schema";
 import { z } from "zod";
 import { openStudioPreviewRead } from "./studio-preview-read";
+import { studioPreviewDemand } from "./studio-preview-demand";
+import { beginStudioPreviewRead } from "./studio-preview-work";
 import type { ModuleRelease } from "./application-page/types";
 
 const requestSchema = z
@@ -49,6 +51,8 @@ export type StudioDataTotal = Readonly<{ alias: string; label: string; value: st
 export type StudioDataRecordsResult =
   | Readonly<{
       kind: "available";
+      /** The builder's preview this was read from; its idle fill names the same preview. */
+      previewInstallationId: string;
       /** The query the records were read through, by its label. */
       queryLabel: string;
       columns: readonly StudioDataColumn[];
@@ -61,6 +65,8 @@ export type StudioDataRecordsResult =
   /** A query that groups records or adds totals: its groups, each with its count and totals, and its overall totals. */
   | Readonly<{
       kind: "summary";
+      /** The builder's preview this was read from; its idle fill names the same preview. */
+      previewInstallationId: string;
       queryLabel: string;
       /** The fields the records are grouped by, by label; empty when the query only adds totals. */
       groupColumns: readonly StudioDataColumn[];
@@ -173,6 +179,7 @@ export const readStudioDataRecords = async (
   const parsed = requestSchema.safeParse(candidate);
   if (!organization.success || !parsed.success) return { kind: "refused" };
   const request = parsed.data;
+  const release = beginStudioPreviewRead(session, organization.data, request.rootId);
   try {
     // The builder's draft authority is checked where the saved draft and their preview are read.
     const preview = await openStudioPreviewRead(
@@ -212,6 +219,18 @@ export const readStudioDataRecords = async (
             )
         : undefined;
     if (queryRecord === undefined) return missing;
+    const demanded = await preview.demand(
+      studioPreviewDemand(
+        context.releaseSet.application.content,
+        context.releaseSet.modules.map((module) => ({
+          key: module.definitionKey,
+          content: module.content,
+        })),
+        { kind: "query", query },
+      ),
+    );
+    if (demanded.kind !== "ready")
+      return demanded.kind === "refused" ? { kind: "refused" } : demanded;
 
     const summary = query.groupByFieldIds.length > 0 || query.aggregates.length > 0;
     const label = query.label ?? sentence(query.key);
@@ -277,6 +296,7 @@ export const readStudioDataRecords = async (
         });
       return {
         kind: "summary",
+        previewInstallationId: preview.selection.previewInstallationId,
         queryLabel: label,
         totalRowCount: completed.totalRowCount,
         totals: totalsOf(completed.aggregates),
@@ -343,6 +363,7 @@ export const readStudioDataRecords = async (
     );
     return {
       kind: "available",
+      previewInstallationId: preview.selection.previewInstallationId,
       queryLabel: label,
       columns: fields.map((field) => ({ key: field.key, label: field.label })),
       ...(title === undefined ? {} : { titleColumn: title.key }),
@@ -363,5 +384,7 @@ export const readStudioDataRecords = async (
       `[studio] data records unavailable: STUDIO_DATA_RECORDS_FAILED cause=${describeFailure(error)}`,
     );
     return { kind: "temporarily_unavailable" };
+  } finally {
+    release();
   }
 };

@@ -4069,6 +4069,7 @@
                               "props": {
                                 "id": "input_crm_opportunity_create_stage",
                                 "field": "vortex.crm.opportunities:opportunity.stage",
+                                "publishes_parameter": "stage",
                                 "vortex": {
                                   "block": {
                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
@@ -4259,7 +4260,8 @@
                             "alias": "pipeline_value",
                             "label": "Total amount"
                           }
-                        ]
+                        ],
+                        "quick_add": true
                       },
                       "pivot": {
                         "enabled": false
@@ -4479,6 +4481,14 @@
         "id": "event_crm_pipeline_move_opportunity",
         "key": "vortex.app.events.vortex_app_crm_pipeline_move_opportunity",
         "label": "Pipeline move opportunity",
+        "record_type": "vortex.crm.opportunities:opportunity",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_crm_pipeline_add_opportunity",
+        "key": "vortex.app.events.vortex_app_crm_pipeline_add_opportunity",
+        "label": "Pipeline add opportunity",
         "record_type": "vortex.crm.opportunities:opportunity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -6366,7 +6376,7 @@
         "contractVersion": "1.0.0",
         "id": "navigate_new_opportunity",
         "key": "navigate_new_opportunity",
-        "description": "Opens the opportunity creation form.",
+        "description": "Opens the opportunity creation form, with the stage chosen when one is given.",
         "labels": {
           "name": "New opportunity"
         },
@@ -6374,7 +6384,12 @@
         "runAs": {
           "kind": "initiator"
         },
-        "inputs": {},
+        "inputs": {
+          "stage": {
+            "type": "text",
+            "required": false
+          }
+        },
         "tasks": [
           {
             "id": "open_page",
@@ -6386,6 +6401,12 @@
                 "literal": {
                   "type": "text",
                   "value": "crm_opportunity_create"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "stage": "{{ inputs.stage }}"
                 }
               }
             }
@@ -6684,6 +6705,19 @@
             "name": "values"
           },
           "target_stage": {
+            "kind": "caller",
+            "name": "value"
+          }
+        }
+      },
+      {
+        "id": "card_binding_crm_pipeline_add_opportunity",
+        "control": "board_crm_pipeline",
+        "event_id": "event_crm_pipeline_add_opportunity",
+        "event": "card_added",
+        "flow": "navigate_new_opportunity",
+        "inputs": {
+          "stage": {
             "kind": "caller",
             "name": "value"
           }

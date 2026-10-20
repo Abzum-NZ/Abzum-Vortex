@@ -3,7 +3,7 @@
 import { useId, useState, type ReactElement } from "react";
 import {
   applicationSourceDocumentSchema,
-  authoredRecordsTableFeatureEnabled,
+  authoredRecordsTableEventAvailable,
   sourcePageItems,
   recordsTableRowActionIcons,
   type ApplicationSourceDocument,
@@ -53,7 +53,7 @@ export const studioRowActionsFor = (
   const item = placementOf(source, alias);
   if (
     item?.type !== "platform.renderer.table" ||
-    !authoredRecordsTableFeatureEnabled(item.props, "row_actions")
+    !authoredRecordsTableEventAvailable(item.props, "row_action")
   )
     return undefined;
   return (item.props.row_actions ?? []) as readonly StudioRowAction[];

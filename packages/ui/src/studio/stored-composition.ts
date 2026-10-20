@@ -4,6 +4,9 @@ import {
   reservedItemPropKeys,
   sourceApplicationShellSchema,
   sourceItemSchema,
+  sourceItemTree,
+  sourcePageDataOf,
+  sourcePageRootSlots,
   sourceSlotBreakpointOrders,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
@@ -60,9 +63,15 @@ const plainObject = (value: unknown): value is Record<string, unknown> => {
   );
 };
 
-const closed = (value: unknown, keys: readonly string[], location: Location): Record<string, unknown> => {
+const closed = (
+  value: unknown,
+  keys: readonly string[],
+  location: Location,
+): Record<string, unknown> => {
   if (!plainObject(value)) return refuse(location, "is not an object");
-  const unknown = Reflect.ownKeys(value).find((key) => typeof key !== "string" || !keys.includes(key));
+  const unknown = Reflect.ownKeys(value).find(
+    (key) => typeof key !== "string" || !keys.includes(key),
+  );
   if (unknown !== undefined) refuse(location, `has an unknown key '${String(unknown)}'`);
   return value;
 };
@@ -70,7 +79,10 @@ const closed = (value: unknown, keys: readonly string[], location: Location): Re
 const sameList = (left: readonly string[], right: readonly string[]): boolean =>
   left.length === right.length && left.every((id, index) => id === right[index]);
 
-const releaseIndexes = new WeakMap<ImmutablePlatformBlockCatalogue, Map<string, PlatformBlockRelease>>();
+const releaseIndexes = new WeakMap<
+  ImmutablePlatformBlockCatalogue,
+  Map<string, PlatformBlockRelease>
+>();
 
 /** The exact catalogue release an item names, or undefined when the catalogue lacks it. */
 export const storedItemRelease = (
@@ -79,7 +91,12 @@ export const storedItemRelease = (
 ): PlatformBlockRelease | undefined => {
   let index = releaseIndexes.get(catalogue);
   if (index === undefined) {
-    index = new Map(catalogue.releases.map((release) => [`${release.blockId}:${release.releaseVersion}`, release]));
+    index = new Map(
+      catalogue.releases.map((release) => [
+        `${release.blockId}:${release.releaseVersion}`,
+        release,
+      ]),
+    );
     releaseIndexes.set(catalogue, index);
   }
   const block = item.props.vortex.block;
@@ -87,7 +104,11 @@ export const storedItemRelease = (
 };
 
 /** Bound the raw item tree (size, depth, cycles) before any recursive schema reads it. */
-const boundItems = (catalogue: ImmutablePlatformBlockCatalogue, candidate: unknown, location: Location): void => {
+const boundItems = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  candidate: unknown,
+  location: Location,
+): void => {
   const pending = [{ value: candidate, depth: 1, exit: false, at: location }];
   const ancestors = new Set<object>();
   let count = 0;
@@ -106,7 +127,8 @@ const boundItems = (catalogue: ImmutablePlatformBlockCatalogue, candidate: unkno
       if (count > catalogue.compositionPolicy.maximumPlacements)
         refuse(at, "has more blocks than a page may hold");
       if (depth > catalogue.compositionPolicy.maximumDepth) refuse(at, "nests blocks too deeply");
-      if (!plainObject(raw) || !plainObject(raw.props)) return refuse([...at, index], "is not a block");
+      if (!plainObject(raw) || !plainObject(raw.props))
+        return refuse([...at, index], "is not a block");
       for (const [key, child] of Object.entries(raw.props))
         if (
           !reservedItemPropKeys.has(key) &&
@@ -114,13 +136,22 @@ const boundItems = (catalogue: ImmutablePlatformBlockCatalogue, candidate: unkno
           child.length > 0 &&
           child.every((entry: unknown) => plainObject(entry) && isSourceItemShape(entry))
         )
-          pending.push({ value: child, depth: depth + 1, exit: false, at: [...at, index, "props", key] });
+          pending.push({
+            value: child,
+            depth: depth + 1,
+            exit: false,
+            at: [...at, index, "props", key],
+          });
     }
   }
 };
 
 /** One authored slot order: closed, and each declared breakpoint a permutation of the slot. */
-const parseSlotOrder = (candidate: unknown, desktop: readonly string[], location: Location): SourceSlotOrder => {
+const parseSlotOrder = (
+  candidate: unknown,
+  desktop: readonly string[],
+  location: Location,
+): SourceSlotOrder => {
   const order = closed(candidate, ["tablet", "phone"], location);
   const result: SourceSlotOrder = {};
   for (const breakpoint of ["tablet", "phone"] as const) {
@@ -139,12 +170,19 @@ const parseSlotOrder = (candidate: unknown, desktop: readonly string[], location
 };
 
 /** The items of a raw slot, parsed with the source item schema; the first issue is located. */
-const parseItems = (catalogue: ImmutablePlatformBlockCatalogue, candidate: unknown, location: Location): SourceItem[] => {
+const parseItems = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  candidate: unknown,
+  location: Location,
+): SourceItem[] => {
   boundItems(catalogue, candidate, location);
   const parsed = sourceItemSchema.array().safeParse(candidate);
   if (parsed.success) return parsed.data;
   const issue = parsed.error.issues[0]!;
-  const at = [...location, ...issue.path.map((part) => (typeof part === "number" ? part : String(part)))];
+  const at = [
+    ...location,
+    ...issue.path.map((part) => (typeof part === "number" ? part : String(part))),
+  ];
   return refuse(
     at,
     issue.code === "unrecognized_keys"
@@ -176,7 +214,10 @@ const validateTree = (
     responsiveOrderAllowed = true,
   ): void => {
     const orders = sourceSlotBreakpointOrders(items, order);
-    if (!responsiveOrderAllowed && (!sameList(orders.tablet, orders.desktop) || !sameList(orders.phone, orders.desktop)))
+    if (
+      !responsiveOrderAllowed &&
+      (!sameList(orders.tablet, orders.desktop) || !sameList(orders.phone, orders.desktop))
+    )
       refuse(at, "cannot have its own tablet or phone order");
     for (const [index, item] of items.entries()) {
       const itemAt = [...at, index];
@@ -184,18 +225,39 @@ const validateTree = (
       if (seen.has(alias)) refuse([...itemAt, "props", "id"], `repeats the block name '${alias}'`);
       seen.add(alias);
       const release = storedItemRelease(catalogue, item);
-      if (release === undefined) return refuse([...itemAt, "props", "vortex", "block"], "names a block release the catalogue does not hold", `Block '${alias}'`);
+      if (release === undefined)
+        return refuse(
+          [...itemAt, "props", "vortex", "block"],
+          "names a block release the catalogue does not hold",
+          `Block '${alias}'`,
+        );
       const subject = `${release.name} '${alias}'`;
-      if (item.type !== release.rendererKey) refuse([...itemAt, "type"], "does not match its block release", subject);
-      if (parentDeclaration !== undefined && !parentDeclaration.allowedChildCategories.includes(release.paletteGroup))
+      if (item.type !== release.rendererKey)
+        refuse([...itemAt, "type"], "does not match its block release", subject);
+      if (
+        parentDeclaration !== undefined &&
+        !parentDeclaration.allowedChildCategories.includes(release.paletteGroup)
+      )
         refuse(itemAt, "is not allowed in this slot", subject);
       const reading = readSourceItem(item, release);
       if (reading.unknownKeys.length > 0)
-        refuse([...itemAt, "props", reading.unknownKeys[0]!], `has an unknown slot '${reading.unknownKeys[0]}'`, subject);
+        refuse(
+          [...itemAt, "props", reading.unknownKeys[0]!],
+          `has an unknown slot '${reading.unknownKeys[0]}'`,
+          subject,
+        );
       if (reading.malformedSlots.length > 0)
-        refuse([...itemAt, "props", reading.malformedSlots[0]!], `slot '${reading.malformedSlots[0]}' is not a list of blocks`, subject);
+        refuse(
+          [...itemAt, "props", reading.malformedSlots[0]!],
+          `slot '${reading.malformedSlots[0]}' is not a list of blocks`,
+          subject,
+        );
       if (reading.repeatableFailures.length > 0)
-        refuse([...itemAt, "props"], `repeats a ${reading.repeatableFailures[0]!.declaration.label} entry`, subject);
+        refuse(
+          [...itemAt, "props"],
+          `repeats a ${reading.repeatableFailures[0]!.declaration.label} entry`,
+          subject,
+        );
       const failure = reading.settingFailures[0];
       if (failure !== undefined)
         refuse(
@@ -209,7 +271,10 @@ const validateTree = (
       const tablet = vortex.responsive.tablet ?? desktop;
       const phone = vortex.responsive.phone ?? tablet;
       const responsiveAt = [...itemAt, "props", "vortex", "responsive"];
-      if (!release.capabilities.responsiveVisibility && (tablet.visible !== desktop.visible || phone.visible !== desktop.visible))
+      if (
+        !release.capabilities.responsiveVisibility &&
+        (tablet.visible !== desktop.visible || phone.visible !== desktop.visible)
+      )
         refuse(responsiveAt, "cannot be hidden on one screen size only", subject);
       for (const layout of [desktop, tablet, phone]) {
         if (!release.capabilities.gridWidth && layout.width.kind === "grid")
@@ -221,15 +286,34 @@ const validateTree = (
       const slotOrders = vortex.slot_orders ?? {};
       for (const key of Object.keys(slotOrders))
         if (reading.slots.get(key)?.items === undefined)
-          refuse([...itemAt, "props", "vortex", "slot_orders", key], "orders a slot the block does not fill", subject);
+          refuse(
+            [...itemAt, "props", "vortex", "slot_orders", key],
+            "orders a slot the block does not fill",
+            subject,
+          );
       for (const [key, { declaration, items: child }] of reading.slots) {
         const reserved = reservations.get(alias)?.has(key) === true;
-        if (declaration.required && declaration.repeats === undefined && !reserved && (child === undefined || child.length === 0))
+        if (
+          declaration.required &&
+          declaration.repeats === undefined &&
+          !reserved &&
+          (child === undefined || child.length === 0)
+        )
           refuse([...itemAt, "props", key], `slot '${declaration.label}' needs a block`, subject);
         if (reserved && (child === undefined || child.length > 0))
-          refuse([...itemAt, "props", key], `slot '${declaration.label}' is reserved for page content`, subject);
+          refuse(
+            [...itemAt, "props", key],
+            `slot '${declaration.label}' is reserved for page content`,
+            subject,
+          );
         if (child !== undefined)
-          visit(child, slotOrders[key], [...itemAt, "props", key], declaration, release.capabilities.responsiveOrder);
+          visit(
+            child,
+            slotOrders[key],
+            [...itemAt, "props", key],
+            declaration,
+            release.capabilities.responsiveOrder,
+          );
       }
     }
   };
@@ -244,7 +328,14 @@ export const validateStoredZone = (
 ): StoredZone => {
   const zone = closed(candidate, ["items", "order"], []);
   const items = parseItems(catalogue, zone.items, []);
-  const order = zone.order === undefined ? undefined : parseSlotOrder(zone.order, items.map((item) => item.props.id), ["order"]);
+  const order =
+    zone.order === undefined
+      ? undefined
+      : parseSlotOrder(
+          zone.order,
+          items.map((item) => item.props.id),
+          ["order"],
+        );
   const parsed = { items, order };
   validateTree(catalogue, parsed, reservations, []);
   return parsed;
@@ -266,14 +357,51 @@ export const validateStoredShell = (
   catalogue: ImmutablePlatformBlockCatalogue,
   candidate: unknown,
 ): SourceApplicationShell => {
-  const layout = plainObject(candidate) && plainObject(candidate.layout) ? candidate.layout : undefined;
+  const layout =
+    plainObject(candidate) && plainObject(candidate.layout) ? candidate.layout : undefined;
   boundItems(catalogue, layout?.content, ["layout", "content"]);
   const parsed = sourceApplicationShellSchema.safeParse(candidate);
   if (!parsed.success) {
     const issue = parsed.error.issues[0]!;
-    return refuse(issue.path.map((part) => (typeof part === "number" ? part : String(part))), `is not valid (${issue.code})`);
+    return refuse(
+      issue.path.map((part) => (typeof part === "number" ? part : String(part))),
+      `is not valid (${issue.code})`,
+    );
   }
   const shell = parsed.data;
+  const items = new Map(sourceItemTree(shell.layout.content).map((item) => [item.props.id, item]));
+  for (const [index, slot] of shell.content_slots.entries()) {
+    const item = items.get(slot.parent_placement);
+    const declaration =
+      item === undefined
+        ? undefined
+        : storedItemRelease(catalogue, item)?.slots.find(
+            (entry) => entry.key === slot.parent_slot && entry.repeats === undefined,
+          );
+    if (declaration === undefined)
+      refuse(
+        ["content_slots", index],
+        "must target a fixed catalogue slot in this layout",
+        `Content outlet "${slot.label}"`,
+      );
+    if (declaration!.required && !slot.required)
+      refuse(
+        ["content_slots", index, "required"],
+        "must remain required because its target slot is required",
+        `Content outlet "${slot.label}"`,
+      );
+    if (
+      new Set(slot.allowed_child_categories).size !== slot.allowed_child_categories.length ||
+      slot.allowed_child_categories.some(
+        (category) => !declaration!.allowedChildCategories.includes(category),
+      )
+    )
+      refuse(
+        ["content_slots", index, "allowed_child_categories"],
+        "must choose distinct categories admitted by the target slot",
+        `Content outlet "${slot.label}"`,
+      );
+  }
   validateTree(
     catalogue,
     { items: shell.layout.content, order: shell.layout.root.props.vortex.slot_orders.content },
@@ -281,6 +409,58 @@ export const validateStoredShell = (
     [],
   );
   return shell;
+};
+
+/** The same outlet contract for command and canvas edits, including every guided-form step. */
+export const validateStoredApplicationOutlets = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+): void => {
+  const shells = new Map(source.body.shells.map((shell) => [shell.id, shell]));
+  for (const page of source.body.pages)
+    for (const data of sourcePageDataOf(page.composition)) {
+      const alias = data.root.props.vortex.shell;
+      if (alias === null) continue;
+      const shell = shells.get(alias);
+      if (shell === undefined)
+        return refuse(
+          ["pages", page.id],
+          "names a layout that is not in this application",
+          `Page "${page.name}"`,
+        );
+      const bindings = new Map(sourcePageRootSlots(data));
+      for (const slot of shell.content_slots) {
+        const items = bindings.get(slot.id);
+        if (items === undefined) {
+          if (slot.required)
+            refuse(
+              ["pages", page.id, slot.id],
+              `must fill the required content outlet "${slot.label}" (empty content is valid)`,
+              `Page "${page.name}"`,
+            );
+          continue;
+        }
+        for (const item of items) {
+          const release = storedItemRelease(catalogue, item);
+          if (
+            release === undefined ||
+            !slot.allowed_child_categories.includes(release.paletteGroup)
+          )
+            refuse(
+              ["pages", page.id, slot.id],
+              `has a block in the content outlet "${slot.label}" of a kind that outlet does not allow`,
+              `Page "${page.name}"`,
+            );
+        }
+      }
+      for (const id of bindings.keys())
+        if (!shell.content_slots.some((slot) => slot.id === id))
+          refuse(
+            ["pages", page.id, id],
+            "uses a content outlet its layout no longer has",
+            `Page "${page.name}"`,
+          );
+    }
 };
 
 /**
@@ -314,8 +494,12 @@ const aliasLimit = 160;
 
 /** A source-safe block name for a Puck-generated id, unique among `reserved`. */
 const generatedAlias = (puckId: string, reserved: ReadonlySet<string>): string => {
-  const readable = puckId.toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "").slice(0, 140);
+  const readable = puckId
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 140);
   const base = `${/^[a-z]/.test(readable) ? "" : "block_"}${readable || "item"}`.slice(0, 140);
   let suffix = 2;
   let alias = base;
@@ -335,7 +519,10 @@ const hasBlockReference = (props: Record<string, unknown>): boolean =>
 
 const childSlotsOf = (props: Record<string, unknown>): [string, unknown[]][] =>
   Object.entries(props).flatMap(([key, value]): [string, unknown[]][] =>
-    !reservedItemPropKeys.has(key) && Array.isArray(value) && value.length > 0 && value.every(isSourceItemShape)
+    !reservedItemPropKeys.has(key) &&
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every(isSourceItemShape)
       ? [[key, value]]
       : [],
   );
@@ -356,8 +543,10 @@ export const storedZoneFromPuck = (
 ): Readonly<{ zone: StoredZone; copies: ReadonlyMap<string, string> }> => {
   const data = closed(candidate, ["root", "content", "zones"], []);
   const root = closed(data.root, ["props", "readOnly"], ["root"]);
-  if (root.props !== undefined &&
-    JSON.stringify(withoutIdentity(root.props)) !== JSON.stringify(withoutIdentity(rootProps)))
+  if (
+    root.props !== undefined &&
+    JSON.stringify(withoutIdentity(root.props)) !== JSON.stringify(withoutIdentity(rootProps))
+  )
     refuse(["root", "props"], "changed the page root, which the canvas does not edit");
   if (root.readOnly !== undefined) closed(root.readOnly, [], ["root", "readOnly"]);
   if (data.zones !== undefined) closed(data.zones, [], ["zones"]);
@@ -371,8 +560,10 @@ export const storedZoneFromPuck = (
     for (const item of items) {
       baselineAliases.add(item.props.id);
       baselineItems.set(item.props.id, item);
-      if (parent !== undefined && key !== undefined) baselineParent.set(item.props.id, { parent, key });
-      for (const [slotKey, children] of childSlotsOf(item.props)) index(children as SourceItem[], item, slotKey);
+      if (parent !== undefined && key !== undefined)
+        baselineParent.set(item.props.id, { parent, key });
+      for (const [slotKey, children] of childSlotsOf(item.props))
+        index(children as SourceItem[], item, slotKey);
     }
   };
   index(baseline.items);
@@ -383,22 +574,37 @@ export const storedZoneFromPuck = (
       const itemAt = [...at, position];
       const node = closed(raw, ["type", "props", "readOnly"], itemAt);
       if (node.readOnly !== undefined) closed(node.readOnly, [], [...itemAt, "readOnly"]);
-      if (!plainObject(node.props) || typeof node.props.id !== "string" || node.props.id.length === 0)
+      if (
+        !plainObject(node.props) ||
+        typeof node.props.id !== "string" ||
+        node.props.id.length === 0
+      )
         return refuse([...itemAt, "props", "id"], "has no block name");
       const puckId = node.props.id;
       const known = baselineAliases.has(puckId) && !assigned.has(puckId);
-      const fresh = sourceAliasPattern.test(puckId) && puckId.length <= aliasLimit &&
-        !baselineAliases.has(puckId) && !assigned.has(puckId);
-      const alias = known || fresh ? puckId : generatedAlias(puckId, new Set([...baselineAliases, ...assigned]));
+      const fresh =
+        sourceAliasPattern.test(puckId) &&
+        puckId.length <= aliasLimit &&
+        !baselineAliases.has(puckId) &&
+        !assigned.has(puckId);
+      const alias =
+        known || fresh
+          ? puckId
+          : generatedAlias(puckId, new Set([...baselineAliases, ...assigned]));
       assigned.add(alias);
       // A fresh copy: Puck shares unchanged values between its states and between a duplicate
       // and its original.
       const slots = new Map(childSlotsOf(node.props));
-      const props = Object.fromEntries(Object.entries(node.props).map(([key, value]) => [
-        key,
-        key === "id" ? alias : slots.has(key)
-          ? rebuild(slots.get(key)!, [...itemAt, "props", key]) : structuredClone(value),
-      ]));
+      const props = Object.fromEntries(
+        Object.entries(node.props).map(([key, value]) => [
+          key,
+          key === "id"
+            ? alias
+            : slots.has(key)
+              ? rebuild(slots.get(key)!, [...itemAt, "props", key])
+              : structuredClone(value),
+        ]),
+      );
       // Puck writes an empty list for every slot the stored block leaves out; that is not an edit.
       const item = { type: node.type, props } as SourceItem;
       const release = hasBlockReference(props) ? storedItemRelease(catalogue, item) : undefined;
@@ -406,7 +612,12 @@ export const storedZoneFromPuck = (
       if (release !== undefined)
         for (const key of readSourceItem(item, release).slots.keys()) {
           const value = props[key];
-          if (Array.isArray(value) && value.length === 0 && (before === undefined || !(key in before))) delete props[key];
+          if (
+            Array.isArray(value) &&
+            value.length === 0 &&
+            (before === undefined || !(key in before))
+          )
+            delete props[key];
         }
       return item;
     });
@@ -422,16 +633,26 @@ export const storedZoneFromPuck = (
           const named = order?.tablet?.[0] ?? order?.phone?.[0];
           const origin = named === undefined ? undefined : baselineParent.get(named);
           const originals = origin === undefined ? undefined : origin.parent.props[origin.key];
-          if (!Array.isArray(copied) || !Array.isArray(originals) || originals.length !== copied.length) continue;
-          const byOriginal = new Map(originals.map((child, position) =>
-            [(child as SourceItem).props.id, (copied[position] as SourceItem).props.id]));
+          if (
+            !Array.isArray(copied) ||
+            !Array.isArray(originals) ||
+            originals.length !== copied.length
+          )
+            continue;
+          const byOriginal = new Map(
+            originals.map((child, position) => [
+              (child as SourceItem).props.id,
+              (copied[position] as SourceItem).props.id,
+            ]),
+          );
           const map = (ids: string[] | undefined) => ids?.map((id) => byOriginal.get(id) ?? id);
           orders[key] = {
             ...(order.tablet === undefined ? {} : { tablet: map(order.tablet) }),
             ...(order.phone === undefined ? {} : { phone: map(order.phone) }),
           };
         }
-      for (const [, children] of childSlotsOf(item.props)) remapCopiedOrders(children as SourceItem[]);
+      for (const [, children] of childSlotsOf(item.props))
+        remapCopiedOrders(children as SourceItem[]);
     }
   };
   remapCopiedOrders(items);
@@ -444,7 +665,10 @@ export const storedZoneFromPuck = (
         for (const key of Object.keys(orders)) {
           const children = item.props[key];
           if (!Array.isArray(children)) continue;
-          const adjusted = adjustedSlotOrder(orders[key], (children as SourceItem[]).map((child) => child.props.id));
+          const adjusted = adjustedSlotOrder(
+            orders[key],
+            (children as SourceItem[]).map((child) => child.props.id),
+          );
           if (adjusted === undefined) delete orders[key];
           else orders[key] = adjusted;
         }
@@ -454,7 +678,10 @@ export const storedZoneFromPuck = (
     }
   };
   adjustNested(items);
-  const order = adjustedSlotOrder(baseline.order, items.map((item) => item.props.id));
+  const order = adjustedSlotOrder(
+    baseline.order,
+    items.map((item) => item.props.id),
+  );
   const zone = validateStoredZone(catalogue, order === undefined ? { items } : { items, order });
   return { zone, copies: copiesOf(zone.items, baselineAliases) };
 };
@@ -463,17 +690,22 @@ export const storedZoneFromPuck = (
 const withoutIdentity = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(withoutIdentity);
   if (value === null || typeof value !== "object") return value;
-  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
-    .filter(([key]) => key !== "id" && key !== "slot_orders")
-    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-    .map(([key, entry]) => [key, withoutIdentity(entry)]));
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => key !== "id" && key !== "slot_orders")
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+      .map(([key, entry]) => [key, withoutIdentity(entry)]),
+  );
 };
 
 /**
  * The blocks Duplicate copied, as original name to copy name, descendants included. Puck places a
  * copy right after its original; a new block there with the same type and content is that copy.
  */
-const copiesOf = (items: readonly SourceItem[], baseline: ReadonlySet<string>): Map<string, string> => {
+const copiesOf = (
+  items: readonly SourceItem[],
+  baseline: ReadonlySet<string>,
+): Map<string, string> => {
   const copies = new Map<string, string>();
   const pair = (original: SourceItem, copy: SourceItem): void => {
     copies.set(original.props.id, copy.props.id);
@@ -487,9 +719,13 @@ const copiesOf = (items: readonly SourceItem[], baseline: ReadonlySet<string>): 
   const visit = (list: readonly SourceItem[]): void => {
     list.forEach((item, index) => {
       const previous = index === 0 ? undefined : list[index - 1]!;
-      if (previous !== undefined && !baseline.has(item.props.id) && baseline.has(previous.props.id) &&
+      if (
+        previous !== undefined &&
+        !baseline.has(item.props.id) &&
+        baseline.has(previous.props.id) &&
         item.type === previous.type &&
-        JSON.stringify(withoutIdentity(item)) === JSON.stringify(withoutIdentity(previous)))
+        JSON.stringify(withoutIdentity(item)) === JSON.stringify(withoutIdentity(previous))
+      )
         pair(previous, item);
       for (const [, children] of childSlotsOf(item.props)) visit(children as SourceItem[]);
     });
@@ -530,8 +766,15 @@ export const withCopiedFlowBindings = <Binding extends SourceFlowBinding>(
  * Duplicate copies them with a copied block. Undo restores both, because history holds the whole
  * draft.
  */
-export const removeFlowBindingsOf = (body: ApplicationSourceDocument["body"], removed: ReadonlySet<string>): void => {
-  const unbound = new Set(body.flow_bindings.filter((binding) => removed.has(binding.control)).map((binding) => binding.event_id));
+export const removeFlowBindingsOf = (
+  body: ApplicationSourceDocument["body"],
+  removed: ReadonlySet<string>,
+): void => {
+  const unbound = new Set(
+    body.flow_bindings
+      .filter((binding) => removed.has(binding.control))
+      .map((binding) => binding.event_id),
+  );
   body.flow_bindings = body.flow_bindings.filter((binding) => !removed.has(binding.control));
   pruneUnboundEvents(body, unbound);
 };
@@ -540,12 +783,20 @@ export const removeFlowBindingsOf = (body: ApplicationSourceDocument["body"], re
  * An event declared only for bindings that left goes with them; one that another binding or a
  * remaining block's setting still names stays.
  */
-export const pruneUnboundEvents = (body: ApplicationSourceDocument["body"], candidates: ReadonlySet<string>): void => {
+export const pruneUnboundEvents = (
+  body: ApplicationSourceDocument["body"],
+  candidates: ReadonlySet<string>,
+): void => {
   const unbound = new Set(candidates);
   for (const binding of body.flow_bindings) unbound.delete(binding.event_id);
   if (unbound.size === 0) return;
-  const named = JSON.stringify([...body.pages.map((page) => page.composition), ...body.shells.map((shell) => shell.layout)]);
-  body.events = body.events.filter((event) => !unbound.has(event.id) || named.includes(`"event_id":"${event.id}"`));
+  const named = JSON.stringify([
+    ...body.pages.map((page) => page.composition),
+    ...body.shells.map((shell) => shell.layout),
+  ]);
+  body.events = body.events.filter(
+    (event) => !unbound.has(event.id) || named.includes(`"event_id":"${event.id}"`),
+  );
 };
 
 /** Every block name in a slot, at any depth. */
@@ -561,7 +812,8 @@ export const storedZoneAliases = (zone: StoredZone): Set<string> => {
   return aliases;
 };
 
-type StoredBlockDependency = ApplicationSourceDocument["body"]["platform_block_dependencies"][number];
+type StoredBlockDependency =
+  ApplicationSourceDocument["body"]["platform_block_dependencies"][number];
 
 /**
  * The dependency list names exactly the releases the placements use: an edit that adds, drops or
@@ -575,18 +827,34 @@ export const syncStoredBlockDependencies = (source: ApplicationSourceDocument): 
     const record = value as Record<string, unknown>;
     const block = record.block as Record<string, unknown> | undefined;
     if (typeof block?.block_id === "string" && typeof block.release_version === "string")
-      used.set(`${block.block_id}@${block.release_version}`,
-        { block_id: block.block_id, release_version: block.release_version });
+      used.set(`${block.block_id}@${block.release_version}`, {
+        block_id: block.block_id,
+        release_version: block.release_version,
+      });
     Object.values(record).forEach(collect);
   };
   collect(source.body.pages);
   collect(source.body.shells);
   const kept = source.body.platform_block_dependencies.filter((dependency) =>
-    used.has(`${dependency.block_id}@${dependency.release_version}`));
+    used.has(`${dependency.block_id}@${dependency.release_version}`),
+  );
   for (const [identity, release] of used)
-    if (!kept.some((dependency) => `${dependency.block_id}@${dependency.release_version}` === identity))
+    if (
+      !kept.some(
+        (dependency) => `${dependency.block_id}@${dependency.release_version}` === identity,
+      )
+    )
       kept.push({ kind: "platform_block", ...release } as StoredBlockDependency);
-  kept.sort((left, right) => left.block_id < right.block_id ? -1 : left.block_id > right.block_id ? 1
-    : left.release_version < right.release_version ? -1 : left.release_version > right.release_version ? 1 : 0);
+  kept.sort((left, right) =>
+    left.block_id < right.block_id
+      ? -1
+      : left.block_id > right.block_id
+        ? 1
+        : left.release_version < right.release_version
+          ? -1
+          : left.release_version > right.release_version
+            ? 1
+            : 0,
+  );
   source.body.platform_block_dependencies = kept;
 };

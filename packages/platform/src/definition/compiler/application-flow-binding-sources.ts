@@ -1,6 +1,6 @@
 import { PLATFORM_BLOCK_RELEASE_IDENTITIES } from "../application-composition-release-identities";
 import {
-  authoredRecordsTableFeatureEnabled,
+  authoredRecordsTableEventAvailable,
   recordsTableFeatureOfEvent,
 } from "../application-composition/records-table-features";
 
@@ -37,13 +37,13 @@ const sourcePlacementProps = (
 
 /**
  * The authored flow bindings that compile. A binding of a Records table event that a grid feature
- * owns (row action, inline edit, row edit) compiles only while that feature is on: a feature that is off
- * compiles to nothing, so its flows can never be started from the table.
+ * owns (row actions, inline edit, row edit, card moves and quick add) compiles only while the
+ * placement raises it: a feature or switch that is off compiles to nothing, so its flows can
+ * never be started from the table.
  */
 export const compiledSourceFlowBindings = (body: JsonObject): JsonObject[] =>
   (body.flow_bindings as JsonObject[]).filter((binding) => {
-    const feature = recordsTableFeatureOfEvent(String(binding.event));
-    if (feature === undefined) return true;
+    if (recordsTableFeatureOfEvent(String(binding.event)) === undefined) return true;
     const props = sourcePlacementProps(body, String(binding.control));
-    return props === undefined || authoredRecordsTableFeatureEnabled(props, feature);
+    return props === undefined || authoredRecordsTableEventAvailable(props, String(binding.event));
   });

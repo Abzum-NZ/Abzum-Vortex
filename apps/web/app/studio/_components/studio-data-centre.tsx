@@ -35,7 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from "@vortex/ui/components/table";
-import { readStudioDataRecords } from "../_lib/studio-reads";
+import { readStudioDataRecords } from "../_lib/studio-preview-reader";
 import { readWhenPreviewReady, type StudioPreviewGate } from "../_lib/studio-preview-gate";
 import type { StudioDataRecordsResult, StudioDataTotal } from "../../_lib/studio-data-records";
 import {

@@ -5,12 +5,14 @@ import {
   type SourceItem,
   type SourcePageData,
   type SourceSlotOrders,
+  type PageSlotAddress,
 } from "@vortex/platform/schema";
 import {
   judged,
   quoted,
   refuse,
   type Source,
+  type Page,
   type StudioStructureContext,
   type StudioStructureResult,
 } from "./application-structure-common";
@@ -23,6 +25,37 @@ export type StudioPageLayoutCommand = Readonly<{
   areaMapping: Readonly<Record<string, string>>;
 }>;
 
+/** Business names for the same stable page-slot addresses the canvas and palette edit. */
+export const studioPageAreaLabel = (
+  source: Source,
+  page: Page,
+  address: PageSlotAddress,
+): string => {
+  const composition = page.composition;
+  const data =
+    "step_content" in composition
+      ? address.step === undefined
+        ? undefined
+        : composition.step_content[address.step]
+      : composition;
+  if (data === undefined) throw new TypeError("The page content area's step is missing.");
+  const step =
+    address.step === undefined
+      ? undefined
+      : page.type === "guided_form"
+        ? page.steps.find((entry) => entry.id === address.step)?.name
+        : undefined;
+  if (address.step !== undefined && step === undefined)
+    throw new TypeError("The page content area names an undeclared step.");
+  if (address.slot === undefined) return step ?? "Page content";
+  const outlet = source.body.shells
+    .find((shell) => shell.id === data.root.props.vortex.shell)
+    ?.content_slots.find((slot) => slot.id === address.slot);
+  if (outlet === undefined)
+    throw new TypeError("The page content area names an undeclared outlet.");
+  return step === undefined ? outlet.label : `${step} / ${outlet.label}`;
+};
+
 type Area = Readonly<{
   id: string;
   key: string;
@@ -31,9 +64,7 @@ type Area = Readonly<{
 }>;
 const areasOf = (source: Source, shellAlias: string | null): readonly Area[] => {
   if (shellAlias === null)
-    return [
-      { id: "content", key: "content", label: "Content", allowed: undefined },
-    ];
+    return [{ id: "content", key: "content", label: "Content", allowed: undefined }];
   const shell = source.body.shells.find((entry) => entry.id === shellAlias);
   if (shell === undefined)
     return refuse("That layout is no longer in this application. Choose another.");

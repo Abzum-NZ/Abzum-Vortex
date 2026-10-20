@@ -51,7 +51,44 @@ type BoundRecordType = Readonly<{
   recordTypeId: string;
   key: string;
   fields: readonly Readonly<{ key: string; fieldId: string; type: string }>[];
+  pipelines: readonly Readonly<{
+    stageFieldId: string;
+    stages: readonly Readonly<{ option: string }>[];
+    transitions: readonly Readonly<{ from: string; to: string }>[];
+  }>[];
 }>;
+
+/**
+ * The stages a new record passes through to reach a stage: it is created in the pipeline's start
+ * stage and moves one transition at a time, as a person would move it.
+ */
+const stagePath = (
+  definition: BoundRecordType,
+  fieldKey: string,
+  target: string,
+): readonly string[] => {
+  const field = definition.fields.find((candidate) => candidate.key === fieldKey);
+  const pipeline = definition.pipelines.find(
+    (candidate) => candidate.stageFieldId.toLowerCase() === field?.fieldId.toLowerCase(),
+  );
+  const start = pipeline?.stages[0]?.option;
+  if (pipeline === undefined || start === undefined)
+    throw new Error(`Demo stage field ${definition.key}.${fieldKey} has no pipeline`);
+  const paths = new Map<string, readonly string[]>([[start, []]]);
+  const queue = [start];
+  while (queue.length > 0) {
+    const from = queue.shift()!;
+    for (const transition of pipeline.transitions)
+      if (transition.from === from && !paths.has(transition.to)) {
+        paths.set(transition.to, [...paths.get(from)!, transition.to]);
+        queue.push(transition.to);
+      }
+  }
+  const path = paths.get(target);
+  if (path === undefined)
+    throw new Error(`Demo stage ${definition.key}.${fieldKey} ${target} is not reachable`);
+  return path;
+};
 
 type BoundReleaseSet = Awaited<
   ReturnType<ReturnType<typeof createDatabaseSystemApplicationBoundReleaseSetService>["read"]>
@@ -386,13 +423,13 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
   };
   const crmOwnerGroupId = await readOwnerGroup(crmRootId);
   const serviceDeskOwnerGroupId = await readOwnerGroup(serviceDeskRootId);
-  const save = async (
+  const create = async (
     applicationRootId: string,
     definition: BoundRecordType,
     key: string,
     values: Readonly<Record<string, unknown>>,
     selectedOwnerGroupId?: string,
-  ): Promise<string> => {
+  ): Promise<Readonly<{ recordId: string; concurrencyNumber: number }>> => {
     const saved = await saveRecord.save(
       ownerSession,
       organizationSelectionCandidateSchema.parse({
@@ -416,7 +453,57 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
       throw new Error(
         `Demo save ${key} was refused (${saved.value.outcome === "refused" ? saved.value.error.code : "correction_required"})`,
       );
-    return saved.value.recordId;
+    return { recordId: saved.value.recordId, concurrencyNumber: saved.value.concurrencyNumber };
+  };
+  const save = async (
+    applicationRootId: string,
+    definition: BoundRecordType,
+    key: string,
+    values: Readonly<Record<string, unknown>>,
+    selectedOwnerGroupId?: string,
+  ): Promise<string> =>
+    (await create(applicationRootId, definition, key, values, selectedOwnerGroupId)).recordId;
+  // A record with a stage is created in its pipeline's start stage and moved along its
+  // transitions, so every stage it reaches is one the pipeline allows.
+  const saveAtStage = async (
+    applicationRootId: string,
+    definition: BoundRecordType,
+    key: string,
+    values: Readonly<Record<string, unknown>>,
+    stageField: string,
+    stage: string,
+    selectedOwnerGroupId?: string,
+  ): Promise<string> => {
+    const created = Object.fromEntries(
+      Object.entries(values).filter(([name]) => name !== stageField),
+    );
+    let saved = await create(applicationRootId, definition, key, created, selectedOwnerGroupId);
+    for (const next of stagePath(definition, stageField, stage)) {
+      const moved = await saveRecord.save(
+        ownerSession,
+        organizationSelectionCandidateSchema.parse({
+          organizationId: facts.system.organizationId,
+          applicationRootId,
+        }),
+        saveRecordCommandSchema.parse({
+          contractVersion: "2.0.0",
+          commandId: stableUuid(`${setupKey}/demo-seed/v2/${key}/${stageField}/${next}`),
+          operation: "update",
+          recordTypeId: definition.recordTypeId,
+          recordId: saved.recordId,
+          expectedConcurrencyNumber: saved.concurrencyNumber,
+          submittedValues: submittedValues(definition, { [stageField]: next }),
+        }),
+      );
+      if (moved.kind !== "available")
+        throw new Error(`Demo move ${key} to ${next} did not complete (${moved.kind})`);
+      if (moved.value.outcome !== "saved")
+        throw new Error(
+          `Demo move ${key} to ${next} was refused (${moved.value.outcome === "refused" ? moved.value.error.code : "correction_required"})`,
+        );
+      saved = { recordId: saved.recordId, concurrencyNumber: moved.value.concurrencyNumber };
+    }
+    return saved.recordId;
   };
 
   const companyIds: string[] = [];
@@ -484,7 +571,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
   for (const [index, opportunity] of opportunities.entries()) {
     const expectedCloseDate = new Date(referenceDate);
     expectedCloseDate.setUTCDate(expectedCloseDate.getUTCDate() + opportunity.days);
-    await save(
+    await saveAtStage(
       crmRootId,
       opportunityType,
       `opportunity/${index + 1}`,
@@ -498,6 +585,8 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
         stage: opportunity.stage,
         expected_close_date: expectedCloseDate.toISOString().slice(0, 10),
       },
+      "stage",
+      opportunity.stage,
       crmOwnerGroupId,
     );
   }
@@ -658,7 +747,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
         ? new Date(openedAt)
         : undefined;
     if (resolvedAt !== undefined) resolvedAt.setUTCHours(resolvedAt.getUTCHours() + 6);
-    await save(
+    await saveAtStage(
       serviceDeskRootId,
       caseType,
       `service-desk/case/${index + 1}`,
@@ -682,6 +771,8 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
         resolution_due_at: resolutionDueAt.toISOString(),
         ...(resolvedAt === undefined ? {} : { resolved_at: resolvedAt.toISOString() }),
       },
+      "status",
+      serviceCase.status,
       serviceDeskOwnerGroupId,
     );
   }
