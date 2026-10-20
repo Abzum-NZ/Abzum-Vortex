@@ -58,6 +58,7 @@ declare
   mapping_row vortex_record.field_storage_mappings%rowtype;
   fast_path boolean := false;
   fast_path_fields_valid boolean := true;
+  search_prefilter_sql text := 'true';
   scan_sql text;
   candidate_sql text;
   selected_sql text;
@@ -500,6 +501,36 @@ begin
     fast_path := fast_path_fields_valid;
   end if;
 
+  -- A search narrows the candidate scan, and so the ceiling, with the authoritative
+  -- search predicate evaluated over the stored values of the searched fields, built
+  -- from the same value expression read_record projects from. A projection only omits
+  -- stored values, so every record whose readable values match also matches here: the
+  -- narrowing is a superset and read_record stays the decision for each counted match.
+  -- A searched field without an active column, or derived (calculation, total), has no
+  -- such proof, so the scan is then not narrowed at all. Nor is it when a searched field
+  -- is not readable on every scanned row: a withheld stored value must never decide
+  -- whether the ceiling refuses, or the refusal would reveal it.
+  if user_search is not null and pg_catalog.cardinality(search_field_ids) > 0 and not exists (
+    select 1
+    from pg_catalog.unnest(search_field_ids) as searched(id)
+    left join vortex_record.field_storage_mappings as mapping
+      on mapping.storage_contract_id = v_storage_contract_id
+      and mapping.field_id = searched.id::uuid
+    where mapping.storage_contract_id is null
+      or mapping.state <> 'active'
+      or fields_by_id -> searched.id ->> 'type' in ('calculation', 'total')
+      or searched.id <> all (readable_field_ids)
+  ) then
+    search_prefilter_sql := pg_catalog.format(
+      'vortex_record.query_search_matches_internal(pg_catalog.jsonb_build_object(%s), $18::text[], $19::text)',
+      vortex_record.named_action_storage_columns_internal(
+        v_storage_contract_id,
+        (select pg_catalog.jsonb_agg(fields_by_id -> searched.id)
+         from pg_catalog.unnest(search_field_ids) as searched(id))
+      ) ->> 'valueExpression'
+    );
+  end if;
+
   for aggregate_item in
     select item.value from pg_catalog.jsonb_array_elements(aggregate_items) as item(value)
   loop
@@ -775,12 +806,14 @@ begin
          and %s
          and (%s)
          and (%s)
+         and (%s)
        limit $5',
       physical_table_token,
       case when storage_scope = 'application_contained'
         then 'stored.application_root_id = $2' else 'stored.application_root_id is null' end,
       access_sql,
-      filter_predicate
+      filter_predicate,
+      search_prefilter_sql
     );
     candidate_sql := scan_sql;
   end if;
