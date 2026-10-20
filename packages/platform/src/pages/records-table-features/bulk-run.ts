@@ -461,7 +461,8 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
           // A row the person saw at another revision changed since they selected it.
           const stale =
             target.revision !== undefined &&
-            eligibility.eligibility === "eligible" &&
+            eligibility.revision !== undefined &&
+            eligibility.eligibility !== "replayed" &&
             eligibility.revision !== target.revision;
           if (stale) refused("changed");
           else if (eligibility.eligibility === "eligible" || eligibility.eligibility === "replayed")
