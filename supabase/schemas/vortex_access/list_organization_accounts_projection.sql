@@ -3,7 +3,8 @@ create or replace function vortex_access.list_organization_accounts_projection(
   p_sort_key text,
   p_direction text,
   p_after jsonb,
-  p_limit integer
+  p_limit integer,
+  p_predicate jsonb
 )
 returns table (
   organization_id uuid,
@@ -67,17 +68,17 @@ begin
     )
   from vortex_identity.list_organization_accounts_projection_internal(
     visible_organization_id, active_members_only, p_record_ids,
-    p_sort_key, p_direction, p_after, p_limit
+    p_sort_key, p_direction, p_after, p_limit, p_predicate
   ) as projected;
 end
 $function$;
 
 revoke all on function vortex_access.list_organization_accounts_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.list_organization_accounts_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) to vortex_owner, vortex_record_adapter, postgres;
 alter function vortex_access.list_organization_accounts_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) owner to vortex_owner;
