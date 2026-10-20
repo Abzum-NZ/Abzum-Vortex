@@ -84,6 +84,12 @@ export {
   type RecordsTableRequestPart,
   type RecordsTableRequestRefusal,
 } from "./records-table-features";
+export {
+  readRecordsTableRowDetail,
+  type RowDetailRequest,
+  type RowDetailResult,
+  type RowDetailRow,
+} from "./records-table-features/master-detail";
 export { readPageSubjectInTransaction } from "./page-subject-read";
 export {
   createPageSubjectReader,

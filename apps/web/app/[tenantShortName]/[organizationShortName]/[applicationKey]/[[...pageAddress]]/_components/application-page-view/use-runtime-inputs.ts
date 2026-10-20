@@ -62,6 +62,7 @@ export function useRuntimeInputs({
   changeTableQuery,
   commitLayout,
   runViewCommand,
+  readRowDetail,
   requestChoicePageRef,
   changeChoiceField,
   subject,
@@ -132,6 +133,7 @@ export function useRuntimeInputs({
     event: DisplaySemanticEvent,
   ) => Promise<GridLayoutCommitResult>;
   runViewCommand: (placementId: string, command: GridViewCommand) => Promise<GridViewCommandResult>;
+  readRowDetail: (placementId: string, event: DisplaySemanticEvent) => Promise<unknown>;
   requestChoicePageRef: RefObject<
     (
       placementId: string,
@@ -215,6 +217,20 @@ export function useRuntimeInputs({
   });
   if (titles.current.scope !== navigationKey)
     titles.current = { scope: navigationKey, values: new Map() };
+  // Selection and unrelated form state must not restart an expanded row's read. Handlers keep
+  // their identity until the page's binding scope changes, when readRowDetail changes with it.
+  const rowDetailHandlers = useMemo(() => {
+    const handlers = new Map<string, (event: DisplaySemanticEvent) => Promise<unknown>>();
+    return (placementId: string) => {
+      let handler = handlers.get(placementId);
+      if (handler === undefined) {
+        handler = (event) => readRowDetail(placementId, event);
+        handlers.set(placementId, handler);
+      }
+      return handler;
+    };
+  }, [readRowDetail]);
+
   const runtimeInputs = useMemo(() => {
     const search = new URLSearchParams(currentSearch);
     const inputs: Record<string, unknown> = {};
@@ -413,6 +429,9 @@ export function useRuntimeInputs({
             if (event.event !== "grid_view_requested") return;
             return runViewCommand(placementId, event.command);
           };
+        // An expanded row reads its related records; only a table whose rows expand offers it.
+        if (supportsEvent("row_expanded") && tableData?.features?.masterDetail !== undefined)
+          events.row_expanded = rowDetailHandlers(placementId);
       }
       if (model.referenceChoiceInputs.some((field) => field.placementId === placementId))
         events.choices_requested = (event: ControlSemanticEvent) => {
@@ -814,6 +833,7 @@ export function useRuntimeInputs({
     changeTableQuery,
     commitLayout,
     runViewCommand,
+    rowDetailHandlers,
     subject,
     onOpenApplication,
     unsavedWork,

@@ -6,30 +6,15 @@ import {
   sourceItemTree,
   sourcePageItems,
   sourcePageShell,
+  type QueryBindingField,
   type QueryBindingPageFacts,
   type QueryBindingPlacement,
 } from "@vortex/platform/schema";
 import type { StudioCompositionContext } from "./application-composition-commands";
 import type { StudioQueryChoice } from "./contextual-palette";
 
-/** Source identities stay in the draft's namespace; publication checks their compiled identities. */
-export function studioQueryBindingFacts(
-  context: StudioCompositionContext,
-  placementAlias: string,
-  queries: readonly StudioQueryChoice[],
-): QueryBindingPageFacts {
-  const { source } = context;
-  const entries = source.body.pages.map((page) => ({
-    page,
-    items: [
-      ...sourcePageItems(page.composition),
-      ...sourceItemTree(
-        source.body.shells.find((shell) => shell.id === sourcePageShell(page.composition))?.layout
-          .content ?? [],
-      ),
-    ],
-  }));
-  const owner = entries.find(({ items }) => items.some((item) => item.props.id === placementAlias));
+/** Every record type of the draft and each of its fields as a binding sees it, by reference. */
+const draftBindingFields = (source: StudioCompositionContext["source"]) => {
   const records = source.body.modules.flatMap((module) =>
     module.record_types.map((record) => ({
       reference: `${module.key}:${record.key}`,
@@ -55,6 +40,35 @@ export function studioQueryBindingFacts(
       }),
     })),
   );
+  return { records, fields };
+};
+
+/** The fields of one draft record type a This row binding may name. */
+export const studioRecordBindingFields = (
+  source: StudioCompositionContext["source"],
+  recordType: string,
+): readonly QueryBindingField[] =>
+  draftBindingFields(source).fields.filter((field) => field.field.startsWith(`${recordType}.`));
+
+/** Source identities stay in the draft's namespace; publication checks their compiled identities. */
+export function studioQueryBindingFacts(
+  context: StudioCompositionContext,
+  placementAlias: string,
+  queries: readonly StudioQueryChoice[],
+): QueryBindingPageFacts {
+  const { source } = context;
+  const entries = source.body.pages.map((page) => ({
+    page,
+    items: [
+      ...sourcePageItems(page.composition),
+      ...sourceItemTree(
+        source.body.shells.find((shell) => shell.id === sourcePageShell(page.composition))?.layout
+          .content ?? [],
+      ),
+    ],
+  }));
+  const owner = entries.find(({ items }) => items.some((item) => item.props.id === placementAlias));
+  const { records, fields } = draftBindingFields(source);
   const subject =
     owner !== undefined && "record_type" in owner.page ? owner.page.record_type : undefined;
   const hasSubject =

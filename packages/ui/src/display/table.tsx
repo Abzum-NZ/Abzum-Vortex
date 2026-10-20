@@ -29,6 +29,7 @@ import type {
   TableNarrowing,
   TablePayload,
 } from "./projected-data";
+import { useRowExpansion } from "./row-expansion";
 import { RecordsCards, type CardRenderers } from "./table-cards";
 import { columnWidth, useTablePresentation } from "./table-geometry";
 import { RecordsGrid, type GridRenderers } from "./table-grid";
@@ -222,6 +223,17 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   );
   const showActions = (behaviours?.rowActions.length ?? 0) > 0 && events?.row_action !== undefined;
   const headingKey = layout.shown[0]?.key;
+  // Rows expand to a panel a projected feature draws (their related records); the panel reads only
+  // while its row is open.
+  const nameOfRow = useCallback((row: DisplayRow) => rowName(row, headingKey), [headingKey]);
+  const expansion = useRowExpansion({
+    enabled: gridFeatures.expands && events?.row_expanded !== undefined,
+    placementId,
+    rows,
+    rowName: nameOfRow,
+    announce,
+    panel: gridFeatures.rowExpansion,
+  });
 
   // Cell, selection and command renderers shared by the grid and the cards. They change only with
   // the bindings and the heading column, so the grid's memoized rows keep their identity.
@@ -480,6 +492,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         showActions={showActions}
         activateRow={activateRow}
         renderers={renderers}
+        expansion={expansion}
         fill={fullScreen.active}
       />
     ) : (
@@ -496,6 +509,8 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         activateRow={activateRow}
         renderers={gridRenderers}
         announce={announce}
+        expansion={expansion}
+        rowName={nameOfRow}
         fill={fullScreen.active}
       />
     );

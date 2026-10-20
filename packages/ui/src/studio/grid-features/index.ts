@@ -1,8 +1,12 @@
 import {
+  queryInputValueType,
   recordsTableEditableFieldTypes,
   recordsTableFieldFilterable,
+  type QueryBindingField,
+  type QueryBindingPageFacts,
   type RecordsTableFeatureKey,
   type RecordsTableQueryFacts,
+  type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import type {
   StudioActionChoice,
@@ -49,8 +53,34 @@ export const studioGridFeatureEditors: Readonly<
   saved_views: { kind: "custom" },
   bulk_actions: { kind: "settings" },
   inline_edit: { kind: "settings" },
+  master_detail: { kind: "settings" },
   conditional_formatting: { kind: "custom" },
 };
+
+/**
+ * The settings a feature starts with when it is switched on, so the definition holds them from the
+ * start. A feature that is off holds only its switch, so these cannot be catalogue defaults.
+ */
+export const studioGridFeatureStartSettings: Readonly<
+  Partial<
+    Record<RecordsTableFeatureKey, Readonly<Record<string, SourceBlockPropertyValueContract>>>
+  >
+> = {
+  // Related records read ten at a time unless the builder chooses otherwise.
+  master_detail: { child_page_size: { kind: "number", value: 10 } },
+};
+
+/**
+ * What the draft offers a row's related records: every query and link it can read, the page's
+ * binding facts and the fields of the table's record type a This row binding may name.
+ */
+export type StudioRelatedRecordsChoices = Readonly<{
+  queries: readonly StudioQueryChoice[];
+  relationships: readonly StudioRelationshipChoice[];
+  recordTypeLabel: (recordType: string) => string;
+  page: QueryBindingPageFacts;
+  rowFields: readonly QueryBindingField[];
+}>;
 
 /**
  * The bound query's facts as the draft holds them, in the spelling the table's settings use
@@ -61,6 +91,7 @@ export const studioRecordsTableQueryFacts = (
   query: StudioQueryChoice | undefined,
   actions: readonly StudioActionChoice[],
   relationships: readonly StudioRelationshipChoice[],
+  related: StudioRelatedRecordsChoices,
 ): RecordsTableQueryFacts => ({
   recordTypeLabel: query?.label ?? "",
   fields: (query?.fields ?? []).map((field) => ({
@@ -79,4 +110,33 @@ export const studioRecordsTableQueryFacts = (
     .map((relationship) => ({ key: relationship.reference, label: relationship.label })),
   actions: actions.map((action) => ({ key: action.reference, label: action.label })),
   grouped: query?.grouped === true,
+  relatedRecords: {
+    recordType: query?.recordType ?? "",
+    links:
+      query === undefined
+        ? []
+        : related.relationships
+            .filter((relationship) => relationship.targets.includes(query.recordType))
+            .map((relationship) => ({
+              relationship: relationship.reference,
+              label: relationship.label,
+              childRecordType: relationship.recordType,
+              childRecordTypeLabel: related.recordTypeLabel(relationship.recordType),
+            })),
+    queries: related.queries.map((candidate) => ({
+      query: candidate.reference,
+      label: candidate.label,
+      recordType: candidate.recordType,
+      fields: candidate.fields.map((field) => ({ field: field.reference, label: field.label })),
+      inputs: candidate.inputs.map((input) => ({
+        key: input.key,
+        label: input.label,
+        required: input.required,
+        type: queryInputValueType(input),
+      })),
+      grouped: candidate.grouped,
+    })),
+    rowFields: related.rowFields,
+    page: related.page,
+  },
 });
