@@ -3,7 +3,9 @@ import {
   sourcePageDataOf,
   sourcePageRootSlots,
   type ApplicationUsePlace,
+  type BlockPaletteGroup,
 } from "@vortex/platform/schema";
+import { PALETTE_GROUP_TITLES } from "../palette-groups";
 import {
   cleanName,
   judged,
@@ -37,6 +39,10 @@ export type StudioLayoutOutletCommand =
       values: StudioLayoutOutletValues;
     }>
   | Readonly<{ kind: "remove_layout_outlet"; shellAlias: string; outletId: string }>;
+
+/** A child category as the palette names it. */
+export const studioLayoutOutletCategoryLabel = (category: BlockPaletteGroup): string =>
+  PALETTE_GROUP_TITLES[category];
 
 /** Only fixed, empty slots of this shell can reserve page content. */
 export const studioLayoutOutletTargets = (
@@ -75,6 +81,8 @@ export const studioLayoutOutletTargets = (
           parentSlot: slot.key,
           label: `${label} ${index + 1} / ${slot.label}`,
           categories: slot.allowedChildCategories,
+          /** The catalogue slot always needs content, so an outlet on it is always Required. */
+          required: slot.required,
         },
       ];
     });
@@ -138,12 +146,13 @@ export const editLayoutOutlet = (
     const uses = pages.filter((page) =>
       sourcePageDataOf(page.composition).some(
         (data) =>
-          data.root.props.vortex.shell === shell.id && Object.hasOwn(data.root.props, existing!.id),
+          data.root.props.vortex.shell === shell.id &&
+          sourcePageRootSlots(data).some(([id, items]) => id === existing!.id && items.length > 0),
       ),
     );
     if (uses.length > 0)
       return refuse(
-        `The outlet ${quoted(existing!.label)} is bound by pages. Move those pages to another layout first.`,
+        `The outlet ${quoted(existing!.label)} holds blocks on these pages. Move or remove those blocks first.`,
         uses.map(pageUse),
       );
     if (shell.content_slots.length === 1)
@@ -151,6 +160,13 @@ export const editLayoutOutlet = (
         "A layout needs at least one content outlet. Add another before removing this one.",
       );
     shell.content_slots = shell.content_slots.filter((entry) => entry.id !== existing!.id);
+    // Empty bindings hold no content; they leave with the outlet, so no page keeps a dangling one.
+    for (const page of pages)
+      for (const data of sourcePageDataOf(page.composition))
+        if (data.root.props.vortex.shell === shell.id) {
+          delete data.root.props[existing!.id];
+          delete data.root.props.vortex.slot_orders[existing!.id];
+        }
   } else {
     const values = command.values;
     const target = studioLayoutOutletTargets(context, shell, existing?.id).find(
@@ -171,6 +187,10 @@ export const editLayoutOutlet = (
       values.allowed_child_categories.some((category) => !target.categories.includes(category))
     )
       return refuse("Choose at least one distinct category allowed by the target slot.");
+    if (target.required && !values.required)
+      return refuse(
+        "This target always needs page content, so its outlet must stay Required. Choose another target to make it optional.",
+      );
     const label = cleanName(values.label, "content outlet");
     const outlet: Outlet =
       existing === undefined
@@ -240,10 +260,10 @@ export const editLayoutOutlet = (
       }
   } catch (error) {
     if (!(error instanceof StoredCompositionRefusal)) throw error;
-    console.error("[studio] layout outlet refused", { part: error.location, reason: error.reason });
     return refuse(
       `The layout or its page content would be invalid: ${error.message}.`,
       pages.map(pageUse),
+      { part: error.location.join("."), reason: error.reason },
     );
   }
   return {

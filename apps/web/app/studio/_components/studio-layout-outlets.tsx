@@ -6,6 +6,7 @@ import type {
 } from "@vortex/platform/schema";
 import {
   applyStudioStructureCommand,
+  studioLayoutOutletCategoryLabel,
   studioLayoutOutletTargets,
   studioLayoutOutletPlacementUses,
   StudioField,
@@ -36,6 +37,24 @@ import { StudioPlaceList } from "./studio-used-in";
 type Shell = ApplicationSourceDocument["body"]["shells"][number];
 type Outlet = Shell["content_slots"][number];
 type Run = (command: StudioStructureCommand, merge?: string) => string | true;
+
+/** How a layout block is named in target lists and refusals: its title, else its block name. */
+const placementNamer =
+  (catalogue: ImmutablePlatformBlockCatalogue) =>
+  ({
+    block,
+    settings,
+  }: Readonly<{
+    block: Readonly<{ block_id: string; release_version: string }>;
+    settings: Readonly<Record<string, unknown>>;
+  }>) =>
+    typeof settings.title === "string" && settings.title.trim() !== ""
+      ? settings.title
+      : catalogue.releases.find(
+          (release) =>
+            String(release.blockId) === block.block_id &&
+            String(release.releaseVersion) === block.release_version,
+        )?.name;
 
 /** A reserved target cannot be removed; its uses open the Layout inspector or affected page. */
 export function StudioLayoutOutletUses({
@@ -90,17 +109,7 @@ function OutletSettings({
   run: Run;
 }>) {
   const targets = studioLayoutOutletTargets(
-    {
-      catalogue,
-      describePlacement: ({ block, settings }) =>
-        typeof settings.title === "string" && settings.title.trim() !== ""
-          ? settings.title
-          : catalogue.releases.find(
-              (release) =>
-                String(release.blockId) === block.block_id &&
-                String(release.releaseVersion) === block.release_version,
-            )?.name,
-    },
+    { catalogue, describePlacement: placementNamer(catalogue) },
     shell,
     outlet.id,
   );
@@ -150,9 +159,11 @@ function OutletSettings({
               );
               if (next === undefined) return;
               // A retarget retains the authored categories. If the new declaration is narrower,
-              // the command explains the refusal; it never silently changes this selection.
+              // the command explains the refusal; it never silently changes this selection. A
+              // target that always needs content makes the outlet Required, shown on its switch.
               edit({
                 ...outlet,
+                required: outlet.required || next.required,
                 parent_placement: next.parentPlacement,
                 parent_slot: next.parentSlot,
               });
@@ -177,7 +188,7 @@ function OutletSettings({
                 })
               }
             />
-            {category.replaceAll("_", " ")}
+            {studioLayoutOutletCategoryLabel(category)}
           </label>
         ))}
       </fieldset>
@@ -213,13 +224,15 @@ export function StudioLayoutOutlets({
     { kind: "refused" }
   > | null>(null);
   const [showUses, setShowUses] = useState(false);
-  const describePlacement = ({ block }: { block: { block_id: string; release_version: string } }) =>
-    catalogue.releases.find(
-      (entry) =>
-        String(entry.blockId) === block.block_id &&
-        String(entry.releaseVersion) === block.release_version,
-    )?.name;
+  const describePlacement = placementNamer(catalogue);
   const targets = studioLayoutOutletTargets({ catalogue, describePlacement }, shell);
+  const requiredTarget = (outlet: Outlet) =>
+    studioLayoutOutletTargets({ catalogue, describePlacement }, shell, outlet.id).some(
+      (entry) =>
+        entry.required &&
+        entry.parentPlacement === outlet.parent_placement &&
+        entry.parentSlot === outlet.parent_slot,
+    );
   const [newTarget, setNewTarget] = useState("");
   if (catalogue.releases.length === 0)
     return (
@@ -296,8 +309,13 @@ export function StudioLayoutOutlets({
               <span className="text-xs text-muted-foreground">Required</span>
               <Switch
                 aria-label={`Required: ${outlet.label}`}
+                title={
+                  requiredTarget(outlet)
+                    ? "This target always needs page content, so the outlet stays Required."
+                    : undefined
+                }
                 checked={outlet.required}
-                disabled={draft.locked}
+                disabled={draft.locked || (outlet.required && requiredTarget(outlet))}
                 onCheckedChange={(required) =>
                   run({
                     kind: "edit_layout_outlet",
@@ -363,7 +381,7 @@ export function StudioLayoutOutlets({
               shellAlias: shell.id,
               values: {
                 label: "Content",
-                required: false,
+                required: target.required,
                 parent_placement: target.parentPlacement,
                 parent_slot: target.parentSlot,
                 allowed_child_categories: [...target.categories],

@@ -380,6 +380,8 @@ export const validateStoredShell = (
           );
     if (declaration === undefined)
       refuse(["content_slots", index], "must target a fixed catalogue slot in this layout");
+    if (declaration!.required && !slot.required)
+      refuse(["content_slots", index, "required"], "must stay required, as its target slot is");
     if (
       new Set(slot.allowed_child_categories).size !== slot.allowed_child_categories.length ||
       slot.allowed_child_categories.some(

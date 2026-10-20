@@ -42,6 +42,7 @@ import { addRecordPage, type StudioRecordPageCommand } from "./application-recor
 import { movePage, type StudioPageLayoutCommand } from "./application-page-layout";
 import { editLayoutOutlet, type StudioLayoutOutletCommand } from "./application-layout-outlets";
 export {
+  studioLayoutOutletCategoryLabel,
   studioLayoutOutletTargets,
   studioLayoutOutletPlacementUses,
   type StudioLayoutOutletValues,

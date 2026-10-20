@@ -54,13 +54,19 @@ export class StructureRefusal extends Error {
   constructor(
     message: string,
     readonly where?: readonly ApplicationUsePlace[],
+    cause?: Readonly<{ part: string; reason: string }>,
   ) {
     super(message);
-    this.cause = { part: "structure", reason: message };
+    this.cause = cause ?? { part: "structure", reason: message };
   }
 }
-export const refuse = (message: string, where?: readonly ApplicationUsePlace[]): never => {
-  throw new StructureRefusal(message, where);
+/** Refuses the edit; `cause` names the refused part and rule when it is narrower than the message. */
+export const refuse = (
+  message: string,
+  where?: readonly ApplicationUsePlace[],
+  cause?: Readonly<{ part: string; reason: string }>,
+): never => {
+  throw new StructureRefusal(message, where, cause);
 };
 
 export const quoted = (name: string) => `“${name}”`;
