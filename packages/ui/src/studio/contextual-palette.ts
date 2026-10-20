@@ -309,6 +309,8 @@ export type StudioRelationshipChoice = Readonly<{
   label: string;
   /** The record type the relationship starts from, as `<module>:<record>`. */
   recordType: string;
+  /** The record types it links to, as `<module>:<record>`. */
+  targets: readonly string[];
   borrowedFrom?: string;
 }>;
 
@@ -456,10 +458,16 @@ export function studioRelationshipChoices(
     module.record_types.flatMap((record) =>
       record.relationships.map((relationship) => {
         const from = record.fields.find((field) => field.key === relationship.from_field);
+        const qualified = (target: string) =>
+          target.includes(":") ? target : `${module.key}:${target}`;
         return Object.freeze({
           reference: `${module.key}:${record.key}.${relationship.key}`,
           label: `${record.name}: ${from?.label ?? relationship.key}`,
           recordType: `${module.key}:${record.key}`,
+          targets: (relationship.to_record_type === undefined
+            ? (relationship.to_record_types ?? [])
+            : [relationship.to_record_type]
+          ).map(qualified),
         });
       }),
     ),

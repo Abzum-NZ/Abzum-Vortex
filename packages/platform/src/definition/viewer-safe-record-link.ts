@@ -230,9 +230,11 @@ const canOpenDetailPage = async (
     transaction,
     scope,
     declaration,
-    async (decision) => decision.correlationId,
+    async () => true,
   );
-  return result.outcome === "completed" && sameId(result.value, context.correlationId);
+  // Labels may be read in a later request than the installed context. The current access
+  // operation authorises this page; those independent requests need not share a correlation id.
+  return result.outcome === "completed" && result.value;
 };
 
 const completeRead = (

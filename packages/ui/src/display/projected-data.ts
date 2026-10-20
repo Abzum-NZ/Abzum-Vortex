@@ -332,6 +332,7 @@ export type DisplaySemanticEventName =
       | "bulk_action"
       | "inline_edit"
       | "card_moved"
+      | "row_expanded"
     >
   /**
    * A Records table's link filter asks the page for one bounded page of the field's target
@@ -429,6 +430,16 @@ export type DisplaySemanticEvent =
       revision?: number;
       field: string;
       value: string;
+    }>
+  | Readonly<{
+      /**
+       * A person expanded a row (or asked for more of its related records). The host reads one page
+       * of that row's related records on the server; its handler resolves to that page.
+       */
+      event: "row_expanded";
+      recordId: string;
+      /** The token of the page before, to read the next page; absent for the first page. */
+      continuationToken?: string;
     }>;
 
 /** A handler may return the promise of the flow it started; the control stays busy until it settles. */
@@ -460,6 +471,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "bulk_action",
   "inline_edit",
   "card_moved",
+  "row_expanded",
 ]);
 
 // The data-free states carry no values, so one frozen instance serves every block's state type.

@@ -3,6 +3,7 @@
 import {
   lazy,
   memo,
+  Fragment,
   Suspense,
   useCallback,
   useEffect,
@@ -40,6 +41,8 @@ import { Icon } from "../icons/icon";
 import { cn } from "../lib/utils";
 import type { DisplayEventHandlers, DisplayRow } from "./projected-data";
 import { useRowEntrance } from "./row-entrance";
+import type { RowExpansionControls } from "./row-expansion";
+import { RowExpansionToggle } from "./row-expansion-toggle";
 import {
   BOUNDED_VIEWPORT_CLASS,
   GRID_COLUMN_MAX_WIDTH,
@@ -51,6 +54,7 @@ import {
 import type { GridColumn, GridLayoutControls } from "./table-layout";
 import {
   ACTIONS_COLUMN,
+  EXPAND_COLUMN,
   SELECT_COLUMN,
   pinStyle,
   sizeVariable,
@@ -66,6 +70,8 @@ const RESIZE_STEP = 16;
 /** Controls inside a cell keep their own meaning: a click or key on one never opens the row. */
 const INTERACTIVE_IN_ROW =
   "a,button,input,select,textarea,label,summary,[role='button'],[role='checkbox'],[role='radio'],[role='menuitem'],[role='switch'],[contenteditable='true']";
+/** An expanded row's panel of related records: its controls follow the row in the tab order. */
+const PANEL = "[data-grid-panel]";
 /** Every element inside a cell that would otherwise be its own tab stop. */
 const INNER_FOCUSABLE =
   "a[href],button,input,select,textarea,[contenteditable='true'],[tabindex]:not([data-grid-cell])";
@@ -85,7 +91,7 @@ type ActiveCell = Readonly<{ recordId: string | null; columnId: string }>;
 /** One rendered column of the grid, in visible order, with everything a row needs to draw it. */
 type CellSlot = Readonly<{
   id: string;
-  kind: "select" | "data" | "actions";
+  kind: "expand" | "select" | "data" | "actions";
   column: GridColumn | undefined;
   style: CSSProperties;
   sticky: boolean;
@@ -116,6 +122,10 @@ export type RecordsGridProps = Readonly<{
   activateRow: ((recordId: string) => unknown) | undefined;
   renderers: GridRenderers;
   announce: (message: string) => void;
+  /** Rows expand to a panel of related records; undefined when no projected feature draws one. */
+  expansion: RowExpansionControls | undefined;
+  /** The name a row is announced and labelled by. */
+  rowName: (row: DisplayRow) => string;
   /** The table fills the screen: the grid takes the remaining height instead of its bound. */
   fill: boolean;
 }>;
@@ -132,16 +142,15 @@ const cellAlignment = (column: GridColumn | undefined): string => {
 };
 
 /**
- * One data row. Rows are memoized by their record and their focus/selection state; column widths
- * are CSS variables of the grid, so resizing a column re-renders no row. The same row renders a
- * normal page and a virtualized window; only `top` differs.
+ * One data row. Rows are memoized by their record and their focus/selection/expansion state;
+ * column widths are CSS variables of the grid, so resizing a column re-renders no row. The same row
+ * renders a normal page and a virtualized window, where its wrapper places it.
  */
 const GridRow = memo(function GridRow({
   row,
   index,
   slots,
   rowHeight,
-  top,
   selected,
   selectable,
   activeColumnId,
@@ -149,12 +158,15 @@ const GridRow = memo(function GridRow({
   activatable,
   renderers,
   onActivate,
+  expanded,
+  name,
+  panelId,
+  onToggle,
 }: Readonly<{
   row: DisplayRow;
   index: number;
   slots: readonly CellSlot[];
   rowHeight: number;
-  top: number | undefined;
   selected: boolean;
   selectable: boolean;
   activeColumnId: string | undefined;
@@ -162,6 +174,10 @@ const GridRow = memo(function GridRow({
   activatable: boolean;
   renderers: GridRenderers;
   onActivate: (recordId: string) => void;
+  expanded: boolean;
+  name: string;
+  panelId: string | undefined;
+  onToggle: (recordId: string) => void;
 }>): ReactElement {
   return (
     <div
@@ -169,25 +185,17 @@ const GridRow = memo(function GridRow({
       aria-rowindex={index + 2}
       {...(selectable ? { "aria-selected": selected } : {})}
       {...(pending ? { "aria-busy": true } : {})}
+      {...(panelId === undefined ? {} : { "aria-expanded": expanded })}
       id={`record-${row.recordId}`}
       data-vortex-record-id={row.recordId}
       data-state={selected ? "selected" : undefined}
       className={cn(
         "group/row flex w-full border-b bg-card transition-colors last:border-b-0 hover:bg-muted data-[state=selected]:bg-muted",
+        expanded && "border-b-0",
         activatable && "cursor-pointer",
         pending && "cursor-progress opacity-60",
       )}
-      style={
-        top === undefined
-          ? { height: rowHeight }
-          : {
-              height: rowHeight,
-              position: "absolute",
-              top: 0,
-              left: 0,
-              transform: `translateY(${top}px)`,
-            }
-      }
+      style={{ height: rowHeight }}
       onClick={(event: MouseEvent<HTMLDivElement>) => {
         if (!activatable || isInteractiveTarget(event.target, event.currentTarget)) return;
         onActivate(row.recordId);
@@ -212,18 +220,61 @@ const GridRow = memo(function GridRow({
           )}
           style={slot.style}
         >
-          {slot.kind === "select"
-            ? renderers.select(row, selected)
-            : slot.kind === "actions"
-              ? renderers.actions(row)
-              : slot.column === undefined
-                ? null
-                : renderers.cell(row, slot.column)}
+          {slot.kind === "expand" ? (
+            panelId === undefined ? null : (
+              <RowExpansionToggle
+                name={name}
+                expanded={expanded}
+                panelId={panelId}
+                onToggle={() => onToggle(row.recordId)}
+              />
+            )
+          ) : slot.kind === "select" ? (
+            renderers.select(row, selected)
+          ) : slot.kind === "actions" ? (
+            renderers.actions(row)
+          ) : slot.column === undefined ? null : (
+            renderers.cell(row, slot.column)
+          )}
         </div>
       ))}
     </div>
   );
 });
+
+/**
+ * The panel of an expanded row: one full-width cell below the row holding its related records. It
+ * stays at the left of the scroll area, so a wide grid scrolled sideways still shows it.
+ */
+const GridRowPanel = ({
+  row,
+  index,
+  columnCount,
+  panelId,
+  name,
+  children,
+}: Readonly<{
+  row: DisplayRow;
+  index: number;
+  columnCount: number;
+  panelId: string;
+  name: string;
+  children: ReactNode;
+}>): ReactElement => (
+  <div role="row" data-vortex-related-of={row.recordId} className="flex w-full border-b bg-card">
+    <div
+      role="gridcell"
+      aria-colspan={columnCount}
+      id={panelId}
+      aria-label={`Related records of ${name}`}
+      data-grid-panel=""
+      data-row={index}
+      className="sticky left-0 w-full min-w-0 bg-muted/40 px-3 py-2"
+    >
+      {children}
+    </div>
+  </div>
+);
 
 /**
  * The Records table's desktop presentation: an accessible data grid over exactly the permitted
@@ -253,6 +304,8 @@ export function RecordsGrid({
   activateRow,
   renderers,
   announce,
+  expansion,
+  rowName,
   fill,
 }: RecordsGridProps): ReactElement {
   const rowHeight = GRID_ROW_HEIGHT[layout.density];
@@ -267,8 +320,19 @@ export function RecordsGrid({
   // Column definitions change only with the requested columns; widths and order are controlled
   // state, so a layout change never rebuilds them.
   const selectable = selection !== undefined;
+  const expandable = expansion !== undefined;
   const definitions = useMemo<ColumnDef<DisplayRow>[]>(
     () => [
+      ...(expandable
+        ? [
+            {
+              id: EXPAND_COLUMN,
+              size: GRID_CONTROL_COLUMN_WIDTH,
+              enableResizing: false,
+              enableHiding: false,
+            },
+          ]
+        : []),
       ...(selectable
         ? [
             {
@@ -298,7 +362,7 @@ export function RecordsGrid({
           ]
         : []),
     ],
-    [columns, selectable, showActions],
+    [columns, expandable, selectable, showActions],
   );
   const sorting = useMemo<SortingState>(
     () =>
@@ -315,7 +379,7 @@ export function RecordsGrid({
     [selectedRecordIds],
   );
   const columnOrder = useMemo(
-    () => [SELECT_COLUMN, ...layout.state.order, ACTIONS_COLUMN],
+    () => [EXPAND_COLUMN, SELECT_COLUMN, ...layout.state.order, ACTIONS_COLUMN],
     [layout.state.order],
   );
   const { setWidths } = layout;
@@ -349,7 +413,14 @@ export function RecordsGrid({
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinning = contract.features.pinning.enabled;
   const pinSignature = visibleIds.map((id) => layout.state.pins[id.toLowerCase()]).join(",");
-  const pinningStyle = useGridPinning(scrollRef, layout, pinning, selectable, showActions);
+  const pinningStyle = useGridPinning(
+    scrollRef,
+    layout,
+    pinning,
+    selectable,
+    showActions,
+    expandable,
+  );
 
   // Rows draw their cells from these slots; a slot changes only with the visible column set, never
   // with a width, so a resize repaints only the grid's width variables.
@@ -357,9 +428,17 @@ export function RecordsGrid({
     () =>
       visibleSignature.split("\u0000").flatMap((id): CellSlot[] => {
         if (id === "") return [];
-        const kind = id === SELECT_COLUMN ? "select" : id === ACTIONS_COLUMN ? "actions" : "data";
+        const kind =
+          id === EXPAND_COLUMN
+            ? "expand"
+            : id === SELECT_COLUMN
+              ? "select"
+              : id === ACTIONS_COLUMN
+                ? "actions"
+                : "data";
+        // The expand and select columns pin at the start, expand first; actions pin at the end.
         const pin =
-          kind === "select"
+          kind === "expand" || kind === "select"
             ? "start"
             : kind === "actions"
               ? "end"
@@ -464,17 +543,21 @@ export function RecordsGrid({
     }
   });
 
-  // Only the active cell is a tab stop; its controls join the tab order only in control mode.
+  // Only the active cell is a tab stop; its controls join the tab order only in control mode. The
+  // panel of the active row's related records follows it, so Tab moves into that panel.
   useLayoutEffect(() => {
     const grid = gridRef.current;
     if (grid === null) return;
     for (const element of grid.querySelectorAll<HTMLElement>(INNER_FOCUSABLE)) {
+      const panel = element.closest<HTMLElement>(PANEL);
       const cell = element.closest<HTMLElement>("[data-grid-cell]");
       const open =
-        controlMode &&
-        cell !== null &&
-        cell.dataset.row === String(activeRow) &&
-        cell.dataset.col === active.columnId;
+        panel !== null
+          ? panel.dataset.row === String(activeRow)
+          : controlMode &&
+            cell !== null &&
+            cell.dataset.row === String(activeRow) &&
+            cell.dataset.col === active.columnId;
       const tabIndex = open ? 0 : -1;
       if (element.tabIndex !== tabIndex) element.tabIndex = tabIndex;
     }
@@ -516,6 +599,9 @@ export function RecordsGrid({
   const activateRef = useRef(runActivation);
   activateRef.current = runActivation;
   const onActivate = useCallback((recordId: string) => activateRef.current(recordId), []);
+  const toggleRef = useRef(expansion?.toggle);
+  toggleRef.current = expansion?.toggle;
+  const onToggle = useCallback((recordId: string) => toggleRef.current?.(recordId), []);
 
   const sortBy = (columnId: string, additive: boolean): void => {
     const onSort = events?.sort_changed;
@@ -585,6 +671,16 @@ export function RecordsGrid({
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     // Keys from a portalled menu or from outside the grid are not grid navigation.
     if (!(event.target instanceof Node) || !gridRef.current?.contains(event.target)) return;
+    // Inside a row's related records the panel's own controls take every key but Escape, which
+    // returns to the row's expand toggle.
+    const panel = (event.target as Element).closest<HTMLElement>(PANEL);
+    if (panel !== null) {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        event.preventDefault();
+        moveTo(Number(panel.dataset.row), visibleIds.indexOf(EXPAND_COLUMN));
+      }
+      return;
+    }
     const cell = (event.target as Element).closest<HTMLElement>("[data-grid-cell]");
     if (cell === null) return;
     if (event.target !== cell) {
@@ -602,6 +698,35 @@ export function RecordsGrid({
     const header = row < 0;
     const control = event.ctrlKey || event.metaKey;
     const handled = (): void => event.preventDefault();
+    // On a row's expand toggle, Right or Enter opens its related records and Left or Enter closes
+    // them; F2 moves into an open panel. Elsewhere the arrows move between cells as usual.
+    const record = header ? undefined : rows[row];
+    if (
+      expansion !== undefined &&
+      record !== undefined &&
+      columnId === EXPAND_COLUMN &&
+      !event.altKey &&
+      !control
+    ) {
+      const open = expansion.isExpanded(record.recordId);
+      if (
+        event.key === "Enter" ||
+        (event.key === "ArrowRight" && !open) ||
+        (event.key === "ArrowLeft" && open)
+      ) {
+        handled();
+        expansion.toggle(record.recordId);
+        return;
+      }
+      if (event.key === "F2" && open) {
+        handled();
+        gridRef.current
+          ?.querySelector<HTMLElement>(`${PANEL}[data-row="${row}"]`)
+          ?.querySelector<HTMLElement>(INNER_FOCUSABLE)
+          ?.focus();
+        return;
+      }
+    }
     if (header && event.altKey && event.key === "ArrowDown") {
       handled();
       if (columnsById.has(columnId)) setMenuColumnId(columnId);
@@ -683,6 +808,17 @@ export function RecordsGrid({
 
   const onFocus = (event: FocusEvent<HTMLDivElement>): void => {
     const target = event.target;
+    // Focus inside a row's related records keeps that row's toggle as the tab stop, so the row
+    // (and, in a virtualized page, its panel) stays mounted.
+    const panel = target.closest<HTMLElement>(PANEL);
+    if (panel !== null && gridRef.current?.contains(panel)) {
+      gridHasFocus.current = true;
+      const recordId = rows[Number(panel.dataset.row)]?.recordId ?? null;
+      if (recordId !== active.recordId || active.columnId !== EXPAND_COLUMN)
+        setActive({ recordId, columnId: EXPAND_COLUMN });
+      setControlMode(false);
+      return;
+    }
     const cell = target.closest<HTMLElement>("[data-grid-cell]");
     if (cell === null || !gridRef.current?.contains(cell)) return;
     gridHasFocus.current = true;
@@ -775,6 +911,8 @@ export function RecordsGrid({
           )
         ) : slot.kind === "actions" ? (
           <span className="sr-only">Actions</span>
+        ) : slot.kind === "expand" ? (
+          <span className="sr-only">Related records</span>
         ) : (
           <>
             <span
@@ -860,23 +998,44 @@ export function RecordsGrid({
   const headers = table.getHeaderGroups()[0]?.headers ?? [];
   const headerById = new Map(headers.map((header) => [header.column.id, header]));
 
-  const drawRow = (row: DisplayRow, index: number, top: number | undefined): ReactElement => (
-    <GridRow
-      key={row.recordId}
-      row={row}
-      index={index}
-      slots={slots}
-      rowHeight={rowHeight}
-      top={top}
-      selected={selectedSet.has(row.recordId)}
-      selectable={selectable}
-      activeColumnId={activeRow === index ? active.columnId : undefined}
-      pending={pendingRecordId === row.recordId}
-      activatable={activateRow !== undefined}
-      renderers={renderers}
-      onActivate={onActivate}
-    />
-  );
+  // A row and, while it is expanded, the panel of its related records below it.
+  const drawRow = (row: DisplayRow, index: number): ReactElement => {
+    const expanded = expansion?.isExpanded(row.recordId) === true;
+    const panelId = expansion?.panelId(row.recordId);
+    const name = expansion === undefined ? "" : rowName(row);
+    return (
+      <Fragment key={row.recordId}>
+        <GridRow
+          row={row}
+          index={index}
+          slots={slots}
+          rowHeight={rowHeight}
+          selected={selectedSet.has(row.recordId)}
+          selectable={selectable}
+          activeColumnId={activeRow === index ? active.columnId : undefined}
+          pending={pendingRecordId === row.recordId}
+          activatable={activateRow !== undefined}
+          renderers={renderers}
+          onActivate={onActivate}
+          expanded={expanded}
+          name={name}
+          panelId={panelId}
+          onToggle={onToggle}
+        />
+        {!expanded || panelId === undefined || expansion === undefined ? null : (
+          <GridRowPanel
+            row={row}
+            index={index}
+            columnCount={slots.length}
+            panelId={panelId}
+            name={name}
+          >
+            {expansion.panel(row)}
+          </GridRowPanel>
+        )}
+      </Fragment>
+    );
+  };
 
   return (
     // The frame is the theme's card (its radius, ring and surface); the grid scrolls inside it.
@@ -892,10 +1051,13 @@ export function RecordsGrid({
     >
       <span id={instructionsId} className="sr-only">
         Use the arrow keys to move between cells. Enter opens a row or uses the controls in a cell,
-        F2 edits them and Escape returns to the cell. Space selects a row. On a column heading,
-        Enter or Alt with the down arrow opens the column menu, Shift and Enter adds to the sort,
-        Alt with the left or right arrow resizes the column and Alt, Shift with the left or right
-        arrow moves it.
+        F2 edits them and Escape returns to the cell. Space selects a row.{" "}
+        {expansion === undefined
+          ? null
+          : "On a row's expand button, the right arrow shows its related records and the left arrow hides them; F2 or Tab moves into them and Escape returns to the row. "}
+        On a column heading, Enter or Alt with the down arrow opens the column menu, Shift and Enter
+        adds to the sort, Alt with the left or right arrow resizes the column and Alt, Shift with
+        the left or right arrow moves it.
       </span>
       <div
         ref={gridRef}
@@ -930,6 +1092,7 @@ export function RecordsGrid({
             fallback={<div role="rowgroup" style={{ height: rows.length * rowHeight }} />}
           >
             <VirtualRows
+              expandedRecordIds={expansion?.expandedRecordIds}
               rows={rows}
               rowHeight={rowHeight}
               activeRow={activeRow}
@@ -940,7 +1103,7 @@ export function RecordsGrid({
           </Suspense>
         ) : (
           <div ref={rowsRef} role="rowgroup">
-            {rows.map((row, index) => drawRow(row, index, undefined))}
+            {rows.map((row, index) => drawRow(row, index))}
           </div>
         )}
       </div>

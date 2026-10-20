@@ -1,6 +1,11 @@
 import type { DefinitionValidationErrorCode } from "../../../catalogue/validation-errors";
 import { definitionValidationErrorCatalogue } from "../../../catalogue/validation-errors";
 import type { ComponentSettingValue } from "../block-property-schema";
+import type {
+  QueryBindingField,
+  QueryBindingInput,
+  QueryBindingPageFacts,
+} from "../query-binding-check";
 
 /**
  * The setting readers a Records table contract and its features share. They read settings that
@@ -108,9 +113,44 @@ export const factsValueType = (field: RecordsTableFieldFacts): string =>
   field.resultType ?? field.type;
 
 /**
+ * One query the application may read, as a row's related records see it: the record type it reads,
+ * the fields it selects and the inputs a binding fills. Identities are spelled as the table's
+ * settings spell them: qualified references in a draft, canonical identities in a release.
+ */
+export type RecordsTableRelatedQueryFacts = Readonly<{
+  query: string;
+  label: string;
+  recordType: string;
+  fields: readonly Readonly<{ field: string; label: string }>[];
+  inputs: readonly QueryBindingInput[];
+  /** The query groups or totals its rows, so its rows are not records that open. */
+  grouped: boolean;
+}>;
+
+/**
+ * What the application offers a row's related records: every link from another record type to the
+ * table's record type, the queries the application may read, the fields of the table's row (which
+ * a This row binding may name) and the page's own binding facts.
+ */
+export type RecordsTableRelatedRecordsFacts = Readonly<{
+  /** The table's record type, as the settings spell record types. */
+  recordType: string;
+  links: readonly Readonly<{
+    relationship: string;
+    label: string;
+    childRecordType: string;
+    childRecordTypeLabel: string;
+  }>[];
+  queries: readonly RecordsTableRelatedQueryFacts[];
+  rowFields: readonly QueryBindingField[];
+  page: Omit<QueryBindingPageFacts, "blockLabel" | "rowFields" | "rowRecordType">;
+}>;
+
+/**
  * What a Records table's bound query offers, the input of every feature check: the fields it
  * selects with their canonical type and flags, its relationships and the record type's named
- * actions. Publication builds it from the compiled release; Studio from the draft being edited.
+ * actions, and what the application offers its rows' related records. Publication builds it from
+ * the compiled release; Studio from the draft being edited.
  */
 export type RecordsTableQueryFacts = Readonly<{
   recordTypeLabel: string;
@@ -119,6 +159,7 @@ export type RecordsTableQueryFacts = Readonly<{
   actions: readonly Readonly<{ key: string; label: string }>[];
   /** The query groups or aggregates its rows, so rows are not records a person can act on. */
   grouped: boolean;
+  relatedRecords: RecordsTableRelatedRecordsFacts;
   /** The record type's fields the query does not select, so a check can name one a setting chose. */
   unselectedFields?: readonly Readonly<{ field: string; label: string }>[];
 }>;
@@ -144,6 +185,7 @@ export type RecordsTableFeatureRefusalCode = Extract<
   | "definition_records_table_saved_views"
   | "definition_records_table_bulk_actions"
   | "definition_records_table_inline_edit"
+  | "definition_records_table_master_detail"
   | "definition_records_table_conditional_formatting"
   | "definition_records_table_pinning"
 >;
@@ -158,6 +200,7 @@ export const featureAvailable: RecordsTableFeatureCheck = Object.freeze({ kind: 
 /** A feature that is not possible: the catalogue sentence, or one that names the field at fault. */
 export const featureNotPossible = (
   code: RecordsTableFeatureRefusalCode,
+  /** The sentence naming the part that does not fit, for a feature whose sentence is not fixed. */
   reason: string = definitionValidationErrorCatalogue[code].message,
 ): RecordsTableFeatureCheck => Object.freeze({ kind: "not_possible", code, reason });
 

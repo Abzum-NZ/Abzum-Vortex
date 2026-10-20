@@ -18,22 +18,31 @@ import sharedProperties from "../catalogue/catalogue/application-composition-sha
 /**
  * A property several blocks declare identically (a query-bound block's input bindings and its
  * waiting message) is written once in the shared properties file and named in each block's
- * properties as `{ "shared": "<key>" }`; each release holds the expanded property.
+ * properties as `{ "shared": "<key>" }`, at the top level or inside a group (a Records table's
+ * related records bind their own query's inputs); each release holds the expanded property.
  */
+const expandShared = (property: object): object => {
+  if ("shared" in property) {
+    const shared = sharedProperties[property.shared as keyof typeof sharedProperties];
+    if (shared === undefined)
+      throw new Error(
+        `Platform block catalogue names unknown shared property ${String(property.shared)}`,
+      );
+    return shared;
+  }
+  if ("kind" in property && property.kind === "group" && "properties" in property)
+    return {
+      ...property,
+      properties: (property.properties as readonly object[]).map(expandShared),
+    };
+  return property;
+};
 const sources = Object.fromEntries(
   Object.entries(catalogueSources).map(([name, definition]) => [
     name,
     {
       ...definition,
-      properties: (definition.properties as readonly object[]).map((property) => {
-        if (!("shared" in property)) return property;
-        const shared = sharedProperties[property.shared as keyof typeof sharedProperties];
-        if (shared === undefined)
-          throw new Error(
-            `Platform block catalogue names unknown shared property ${String(property.shared)}`,
-          );
-        return shared;
-      }),
+      properties: (definition.properties as readonly object[]).map(expandShared),
     },
   ]),
 ) as unknown as typeof catalogueSources;
