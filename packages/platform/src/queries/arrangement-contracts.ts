@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import {
+  boardColumnReadLimit,
   builderKeySchema,
   calendarMappingSchema,
   exactDecimalTextSchema,
@@ -219,7 +220,7 @@ export const protectedBoardArrangementPageRequestSchema = z.discriminatedUnion("
       columns: z
         .array(protectedQueryBoardSelectorSchema.shape.column)
         .min(1)
-        .max(boardChoiceOptionLimit + 1),
+        .max(boardColumnReadLimit),
     })
     .strict(),
   z

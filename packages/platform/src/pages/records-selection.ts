@@ -63,8 +63,6 @@ export const recordsSelectionCountResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("counted"), count: z.number().int().nonnegative() }).strict(),
   /** More records match than the count ceiling. */
   z.object({ kind: z.literal("too_many") }).strict(),
-  /** A search narrows the table; the count path counts by filters only, so the search must go. */
-  z.object({ kind: z.literal("search_not_counted") }).strict(),
   z.object({ kind: z.literal("refused") }).strict(),
   z.object({ kind: z.literal("unavailable") }).strict(),
 ]);

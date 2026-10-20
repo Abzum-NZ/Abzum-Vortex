@@ -218,7 +218,14 @@ export function useRuntimeInputs({
     setSelection,
   });
   // Bulk actions: every matching record of a table, and the runs over a selection.
-  const bulk = useBulkSelection({ model, navigationKey, setSelection, refreshPlacements });
+  const bulk = useBulkSelection({
+    model,
+    navigationKey,
+    currentData,
+    selection,
+    setSelection,
+    refreshPlacements,
+  });
   const titles = useRef<{ scope: string; values: PublishedRecordTitles }>({
     scope: navigationKey,
     values: new Map(),

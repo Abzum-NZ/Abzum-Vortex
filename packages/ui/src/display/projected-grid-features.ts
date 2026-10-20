@@ -9,6 +9,8 @@ import {
   recordsTableBulkRefusalReasons,
   recordsTableFilterKinds,
   RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
+  namedActionAvailabilitySchema,
+  type NamedActionAvailability,
 } from "@vortex/platform/schema";
 import { parseConditionalFormatting } from "./projected-format";
 import type { DefinitionRenderErrorLocation } from "../definition-error";
@@ -107,7 +109,7 @@ const parseTableAction = (
 export type TableSelectionScope =
   | Readonly<{ kind: "counting" }>
   | Readonly<{ kind: "matching"; count: number; excluded: number }>
-  | Readonly<{ kind: "not_counted"; reason: "too_many" | "search_not_counted" | "unavailable" }>;
+  | Readonly<{ kind: "not_counted"; reason: "too_many" | "changed" | "unavailable" }>;
 
 /** What a finished bulk run reports: the records it covered, changed, refused and did not reach. */
 export type TableBulkRunSummary = Readonly<{
@@ -132,6 +134,7 @@ export type TableSelectionParts = Readonly<{
   selectionToken?: string;
   selectionScope?: TableSelectionScope;
   bulkRun?: TableBulkRun;
+  actionAvailability?: NamedActionAvailability | "unavailable";
 }>;
 
 const wholeCount = (value: unknown, location: DefinitionRenderErrorLocation): number => {
@@ -154,9 +157,7 @@ const parseSelectionScope = (
     });
   if (
     scope.kind === "not_counted" &&
-    (scope.reason === "too_many" ||
-      scope.reason === "search_not_counted" ||
-      scope.reason === "unavailable")
+    (scope.reason === "too_many" || scope.reason === "changed" || scope.reason === "unavailable")
   )
     return Object.freeze({ kind: "not_counted", reason: scope.reason });
   return fail("A table selection scope is invalid", location);
@@ -205,6 +206,12 @@ export const parseTableSelectionParts = (
   location: DefinitionRenderErrorLocation,
 ): TableSelectionParts => {
   const token = record.selectionToken;
+  const availability =
+    record.actionAvailability === undefined || record.actionAvailability === "unavailable"
+      ? undefined
+      : namedActionAvailabilitySchema.safeParse(record.actionAvailability);
+  if (availability !== undefined && !availability.success)
+    fail("Projected named action availability is invalid", location);
   if (token !== undefined && (typeof token !== "string" || !/^[A-Za-z0-9_-]{1,65536}$/.test(token)))
     fail("A table selection token is invalid", location);
   return Object.freeze({
@@ -213,6 +220,10 @@ export const parseTableSelectionParts = (
       ? {}
       : { selectionScope: parseSelectionScope(record.selectionScope, location) }),
     ...(record.bulkRun === undefined ? {} : { bulkRun: parseBulkRun(record.bulkRun, location) }),
+    ...(availability?.success === true ? { actionAvailability: availability.data } : {}),
+    ...(record.actionAvailability === "unavailable"
+      ? { actionAvailability: "unavailable" as const }
+      : {}),
   });
 };
 

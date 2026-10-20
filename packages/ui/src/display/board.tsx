@@ -219,7 +219,7 @@ function BoardColumn({
       <div className="flex flex-col gap-3">
         {page === null ? (
           <p className="text-sm text-muted-foreground" role="status">
-            {pending ? "Loading cards�" : "Cards have not been loaded."}
+            {pending ? "Loading cards…" : "Cards have not been loaded."}
           </p>
         ) : page.rows.length === 0 ? (
           <p className="text-sm text-muted-foreground" role="status">
@@ -465,15 +465,18 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
               ...(column.gatedBy === undefined ? {} : { gatedBy: column.gatedBy }),
             },
           })),
-          ...[
-            {
-              key: "unassigned",
-              label: "Unassigned",
-              selector: { kind: "unassigned" as const },
-              values: values.unassigned,
-              moves: values.unassigned.moves,
-            },
-          ],
+          // A required stage hides Unassigned once a read finds it empty; until then it is unknown.
+          ...(values.choiceFieldRequired && values.unassigned.rowCount === 0
+            ? []
+            : [
+                {
+                  key: "unassigned",
+                  label: "Unassigned",
+                  selector: { kind: "unassigned" as const },
+                  values: values.unassigned,
+                  moves: values.unassigned.moves,
+                },
+              ]),
         ];
 
   // A phone shows one column at a time; the chosen column stays while it still exists.

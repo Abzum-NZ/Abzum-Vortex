@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import {
+  boardColumnReadLimit,
   builderKeySchema,
   conditionNodeSchema,
   fieldIdSchema,
@@ -664,7 +665,10 @@ export const protectedQueryBoardSummaryCommandSchema = z
     queryId: queryIdSchema,
     inputValues: z.record(builderKeySchema, jsonValueSchema),
     choiceFieldId: fieldIdSchema,
-    columns: z.array(protectedQueryBoardSelectorSchema.shape.column).min(1).max(13),
+    columns: z
+      .array(protectedQueryBoardSelectorSchema.shape.column)
+      .min(1)
+      .max(boardColumnReadLimit),
     /** The viewer's typed filter narrows the installed Query filter. */
     filter: conditionNodeSchema.optional(),
     /** Built by the bound component from its installed filter controls. */

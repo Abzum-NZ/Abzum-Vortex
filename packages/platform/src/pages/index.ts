@@ -1,6 +1,11 @@
 import "server-only";
 
 export {
+  readRecordsTableNamedActionAvailability,
+  projectNamedActionAvailability,
+} from "./records-table-features/named-action-availability";
+
+export {
   organizationChooserEmptyPage,
   organizationChooserPage,
   organizationChooserPlacementId,

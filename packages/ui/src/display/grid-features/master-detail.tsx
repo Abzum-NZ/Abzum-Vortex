@@ -111,18 +111,31 @@ const cellOf = (row: RelatedRow, column: DisplayColumn): DisplayCellValue =>
     kind: "empty",
   };
 
+/** The settled state a panel keeps while its row stays open; a read in flight is not kept. */
+const settled = (state: PanelState): PanelState | undefined =>
+  state.kind === "loading"
+    ? undefined
+    : state.kind === "ready" && state.more === "reading"
+      ? { ...state, more: "idle" }
+      : state;
+
 /**
  * The related records of one expanded row: the records of another record type that link to it,
  * read only while the row is expanded (one read when it opens, one per "Show more"; nothing when
- * it collapses). Each value is drawn by the table's own cell renderer, the first column opens the
+ * it collapses, and nothing when the table swaps between the grid and the phone cards, as the
+ * table keeps the shown page for the open row). Each value is drawn by the table's own cell renderer, the first column opens the
  * related record's page when the viewer may open it, and loading, empty, refused and failed reads
  * each have their own state.
  */
-function RelatedRecords({ context, row }: GridFeatureRowProps): ReactElement {
+function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactElement {
   const read = context.events?.row_expanded;
   const pageSize = context.features.masterDetail?.pageSize;
   if (pageSize === undefined) fail("Related records require their feature projection", location);
-  const [state, setState] = useState<PanelState>({ kind: "loading" });
+  // Only this panel writes its memory, so what it holds is a state this panel kept.
+  const [state, setState] = useState<PanelState>(
+    () => (memory.kept() as PanelState | undefined) ?? { kind: "loading" },
+  );
+  const reopened = useRef(state.kind !== "loading");
   const mounted = useRef(true);
   const recordId = row.recordId;
 
@@ -158,11 +171,17 @@ function RelatedRecords({ context, row }: GridFeatureRowProps): ReactElement {
 
   useEffect(() => {
     mounted.current = true;
-    void open();
+    if (reopened.current) reopened.current = false;
+    else void open();
     return () => {
       mounted.current = false;
     };
   }, [open]);
+
+  useEffect(() => {
+    const keep = settled(state);
+    if (keep !== undefined) memory.keep(keep);
+  }, [memory, state]);
 
   const showMore = async (): Promise<void> => {
     if (state.kind !== "ready" || state.page.next === undefined || state.more === "reading") return;
@@ -228,6 +247,75 @@ function RelatedRecords({ context, row }: GridFeatureRowProps): ReactElement {
       </Empty>
     );
   const { page, more } = state;
+  const footer = (
+    <>
+      {page.next === undefined ? null : (
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={more === "reading"}
+          onClick={() => void showMore()}
+        >
+          {more === "reading" ? "Reading…" : "Show more"}
+        </Button>
+      )}
+      {more === "failed" ? (
+        <p role="alert" className="m-0 text-sm text-muted-foreground">
+          More related records could not be read.
+        </p>
+      ) : null}
+    </>
+  );
+  if (context.presentation === "cards")
+    return (
+      <div className="flex min-w-0 flex-col items-start gap-1 text-sm">
+        <ul className="m-0 flex w-full min-w-0 list-none flex-col divide-y divide-border p-0">
+          {page.rows.map((related) => {
+            const [titleColumn, ...detailColumns] = page.columns;
+            const titleValue = titleColumn === undefined ? undefined : cellOf(related, titleColumn);
+            return (
+              <li
+                key={related.recordId}
+                data-vortex-related-record-id={related.recordId}
+                className="min-w-0 py-2 first:pt-0 last:pb-0"
+              >
+                {titleColumn === undefined ? null : (
+                  <h4 className="m-0 min-w-0 font-medium">
+                    {titleValue === undefined || related.href === undefined ? (
+                      titleValue === undefined ? null : (
+                        <DisplayCellView value={titleValue} />
+                      )
+                    ) : (
+                      <a
+                        href={related.href}
+                        className="underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
+                      >
+                        {cellValueToText(titleValue) || "Open"}
+                      </a>
+                    )}
+                  </h4>
+                )}
+                {detailColumns.length === 0 ? null : (
+                  <dl className="m-0 mt-1 grid min-w-0 grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-x-3 gap-y-1">
+                    {detailColumns.map((column) => (
+                      <div key={column.key} className="contents">
+                        <dt className="min-w-0 break-words text-muted-foreground">
+                          {column.label}
+                        </dt>
+                        <dd className="m-0 min-w-0 break-words text-end">
+                          <DisplayCellView value={cellOf(related, column)} />
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {footer}
+      </div>
+    );
   return (
     <div className="flex flex-col items-start gap-1">
       <Table className="text-sm" containerClassName="border-0 bg-transparent">
@@ -264,21 +352,7 @@ function RelatedRecords({ context, row }: GridFeatureRowProps): ReactElement {
           ))}
         </TableBody>
       </Table>
-      {page.next === undefined ? null : (
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={more === "reading"}
-          onClick={() => void showMore()}
-        >
-          {more === "reading" ? "Reading…" : "Show more"}
-        </Button>
-      )}
-      {more === "failed" ? (
-        <p role="alert" className="m-0 text-sm text-muted-foreground">
-          More related records could not be read.
-        </p>
-      ) : null}
+      {footer}
     </div>
   );
 }
