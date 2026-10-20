@@ -809,10 +809,24 @@ export const loadStudioApplicationDraft = async (
                       const from = record.fields.find((field) =>
                         sameId(String(field.fieldId), String(relationship.fromFieldId)),
                       );
+                      // Targets may belong to another installed module, as query inputs do.
+                      const targets = [
+                        ...(relationship.toRecordType === undefined
+                          ? []
+                          : [relationship.toRecordType]),
+                        ...(relationship.toRecordTypes ?? []),
+                      ].flatMap((target) => {
+                        const linked =
+                          target.state === "resolved"
+                            ? recordTypeKeys.get(String(target.recordTypeId))
+                            : undefined;
+                        return linked === undefined ? [] : [linked];
+                      });
                       borrowedRelationships.push({
                         reference: `${release.key}:${record.key}.${relationship.key}`,
                         label: `${record.singularLabel}: ${from?.label ?? relationship.key}`,
                         recordType: `${release.key}:${record.key}`,
+                        targets,
                         borrowedFrom: use.application,
                       });
                     }
