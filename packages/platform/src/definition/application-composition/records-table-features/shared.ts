@@ -169,7 +169,12 @@ export type RecordsTableBoardFacts = Readonly<{
    * The query's own totals: each alias with its operation, the field it is taken of (absent for a
    * count of records) and the business label it is offered under.
    */
-  aggregates: readonly Readonly<{ alias: string; operation: string; field?: string; label: string }>[];
+  aggregates: readonly Readonly<{
+    alias: string;
+    operation: string;
+    field?: string;
+    label: string;
+  }>[];
   relationshipHops: number;
   pageSize: number;
   stageFields: readonly string[];
