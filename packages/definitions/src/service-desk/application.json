@@ -669,6 +669,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
@@ -893,6 +896,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
@@ -1457,6 +1463,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
@@ -1801,6 +1810,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
@@ -2129,6 +2141,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
@@ -2286,6 +2301,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
@@ -2396,6 +2414,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
