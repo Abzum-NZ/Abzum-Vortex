@@ -137,7 +137,8 @@ function NameDialog({
             setBusy(true);
             void onSubmit(trimmed).then((result) => {
               setBusy(false);
-              if (result.outcome === "done") onClose();
+              // Only a failed write keeps the dialog: any other answer was told by the host.
+              if (result.outcome !== "unavailable") onClose();
             });
           }}
         >
