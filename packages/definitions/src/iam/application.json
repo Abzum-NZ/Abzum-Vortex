@@ -1084,22 +1084,26 @@
                       {
                         "field": "vortex.system_directory:person.display_name",
                         "label": "Display name",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.system_directory:person.state",
                         "label": "State",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:person.language",
                         "label": "Language",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:person.time_zone",
                         "label": "Time zone",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "vortex": {
@@ -1118,6 +1122,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -1240,42 +1249,50 @@
                       {
                         "field": "vortex.system_directory:role.key",
                         "label": "Key",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.system_directory:role.label",
                         "label": "Label",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role.lifecycle",
                         "label": "Lifecycle",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role.role_kind",
                         "label": "Role kind",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role.privilege_classification",
                         "label": "Privilege",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role.assignment_policy",
                         "label": "Assignment policy",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role.accepted_permission_count",
                         "label": "Accepted permissions",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role.revision",
                         "label": "Role revision",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "sortable_fields": [
@@ -1314,6 +1331,11 @@
                           }
                         }
                       }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
+                      }
                     }
                   }
                 },
@@ -1326,17 +1348,20 @@
                       {
                         "field": "vortex.system_directory:group.key",
                         "label": "Key",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.system_directory:group.label",
                         "label": "Label",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:group.state",
                         "label": "State",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "sortable_fields": [
@@ -1379,6 +1404,11 @@
                           }
                         }
                       }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
+                      }
                     }
                   }
                 },
@@ -1391,27 +1421,32 @@
                       {
                         "field": "vortex.system_directory:group_membership.account_display_name",
                         "label": "Member",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.system_directory:group_membership.group_id",
                         "label": "Group",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:group_membership.starts_at",
                         "label": "Starts at",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:group_membership.expires_at",
                         "label": "Expires at",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:group_membership.state",
                         "label": "State",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "row_actions": [
@@ -1436,6 +1471,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -2083,62 +2123,74 @@
                       {
                         "field": "vortex.system_directory:role_assignment.role_label",
                         "label": "Role",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.assignee_kind",
                         "label": "Assignee kind",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.assignment_kind",
                         "label": "Assignment kind",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.starts_at",
                         "label": "Starts",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.expires_at",
                         "label": "Expires",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.state",
                         "label": "State",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.temporal_state",
                         "label": "Temporal state",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.role_id",
                         "label": "Role ID",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.role_key",
                         "label": "Role key",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.organization_account_id",
                         "label": "Organisation account ID",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.group_id",
                         "label": "Group ID",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.revision",
                         "label": "Assignment revision",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "row_actions": [
@@ -2164,6 +2216,11 @@
                           }
                         }
                       }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
+                      }
                     }
                   }
                 },
@@ -2176,27 +2233,32 @@
                       {
                         "field": "vortex.system_directory:delegation.holder_kind",
                         "label": "Holder",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.system_directory:delegation.scope_kind",
                         "label": "Scope",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:delegation.starts_at",
                         "label": "Starts at",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:delegation.expires_at",
                         "label": "Expires at",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:delegation.state",
                         "label": "State",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "row_actions": [
@@ -2221,6 +2283,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -2614,27 +2681,32 @@
                       {
                         "field": "vortex.system_directory:role_activation.account_display_name",
                         "label": "Person",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.system_directory:role_activation.role_label",
                         "label": "Role",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_activation.activated_at",
                         "label": "Activated at",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_activation.expires_at",
                         "label": "Expires at",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_activation.state",
                         "label": "State",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "row_actions": [
@@ -2659,6 +2731,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -2697,32 +2774,38 @@
                       {
                         "field": "vortex.iam.core:access_request.request_number",
                         "label": "Request number",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.iam.core:access_request.title",
                         "label": "Title",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.iam.core:access_request.request_type",
                         "label": "Request type",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.iam.core:access_request.state",
                         "label": "State",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.iam.core:access_request.beneficiary",
                         "label": "Beneficiary",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.iam.core:access_request.submitted_at",
                         "label": "Submitted",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "title": "Access Requests",
@@ -2742,6 +2825,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }

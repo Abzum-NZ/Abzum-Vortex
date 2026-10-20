@@ -407,17 +407,20 @@
                       {
                         "field": "vortex.system_directory:organization.display_name",
                         "label": "Organisation",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.system_directory:organization.short_name",
                         "label": "Short name",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:organization.state",
                         "label": "State",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "vortex": {
@@ -437,6 +440,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -474,27 +482,32 @@
                       {
                         "field": "vortex.system_directory:organization.display_name",
                         "label": "Display name",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.system_directory:organization.short_name",
                         "label": "Short name",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:organization.state",
                         "label": "State",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:organization.state_changed_at",
                         "label": "State changed",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:organization.created_at",
                         "label": "Created",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "row_actions": [
@@ -536,6 +549,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -1073,22 +1091,26 @@
                       {
                         "field": "vortex.system_directory:tenant_administrator.identity_id",
                         "label": "Identity",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.system_directory:tenant_administrator.starts_at",
                         "label": "Starts",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:tenant_administrator.expires_at",
                         "label": "Expires",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:tenant_administrator.state",
                         "label": "State",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "vortex": {
@@ -1108,6 +1130,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
