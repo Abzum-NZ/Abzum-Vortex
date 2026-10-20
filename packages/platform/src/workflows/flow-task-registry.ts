@@ -952,6 +952,18 @@ export const validateFlowTaskPlacement = (
             code: "wrong_run_location",
             message: `${definition.title} cannot run before a save`,
           });
+        // Only a save reads the warnings and requirements a rule task reports; an action flow
+        // would drop them, so it may only refuse.
+        if (
+          flow.execution === "transaction" &&
+          !beforeSave &&
+          (flowTask.type === "rule.require" || flowTask.type === "rule.warn")
+        )
+          issues.push({
+            path: [...taskPath, "type"],
+            code: "wrong_run_location",
+            message: `${definition.title} runs only before a save`,
+          });
         if (
           !definition.runLocations.some((location) => allowedHere.includes(location)) &&
           !(actionFlow && definition.actionFlowTransaction === true)

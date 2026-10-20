@@ -867,7 +867,13 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
       return { kind: "continue" };
     }
     // A save transaction flow reports its warnings and requirements and refuses its record here.
-    if (flow.execution === "transaction" && registered.type.startsWith("rule.")) {
+    // Only a save reads the warnings and requirements, so any other transaction flow may only refuse.
+    if (
+      flow.execution === "transaction" &&
+      (registered.type === "rule.refuse" ||
+        (registered.type.startsWith("rule.") &&
+          flow.triggers.some((trigger) => trigger.type === "BeforeSave")))
+    ) {
       const message = properties.message?.value;
       if (typeof message !== "string") return failed("value_unresolved", "failed", taskId);
       const field = properties.field?.value;
