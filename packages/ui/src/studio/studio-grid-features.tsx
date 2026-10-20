@@ -32,6 +32,7 @@ import {
   studioRecordsTableQueryFacts,
   type StudioRelatedRecordsChoices,
 } from "./grid-features";
+import { StudioSpreadsheetEditor } from "./grid-features/spreadsheet";
 import type { StudioBoardPipeline } from "./board-source";
 import { StudioBoardEditor } from "./grid-features/board";
 import { StudioConditionalFormattingEditor } from "./grid-features/conditional-formatting";
@@ -248,6 +249,13 @@ export function StudioGridFeatures({
                   />
                 </ItemActions>
               </Item>
+              {enabled && key === "spreadsheet" ? (
+                <StudioSpreadsheetEditor
+                  value={current}
+                  disabled={disabled}
+                  onChange={(next) => write(key, next)}
+                />
+              ) : null}
               {enabled && key === "conditional_formatting" && features !== undefined ? (
                 <div className="pb-2">
                   <StudioConditionalFormattingEditor

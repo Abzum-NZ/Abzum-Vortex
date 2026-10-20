@@ -218,6 +218,7 @@ export type RecordsTableFeatureRefusalCode = Extract<
   | "definition_records_table_master_detail"
   | "definition_records_table_conditional_formatting"
   | "definition_records_table_pinning"
+  | "definition_records_table_spreadsheet"
   | "definition_records_table_board"
 >;
 
