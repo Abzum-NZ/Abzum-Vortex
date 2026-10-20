@@ -4,6 +4,11 @@ import {
 } from "./spreadsheet";
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
+  recordsTableBoardFeature,
+  type RecordsTableBoardMode,
+  type RecordsTableBoardSettings,
+} from "./board";
+import {
   recordsTableBulkActionsFeature,
   type RecordsTableBulkActionsSettings,
 } from "./bulk-actions";
@@ -50,6 +55,7 @@ export {
   recordsTableEditableFieldTypes,
   type RecordsTableActionCapability,
   type RecordsTableActionContract,
+  type RecordsTableBoardFacts,
   type RecordsTableFeatureCheck,
   type RecordsTableFeatureRefusalCode,
   type RecordsTableFeatureState,
@@ -59,6 +65,7 @@ export {
   type RecordsTableRelatedRecordsFacts,
 } from "./shared";
 export { RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE } from "./master-detail";
+export { boardProblem, recordsTableBoardFactsOf } from "./board";
 export {
   conditionalColumnFormatFieldTypes,
   conditionalColumnFormatIssue,
@@ -79,6 +86,8 @@ export {
   type ConditionalFormattingDateParameter,
 } from "./conditional-formatting";
 export type {
+  RecordsTableBoardMode,
+  RecordsTableBoardSettings,
   RecordsTableConditionalFormattingSettings,
   RecordsTableBulkActionsSettings,
   RecordsTableColumnFiltersSettings,
@@ -108,6 +117,7 @@ export type RecordsTableFeatures = Readonly<{
   conditionalFormatting: RecordsTableFeatureState<RecordsTableConditionalFormattingSettings>;
   pinning: RecordsTableFeatureState<RecordsTablePinningSettings>;
   spreadsheet: RecordsTableFeatureState<RecordsTableSpreadsheetSettings>;
+  board: RecordsTableFeatureState<RecordsTableBoardSettings>;
 }>;
 
 const registry = {
@@ -123,6 +133,7 @@ const registry = {
     property: "conditionalFormatting",
     definition: recordsTableConditionalFormattingFeature,
   },
+  board: { property: "board", definition: recordsTableBoardFeature },
 } as const satisfies Record<
   string,
   Readonly<{
@@ -142,6 +153,7 @@ export const recordsTableFeatureKeys = [
   "inline_edit",
   "master_detail",
   "conditional_formatting",
+  "board",
 ] as const satisfies readonly (keyof typeof registry)[];
 export type RecordsTableFeatureKey = (typeof recordsTableFeatureKeys)[number];
 
@@ -184,6 +196,7 @@ export const readRecordsTableFeatures = (
   const masterDetail = read("master_detail");
   const conditionalFormatting = read("conditional_formatting");
   const pinning = read("pinning");
+  const board = read("board");
   if (
     spreadsheet === undefined ||
     search === undefined ||
@@ -193,7 +206,8 @@ export const readRecordsTableFeatures = (
     inlineEdit === undefined ||
     masterDetail === undefined ||
     conditionalFormatting === undefined ||
-    pinning === undefined
+    pinning === undefined ||
+    board === undefined
   )
     return undefined;
   return {
@@ -206,6 +220,7 @@ export const readRecordsTableFeatures = (
     inlineEdit: inlineEdit as RecordsTableFeatures["inlineEdit"],
     masterDetail: masterDetail as RecordsTableFeatures["masterDetail"],
     conditionalFormatting: conditionalFormatting as RecordsTableFeatures["conditionalFormatting"],
+    board: board as RecordsTableFeatures["board"],
   };
 };
 
@@ -261,6 +276,7 @@ const featureEvents: Readonly<Record<string, RecordsTableFeatureKey>> = {
   search_changed: "search",
   filter_changed: "column_filters",
   inline_edit: "inline_edit",
+  card_moved: "board",
 };
 
 /** The feature whose controls raise this Records table event, for the events a feature owns. */

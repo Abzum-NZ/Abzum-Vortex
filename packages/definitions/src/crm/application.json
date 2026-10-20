@@ -4083,37 +4083,47 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.board",
+                  "type": "platform.renderer.table",
                   "props": {
                     "id": "board_crm_pipeline",
                     "title": "Pipeline",
-                    "choice_field": "vortex.crm.opportunities:opportunity.stage",
-                    "card_title_field": "vortex.crm.opportunities:opportunity.name",
-                    "detail_fields": [
+                    "columns": [
                       {
-                        "field": "vortex.crm.opportunities:opportunity.opportunity_number",
-                        "label": "Opportunity number"
-                      },
-                      {
-                        "field": "vortex.crm.opportunities:opportunity.value",
-                        "label": "Value"
-                      },
-                      {
-                        "field": "vortex.crm.opportunities:opportunity.expected_close_date",
-                        "label": "Expected close date"
+                        "field": "vortex.crm.opportunities:opportunity.name",
+                        "label": "Opportunity name",
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
-                    "aggregates": [
+                    "row_actions": [
                       {
-                        "alias": "pipeline_value",
-                        "label": "Total amount"
+                        "event_id": "event_crm_pipeline_open_opportunity",
+                        "label": "Open"
                       }
                     ],
+                    "features": {
+                      "board": {
+                        "enabled": true,
+                        "column_field": "vortex.crm.opportunities:opportunity.stage",
+                        "card_title_field": "vortex.crm.opportunities:opportunity.name",
+                        "card_fields": [
+                          "vortex.crm.opportunities:opportunity.opportunity_number",
+                          "vortex.crm.opportunities:opportunity.value",
+                          "vortex.crm.opportunities:opportunity.expected_close_date"
+                        ],
+                        "totals": [
+                          {
+                            "alias": "pipeline_value",
+                            "label": "Total amount"
+                          }
+                        ]
+                      }
+                    },
                     "empty_message": "No opportunities in this stage.",
                     "vortex": {
                       "block": {
-                        "block_id": "626c1ff5-ae7b-47da-b0d4-370e3a262444",
-                        "release_version": "1.1.0"
+                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.crm.opportunities:crm_pipeline_board",
                       "responsive": {

@@ -61,6 +61,7 @@ export const studioGridFeatureEditors: Readonly<
   inline_edit: { kind: "settings" },
   master_detail: { kind: "settings" },
   conditional_formatting: { kind: "custom" },
+  board: { kind: "custom" },
 };
 
 /**
@@ -127,6 +128,7 @@ export const studioRecordsTableQueryFacts = (
       acceptsSelection: action.acceptsSelection,
     })),
   grouped: query?.grouped === true,
+  board: query?.board,
   relatedRecords: {
     recordType: query?.recordType ?? "",
     links:

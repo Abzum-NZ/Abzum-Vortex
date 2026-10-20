@@ -751,7 +751,7 @@ const choiceOptionUses = (
   return uses;
 };
 
-/** A pipeline is used by every page or layout block that shows a board over its choice field. */
+/** A pipeline is used by every page or layout Data grid whose Board mode takes its columns from the pipeline. */
 const pipelineUses = (
   source: Source,
   index: UseIndex,
@@ -765,7 +765,7 @@ const pipelineUses = (
   if (pipeline === undefined) return [];
   return occurrences(index, `${moduleKey}:${recordKey}.${pipeline.stage_field}`)
     .filter(
-      ({ path, key }) => key === "choice_field" && (path[1] === "pages" || path[1] === "shells"),
+      ({ path, key }) => key === "column_field" && (path[1] === "pages" || path[1] === "shells"),
     )
     .map(({ path }) => ({ path }));
 };

@@ -64,6 +64,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_conditional_formatting",
   "definition_records_table_pinning",
   "definition_records_table_spreadsheet",
+  "definition_records_table_board",
   "definition_query_binding",
   "definition_unknown_property",
   "definition_too_few_items",
@@ -177,6 +178,14 @@ const definitionValidationErrorCatalogueSource = {
     order: 39,
     message: "Column pinning needs a field from the bound query.",
     guidance: "Choose a query with fields, then set each column's pin position in Columns.",
+  },
+  // Board names its own part (the stage field, a card field, a total) in its sentence; the
+  // catalogue message is what a reader without that sentence sees.
+  definition_records_table_board: {
+    order: 39,
+    message: "Board needs a stage field.",
+    guidance:
+      "Choose a query grouped by a stage field of a pipeline, and the card title and card fields it selects, or turn Board off.",
   },
   // A query binding refusal carries its own sentence (the input, the source and the types); the
   // catalogue message is what a reader without that sentence sees.

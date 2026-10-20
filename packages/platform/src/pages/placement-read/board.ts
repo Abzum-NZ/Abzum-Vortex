@@ -1,14 +1,18 @@
 import "server-only";
 
-import { describeFailure, sameId, type JsonValue } from "../../schema";
+import { describeFailure, sameId, type JsonValue, type RecordsTableBoardMode } from "../../schema";
 import { projectBoardPlacement } from "../board-query";
 import { logPlacementFailure, type PlacementReadEntry } from "./shared";
 import type { PlacementReadInput } from "./types";
 
-/** A board placement: its columns for its resolved inputs, or the next page of one column. */
+/**
+ * A Records table placement in Board mode: its columns for its resolved inputs, or the next page of
+ * one column.
+ */
 export const readBoard = async (
   read: PlacementReadInput,
   placement: PlacementReadEntry,
+  board: RecordsTableBoardMode,
   inputValues: Readonly<Record<string, JsonValue>>,
 ): Promise<void> => {
   const { placementId } = placement;
@@ -25,6 +29,7 @@ export const readBoard = async (
     >[0]["placement"],
     inputValues,
     queries: read.services.queries,
+    board,
     ...(continuation === undefined ? {} : { continuation }),
   });
   if (projection.outcome === "ready") {
