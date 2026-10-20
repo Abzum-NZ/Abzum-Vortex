@@ -189,20 +189,42 @@ export function useGridLayout({
     else toast.error("The view could not be saved.");
   }, []);
 
+  /**
+   * Stores the person's own layout (or removes it), made from the revision the page was read with.
+   * The grid's own writer may have stored a newer one since; the person's current arrangement is
+   * what they see and want, so one retry is made from the revision the store reports.
+   */
+  const writeOwnLayout = useCallback(
+    async (
+      placementId: string,
+      change: (expectedRevision: number | null) => Record<string, unknown> | undefined,
+    ): Promise<GridLayoutCommitResult> => {
+      let expected = layoutOf(placementId)?.revision ?? null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const body = change(expected);
+        if (body === undefined) return { outcome: "reset" };
+        const result = await commitGridLayout(address.current, { placementId, ...body }).catch(
+          (error: unknown) => {
+            console.error("[page] grid layout not stored", error);
+            return UNAVAILABLE;
+          },
+        );
+        if (result.outcome !== "conflict") return result;
+        expected = result.stored?.revision ?? null;
+      }
+      return UNAVAILABLE;
+    },
+    [layoutOf],
+  );
+
   /** Removes the person's own arrangement, so the view (or the authored layout) shows as it is. */
   const dropOwnLayout = useCallback(
     async (placementId: string): Promise<void> => {
-      const revision = layoutOf(placementId)?.revision ?? null;
-      if (revision === null) return;
-      await commitGridLayout(address.current, {
-        kind: "reset",
-        placementId,
-        expectedRevision: revision,
-      }).catch((error: unknown) => {
-        console.error("[page] grid layout not reset", error);
-      });
+      await writeOwnLayout(placementId, (expectedRevision) =>
+        expectedRevision === null ? undefined : { kind: "reset", expectedRevision },
+      );
     },
-    [layoutOf],
+    [writeOwnLayout],
   );
 
   /**
@@ -217,17 +239,13 @@ export function useGridLayout({
         columns: document.columns,
         ...(document.density === undefined ? {} : { density: document.density }),
       };
-      const stored = await commitGridLayout(address.current, {
+      const stored = await writeOwnLayout(placementId, (expectedRevision) => ({
         kind: "write",
-        placementId,
         queryId: state.queryId,
-        expectedRevision: state.revision,
+        expectedRevision,
         basedOnViewId: viewId,
         layout: arranged,
-      }).catch((error: unknown) => {
-        console.error("[page] grid layout not stored", error);
-        return UNAVAILABLE;
-      });
+      }));
       if (stored.outcome === "saved")
         patchLayoutState(placementId, (layout) => ({
           ...layout,
@@ -238,7 +256,7 @@ export function useGridLayout({
             : { views: { ...layout.views, basedOnViewId: viewId } }),
         }));
     },
-    [layoutOf, patchLayoutState],
+    [layoutOf, patchLayoutState, writeOwnLayout],
   );
 
   /** Applies a view's new revision (and changes) to its list entry and, if open, to the selected view. */

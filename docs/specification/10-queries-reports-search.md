@@ -140,7 +140,11 @@ The table has one toolbar in a fixed order: the projected features' items (searc
 
 ## Saved views
 
-A saved view records the query, visible columns, arrangement, grouping, sort, and display choices. A personal view is visible only to its owner. A shared view belongs to an application and requires a permission to publish or change.
+A saved view records the whole state of one table: column order, visibility and widths, density, the ordered sort, one typed filter per field and the search (grouping, pinning and the like join the same document as their features land). It stores configuration only, never rows, a cursor, a page or a permission. Views live in the one grid view store, next to the person's current layout, isolated by organisation account, application installation, page and placement; deleting the account or the installation removes them.
+
+A view is **personal** (its owner only) or **shared** with the whole organisation, chosen roles of the application, or groups. Sharing, and changing or deleting a shared view that is not one's own, is a permission the table's Saved views setting names from the application's own permissions and that Access grants to roles; the database decides it now, for the person making the request. Recipients see a shared view read-only and can Save as their own copy. Names, shares and deletes are revision-checked: a change made in another tab is refused and the latest version is shown.
+
+Opening a view re-evaluates it under the viewer's current access, field policy and release. A column the viewer cannot see, and a filter or sort key on a field they cannot read, are left out and announced ("1 column is hidden for your role"); a stored filter that is malformed is never applied, which would widen the rows, and the viewer is told the view needs fixing. The address names the view (`view.<placement>=<id>`, with the sort, filters and search it shows), so a copied link opens the same view for anyone who may see it; the address wins over the view's own state, and a view the viewer may not see opens the table without it. The switcher lists Personal and Shared views with search, Save view, Save as, Rename, Share, Delete and Reset to default, and an unsaved-changes dot. Saving, renaming, sharing, deleting and a layout change read no records; opening another view reads the one grid again.
 
 The term **saved view** replaces the outdated terms “prepared list,” “prepared query,” and “prepared view.”
 
