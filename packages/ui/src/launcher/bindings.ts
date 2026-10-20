@@ -8,7 +8,7 @@ import {
   isRecord,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
-import type { DisplayCellValue, DisplayRow, ListPayload } from "../display/projected-data";
+import type { DisplayCellValue, DisplayRow, LauncherRowsPayload } from "../display/projected-data";
 
 const MAXIMUM_APPLICATIONS = 10_000;
 const MAXIMUM_PAGE_KEYS = 10_000;
@@ -95,7 +95,9 @@ const requireApplicationText = (
   location: DefinitionRenderErrorLocation,
 ): string => {
   const text = typeof value === "string" ? value.trim() : "";
-  return text.length > 0 && text.length <= MAXIMUM_APPLICATION_TEXT ? text : fail(message, location);
+  return text.length > 0 && text.length <= MAXIMUM_APPLICATION_TEXT
+    ? text
+    : fail(message, location);
 };
 
 const sameIdentity = (left: string, right: string): boolean =>
@@ -256,7 +258,7 @@ export function parsePermittedApplicationsLauncherProjection(
  */
 export function permittedApplicationsToListValues(
   projection: Extract<PermittedApplicationsLauncherProjection, { kind: "available" }>,
-): ListPayload {
+): LauncherRowsPayload {
   const rows: DisplayRow[] = projection.applications.map((application) => {
     const cells: Record<string, DisplayCellValue> = {
       name: Object.freeze({ kind: "text", text: application.name }),
@@ -265,7 +267,7 @@ export function permittedApplicationsToListValues(
     return Object.freeze({ recordId: application.applicationRootId, cells: Object.freeze(cells) });
   });
   return Object.freeze({
-    kind: "list",
+    kind: "launcher_rows",
     headingKey: "name",
     secondaryKey: "icon",
     rows: Object.freeze(rows),
@@ -290,7 +292,7 @@ export function applicationLauncherQueryRowsToListValues(
   nameKey: string,
   iconKey: string,
   location: DefinitionRenderErrorLocation = {},
-): ListPayload {
+): LauncherRowsPayload {
   const headingKey = requireBuilderKey(
     nameKey,
     "An application launcher requires a name cell key",
@@ -325,13 +327,15 @@ export function applicationLauncherQueryRowsToListValues(
     seen.add(identity);
 
     const projectedName = row.cells[headingKey];
-    const name = projectedName?.kind === "text"
-      ? projectedName
-      : fail("A launcher query row requires its projected name cell", rowLocation);
+    const name =
+      projectedName?.kind === "text"
+        ? projectedName
+        : fail("A launcher query row requires its projected name cell", rowLocation);
     const projectedIcon = row.cells[secondaryKey];
-    const icon = projectedIcon?.kind === "text"
-      ? projectedIcon
-      : fail("A launcher query row requires its projected icon cell", rowLocation);
+    const icon =
+      projectedIcon?.kind === "text"
+        ? projectedIcon
+        : fail("A launcher query row requires its projected icon cell", rowLocation);
     const cells: Record<string, DisplayCellValue> = {
       [headingKey]: name,
       [secondaryKey]: icon,
@@ -348,7 +352,7 @@ export function applicationLauncherQueryRowsToListValues(
     );
   }
   return Object.freeze({
-    kind: "list",
+    kind: "launcher_rows",
     headingKey,
     secondaryKey,
     rows: Object.freeze(displayRows),
@@ -377,7 +381,7 @@ export type LinkTileRow = Readonly<{
 export function linkTilesToListValues(
   rows: readonly LinkTileRow[],
   location: DefinitionRenderErrorLocation = {},
-): ListPayload {
+): LauncherRowsPayload {
   const seen = new Set<string>();
   const displayRows: DisplayRow[] = rows.map((row, index) => {
     const rowLocation = { ...location, propertyPath: [`rows[${index}]`] };
@@ -409,7 +413,7 @@ export function linkTilesToListValues(
     return Object.freeze({ recordId, cells: Object.freeze(cells) });
   });
   return Object.freeze({
-    kind: "list",
+    kind: "launcher_rows",
     headingKey: "label",
     secondaryKey: "description",
     rows: Object.freeze(displayRows),

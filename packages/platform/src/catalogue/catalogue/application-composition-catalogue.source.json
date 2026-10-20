@@ -92,40 +92,6 @@
     "supportedEvents": ["refresh"],
     "supportedStateOperations": []
   },
-  "LIST_BLOCK_RELEASE": {
-    "blockId": "4881c816-e4ce-4c39-b0b7-20958b947748",
-    "key": "platform.display.list",
-    "releaseVersion": "1.0.0",
-    "name": "List",
-    "description": "A simple list of records from a query.",
-    "icon": "list",
-    "paletteGroup": "data",
-    "rendererKey": "platform.renderer.list",
-    "properties": [
-      {
-        "kind": "text",
-        "key": "title",
-        "presentation": true,
-        "label": "Title",
-        "help": "Accessible name shown as the block heading",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 120
-      }
-    ],
-    "slots": [],
-    "capabilities": {
-      "responsiveVisibility": true,
-      "responsiveOrder": true,
-      "gridWidth": true,
-      "height": "content_or_bounded",
-      "publicSurface": "allowed",
-      "accessibleName": "optional",
-      "accessibleNamePropertyPath": ["title"]
-    },
-    "supportedEvents": ["refresh", "row_action", "selection_changed", "page_changed"],
-    "supportedStateOperations": []
-  },
   "RECORD_DETAIL_BLOCK_RELEASE": {
     "blockId": "e2569df0-2f10-4b20-b41d-177b66cd136c",
     "key": "platform.display.record_detail",
@@ -164,40 +130,6 @@
       "accessibleNamePropertyPath": ["title"]
     },
     "supportedEvents": ["refresh", "row_action"],
-    "supportedStateOperations": []
-  },
-  "GROUPED_DATA_BLOCK_RELEASE": {
-    "blockId": "6c27a0c2-ad91-4a5a-ab1d-54d337bebe36",
-    "key": "platform.display.grouped_data",
-    "releaseVersion": "1.0.0",
-    "name": "Grouped data",
-    "description": "Records from a query, grouped under headings.",
-    "icon": "layers",
-    "paletteGroup": "data",
-    "rendererKey": "platform.renderer.grouped_data",
-    "properties": [
-      {
-        "kind": "text",
-        "key": "title",
-        "presentation": true,
-        "label": "Title",
-        "help": "Accessible name shown as the block heading",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 120
-      }
-    ],
-    "slots": [],
-    "capabilities": {
-      "responsiveVisibility": true,
-      "responsiveOrder": true,
-      "gridWidth": true,
-      "height": "content_or_bounded",
-      "publicSurface": "allowed",
-      "accessibleName": "optional",
-      "accessibleNamePropertyPath": ["title"]
-    },
-    "supportedEvents": ["refresh", "row_action", "selection_changed"],
     "supportedStateOperations": []
   },
   "SUMMARY_VALUES_BLOCK_RELEASE": {
@@ -597,50 +529,6 @@
     "supportedEvents": ["refresh"],
     "supportedStateOperations": []
   },
-  "LIST_BLOCK_RELEASE_1_1_0": {
-    "blockId": "4881c816-e4ce-4c39-b0b7-20958b947748",
-    "key": "platform.display.list",
-    "releaseVersion": "1.1.0",
-    "name": "List",
-    "description": "A simple list of records from a query.",
-    "icon": "list",
-    "paletteGroup": "data",
-    "rendererKey": "platform.renderer.list",
-    "properties": [
-      {
-        "kind": "text",
-        "key": "title",
-        "presentation": true,
-        "label": "Title",
-        "help": "Accessible name shown as the block heading",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 120
-      },
-      {
-        "kind": "text",
-        "key": "empty_message",
-        "presentation": true,
-        "label": "Empty message",
-        "help": "Text shown when there are no records to display",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 200
-      }
-    ],
-    "slots": [],
-    "capabilities": {
-      "responsiveVisibility": true,
-      "responsiveOrder": true,
-      "gridWidth": true,
-      "height": "content_or_bounded",
-      "publicSurface": "allowed",
-      "accessibleName": "optional",
-      "accessibleNamePropertyPath": ["title"]
-    },
-    "supportedEvents": ["refresh", "row_action", "selection_changed", "page_changed"],
-    "supportedStateOperations": []
-  },
   "RECORD_DETAIL_BLOCK_RELEASE_1_1_0": {
     "blockId": "e2569df0-2f10-4b20-b41d-177b66cd136c",
     "key": "platform.display.record_detail",
@@ -689,50 +577,6 @@
       "accessibleNamePropertyPath": ["title"]
     },
     "supportedEvents": ["refresh", "row_action"],
-    "supportedStateOperations": []
-  },
-  "GROUPED_DATA_BLOCK_RELEASE_1_1_0": {
-    "blockId": "6c27a0c2-ad91-4a5a-ab1d-54d337bebe36",
-    "key": "platform.display.grouped_data",
-    "releaseVersion": "1.1.0",
-    "name": "Grouped data",
-    "description": "Records from a query, grouped under headings.",
-    "icon": "layers",
-    "paletteGroup": "data",
-    "rendererKey": "platform.renderer.grouped_data",
-    "properties": [
-      {
-        "kind": "text",
-        "key": "title",
-        "presentation": true,
-        "label": "Title",
-        "help": "Accessible name shown as the block heading",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 120
-      },
-      {
-        "kind": "text",
-        "key": "empty_message",
-        "presentation": true,
-        "label": "Empty message",
-        "help": "Text shown when there are no groups to display",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 200
-      }
-    ],
-    "slots": [],
-    "capabilities": {
-      "responsiveVisibility": true,
-      "responsiveOrder": true,
-      "gridWidth": true,
-      "height": "content_or_bounded",
-      "publicSurface": "allowed",
-      "accessibleName": "optional",
-      "accessibleNamePropertyPath": ["title"]
-    },
-    "supportedEvents": ["refresh", "row_action", "selection_changed"],
     "supportedStateOperations": []
   },
   "SUMMARY_VALUES_BLOCK_RELEASE_1_1_0": {
@@ -4601,6 +4445,19 @@
           "kind": "number",
           "value": 40
         }
+      },
+      {
+        "kind": "choice",
+        "key": "presentation",
+        "presentation": true,
+        "label": "Preset",
+        "help": "Table shows columns; List shows the same records as cards at every screen size",
+        "required": true,
+        "options": [
+          { "key": "grid", "label": "Table" },
+          { "key": "cards", "label": "List" }
+        ],
+        "defaultValue": { "kind": "choice", "value": "grid" }
       },
       {
         "kind": "choice",

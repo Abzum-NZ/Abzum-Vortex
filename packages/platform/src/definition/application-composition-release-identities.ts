@@ -20,22 +20,10 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     rendererKey: "platform.renderer.rich_text",
     releaseVersion: "1.0.0",
   },
-  LIST_BLOCK_RELEASE: {
-    blockId: "4881c816-e4ce-4c39-b0b7-20958b947748",
-    key: "platform.display.list",
-    rendererKey: "platform.renderer.list",
-    releaseVersion: "1.0.0",
-  },
   RECORD_DETAIL_BLOCK_RELEASE: {
     blockId: "e2569df0-2f10-4b20-b41d-177b66cd136c",
     key: "platform.display.record_detail",
     rendererKey: "platform.renderer.record_detail",
-    releaseVersion: "1.0.0",
-  },
-  GROUPED_DATA_BLOCK_RELEASE: {
-    blockId: "6c27a0c2-ad91-4a5a-ab1d-54d337bebe36",
-    key: "platform.display.grouped_data",
-    rendererKey: "platform.renderer.grouped_data",
     releaseVersion: "1.0.0",
   },
   SUMMARY_VALUES_BLOCK_RELEASE: {
@@ -68,22 +56,10 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     rendererKey: "platform.renderer.rich_text",
     releaseVersion: "1.1.0",
   },
-  LIST_BLOCK_RELEASE_1_1_0: {
-    blockId: "4881c816-e4ce-4c39-b0b7-20958b947748",
-    key: "platform.display.list",
-    rendererKey: "platform.renderer.list",
-    releaseVersion: "1.1.0",
-  },
   RECORD_DETAIL_BLOCK_RELEASE_1_1_0: {
     blockId: "e2569df0-2f10-4b20-b41d-177b66cd136c",
     key: "platform.display.record_detail",
     rendererKey: "platform.renderer.record_detail",
-    releaseVersion: "1.1.0",
-  },
-  GROUPED_DATA_BLOCK_RELEASE_1_1_0: {
-    blockId: "6c27a0c2-ad91-4a5a-ab1d-54d337bebe36",
-    key: "platform.display.grouped_data",
-    rendererKey: "platform.renderer.grouped_data",
     releaseVersion: "1.1.0",
   },
   SUMMARY_VALUES_BLOCK_RELEASE_1_1_0: {
