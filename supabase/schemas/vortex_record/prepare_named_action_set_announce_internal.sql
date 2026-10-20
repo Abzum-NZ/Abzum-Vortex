@@ -92,8 +92,7 @@ begin
     p_action_owner_kind, p_action_owner_id, p_action_release_revision,
     p_action_id, p_record_type_id
   );
-  if coalesce((action_context ->> 'rulesUnsupported')::boolean, false)
-    or pg_catalog.jsonb_typeof(action_context -> 'action' -> 'tasks') is distinct from 'array'
+  if pg_catalog.jsonb_typeof(action_context -> 'action' -> 'tasks') is distinct from 'array'
     or pg_catalog.jsonb_array_length(action_context -> 'action' -> 'tasks') not between 1 and 10
     or exists (
       select 1 from pg_catalog.jsonb_array_elements(
@@ -270,7 +269,7 @@ begin
     'validationContractVersion', action_context -> 'validationContractVersion',
     'recordType', action_context -> 'recordType',
     -- #578: the owning Module release's rules for the subject, evaluated by Record.
-    'beforeSaveRules', vortex_record.before_save_rules_for_record_type_internal(
+    'beforeSaveFlows', vortex_record.before_save_flows_for_record_type_internal(
       (action_context ->> 'moduleRootId')::uuid,
       (action_context ->> 'moduleReleaseRevision')::bigint,
       p_record_type_id
@@ -281,7 +280,7 @@ begin
           'ordinal', item.value -> 'ordinal',
           'recordTypeId', item.value -> 'recordTypeId',
           'recordType', item.value -> 'recordType',
-          'beforeSaveRules', item.value -> 'beforeSaveRules'
+          'beforeSaveFlows', item.value -> 'beforeSaveFlows'
         ) order by (item.value ->> 'ordinal')::integer
       )
       from pg_catalog.jsonb_array_elements(creation_plan -> 'createTargets') item(value)

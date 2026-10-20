@@ -41,7 +41,7 @@ export const flowOnlyValueTypeKeys = [
 ] as const;
 
 /**
- * The one value-type catalogue. Every field, flow, action-input, sharing-parameter and rule-graph
+ * The one value-type catalogue. Every field, flow, action-input and sharing-parameter
  * type list is a view of this list, and `valueTypesCompatible` is the one type-compatibility
  * function.
  */

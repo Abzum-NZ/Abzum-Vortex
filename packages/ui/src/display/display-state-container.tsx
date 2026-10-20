@@ -12,6 +12,10 @@ const REFUSAL_MESSAGES: Readonly<Record<DisplayRefusalReason, string>> = Object.
   not_permitted: "You do not have permission to view this content",
   access_ended: "Access to this content has ended",
   not_found: "Content not found",
+  value_out_of_range:
+    "Some dates in these records fall in a period that reaches past the supported years 0001 to 9999. Narrow the records with search or filters, or group the dates by a shorter period.",
+  dataset_limit_exceeded:
+    "There are too many records to summarise at once. Narrow them with search or filters.",
 });
 
 /**
@@ -47,7 +51,7 @@ export type DisplayStateContainerProps<Values> = Readonly<{
   /** The state this block's own registration validated. */
   projectedData: DisplayDataState<Values>;
   emptyMessage: string;
-  /** Authored refused text shown in place of the fixed reason text. */
+  /** Authored access refusal text shown in place of the fixed access reason text. */
   refusedMessage?: string;
   /** Authored error text shown in place of the fixed neutral error text. */
   errorMessage?: string;
@@ -130,7 +134,10 @@ export function DisplayStateContainer<Values>({
       >
         <EmptyHeader>
           <EmptyDescription>
-            {refusedMessage ?? REFUSAL_MESSAGES[projectedData.reason]}
+            {projectedData.reason === "value_out_of_range" ||
+            projectedData.reason === "dataset_limit_exceeded"
+              ? REFUSAL_MESSAGES[projectedData.reason]
+              : (refusedMessage ?? REFUSAL_MESSAGES[projectedData.reason])}
           </EmptyDescription>
         </EmptyHeader>
       </Empty>

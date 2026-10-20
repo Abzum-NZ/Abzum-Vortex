@@ -64,7 +64,6 @@ const readReferenceChoices = async (
     placementId,
     formId,
     fieldKey: field.fieldKey,
-    releaseVersion: field.releaseVersion,
     ...(parent === undefined
       ? {}
       : { dependency: { fieldKey: parent[1].fieldKey, placementId: parent[0] } }),

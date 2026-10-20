@@ -13,7 +13,7 @@ import { studioPlacementRemovalReference, type StudioCompositionRemovalReason } 
 import type { StudioSemanticSelection } from "./semantic-selection";
 import { applyStudioItemLabels } from "./application-item-labels";
 import {
-  blockItem, cleanName, emptyPageData, judged, newestRelease, placeNewPage, quoted, refuse, StructureRefusal, uniqueKey,
+  blockItem, cleanName, emptyPageData, judged, blockRelease, placeNewPage, quoted, refuse, StructureRefusal, uniqueKey,
   type Navigation, type Page, type Shell, type Source, type StudioStructureContext, type StudioStructureResult,
 } from "./application-structure-common";
 import { addRecordPage, type StudioRecordPageCommand } from "./application-record-pages";
@@ -121,8 +121,8 @@ const addPage = (context: StudioStructureContext, candidate: Source,
 const placeMenuShell = (catalogue: ImmutablePlatformBlockCatalogue, candidate: Source, name: string): Shell => {
   const body = candidate.body;
   if (body.shells.length >= 100) refuse("An application can have at most 100 layouts.");
-  const container = newestRelease(catalogue, PLATFORM_BLOCK_RELEASE_IDENTITIES.CONTAINER_BLOCK_RELEASE_1_3_0);
-  const menu = newestRelease(catalogue, PLATFORM_BLOCK_RELEASE_IDENTITIES.APPLICATION_NAVIGATION_BLOCK_RELEASE);
+  const container = blockRelease(catalogue, PLATFORM_BLOCK_RELEASE_IDENTITIES.CONTAINER_BLOCK_RELEASE);
+  const menu = blockRelease(catalogue, PLATFORM_BLOCK_RELEASE_IDENTITIES.APPLICATION_NAVIGATION_BLOCK_RELEASE);
   if (container === undefined || !container.slots.some((slot) => slot.key === "content") ||
     !container.slots.some((slot) => slot.key === "menu") || menu === undefined)
     refuse("The block catalogue has no frame block for a new layout, so none was added.");
@@ -180,7 +180,7 @@ export const studioStarterFrame = (catalogue: ImmutablePlatformBlockCatalogue, s
     const shell = placeMenuShell(catalogue, candidate, "Main layout");
     const home = candidate.body.pages.find((page) => page.key === candidate.body.home_page);
     if (home === undefined) return refuse("The application's home page is missing, so it has no frame to start in.");
-    const text = newestRelease(catalogue, PLATFORM_BLOCK_RELEASE_IDENTITIES.TEXT_BLOCK_RELEASE);
+    const text = blockRelease(catalogue, PLATFORM_BLOCK_RELEASE_IDENTITIES.TEXT_BLOCK_RELEASE);
     if (text === undefined) return refuse("The block catalogue has no text block for the home page.");
     const items = [blockItem(text, "home_next_steps", {
       title: `Welcome to ${candidate.body.name}`.slice(0, 120),

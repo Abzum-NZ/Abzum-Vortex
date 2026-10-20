@@ -2,13 +2,11 @@ import "server-only";
 
 import { readRecordDetailContract, readRecordsTableContract } from "../../schema";
 import {
-  APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
   ATTACHMENT_LIST_BLOCK_RELEASE,
   CALENDAR_BLOCK_RELEASE,
   CHART_BLOCK_RELEASE,
   LINK_TILES_BLOCK_RELEASE,
   QUERY_NOTICE_BLOCK_RELEASE,
-  RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE,
 } from "../../definition/index";
 import { readCalendarPlacementContract } from "../calendar-query";
@@ -25,7 +23,6 @@ import {
   isApplicationLauncherPlacement,
   logPlacementFailure,
   placementBlockIs,
-  placementReleaseVersion,
   placementSettingsOf,
   projectedUseAvailability,
   type PageDataState,
@@ -33,12 +30,6 @@ import {
 } from "./shared";
 import { readSummaryOrChart } from "./summary-chart";
 import type { PlacementReadInput } from "./types";
-
-const linkTileReleases = new Set([
-  LINK_TILES_BLOCK_RELEASE.releaseVersion,
-  RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion,
-  APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion,
-]);
 
 /**
  * Whether a placement's data comes only from its own bound query: nothing else on the page waits
@@ -77,11 +68,7 @@ export const readQueryPlacement = async (
   const { placementId } = placement;
   const settings = placementSettingsOf(placement);
   const isLinkTiles = placementBlockIs(placement, LINK_TILES_BLOCK_RELEASE);
-  if (
-    isLinkTiles &&
-    (!linkTileReleases.has(placementReleaseVersion(placement)) ||
-      projectedUseAvailability(placement) !== "available")
-  ) {
+  if (isLinkTiles && projectedUseAvailability(placement) !== "available") {
     read.data[placementId] = { status: "refused", reason: "not_permitted" };
     return;
   }

@@ -37,7 +37,7 @@ import {
 } from "./action-flow-effects";
 import {
   beginBeforeSaveRuleExecution,
-  parseBeforeSaveRuleSet,
+  parseBeforeSaveFlowSet,
   type BeforeSaveRuleExecution,
 } from "./before-save-rules";
 import {
@@ -72,7 +72,7 @@ type PreparedAction = PreparedNamedAction &
     correlationId: string;
     singleRequiredPermissionId?: string;
     /** The exact release's compiled before-save rules for the subject, unparsed. */
-    beforeSaveRules?: unknown;
+    beforeSaveFlows?: unknown;
     copyTargets: readonly Readonly<{
       recordId: string;
       existingValues: Readonly<Record<string, unknown>>;
@@ -171,7 +171,7 @@ const parseCreateTargets = (candidate: unknown): readonly NamedActionCreateTarge
       ordinal: value.ordinal,
       recordTypeId: recordType.data.recordTypeId,
       recordType: recordType.data,
-      beforeSaveRules: value.beforeSaveRules,
+      beforeSaveFlows: value.beforeSaveFlows,
     });
   }
   return targets.every(
@@ -318,7 +318,7 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     ...(singleRequiredPermissionId === undefined
       ? {}
       : { singleRequiredPermissionId: singleRequiredPermissionId.data }),
-    ...(value.beforeSaveRules === undefined ? {} : { beforeSaveRules: value.beforeSaveRules }),
+    ...(value.beforeSaveFlows === undefined ? {} : { beforeSaveFlows: value.beforeSaveFlows }),
   };
 };
 
@@ -436,7 +436,7 @@ const creationFinalValues = (
       return {
         reason: `the created record ${creation.ordinal} is not a valid save command: ${describeIssues(command.error.issues.map((value) => ({ code: value.code, path: value.path.map(String) })))}`,
       };
-    const ruleSet = parseBeforeSaveRuleSet(target.beforeSaveRules, target.recordTypeId);
+    const ruleSet = parseBeforeSaveFlowSet(target.beforeSaveFlows, target.recordTypeId);
     if (ruleSet === undefined)
       return { reason: `the created record ${creation.ordinal} has unavailable before-save rules` };
     const execution = beginBeforeSaveRuleExecution(ruleSet);
@@ -885,8 +885,8 @@ const planNamedAction = async (
   )
     return restart;
 
-  const subjectRuleSet = parseBeforeSaveRuleSet(
-    prepared.beforeSaveRules,
+  const subjectRuleSet = parseBeforeSaveFlowSet(
+    prepared.beforeSaveFlows,
     prepared.recordType.recordTypeId,
   );
   if (subjectRuleSet === undefined)
@@ -948,8 +948,8 @@ const planNamedAction = async (
   if (totalPreparation.outcome === "prepared") {
     closureRules = new Map();
     for (const record of totalPreparation.records) {
-      const ruleSet = parseBeforeSaveRuleSet(
-        record.beforeSaveRules,
+      const ruleSet = parseBeforeSaveFlowSet(
+        record.beforeSaveFlows,
         record.recordType.recordTypeId,
       );
       if (ruleSet === undefined)
@@ -1093,12 +1093,12 @@ const planNamedAction = async (
       totalPreparation.outcome === "prepared" &&
       Object.keys(composition.submittedValues).length === 0 &&
       Object.keys(finalValues).length > 0 &&
-      subjectRuleSet.rules.length > 0
+      subjectRuleSet.flows.length > 0
     )
       return safeRefusal(
         prepared.correlationId,
         "operation_refused",
-        "the created records changed derived subject values that require its before-save rules",
+        "the created records changed derived subject values that require its before-save flows",
       );
     const createdFinalValues =
       "creationFinalValues" in calculated

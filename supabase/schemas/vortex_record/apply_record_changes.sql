@@ -447,12 +447,12 @@ begin
         and vortex_record.command_receipt_exists_internal('named_action', effective_command_id) then
         preparation_value := null;
       elsif preparation_value ->> 'outcome' = 'defer' then
-        -- With an installed Rule the closure is not computed, so a command that
+        -- With an installed BeforeSave flow the closure is not computed, so a command that
         -- would move a total must refuse rather than silently skip it. A
         -- create-bearing command already refused inside the preparation, so only
         -- the set/announce shape reaches here.
         catalogue := vortex_record.relationship_total_catalogue_internal();
-        if coalesce((catalogue ->> 'hasInstalledRules')::boolean, false) then
+        if coalesce((catalogue ->> 'hasBeforeSaveFlows')::boolean, false) then
           closure_value := vortex_record.discover_relationship_total_closure_internal(
             catalogue, 'update', p_record_type_id, p_record_id, p_submitted_values
           );
@@ -616,8 +616,7 @@ begin
       );
     end if;
 
-    if coalesce((action_context ->> 'rulesUnsupported')::boolean, false)
-      or pg_catalog.jsonb_typeof(action_context -> 'action' -> 'tasks') is distinct from 'array'
+    if pg_catalog.jsonb_typeof(action_context -> 'action' -> 'tasks') is distinct from 'array'
       or exists (
         select 1 from pg_catalog.jsonb_array_elements(
           action_context -> 'action' -> 'tasks'

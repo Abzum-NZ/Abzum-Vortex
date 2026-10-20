@@ -209,11 +209,19 @@ const literalAs = (type: string, value: JsonValue): JsonValue | undefined => {
   return typed.type === type ? typed.value : undefined;
 };
 
-const typeOfOperand = (formula: FlowFormula, seed: ActionFlowSeed): string | undefined => {
+/** The typed values a flow's comparisons read, which give a compared literal its type. */
+export type RetypeScope = Readonly<{
+  triggerRecord: FlowRuntimeValues;
+  previousRecord?: FlowRuntimeValues;
+  inputs?: FlowRuntimeValues;
+}>;
+
+const typeOfOperand = (formula: FlowFormula, scope: RetypeScope): string | undefined => {
   if (formula.op !== "reference") return undefined;
   const reference = formula.reference;
-  if (reference.source === "trigger_record") return seed.triggerRecord[reference.field]?.type;
-  if (reference.source === "input") return seed.inputs[reference.name]?.type;
+  if (reference.source === "trigger_record") return scope.triggerRecord[reference.field]?.type;
+  if (reference.source === "trigger_previous") return scope.previousRecord?.[reference.field]?.type;
+  if (reference.source === "input") return scope.inputs?.[reference.name]?.type;
   return undefined;
 };
 
@@ -231,7 +239,7 @@ const retypedLiteral = (candidate: FlowFormula, type: string | undefined): FlowF
     : ({ op: "literal", type, value } as unknown as FlowFormula);
 };
 
-const retypeFormula = (formula: FlowFormula, seed: ActionFlowSeed): FlowFormula => {
+const retypeFormula = (formula: FlowFormula, seed: RetypeScope): FlowFormula => {
   switch (formula.op) {
     case "eq":
     case "neq":
@@ -270,7 +278,7 @@ const retypeFormula = (formula: FlowFormula, seed: ActionFlowSeed): FlowFormula 
   }
 };
 
-const retypeTasks = (tasks: readonly FlowTask[], seed: ActionFlowSeed): FlowTask[] =>
+export const retypeTasks = (tasks: readonly FlowTask[], seed: RetypeScope): FlowTask[] =>
   tasks.map((task): FlowTask => {
     if (task.type !== "if") return task;
     const node = task as Extract<FlowTask, { type: "if" }>;
