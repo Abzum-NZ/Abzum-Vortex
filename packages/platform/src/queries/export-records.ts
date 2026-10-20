@@ -31,10 +31,22 @@ const csvQuote = (value: string): string => `"${value.replaceAll('"', '""')}"`;
 
 /** Prefix spreadsheet formula strings, including header labels; quoting alone is insufficient. */
 const csvText = (value: string): string =>
-  csvQuote(/^[=+\-@\t\r]/.test(value) ? `'${value}` : value);
+  csvQuote(/^[=+\-@\t\r\n\uFF1D\uFF0B\uFF0D\uFF20]/.test(value) ? `'${value}` : value);
 
 const validateCell = (cell: RecordsExportCell): void => {
   if (cell === null) return;
+  // Record types outside the export contract must not bypass text neutralisation or be coerced.
+  switch (cell.type) {
+    case "text":
+    case "decimal_number":
+    case "date":
+    case "date_time":
+    case "whole_number":
+    case "yes_no":
+      break;
+    default:
+      throw exportError("cell_type_invalid");
+  }
   const result = moduleFieldValueSchemas[cell.type].safeParse(cell.value);
   if (!result.success) throw exportError("cell_invalid", result.error);
 };
@@ -72,7 +84,7 @@ export type RecordsExportOutcome =
 
 /** Safe for a quoted Content-Disposition filename; the format owns the extension. */
 const exportFilename = (name: string, extension: string): string => {
-  if (!/^[a-z0-9]{1,10}$/.test(extension)) throw new Error("EXPORT_EXTENSION_INVALID");
+  if (!/^[a-z0-9]{1,10}$/.test(extension)) throw exportError("extension_invalid");
   const stem = name
     .normalize("NFKD")
     .replace(/[^a-zA-Z0-9_-]+/g, "-")
@@ -125,11 +137,6 @@ export const prepareRecordsExport = async (
     outcome: Promise<RecordsExportOutcome>;
   }>
 > => {
-  if (!Number.isSafeInteger(request.maxRows) || request.maxRows < 1 || request.maxRows > 100_000)
-    throw exportError("row_limit_invalid");
-  if (request.labels.length === 0 || request.labels.length > 200)
-    throw exportError("columns_invalid");
-  const filename = exportFilename(request.name, request.format.extension);
   const abort = new AbortController();
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   let exported = 0;
@@ -188,8 +195,14 @@ export const prepareRecordsExport = async (
 
   let page: IteratorResult<RecordsExportPage>;
   let header: Uint8Array;
+  let filename: string;
   try {
     throwIfAborted();
+    if (!Number.isSafeInteger(request.maxRows) || request.maxRows < 1 || request.maxRows > 100_000)
+      throw exportError("row_limit_invalid");
+    if (request.labels.length === 0 || request.labels.length > 200)
+      throw exportError("columns_invalid");
+    filename = exportFilename(request.name, request.format.extension);
     iterator = request.pages(abort.signal)[Symbol.asyncIterator]();
     // Read AND validate the first page before the route can send successful download headers.
     page = await iterator.next();
