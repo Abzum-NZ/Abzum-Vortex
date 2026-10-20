@@ -27,6 +27,7 @@ import {
   StudioQueryPicker,
   StudioQueryBindings,
   studioQueryBindingFacts,
+  studioRecordBindingFields,
   StudioSettingFields,
   StudioGridFeatures,
   studioGridFeaturesProperty,
@@ -410,6 +411,26 @@ export function ApplicationCompositionEditor(props: Props) {
               : props.compiledFields?.recordTypes[query.recordType];
           })()}
           choices={choices}
+          related={{
+            queries: props.choices.queries,
+            relationships: props.choices.relationships,
+            recordTypeLabel: (recordType) =>
+              props.choices.recordTypes.find((candidate) => candidate.key === recordType)?.label ??
+              recordType.slice(recordType.indexOf(":") + 1).replaceAll("_", " "),
+            page:
+              settingsModel.kind === "available"
+                ? studioQueryBindingFacts(
+                    props.context,
+                    settingsModel.placementAlias,
+                    props.choices.queries,
+                  )
+                : studioQueryBindingFacts(props.context, "", props.choices.queries),
+            rowFields: studioRecordBindingFields(
+              props.context.source,
+              props.choices.queries.find((query) => query.reference === settingsInputs.query)
+                ?.recordType ?? "",
+            ),
+          }}
           disabled={props.disabled}
           onChange={(features) =>
             changeSettings({
