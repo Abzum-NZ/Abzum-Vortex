@@ -412,6 +412,7 @@ export const parseTableFeatures = (
       "savedViews",
       "bulkActions",
       "inlineEdit",
+      "rowEdit",
       "masterDetail",
       "tree",
       "conditionalFormatting",
@@ -451,6 +452,17 @@ export const parseTableFeatures = (
         );
   if (bulkActions !== undefined && bulkActions.length === 0)
     fail("Projected bulk actions are empty", location);
+  let rowEdit: RecordsTableFeatureProjection["rowEdit"];
+  if (record.rowEdit !== undefined) {
+    const row = requireRecord(record.rowEdit, "Projected row editing is invalid", location);
+    requireExactKeys(row, ["eventId", "fields", "trigger"], location);
+    if (row.trigger !== "button") fail("Row editing requires its button trigger", location);
+    rowEdit = Object.freeze({
+      eventId: requireNonEmptyString(row.eventId, "Row editing needs its event", location),
+      trigger: "button",
+      fields: parseInlineEditFields(row.fields, location),
+    });
+  }
   let inlineEdit: RecordsTableFeatureProjection["inlineEdit"];
   if (record.inlineEdit !== undefined) {
     const inline = requireRecord(
@@ -547,6 +559,7 @@ export const parseTableFeatures = (
     ...(record.savedViews === true ? { savedViews: true as const } : {}),
     ...(bulkActions === undefined ? {} : { bulkActions: Object.freeze(bulkActions) }),
     ...(inlineEdit === undefined ? {} : { inlineEdit }),
+    ...(rowEdit === undefined ? {} : { rowEdit }),
     ...(masterDetail === undefined ? {} : { masterDetail }),
     ...(tree === undefined ? {} : { tree }),
     ...(record.conditionalFormatting === undefined

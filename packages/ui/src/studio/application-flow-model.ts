@@ -438,6 +438,7 @@ const eventWords: Readonly<Record<string, string>> = {
   action: "is used",
   row_clicked: "row is clicked",
   row_action: "row action is used",
+  row_edit: "When a row is saved",
   inline_edit: "value is edited",
   card_moved: "card is moved",
   load: "loads",

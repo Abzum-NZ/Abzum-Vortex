@@ -1125,9 +1125,7 @@
                               ]
                             },
                             "target": "cells",
-                            "fields": [
-                              "vortex.crm.opportunities:opportunity.expected_close_date"
-                            ],
+                            "fields": ["vortex.crm.opportunities:opportunity.expected_close_date"],
                             "token": "info",
                             "tint": false,
                             "text_colour": true,
@@ -1147,9 +1145,7 @@
                               }
                             },
                             "target": "cells",
-                            "fields": [
-                              "vortex.crm.opportunities:opportunity.net_value"
-                            ],
+                            "fields": ["vortex.crm.opportunities:opportunity.net_value"],
                             "token": "success",
                             "tint": false,
                             "text_colour": true,
@@ -1164,9 +1160,7 @@
                               "value": "negotiation"
                             },
                             "target": "cells",
-                            "fields": [
-                              "vortex.crm.opportunities:opportunity.stage"
-                            ],
+                            "fields": ["vortex.crm.opportunities:opportunity.stage"],
                             "token": "info",
                             "tint": false,
                             "bold": true
@@ -1188,6 +1182,16 @@
                       },
                       "spreadsheet": {
                         "enabled": false
+                      },
+                      "row_edit": {
+                        "enabled": true,
+                        "event_id": "event_save_opportunity_row",
+                        "trigger": "button",
+                        "fields": [
+                          "vortex.crm.opportunities:opportunity.name",
+                          "vortex.crm.opportunities:opportunity.expected_close_date",
+                          "vortex.crm.opportunities:opportunity.probability"
+                        ]
                       }
                     },
                     "row_click": {
@@ -1234,6 +1238,12 @@
                       {
                         "field": "vortex.crm.opportunities:opportunity.expected_close_date",
                         "label": "Expected close date",
+                        "visible": true,
+                        "pin": "unpinned"
+                      },
+                      {
+                        "field": "vortex.crm.opportunities:opportunity.probability",
+                        "label": "Probability",
                         "visible": true,
                         "pin": "unpinned"
                       }
@@ -4565,6 +4575,14 @@
         "record_type": "vortex.crm.opportunities:opportunity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_save_opportunity_row",
+        "key": "vortex.app.events.save_opportunity_row",
+        "label": "Save opportunity row",
+        "record_type": "vortex.crm.opportunities:opportunity",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
       }
     ],
     "public_addresses": [],
@@ -4750,9 +4768,7 @@
           "duplicate_company": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.crm.organisations:company"
-            ]
+            "recordTypeIds": ["vortex.crm.organisations:company"]
           }
         },
         "tasks": [
@@ -4797,9 +4813,7 @@
           "company": {
             "type": "record_reference",
             "required": false,
-            "recordTypeIds": [
-              "vortex.crm.organisations:company"
-            ]
+            "recordTypeIds": ["vortex.crm.organisations:company"]
           }
         },
         "tasks": [
@@ -4895,9 +4909,7 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": [
-              "vortex.crm.organisations:company"
-            ],
+            "recordTypeIds": ["vortex.crm.organisations:company"],
             "value": {
               "kind": "reference",
               "reference": {
@@ -4924,9 +4936,7 @@
         "inputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": [
-              "vortex.crm.organisations:company"
-            ],
+            "recordTypeIds": ["vortex.crm.organisations:company"],
             "required": true
           },
           "values": {
@@ -4987,9 +4997,7 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": [
-              "vortex.crm.organisations:company"
-            ],
+            "recordTypeIds": ["vortex.crm.organisations:company"],
             "value": {
               "kind": "reference",
               "reference": {
@@ -5056,9 +5064,7 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": [
-              "vortex.crm.people:contact"
-            ],
+            "recordTypeIds": ["vortex.crm.people:contact"],
             "value": {
               "kind": "reference",
               "reference": {
@@ -5085,9 +5091,7 @@
         "inputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": [
-              "vortex.crm.people:contact"
-            ],
+            "recordTypeIds": ["vortex.crm.people:contact"],
             "required": true
           },
           "values": {
@@ -5148,9 +5152,7 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": [
-              "vortex.crm.people:contact"
-            ],
+            "recordTypeIds": ["vortex.crm.people:contact"],
             "value": {
               "kind": "reference",
               "reference": {
@@ -5206,9 +5208,7 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": [
-              "vortex.crm.people:lead"
-            ],
+            "recordTypeIds": ["vortex.crm.people:lead"],
             "value": {
               "kind": "reference",
               "reference": {
@@ -5235,9 +5235,7 @@
         "inputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": [
-              "vortex.crm.people:lead"
-            ],
+            "recordTypeIds": ["vortex.crm.people:lead"],
             "required": true
           },
           "values": {
@@ -5298,9 +5296,7 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": [
-              "vortex.crm.people:lead"
-            ],
+            "recordTypeIds": ["vortex.crm.people:lead"],
             "value": {
               "kind": "reference",
               "reference": {
@@ -5328,9 +5324,7 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.crm.opportunities:opportunity"
-            ]
+            "recordTypeIds": ["vortex.crm.opportunities:opportunity"]
           }
         },
         "recordInput": "record_id",
@@ -5455,9 +5449,7 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.crm.organisations:company"
-            ]
+            "recordTypeIds": ["vortex.crm.organisations:company"]
           }
         },
         "tasks": [
@@ -5500,9 +5492,7 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.crm.people:contact"
-            ]
+            "recordTypeIds": ["vortex.crm.people:contact"]
           }
         },
         "tasks": [
@@ -5545,9 +5535,7 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.crm.people:lead"
-            ]
+            "recordTypeIds": ["vortex.crm.people:lead"]
           }
         },
         "tasks": [
@@ -5590,9 +5578,7 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.crm.opportunities:opportunity"
-            ]
+            "recordTypeIds": ["vortex.crm.opportunities:opportunity"]
           }
         },
         "tasks": [
@@ -5635,9 +5621,7 @@
           "record": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.crm.opportunities:opportunity"
-            ]
+            "recordTypeIds": ["vortex.crm.opportunities:opportunity"]
           },
           "values": {
             "type": "json",
@@ -5756,9 +5740,7 @@
                           "source": "task_output",
                           "task": "lost_form",
                           "key": "values",
-                          "path": [
-                            "lost_reason"
-                          ]
+                          "path": ["lost_reason"]
                         }
                       }
                     }
@@ -5816,9 +5798,7 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.crm.activities:activity"
-            ]
+            "recordTypeIds": ["vortex.crm.activities:activity"]
           }
         },
         "tasks": [
@@ -5954,9 +5934,7 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.crm.organisations:company"
-            ]
+            "recordTypeIds": ["vortex.crm.organisations:company"]
           }
         },
         "tasks": [
@@ -5999,9 +5977,7 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.crm.organisations:company"
-            ]
+            "recordTypeIds": ["vortex.crm.organisations:company"]
           }
         },
         "tasks": [
@@ -6044,9 +6020,7 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.crm.people:contact"
-            ]
+            "recordTypeIds": ["vortex.crm.people:contact"]
           }
         },
         "tasks": [
@@ -6089,9 +6063,7 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.crm.people:lead"
-            ]
+            "recordTypeIds": ["vortex.crm.people:lead"]
           }
         },
         "tasks": [
@@ -6134,9 +6106,7 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.crm.people:lead"
-            ]
+            "recordTypeIds": ["vortex.crm.people:lead"]
           }
         },
         "tasks": [
@@ -6178,9 +6148,7 @@
         "inputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": [
-              "vortex.crm.opportunities:opportunity"
-            ],
+            "recordTypeIds": ["vortex.crm.opportunities:opportunity"],
             "required": true
           },
           "values": {
@@ -6241,9 +6209,7 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": [
-              "vortex.crm.opportunities:opportunity"
-            ],
+            "recordTypeIds": ["vortex.crm.opportunities:opportunity"],
             "value": {
               "kind": "reference",
               "reference": {
@@ -6271,9 +6237,7 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.crm.opportunities:opportunity"
-            ]
+            "recordTypeIds": ["vortex.crm.opportunities:opportunity"]
           }
         },
         "tasks": [
@@ -6375,9 +6339,7 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": [
-              "vortex.crm.opportunities:opportunity"
-            ],
+            "recordTypeIds": ["vortex.crm.opportunities:opportunity"],
             "value": {
               "kind": "reference",
               "reference": {
@@ -6413,6 +6375,61 @@
                 "literal": {
                   "type": "text",
                   "value": "crm_opportunity_create"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {}
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "save_opportunity_row",
+        "key": "save_opportunity_row",
+        "labels": {
+          "name": "Save opportunity row"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "recordInput": "record",
+        "inputs": {
+          "record": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.crm.opportunities:opportunity"]
+          },
+          "values": {
+            "type": "json",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "save_row",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.crm.opportunities:opportunity"
+                }
+              },
+              "record": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "record"
+                }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "values"
                 }
               }
             }
@@ -6817,6 +6834,23 @@
         "event": "action",
         "flow": "navigate_new_opportunity",
         "inputs": {}
+      },
+      {
+        "id": "binding_save_opportunity_row",
+        "control": "content_4",
+        "event_id": "event_save_opportunity_row",
+        "event": "row_edit",
+        "flow": "save_opportunity_row",
+        "inputs": {
+          "record": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "values": {
+            "kind": "caller",
+            "name": "values"
+          }
+        }
       }
     ]
   }
