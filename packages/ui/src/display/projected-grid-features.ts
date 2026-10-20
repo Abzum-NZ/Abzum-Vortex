@@ -109,7 +109,7 @@ const parseTableAction = (
 export type TableSelectionScope =
   | Readonly<{ kind: "counting" }>
   | Readonly<{ kind: "matching"; count: number; excluded: number }>
-  | Readonly<{ kind: "not_counted"; reason: "too_many" | "search_not_counted" | "unavailable" }>;
+  | Readonly<{ kind: "not_counted"; reason: "too_many" | "changed" | "unavailable" }>;
 
 /** What a finished bulk run reports: the records it covered, changed, refused and did not reach. */
 export type TableBulkRunSummary = Readonly<{
@@ -157,9 +157,7 @@ const parseSelectionScope = (
     });
   if (
     scope.kind === "not_counted" &&
-    (scope.reason === "too_many" ||
-      scope.reason === "search_not_counted" ||
-      scope.reason === "unavailable")
+    (scope.reason === "too_many" || scope.reason === "changed" || scope.reason === "unavailable")
   )
     return Object.freeze({ kind: "not_counted", reason: scope.reason });
   return fail("A table selection scope is invalid", location);

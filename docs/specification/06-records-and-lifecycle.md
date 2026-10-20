@@ -232,8 +232,8 @@ correction names the mutation whose value needs correcting.
 
 Retired by #1063: `save_named_action_set_announce`, `save_named_action_set_fields_internal` and
 `save_named_action_effects_with_relationship_totals`. A named action is a `transaction` flow whose
-record tasks the flow runner collects and applies in one `apply_record_changes` call (through its
-request-role entry `apply_action_record_changes`), keeping the `named_action` receipt, the action's own field rules, Activity and Events.
+record tasks the flow runner collects and applies through `apply_record_changes` (through its
+request-role entry `apply_action_record_changes`, which takes one to 200 subjects of one action in a single call and applies them in record identity order, the first refusal rolling all back), keeping the `named_action` receipt, the action's own field rules, Activity and Events.
 
 The one engine retires the overlapping entry points, cloned writers, receipt
 ledgers and helpers below. No new record writer variant or named-action effect

@@ -103,7 +103,7 @@ function BulkActionsMenu({
   const scope = context.selection.selectionScope;
   const matching = scope?.kind === "matching";
   const running = context.selection.bulkRun?.status === "running";
-  const ready = count > 0 && !running && scope?.kind !== "counting";
+  const ready = count > 0 && !running && (scope === undefined || scope.kind === "matching");
   const run = (action: RecordsTableBulkActionContract): void => {
     void onBulkAction({ event: "bulk_action", action: action.action });
   };
@@ -249,9 +249,9 @@ const scopeMessage = (scope: TableSelectionScope | undefined): string | undefine
   if (scope?.kind === "counting") return "Counting the matching records...";
   if (scope?.kind !== "not_counted") return undefined;
   return scope.reason === "too_many"
-    ? "More than 100,000 records match; narrow the filter."
-    : scope.reason === "search_not_counted"
-      ? "Clear the search to select every matching record; filters can stay."
+    ? "More than 100,000 records match the filters; narrow the filter."
+    : scope.reason === "changed"
+      ? "The table changed. Select the matching records again."
       : "The matching records could not be counted. Try again.";
 };
 

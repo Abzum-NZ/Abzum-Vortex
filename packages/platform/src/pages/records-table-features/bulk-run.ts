@@ -298,13 +298,14 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
       if (descriptor === undefined) return { kind: "refused" };
       const built = commandFor(placement, descriptor);
       if (built === undefined) return { kind: "refused" };
-      if (built.narrowing.search !== null) return { kind: "search_not_counted" };
       const summary = await queries.summarise(session, selectionOf(address), {
         moduleRootId: built.command.moduleRootId,
         queryId: built.command.queryId,
         inputValues: built.command.inputValues,
         ...(built.command.filter === undefined ? {} : { filter: built.command.filter }),
         filterableFieldIds: built.command.filterableFieldIds,
+        ...(built.command.search === undefined ? {} : { search: built.command.search }),
+        searchableFieldIds: built.command.searchableFieldIds,
       });
       if (summary.kind === "temporarily_unavailable") return { kind: "unavailable" };
       if (summary.kind !== "available") return { kind: "refused" };
