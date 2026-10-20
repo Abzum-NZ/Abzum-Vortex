@@ -13,7 +13,7 @@ import { PALETTE_GROUP_TITLES } from "../palette-groups";
 import { studioHasSlotStarter } from "./composition-starters";
 
 /**
- * The Studio block palette for one place on a page: the newest release of each block the catalogue
+ * The Studio block palette for one place on a page: the one release of each block the catalogue
  * admits there, by name, description and group, and what a new block of it needs before it can be
  * stored. A new block gets its catalogue defaults; a required setting without a default is asked
  * for when the block is added.
@@ -44,19 +44,6 @@ export type StudioPaletteGroup = Readonly<{
   label: string;
   choices: readonly StudioPaletteChoice[];
 }>;
-
-const versionParts = (version: string): number[] =>
-  version
-    .split(/[.+-]/u)
-    .slice(0, 3)
-    .map((part) => Number.parseInt(part, 10) || 0);
-const newer = (left: string, right: string): boolean => {
-  const a = versionParts(left);
-  const b = versionParts(right);
-  for (let index = 0; index < 3; index += 1)
-    if ((a[index] ?? 0) !== (b[index] ?? 0)) return (a[index] ?? 0) > (b[index] ?? 0);
-  return false;
-};
 
 /**
  * Every declared kind Studio's typed controls edit. `asset_reference` is the one kind left out:
@@ -151,23 +138,19 @@ const releaseIndex = (
 };
 
 /**
- * The palette choices of the releases a place admits: one per block, its newest admitted release,
- * in catalogue order. A new block always takes the newest release.
+ * The palette choices of the releases a place admits: one per block, in catalogue order.
  */
 export function studioPaletteChoices(
   catalogue: ImmutablePlatformBlockCatalogue,
   admitted: readonly PlatformBlockReleaseSummary[],
 ): readonly StudioPaletteChoice[] {
   const index = releaseIndex(catalogue);
-  const newest = new Map<string, PlatformBlockRelease>();
+  const releases = new Map<string, PlatformBlockRelease>();
   for (const summary of admitted) {
     const release = index.get(platformBlockReleaseIdentity(summary));
-    if (release === undefined) continue;
-    const known = newest.get(release.key);
-    if (known === undefined || newer(release.releaseVersion, known.releaseVersion))
-      newest.set(release.key, release);
+    if (release !== undefined) releases.set(release.key, release);
   }
-  return Object.freeze([...newest.values()].map((release) => choiceFor(catalogue, release)));
+  return Object.freeze([...releases.values()].map((release) => choiceFor(catalogue, release)));
 }
 
 /** Whether a choice matches the search: its name, description, group or key holds every word. */

@@ -13,8 +13,6 @@ import {
   organizationLauncherPage,
   organizationLauncherPlacementId,
   organizationLauncherShell,
-  organizationLauncherStudioPage,
-  organizationLauncherStudioPlacementId,
 } from "@vortex/platform/server";
 import { OrganizationLauncherPage } from "./_components/organization-launcher-page";
 import {
@@ -35,6 +33,9 @@ import { loadStudioCreateAccess } from "../../_lib/studio-application-draft";
 import { platformBlockReleasesFor } from "../../_lib/platform-block-releases";
 
 export const dynamic = "force-dynamic";
+
+/** The launcher row that opens Studio rather than an installed application. */
+const STUDIO_TILE_ID = "studio";
 
 type OrganizationPageProps = Readonly<{
   params: Promise<{ tenantShortName: string; organizationShortName: string }>;
@@ -66,7 +67,8 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
   );
   if (resolved.kind === "temporarily_unavailable")
     return <TemporarilyUnavailableAddress retryHref={retryHref} />;
-  if (resolved.kind === "suspended_super_administrator_account") return suspendedOrganizationAccount;
+  if (resolved.kind === "suspended_super_administrator_account")
+    return suspendedOrganizationAccount;
   if (resolved.kind !== "organization_launcher") return unavailableAddress;
 
   const defaultApplication = resolved.read.applications.find(
@@ -90,22 +92,37 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
       entry.tenantShortName === tenantShortName &&
       entry.organizationShortName === organizationShortName,
   )?.accountDisplayName;
-  const account: ApplicationAccount = displayName === undefined ? { email } : { email, displayName };
+  const account: ApplicationAccount =
+    displayName === undefined ? { email } : { email, displayName };
 
   const projection = parsePermittedApplicationsLauncherProjection(resolved.read);
   if (projection.kind !== "available")
     throw new Error("Available organisation launcher read produced an unavailable projection");
-  const launcherValues = permittedApplicationsToListValues(projection);
+  const permittedValues = permittedApplicationsToListValues(projection);
   const studioCreateAccess = await loadStudioCreateAccess(resolved.read.organizationId);
   const studio =
     studioCreateAccess.kind === "available" &&
     studioCreateAccess.organizationId === resolved.read.organizationId
-      ? {
-          href: "/studio",
-          placementId: organizationLauncherStudioPlacementId,
-        }
+      ? { href: "/studio", tileId: STUDIO_TILE_ID }
       : undefined;
-  const page = studio === undefined ? organizationLauncherPage : organizationLauncherStudioPage;
+  const launcherValues =
+    studio === undefined
+      ? permittedValues
+      : {
+          ...permittedValues,
+          rows: [
+            ...permittedValues.rows,
+            {
+              recordId: studio.tileId,
+              cells: {
+                name: { kind: "text" as const, text: "Studio" },
+                icon: { kind: "text" as const, text: "layout-dashboard" },
+                description: { kind: "text" as const, text: "Build applications and modules" },
+              },
+            },
+          ],
+        };
+  const page = organizationLauncherPage;
 
   return (
     <OrganizationLauncherPage

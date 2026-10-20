@@ -317,12 +317,6 @@ export const APPLICATION_LAUNCHER_BLOCK_RELEASE: PlatformBlockRelease = release(
 export const LINK_TILES_BLOCK_RELEASE: PlatformBlockRelease = release(
   sources.LINK_TILES_BLOCK_RELEASE,
 );
-export const RECORD_PIN_LINK_TILES_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
-);
-export const APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
-);
 
 /** All immutable display block releases, including calendar and query-bound board releases. */
 export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
@@ -362,8 +356,6 @@ export const CONTROL_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.fr
 export const LAUNCHER_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
   LINK_TILES_BLOCK_RELEASE,
-  RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
-  APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
 ]);
 
 /** All immutable general layout block releases. */

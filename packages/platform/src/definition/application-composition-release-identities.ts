@@ -168,18 +168,6 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     blockId: "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47",
     key: "platform.launcher.link_tiles",
     rendererKey: "platform.renderer.link_tiles",
-    releaseVersion: "1.0.0",
-  },
-  RECORD_PIN_LINK_TILES_BLOCK_RELEASE: {
-    blockId: "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47",
-    key: "platform.launcher.link_tiles",
-    rendererKey: "platform.renderer.link_tiles",
-    releaseVersion: "1.1.0",
-  },
-  APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE: {
-    blockId: "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47",
-    key: "platform.launcher.link_tiles",
-    rendererKey: "platform.renderer.link_tiles",
     releaseVersion: "1.2.0",
   },
   CALENDAR_BLOCK_RELEASE: {

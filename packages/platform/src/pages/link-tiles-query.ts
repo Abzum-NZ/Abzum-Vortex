@@ -7,12 +7,11 @@ import {
 import {
   applicationPageLinkResultSchema,
   applicationPageLinkSelectorSchema,
-  projectedApplicationPageLinkTilesSchema,
+  projectedLinkTilesSchema,
   type ApplicationPageLinkSelector,
   type ApplicationPageLinkResult,
-  type ApplicationPageLinkTileTarget,
-  type ProjectedApplicationPageLinkTiles,
-  projectedRecordPinTilesSchema,
+  type ProjectedLinkTileTarget,
+  type ProjectedLinkTiles,
   viewerSafeRecordLinkIdentitySchema,
   viewerSafeRecordLinkResultSchema,
   builderKeySchema,
@@ -24,44 +23,20 @@ import {
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
-  type ProjectedRecordPinTiles,
   type ViewerSafeRecordLinkIdentity,
   type ViewerSafeRecordLinkResult,
 } from "../schema";
-import {
-  LINK_TILES_BLOCK_RELEASE,
-  RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
-  APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
-} from "../definition/application-composition-catalogue";
+import { LINK_TILES_BLOCK_RELEASE } from "../definition/application-composition-catalogue";
 import {
   protectedQueryCommandSchema,
   protectedQueryPageSchema,
   type ProtectedQueryCommand,
-  type ProtectedQueryRowCapabilities,
 } from "../queries/index";
 import type { RecordsTableQueryRunner } from "./records-table-query";
 
 type Settings = Readonly<Record<string, BlockPropertyValueContract>>;
-type TextCell = Readonly<{ kind: "text"; text: string }>;
-type LinkCell = Readonly<{ kind: "link"; address: string; label: string }>;
-type LinkRow = Readonly<{
-  recordId: string;
-  revision: number;
-  capabilities: ProtectedQueryRowCapabilities;
-  cells: Readonly<Record<string, TextCell | LinkCell>>;
-}>;
-export type ProjectedLinkTilesValues = Readonly<{
-  kind: "launcher_rows";
-  headingKey: string;
-  secondaryKey?: string;
-  rows: readonly LinkRow[];
-}>;
 export type LinkTilesQueryResolution =
-  | Readonly<{
-      status: "ready";
-      values:
-        ProjectedLinkTilesValues | ProjectedRecordPinTiles | ProjectedApplicationPageLinkTiles;
-    }>
+  | Readonly<{ status: "ready"; values: ProjectedLinkTiles }>
   | Readonly<{ status: "refused"; reason: "not_permitted" }>
   | Readonly<{ status: "error" }>;
 export type LinkTilesQueryBinding = Readonly<{
@@ -73,8 +48,8 @@ export type LinkTilesQueryBinding = Readonly<{
     address: Readonly<{ key: string; fieldId: string }>;
     description?: Readonly<{ key: string; fieldId: string }>;
   }>;
-  pinFields?: Readonly<Record<PinField, string>>;
-  applicationFields?: Readonly<{ application_key: string; page_key: string }>;
+  pinFields: Readonly<Record<PinField, string>>;
+  applicationFields: Readonly<{ application_key: string; page_key: string }>;
 }>;
 
 const pinFields = [
@@ -120,20 +95,15 @@ const cellKey = (settings: Settings, property: string): string | undefined => {
   return parsed.success ? parsed.data : undefined;
 };
 
-/** Maps declared cell keys to selected fields of one exact installed ordinary Query. */
-export const buildLinkTilesQueryBinding = (
+/** The display columns (label, address, description) mapped to selected fields of one exact installed ordinary Query. */
+type SourceBinding = Omit<LinkTilesQueryBinding, "pinFields" | "applicationFields">;
+
+const buildSourceBinding = (
   candidateContext: InstalledRuntimeContext,
   queryId: string,
   settings: Settings,
   inputValues: Readonly<Record<string, JsonValue>>,
-  releaseVersion: string = LINK_TILES_BLOCK_RELEASE.releaseVersion,
-): LinkTilesQueryBinding | undefined => {
-  if (
-    releaseVersion === RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion ||
-    releaseVersion === APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion
-  )
-    return buildRecordPinBinding(candidateContext, queryId, settings, inputValues, releaseVersion);
-  if (releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion) return undefined;
+): SourceBinding | undefined => {
   let context: InstalledRuntimeContext;
   try {
     context = requireInstalledRuntimeContext(candidateContext);
@@ -143,8 +113,6 @@ export const buildLinkTilesQueryBinding = (
     );
     return undefined;
   }
-  if (validateComponentSettings(settings, LINK_TILES_BLOCK_RELEASE.properties).length !== 0)
-    return undefined;
   const matches = context.releaseSet.modules.flatMap((module) =>
     module.content.queries.flatMap((query) =>
       sameId(query.queryId, queryId) ? [{ module, query }] : [],
@@ -239,148 +207,33 @@ export const createLinkTilesQueryResolver = (
   readRecordLink?: ProtectedRecordLinkReader,
   readApplicationPageLink?: ProtectedApplicationPageLinkReader,
 ) => ({
-  async resolve(
+  resolve: (
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     candidateContext: InstalledRuntimeContext,
     queryId: string,
     settings: Settings,
     inputValues: Readonly<Record<string, JsonValue>>,
-    releaseVersion: string = LINK_TILES_BLOCK_RELEASE.releaseVersion,
-  ): Promise<LinkTilesQueryResolution> {
-    if (
-      releaseVersion === RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion ||
-      releaseVersion === APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion
-    )
-      return resolveRecordPins(
-        runner,
-        readRecordLink,
-        session,
-        selection,
-        candidateContext,
-        queryId,
-        settings,
-        inputValues,
-        releaseVersion,
-        readApplicationPageLink,
-      );
-    if (releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion)
-      return refusedBecause("RELEASE_NOT_SUPPORTED");
-    let context: InstalledRuntimeContext;
-    try {
-      context = requireInstalledRuntimeContext(candidateContext);
-    } catch (error) {
-      console.error(
-        `[page] link tile query refused LINK_TILES_CONTEXT_NOT_INSTALLED: ${describeFailure(error)}`,
-      );
-      return REFUSED;
-    }
-    try {
-      if (
-        !sameId(selection.organizationId, context.organizationId) ||
-        selection.applicationRootId === undefined ||
-        !sameId(selection.applicationRootId, context.applicationRootId)
-      )
-        return refusedBecause("SELECTION_NOT_CURRENT_APPLICATION");
-      const binding = buildLinkTilesQueryBinding(context, queryId, settings, inputValues);
-      if (binding === undefined) return refusedBecause("BINDING_NOT_RESOLVED");
-      const requested = new Set(binding.command.requestedFieldIds.map((id) => id.toLowerCase()));
-      const records = new Set<string>();
-      const rows: LinkRow[] = [];
-      {
-        const result = await runner.run(session, selection, binding.command);
-        if (result.kind === "temporarily_unavailable") return ERROR;
-        if (result.kind !== "available") return refusedBecause("QUERY_NOT_AVAILABLE");
-        const parsed = protectedQueryPageSchema.safeParse(result.value);
-        if (!parsed.success) return refusedBecause("PAGE_SHAPE_INVALID");
-        const page = parsed.data;
-        if (
-          !sameId(page.moduleRootId, binding.command.moduleRootId) ||
-          !sameId(page.queryId, binding.command.queryId) ||
-          page.moduleReleaseVersion !== binding.moduleReleaseVersion ||
-          page.rows.length > binding.command.pageSize
-        )
-          return refusedBecause("PAGE_SIZE_EXCEEDED");
-        // Tiles are one page of the query's own page size (at most 200); a query that offers
-        // more is refused loudly rather than silently truncated.
-        if (page.nextContinuationToken !== undefined) return refusedBecause("MORE_THAN_ONE_PAGE");
-        for (const row of page.rows) {
-          const recordId = row.recordId.toLowerCase();
-          const keys = Object.keys(row.values);
-          if (
-            records.has(recordId) ||
-            keys.some((id) => !requested.has(id.toLowerCase())) ||
-            new Set(keys.map((id) => id.toLowerCase())).size !== keys.length ||
-            Object.keys(row.systemValues ?? {}).length !== 0
-          )
-            return refusedBecause("ROW_KEYS_INVALID");
-          records.add(recordId);
-          const value = (id: string | undefined): JsonValue | undefined =>
-            id === undefined
-              ? undefined
-              : Object.entries(row.values).find(([key]) => sameId(key, id))?.[1];
-          const address = value(binding.mapping.address.fieldId);
-          // Withheld or null addresses expose neither a tile nor its record metadata.
-          if (address === undefined || address === null) continue;
-          const safeAddress = safeHttpsUrlSchema.safeParse(address);
-          if (!safeAddress.success) return refusedBecause("ADDRESS_NOT_HTTPS");
-          const label = value(binding.mapping.label.fieldId);
-          const description = value(binding.mapping.description?.fieldId);
-          if (
-            (label !== undefined && label !== null && typeof label !== "string") ||
-            (description !== undefined && description !== null && typeof description !== "string")
-          )
-            return refusedBecause("LABEL_OR_DESCRIPTION_INVALID");
-          const cells: Record<string, TextCell | LinkCell> = {
-            [binding.mapping.address.key]: Object.freeze({
-              kind: "link",
-              address: safeAddress.data,
-              label: typeof label === "string" && label.trim() !== "" ? label : safeAddress.data,
-            }),
-          };
-          if (typeof label === "string")
-            cells[binding.mapping.label.key] = Object.freeze({ kind: "text", text: label });
-          if (typeof description === "string" && binding.mapping.description !== undefined)
-            cells[binding.mapping.description.key] = Object.freeze({
-              kind: "text",
-              text: description,
-            });
-          rows.push(
-            Object.freeze({
-              recordId: row.recordId,
-              revision: row.revision,
-              capabilities: row.capabilities,
-              cells: Object.freeze(cells),
-            }),
-          );
-        }
-        return Object.freeze({
-          status: "ready",
-          values: Object.freeze({
-            kind: "launcher_rows",
-            headingKey: binding.mapping.label.key,
-            ...(binding.mapping.description === undefined
-              ? {}
-              : {
-                  secondaryKey: binding.mapping.description.key,
-                }),
-            rows: Object.freeze(rows),
-          }),
-        });
-      }
-    } catch (error) {
-      return projectionError("link-tiles-query", error);
-    }
-  },
+  ): Promise<LinkTilesQueryResolution> =>
+    resolveLinkTiles(
+      runner,
+      readRecordLink,
+      readApplicationPageLink,
+      session,
+      selection,
+      candidateContext,
+      queryId,
+      settings,
+      inputValues,
+    ),
 });
 
-/** The fresh release requires explicit unique selected keys; the old mapping remains unchanged. */
-function buildRecordPinBinding(
+/** The one binding: explicit unique selected keys for the display columns and every target column. */
+export function buildLinkTilesQueryBinding(
   candidateContext: InstalledRuntimeContext,
   queryId: string,
   settings: Settings,
   inputValues: Readonly<Record<string, JsonValue>>,
-  releaseVersion: string = RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion,
 ): LinkTilesQueryBinding | undefined {
   let context: InstalledRuntimeContext;
   try {
@@ -391,19 +244,9 @@ function buildRecordPinBinding(
     );
     return undefined;
   }
-  const appPage = releaseVersion === APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion;
-  if (!appPage && releaseVersion !== RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion)
+  if (validateComponentSettings(settings, LINK_TILES_BLOCK_RELEASE.properties).length !== 0)
     return undefined;
-  const release = appPage
-    ? APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE
-    : RECORD_PIN_LINK_TILES_BLOCK_RELEASE;
-  if (validateComponentSettings(settings, release.properties).length !== 0) return undefined;
-  const externalSettings = Object.fromEntries(
-    Object.entries(settings).filter(([key]) =>
-      LINK_TILES_BLOCK_RELEASE.properties.some((property) => property.key === key),
-    ),
-  );
-  const base = buildLinkTilesQueryBinding(context, queryId, externalSettings, inputValues);
+  const base = buildSourceBinding(context, queryId, settings, inputValues);
   if (base === undefined) return undefined;
   const queries = context.releaseSet.modules.flatMap((module) =>
     module.content.queries.filter(
@@ -433,9 +276,7 @@ function buildRecordPinBinding(
       if (field.type !== "choice") return undefined;
       const required =
         name === "target_kind"
-          ? appPage
-            ? ["record", "external", "application", "page"]
-            : ["record", "external"]
+          ? ["record", "external", "application", "page"]
           : ["replace", "new_page"];
       if (
         required.some((value) => !field.settings.options.some((option) => option.value === value))
@@ -480,29 +321,22 @@ function buildRecordPinBinding(
     storage_contract_id,
     record_id,
   };
-  let applicationFields: LinkTilesQueryBinding["applicationFields"];
-  if (appPage) {
-    const mapped: Partial<Record<"application_key" | "page_key", string>> = {};
-    for (const name of ["application_key", "page_key"] as const) {
-      const setting = settings[`${name}_key`];
-      const key = setting?.kind === "text" ? builderKeySchema.safeParse(setting.value) : undefined;
-      if (key?.success !== true) return undefined;
-      const field = record.fields.find((candidate) => candidate.key === key.data);
-      if (
-        field === undefined ||
-        field.type !== "text" ||
-        !selected.has(field.fieldId.toLowerCase())
-      )
-        return undefined;
-      mapped[name] = field.fieldId;
-    }
-    if (mapped.application_key === undefined || mapped.page_key === undefined) return undefined;
-    applicationFields = { application_key: mapped.application_key, page_key: mapped.page_key };
+  const mapped: Partial<Record<"application_key" | "page_key", string>> = {};
+  for (const name of ["application_key", "page_key"] as const) {
+    const setting = settings[`${name}_key`];
+    const key = setting?.kind === "text" ? builderKeySchema.safeParse(setting.value) : undefined;
+    if (key?.success !== true) return undefined;
+    const field = record.fields.find((candidate) => candidate.key === key.data);
+    if (field === undefined || field.type !== "text" || !selected.has(field.fieldId.toLowerCase()))
+      return undefined;
+    mapped[name] = field.fieldId;
   }
+  if (mapped.application_key === undefined || mapped.page_key === undefined) return undefined;
+  const applicationFields = { application_key: mapped.application_key, page_key: mapped.page_key };
   const fieldIds = [
     ...base.command.requestedFieldIds,
     ...Object.values(completed),
-    ...Object.values(applicationFields ?? {}),
+    ...Object.values(applicationFields),
   ];
   if (new Set(fieldIds.map((id) => id.toLowerCase())).size !== fieldIds.length) return undefined;
   const command = protectedQueryCommandSchema.safeParse({
@@ -514,25 +348,22 @@ function buildRecordPinBinding(
         ...base,
         command: command.data,
         pinFields: Object.freeze(completed),
-        ...(applicationFields === undefined
-          ? {}
-          : { applicationFields: Object.freeze(applicationFields) }),
+        applicationFields: Object.freeze(applicationFields),
       })
     : undefined;
 }
 
 /** Finish the source Query before any target read, so a refused continuation cannot leak partial targets. */
-async function resolveRecordPins(
+async function resolveLinkTiles(
   runner: RecordsTableQueryRunner,
   readRecordLink: ProtectedRecordLinkReader | undefined,
+  readApplicationPageLink: ProtectedApplicationPageLinkReader | undefined,
   session: IdentitySession,
   selection: OrganizationSelectionCandidate,
   candidateContext: InstalledRuntimeContext,
   queryId: string,
   settings: Settings,
   inputValues: Readonly<Record<string, JsonValue>>,
-  releaseVersion: string = RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion,
-  readApplicationPageLink?: ProtectedApplicationPageLinkReader,
 ): Promise<LinkTilesQueryResolution> {
   try {
     const context = requireInstalledRuntimeContext(candidateContext);
@@ -541,20 +372,19 @@ async function resolveRecordPins(
       selection.applicationRootId === undefined ||
       !sameId(selection.applicationRootId, context.applicationRootId)
     )
-      return refusedBecause("RECORD_PIN_SELECTION_NOT_CURRENT_APPLICATION");
-    const appPage = releaseVersion === APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion;
-    const binding = buildRecordPinBinding(context, queryId, settings, inputValues, releaseVersion);
-    if (binding === undefined || binding.pinFields === undefined || readRecordLink === undefined)
-      return refusedBecause("RECORD_PIN_BINDING_NOT_RESOLVED");
+      return refusedBecause("LINK_TILES_SELECTION_NOT_CURRENT_APPLICATION");
+    const binding = buildLinkTilesQueryBinding(context, queryId, settings, inputValues);
+    if (binding === undefined || readRecordLink === undefined)
+      return refusedBecause("LINK_TILES_BINDING_NOT_RESOLVED");
     const requested = new Set(binding.command.requestedFieldIds.map((id) => id.toLowerCase()));
     const records = new Set<string>();
     const sourceRows: ReturnType<typeof protectedQueryPageSchema.parse>["rows"] = [];
     {
       const result = await runner.run(session, selection, binding.command);
       if (result.kind === "temporarily_unavailable") return ERROR;
-      if (result.kind !== "available") return refusedBecause("RECORD_PIN_QUERY_NOT_AVAILABLE");
+      if (result.kind !== "available") return refusedBecause("LINK_TILES_QUERY_NOT_AVAILABLE");
       const parsed = protectedQueryPageSchema.safeParse(result.value);
-      if (!parsed.success) return refusedBecause("RECORD_PIN_PAGE_SHAPE_INVALID");
+      if (!parsed.success) return refusedBecause("LINK_TILES_PAGE_SHAPE_INVALID");
       const page = parsed.data;
       if (
         !sameId(page.moduleRootId, binding.command.moduleRootId) ||
@@ -562,10 +392,10 @@ async function resolveRecordPins(
         page.moduleReleaseVersion !== binding.moduleReleaseVersion ||
         page.rows.length > binding.command.pageSize
       )
-        return refusedBecause("RECORD_PIN_PAGE_SIZE_EXCEEDED");
+        return refusedBecause("LINK_TILES_PAGE_SIZE_EXCEEDED");
       // One page of the query's own page size (at most 200); more is refused, never truncated.
       if (page.nextContinuationToken !== undefined)
-        return refusedBecause("RECORD_PIN_MORE_THAN_ONE_PAGE");
+        return refusedBecause("LINK_TILES_MORE_THAN_ONE_PAGE");
       for (const row of page.rows) {
         const keys = Object.keys(row.values);
         if (
@@ -574,7 +404,7 @@ async function resolveRecordPins(
           new Set(keys.map((id) => id.toLowerCase())).size !== keys.length ||
           Object.keys(row.systemValues ?? {}).length !== 0
         )
-          return refusedBecause("RECORD_PIN_ROW_KEYS_INVALID");
+          return refusedBecause("LINK_TILES_ROW_KEYS_INVALID");
         records.add(row.recordId.toLowerCase());
         sourceRows.push(row);
       }
@@ -612,11 +442,7 @@ async function resolveRecordPins(
           : Object.entries(source.values).find(([key]) => sameId(key, id))?.[1];
       const fields = binding.pinFields;
       const kind = value(fields.target_kind);
-      if (
-        kind !== "record" &&
-        kind !== "external" &&
-        (!appPage || (kind !== "application" && kind !== "page"))
-      )
+      if (kind !== "record" && kind !== "external" && kind !== "application" && kind !== "page")
         continue;
       const behaviour = value(fields.open_behaviour);
       if (behaviour !== "replace" && behaviour !== "new_page") continue;
@@ -722,7 +548,7 @@ async function resolveRecordPins(
       return projectionError("target_batch_reader_failed", error);
     }
 
-    const rows: ProjectedApplicationPageLinkTiles["rows"] = [];
+    const rows: ProjectedLinkTiles["rows"] = [];
     for (const source of sourceRows) {
       const value = (id: string | undefined): JsonValue | undefined =>
         id === undefined
@@ -731,14 +557,10 @@ async function resolveRecordPins(
       const fields = binding.pinFields;
       const kind = value(fields.target_kind);
       // Other declared target kinds retain their prior unrendered residual outcome.
-      if (
-        kind !== "record" &&
-        kind !== "external" &&
-        (!appPage || (kind !== "application" && kind !== "page"))
-      )
+      if (kind !== "record" && kind !== "external" && kind !== "application" && kind !== "page")
         continue;
       const behaviour = value(fields.open_behaviour);
-      let target: ApplicationPageLinkTileTarget = { kind: "unavailable" };
+      let target: ProjectedLinkTileTarget = { kind: "unavailable" };
       if (behaviour === "replace" || behaviour === "new_page") {
         if (kind === "external") {
           const address = safeHttpsUrlSchema.safeParse(value(binding.mapping.address.fieldId));
@@ -800,12 +622,7 @@ async function resolveRecordPins(
       }
       rows.push({ sourceRecordId: source.recordId, sourceRevision: source.revision, target });
     }
-    const payload = appPage
-      ? projectedApplicationPageLinkTilesSchema.safeParse({
-          kind: "application_page_link_tiles",
-          rows,
-        })
-      : projectedRecordPinTilesSchema.safeParse({ kind: "record_pin_tiles", rows });
+    const payload = projectedLinkTilesSchema.safeParse({ kind: "link_tiles", rows });
     return payload.success
       ? { status: "ready", values: payload.data }
       : projectionError("projected_tiles_result_invalid", payload.error);
