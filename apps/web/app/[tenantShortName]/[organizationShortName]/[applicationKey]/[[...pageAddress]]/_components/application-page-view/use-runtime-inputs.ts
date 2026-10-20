@@ -352,6 +352,11 @@ export function useRuntimeInputs({
               event.commandId,
               true,
             );
+            // A neutral refusal may mean the viewer's access to the field ended: the table is read once more
+            // so a field no longer editable, or no longer readable, loses its editor and its draft.
+            // A changed record is already read again by the dispatch. Nothing here writes.
+            if (!outcome.confirmed && !outcome.changed && outcome.notice === unavailableNotice)
+              void refreshPlacements([placementId], undefined, { content: true });
             return outcome.confirmed
               ? { kind: "saved" }
               : {

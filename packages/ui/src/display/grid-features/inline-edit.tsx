@@ -99,6 +99,21 @@ function EditableCell({
     };
   }, []);
 
+  // The saved note is announced for a moment. Until the page read again after a saved commit shows
+  // the new stored value, a switch keeps showing the confirmed draft: it is shown only while the
+  // stored value is still the one the commit replaced.
+  const storedNow = useRef(stored);
+  storedNow.current = stored;
+  const [replaced, setReplaced] = useState<Readonly<{ value: JsonValue | undefined }> | undefined>(
+    undefined,
+  );
+  const awaitingRefresh = replaced !== undefined && replaced.value === stored;
+  useEffect(() => {
+    if (!saved) return;
+    const timer = setTimeout(() => setSaved(false), 4000);
+    return () => clearTimeout(timer);
+  }, [saved]);
+
   const unsaved = useUnsavedWorkRegistry();
   const cancel = (): void => {
     setPhase("idle");
@@ -183,6 +198,7 @@ function EditableCell({
     if (!mounted.current) return;
     if (result.kind === "saved") {
       setSaved(true);
+      setReplaced({ value: storedNow.current });
       setMessage(undefined);
       setChangedFrom(undefined);
       restoreFocus.current = true;
@@ -258,7 +274,7 @@ function EditableCell({
   );
 
   if (editor.kind === "yes_no") {
-    const checked = phase === "saving" || saved ? draft === true : stored === true;
+    const checked = phase === "saving" || awaitingRefresh ? draft === true : stored === true;
     return (
       <span
         className="flex flex-col"
