@@ -332,6 +332,14 @@ export type DisplaySemanticEventName =
    */
   | "filter_records_requested"
   | "selection_scope_changed"
+  /**
+   * A Records table's pivot asks for one page of its rows, opens the pivot or closes it, or a cell
+   * opens the ordinary grid on the records it counts. These are the Pivot feature's own reads and
+   * address changes, not flow events.
+   */
+  | "pivot_requested"
+  | "pivot_view_changed"
+  | "pivot_drilled"
   /** The Saved views feature asks the host to open, store, share or delete a view. */
   | "grid_view_requested";
 
@@ -375,6 +383,21 @@ export type DisplaySemanticEvent =
       continuationToken?: string;
     }>
   | Readonly<{ event: "search_changed"; query: string }>
+  | Readonly<{
+      event: "pivot_requested";
+      /** The opaque position of the first row of the page; absent reads the first rows. */
+      cursor?: string;
+    }>
+  | Readonly<{
+      event: "pivot_view_changed";
+      /** The view to keep in the address: absent shows the ordinary grid. */
+      view: Readonly<{ cursor?: string }> | undefined;
+    }>
+  | Readonly<{
+      event: "pivot_drilled";
+      /** The typed filters (address spelling) that select the cell's records in the ordinary grid. */
+      filters: readonly Readonly<{ fieldId: string; filter: string }>[];
+    }>
   | Readonly<{
       /**
        * A person asked for a change to the grid's saved views. The host opens the view in the
@@ -483,6 +506,9 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "selection_changed",
   "filter_changed",
   "filter_records_requested",
+  "pivot_requested",
+  "pivot_view_changed",
+  "pivot_drilled",
   "grid_view_requested",
   "search_changed",
   "sort_changed",
@@ -941,7 +967,8 @@ const parseSelection = (
   );
 };
 
-const parseSummaryValue = (
+/** @internal Shared with the pivot feature, whose cells are summary values. */
+export const parseSummaryValue = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
 ): DisplaySummaryMetric["value"] => {
@@ -1118,6 +1145,7 @@ export const parseTablePayload = (
       "selectionToken",
       "selectionScope",
       "bulkRun",
+      "actionAvailability",
     ],
     location,
   );

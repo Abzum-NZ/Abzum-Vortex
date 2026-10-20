@@ -1,4 +1,5 @@
 export * from "./application-page-links";
+export * from "./calendar-date";
 export * from "./application-page-link-tiles";
 export { inspectApplicationPageReplacements } from "./application-page-replacement";
 export * from "./projected-navigation";
@@ -10,6 +11,7 @@ export * from "./page-composition-resolution";
 export * from "./records-table-state";
 export * from "./grid-view-state";
 export * from "./records-selection";
+export * from "./named-action-availability-schema";
 export type {
   ConditionalColumnFormatProjection,
   ConditionalFormattingProjection,

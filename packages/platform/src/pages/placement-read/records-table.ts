@@ -278,8 +278,12 @@ export const readRecordsTable = async (
     fromAddress &&
     resolved.kind === "refused" &&
     (resolved.reasonCode === "cursor_invalid" || resolved.reasonCode === "cursor_stale")
-  )
+  ) {
+    console.warn(
+      `[page] table page address reopened at page one: application=${address.application.key} page=${address.pageKey} placement=${placementId} cause=${resolved.reasonCode}`,
+    );
     resolved = await readPage(undefined);
+  }
   if (resolved.kind === "unavailable") {
     console.error(
       "[page] data placement unavailable: class=protected_query code=query_unavailable",

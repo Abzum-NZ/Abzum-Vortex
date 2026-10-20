@@ -83,6 +83,8 @@ function FilterSummary({
   narrowing: TableNarrowing | undefined;
 }>): ReactElement {
   switch (filter.kind) {
+    case "empty":
+      return <>is empty</>;
     case "text":
       return <>contains “{filter.text}”</>;
     case "choice":

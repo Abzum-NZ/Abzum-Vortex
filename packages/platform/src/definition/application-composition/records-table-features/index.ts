@@ -40,6 +40,7 @@ import {
 import { recordsTableSavedViewsFeature, type RecordsTableSavedViewsSettings } from "./saved-views";
 import { recordsTableSearchFeature, type RecordsTableSearchSettings } from "./search";
 import { recordsTablePinningFeature, type RecordsTablePinningSettings } from "./pinning";
+import { recordsTablePivotFeature, type RecordsTablePivotSettings } from "./pivot";
 import {
   featureNotPossible,
   settingGroup,
@@ -67,6 +68,15 @@ export {
 } from "./shared";
 export { RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE } from "./master-detail";
 export { boardProblem, recordsTableBoardFactsOf } from "./board";
+export {
+  RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS,
+  RECORDS_TABLE_PIVOT_MAXIMUM_ROW_PAGE_SIZE,
+  recordsTablePivotDateUnits,
+  recordsTablePivotMeasureFieldTypes,
+  recordsTablePivotMeasureFunctions,
+  type RecordsTablePivotDateUnit,
+  type RecordsTablePivotMeasureFunction,
+} from "./pivot";
 export {
   conditionalColumnFormatFieldTypes,
   conditionalColumnFormatIssue,
@@ -97,6 +107,7 @@ export type {
   RecordsTableSavedViewsSettings,
   RecordsTableSearchSettings,
   RecordsTablePinningSettings,
+  RecordsTablePivotSettings,
   RecordsTableSpreadsheetSettings,
 };
 
@@ -117,6 +128,7 @@ export type RecordsTableFeatures = Readonly<{
   masterDetail: RecordsTableFeatureState<RecordsTableMasterDetailSettings>;
   conditionalFormatting: RecordsTableFeatureState<RecordsTableConditionalFormattingSettings>;
   pinning: RecordsTableFeatureState<RecordsTablePinningSettings>;
+  pivot: RecordsTableFeatureState<RecordsTablePivotSettings>;
   spreadsheet: RecordsTableFeatureState<RecordsTableSpreadsheetSettings>;
   board: RecordsTableFeatureState<RecordsTableBoardSettings>;
 }>;
@@ -134,6 +146,7 @@ const registry = {
     property: "conditionalFormatting",
     definition: recordsTableConditionalFormattingFeature,
   },
+  pivot: { property: "pivot", definition: recordsTablePivotFeature },
   board: { property: "board", definition: recordsTableBoardFeature },
 } as const satisfies Record<
   string,
@@ -154,6 +167,7 @@ export const recordsTableFeatureKeys = [
   "inline_edit",
   "master_detail",
   "conditional_formatting",
+  "pivot",
   "board",
 ] as const satisfies readonly (keyof typeof registry)[];
 export type RecordsTableFeatureKey = (typeof recordsTableFeatureKeys)[number];
@@ -197,6 +211,7 @@ export const readRecordsTableFeatures = (
   const masterDetail = read("master_detail");
   const conditionalFormatting = read("conditional_formatting");
   const pinning = read("pinning");
+  const pivot = read("pivot");
   const board = read("board");
   if (
     spreadsheet === undefined ||
@@ -208,6 +223,7 @@ export const readRecordsTableFeatures = (
     masterDetail === undefined ||
     conditionalFormatting === undefined ||
     pinning === undefined ||
+    pivot === undefined ||
     board === undefined
   )
     return undefined;
@@ -221,6 +237,7 @@ export const readRecordsTableFeatures = (
     inlineEdit: inlineEdit as RecordsTableFeatures["inlineEdit"],
     masterDetail: masterDetail as RecordsTableFeatures["masterDetail"],
     conditionalFormatting: conditionalFormatting as RecordsTableFeatures["conditionalFormatting"],
+    pivot: pivot as RecordsTableFeatures["pivot"],
     board: board as RecordsTableFeatures["board"],
   };
 };

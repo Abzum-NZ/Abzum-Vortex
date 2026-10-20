@@ -239,6 +239,8 @@ export type ComponentDataProjectionInput = Readonly<{
   formatting?: ConditionalFormattingContext;
   /** How a cell edits each field of the installed definition (field identity to editor); supplied only when inline editing is on. */
   fieldEditors?: Readonly<Record<string, RecordsTableInlineEditor>>;
+  /** The pivot view the address opens the table in; absent shows the ordinary grid. */
+  pivotView?: Readonly<{ cursor?: string }>;
 }>;
 
 /** One declared column of a table field: its key, readable heading, cell type and, for a choice, its options. */
@@ -573,6 +575,7 @@ export const projectRecordsTableData = (
     input.filterFields,
     input.fieldEditors,
     formatting?.projection,
+    input.pivotView,
   );
   const editableFields = features?.inlineEdit?.fields ?? [];
 

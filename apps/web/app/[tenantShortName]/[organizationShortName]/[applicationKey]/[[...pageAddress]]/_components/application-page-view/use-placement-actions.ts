@@ -344,8 +344,7 @@ export function usePlacementActions({
           pageDirection: direction === "previous" || direction === "last" ? "backward" : "forward",
           ...(continuationToken === undefined ? {} : { continuationToken }),
         };
-        // One read of the requested page under the viewer's current access; only a Next whose page
-        // was read ahead for this same state uses that read, and no page is replayed.
+        // One read of the requested page under the viewer's current access; no page is replayed.
         commitTablePage(parsedId.data, request);
         await refreshPlacements([parsedId.data], { placementId: parsedId.data, request });
       } finally {

@@ -33,15 +33,16 @@ begin
   if pg_catalog.jsonb_typeof(p_user_inputs) <> 'object'
     or exists (
       select 1 from pg_catalog.jsonb_object_keys(p_user_inputs) as supplied(key)
-      where supplied.key not in ('filter', 'filterableFieldIds', 'boardSummary', 'grouping', 'groupAfter', 'search', 'searchableFieldIds')
+      where supplied.key not in ('filter', 'filterableFieldIds', 'boardSummary', 'grouping', 'pivot', 'groupAfter', 'search', 'searchableFieldIds')
     ) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
   if (p_user_inputs ? 'groupAfter' and (
-      not (p_user_inputs ? 'grouping')
+      not (p_user_inputs ? 'grouping' or p_user_inputs ? 'pivot')
       or pg_catalog.jsonb_typeof(p_user_inputs -> 'groupAfter') is distinct from 'string'
       or pg_catalog.length(p_user_inputs ->> 'groupAfter') not between 1 and 4096
-    )) or (p_user_inputs ? 'grouping' and board_summary_mode)
+    )) or ((p_user_inputs ? 'grouping' or p_user_inputs ? 'pivot') and board_summary_mode)
+    or (p_user_inputs ? 'grouping' and p_user_inputs ? 'pivot')
     or (p_user_inputs ? 'search' and pg_catalog.jsonb_typeof(p_user_inputs -> 'search') not in ('string', 'null'))
     or pg_catalog.length(pg_catalog.btrim(p_user_inputs ->> 'search')) > 200 then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
@@ -92,4 +93,4 @@ grant execute on function vortex_record.run_module_query_summary(uuid, uuid, big
   to vortex_request, vortex_owner;
 
 comment on function vortex_record.run_module_query_summary(uuid, uuid, bigint, jsonb, jsonb) is
-  'Runs one bounded database-backed installed Module query summary or protected board summary. It validates the request, prepares one protected read-scan access plan, and delegates the summary to the owner-only aggregate function, normalizes unreadable board choices to one unassigned bucket, summarises the own records of a preview for a preview request, caps authored group pages at 200 with keysets over canonical group keys while keeping full readable totals, and refuses neutrally above 100000 candidate rows.';
+  'Runs one bounded database-backed installed Module query summary, protected board summary or pivot. It validates the request, prepares one protected read-scan access plan, and delegates the summary to the owner-only aggregate function, normalizes unreadable board choices to one unassigned bucket, summarises the own records of a preview for a preview request, caps authored group pages at 200 with keysets over canonical group keys while keeping full readable totals, crosses one row and one column dimension into capped cells with row, column and grand totals from one statement, and refuses neutrally above 100000 candidate rows.';

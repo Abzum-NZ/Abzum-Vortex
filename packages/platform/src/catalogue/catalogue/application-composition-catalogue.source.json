@@ -4454,10 +4454,19 @@
         "help": "Table shows columns; List shows the same records as cards at every screen size",
         "required": true,
         "options": [
-          { "key": "grid", "label": "Table" },
-          { "key": "cards", "label": "List" }
+          {
+            "key": "grid",
+            "label": "Table"
+          },
+          {
+            "key": "cards",
+            "label": "List"
+          }
         ],
-        "defaultValue": { "kind": "choice", "value": "grid" }
+        "defaultValue": {
+          "kind": "choice",
+          "value": "grid"
+        }
       },
       {
         "kind": "choice",
@@ -5844,6 +5853,163 @@
           },
           {
             "kind": "group",
+            "key": "pivot",
+            "label": "Pivot",
+            "help": "Show records as rows crossed with columns, totalled on the server",
+            "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "properties": [
+              {
+                "kind": "boolean",
+                "key": "enabled",
+                "label": "On",
+                "help": "Let people switch the table to a pivot of its filtered records",
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              },
+              {
+                "kind": "field_reference",
+                "key": "row_field",
+                "label": "Rows",
+                "help": "A choice, link or date field people can filter by; each value is one row",
+                "required": false,
+                "fieldTypes": ["choice", "link", "date", "date_time"]
+              },
+              {
+                "kind": "choice",
+                "key": "row_date_unit",
+                "label": "Group row dates by",
+                "help": "The calendar unit when the rows are a date field",
+                "required": false,
+                "options": [
+                  {
+                    "key": "day",
+                    "label": "Day"
+                  },
+                  {
+                    "key": "week",
+                    "label": "Week"
+                  },
+                  {
+                    "key": "month",
+                    "label": "Month"
+                  },
+                  {
+                    "key": "quarter",
+                    "label": "Quarter"
+                  },
+                  {
+                    "key": "year",
+                    "label": "Year"
+                  }
+                ]
+              },
+              {
+                "kind": "field_reference",
+                "key": "column_field",
+                "label": "Columns",
+                "help": "A choice, link or date field people can filter by, with at most 50 values",
+                "required": false,
+                "fieldTypes": ["choice", "link", "date", "date_time"]
+              },
+              {
+                "kind": "choice",
+                "key": "column_date_unit",
+                "label": "Group column dates by",
+                "help": "The calendar unit when the columns are a date field",
+                "required": false,
+                "options": [
+                  {
+                    "key": "day",
+                    "label": "Day"
+                  },
+                  {
+                    "key": "week",
+                    "label": "Week"
+                  },
+                  {
+                    "key": "month",
+                    "label": "Month"
+                  },
+                  {
+                    "key": "quarter",
+                    "label": "Quarter"
+                  },
+                  {
+                    "key": "year",
+                    "label": "Year"
+                  }
+                ]
+              },
+              {
+                "kind": "choice",
+                "key": "measure_function",
+                "label": "Each cell shows",
+                "help": "A count of records, or a total, average, lowest or highest of a number or money field",
+                "required": false,
+                "options": [
+                  {
+                    "key": "count",
+                    "label": "Count of records"
+                  },
+                  {
+                    "key": "sum",
+                    "label": "Total"
+                  },
+                  {
+                    "key": "average",
+                    "label": "Average"
+                  },
+                  {
+                    "key": "minimum",
+                    "label": "Lowest"
+                  },
+                  {
+                    "key": "maximum",
+                    "label": "Highest"
+                  }
+                ]
+              },
+              {
+                "kind": "field_reference",
+                "key": "measure_field",
+                "label": "Number or money field",
+                "help": "The field each cell totals; leave empty when counting records",
+                "required": false,
+                "fieldTypes": ["whole_number", "decimal_number", "money"]
+              },
+              {
+                "kind": "boolean",
+                "key": "totals",
+                "label": "Show totals",
+                "help": "Add the row, column and grand totals",
+                "required": false
+              },
+              {
+                "kind": "number",
+                "key": "row_page_size",
+                "label": "Rows at a time",
+                "help": "How many pivot rows one page shows, at most 200",
+                "required": false,
+                "integer": true,
+                "minimum": 1,
+                "maximum": 200
+              }
+            ]
+          },
+          {
+            "kind": "group",
             "key": "spreadsheet",
             "label": "Spreadsheet controls",
             "help": "Select ranges and find values within the loaded page",
@@ -5961,6 +6127,15 @@
               }
             },
             "board": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "pivot": {
               "kind": "group",
               "properties": {
                 "enabled": {

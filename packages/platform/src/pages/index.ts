@@ -1,6 +1,11 @@
 import "server-only";
 
 export {
+  readRecordsTableNamedActionAvailability,
+  projectNamedActionAvailability,
+} from "./records-table-features/named-action-availability";
+
+export {
   organizationChooserEmptyPage,
   organizationChooserPage,
   organizationChooserPlacementId,
@@ -104,7 +109,15 @@ export {
   type RowDetailResult,
   type RowDetailRow,
 } from "./records-table-features/master-detail";
-
+export {
+  readRecordsTablePivot,
+  type PivotCell,
+  type PivotDrill,
+  type PivotRequest,
+  type PivotResult,
+  type PivotRow,
+  type RecordsTablePivotQueryRunner,
+} from "./records-table-features/pivot";
 export { readPageSubjectInTransaction } from "./page-subject-read";
 export {
   createPageSubjectReader,
@@ -199,8 +212,8 @@ export {
   type CalendarPlacementProjectionInput,
   type CalendarPlacementValues,
   type CalendarQueryRunner,
-  type CalendarView,
 } from "./calendar-query";
+export type { CalendarView } from "./calendar-date";
 export {
   projectBoardPlacement,
   type BoardPlacementFailureCause,

@@ -43,8 +43,8 @@ export type RecordsTableFeatureProjection = Readonly<{
   /** Present when the viewer can filter by some field or sort by some field it can read. */
   savedViews?: true;
   /**
-   * The declared bulk actions. Whether the viewer may run one on a record is decided per record when
-   * it runs, under current access, and every refused record is reported.
+   * The declared bulk actions. A bounded on-intent availability read decides each action's own
+   * permission and precondition for the visible selection; execution rechecks current authority.
    */
   bulkActions?: readonly RecordsTableBulkActionContract[];
   /**
@@ -56,6 +56,11 @@ export type RecordsTableFeatureProjection = Readonly<{
   masterDetail?: Readonly<{ pageSize: number }>;
   /** The styles the page's rows name and the numeric columns drawn as bars or scales. */
   conditionalFormatting?: ConditionalFormattingProjection;
+  /**
+   * The viewer can read the pivot's rows, columns and measure: it shows this many rows a page.
+   * `view` is present when the address opens the table as a pivot, with its row position.
+   */
+  pivot?: Readonly<{ rowPageSize: number; totals: boolean; view?: Readonly<{ cursor?: string }> }>;
 }>;
 
 /**
@@ -165,6 +170,12 @@ export const recordsTableEditableFields = (
   });
 };
 
+/** The one bulk-action projection; a disabled feature offers neither actions nor availability reads. */
+export const recordsTableBulkActions = (
+  contract: RecordsTableContract,
+): readonly RecordsTableBulkActionContract[] =>
+  contract.features.bulkActions.enabled ? contract.features.bulkActions.actions : [];
+
 /**
  * Projects the enabled features for the viewer of one read. `bounds` is the viewer's current field
  * bound from the same read, carried even when no row was returned, so it decides filters, search
@@ -180,6 +191,7 @@ export const projectRecordsTableFeatures = (
   filterFields: Readonly<Record<string, RecordsTableFilterField>> | undefined,
   editors: Readonly<Record<string, RecordsTableInlineEditor>> | undefined,
   conditionalFormatting?: ConditionalFormattingProjection,
+  pivotView?: Readonly<{ cursor?: string }>,
 ): RecordsTableFeatureProjection | undefined => {
   const { features } = contract;
   const readable = (field: string): boolean =>
@@ -197,12 +209,31 @@ export const projectRecordsTableFeatures = (
   const savedViews =
     features.savedViews.enabled &&
     (columnFilters.length > 0 || contract.sortableFields.some((field) => readable(field)));
-  const bulkActions = features.bulkActions.enabled ? features.bulkActions.actions : [];
+  const bulkActions = recordsTableBulkActions(contract);
   const inlineEdit = features.inlineEdit;
   const editableFields = recordsTableEditableFields(contract, rows, bounds, editors);
   // Every expanded row is read again under the viewer's current access: the projection only says
   // rows expand; a viewer who cannot read the related records sees the panel's neutral refusal.
   const masterDetail = features.masterDetail;
+  // A pivot is offered only when the viewer may read its rows, columns and measure on every
+  // record; the pivot read applies the same field policy again.
+  const pivotSettings = features.pivot;
+  const pivotFields = pivotSettings.enabled
+    ? [pivotSettings.rowField, pivotSettings.columnField, pivotSettings.measureField]
+    : [];
+  const pivot =
+    pivotSettings.enabled &&
+    pivotSettings.rowPageSize !== undefined &&
+    pivotSettings.rowField !== undefined &&
+    pivotSettings.columnField !== undefined &&
+    pivotSettings.measureFunction !== undefined &&
+    pivotFields.every((field) => field === undefined || readable(field))
+      ? {
+          rowPageSize: pivotSettings.rowPageSize,
+          totals: pivotSettings.totals,
+          ...(pivotView === undefined ? {} : { view: pivotView }),
+        }
+      : undefined;
   const projection: RecordsTableFeatureProjection = {
     ...(features.spreadsheet.enabled &&
     typeof features.spreadsheet.rangeSelect === "boolean" &&
@@ -229,6 +260,7 @@ export const projectRecordsTableFeatures = (
     ...(conditionalFormatting === undefined || !features.conditionalFormatting.enabled
       ? {}
       : { conditionalFormatting }),
+    ...(pivot === undefined ? {} : { pivot }),
   };
   return Object.keys(projection).length === 0 ? undefined : projection;
 };
