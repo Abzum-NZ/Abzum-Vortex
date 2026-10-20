@@ -30,7 +30,7 @@ import type {
   ResolvedTypedConditionOperand as CoreResolvedTypedConditionOperand,
 } from "./typed-condition-core";
 
-export type SemanticType = ConditionValueType;
+type SemanticType = ConditionValueType;
 
 export type ResolvedTypedConditionOperand = CoreResolvedTypedConditionOperand<SemanticType> &
   Readonly<{ missing?: boolean }>;

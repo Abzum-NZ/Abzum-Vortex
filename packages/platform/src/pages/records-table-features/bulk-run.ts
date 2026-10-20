@@ -31,7 +31,11 @@ import {
 import { createHumanInstalledPageBundleContextLoader } from "../../definition/installed-page-bundle-context";
 import { installedNamedActions } from "../../definition/installed-named-actions";
 import type { InstalledRuntimeContext } from "../../definition/index";
-import { createProtectedQueryService, type QueryContinuationKey } from "../../queries/index";
+import {
+  createProtectedQueryService,
+  tableReadCandidatesPerRequest,
+  type QueryContinuationKey,
+} from "../../queries/index";
 import {
   createNamedActionRecordPort,
   namedActionBatchMaximum,
@@ -48,6 +52,7 @@ import {
   type PlacementQuery,
 } from "../placement-read/shared";
 import { buildRecordsTableQueryCommand } from "../records-table-query";
+import { recordsSelectionCountCeiling } from "../records-selection";
 import { openRecordsSelection, type RecordsSelectionDescriptor } from "../records-selection-seal";
 import { installedPlacementProps } from "./flow-dispatch";
 import { readNamedActionEligibility } from "./named-action-eligibility";
@@ -78,6 +83,16 @@ type BulkPlacement = Readonly<{
   query: PlacementQuery;
   recordTypeId: string;
 }>;
+
+/**
+ * The most scan-limited reader requests one "matching" enumeration follows. A full page is bounded
+ * by the run's own limit; a scan-limited page spent its whole budget of
+ * `tableReadCandidatesPerRequest` candidates, so this many of them examine the candidate ceiling
+ * the count uses (`recordsSelectionCountCeiling`) before the run refuses as "too many".
+ */
+const enumerationScanLimitedCeiling = Math.ceil(
+  recordsSelectionCountCeiling / tableReadCandidatesPerRequest,
+);
 
 const refuse = (cause: string): undefined => {
   console.error(`[records-table] bulk request refused cause=${cause}`);
@@ -244,6 +259,8 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
    * Every record the descriptor matches now, in the table's order, minus the exclusions, read in
    * keyset pages of the bound query's own page size (at most 200 identities) under the person's
    * current access; at most `limit` + 1, so a run past its limit is known without reading further.
+   * A scan-limited page (the reader's budget ran out before the page filled) is followed, up to
+   * `enumerationScanLimitedCeiling` of them; past it the enumeration is "too_many".
    */
   const resolveMatching = async (
     session: IdentitySession,
@@ -252,10 +269,11 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
     queryPageSize: number,
     excluded: ReadonlySet<string>,
     limit: number,
-  ): Promise<readonly string[] | undefined> => {
+  ): Promise<readonly string[] | "too_many" | undefined> => {
     const recordIds: string[] = [];
     const seen = new Set<string>();
     let continuationToken: string | undefined;
+    let scanLimitedCount = 0;
     do {
       const result = await queries.run(session, selection, {
         ...command,
@@ -275,6 +293,13 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         recordIds.push(recordId);
       }
       continuationToken = result.value.nextContinuationToken;
+      if (result.value.scanLimited) scanLimitedCount += 1;
+      if (continuationToken !== undefined && scanLimitedCount === enumerationScanLimitedCeiling) {
+        console.error(
+          `[records-table] bulk request refused cause=matching_enumeration_ceiling scanLimited=${scanLimitedCount}`,
+        );
+        return "too_many";
+      }
     } while (continuationToken !== undefined && recordIds.length <= limit);
     return recordIds;
   };
@@ -407,6 +432,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
           declared.maxRecords,
         );
         if (matching === undefined) return report({ kind: "unavailable" });
+        if (matching === "too_many") return report({ kind: "refused" });
         limited = matching.length > declared.maxRecords;
         targets = matching.slice(0, declared.maxRecords).map((recordId) => ({ recordId }));
       }

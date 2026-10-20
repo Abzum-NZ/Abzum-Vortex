@@ -137,7 +137,11 @@ export function applicationPageRules(scope: ApplicationScope): void {
             sortable: field.sortable === true,
             filterable: field.filterable === true,
             searchable: field.searchPriority !== undefined,
-            editable: !grouped && recordsTableEditableFieldTypes.includes(String(field.type)),
+            editable:
+              !grouped &&
+              recordsTableEditableFieldTypes.includes(String(field.type)) &&
+              (field.type !== "link" ||
+                object(object(field.settings ?? {}).target).state === "resolved"),
             // A one-record link from the record type to itself names each record's parent.
             parentLink:
               field.type === "link" &&

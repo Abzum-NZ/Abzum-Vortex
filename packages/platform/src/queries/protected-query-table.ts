@@ -26,7 +26,7 @@ import {
   refusal,
   readInputs,
 } from "./protected-query-helpers";
-import { pageReadSchema, type pageAnchorSchema } from "./protected-query-read-schemas";
+import { pageAnchorSchema, pageReadSchema } from "./protected-query-read-schemas";
 import type { QueryCache } from "./protected-query-types";
 import { readThroughQueryCache } from "./shared-cache-adapter";
 import {
@@ -34,6 +34,15 @@ import {
   validateQueryInputValues,
   QueryInputRefusalError,
 } from "./typed-input-validation";
+
+/**
+ * One table read makes at most this many database reads, each examining at most
+ * `tableReadCandidatesPerCall` candidates (the `scan_limit` of run_module_query), so one request
+ * examines at most `tableReadCandidatesPerRequest` candidates.
+ */
+export const tableReadCallsPerRequest = 4;
+export const tableReadCandidatesPerCall = 500;
+export const tableReadCandidatesPerRequest = tableReadCallsPerRequest * tableReadCandidatesPerCall;
 
 /**
  * The user-facing sort, filter and search a request carries, plus the component-declared
@@ -168,7 +177,11 @@ export const runCommand = async (
     let oppositeAnchor: z.infer<typeof pageAnchorSchema> | null = null;
     let releaseVersion: string | undefined;
     let fieldBounds: ProtectedQueryPage["fieldBounds"] | undefined;
-    for (let call = 0; call < (command.exactRecordId === undefined ? 4 : 1); call += 1) {
+    for (
+      let call = 0;
+      call < (command.exactRecordId === undefined ? tableReadCallsPerRequest : 1);
+      call += 1
+    ) {
       const page = await readPage(
         transaction,
         { ...command, pageSize: command.pageSize - rows.length },
@@ -199,8 +212,21 @@ export const runCommand = async (
     }
     if (releaseVersion === undefined || fieldBounds === undefined)
       throw new Error("PROTECTED_QUERY_RESULT_INVALID");
-    if (rows.length < command.pageSize && nextAnchor !== null)
-      return refusal("dataset_limit_exceeded");
+    // The request's scan budget ran out before the page filled: the rows found so far are the
+    // page and the continuation (sealed at the last examined key) resumes the search.
+    const scanLimited = rows.length < command.pageSize && nextAnchor !== null;
+    // A page with no rows has no first row to turn back from: it turns back from the last key it
+    // examined, or (at the end of the data) from the key it started after, so a person who paged
+    // into an empty stretch of a sparse search can still go back.
+    if (rows.length === 0 && after !== undefined)
+      oppositeAnchor =
+        nextAnchor ??
+        pageAnchorSchema.parse({
+          sortKey: after.sortKey,
+          sort: after.sort,
+          phase: after.phase,
+          recordId: after.recordId,
+        });
     // Only the declared system values may appear; a row carrying any other is a
     // contract breach, not something to pass on.
     const declaredSystemKeys = new Set<string>(command.requestedSystemFieldKeys);
@@ -256,6 +282,7 @@ export const runCommand = async (
       queryId: command.queryId,
       rows,
       fieldBounds,
+      scanLimited,
       ...(next === undefined ? {} : { nextContinuationToken: next }),
       ...(previous === undefined ? {} : { previousContinuationToken: previous }),
     };

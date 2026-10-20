@@ -1,6 +1,6 @@
 create or replace function vortex_access.list_organization_runtime_settings_projection(
   p_record_ids uuid[], p_sort_key text, p_direction text, p_after jsonb,
-  p_limit integer
+  p_limit integer, p_predicate jsonb
 )
 returns table (
   organization_id uuid,
@@ -18,7 +18,19 @@ declare
   settings_row record;
   settings_default_application_root_id uuid;
   settings_extension_values jsonb;
+  predicate_plan jsonb;
+  predicate_matches boolean;
 begin
+  -- This reader declares no filterable or searchable key: a filter is refused, and a
+  -- search over no searchable key matches no row.
+  predicate_plan := vortex_record.compile_projection_predicate_internal(p_predicate, '{}'::jsonb, 1);
+  if predicate_plan ->> 'predicate' is not null then
+    execute 'select (' || (predicate_plan ->> 'predicate') || ') is true'
+      into predicate_matches using predicate_plan -> 'parameters';
+    if not predicate_matches then
+      return;
+    end if;
+  end if;
   -- One settings row per organisation, so ordering is irrelevant: record_id and the projection's
   -- declared sortable field (language) are both accepted.
   if p_sort_key is null or p_sort_key not in ('record_id', 'language')
@@ -93,9 +105,9 @@ begin
 end
 $function$;
 
-revoke all on function vortex_access.list_organization_runtime_settings_projection(uuid[], text, text, jsonb, integer)
+revoke all on function vortex_access.list_organization_runtime_settings_projection(uuid[], text, text, jsonb, integer, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_access.list_organization_runtime_settings_projection(uuid[], text, text, jsonb, integer)
+grant execute on function vortex_access.list_organization_runtime_settings_projection(uuid[], text, text, jsonb, integer, jsonb)
   to vortex_owner, vortex_record_adapter, postgres;
-alter function vortex_access.list_organization_runtime_settings_projection(uuid[], text, text, jsonb, integer)
+alter function vortex_access.list_organization_runtime_settings_projection(uuid[], text, text, jsonb, integer, jsonb)
   owner to vortex_owner;

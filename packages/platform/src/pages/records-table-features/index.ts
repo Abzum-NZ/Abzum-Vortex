@@ -100,6 +100,12 @@ export type RecordsTableInlineEditor = Readonly<{ required: boolean }> &
     | Readonly<{ kind: "choice"; options: readonly Readonly<{ value: string; label: string }>[] }>
     | Readonly<{ kind: "date"; earliest?: string; latest?: string }>
     | Readonly<{ kind: "date_time" }>
+    | Readonly<{
+        /** A single-target link: the person picks one record of the installed target type. */
+        kind: "link";
+        recordTypeId: string;
+        targetLabel: string;
+      }>
   );
 
 /** One field a viewer may edit in a cell, as the field identity the table's columns use. */

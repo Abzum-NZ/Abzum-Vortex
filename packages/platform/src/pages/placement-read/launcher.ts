@@ -1,7 +1,12 @@
 import "server-only";
 
 import { isRecord, type BlockPropertyValueContract, type JsonValue } from "../../schema";
-import { protectedQueryCommandSchema, type ProtectedQueryRow } from "../../queries/index";
+import {
+  protectedQueryCommandSchema,
+  tableReadCandidatesPerRequest,
+  type ProtectedQueryRow,
+} from "../../queries/index";
+import { recordsSelectionCountCeiling } from "../records-selection";
 import {
   logPlacementFailure,
   placementSettingsOf,
@@ -14,6 +19,16 @@ import type { LauncherQueryRow, PlacementReadInput } from "./types";
 
 /** The most application rows a query-bound launcher reads before it refuses. */
 export const MAXIMUM_LAUNCHER_QUERY_ROWS = 10_000;
+
+/**
+ * The most scan-limited reader requests one launcher read follows. A sparse query returns short
+ * pages with a continuation, so rows alone do not bound the work; each scan-limited page spent its
+ * whole budget of `tableReadCandidatesPerRequest` candidates, so this many of them examine the
+ * candidate ceiling the selection count uses.
+ */
+const MAXIMUM_LAUNCHER_SCAN_LIMITED_REQUESTS = Math.ceil(
+  recordsSelectionCountCeiling / tableReadCandidatesPerRequest,
+);
 
 const launcherCellKey = (
   settings: Readonly<Record<string, BlockPropertyValueContract>>,
@@ -75,6 +90,7 @@ export const readLauncher = async (
   let continuationToken: string | undefined;
   let failure: "unavailable" | "refused" | "too_many_rows" | undefined;
   let failureCause: string | undefined;
+  let scanLimitedCount = 0;
   do {
     const result = await read.services.queries.run(read.session, read.selection, {
       ...command.data,
@@ -94,8 +110,10 @@ export const readLauncher = async (
     }
     queryRows.push(...result.value.rows);
     const nextToken = result.value.nextContinuationToken;
+    if (result.value.scanLimited) scanLimitedCount += 1;
     if (
       queryRows.length > MAXIMUM_LAUNCHER_QUERY_ROWS ||
+      (nextToken !== undefined && scanLimitedCount === MAXIMUM_LAUNCHER_SCAN_LIMITED_REQUESTS) ||
       (nextToken !== undefined && seenContinuationTokens.has(nextToken))
     ) {
       failure = "too_many_rows";

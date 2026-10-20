@@ -312,11 +312,11 @@ export function StudioActionTasks({
   };
   return (
     <fieldset className="space-y-3">
-      <legend className="text-sm font-medium">Ordered tasks</legend>
+      <legend className="text-sm font-medium">Ordered steps</legend>
       <StudioEntryList
-        label="Action tasks"
-        itemName="task"
-        empty="No tasks yet."
+        label="Action steps"
+        itemName="step"
+        empty="No steps yet."
         onMove={move}
         onRemove={(index) => onChange(tasks.filter((_, at) => at !== index))}
         items={tasks.map((task, index) => ({
@@ -497,7 +497,7 @@ export function StudioActionTasks({
             disabled={tasks.length >= 10}
             render={<Button type="button" variant="ghost" size="sm" />}
           >
-            <Icon name="plus" /> Add task
+            <Icon name="plus" /> Add step
           </DropdownMenuTrigger>
           <DropdownMenuContent className="min-w-48">
             {(Object.keys(titles) as Task["type"][]).map((type) => (
