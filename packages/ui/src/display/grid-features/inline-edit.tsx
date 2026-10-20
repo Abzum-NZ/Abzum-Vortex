@@ -34,6 +34,12 @@ import {
   type EditDraft,
 } from "./edit-values";
 import { LinkDraftPicker, linkedRecordTitle } from "./record-choice-picker";
+import {
+  dependentFieldsOf,
+  parentFieldOf,
+  storedRecordId,
+  waitingForParent,
+} from "./link-dependency";
 import type { GridFeatureCellProps, GridFeatureModule } from "./registry";
 
 type Phase = "idle" | "editing" | "saving";
@@ -72,6 +78,8 @@ function EditableCell({
   handler,
   events,
   reload,
+  dependency,
+  dependents,
   children,
 }: Readonly<{
   eventId: string;
@@ -84,6 +92,10 @@ function EditableCell({
   /** The page's display callbacks, for a link editor's record picker. */
   events: DisplayEventHandlers | undefined;
   reload: (() => void) | undefined;
+  /** For a link that depends on another: the record chosen there in this row, and its label. */
+  dependency: Readonly<{ parentRecordId: string | undefined; parentLabel: string }> | undefined;
+  /** The labels of the fields that depend on this one and hold a record in this row. */
+  dependents: readonly string[];
   children: ReactNode;
 }>): ReactElement {
   const { timeZone } = useDateFormatOptions();
@@ -189,6 +201,14 @@ function EditableCell({
       restoreFocus.current = true;
       cancel();
       afterCommit?.();
+      return;
+    }
+    if (dependents.length > 0) {
+      // A changed parent would leave its dependents holding records the server refuses.
+      setMessage(
+        `${dependents.join(" and ")} depend${dependents.length === 1 ? "s" : ""} on ${label}. Clear ${dependents.length === 1 ? "it" : "them"} first, or change them together in one row edit.`,
+      );
+      setPhase("editing");
       return;
     }
     committing.current = true;
@@ -401,6 +421,7 @@ function EditableCell({
             events={events}
             draft={typeof draft === "object" ? draft : null}
             {...(currentTitle === undefined ? {} : { current: currentTitle })}
+            {...(dependency === undefined ? {} : { dependency })}
             inline
             required={editor.required}
             disabled={phase === "saving"}
@@ -545,6 +566,31 @@ function InlineEditor({ context, row, column, children }: GridFeatureCellProps):
     onRefresh?.({ event: "refresh" });
   }, [onRefresh]);
   if (!editable || row.edit === undefined || storedKey === undefined) return <>{children}</>;
+  const labelOf = (key: string): string =>
+    context.columns.find((candidate) => same(candidate.key, key))?.label ?? key;
+  const storedOf = (key: string): unknown =>
+    row.edit![Object.keys(row.edit!).find((candidate) => same(candidate, key)) ?? ""];
+  const parentField = parentFieldOf(field.editor);
+  const dependency =
+    parentField === undefined
+      ? undefined
+      : {
+          parentRecordId: storedRecordId(storedOf(parentField)),
+          parentLabel: labelOf(parentField),
+        };
+  if (dependency !== undefined && dependency.parentRecordId === undefined)
+    // The parent is empty or not readable: the dependent link stays as it is, with a neutral reason.
+    return (
+      <span
+        title={waitingForParent(dependency.parentLabel)}
+        aria-description={waitingForParent(dependency.parentLabel)}
+      >
+        {children}
+      </span>
+    );
+  const dependents = dependentFieldsOf(inlineEdit.fields, column.key)
+    .filter((child) => storedRecordId(storedOf(child.field)) !== undefined)
+    .map((child) => labelOf(child.field));
   return (
     // Keyed by record and field, never by value: a refresh keeps the draft and its refusal.
     <EditableCell
@@ -558,6 +604,8 @@ function InlineEditor({ context, row, column, children }: GridFeatureCellProps):
       handler={onInlineEdit}
       events={context.events}
       reload={onRefresh === undefined ? undefined : reload}
+      dependency={dependency}
+      dependents={dependents}
     >
       {children}
     </EditableCell>

@@ -473,6 +473,13 @@ export const fieldEditorsOf = (
                       required,
                       recordTypeId: String(recordTypeId),
                       targetLabel: target.singularLabel,
+                      ...(field.settings.dependsOn === undefined
+                        ? {}
+                        : {
+                            dependsOnField: String(
+                              field.settings.dependsOn.parentFieldId,
+                            ).toLowerCase(),
+                          }),
                     },
                   ],
                 ];

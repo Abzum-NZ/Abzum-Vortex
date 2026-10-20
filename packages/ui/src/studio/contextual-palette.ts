@@ -212,6 +212,8 @@ export type StudioQueryField = Readonly<{
   resultType?: string;
   /** The field is a one-record link from its record type to itself, so a record names its parent. */
   parentLink?: boolean;
+  /** The field of the same record type whose chosen record narrows this link's choices. */
+  dependsOn?: string;
 }>;
 
 /** The facts of one draft field, as a query field carries them. */
@@ -434,6 +436,13 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
                 ...studioFieldFacts(field),
                 ...(isParentLink(module.key, recordType, record, field)
                   ? { parentLink: true }
+                  : {}),
+                ...(field.type === "link" &&
+                (field.settings as { depends_on?: { parent_field: string } }).depends_on !==
+                  undefined
+                  ? {
+                      dependsOn: `${recordType}.${(field.settings as { depends_on: { parent_field: string } }).depends_on.parent_field}`,
+                    }
                   : {}),
               }),
             ];

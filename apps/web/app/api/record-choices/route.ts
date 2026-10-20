@@ -36,6 +36,8 @@ const requestSchema = z
     installationRevision: revisionSchema,
     releaseKey: z.string().min(1).max(512),
     subjectRecordId: recordIdSchema.optional(),
+    /** For a dependent link field: the record chosen in the field it depends on, in the draft. */
+    parentRecordId: recordIdSchema.optional(),
     search: z.string().trim().max(100).optional(),
     pageSize: z.number().int().min(1).max(200).optional(),
     continuationToken: z.string().min(1).max(65_536).optional(),
@@ -43,6 +45,9 @@ const requestSchema = z
   .strict()
   .refine((body) => (body.fieldId === undefined) === (body.purpose === undefined), {
     message: "A table link picker names its field and its purpose together",
+  })
+  .refine((body) => body.parentRecordId === undefined || body.purpose === "edit", {
+    message: "Only an edited cell's picker names a parent record",
   });
 
 const refusedResponse = (code: string, cause?: unknown): NextResponse => {
@@ -105,6 +110,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       installationRevision: body.installationRevision,
       releaseKey: body.releaseKey,
       ...(body.subjectRecordId === undefined ? {} : { subjectRecordId: body.subjectRecordId }),
+      ...(body.parentRecordId === undefined ? {} : { parentRecordId: body.parentRecordId }),
       ...(body.search === undefined ? {} : { search: body.search }),
       ...(body.pageSize === undefined ? {} : { pageSize: body.pageSize }),
       ...(body.continuationToken === undefined

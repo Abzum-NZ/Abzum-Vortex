@@ -30,6 +30,29 @@ import {
   actionFieldByKey,
 } from "./action-values";
 import { evaluateSavedSharingCondition } from "./saved-conditions";
+import { linkDependencyProblem, type LinkDependencyField } from "../module-link-dependencies";
+
+/** A canonical record type's fields as the one link-dependency judgement reads them. */
+const linkDependencyViews = (fields: readonly JsonObject[]): LinkDependencyField[] =>
+  fields.map((field) => {
+    const settings = object(field.settings);
+    const dependsOn = settings.dependsOn === undefined ? undefined : object(settings.dependsOn);
+    return {
+      id: String(field.fieldId),
+      label: String(field.label),
+      type: String(field.type),
+      filterable: field.filterable === true,
+      ...(field.type === "link" ? { target: String(object(settings.target).recordTypeId) } : {}),
+      ...(dependsOn === undefined
+        ? {}
+        : {
+            dependsOn: {
+              parent: String(dependsOn.parentFieldId),
+              filter: String(dependsOn.filterFieldId),
+            },
+          }),
+    };
+  });
 
 export function moduleReferenceRule(context: PreparedValidationContext): DefinitionRuleFailure[] {
   const walkValues = context.walkCanonicalValues ?? canonicalValueWalker(context);
@@ -346,8 +369,17 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
             array(settings.columns).some((column) => column.settings === undefined))
         )
           valid = false;
-        if (field.type === "link")
-          valid = recordReference(settings.target, allowedModuleRoots) !== undefined;
+        if (field.type === "link") {
+          const target = recordReference(settings.target, allowedModuleRoots);
+          valid = target !== undefined;
+          if (valid && settings.dependsOn !== undefined)
+            valid =
+              linkDependencyProblem(
+                linkDependencyViews(array(record.fields)),
+                String(field.fieldId),
+                linkDependencyViews(array(target!.fields)),
+              ) === undefined;
+        }
         if (field.type === "link_to_one_of_several")
           valid = (settings.targets as unknown[]).every(
             (target) => recordReference(target, allowedModuleRoots) !== undefined,

@@ -4,6 +4,7 @@ import {
   featureEnabled,
   featureNotPossible,
   fieldList,
+  recordsTableDependencyMissing,
   recordsTableFieldNotEditableReason,
   settingOptionalChoice,
   settingText,
@@ -56,6 +57,8 @@ export const recordsTableRowEditFeature: RecordsTableFeatureDefinition<RecordsTa
         const reason = recordsTableFieldNotEditableReason(field);
         if (reason !== undefined) return featureNotPossible(code, reason);
       }
+      const missing = recordsTableDependencyMissing(facts, state.fields);
+      if (missing !== undefined) return featureNotPossible(code, missing);
       return featureAvailable;
     },
   };
