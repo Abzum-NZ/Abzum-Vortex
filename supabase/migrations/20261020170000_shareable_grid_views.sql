@@ -3,9 +3,11 @@
 -- groups). Both hold presentation configuration only, never row data, a cursor or a permission.
 -- The store is preference metadata, so existing rows are removed rather than converted.
 
--- The unchanged helper belongs to the restricted record adapter; only its owner or the
--- migration administrator may grant its execution to the platform owner.
+-- The unchanged helper belongs to the restricted record adapter. Grant execution as
+-- that owner before creating the platform-owned view functions.
+set local role vortex_record_adapter;
 grant execute on function vortex_record.record_type_read_declaration_internal(jsonb, uuid, uuid) to vortex_owner;
+reset role;
 
 set local role vortex_owner;
 
