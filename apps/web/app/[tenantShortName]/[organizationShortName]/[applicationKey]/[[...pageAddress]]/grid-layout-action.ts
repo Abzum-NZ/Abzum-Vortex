@@ -289,6 +289,7 @@ export async function commitGridView(
           .flatMap((module) => module.content.queries)
           .find((query) => String(query.queryId).toLowerCase() === queryId);
         if (query?.recordType.state !== "resolved") return { outcome: "unavailable" };
+        if (!placement.contract.features.savedViews.enabled) return { outcome: "unavailable" };
         const stored = await readGridViews(
           transaction,
           pageId,
@@ -304,8 +305,7 @@ export async function commitGridView(
         const readable = stored.readable.get(String(query.recordType.recordTypeId).toLowerCase());
         if (readable === undefined) throw new Error("GRID_VIEW_FIELD_VISIBILITY_MISSING");
         const authored = authoredGridLayout(placement.contract, readable);
-        if (authored === undefined || !placement.contract.features.savedViews.enabled)
-          return { outcome: "unavailable" };
+        if (authored === undefined) return { outcome: "unavailable" };
         const defaults = addressedDefaultGridViews(
           placement.contract.features.savedViews.defaultViews,
           stored.roleKeys,

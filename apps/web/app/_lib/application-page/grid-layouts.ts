@@ -95,7 +95,6 @@ export const readPageGridLayouts = async (
   session: IdentitySession,
   dependencies: HumanOrganizationRequestDependencies,
   selection: OrganizationSelectionCandidate,
-  _context: InstalledRuntimeContext,
   pageId: string,
   grids: readonly PageGrid[],
 ): Promise<PageGridLayouts> => {
