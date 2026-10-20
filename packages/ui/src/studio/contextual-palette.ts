@@ -222,6 +222,8 @@ export type StudioQueryField = Readonly<{
   choiceCount?: number;
   /** For a calculation or total, the type of the value it produces. */
   resultType?: string;
+  /** The field is a one-record link from its record type to itself, so a record names its parent. */
+  parentLink?: boolean;
 }>;
 
 /** The facts of one draft field, as a query field carries them. */
@@ -332,6 +334,28 @@ export const studioUsesSignature = (source: ApplicationSourceDocument): string =
   JSON.stringify(source.body.uses.map((use) => `${use.application}/${use.module}`).sort());
 
 /** The queries of the application's own Modules: they are in its source. */
+/** Whether a draft field is a one-record link from its record type to itself. */
+const isParentLink = (
+  record:
+    | Readonly<{
+        key: string;
+        relationships: readonly Readonly<{ from_field: string; cardinality: string }>[];
+      }>
+    | undefined,
+  field: Readonly<{ key: string; type: string; settings?: unknown }>,
+): boolean => {
+  if (record === undefined || field.type !== "link") return false;
+  const target = (field.settings as { target?: unknown } | undefined)?.target;
+  return (
+    typeof target === "string" &&
+    target.slice(target.lastIndexOf(":") + 1) === record.key &&
+    record.relationships.some(
+      (relationship) =>
+        relationship.from_field === field.key && relationship.cardinality === "many_to_one",
+    )
+  );
+};
+
 const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
   (source.body.modules ?? []).flatMap((module) =>
     module.queries.map((query) => {
@@ -354,6 +378,7 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
                 label: field.label,
                 type: field.type,
                 ...studioFieldFacts(field),
+                ...(isParentLink(record, field) ? { parentLink: true } : {}),
               }),
             ];
       });

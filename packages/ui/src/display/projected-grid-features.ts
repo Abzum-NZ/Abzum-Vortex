@@ -166,6 +166,7 @@ export const parseTableFeatures = (
       "bulkActions",
       "inlineEdit",
       "masterDetail",
+      "tree",
       "conditionalFormatting",
       "pinning",
     ],
@@ -230,6 +231,14 @@ export const parseTableFeatures = (
       ),
     });
   }
+  let tree: RecordsTableFeatureProjection["tree"];
+  if (record.tree !== undefined) {
+    const beneath = requireRecord(record.tree, "Projected tree is invalid", location);
+    requireExactKeys(beneath, ["pageSize"], location);
+    tree = Object.freeze({
+      pageSize: requirePositiveInteger(beneath.pageSize, "A tree needs its page size", location),
+    });
+  }
   return Object.freeze({
     ...(record.pinning === true ? { pinning: true as const } : {}),
     ...(record.search === true ? { search: true as const } : {}),
@@ -238,6 +247,7 @@ export const parseTableFeatures = (
     ...(bulkActions === undefined ? {} : { bulkActions: Object.freeze(bulkActions) }),
     ...(inlineEdit === undefined ? {} : { inlineEdit }),
     ...(masterDetail === undefined ? {} : { masterDetail }),
+    ...(tree === undefined ? {} : { tree }),
     ...(record.conditionalFormatting === undefined
       ? {}
       : {

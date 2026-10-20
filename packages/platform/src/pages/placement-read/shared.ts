@@ -75,6 +75,7 @@ export type PlacementFailureReason =
   | "calendar_settings_invalid"
   | "calendar_time_zone_unavailable"
   | "table_time_zone_unavailable"
+  | "table_tree_off"
   | "calendar_query_invalid"
   | "calendar_query_unavailable"
   | "calendar_query_refused"

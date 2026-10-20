@@ -222,6 +222,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   const nameOfRow = useCallback((row: DisplayRow) => rowName(row, headingKey), [headingKey]);
   const expansion = useRowExpansion({
     enabled: gridFeatures.expands && events?.row_expanded !== undefined,
+    kind: gridFeatures.expansionKind,
     placementId,
     rows,
     rowName: nameOfRow,

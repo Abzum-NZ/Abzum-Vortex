@@ -135,6 +135,17 @@ export function applicationPageRules(scope: ApplicationScope): void {
             filterable: field.filterable === true,
             searchable: field.searchPriority !== undefined,
             editable: !grouped && recordsTableEditableFieldTypes.includes(String(field.type)),
+            // A one-record link from the record type to itself names each record's parent.
+            parentLink:
+              field.type === "link" &&
+              array(record?.relationships).some(
+                (relationship) =>
+                  String(relationship.fromFieldId).toLowerCase() ===
+                    String(field.fieldId).toLowerCase() &&
+                  relationship.cardinality === "many_to_one" &&
+                  String(object(relationship.toRecordType ?? {}).recordTypeId).toLowerCase() ===
+                    recordTypeId.toLowerCase(),
+              ),
             ...(field.type === "choice" && Array.isArray(options)
               ? { choiceCount: options.length }
               : {}),

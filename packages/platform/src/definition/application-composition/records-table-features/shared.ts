@@ -104,6 +104,8 @@ export type RecordsTableFieldFacts = Readonly<{
   choiceCount?: number;
   /** For a calculation or total, the type of the value it produces. */
   resultType?: string;
+  /** The field is a one-record link from the record type to itself, so a record names its parent. */
+  parentLink: boolean;
 }>;
 
 /** The type of value a field holds: a calculation's or total's result type, else its own type. */
@@ -184,6 +186,7 @@ export type RecordsTableFeatureRefusalCode = Extract<
   | "definition_records_table_bulk_actions"
   | "definition_records_table_inline_edit"
   | "definition_records_table_master_detail"
+  | "definition_records_table_tree"
   | "definition_records_table_conditional_formatting"
   | "definition_records_table_pinning"
 >;

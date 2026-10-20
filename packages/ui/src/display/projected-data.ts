@@ -100,6 +100,8 @@ export type DisplayRow = Readonly<{
   cells: Readonly<Record<string, DisplayCellValue>>;
   /** The style keys and measures the table's formatting gives the row, decided on the server. */
   format?: RecordsTableRowFormat;
+  /** A tree row the viewer may read a child of, decided on the server. */
+  hasChildren?: true;
 }>;
 
 /** One declared table column; only declared columns are ever rendered. */
@@ -792,9 +794,11 @@ const parseRows = (
       const record = requireRecord(item, "A projected row must be an object", rowLocation);
       requireExactKeys(
         record,
-        ["recordId", "revision", "capabilities", "cells", "format"],
+        ["recordId", "revision", "capabilities", "cells", "format", "hasChildren"],
         rowLocation,
       );
+      if (record.hasChildren !== undefined && record.hasChildren !== true)
+        fail("A projected row can only say it has children", rowLocation);
       const recordId = requireNonEmptyString(
         record.recordId,
         "A projected row requires a stable record identity",
@@ -842,6 +846,7 @@ const parseRows = (
         ...(capabilities === undefined ? {} : { capabilities }),
         cells: Object.freeze(cells),
         ...(format === undefined ? {} : { format }),
+        ...(record.hasChildren === true ? { hasChildren: true as const } : {}),
       });
     }),
   );

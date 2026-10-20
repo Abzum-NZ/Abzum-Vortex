@@ -139,6 +139,29 @@ export const readRecordsTable = async (
     }
     formatting = { recordFields, relativeDates };
   }
+  // A tree table reads one level at a time: its roots, or the children of the record a level
+  // read names, whose page position is the level's own token and never the address's.
+  const treeFeature = contract.features.tree;
+  const level =
+    read.treeLevel !== undefined && sameId(read.treeLevel.placementId, placementId)
+      ? read.treeLevel
+      : undefined;
+  if (level !== undefined && !(treeFeature.enabled && treeFeature.parentField !== undefined)) {
+    logPlacementFailure(address, placementId, "table_tree_off");
+    data[placementId] = { status: "refused", reason: "not_permitted" };
+    return;
+  }
+  const tree =
+    treeFeature.enabled && treeFeature.parentField !== undefined
+      ? {
+          parentFieldId: treeFeature.parentField.toLowerCase(),
+          parentRecordId: level?.parentRecordId ?? null,
+          pageSize:
+            level === undefined
+              ? contract.pageSize
+              : (treeFeature.childPageSize ?? contract.pageSize),
+        }
+      : undefined;
   const continuation = read.tableContinuation;
   const explicitRequest =
     continuation !== undefined && sameId(continuation.placementId, placementId)
@@ -161,11 +184,22 @@ export const readRecordsTable = async (
       state: { ...addressed.state, page },
       layout,
       ...(formatting === undefined ? {} : { formatting }),
+      ...(tree === undefined ? {} : { tree }),
     });
   const fromAddress =
     (explicitRequest === undefined && addressed.state.page !== undefined) ||
     (explicitRequest !== undefined && continuation?.fromAddress === true);
-  let resolved = await readPage(explicitRequest ?? addressed.state.page);
+  let resolved = await readPage(
+    level !== undefined
+      ? {
+          page: level.continuationToken === undefined ? 1 : 2,
+          pageDirection: "forward",
+          ...(level.continuationToken === undefined
+            ? {}
+            : { continuationToken: level.continuationToken }),
+        }
+      : (explicitRequest ?? addressed.state.page),
+  );
   // A shared link opened by another account, or after an access, release, sort, filter or column
   // change, no longer matches its sealed cursor (invalid or stale): it opens the first page
   // without an error.

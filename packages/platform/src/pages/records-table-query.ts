@@ -24,10 +24,13 @@ import {
 import type { HumanOrganizationRequestResult } from "../access/index";
 import {
   protectedQueryCommandSchema,
+  protectedQueryTreeLevelCommandSchema,
   type ProtectedQueryCommand,
   type ProtectedQueryRefusalReasonCode,
   type ProtectedQueryResult,
   type ProtectedQueryRow,
+  type ProtectedQueryTreeLevelCommand,
+  type ProtectedQueryTreeLevelResult,
 } from "../queries/index";
 import {
   collectRecordLinks,
@@ -59,6 +62,12 @@ export type RecordsTableQueryRunner = Readonly<{
     selection: OrganizationSelectionCandidate,
     command: ProtectedQueryCommand,
   ): Promise<HumanOrganizationRequestResult<ProtectedQueryResult>>;
+  /** One level of a tree: the roots or the children of one parent record. */
+  treeLevel(
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    command: ProtectedQueryTreeLevelCommand,
+  ): Promise<HumanOrganizationRequestResult<ProtectedQueryTreeLevelResult>>;
 }>;
 
 /**
@@ -108,6 +117,11 @@ export type RecordsTableQueryRequest = Readonly<{
   resolveRecordLinks?: RecordLinkResolver;
   /** What the table's formatting rules are evaluated with; supplied only when they are on. */
   formatting?: ConditionalFormattingContext;
+  /**
+   * Set when the table is a tree: the read is one level of it, the roots (no parent) or the
+   * children of one record, `pageSize` at a time, over the link that names each record's parent.
+   */
+  tree?: Readonly<{ parentFieldId: string; parentRecordId: string | null; pageSize: number }>;
 }>;
 
 /**
@@ -463,7 +477,27 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
       return refused;
     }
     try {
-      const result = await runner.run(session, selection, built.command);
+      const tree = request.tree;
+      const treeCommand =
+        tree === undefined
+          ? undefined
+          : protectedQueryTreeLevelCommandSchema.safeParse({
+              ...built.command,
+              pageSize: tree.pageSize,
+              parentFieldId: tree.parentFieldId,
+              parentRecordId: tree.parentRecordId,
+            });
+      if (treeCommand !== undefined && !treeCommand.success) {
+        logRecordsTableRequestRefusal(
+          recordsTableRequestRefusal("tree_level", "tree_command_invalid"),
+          "table_read",
+        );
+        return refused;
+      }
+      const result =
+        treeCommand === undefined
+          ? await runner.run(session, selection, built.command)
+          : await runner.treeLevel(session, selection, treeCommand.data);
       if (result.kind === "temporarily_unavailable") return unavailableResult;
       if (result.kind !== "available") return refused;
       if (result.value.outcome === "refused")
@@ -543,7 +577,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         kind: "available",
         fieldIds: built.fieldIds,
         display,
-        pageSize: built.command.pageSize,
+        pageSize: request.tree?.pageSize ?? built.command.pageSize,
         rows: projectedRows,
         ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
         ...(previousContinuationToken === undefined ? {} : { previousContinuationToken }),

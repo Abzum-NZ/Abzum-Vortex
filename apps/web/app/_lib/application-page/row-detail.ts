@@ -3,8 +3,18 @@ import "server-only";
 import {
   pageQueryBindingContext,
   readRecordsTableRowDetail,
+  isTreeTablePlacement,
+  readRecordsTableTreeLevel,
+  resolvedQueryRecordTypeId,
+  type PlacementReadInput,
   type RowDetailResult,
+  type TreeLevelResult,
 } from "@vortex/platform/server";
+import {
+  applicationLauncherQueryRowsToListValues,
+  parseBoardPayload,
+  parseDisplayData,
+} from "@vortex/ui";
 import {
   describeFailure,
   recordIdSchema,
@@ -14,6 +24,7 @@ import {
 } from "@vortex/platform/schema";
 import { getQueryContinuationKey } from "../query-continuation-key";
 import { loadInstalledContext, readPageProjections, requestDependencies } from "./load";
+import { readPageGridLayouts } from "./grid-layouts";
 import {
   collectPlacements,
   first,
@@ -25,7 +36,7 @@ import { createPlacementReadServices } from "./placement-services";
 import type { ApplicationPageLoaderAddress, SearchParameters } from "./types";
 
 export type RowDetailLoadResult =
-  | Readonly<{ kind: "available"; detail: RowDetailResult }>
+  | Readonly<{ kind: "available"; detail: RowDetailResult | TreeLevelResult }>
   | Readonly<{ kind: "reload" }>
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
@@ -140,6 +151,66 @@ export const loadApplicationRowDetail = async (
         }
       },
     });
+    const recordTypeId =
+      typeof placement.vortex.queryId === "string"
+        ? resolvedQueryRecordTypeId(context, placement.vortex.queryId)
+        : undefined;
+    const readSubject = (subjectRecordTypeId: string, recordId: string) =>
+      services.subjects.read(session, selection, { recordTypeId: subjectRecordTypeId, recordId });
+    // A tree table opens the records beneath the row through the table's own read, which takes the
+    // person's stored layout and field policy as the page read does.
+    const level =
+      recordTypeId === undefined || !isTreeTablePlacement(placement)
+        ? undefined
+        : await readRecordsTableTreeLevel(
+            {
+              context,
+              session,
+              selection,
+              address: { application: { key: address.application.key }, pageKey: address.pageKey },
+              pageDefinition,
+              accessVersion:
+                typeof projectedPage.value.accessVersion === "number"
+                  ? projectedPage.value.accessVersion
+                  : undefined,
+              subjectType,
+              subjectId: subjectRecordId.success ? subjectRecordId.data : undefined,
+              parameters,
+              bindings,
+              data: {},
+              services: {
+                queries: services.queries,
+                linkTiles: services.linkTiles,
+                queryNotices: services.queryNotices,
+                tables: services.tables,
+                resolveRecordLinks: services.recordLinkResolver(context),
+                readCalendarSettings: services.readCalendarSettings,
+                readSubject,
+                launcherValues: applicationLauncherQueryRowsToListValues,
+                boardData: (values) =>
+                  parseDisplayData({ status: "ready", values }, parseBoardPayload),
+              },
+              permittedApplicationKeys: undefined,
+              permittedApplicationsUnavailable: false,
+              gridLayouts: await readPageGridLayouts(
+                session,
+                dependencies,
+                selection,
+                context,
+                String(pageDefinition.pageId),
+                [{ placementId: placement.placementId, recordTypeId }],
+              ),
+              markSubjectUnreadable: () => undefined,
+            } satisfies PlacementReadInput,
+            placement,
+            {
+              parentRecordId: parentRecordId.data,
+              ...(request.continuationToken === undefined
+                ? {}
+                : { continuationToken: request.continuationToken }),
+            },
+          );
+    if (level !== undefined) return { kind: "available", detail: level };
     const detail = await readRecordsTableRowDetail({
       context,
       session,
@@ -151,8 +222,7 @@ export const loadApplicationRowDetail = async (
         : { continuationToken: request.continuationToken }),
       bindings,
       queries: services.queries,
-      readRecord: (recordTypeId, recordId) =>
-        services.subjects.read(session, selection, { recordTypeId, recordId }),
+      readRecord: readSubject,
       resolveRecordLinks: services.recordLinkResolver(context),
     });
     return { kind: "available", detail };

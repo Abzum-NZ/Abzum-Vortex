@@ -253,6 +253,15 @@ begin
     end if;
   end if;
 
+  if mapping_row.cardinality = 'many_to_one' and target_type_id = p_source_record_type_id then
+    -- A record type's one-record link to itself is a parent link: it never makes a cycle.
+    perform vortex_record.assert_relationship_acyclic_internal(
+      p_relationship_id, (source_context ->> 'organizationId')::uuid,
+      (source_meta ->> 'storageContractId')::uuid, (field_value ->> 'fieldId')::uuid,
+      p_source_record_id, target_record_id
+    );
+  end if;
+
   delete from vortex_record.relationship_edges as edge
   where edge.relationship_id = p_relationship_id
     and edge.from_organisation_id = (source_context ->> 'organizationId')::uuid

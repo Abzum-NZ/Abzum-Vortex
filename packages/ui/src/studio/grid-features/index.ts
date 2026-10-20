@@ -48,12 +48,15 @@ export const studioGridFeatureEditors: Readonly<
         filterable: field.filterable,
         searchable: field.searchable,
         editable: false,
+        parentLink: false,
       }),
   },
   saved_views: { kind: "settings" },
   bulk_actions: { kind: "settings" },
   inline_edit: { kind: "settings" },
   master_detail: { kind: "settings" },
+  // Only the links from a record type to itself can name a record's parent.
+  tree: { kind: "settings", offers: (field) => field.parentLink === true },
   conditional_formatting: { kind: "custom" },
 };
 
@@ -68,6 +71,8 @@ export const studioGridFeatureStartSettings: Readonly<
 > = {
   // Related records read ten at a time unless the builder chooses otherwise.
   master_detail: { child_page_size: { kind: "number", value: 10 } },
+  // A tree reads forty records of a level at a time unless the builder chooses otherwise.
+  tree: { child_page_size: { kind: "number", value: 40 } },
 };
 
 /**
@@ -102,6 +107,7 @@ export const studioRecordsTableQueryFacts = (
     filterable: field.filterable,
     searchable: field.searchable,
     editable: query?.grouped !== true && recordsTableEditableFieldTypes.includes(field.type),
+    parentLink: field.parentLink === true,
     ...(field.choiceCount === undefined ? {} : { choiceCount: field.choiceCount }),
     ...(field.resultType === undefined ? {} : { resultType: field.resultType }),
   })),

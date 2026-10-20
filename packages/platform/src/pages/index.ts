@@ -85,6 +85,11 @@ export {
   type RecordsTableRequestRefusal,
 } from "./records-table-features";
 export {
+  isTreeTablePlacement,
+  readRecordsTableTreeLevel,
+  type TreeLevelResult,
+} from "./placement-read";
+export {
   readRecordsTableRowDetail,
   type RowDetailRequest,
   type RowDetailResult,

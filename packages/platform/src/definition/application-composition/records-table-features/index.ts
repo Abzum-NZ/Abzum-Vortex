@@ -19,6 +19,7 @@ import {
   recordsTableMasterDetailFeature,
   type RecordsTableMasterDetailSettings,
 } from "./master-detail";
+import { recordsTableTreeFeature, type RecordsTableTreeSettings } from "./tree";
 import {
   recordsTableConditionalFormattingFeature,
   type RecordsTableConditionalFormattingSettings,
@@ -27,6 +28,7 @@ import { recordsTableSavedViewsFeature, type RecordsTableSavedViewsSettings } fr
 import { recordsTableSearchFeature, type RecordsTableSearchSettings } from "./search";
 import { recordsTablePinningFeature, type RecordsTablePinningSettings } from "./pinning";
 import {
+  featureNotPossible,
   settingGroup,
   type RecordsTableFeatureCheck,
   type RecordsTableFeatureDefinition,
@@ -49,6 +51,7 @@ export {
   type RecordsTableRelatedRecordsFacts,
 } from "./shared";
 export { RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE } from "./master-detail";
+export { RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE } from "./tree";
 export {
   conditionalColumnFormatFieldTypes,
   conditionalColumnFormatIssue,
@@ -74,6 +77,7 @@ export type {
   RecordsTableColumnFiltersSettings,
   RecordsTableInlineEditSettings,
   RecordsTableMasterDetailSettings,
+  RecordsTableTreeSettings,
   RecordsTableSavedViewsSettings,
   RecordsTableSearchSettings,
   RecordsTablePinningSettings,
@@ -94,6 +98,7 @@ export type RecordsTableFeatures = Readonly<{
   bulkActions: RecordsTableFeatureState<RecordsTableBulkActionsSettings>;
   inlineEdit: RecordsTableFeatureState<RecordsTableInlineEditSettings>;
   masterDetail: RecordsTableFeatureState<RecordsTableMasterDetailSettings>;
+  tree: RecordsTableFeatureState<RecordsTableTreeSettings>;
   conditionalFormatting: RecordsTableFeatureState<RecordsTableConditionalFormattingSettings>;
   pinning: RecordsTableFeatureState<RecordsTablePinningSettings>;
 }>;
@@ -106,6 +111,7 @@ const registry = {
   bulk_actions: { property: "bulkActions", definition: recordsTableBulkActionsFeature },
   inline_edit: { property: "inlineEdit", definition: recordsTableInlineEditFeature },
   master_detail: { property: "masterDetail", definition: recordsTableMasterDetailFeature },
+  tree: { property: "tree", definition: recordsTableTreeFeature },
   conditional_formatting: {
     property: "conditionalFormatting",
     definition: recordsTableConditionalFormattingFeature,
@@ -127,6 +133,7 @@ export const recordsTableFeatureKeys = [
   "bulk_actions",
   "inline_edit",
   "master_detail",
+  "tree",
   "conditional_formatting",
 ] as const satisfies readonly (keyof typeof registry)[];
 export type RecordsTableFeatureKey = (typeof recordsTableFeatureKeys)[number];
@@ -167,6 +174,7 @@ export const readRecordsTableFeatures = (
   const bulkActions = read("bulk_actions");
   const inlineEdit = read("inline_edit");
   const masterDetail = read("master_detail");
+  const tree = read("tree");
   const conditionalFormatting = read("conditional_formatting");
   const pinning = read("pinning");
   if (
@@ -176,6 +184,7 @@ export const readRecordsTableFeatures = (
     bulkActions === undefined ||
     inlineEdit === undefined ||
     masterDetail === undefined ||
+    tree === undefined ||
     conditionalFormatting === undefined ||
     pinning === undefined
   )
@@ -188,6 +197,7 @@ export const readRecordsTableFeatures = (
     bulkActions: bulkActions as RecordsTableFeatures["bulkActions"],
     inlineEdit: inlineEdit as RecordsTableFeatures["inlineEdit"],
     masterDetail: masterDetail as RecordsTableFeatures["masterDetail"],
+    tree: tree as RecordsTableFeatures["tree"],
     conditionalFormatting: conditionalFormatting as RecordsTableFeatures["conditionalFormatting"],
   };
 };
@@ -201,8 +211,15 @@ export const checkRecordsTableFeature = (
   key: RecordsTableFeatureKey,
   state: RecordsTableFeatureState<object>,
   facts: RecordsTableQueryFacts,
+  features: RecordsTableFeatures,
 ): RecordsTableFeatureCheck =>
-  (registry[key].definition as RecordsTableFeatureDefinition<object>).check(state, facts);
+  // A row opens one panel: its related records or the records beneath it, never both.
+  key === "tree" && state.enabled && features.masterDetail.enabled
+    ? featureNotPossible(
+        "definition_records_table_tree",
+        "A row shows either its related records or the records beneath it; turn Related records off to use a tree.",
+      )
+    : (registry[key].definition as RecordsTableFeatureDefinition<object>).check(state, facts);
 
 /** Every feature's state and check, in Studio's order. */
 export const checkRecordsTableFeatures = (
@@ -215,7 +232,11 @@ export const checkRecordsTableFeatures = (
 }>[] =>
   recordsTableFeatureKeys.map((key) => {
     const state = recordsTableFeatureState(features, key);
-    return { key, enabled: state.enabled, check: checkRecordsTableFeature(key, state, facts) };
+    return {
+      key,
+      enabled: state.enabled,
+      check: checkRecordsTableFeature(key, state, facts, features),
+    };
   });
 
 const featureEvents: Readonly<Record<string, RecordsTableFeatureKey>> = {

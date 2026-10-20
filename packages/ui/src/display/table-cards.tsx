@@ -101,6 +101,7 @@ export function RecordsCards({
         const selected = selectedRecordIds.includes(row.recordId);
         const headingId = `record-${row.recordId}-heading`;
         const expanded = expansion?.isExpanded(row.recordId) === true;
+        const expandable = expansion?.isExpandable(row) === true;
         const name =
           heading === undefined
             ? "this record"
@@ -160,9 +161,10 @@ export function RecordsCards({
                   )}
                 </h3>
                 {showActions ? renderers.actions(row) : null}
-                {expansion === undefined ? null : (
+                {expansion === undefined || !expandable ? null : (
                   <RowExpansionToggle
                     name={name}
+                    noun={expansion.noun}
                     expanded={expanded}
                     panelId={expansion.panelId(row.recordId)}
                     onToggle={() => expansion.toggle(row.recordId)}
@@ -182,11 +184,11 @@ export function RecordsCards({
                 </dl>
               )}
             </Card>
-            {!expanded || expansion === undefined ? null : (
+            {!expanded || expansion === undefined || !expandable ? null : (
               <div
                 id={expansion.panelId(row.recordId)}
                 role="region"
-                aria-label={`Related records of ${name}`}
+                aria-label={`${expansion.noun.charAt(0).toUpperCase()}${expansion.noun.slice(1)} of ${name}`}
                 data-vortex-related-panel=""
                 className="mt-1 bg-muted/40 px-3 py-2"
               >

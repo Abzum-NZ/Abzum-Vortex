@@ -17,6 +17,7 @@ import type {
   RecordsTableFeatureProjection,
 } from "@vortex/platform/schema";
 import type { DisplayEventHandlers, DisplayRow, TableNarrowing } from "../projected-data";
+import type { RowExpansionKind } from "../row-expansion";
 import type { GridColumn, GridLayoutControls } from "../table-layout";
 
 /**
@@ -103,6 +104,7 @@ const loaders: Readonly<
   bulk_actions: () => import("./bulk-actions"),
   inline_edit: () => import("./inline-edit"),
   master_detail: () => import("./master-detail"),
+  tree: () => import("./tree"),
   conditional_formatting: () => import("./conditional-format"),
 };
 
@@ -116,6 +118,7 @@ const projectionKeys: Readonly<
   bulkActions: "bulk_actions",
   inlineEdit: "inline_edit",
   masterDetail: "master_detail",
+  tree: "tree",
   conditionalFormatting: "conditional_formatting",
 };
 
@@ -173,7 +176,28 @@ const featurePoints: Readonly<Record<RecordsTableFeatureKey, readonly ComponentP
   bulk_actions: ["SelectionBanner"],
   inline_edit: ["CellEditor"],
   master_detail: ["RowExpansion"],
+  tree: ["RowExpansion"],
   conditional_formatting: ["CellAdornment", "HeaderAdornment"],
+};
+
+/**
+ * What a row opens to for each feature that fills the row panel. A row's related records open at
+ * most three at a time; a tree's rows are bounded by the tree's shared row budget, so any number
+ * of them may be open, and only a row the server says has children offers the toggle.
+ */
+const expansionKinds: Readonly<Partial<Record<RecordsTableFeatureKey, RowExpansionKind>>> = {
+  master_detail: {
+    noun: "related records",
+    maximum: 3,
+    tree: false,
+    expandable: () => true,
+  },
+  tree: {
+    noun: "child records",
+    maximum: Number.MAX_SAFE_INTEGER,
+    tree: true,
+    expandable: (row) => row.hasChildren === true,
+  },
 };
 
 const activeKeys = (signature: string): readonly RecordsTableFeatureKey[] =>
@@ -206,6 +230,8 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   keys: readonly RecordsTableFeatureKey[];
   /** A projected feature draws a panel below an expanded row, so rows offer an expand toggle. */
   expands: boolean;
+  /** What that panel holds and how many may be open; undefined when no feature draws one. */
+  expansionKind: RowExpansionKind | undefined;
   toolbarItems: () => ReactNode;
   selectionBanner: () => ReactNode;
   headerAdornment: (column: GridColumn) => ReactNode;
@@ -326,6 +352,7 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   return {
     keys: active,
     expands: active.some((key) => featurePoints[key].includes("RowExpansion")),
+    expansionKind: active.map((key) => expansionKinds[key]).find((kind) => kind !== undefined),
     toolbarItems: () =>
       context === undefined ? null : drawPoint(active, "ToolbarItems", context, {}),
     selectionBanner: () =>

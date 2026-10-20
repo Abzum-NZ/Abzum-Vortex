@@ -40,6 +40,8 @@ export type RecordsTableFeatureProjection = Readonly<{
   inlineEdit?: Readonly<{ eventId: string; fields: readonly string[] }>;
   /** Rows expand to their related records, read this many at a time. */
   masterDetail?: Readonly<{ pageSize: number }>;
+  /** Rows expand to the records that name them as their parent, read this many at a time. */
+  tree?: Readonly<{ pageSize: number }>;
   /** The styles the page's rows name and the numeric columns drawn as bars or scales. */
   conditionalFormatting?: ConditionalFormattingProjection;
 }>;
@@ -57,7 +59,8 @@ export type RecordsTableRequestPart =
   | "inline_edit"
   | "row_action"
   | "row_clicked"
-  | "row_detail";
+  | "row_detail"
+  | "tree_level";
 
 /**
  * Why the server refused a Records table request: the part and the cause. The viewer only ever
@@ -135,6 +138,7 @@ export const projectRecordsTableFeatures = (
   // Every expanded row is read again under the viewer's current access: the projection only says
   // rows expand; a viewer who cannot read the related records sees the panel's neutral refusal.
   const masterDetail = features.masterDetail;
+  const tree = features.tree;
   const projection: RecordsTableFeatureProjection = {
     ...(features.pinning.enabled ? { pinning: true as const } : {}),
     ...(features.search.enabled ? { search: true as const } : {}),
@@ -146,6 +150,9 @@ export const projectRecordsTableFeatures = (
       : { inlineEdit: { eventId: inlineEdit.eventId, fields: editableFields } }),
     ...(masterDetail.enabled && masterDetail.childPageSize !== undefined
       ? { masterDetail: { pageSize: masterDetail.childPageSize } }
+      : {}),
+    ...(tree.enabled && tree.childPageSize !== undefined
+      ? { tree: { pageSize: tree.childPageSize } }
       : {}),
     ...(conditionalFormatting === undefined || !features.conditionalFormatting.enabled
       ? {}
