@@ -1,4 +1,5 @@
 import "server-only";
+import type { ModuleExtensionPointUse } from "./module-extension-point-shape";
 
 import { planApplicationPreview } from "./preview-release-plan";
 import { componentLabelsOf } from "./publication-component-labels";
@@ -89,6 +90,7 @@ export type ApplicationDraftCompilation = Readonly<{
 export type ApplicationDraftPublication = Readonly<{
   recordTypes: readonly string[];
   fields: readonly string[];
+  extensionPointUses: readonly ModuleExtensionPointUse[];
 }>;
 
 /** The owner and person title of a release of the people directory Module. */

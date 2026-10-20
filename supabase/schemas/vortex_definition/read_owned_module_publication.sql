@@ -90,6 +90,50 @@ begin
   if invalid_field_key then
     raise exception using errcode = '23514', message = 'Owned Module publication field is inconsistent';
   end if;
+
+  -- Only actual contribution targets count. A dependency on the owner alone is not a use.
+  -- Include current published contributors and older releases still bound to an installation.
+  with owned_points as (
+    select distinct root.root_id, root.key as module_key,
+      point.value ->> 'extensionPointId' as point_id, point.value ->> 'key' as point_key
+    from vortex_definition.roots as root
+    join vortex_definition.releases as release on release.root_id = root.root_id
+    cross join lateral pg_catalog.jsonb_array_elements(
+      release.compilation_output #> '{canonical,content,extensionPoints}'
+    ) as point(value)
+    where root.organization_id = (checked_context ->> 'organizationId')::uuid
+      and root.owner_application_root_id = p_application_root_id and root.kind = 'module'
+  ), contributor_releases as (
+    select root.root_id, root.current_release_revision as release_revision
+    from vortex_definition.roots as root
+    where root.organization_id = (checked_context ->> 'organizationId')::uuid
+      and root.kind = 'module' and root.current_release_revision is not null
+    union
+    select binding.module_root_id, binding.module_release_revision
+    from vortex_definition.installation_bindings as binding
+    where binding.organization_id = (checked_context ->> 'organizationId')::uuid
+      and binding.state in ('provisioned', 'active', 'draining')
+  ), uses as (
+    select distinct point.module_key, point.point_key,
+      contribution.value ->> 'kind' as kind,
+      release.compilation_output #>> '{canonical,content,name}' as contributor_name
+    from contributor_releases as contributor
+    join vortex_definition.releases as release
+      on release.root_id = contributor.root_id and release.release_revision = contributor.release_revision
+    cross join lateral pg_catalog.jsonb_array_elements(
+      release.compilation_output #> '{canonical,content,contributions}'
+    ) as contribution(value)
+    join owned_points as point
+      on point.root_id::text = contribution.value #>> '{targetModule,moduleRootId}'
+      and point.point_id = contribution.value ->> 'targetExtensionPointId'
+  )
+  select publication || pg_catalog.jsonb_build_object('extensionPointUses', coalesce(
+    pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'moduleKey', module_key, 'extensionPointKey', point_key,
+      'kind', kind, 'contributorName', contributor_name
+    ) order by module_key collate "C", point_key collate "C", contributor_name collate "C", kind collate "C"),
+    '[]'::jsonb
+  )) into publication from uses;
   return publication;
 end
 $function$;
