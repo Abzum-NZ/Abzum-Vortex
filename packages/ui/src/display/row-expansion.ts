@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { RowPanelMemory } from "./grid-features/registry";
 import type { DisplayRow } from "./projected-data";
 
 /**
@@ -56,12 +57,18 @@ export const useRowExpansion = (
     rows: readonly DisplayRow[];
     rowName: (row: DisplayRow) => string;
     announce: (message: string) => void;
-    panel: (row: DisplayRow) => ReactNode;
+    panel: (row: DisplayRow, memory: RowPanelMemory) => ReactNode;
   }>,
 ): RowExpansionControls | undefined => {
   const { enabled, kind, placementId, rows, rowName, announce, panel } = input;
   const { noun, maximum, expandable, tree } = kind ?? closedKind;
   const [expanded, setExpanded] = useState<readonly string[]>([]);
+  // What each open row's panel keeps; an entry lives exactly as long as its row stays expanded.
+  const kept = useRef(new Map<string, unknown>());
+  useEffect(() => {
+    for (const recordId of [...kept.current.keys()])
+      if (!expanded.includes(recordId)) kept.current.delete(recordId);
+  }, [expanded]);
   // A row that leaves the page, or no longer has anything to open (a searched tree lists its
   // records flat), collapses.
   const pageSignature = rows
@@ -104,6 +111,16 @@ export const useRowExpansion = (
     },
     [expanded, announce, nameOf, maximum],
   );
+  const drawPanel = useCallback(
+    (row: DisplayRow) =>
+      panel(row, {
+        kept: () => kept.current.get(row.recordId),
+        keep: (value: unknown) => {
+          kept.current.set(row.recordId, value);
+        },
+      }),
+    [panel],
+  );
   return useMemo(
     () =>
       enabled && kind !== undefined
@@ -114,10 +131,10 @@ export const useRowExpansion = (
             isExpanded: (recordId: string) => expanded.includes(recordId),
             isExpandable: expandable,
             toggle,
-            panel,
+            panel: drawPanel,
             panelId: (recordId: string) => `${placementId}-related-${recordId}`,
           }
         : undefined,
-    [enabled, kind, noun, tree, expandable, expanded, toggle, panel, placementId],
+    [enabled, kind, noun, tree, expandable, expanded, toggle, drawPanel, placementId],
   );
 };

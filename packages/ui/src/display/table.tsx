@@ -254,6 +254,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
         ? undefined
         : {
             accessibleName,
+            presentation: presentation ?? "grid",
             features,
             pins: layout.state.pins,
             setPin: layout.setPin,
@@ -271,6 +272,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
           },
     [
       accessibleName,
+      presentation,
       features,
       layout.state.pins,
       layout.setPin,
