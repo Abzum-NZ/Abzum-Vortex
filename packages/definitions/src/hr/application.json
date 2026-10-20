@@ -491,6 +491,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "hr_department_list",
                     "row_click": {
                       "event_id": "event_hr_open_department",
@@ -917,6 +918,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "hr_position_list",
                     "row_click": {
                       "event_id": "event_hr_open_position",
@@ -1401,6 +1403,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "hr_employee_list",
                     "row_click": {
                       "event_id": "event_hr_open_employee",
@@ -2063,6 +2066,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "hr_leave_request_list",
                     "row_click": {
                       "event_id": "event_hr_open_leave_request",
@@ -2779,6 +2783,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "hr_leave_entitlement_list",
                     "row_click": {
                       "event_id": "event_hr_open_leave_entitlement",
@@ -3273,6 +3278,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "hr_leave_balance_entitlements",
                     "columns": [
                       {
