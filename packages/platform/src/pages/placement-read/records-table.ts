@@ -26,6 +26,7 @@ import {
 import {
   fieldChoiceLabelsOf,
   fieldDateTypesOf,
+  fieldEditorsOf,
   fieldFilterTargetsOf,
   fieldLabelsOf,
   fieldLinkTypesOf,
@@ -257,6 +258,9 @@ export const readRecordsTable = async (
       fieldDateTypes: fieldDateTypesOf(bound.module),
       fieldLinkTypes: fieldLinkTypesOf(bound.module),
       filterTargets,
+      ...(contract.features.inlineEdit.enabled
+        ? { fieldEditors: fieldEditorsOf(bound.module) }
+        : {}),
       ...(timeZone === undefined ? {} : { timeZone }),
       resolveRecordLinks: read.services.resolveRecordLinks,
       state: { ...effectiveState, page },

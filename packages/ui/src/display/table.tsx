@@ -297,7 +297,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
   // the bindings and the heading column, so the grid's memoized rows keep their identity.
   const renderers = useMemo((): GridRenderers & CardRenderers => {
     const rowActions = behaviours?.rowActions ?? [];
-    // Cards show the same formatting as the grid, never its editors.
+    // Cards show the same formatting as the grid; their labelled details carry the grid's editors.
     const value = (row: DisplayRow, column: GridColumn) => {
       const cell: DisplayCellValue = row.cells[column.key] ?? { kind: "empty" };
       return decorate(row, column, <DisplayCellView value={cell} />);

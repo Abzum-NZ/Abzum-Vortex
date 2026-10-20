@@ -14,5 +14,7 @@ export type {
   ConditionalColumnFormatProjection,
   ConditionalFormattingProjection,
   RecordsTableFeatureProjection,
+  RecordsTableInlineEditField,
+  RecordsTableInlineEditor,
   RecordsTableRowFormat,
 } from "./records-table-features";

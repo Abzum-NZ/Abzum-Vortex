@@ -33,6 +33,7 @@ import {
   type StudioRelatedRecordsChoices,
 } from "./grid-features";
 import { StudioSpreadsheetEditor } from "./grid-features/spreadsheet";
+import { StudioInlineEditEditor } from "./grid-features/inline-edit";
 import type { StudioBoardPipeline } from "./board-source";
 import { StudioBoardEditor } from "./grid-features/board";
 import { StudioConditionalFormattingEditor } from "./grid-features/conditional-formatting";
@@ -46,6 +47,16 @@ import {
 } from "./studio-setting-controls";
 
 type GroupValue = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
+
+/** The fields a table shows as columns, as its settings name them. */
+const tableColumnFields = (tableSettings: StudioSettingValues): readonly string[] => {
+  const columns = tableSettings["columns"];
+  if (columns?.kind !== "list") return [];
+  return columns.items.flatMap((item) => {
+    const field = item.kind === "group" ? item.properties["field"] : undefined;
+    return field?.kind === "field_reference" ? [field.field] : [];
+  });
+};
 
 /**
  * The Records table's `features` setting group: the group whose entries are exactly the grid
@@ -258,6 +269,15 @@ export function StudioGridFeatures({
               {enabled && key === "spreadsheet" ? (
                 <StudioSpreadsheetEditor
                   value={current}
+                  disabled={disabled}
+                  onChange={(next) => write(key, next)}
+                />
+              ) : null}
+              {enabled && key === "inline_edit" ? (
+                <StudioInlineEditEditor
+                  value={current}
+                  facts={facts}
+                  columns={tableColumnFields(tableSettings)}
                   disabled={disabled}
                   onChange={(next) => write(key, next)}
                 />

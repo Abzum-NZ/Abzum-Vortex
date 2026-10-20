@@ -58,7 +58,7 @@ export const studioGridFeatureEditors: Readonly<
   },
   saved_views: { kind: "custom" },
   bulk_actions: { kind: "settings", boundRecordTypeActions: true },
-  inline_edit: { kind: "settings" },
+  inline_edit: { kind: "custom" },
   master_detail: { kind: "settings" },
   conditional_formatting: { kind: "custom" },
   board: { kind: "custom" },

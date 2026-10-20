@@ -44,6 +44,7 @@ import {
   recordsTableNarrowingRefusal,
   recordsTableRequestRefusal,
   type ConditionalFormattingContext,
+  type RecordsTableInlineEditor,
   type RecordsTableRequestRefusal,
 } from "./records-table-features";
 import { calendarAddDays, calendarStartOfDay } from "./calendar-query";
@@ -109,6 +110,8 @@ export type RecordsTableQueryRequest = Readonly<{
   resolveRecordLinks?: RecordLinkResolver;
   /** What the table's formatting rules are evaluated with; supplied only when they are on. */
   formatting?: ConditionalFormattingContext;
+  /** How a cell edits each field of the installed definition; supplied only when inline editing is on. */
+  fieldEditors?: Readonly<Record<string, RecordsTableInlineEditor>>;
 }>;
 
 /**
@@ -515,6 +518,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
             ? {}
             : { fieldLinkTypes: request.fieldLinkTypes }),
           ...(request.formatting === undefined ? {} : { formatting: request.formatting }),
+          ...(request.fieldEditors === undefined ? {} : { fieldEditors: request.fieldEditors }),
         },
         result.value.rows,
         result.value.fieldBounds,
