@@ -72,6 +72,17 @@ const storedViewRowsSchema = z
 
 const storedReadSchema = z
   .object({
+    defaultDocuments: z
+      .array(
+        z
+          .object({
+            viewId: idSchema,
+            document: z.unknown(),
+            hiddenFilters: z.number().int().min(0),
+          })
+          .strict(),
+      )
+      .max(10_000),
     roleKeys: z.array(z.string()),
     shareablePlacementIds: z.array(idSchema).max(500),
     layouts: storedLayoutRowsSchema,
@@ -123,6 +134,11 @@ export type StoredNamedGridView = Readonly<{
 
 /** Everything one page read returns of the store: layouts keyed by placement, views by placement. */
 export type StoredGridViews = Readonly<{
+  /** Authored documents narrowed by the same current field bounds as stored shared views. */
+  defaultDocuments: ReadonlyMap<
+    string,
+    Readonly<{ document: GridViewDocument; hiddenFilters: number }>
+  >;
   roleKeys: ReadonlySet<string>;
   /** The placements (lower-cased) whose tables name a share permission the person holds now. */
   shareable: ReadonlySet<string>;
@@ -191,12 +207,18 @@ export const readGridViews = async (
   pageId: string,
   placementIds: readonly string[],
   selectedViewIds: readonly string[],
+  defaultViews: readonly Readonly<{
+    viewId: string;
+    queryId: string;
+    document: GridViewDocument;
+  }>[] = [],
 ): Promise<StoredGridViews> => {
   const rows = await transaction.query<ResultRow>`
     select vortex_platform.read_grid_views(
       ${pageId}::uuid,
       array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(placementIds)}::text::jsonb)::uuid),
-      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(selectedViewIds)}::text::jsonb)::uuid)
+      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(selectedViewIds)}::text::jsonb)::uuid),
+      ${JSON.stringify(defaultViews)}::text::jsonb
     ) as result
   `;
   const read = stored("read", pageId, storedReadSchema, only(rows));
@@ -225,6 +247,15 @@ export const readGridViews = async (
     views.set(placementId, [...(views.get(placementId) ?? []), named]);
   }
   return {
+    defaultDocuments: new Map(
+      read.defaultDocuments.map((row) => [
+        row.viewId.toLowerCase(),
+        {
+          document: stored("default view", row.viewId, gridViewDocumentSchema, row.document),
+          hiddenFilters: row.hiddenFilters,
+        },
+      ]),
+    ),
     roleKeys: new Set(read.roleKeys),
     shareable: new Set(read.shareablePlacementIds.map((id) => id.toLowerCase())),
     layouts: new Map(
@@ -248,6 +279,7 @@ export const addressedGridView = (
   views: readonly StoredNamedGridView[] | undefined,
   queryId: string,
   viewId: string | undefined,
+  canShare: boolean,
 ): AddressedGridView | undefined => {
   const view = views?.find(
     (candidate) =>
@@ -266,7 +298,7 @@ export const addressedGridView = (
     },
     document: view.document,
     hiddenFilters: view.hiddenFilters,
-    sharing: view.sharing,
+    sharing: view.mine || canShare ? view.sharing : null,
   };
 };
 

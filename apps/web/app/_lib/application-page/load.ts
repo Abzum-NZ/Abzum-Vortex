@@ -13,6 +13,7 @@ import {
   type RecordLinkResolver,
   readCurrentRecordOwnerGroupsAfterAuthorization,
   pageSubjectFieldIds,
+  gridViewPlacement,
 } from "@vortex/platform/server";
 import {
   FORM_CONTAINER_BLOCK_RELEASE,
@@ -696,6 +697,17 @@ const loadApplicationPageJoined = async (
                 }),
               )
             : undefined,
+          defaultViews: (() => {
+            const installed = gridViewPlacement(pageDefinition, placementId);
+            const feature = installed?.contract.features.savedViews;
+            return installed === undefined || feature?.enabled !== true
+              ? []
+              : feature.defaultViews.map((view) => ({
+                  viewId: view.viewId,
+                  queryId: installed.queryId,
+                  document: view.document,
+                }));
+          })(),
         },
       ];
     }),

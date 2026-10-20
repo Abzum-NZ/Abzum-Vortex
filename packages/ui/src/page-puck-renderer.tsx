@@ -137,7 +137,7 @@ export type PagePuckRendererProps = Readonly<{
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
   /** The application shell that frames the page; absent for the platform default frame. */
-  shell?: ApplicationShell;
+  shell?: Pick<ApplicationShell, "shellId" | "key" | "name" | "presentation">;
   pageId?: string;
   activeStepId?: string;
   guidedStepNavigation?: Readonly<{

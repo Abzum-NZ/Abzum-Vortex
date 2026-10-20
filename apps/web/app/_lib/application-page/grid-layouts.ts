@@ -5,7 +5,11 @@ import {
   type InstalledRuntimeContext,
   type StoredGridViews,
 } from "@vortex/platform/server";
-import type { IdentitySession, OrganizationSelectionCandidate } from "@vortex/platform/schema";
+import type {
+  GridViewDocument,
+  IdentitySession,
+  OrganizationSelectionCandidate,
+} from "@vortex/platform/schema";
 import { decideRecordTypeFieldIds } from "./form-field-access";
 
 /**
@@ -29,6 +33,7 @@ const NONE: StoredGridViews = {
   shareable: new Set(),
   layouts: new Map(),
   views: new Map(),
+  defaultDocuments: new Map(),
 };
 
 /** One data grid of the page whose layout and views are read. */
@@ -37,6 +42,11 @@ export type PageGrid = Readonly<{
   recordTypeId: string;
   /** The saved view the address selects for this grid, when it names one. */
   selectedViewId: string | undefined;
+  defaultViews: readonly Readonly<{
+    viewId: string;
+    queryId: string;
+    document: GridViewDocument;
+  }>[];
 }>;
 
 /**
@@ -66,6 +76,7 @@ export const readPageGridLayouts = async (
         pageId,
         grids.map((grid) => grid.placementId),
         grids.flatMap((grid) => (grid.selectedViewId === undefined ? [] : [grid.selectedViewId])),
+        grids.flatMap((grid) => grid.defaultViews),
       );
       const readable = new Map<string, ReadonlySet<string>>();
       for (const recordTypeId of recordTypeIds)

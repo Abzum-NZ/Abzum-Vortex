@@ -303,7 +303,13 @@ export const readStudioCanvasRecords = async (
       // The Studio canvas shows the authored layout; a person's layout belongs to the running app.
       gridLayouts: {
         persisted: false,
-        stored: { roleKeys: new Set(), shareable: new Set(), layouts: new Map(), views: new Map() },
+        stored: {
+          roleKeys: new Set(),
+          shareable: new Set(),
+          layouts: new Map(),
+          views: new Map(),
+          defaultDocuments: new Map(),
+        },
         readable: undefined,
       },
       adoptSubjectRead: () => {},

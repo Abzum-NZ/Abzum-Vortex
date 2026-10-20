@@ -17,7 +17,7 @@ import {
   type GridLayoutState,
   type GridViewsState,
 } from "../grid-view-state";
-import { addressedGridView } from "../grid-views";
+import { addressedGridView, gridViewPlacement } from "../grid-views";
 import {
   conditionalFormattingRelativeDates,
   conditionalFormattingUsesRelativeDates,
@@ -111,9 +111,13 @@ export const readRecordsTable = async (
     const listed = (gridLayouts.stored.views.get(placementId.toLowerCase()) ?? []).filter(
       (view) => view.queryId === queryId,
     );
+    const installedViews = gridViewPlacement(read.pageDefinition, placementId)?.contract.features
+      .savedViews;
+    if (installedViews?.enabled !== true) throw new Error("GRID_DEFAULT_VIEWS_NOT_INSTALLED");
     const defaults = addressedDefaultGridViews(
-      contract.features.savedViews.defaultViews,
+      installedViews.defaultViews,
       gridLayouts.stored.roleKeys,
+      gridLayouts.stored.defaultDocuments,
     );
     const addressedView = readRecordsTableView(placementId, addressEntries);
     const automatic =
@@ -129,7 +133,12 @@ export const readRecordsTable = async (
         : resolveSelectedGridView(
             authored,
             defaults.find((candidate) => candidate.viewId === view.viewId) ??
-              addressedGridView(listed, queryId, view.viewId),
+              addressedGridView(
+                listed,
+                queryId,
+                view.viewId,
+                gridLayouts.stored.shareable.has(placementId.toLowerCase()),
+              ),
             readable,
           );
     views = {

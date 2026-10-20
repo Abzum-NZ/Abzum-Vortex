@@ -196,6 +196,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
   };
 
   for (const page of pages.values()) {
+    const defaultViewIds = new Set<string>();
     const pageRecordId = page.recordType ? String(object(page.recordType).recordTypeId) : undefined;
     const pageQuery = page.queryId ? moduleQueries.get(String(page.queryId)) : undefined;
     const pageQueryRecordId = pageQuery
@@ -546,6 +547,19 @@ export function applicationPageRules(scope: ApplicationScope): void {
       if (table?.features.savedViews.enabled) {
         const roles = new Set(array(content.roles).map((role) => String(role.key)));
         for (const view of table.features.savedViews.defaultViews) {
+          const viewId = view.viewId.toLowerCase();
+          if (defaultViewIds.has(viewId))
+            failures.push(
+              failure(
+                output,
+                "vortex.definition.application_block_settings",
+                "unsupported_choice",
+                undefined,
+                "definition_records_table_saved_views",
+                "Each default view on this page needs a unique identity.",
+              ),
+            );
+          defaultViewIds.add(viewId);
           if (!gridViewDocumentSchema.safeParse(view.document).success)
             failures.push(
               failure(

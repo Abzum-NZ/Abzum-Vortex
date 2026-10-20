@@ -1,7 +1,8 @@
 create or replace function vortex_platform.read_grid_views(
   p_page_id uuid,
   p_placement_ids uuid[],
-  p_selected_view_ids uuid[]
+  p_selected_view_ids uuid[],
+  p_default_views jsonb
 )
 returns jsonb
 language plpgsql
@@ -23,8 +24,27 @@ begin
     or p_selected_view_ids is null
     or pg_catalog.cardinality(p_selected_view_ids) > 500
     or pg_catalog.array_position(p_selected_view_ids, null) is not null
+    or p_default_views is null
+    or pg_catalog.jsonb_typeof(p_default_views) is distinct from 'array'
  then
     raise exception using errcode = '22023', message = 'Grid view read is invalid';
+  end if;
+  if pg_catalog.jsonb_array_length(p_default_views) > 10000 or exists (
+    select 1 from pg_catalog.jsonb_array_elements(p_default_views) as supplied(value)
+    where pg_catalog.jsonb_typeof(supplied.value) is distinct from 'object'
+      or supplied.value - array['viewId', 'queryId', 'document'] <> '{}'::jsonb
+      or pg_catalog.jsonb_typeof(supplied.value -> 'viewId') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(supplied.value -> 'queryId') is distinct from 'string'
+      or not vortex_platform.is_non_nil_uuid(supplied.value ->> 'viewId')
+      or not vortex_platform.is_non_nil_uuid(supplied.value ->> 'queryId')
+      or not vortex_platform.grid_view_document_valid_internal(supplied.value -> 'document', 'named_view')
+  ) then
+    raise exception using errcode = '22023', message = 'Grid default view read is invalid';
+  end if;
+  if (select pg_catalog.count(distinct pg_catalog.lower(supplied.value ->> 'viewId'))
+      from pg_catalog.jsonb_array_elements(p_default_views) as supplied(value))
+    <> pg_catalog.jsonb_array_length(p_default_views) then
+    raise exception using errcode = '22023', message = 'Grid default view identities are duplicated';
   end if;
 
   select context.* into strict scope from vortex_platform.grid_view_scope_internal() as context;
@@ -40,13 +60,24 @@ begin
   if exists (select 1 from vortex_platform.grid_views as selected
     where selected.organization_id = scope.organization_id
       and selected.application_root_id = scope.application_root_id
-      and selected.view_id = any(p_selected_view_ids) and selected.document ? 'filters') then
+      and selected.view_id = any(p_selected_view_ids) and selected.document ? 'filters')
+    or exists (select 1 from pg_catalog.jsonb_array_elements(p_default_views) as supplied(value)
+      where supplied.value -> 'document' ? 'filters') then
     access_plan := vortex_record.resolve_installation_access_plan_internal(installation);
   end if;
 
   -- The person's current layouts and every named view they may see, for all the page's grids, in
   -- one bounded read. Only the views the address selected carry their document.
   return pg_catalog.jsonb_build_object(
+    'defaultDocuments', coalesce((
+      select pg_catalog.jsonb_agg(
+        pg_catalog.jsonb_build_object('viewId', supplied.value ->> 'viewId')
+        || vortex_platform.grid_view_document_for_viewer_internal(
+          (supplied.value ->> 'queryId')::uuid, supplied.value -> 'document', installation, access_plan
+        )
+      )
+      from pg_catalog.jsonb_array_elements(p_default_views) as supplied(value)
+    ), '[]'::jsonb),
     'roleKeys', coalesce((
       select pg_catalog.jsonb_agg(distinct template.key)
       from vortex_access.organization_roles as role
@@ -116,11 +147,11 @@ begin
 end
 $function$;
 
-revoke all on function vortex_platform.read_grid_views(uuid, uuid[], uuid[])
+revoke all on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
-grant execute on function vortex_platform.read_grid_views(uuid, uuid[], uuid[]) to vortex_request;
+grant execute on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb) to vortex_request;
 
-comment on function vortex_platform.read_grid_views(uuid, uuid[], uuid[]) is
-  'Reads the current person''s current grid layouts and the named views they may see for the named placements of one page of the selected application, in one bounded call.';
+comment on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb) is
+  'Reads the current person''s current layouts and visible named views, and narrows authored default documents through the same current field bounds, in one bounded call.';
 
-alter function vortex_platform.read_grid_views(uuid, uuid[], uuid[]) owner to vortex_owner;
+alter function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb) owner to vortex_owner;

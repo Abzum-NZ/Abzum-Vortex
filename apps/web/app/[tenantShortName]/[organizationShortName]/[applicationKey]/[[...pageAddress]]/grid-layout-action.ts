@@ -18,6 +18,9 @@ import {
   addressedGridView,
   readGridViews,
   createHumanOrganizationRequestService,
+  createStoredPageCapabilityService,
+  runtimeContextSelection,
+  projectedUseAvailability,
   deleteGridView,
   gridViewPlacement,
   listGridViewShareTargets,
@@ -34,6 +37,8 @@ import { continueSessionOrEnd } from "../../../../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../../../../auth/_lib/session-server";
 import { resolveApplicationAddress } from "../../../../_lib/application-address";
 import { humanOrganizationRequestDependencies } from "../../../../_lib/server-composition";
+import { platformPermissionSource } from "../../../../_lib/platform-permission-source";
+import { collectPlacements } from "../../../../_lib/application-page/placement-helpers";
 
 const gridLayoutAddressSchema = z
   .object({
@@ -139,7 +144,7 @@ const conflictResult = (conflict: GridViewConflict): GridLayoutCommitResult => (
  * The page a verified person may open and the request service for it. The person, organisation and
  * installation come from the verified session and address, never from the request.
  */
-const openGridPage = async (addressInput: unknown) => {
+const openGridPage = async (addressInput: unknown, placementId: string) => {
   const address = gridLayoutAddressSchema.safeParse(addressInput);
   if (!address.success) return undefined;
   const identity = await continueSessionOrEnd(await resolveIdentitySession());
@@ -158,6 +163,24 @@ const openGridPage = async (addressInput: unknown) => {
     (candidate) => candidate.key === resolved.pageKey,
   );
   if (page === undefined) return undefined;
+  const projected = await createStoredPageCapabilityService({
+    ...humanOrganizationRequestDependencies(),
+    context,
+    permissions: platformPermissionSource,
+    selection: { pageId: String(page.pageId) },
+  }).project(identity.session, runtimeContextSelection(context));
+  if (projected.kind !== "available") {
+    console.error(`[page] grid placement access unavailable: kind=${projected.kind}`);
+    return undefined;
+  }
+  const placement =
+    projected.value === undefined
+      ? undefined
+      : collectPlacements(projected.value).find(
+          (candidate) => candidate.placementId.toLowerCase() === placementId.toLowerCase(),
+        );
+  if (placement === undefined || projectedUseAvailability(placement) !== "available")
+    return undefined;
   const requests = createHumanOrganizationRequestService(humanOrganizationRequestDependencies());
   return {
     page,
@@ -187,7 +210,7 @@ export async function commitGridLayout(
 ): Promise<GridLayoutCommitResult> {
   const change = gridLayoutChangeSchema.safeParse(changeInput);
   if (!change.success) return unavailable;
-  const opened = await openGridPage(addressInput);
+  const opened = await openGridPage(addressInput, change.data.placementId);
   if (opened === undefined) return unavailable;
   const { page } = opened;
   const pageId = String(page.pageId);
@@ -251,7 +274,7 @@ export async function commitGridView(
 ): Promise<GridViewCommandResult> {
   const change = gridViewChangeSchema.safeParse(changeInput);
   if (!change.success) return { outcome: "unavailable" };
-  const opened = await openGridPage(addressInput);
+  const opened = await openGridPage(addressInput, change.data.placementId);
   if (opened === undefined) return { outcome: "unavailable" };
   const { page } = opened;
   const requested = change.data;
@@ -282,10 +305,16 @@ export async function commitGridView(
           pageId,
           [requested.placementId],
           [requested.viewId],
+          placement.contract.features.savedViews.defaultViews.map((view) => ({
+            viewId: view.viewId,
+            queryId,
+            document: view.document,
+          })),
         );
         const defaults = addressedDefaultGridViews(
           placement.contract.features.savedViews.defaultViews,
           stored.roleKeys,
+          stored.defaultDocuments,
         );
         const addressed =
           defaults.find((view) => view.viewId === requested.viewId) ??
@@ -293,6 +322,7 @@ export async function commitGridView(
             stored.views.get(requested.placementId.toLowerCase()),
             queryId,
             requested.viewId,
+            stored.shareable.has(requested.placementId.toLowerCase()),
           );
         const resolved = resolveSelectedGridView(authored, addressed, readable);
         return resolved.selected === null

@@ -437,21 +437,29 @@ export type GridViewCommandResult =
 export const addressedDefaultGridViews = (
   views: readonly AuthoredGridView[],
   roleKeys: ReadonlySet<string>,
+  defaultDocuments: ReadonlyMap<
+    string,
+    Readonly<{ document: GridViewDocument; hiddenFilters: number }>
+  >,
 ) =>
   views
     .filter((view) => view.role === "*" || roleKeys.has(view.role))
     // A role-specific default takes precedence over the application's default.
     .sort((left, right) => Number(left.role === "*") - Number(right.role === "*"))
-    .map((view) => ({
-      ...view,
-      item: {
-        viewId: view.viewId,
-        name: view.name,
-        scope: "default" as const,
-        mine: false,
-        revision: 1,
-      },
-      document: gridViewDocumentSchema.parse(view.document),
-      hiddenFilters: 0,
-      sharing: null,
-    }));
+    .map((view) => {
+      const sanitized = defaultDocuments.get(view.viewId.toLowerCase());
+      if (sanitized === undefined) throw new Error("GRID_DEFAULT_VIEW_DOCUMENT_MISSING");
+      return {
+        ...view,
+        item: {
+          viewId: view.viewId,
+          name: view.name,
+          scope: "default" as const,
+          mine: false,
+          revision: 1,
+        },
+        document: sanitized.document,
+        hiddenFilters: sanitized.hiddenFilters,
+        sharing: null,
+      };
+    });
