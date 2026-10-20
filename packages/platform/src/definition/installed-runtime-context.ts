@@ -45,7 +45,7 @@ export type InstalledRuntimeContext = Readonly<{
   installation: ActiveApplicationInstallationEvidence;
   /**
    * The organisation account of the person a human request runs for, from the verified request
-   * scope; absent for a system context. A query binding to the current person reads only this.
+   * scope; absent for a system context. The directory projects this account as its person record.
    */
   viewerOrganizationAccountId?: string;
 }>;

@@ -97,7 +97,12 @@ export const compiledPageBindingFacts = <Entry extends Placement>(
       : undefined;
   const subject =
     subjectTypeId === undefined ? undefined : recordById.get(subjectTypeId.toLowerCase());
+  const directoryPersonTypeId = [...recordById.values()].find(
+    (record) => object(record.systemProjection).protectedView === "organization_accounts",
+  )?.recordTypeId;
   return pageBindingFacts({
+    currentPersonRecordType:
+      typeof directoryPersonTypeId === "string" ? directoryPersonTypeId : undefined,
     subject:
       subjectTypeId === undefined
         ? undefined

@@ -118,7 +118,17 @@ export const pageQueryBindingContext = (
                 }
               : { kind: "unreadable" };
           },
-    viewerAccountId: input.context.viewerOrganizationAccountId,
+    // The protected directory projection's record identity IS the organisation account identity.
+    // A live verified human context already proves that account exists and is active; no address
+    // parameter or control may choose either part of this reference.
+    viewerPerson:
+      facts.currentPersonRecordType === undefined ||
+      input.context.viewerOrganizationAccountId === undefined
+        ? undefined
+        : {
+            recordTypeId: facts.currentPersonRecordType,
+            recordId: input.context.viewerOrganizationAccountId,
+          },
     timeZone: input.readTimeZone,
     now: new Date(),
   };
