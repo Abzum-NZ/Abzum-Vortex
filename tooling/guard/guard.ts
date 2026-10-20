@@ -872,10 +872,10 @@ for (const file of files.filter(
 
 // A Records table grid feature exists in the platform contract (with its one capability check),
 // Studio's Features panel, the UI's lazy chunks and its extension points. All four name the same
-// features, and only the UI registry imports a feature's chunk, so there is no second gating path
+// features, including the server-projection mapping, and only the UI registry imports a feature's chunk, so there is no second gating path
 // (the core header menu and toolbar beside it are imported directly; auto-size is their own chunk).
 {
-  const registries: Array<[string, string]> = [
+  const registries: Array<[string, string, ("keys" | "values")?]> = [
     [
       "packages/platform/src/definition/application-composition/records-table-features/index.ts",
       "recordsTableFeatureKeys",
@@ -883,8 +883,9 @@ for (const file of files.filter(
     ["packages/ui/src/studio/grid-features/index.ts", "studioGridFeatureEditors"],
     ["packages/ui/src/display/grid-features/registry.tsx", "loaders"],
     ["packages/ui/src/display/grid-features/registry.tsx", "featurePoints"],
+    ["packages/ui/src/display/grid-features/registry.tsx", "projectionKeys", "values"],
   ];
-  const keySets = registries.map(([file, name]): [string, string[]] => {
+  const keySets = registries.map(([file, name, selection]): [string, string[]] => {
     const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
     let initializer: ts.Expression | undefined;
     for (const statement of source.statements) {
@@ -903,10 +904,15 @@ for (const file of files.filter(
           )
         : initializer && ts.isObjectLiteralExpression(initializer)
           ? initializer.properties.map((property) =>
-              ts.isPropertyAssignment(property) &&
-              (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
-                ? property.name.text
-                : undefined,
+              !ts.isPropertyAssignment(property)
+                ? undefined
+                : selection === "values"
+                  ? ts.isStringLiteral(property.initializer)
+                    ? property.initializer.text
+                    : undefined
+                  : ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)
+                    ? property.name.text
+                    : undefined,
             )
           : undefined;
     if (entries === undefined || entries.some((entry) => entry === undefined)) {

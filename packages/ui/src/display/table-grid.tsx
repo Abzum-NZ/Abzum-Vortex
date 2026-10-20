@@ -36,6 +36,7 @@ import {
   type RecordsTableSortState,
 } from "@vortex/platform/schema";
 import { Card } from "../components/card";
+import type { GridInteractionSurface } from "./grid-features/registry";
 import { ColumnMenu } from "./grid-features/column-menu";
 import { Icon } from "../icons/icon";
 import { cn } from "../lib/utils";
@@ -121,6 +122,7 @@ export type RecordsGridProps = Readonly<{
   events: DisplayEventHandlers | undefined;
   activateRow: ((recordId: string) => unknown) | undefined;
   renderers: GridRenderers;
+  interaction?: (surface: GridInteractionSurface) => ReactNode;
   announce: (message: string) => void;
   /** Rows expand to a panel of related records; undefined when no projected feature draws one. */
   expansion: RowExpansionControls | undefined;
@@ -303,6 +305,7 @@ export function RecordsGrid({
   events,
   activateRow,
   renderers,
+  interaction,
   announce,
   expansion,
   rowName,
@@ -481,6 +484,7 @@ export function RecordsGrid({
   const [pendingRecordId, setPendingRecordId] = useState<string | undefined>(undefined);
   const lastPosition = useRef({ row: -1, column: 0 });
   const focusRequested = useRef(false);
+  const revealRequested = useRef(false);
   const gridHasFocus = useRef(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -534,12 +538,14 @@ export function RecordsGrid({
   // (the window always holds the active row); focusing scrolls it into view below the sticky header
   // (its scroll margin), and the window then follows the scroll.
   useLayoutEffect(() => {
-    if (!focusRequested.current) return;
+    if (!focusRequested.current && !revealRequested.current) return;
+    const focus = focusRequested.current;
     focusRequested.current = false;
+    revealRequested.current = false;
     if (activeColumn >= 0) {
       const element = cellElement(activeRow, active.columnId);
       element?.scrollIntoView({ block: "nearest", inline: "nearest" });
-      element?.focus({ preventScroll: true });
+      if (focus) element?.focus({ preventScroll: true });
     }
   });
 
@@ -572,7 +578,7 @@ export function RecordsGrid({
       cellElement(activeRowRef.current, activeColumnIdRef.current)?.focus();
   }, [rows]);
 
-  const moveTo = (row: number, column: number): void => {
+  const moveTo = (row: number, column: number, focus = true): void => {
     const clampedRow = Math.max(-1, Math.min(row, rows.length - 1));
     const clampedColumn = Math.max(0, Math.min(column, visibleIds.length - 1));
     setControlMode(false);
@@ -580,7 +586,8 @@ export function RecordsGrid({
       recordId: clampedRow < 0 ? null : (rows[clampedRow]?.recordId ?? null),
       columnId: visibleIds[clampedColumn] ?? "",
     });
-    focusRequested.current = true;
+    focusRequested.current = focus;
+    revealRequested.current = true;
   };
 
   const runActivation = (recordId: string): void => {
@@ -669,6 +676,7 @@ export function RecordsGrid({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.defaultPrevented) return;
     // Keys from a portalled menu or from outside the grid are not grid navigation.
     if (!(event.target instanceof Node) || !gridRef.current?.contains(event.target)) return;
     // Inside a row's related records the panel's own controls take every key but Escape, which
@@ -1038,75 +1046,81 @@ export function RecordsGrid({
   };
 
   return (
-    // The frame is the theme's card (its radius, ring and surface); the grid scrolls inside it.
-    <Card
-      ref={scrollRef}
-      style={pinningStyle.scrollPadding}
-      data-slot="grid-viewport"
-      data-vortex-grid-virtualized={virtual ? "" : undefined}
-      className={cn(
-        "relative max-w-full gap-0 overflow-auto py-0",
-        fill ? "min-h-0 flex-1" : bounded && BOUNDED_VIEWPORT_CLASS,
-      )}
-    >
-      <span id={instructionsId} className="sr-only">
-        Use the arrow keys to move between cells. Enter opens a row or uses the controls in a cell,
-        F2 edits them and Escape returns to the cell. Space selects a row.{" "}
-        {expansion === undefined
-          ? null
-          : "On a row's expand button, the right arrow shows its related records and the left arrow hides them; F2 or Tab moves into them and Escape returns to the row. "}
-        On a column heading, Enter or Alt with the down arrow opens the column menu, Shift and Enter
-        adds to the sort, Alt with the left or right arrow resizes the column and Alt, Shift with
-        the left or right arrow moves it.
-      </span>
-      <div
-        ref={gridRef}
-        role="grid"
-        aria-label={accessibleName}
-        aria-describedby={instructionsId}
-        aria-rowcount={rows.length + 1}
-        aria-colcount={slots.length}
-        {...(selection === "multiple" ? { "aria-multiselectable": true } : {})}
-        className="text-sm"
-        style={{ ...sizeStyle, ...pinningStyle.variables, width: totalWidth, minWidth: "100%" }}
-        onKeyDown={onKeyDown}
-        onFocus={onFocus}
-        onBlur={onBlur}
+    <>
+      {interaction?.({
+        rootRef: gridRef,
+        focusCell: (row, columnId, focus) => moveTo(row, visibleIds.indexOf(columnId), focus),
+      })}
+      {/* The frame uses the theme's card; optional page controls stay outside its scroll area. */}
+      <Card
+        ref={scrollRef}
+        style={pinningStyle.scrollPadding}
+        data-slot="grid-viewport"
+        data-vortex-grid-virtualized={virtual ? "" : undefined}
+        className={cn(
+          "relative max-w-full gap-0 overflow-auto py-0",
+          fill ? "min-h-0 flex-1" : bounded && BOUNDED_VIEWPORT_CLASS,
+        )}
       >
+        <span id={instructionsId} className="sr-only">
+          Use the arrow keys to move between cells. Enter opens a row or uses the controls in a
+          cell, F2 edits them and Escape returns to the cell. Space selects a row.{" "}
+          {expansion === undefined
+            ? null
+            : "On a row's expand button, the right arrow shows its related records and the left arrow hides them; F2 or Tab moves into them and Escape returns to the row. "}
+          On a column heading, Enter or Alt with the down arrow opens the column menu, Shift and
+          Enter adds to the sort, Alt with the left or right arrow resizes the column and Alt, Shift
+          with the left or right arrow moves it.
+        </span>
         <div
-          role="rowgroup"
-          className={cn(contract.stickyHeader && bounded && "sticky top-0 z-20")}
+          ref={gridRef}
+          role="grid"
+          aria-label={accessibleName}
+          aria-describedby={instructionsId}
+          aria-rowcount={rows.length + 1}
+          aria-colcount={slots.length}
+          {...(selection === "multiple" ? { "aria-multiselectable": true } : {})}
+          className="text-sm"
+          style={{ ...sizeStyle, ...pinningStyle.variables, width: totalWidth, minWidth: "100%" }}
+          onKeyDown={onKeyDown}
+          onFocus={onFocus}
+          onBlur={onBlur}
         >
           <div
-            role="row"
-            aria-rowindex={1}
-            className="flex w-full border-b bg-muted"
-            style={{ height: rowHeight }}
+            role="rowgroup"
+            className={cn(contract.stickyHeader && bounded && "sticky top-0 z-20")}
           >
-            {headerSlots.map((slot, index) => renderHeader(headerById.get(slot.id), slot, index))}
+            <div
+              role="row"
+              aria-rowindex={1}
+              className="flex w-full border-b bg-muted"
+              style={{ height: rowHeight }}
+            >
+              {headerSlots.map((slot, index) => renderHeader(headerById.get(slot.id), slot, index))}
+            </div>
           </div>
+          {virtual ? (
+            <Suspense
+              // Until the virtual body arrives, the rows' full height keeps the real scroll range.
+              fallback={<div role="rowgroup" style={{ height: rows.length * rowHeight }} />}
+            >
+              <VirtualRows
+                expandedRecordIds={expansion?.expandedRecordIds}
+                rows={rows}
+                rowHeight={rowHeight}
+                activeRow={activeRow}
+                stickyHeader={contract.stickyHeader}
+                scrollRef={scrollRef}
+                drawRow={drawRow}
+              />
+            </Suspense>
+          ) : (
+            <div ref={rowsRef} role="rowgroup">
+              {rows.map((row, index) => drawRow(row, index))}
+            </div>
+          )}
         </div>
-        {virtual ? (
-          <Suspense
-            // Until the virtual body arrives, the rows' full height keeps the real scroll range.
-            fallback={<div role="rowgroup" style={{ height: rows.length * rowHeight }} />}
-          >
-            <VirtualRows
-              expandedRecordIds={expansion?.expandedRecordIds}
-              rows={rows}
-              rowHeight={rowHeight}
-              activeRow={activeRow}
-              stickyHeader={contract.stickyHeader}
-              scrollRef={scrollRef}
-              drawRow={drawRow}
-            />
-          </Suspense>
-        ) : (
-          <div ref={rowsRef} role="rowgroup">
-            {rows.map((row, index) => drawRow(row, index))}
-          </div>
-        )}
-      </div>
-    </Card>
+      </Card>
+    </>
   );
 }

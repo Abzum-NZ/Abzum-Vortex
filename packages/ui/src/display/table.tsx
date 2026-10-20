@@ -163,6 +163,10 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
 
   // The optional grid features draw through their extension points; each feature's code loads only
   // when the projection turns it on.
+  const featureColumns = useMemo(
+    () => layout.state.order.flatMap((key) => layout.shown.filter((column) => column.key === key)),
+    [layout.state.order, layout.shown],
+  );
   const featureContext = useMemo(
     (): GridFeatureContext | undefined =>
       features === undefined
@@ -172,7 +176,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
             features,
             pins: layout.state.pins,
             setPin: layout.setPin,
-            columns: layout.shown,
+            columns: featureColumns,
             rows,
             selectedRecordIds,
             narrowing,
@@ -183,7 +187,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
       features,
       layout.state.pins,
       layout.setPin,
-      layout.shown,
+      featureColumns,
       rows,
       selectedRecordIds,
       narrowing,
@@ -502,6 +506,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         events={events}
         activateRow={activateRow}
         renderers={gridRenderers}
+        interaction={gridFeatures.interaction}
         announce={announce}
         expansion={expansion}
         rowName={nameOfRow}

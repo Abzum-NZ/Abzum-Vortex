@@ -35,6 +35,7 @@ export const studioGridFeatureEditors: Readonly<
   Record<RecordsTableFeatureKey, StudioGridFeatureEditor>
 > = {
   pinning: { kind: "settings" },
+  spreadsheet: { kind: "settings" },
   search: { kind: "settings" },
   // Only fields people can filter by: stored, filterable and of a type a filter fits.
   column_filters: {
@@ -66,6 +67,10 @@ export const studioGridFeatureStartSettings: Readonly<
     Record<RecordsTableFeatureKey, Readonly<Record<string, SourceBlockPropertyValueContract>>>
   >
 > = {
+  spreadsheet: {
+    range_select: { kind: "boolean", value: true },
+    find: { kind: "boolean", value: true },
+  },
   // Related records read ten at a time unless the builder chooses otherwise.
   master_detail: { child_page_size: { kind: "number", value: 10 } },
 };

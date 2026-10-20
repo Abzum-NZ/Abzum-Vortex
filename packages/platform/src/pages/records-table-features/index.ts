@@ -27,6 +27,7 @@ export {
  */
 export type RecordsTableFeatureProjection = Readonly<{
   pinning?: true;
+  spreadsheet?: Readonly<{ rangeSelect: boolean; find: boolean }>;
   search?: true;
   /**
    * The filterable fields the viewer may filter by, each with its canonical type, filter kind and
@@ -136,6 +137,19 @@ export const projectRecordsTableFeatures = (
   // rows expand; a viewer who cannot read the related records sees the panel's neutral refusal.
   const masterDetail = features.masterDetail;
   const projection: RecordsTableFeatureProjection = {
+    ...(features.spreadsheet.enabled &&
+    typeof features.spreadsheet.rangeSelect === "boolean" &&
+    typeof features.spreadsheet.find === "boolean" &&
+    rows.some((row) =>
+      visibleFieldIds.some((field) => Object.keys(row.values).some((key) => sameField(key, field))),
+    )
+      ? {
+          spreadsheet: {
+            rangeSelect: features.spreadsheet.rangeSelect,
+            find: features.spreadsheet.find,
+          },
+        }
+      : {}),
     ...(features.pinning.enabled ? { pinning: true as const } : {}),
     ...(features.search.enabled ? { search: true as const } : {}),
     ...(columnFilters.length === 0 ? {} : { columnFilters }),

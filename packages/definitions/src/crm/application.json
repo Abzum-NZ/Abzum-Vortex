@@ -650,6 +650,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
@@ -765,6 +768,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
@@ -900,6 +906,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
@@ -1042,6 +1051,9 @@
                       },
                       "pinning": {
                         "enabled": true
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     },
                     "row_click": {
@@ -1236,6 +1248,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
@@ -2758,6 +2773,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }
