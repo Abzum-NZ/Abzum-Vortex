@@ -254,6 +254,7 @@ export type RecordsTableFeatureRefusalCode = Extract<
   | "definition_records_table_row_edit"
   | "definition_records_table_master_detail"
   | "definition_records_table_tree"
+  | "definition_records_table_grouping"
   | "definition_records_table_conditional_formatting"
   | "definition_records_table_pinning"
   | "definition_records_table_pivot"
