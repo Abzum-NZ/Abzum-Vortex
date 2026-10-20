@@ -87,7 +87,7 @@ export function useProjectionRefresh(
                 typeof row.recordId === "string" &&
                 onScreen(
                   placement?.querySelector(
-                    `[data-vortex-record-id="${CSS.escape(row.recordId)}"]`,
+                    `[data-vortex-record-id="${CSS.escape(row.recordId)}"] :is([data-col="${CSS.escape(policy.fieldId)}"], [data-vortex-field-key="${CSS.escape(policy.fieldId)}"])`,
                   ) ?? null,
                 ),
             ))
