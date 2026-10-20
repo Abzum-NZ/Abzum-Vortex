@@ -301,7 +301,7 @@ Every query-bound page block maps query inputs through `query_parameters`. Each 
 
 The server resolves each binding per request. Record fields reuse the authorised subject read; a withheld field is logged without its value and yields `awaiting_input`. Missing required values render the authored awaiting message and make no query. Missing optional values omit their comparison from the query condition, including within conjunctions, alternatives and negation. Additional grid filters only narrow the resulting query. Relative dates use the organisation time zone; date-time inputs receive the start-of-day instant.
 
-The currently supported person part is the organisation account representing the signed-in person. Organisation and team parts require corresponding typed query inputs and an authoritative session selection before they can be offered.
+Current person supplies a record reference to the signed-in viewer's directory person. Studio offers it only for record inputs accepting that directory type, and publication uses the same type check. The server derives both the installed person type and its record identity from the verified human context, never from a page address or control. A viewer without a directory person is refused, including for optional inputs, so a missing person cannot broaden a "My records" query. Organisation-account-valued inputs are not supported by page bindings.
 
 ### Grid grouping execution
 

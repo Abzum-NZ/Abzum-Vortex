@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { organizationAccountIdSchema, recordIdSchema } from "../../catalogue/identifiers";
+import { recordIdSchema } from "../../catalogue/identifiers";
 import type { JsonValue } from "../../catalogue/common";
 import { exactDecimalTextSchema, currencyCodeSchema } from "../../records/module-field-values";
 import { normalizeExactDecimal, parseExactDecimal } from "../../records/exact-decimal";
@@ -19,8 +19,7 @@ export type QueryBindingValueType =
         | "money"
         | "yes_no"
         | "date"
-        | "date_time"
-        | "person";
+        | "date_time";
     }>
   | Readonly<{ kind: "record"; recordTypes: readonly string[] }>;
 
@@ -38,8 +37,6 @@ export const queryInputValueType = (
     case "date":
     case "date_time":
       return { kind: input.type };
-    case "organization_account_reference":
-      return { kind: "person" };
     case "record_reference":
       return { kind: "record", recordTypes: input.recordTypes ?? [] };
     default:
@@ -89,7 +86,6 @@ const typeNames: Readonly<Record<Exclude<QueryBindingValueType["kind"], "record"
   yes_no: "yes or no",
   date: "date",
   date_time: "date and time",
-  person: "person",
 };
 
 /** A value type in business words: a record value by its record type's name. */
@@ -168,10 +164,6 @@ export const parseQueryBindingText = (
       return z.iso.date().safeParse(text).success ? text : undefined;
     case "date_time":
       return z.iso.datetime({ offset: true }).safeParse(text).success ? text : undefined;
-    case "person": {
-      const account = organizationAccountIdSchema.safeParse(text);
-      return account.success ? String(account.data) : undefined;
-    }
     case "record": {
       const recordId = recordIdSchema.safeParse(text);
       return recordId.success && type.recordTypes.length === 1
