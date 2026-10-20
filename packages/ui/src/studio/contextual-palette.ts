@@ -225,6 +225,7 @@ export type StudioQueryField = Readonly<{
   filterable: boolean;
   searchable: boolean;
   choiceCount?: number;
+  choiceValues?: readonly string[];
   /** For a calculation or total, the type of the value it produces. */
   resultType?: string;
 }>;
@@ -240,7 +241,7 @@ export const studioFieldFacts = (
   }>,
 ): Pick<
   StudioQueryField,
-  "sortable" | "filterable" | "searchable" | "choiceCount" | "resultType"
+  "sortable" | "filterable" | "searchable" | "choiceCount" | "choiceValues" | "resultType"
 > => {
   const options =
     field.type === "choice" && typeof field.settings === "object" && field.settings !== null
@@ -257,7 +258,12 @@ export const studioFieldFacts = (
     sortable: field.sortable,
     filterable: field.filterable,
     searchable: field.search_priority !== undefined,
-    ...(Array.isArray(options) ? { choiceCount: options.length } : {}),
+    ...(Array.isArray(options)
+      ? {
+          choiceCount: options.length,
+          choiceValues: options.map((option: { value: string }) => option.value),
+        }
+      : {}),
     ...(resultType === undefined ? {} : { resultType }),
   };
 };
