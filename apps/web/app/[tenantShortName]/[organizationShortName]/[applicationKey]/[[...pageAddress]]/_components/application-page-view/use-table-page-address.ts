@@ -153,6 +153,7 @@ export function useTablePageAddress({
   const selectTableViewInPlace = useCallback(
     (placementId: string, viewId: string | null, document?: GridViewDocument) => {
       const parameters = new URLSearchParams(window.location.search);
+      const current = readRecordsTableQueryState(placementId, parameters);
       if (document === undefined)
         applyRecordsTableQueryChange(parameters, placementId, { kind: "view", viewId });
       else
@@ -161,6 +162,13 @@ export function useTablePageAddress({
           sort: document.sort ?? [],
           filters: document.filters ?? [],
           search: document.search ?? null,
+        });
+      // Saving, deleting or applying a layout-only view keeps the rows already shown. Keep their
+      // page position too, so reloading the address opens that same page.
+      if (current.kind === "valid" && current.state.page !== undefined)
+        applyRecordsTableQueryChange(parameters, placementId, {
+          kind: "page",
+          request: current.state.page,
         });
       shownRef.current.keys.set(
         placementId.toLowerCase(),
