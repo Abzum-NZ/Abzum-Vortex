@@ -36,6 +36,15 @@ import {
 } from "./typed-input-validation";
 
 /**
+ * One table read makes at most this many database reads, each examining at most
+ * `tableReadCandidatesPerCall` candidates (the `scan_limit` of run_module_query), so one request
+ * examines at most `tableReadCandidatesPerRequest` candidates.
+ */
+export const tableReadCallsPerRequest = 4;
+export const tableReadCandidatesPerCall = 500;
+export const tableReadCandidatesPerRequest = tableReadCallsPerRequest * tableReadCandidatesPerCall;
+
+/**
  * The user-facing sort, filter and search a request carries, plus the component-declared
  * sortable, filterable and searchable field sets. It is passed as one value so the engine can
  * validate every choice against the installed record type's own field flags and the
@@ -168,7 +177,11 @@ export const runCommand = async (
     let oppositeAnchor: z.infer<typeof pageAnchorSchema> | null = null;
     let releaseVersion: string | undefined;
     let fieldBounds: ProtectedQueryPage["fieldBounds"] | undefined;
-    for (let call = 0; call < (command.exactRecordId === undefined ? 4 : 1); call += 1) {
+    for (
+      let call = 0;
+      call < (command.exactRecordId === undefined ? tableReadCallsPerRequest : 1);
+      call += 1
+    ) {
       const page = await readPage(
         transaction,
         { ...command, pageSize: command.pageSize - rows.length },
@@ -199,8 +212,9 @@ export const runCommand = async (
     }
     if (releaseVersion === undefined || fieldBounds === undefined)
       throw new Error("PROTECTED_QUERY_RESULT_INVALID");
-    if (rows.length < command.pageSize && nextAnchor !== null)
-      return refusal("dataset_limit_exceeded");
+    // The request's scan budget ran out before the page filled: the rows found so far are the
+    // page and the continuation (sealed at the last examined key) resumes the search.
+    const scanLimited = rows.length < command.pageSize && nextAnchor !== null;
     // Only the declared system values may appear; a row carrying any other is a
     // contract breach, not something to pass on.
     const declaredSystemKeys = new Set<string>(command.requestedSystemFieldKeys);
@@ -256,6 +270,7 @@ export const runCommand = async (
       queryId: command.queryId,
       rows,
       fieldBounds,
+      scanLimited,
       ...(next === undefined ? {} : { nextContinuationToken: next }),
       ...(previous === undefined ? {} : { previousContinuationToken: previous }),
     };

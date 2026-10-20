@@ -179,6 +179,8 @@ export type ProjectedTableValues = Readonly<{
   page?: number;
   hasNextPage?: boolean;
   nextContinuationToken?: string;
+  /** The read's scan budget ran out before the page filled: more records may match on the next page. */
+  scanLimited?: boolean;
   hasPreviousPage?: boolean;
   previousContinuationToken?: string;
   /**

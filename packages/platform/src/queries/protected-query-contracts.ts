@@ -380,7 +380,7 @@ export const protectedQueryRefusalReasonCodes = [
   "page_size_invalid",
   "cursor_invalid",
   "cursor_stale",
-  /** A database-backed summary would exceed its bounded candidate scan. */
+  /** A database-backed summary or arrangement would exceed its bounded candidate scan. */
   "dataset_limit_exceeded",
   /** A pivot's column dimension holds more values than one pivot shows. */
   "pivot_columns_exceeded",
@@ -418,6 +418,11 @@ export const protectedQueryPageSchema = z
     queryId: queryIdSchema,
     rows: z.array(protectedQueryPageRowSchema).max(200),
     fieldBounds: protectedQueryFieldBoundsSchema,
+    /**
+     * True when the request's scan budget ran out before the page filled: the rows are the matches
+     * found so far and the continuation resumes after the last candidate examined.
+     */
+    scanLimited: z.boolean(),
     /** Opaque; present only when a later page may hold further permitted rows. */
     nextContinuationToken: z.string().optional(),
     previousContinuationToken: z.string().optional(),
@@ -515,6 +520,7 @@ export const protectedQueryTreeLevelCompletedSchema = z
     queryId: queryIdSchema,
     rows: z.array(protectedQueryTreeRowSchema).max(200),
     fieldBounds: protectedQueryFieldBoundsSchema,
+    scanLimited: z.boolean(),
     nextContinuationToken: z.string().optional(),
     previousContinuationToken: z.string().optional(),
   })

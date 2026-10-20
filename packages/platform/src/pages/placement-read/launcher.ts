@@ -1,7 +1,12 @@
 import "server-only";
 
 import { isRecord, type BlockPropertyValueContract, type JsonValue } from "../../schema";
-import { protectedQueryCommandSchema, type ProtectedQueryRow } from "../../queries/index";
+import {
+  protectedQueryCommandSchema,
+  tableReadCandidatesPerRequest,
+  type ProtectedQueryRow,
+} from "../../queries/index";
+import { recordsSelectionCountCeiling } from "../records-selection";
 import {
   logPlacementFailure,
   placementSettingsOf,
@@ -14,6 +19,15 @@ import type { LauncherQueryRow, PlacementReadInput } from "./types";
 
 /** The most application rows a query-bound launcher reads before it refuses. */
 export const MAXIMUM_LAUNCHER_QUERY_ROWS = 10_000;
+
+/**
+ * The most reader requests one launcher read makes. A sparse query returns short pages with a
+ * continuation, so rows alone do not bound the work: the read examines at most the candidate
+ * ceiling the selection count uses.
+ */
+const MAXIMUM_LAUNCHER_QUERY_REQUESTS = Math.ceil(
+  recordsSelectionCountCeiling / tableReadCandidatesPerRequest,
+);
 
 const launcherCellKey = (
   settings: Readonly<Record<string, BlockPropertyValueContract>>,
@@ -96,6 +110,8 @@ export const readLauncher = async (
     const nextToken = result.value.nextContinuationToken;
     if (
       queryRows.length > MAXIMUM_LAUNCHER_QUERY_ROWS ||
+      (nextToken !== undefined &&
+        seenContinuationTokens.size + 1 >= MAXIMUM_LAUNCHER_QUERY_REQUESTS) ||
       (nextToken !== undefined && seenContinuationTokens.has(nextToken))
     ) {
       failure = "too_many_rows";

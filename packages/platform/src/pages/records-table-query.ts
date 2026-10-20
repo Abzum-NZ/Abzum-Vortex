@@ -652,6 +652,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
                 narrowing,
                 page,
                 hasNextPage: nextContinuationToken !== undefined,
+                scanLimited: result.value.scanLimited,
                 hasPreviousPage: previousContinuationToken !== undefined,
                 ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
                 ...(previousContinuationToken === undefined ? {} : { previousContinuationToken }),
