@@ -51,6 +51,7 @@ import {
   GRID_COLUMN_MAX_WIDTH,
   GRID_COLUMN_MIN_WIDTH,
   GRID_CONTROL_COLUMN_WIDTH,
+  gridActionsWidth,
   GRID_ROW_HEIGHT,
   virtualizesRows,
 } from "./table-geometry";
@@ -364,6 +365,7 @@ export function RecordsGrid({
   const rowHeight = GRID_ROW_HEIGHT[layout.density];
   const virtual = virtualizesRows(lines.length);
   const bounded = contract.viewport === "bounded";
+  const actionsWidth = gridActionsWidth(contract);
   const { columns } = layout;
   const columnsById = useMemo(
     () => new Map(columns.map((column) => [column.key, column])),
@@ -408,14 +410,14 @@ export function RecordsGrid({
         ? [
             {
               id: ACTIONS_COLUMN,
-              size: GRID_CONTROL_COLUMN_WIDTH,
+              size: actionsWidth,
               enableResizing: false,
               enableHiding: false,
             },
           ]
         : []),
     ],
-    [columns, expandable, selectable, showActions],
+    [columns, expandable, selectable, showActions, actionsWidth],
   );
   const sorting = useMemo<SortingState>(
     () =>
@@ -471,7 +473,7 @@ export function RecordsGrid({
     layout,
     pinning,
     selectable,
-    showActions,
+    showActions ? actionsWidth : 0,
     expandable,
   );
 
@@ -507,7 +509,9 @@ export function RecordsGrid({
               flex:
                 kind === "data"
                   ? `var(${sizeVariable(id)}) 0 calc(var(${sizeVariable(id)}) * 1px)`
-                  : `0 0 ${GRID_CONTROL_COLUMN_WIDTH}px`,
+                  : kind === "actions"
+                    ? `0 0 calc(var(${sizeVariable(id)}) * 1px)`
+                    : `0 0 ${GRID_CONTROL_COLUMN_WIDTH}px`,
               ...(sticky ? pinStyle(id, pin as "start" | "end") : {}),
             },
           },
@@ -601,7 +605,14 @@ export function RecordsGrid({
     revealRequested.current = false;
     if (activeColumn >= 0) {
       const element = cellElement(activeRow, active.columnId);
+      // A pinned cell is always in view across; revealing it at its unpinned place would scroll
+      // the grid sideways to the far edge, so only its row is brought into view.
+      const across: [HTMLElement, number][] = [];
+      if (element !== null && getComputedStyle(element).position === "sticky")
+        for (let node = element.parentElement; node !== null; node = node.parentElement)
+          if (node.scrollWidth > node.clientWidth) across.push([node, node.scrollLeft]);
       element?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      for (const [node, left] of across) node.scrollLeft = left;
       if (focus) element?.focus({ preventScroll: true });
     }
   });

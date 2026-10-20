@@ -6,6 +6,8 @@ import {
   createQueryNoticeQueryResolver,
   createRecordsSelectionSealer,
   createRecordsTableQueryResolver,
+  projectRowActionAvailability,
+  installedNamedActions,
   createReferenceChoiceService,
   createViewerSafeRecordLinkService,
   decideRecordTypeExport,
@@ -50,6 +52,40 @@ export const createPlacementReadServices = (
   const tables = {
     ...createRecordsTableQueryResolver(queries),
     sealSelection: createRecordsSelectionSealer(continuationKey, session, selection),
+    projectRowActions: async (
+      ...args: Parameters<PlacementReadInput["services"]["tables"]["projectRowActions"]>
+    ) => {
+      const [context, placementId, recordTypeId, projection] = args;
+      const application = context.releaseSet.application;
+      const modules = context.releaseSet.modules;
+      const result = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
+        session,
+        selection,
+        async (transaction, _scope, issuedAt) =>
+          projectRowActionAvailability(
+            transaction,
+            {
+              bindings: application.content.flowBindings,
+              flows: new Map(
+                [
+                  ...application.content.flows,
+                  ...modules.flatMap((module) => module.content.flows),
+                ].map((flow) => [String(flow.id), flow]),
+              ),
+              namedActions: installedNamedActions(application, modules),
+            },
+            placementId,
+            recordTypeId,
+            projection,
+            issuedAt,
+          ),
+      );
+      if (result.kind !== "available") {
+        console.error(`[page] row action availability refused: ${result.kind}`);
+        throw new Error("ROW_ACTION_AVAILABILITY_UNAVAILABLE");
+      }
+      return result.value;
+    },
   };
   const queryNotices = createQueryNoticeQueryResolver(queries);
   const recordLinks = createViewerSafeRecordLinkService({

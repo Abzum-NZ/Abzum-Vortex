@@ -350,6 +350,14 @@ export function useRuntimeInputs({
                   event.event === "row_clicked" || event.event === "row_action"
                     ? event.recordId
                     : undefined,
+                  tableData !== undefined &&
+                    event.event === "row_action" &&
+                    event.revision !== undefined
+                    ? { recordId: event.recordId, revision: event.revision }
+                    : undefined,
+                  undefined,
+                  undefined,
+                  tableData !== undefined && event.event === "row_action" ? true : undefined,
                 );
             };
         // An inline edit commits one stored value through the bound flow at the revision the row
@@ -418,6 +426,9 @@ export function useRuntimeInputs({
               boardRowActionBinding,
               suppliedValues(event),
               event.recordId,
+              event.revision === undefined
+                ? undefined
+                : { recordId: event.recordId, revision: event.revision },
             );
           };
         // A moved card saves the record's choice field through the bound flow. The handler reports

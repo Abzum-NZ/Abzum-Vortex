@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { RecordsTableFeatureProjection } from "../records-table-features";
+
 import type { BoardColumnReadRequest, PageDefinition } from "../../schema";
 import type {
   HumanOrganizationRequestResult,
@@ -58,7 +60,15 @@ export type PlacementReadServices = Readonly<{
    * the viewer; a host where nothing runs over a selection leaves it out.
    */
   tables: ReturnType<typeof createRecordsTableQueryResolver> &
-    Readonly<{ sealSelection?: RecordsSelectionSealer }>;
+    Readonly<{
+      sealSelection?: RecordsSelectionSealer;
+      projectRowActions: (
+        context: InstalledRuntimeContext,
+        placementId: string,
+        recordTypeId: string,
+        projection: NonNullable<RecordsTableFeatureProjection["rowActions"]>,
+      ) => Promise<NonNullable<RecordsTableFeatureProjection["rowActions"]>>;
+    }>;
   resolveRecordLinks: RecordLinkResolver;
   /**
    * Whether the viewer may export the records of one record type now: an export permission that

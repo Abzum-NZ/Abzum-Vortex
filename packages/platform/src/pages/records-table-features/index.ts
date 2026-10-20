@@ -1,4 +1,6 @@
 import type {
+  NamedActionAvailability,
+  RecordsTableActionContract,
   RecordsTableBulkActionContract,
   RecordsTableContract,
   RecordsTableFilterField,
@@ -47,6 +49,10 @@ export type RecordsTableFeatureProjection = Readonly<{
    * permission and precondition for the visible selection; execution rechecks current authority.
    */
   bulkActions?: readonly RecordsTableBulkActionContract[];
+  rowActions?: Readonly<{
+    actions: readonly RecordsTableActionContract[];
+    availability: NamedActionAvailability;
+  }>;
   /**
    * The fields the viewer may change on at least one row, each with how a cell edits it, and the
    * flow binding that commits a change.
@@ -313,6 +319,33 @@ export const projectRecordsTableFeatures = (
           spreadsheet: {
             rangeSelect: features.spreadsheet.rangeSelect,
             find: features.spreadsheet.find,
+          },
+        }
+      : {}),
+    ...(features.rowActions.enabled && contract.rowBehaviours.rowActions.length > 0
+      ? {
+          rowActions: {
+            actions: contract.rowBehaviours.rowActions,
+            availability: rows.flatMap((row) =>
+              row.revision === undefined
+                ? []
+                : [
+                    {
+                      recordId: row.recordId,
+                      revision: row.revision,
+                      actions: contract.rowBehaviours.rowActions.map((action) =>
+                        action.capability === undefined ||
+                        row.capabilities?.actions.includes(action.capability) === true
+                          ? { action: action.eventId, eligible: true as const }
+                          : {
+                              action: action.eventId,
+                              eligible: false as const,
+                              reason: "not_permitted" as const,
+                            },
+                      ),
+                    },
+                  ],
+            ),
           },
         }
       : {}),

@@ -1,4 +1,8 @@
 import "server-only";
+export {
+  projectRowActionAvailability,
+  type RowActionInstallation,
+} from "./records-table-features/row-actions";
 
 export {
   readRecordsTableNamedActionAvailability,

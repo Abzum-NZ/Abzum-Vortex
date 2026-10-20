@@ -941,6 +941,26 @@ for (const file of files.filter(
         1,
         `registers ${JSON.stringify(keys)}, ${platformFile} registers ${JSON.stringify(platformKeys)}`,
       );
+  // A row-action feature that forgot its compiler event gate would retain runnable bindings while
+  // switched off. Keep this invariant with the registry and its one lazy command renderer.
+  if (platformKeys.includes("row_actions")) {
+    const platformRegistry = read(platformFile);
+    if (!/row_action:\s*"row_actions"/.test(platformRegistry))
+      add(
+        "grid-feature-registry",
+        platformFile,
+        1,
+        "row_action must compile only while row_actions is enabled",
+      );
+    const tableFile = "packages/ui/src/display/table.tsx";
+    if (/RowActionsMenu/.test(read(tableFile)))
+      add(
+        "grid-feature-registry",
+        tableFile,
+        1,
+        "row commands must render through the feature registry",
+      );
+  }
   const chunkDirectory = "packages/ui/src/display/grid-features/";
   for (const file of codeFiles.filter((candidate) => candidate.startsWith("packages/ui/src/")))
     if (file !== `${chunkDirectory}registry.tsx` && !file.startsWith(chunkDirectory)) {

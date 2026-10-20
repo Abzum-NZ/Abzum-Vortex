@@ -402,7 +402,18 @@ export const readRecordsTable = async (
     data[placementId] = { status: "refused", reason: "not_permitted" };
   } else if (resolved.display.status === "empty") data[placementId] = { status: "empty" };
   else {
-    const values = resolved.display.values;
+    let values = resolved.display.values;
+    if (values.features?.rowActions !== undefined) {
+      if (bound.query.recordType.state !== "resolved")
+        throw new Error("ROW_ACTION_RECORD_TYPE_UNRESOLVED");
+      const rowActions = await read.services.tables.projectRowActions(
+        read.context,
+        placementId,
+        String(bound.query.recordType.recordTypeId),
+        values.features.rowActions,
+      );
+      values = { ...values, features: { ...values.features, rowActions } };
+    }
     // Bulk actions may run over every matching record: the read seals what it matched (release,
     // resolved inputs and query state minus the page) for this viewer, with no extra read.
     const seal = read.services.tables.sealSelection;

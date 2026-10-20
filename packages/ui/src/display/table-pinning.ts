@@ -33,7 +33,7 @@ export function useGridPinning(
   layout: GridLayoutControls,
   enabled: boolean,
   selection: boolean,
-  actions: boolean,
+  actions: number,
   /** Rows expand to their related records, so the expand column pins first at the start. */
   expansion: boolean,
 ): Readonly<{ variables: CSSProperties; scrollPadding: CSSProperties }> {
@@ -50,7 +50,7 @@ export function useGridPinning(
 
   const style: Record<string, string | number> = {};
   const utilityWidth =
-    (Number(expansion) + Number(selection) + Number(actions)) * GRID_CONTROL_COLUMN_WIDTH;
+    (Number(expansion) + Number(selection)) * GRID_CONTROL_COLUMN_WIDTH + actions;
   let budget = Math.max(
     0,
     viewport - Math.min(viewport, Math.max(viewport / 2, GRID_COLUMN_MIN_WIDTH * 2)) - utilityWidth,
@@ -97,8 +97,16 @@ export function useGridPinning(
           : `calc(${offsets.join(" + ")})`
         : "auto";
       if (active) {
-        offsets.push(utility ? `${GRID_CONTROL_COLUMN_WIDTH}px` : `var(${sizeVariable(id)}) * 1px`);
-        edgeWidth[side] += utility ? GRID_CONTROL_COLUMN_WIDTH : layout.state.widths[id]!;
+        offsets.push(
+          utility
+            ? `${id === ACTIONS_COLUMN ? actions : GRID_CONTROL_COLUMN_WIDTH}px`
+            : `var(${sizeVariable(id)}) * 1px`,
+        );
+        edgeWidth[side] += utility
+          ? id === ACTIONS_COLUMN
+            ? actions
+            : GRID_CONTROL_COLUMN_WIDTH
+          : layout.state.widths[id]!;
       }
     }
   }

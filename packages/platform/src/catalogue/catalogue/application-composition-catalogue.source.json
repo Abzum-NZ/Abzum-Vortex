@@ -1185,7 +1185,7 @@
     "releaseVersion": "1.0.0",
     "name": "Button",
     "description": "A button that runs an action or a flow.",
-    "icon": "play",
+    "icon": "workflow",
     "paletteGroup": "actions",
     "rendererKey": "platform.renderer.button",
     "properties": [
@@ -3177,6 +3177,10 @@
         "label": "Row actions",
         "help": "Named commands shown on every row, each bound to a flow",
         "required": false,
+        "defaultValue": {
+          "kind": "list",
+          "items": []
+        },
         "minimumItems": 0,
         "maximumItems": 20,
         "item": {
@@ -3223,6 +3227,72 @@
                 {
                   "key": "restore",
                   "label": "Restore"
+                }
+              ]
+            },
+            {
+              "kind": "choice",
+              "key": "icon",
+              "label": "Icon",
+              "help": "Symbol on the row button",
+              "required": true,
+              "defaultValue": {
+                "kind": "choice",
+                "value": "workflow"
+              },
+              "options": [
+                {
+                  "key": "workflow",
+                  "label": "Run"
+                },
+                {
+                  "key": "check",
+                  "label": "Check"
+                },
+                {
+                  "key": "close",
+                  "label": "Close"
+                },
+                {
+                  "key": "info",
+                  "label": "Details"
+                },
+                {
+                  "key": "minus",
+                  "label": "Remove"
+                },
+                {
+                  "key": "eye",
+                  "label": "Open"
+                },
+                {
+                  "key": "plus",
+                  "label": "Install"
+                },
+                {
+                  "key": "undo",
+                  "label": "Restore"
+                }
+              ]
+            },
+            {
+              "kind": "choice",
+              "key": "placement",
+              "label": "Show in",
+              "help": "At most three actions sit beside a row; the rest belong in its menu",
+              "required": true,
+              "defaultValue": {
+                "kind": "choice",
+                "value": "menu"
+              },
+              "options": [
+                {
+                  "key": "inline",
+                  "label": "Beside the row"
+                },
+                {
+                  "key": "menu",
+                  "label": "Row menu"
                 }
               ]
             }
@@ -4056,7 +4126,7 @@
                           "label": "Star"
                         },
                         {
-                          "key": "x",
+                          "key": "close",
                           "label": "Cross"
                         },
                         {
@@ -4874,6 +4944,35 @@
                 }
               }
             }
+          },
+          {
+            "kind": "group",
+            "key": "row_actions",
+            "label": "Row actions",
+            "help": "Buttons and a menu that run each row's declared workflows",
+            "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "properties": [
+              {
+                "kind": "boolean",
+                "key": "enabled",
+                "label": "Enabled",
+                "help": "Offer the declared row actions",
+                "required": true,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ]
           }
         ],
         "defaultValue": {
@@ -5006,6 +5105,15 @@
               }
             },
             "row_edit": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "row_actions": {
               "kind": "group",
               "properties": {
                 "enabled": {
