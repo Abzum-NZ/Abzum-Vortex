@@ -3,9 +3,12 @@ import "server-only";
 import {
   pageQueryBindingContext,
   readRecordsTableRowDetail,
+  isGroupingTablePlacement,
   isTreeTablePlacement,
+  readRecordsTableGroupMembers,
   readRecordsTableTreeLevel,
   resolvedQueryRecordTypeId,
+  type GroupMembersResult,
   type PlacementReadInput,
   type RowDetailResult,
   type TreeLevelResult,
@@ -31,17 +34,21 @@ import { createPlacementReadServices } from "./placement-services";
 import type { ApplicationPageLoaderAddress, SearchParameters } from "./types";
 
 export type RowDetailLoadResult =
-  | Readonly<{ kind: "available"; detail: RowDetailResult | TreeLevelResult }>
+  | Readonly<{
+      kind: "available";
+      detail: RowDetailResult | TreeLevelResult | GroupMembersResult;
+    }>
   | Readonly<{ kind: "reload" }>
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 /**
- * Reads one expanded row's related records on the viewer's current page. The page is projected
- * again for this viewer, so the Records table must still be on it and usable; the row, the related
- * records query and its inputs are all decided on the server by the platform's row detail read.
- * The browser supplies the page address, the table's placement, the row's record identity and a
- * continuation token the Query engine sealed for this same read.
+ * Reads one expanded row's related records, or one page of an open group's members, on the
+ * viewer's current page. The page is projected again for this viewer, so the Records table must
+ * still be on it and usable; the row, the related records query and its inputs, or the group's
+ * field, are all decided on the server by the platform's read. The browser supplies the page
+ * address, the table's placement, the row's record identity or the group's key, and a continuation
+ * token the Query engine sealed for this same read.
  */
 export const loadApplicationRowDetail = async (
   session: IdentitySession,
@@ -49,14 +56,17 @@ export const loadApplicationRowDetail = async (
   parameters: SearchParameters,
   request: Readonly<{
     placementId: string;
-    recordId: string;
+    /** A row of the table, or a group of it (`groupKey`): exactly one is named. */
+    recordId?: string;
+    groupKey?: string;
+    direction?: "forward" | "backward";
     continuationToken?: string;
     pageSize?: number;
     installationRevision: number;
   }>,
 ): Promise<RowDetailLoadResult> => {
   const parentRecordId = recordIdSchema.safeParse(request.recordId);
-  if (!parentRecordId.success) return { kind: "unavailable" };
+  if (request.groupKey === undefined && !parentRecordId.success) return { kind: "unavailable" };
   const dependencies = requestDependencies();
   const selection: OrganizationSelectionCandidate = {
     organizationId: address.read.organizationId,
@@ -153,59 +163,67 @@ export const loadApplicationRowDetail = async (
         : undefined;
     const readSubject = (subjectRecordTypeId: string, recordId: string) =>
       services.subjects.read(session, selection, { recordTypeId: subjectRecordTypeId, recordId });
-    // A tree table opens the records beneath the row through the table's own read, which takes the
+    // A tree level and a group's members are read through the table's own read, which takes the
     // person's stored layout and field policy as the page read does.
+    const accessVersion = projectedPage.value.accessVersion;
+    const tableRead = async (tableRecordTypeId: string): Promise<PlacementReadInput> =>
+      ({
+        context,
+        session,
+        selection,
+        address: { application: { key: address.application.key }, pageKey: address.pageKey },
+        pageDefinition,
+        accessVersion: typeof accessVersion === "number" ? accessVersion : undefined,
+        subjectType,
+        subjectId: subjectRecordId.success ? subjectRecordId.data : undefined,
+        parameters,
+        bindings,
+        data: {},
+        services: services.placementServices(services.recordLinkResolver(context), readSubject),
+        permittedApplicationKeys: undefined,
+        permittedApplicationsUnavailable: false,
+        gridLayouts: await readPageGridLayouts(
+          session,
+          dependencies,
+          selection,
+          context,
+          String(pageDefinition.pageId),
+          [
+            pageGridLayoutRequest(
+              pageDefinition,
+              placement.placementId,
+              tableRecordTypeId,
+              parameters,
+            ),
+          ],
+        ),
+        markSubjectUnreadable: () => undefined,
+      }) satisfies PlacementReadInput;
+    if (request.groupKey !== undefined) {
+      if (recordTypeId === undefined || !isGroupingTablePlacement(placement))
+        return { kind: "unavailable" };
+      return {
+        kind: "available",
+        detail: (await readRecordsTableGroupMembers(await tableRead(recordTypeId), placement, {
+          groupKey: request.groupKey,
+          ...(request.direction === undefined ? {} : { direction: request.direction }),
+          ...(request.continuationToken === undefined
+            ? {}
+            : { continuationToken: request.continuationToken }),
+        })) ?? { status: "error" },
+      };
+    }
+    if (!parentRecordId.success) return { kind: "unavailable" };
     const level =
       recordTypeId === undefined || !isTreeTablePlacement(placement)
         ? undefined
-        : await readRecordsTableTreeLevel(
-            {
-              context,
-              session,
-              selection,
-              address: { application: { key: address.application.key }, pageKey: address.pageKey },
-              pageDefinition,
-              accessVersion:
-                typeof projectedPage.value.accessVersion === "number"
-                  ? projectedPage.value.accessVersion
-                  : undefined,
-              subjectType,
-              subjectId: subjectRecordId.success ? subjectRecordId.data : undefined,
-              parameters,
-              bindings,
-              data: {},
-              services: services.placementServices(
-                services.recordLinkResolver(context),
-                readSubject,
-              ),
-              permittedApplicationKeys: undefined,
-              permittedApplicationsUnavailable: false,
-              gridLayouts: await readPageGridLayouts(
-                session,
-                dependencies,
-                selection,
-                context,
-                String(pageDefinition.pageId),
-                [
-                  pageGridLayoutRequest(
-                    pageDefinition,
-                    placement.placementId,
-                    recordTypeId,
-                    parameters,
-                  ),
-                ],
-              ),
-              markSubjectUnreadable: () => undefined,
-            } satisfies PlacementReadInput,
-            placement,
-            {
-              parentRecordId: parentRecordId.data,
-              ...(request.pageSize === undefined ? {} : { pageSize: request.pageSize }),
-              ...(request.continuationToken === undefined
-                ? {}
-                : { continuationToken: request.continuationToken }),
-            },
-          );
+        : await readRecordsTableTreeLevel(await tableRead(recordTypeId), placement, {
+            parentRecordId: parentRecordId.data,
+            ...(request.pageSize === undefined ? {} : { pageSize: request.pageSize }),
+            ...(request.continuationToken === undefined
+              ? {}
+              : { continuationToken: request.continuationToken }),
+          });
     if (level !== undefined) return { kind: "available", detail: level };
     const detail = await readRecordsTableRowDetail({
       context,
