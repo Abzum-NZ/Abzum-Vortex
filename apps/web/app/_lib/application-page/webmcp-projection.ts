@@ -197,11 +197,7 @@ export const projectPageWebMcpTools = (input: ProjectionInput): readonly PageWeb
   >();
   for (const binding of installedBindings) {
     const pageBinding = projectedBindingIds.get(String(binding.bindingId).toLowerCase());
-    if (
-      pageBinding === undefined ||
-      !["action", "row_action", "bulk_action"].includes(binding.event)
-    )
-      continue;
+    if (pageBinding === undefined || !["action", "row_action"].includes(binding.event)) continue;
     const flowId = String(binding.flow.flowId).toLowerCase();
     const matches = visibleByFlowId.get(flowId) ?? [];
     matches.push({ binding, pageBinding });
