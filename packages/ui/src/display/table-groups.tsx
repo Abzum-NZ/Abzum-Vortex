@@ -121,6 +121,20 @@ export function useGroupedTable(
 ): GroupedTable | undefined {
   const groups = values?.groups?.status === "ready" ? values.groups : undefined;
   const serverExpanded = groups?.expanded ?? null;
+  // What the server read, by content: the page payload is parsed again on every render of the
+  // page (an address write that opens a group is one), and only a different read starts again.
+  const serverRead = useMemo(
+    () =>
+      values === undefined
+        ? ""
+        : JSON.stringify([
+            values.groups,
+            values.rows,
+            values.nextContinuationToken,
+            values.previousContinuationToken,
+          ]),
+    [values],
+  );
   const initialMembers = useCallback((): Members | undefined => {
     if (values === undefined || serverExpanded === null) return undefined;
     return {
@@ -141,18 +155,18 @@ export function useGroupedTable(
     };
   }, [values, serverExpanded]);
   const [held, setHeld] = useState<{
-    owner: TablePayload | undefined;
+    owner: string;
     expanded: string | null;
     members: Members | undefined;
-  }>(() => ({ owner: values, expanded: serverExpanded, members: initialMembers() }));
+  }>(() => ({ owner: serverRead, expanded: serverExpanded, members: initialMembers() }));
   // A payload the server read replaces whatever the person opened since: the groups were counted
   // again under the query as it is now.
-  if (held.owner !== values)
-    setHeld({ owner: values, expanded: serverExpanded, members: initialMembers() });
+  if (held.owner !== serverRead)
+    setHeld({ owner: serverRead, expanded: serverExpanded, members: initialMembers() });
   const current =
-    held.owner === values
+    held.owner === serverRead
       ? held
-      : { owner: values, expanded: serverExpanded, members: initialMembers() };
+      : { owner: serverRead, expanded: serverExpanded, members: initialMembers() };
   const latest = useRef(0);
   const mounted = useRef(true);
   useEffect(() => {
@@ -164,7 +178,7 @@ export function useGroupedTable(
   // A payload the server read ends every member read still on its way: it was for the old query.
   useEffect(() => {
     latest.current += 1;
-  }, [values]);
+  }, [serverRead]);
   const requestGroup = events?.group_requested;
   const opened = events?.group_opened;
 
