@@ -38,19 +38,17 @@ export function publishedControlData(
         value: value ?? (kind === "text_input" ? "" : null),
       },
     };
-  // A field input of a text or choice field starts with the published value: a choice only when it
-  // names one of the field's options, so a stale address never selects a stage that is not there.
+  // A field input of a text or choice field starts with the published value. The server still
+  // checks the value when the form is saved, so an address that names no option is refused there.
   if (kind === "field_input") {
     const payload = ready?.values;
-    if (value === null || ready?.status !== "ready" || payload === undefined) return data;
-    if (payload.kind === "text_input") return { status: "ready", values: { ...payload, value } };
-    const options = Array.isArray(payload.options) ? payload.options : [];
     if (
-      payload.kind === "choice_input" &&
-      options.some((option) => (option as { key?: unknown }).key === value)
+      value === null ||
+      ready?.status !== "ready" ||
+      (payload?.kind !== "text_input" && payload?.kind !== "choice_input")
     )
-      return { status: "ready", values: { ...payload, value } };
-    return data;
+      return data;
+    return { status: "ready", values: { ...payload, value } };
   }
   if (kind !== "link_input") return data;
   const seed = ready?.values?.value as { recordTypeId: string; recordId: string } | undefined;
