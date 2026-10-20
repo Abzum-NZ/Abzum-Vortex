@@ -1392,7 +1392,7 @@ begin
   end if;
   if tree_mode then
     tree_item := vortex_record.query_tree_selector_internal(
-      p_user_inputs -> 'tree', record_type_item, readable_field_ids);
+      p_user_inputs -> 'tree', record_type_item, bound_field_ids);
     if tree_item ->> 'outcome' <> 'completed' then return tree_item; end if;
     tree_field_id := tree_item ->> 'fieldId';
     tree_parent_id := (tree_item ->> 'parentRecordId')::uuid;
