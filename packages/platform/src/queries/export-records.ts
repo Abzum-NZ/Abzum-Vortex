@@ -23,7 +23,10 @@ export type RecordsExportCell =
 
 export type RecordsExportPage = readonly (readonly RecordsExportCell[])[];
 
-/** One encoder per download. The transport is independent of the declared file format. */
+/**
+ * One encoder per download. The transport is independent of the declared file format and validates
+ * every page's cells before an encoder receives them; encoders do not repeat that validation.
+ */
 export type RecordsExportFormat = Readonly<{
   mediaType: string;
   extension: string;
@@ -77,10 +80,10 @@ export const recordsCsvFormat = (): RecordsExportFormat => {
       yield encoder.encode(
         `${cells
           .map((cell) => {
-            validateCell(cell);
             if (cell === null) return csvQuote("");
+            // Code first: a leading "-" amount would make spreadsheets parse the cell as a formula.
             if (cell.type === "money")
-              return csvQuote(`${cell.value.amount} ${cell.value.currency}`);
+              return csvQuote(`${cell.value.currency} ${cell.value.amount}`);
             return cell.type === "text" ? csvText(cell.value) : csvQuote(String(cell.value));
           })
           .join(",")}\r\n`,
@@ -316,7 +319,6 @@ export const recordsXlsxFormat = async (
           throw exportError("row_width_invalid");
         const row = sheet.addRow([]);
         cells.forEach((cell, index) => {
-          validateCell(cell);
           if (cell === null) return;
           const column = options.columns[index]!;
           if (cell.type !== column.type) throw exportError("column_cell_type_mismatch");
