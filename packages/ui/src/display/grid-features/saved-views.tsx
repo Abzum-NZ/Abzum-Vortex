@@ -27,7 +27,6 @@ import { Input } from "../../components/input";
 import { Label } from "../../components/label";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "../../components/popover";
 import { Separator } from "../../components/separator";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/tooltip";
 import { Icon } from "../../icons/icon";
 import type { GridFeatureContext, GridFeatureModule, GridFeaturePointProps } from "./registry";
 
@@ -527,21 +526,9 @@ function ViewSwitcher({
         </PopoverContent>
       </Popover>
       {hidden === undefined ? null : (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <span
-                role="status"
-                className="max-w-56 truncate text-xs text-muted-foreground"
-              />
-            }
-          >
-            {hidden}
-          </TooltipTrigger>
-          <TooltipContent>
-            This view was saved with more than your role can see. It shows only what you may.
-          </TooltipContent>
-        </Tooltip>
+        <p role="status" className="max-w-sm text-xs text-muted-foreground">
+          {hidden}
+        </p>
       )}
       {prompt === "save_as" ? (
         <NameDialog
