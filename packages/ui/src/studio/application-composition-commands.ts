@@ -688,7 +688,7 @@ type AddPlace = { target: StudioCompositionAddTarget; region: Region; steps: rea
 
 /**
  * Every place on one page a new block can go: the top of each content area, and each fixed slot
- * of every block in it, at any depth. Each place lists the newest release of every block the
+ * of every block in it, at any depth. Each place lists the one release of every block the
  * catalogue admits there. A public page, a guided form and a page an experience shows are not
  * offered: their surface rules are not checked here.
  */

@@ -1,8 +1,7 @@
 import {
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
-  CONTAINER_BLOCK_RELEASE_1_3_0,
+  CONTAINER_BLOCK_RELEASE,
   HEADING_BLOCK_RELEASE,
-  LINK_TILES_BLOCK_RELEASE,
 } from "../definition/application-composition-catalogue";
 import { applicationShellSchema } from "../definition/application-composition/page-composition";
 import type { PlatformBlockRelease } from "../definition/application-composition/platform-block-release";
@@ -80,7 +79,7 @@ export const organizationLauncherShell = applicationShellSchema.parse({
     root: { props: { vortex: { slotOrders: { content: sameOrder([launcherContainerId]) } } } },
     content: [
       platformPageItem(
-        CONTAINER_BLOCK_RELEASE_1_3_0,
+        CONTAINER_BLOCK_RELEASE,
         launcherContainerId,
         {
           direction: "column",
@@ -115,7 +114,6 @@ export const organizationLauncherShell = applicationShellSchema.parse({
 });
 
 export const organizationLauncherPlacementId = "8f31d589-1897-4d31-b27c-e79ebda3f001";
-export const organizationLauncherStudioPlacementId = "ec7f435c-e468-4690-b3e3-a74ee077f001";
 
 const launcherItems = [
   platformPageItem(HEADING_BLOCK_RELEASE, "f0299e44-84f3-4ab1-a822-90b28584f001", {
@@ -145,19 +143,3 @@ const launcherPage = (items: readonly ReturnType<typeof platformPageItem>[]) =>
   });
 
 export const organizationLauncherPage = launcherPage(launcherItems);
-
-/** The Studio tile is part of the page definition only for an authorized creator. */
-export const organizationLauncherStudioPage = launcherPage([
-  ...launcherItems,
-  platformPageItem(
-    LINK_TILES_BLOCK_RELEASE,
-    organizationLauncherStudioPlacementId,
-    {
-      title: "Studio",
-      label_key: "label",
-      address_key: "address",
-      description_key: "description",
-    },
-    ["actions"],
-  ),
-]);

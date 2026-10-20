@@ -3,8 +3,6 @@ import {
   builderKeySchema,
   namespacedKeySchema,
   organizationIdSchema,
-  safeHttpsUrlSchema,
-  type ApplicationModuleQueryBinding,
   isRecord,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
@@ -76,15 +74,6 @@ const requireOrganizationId = (
   location: DefinitionRenderErrorLocation,
 ): string => {
   const parsed = organizationIdSchema.safeParse(value);
-  return parsed.success ? parsed.data : fail(message, location);
-};
-
-const requireSafeHttpsAddress = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): string => {
-  const parsed = safeHttpsUrlSchema.safeParse(value);
   return parsed.success ? parsed.data : fail(message, location);
 };
 
@@ -355,67 +344,6 @@ export function applicationLauncherQueryRowsToListValues(
     kind: "launcher_rows",
     headingKey,
     secondaryKey,
-    rows: Object.freeze(displayRows),
-  });
-}
-
-/**
- * The exact query binding a `link_tiles` block resolves when live query execution arrives (#584).
- * It names one published Module release and query identity and never a database target.
- */
-export type LinkTilesQueryBinding = Readonly<{ query: ApplicationModuleQueryBinding }>;
-
-/** One query-projected link tile: safe display metadata plus an already-validated HTTPS address. */
-export type LinkTileRow = Readonly<{
-  recordId: string;
-  label: string;
-  address: string;
-  description?: string;
-}>;
-
-/**
- * Projects already-returned query rows into the closed `list` display values `link_tiles`
- * consumes. Addresses are re-validated as safe HTTPS addresses; anything else fails closed. This
- * function never executes the bound query; it only presents rows the caller already has.
- */
-export function linkTilesToListValues(
-  rows: readonly LinkTileRow[],
-  location: DefinitionRenderErrorLocation = {},
-): LauncherRowsPayload {
-  const seen = new Set<string>();
-  const displayRows: DisplayRow[] = rows.map((row, index) => {
-    const rowLocation = { ...location, propertyPath: [`rows[${index}]`] };
-    const recordId =
-      typeof row.recordId === "string" && row.recordId.trim().length > 0
-        ? row.recordId
-        : fail("A link tile requires a stable row identity", rowLocation);
-    if (seen.has(recordId)) fail(`Duplicate link tile identity '${recordId}'`, rowLocation);
-    seen.add(recordId);
-    const address = requireSafeHttpsAddress(
-      row.address,
-      "A link tile requires a safe HTTPS address",
-      rowLocation,
-    );
-    const label =
-      typeof row.label === "string" && row.label.trim().length > 0
-        ? row.label.trim()
-        : fail("A link tile requires a label", rowLocation);
-    const cells: Record<string, DisplayCellValue> = {
-      label: Object.freeze({ kind: "text", text: label }),
-      address: Object.freeze({ kind: "link", address, label }),
-    };
-    if (row.description !== undefined) {
-      if (typeof row.description !== "string")
-        fail("A link tile description must be text", rowLocation);
-      else if (row.description.trim().length > 0)
-        cells.description = Object.freeze({ kind: "text", text: row.description.trim() });
-    }
-    return Object.freeze({ recordId, cells: Object.freeze(cells) });
-  });
-  return Object.freeze({
-    kind: "launcher_rows",
-    headingKey: "label",
-    secondaryKey: "description",
     rows: Object.freeze(displayRows),
   });
 }

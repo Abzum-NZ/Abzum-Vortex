@@ -7,7 +7,7 @@ import { Icon } from "../icons/icon";
 import { cn } from "../lib/utils";
 
 /**
- * The toggle that expands a row to what it holds (its related records or the records beneath it)
+ * The toggle that expands a row to what it holds (its related records or the rows beneath it)
  * and collapses it again. It says which row it opens and which panel it controls; the chevron
  * turns when the row is open.
  */
@@ -22,7 +22,8 @@ export function RowExpansionToggle({
   /** What the panel holds, in a sentence: "related records" or "child records". */
   noun: string;
   expanded: boolean;
-  panelId: string;
+  /** The panel the toggle controls; undefined when what it opens is rows of the grid itself. */
+  panelId?: string;
   onToggle: () => void;
 }>): ReactElement {
   const label = `${expanded ? "Hide" : "Show"} ${noun} of ${name}`;
@@ -36,7 +37,7 @@ export function RowExpansionToggle({
             size="icon-sm"
             aria-expanded={expanded}
             // The panel exists only while the row is open, so only then does the toggle name it.
-            {...(expanded ? { "aria-controls": panelId } : {})}
+            {...(expanded && panelId !== undefined ? { "aria-controls": panelId } : {})}
             aria-label={label}
             onClick={onToggle}
             onKeyDown={(event) => {
@@ -49,7 +50,7 @@ export function RowExpansionToggle({
                 return;
               }
               // F2 moves into the open panel, as it does from the toggle's cell.
-              if (event.key === "F2" && expanded) {
+              if (event.key === "F2" && expanded && panelId !== undefined) {
                 const inner = document
                   .getElementById(panelId)
                   ?.querySelector<HTMLElement>(

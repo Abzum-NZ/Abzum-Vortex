@@ -82,9 +82,8 @@ export const normaliseModuleContent = <T extends ModuleContent>(content: T): T =
       })),
       "eventId",
     ),
-    rules: sorted(value.rules as unknown[], "ruleId"),
-    // Superseded Module contents carry no flows.
-    ...(value.flows === undefined ? {} : { flows: sorted(value.flows as unknown[], "id") }),
+    // Equal-priority BeforeSave flows execute in this order.
+    flows: value.flows,
     sharingConditions: sorted(
       (value.sharingConditions as RecordValue[]).map((condition) => {
         const normalised: RecordValue = {
@@ -220,7 +219,6 @@ export const assertUnambiguousModuleContent = (content: unknown): void => {
     ["permissions", "permissionId"],
     ["actions", "actionId"],
     ["events", "eventId"],
-    ["rules", "ruleId"],
     ["sharingConditions", "conditionId"],
     ["extensionPoints", "extensionPointId"],
   ] as const)
