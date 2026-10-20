@@ -7,6 +7,11 @@ import {
   recordsTableBulkActionsFeature,
   type RecordsTableBulkActionsSettings,
 } from "./bulk-actions";
+
+export {
+  recordsTableBulkActionRecordLimit,
+  type RecordsTableBulkActionContract,
+} from "./bulk-actions";
 import {
   recordsTableColumnFiltersFeature,
   type RecordsTableColumnFiltersSettings,
@@ -232,7 +237,6 @@ export const checkRecordsTableFeatures = (
 const featureEvents: Readonly<Record<string, RecordsTableFeatureKey>> = {
   search_changed: "search",
   filter_changed: "column_filters",
-  bulk_action: "bulk_actions",
   inline_edit: "inline_edit",
 };
 

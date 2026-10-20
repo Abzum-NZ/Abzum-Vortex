@@ -28,6 +28,11 @@ export type StudioGridFeatureEditor =
       kind: "settings";
       /** The bound query's fields the feature's field pickers offer; every field when absent. */
       offers?: (field: StudioQueryField) => boolean;
+      /**
+       * The feature's action pickers offer only the named actions of the record type the query
+       * reads; the feature's check says when a chosen one cannot run as the feature needs.
+       */
+      boundRecordTypeActions?: true;
     }>
   | Readonly<{ kind: "custom" }>;
 
@@ -52,7 +57,7 @@ export const studioGridFeatureEditors: Readonly<
       }),
   },
   saved_views: { kind: "settings" },
-  bulk_actions: { kind: "settings" },
+  bulk_actions: { kind: "settings", boundRecordTypeActions: true },
   inline_edit: { kind: "settings" },
   master_detail: { kind: "settings" },
   conditional_formatting: { kind: "custom" },
@@ -114,7 +119,13 @@ export const studioRecordsTableQueryFacts = (
   relationships: relationships
     .filter((relationship) => relationship.recordType === query?.recordType)
     .map((relationship) => ({ key: relationship.reference, label: relationship.label })),
-  actions: actions.map((action) => ({ key: action.reference, label: action.label })),
+  actions: actions
+    .filter((action) => action.recordType === query?.recordType)
+    .map((action) => ({
+      key: action.reference,
+      label: action.label,
+      acceptsSelection: action.acceptsSelection,
+    })),
   grouped: query?.grouped === true,
   relatedRecords: {
     recordType: query?.recordType ?? "",
