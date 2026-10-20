@@ -284,7 +284,12 @@ export const projectCalendarPlacement = async (
   const date = input.requestedDate ?? calendarToday(timeZone);
   if (!calendarPeriodSupported(view, date, timeZone)) return refused("calendar_range_unsupported");
   const window = calendarPeriod(view, date);
-  const filter = calendarWindowFilter(mapping, dateFieldType as "date" | "date_time", window, timeZone);
+  const filter = calendarWindowFilter(
+    mapping,
+    dateFieldType as "date" | "date_time",
+    window,
+    timeZone,
+  );
   const filterableFieldIds = [
     ...new Set(
       (mapping.kind === "start_end"

@@ -186,9 +186,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                 aria-label="Next period"
                 disabled={!calendarPeriodSupported(values.view, nextDate, values.timeZone)}
                 onClick={() =>
-                  replaceParameters((parameters) =>
-                    parameters.set(`date.${placementId}`, nextDate),
-                  )
+                  replaceParameters((parameters) => parameters.set(`date.${placementId}`, nextDate))
                 }
               >
                 Next
