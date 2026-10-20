@@ -190,7 +190,11 @@ export const studioActionConditionSource = (
           : undefined;
     const left = operand(node.left);
     if (node.operator === "is_empty" || node.operator === "is_not_empty")
-      return left?.source === "field" ? { field: left.field, operator: node.operator } : undefined;
+      return left?.source === "field"
+        ? { field: left.field, operator: node.operator }
+        : left?.source === "parameter"
+          ? { operator: node.operator, left }
+          : undefined;
     if (node.right === undefined) return undefined;
     const right = operand(node.right);
     if (left?.source === "field" && right?.source === "parameter")

@@ -175,12 +175,20 @@ export function ActionDialog({
   ) => {
     setInputs(next);
     // A condition comparing an input follows that input when inputs move, are renamed or removed.
-    if (projected.kind === "condition" || replacing) {
+    if ((projected.kind === "condition" || replacing) && condition !== undefined) {
       const remapped = remapStudioActionCondition(condition, inputs, next, renamed);
       const valid = validateStudioCondition(
         remapped,
         studioActionConditionContext(record, next),
       ).isValid;
+      // An edit that leaves the condition's inputs where they were keeps the saved precondition as written.
+      if (
+        renamed === undefined &&
+        conditionProblem === "" &&
+        valid &&
+        JSON.stringify(remapped) === JSON.stringify(condition)
+      )
+        return;
       showCondition(remapped, next, valid);
     }
     if (renamed === undefined) return;

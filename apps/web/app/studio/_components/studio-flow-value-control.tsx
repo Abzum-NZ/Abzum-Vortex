@@ -43,12 +43,15 @@ function BuiltParts({ children }: Readonly<{ children: ReactNode }>) {
 function BuiltValue({
   id,
   value,
+  valueType,
   references,
   disabled,
   onChange,
 }: Readonly<{
   id: string;
   value: FlowValue;
+  /** What the whole value must be, which a chosen branch's value must be too. */
+  valueType: string | undefined;
   references: readonly StudioFlowReferenceChoice[];
   disabled: boolean;
   onChange: (value: FlowValue) => void;
@@ -58,13 +61,14 @@ function BuiltValue({
     label: string,
     entry: FlowValue,
     change: (value: FlowValue) => void,
+    partType?: string,
   ) => (
     <StudioFlowValueControl
       key={key}
-      id={`${id}-${key}`}
+      id={`${id}-part-${key}`}
       label={label}
       value={studioFlowValueSourceOf(entry)}
-      valueType={undefined}
+      valueType={partType}
       references={references}
       disabled={disabled}
       onChange={(next) => {
@@ -102,6 +106,7 @@ function BuiltValue({
     label: string,
     entry: FlowFormula,
     change: (next: FlowFormula) => FlowFormula,
+    partType?: string,
   ) =>
     child(
       key,
@@ -121,6 +126,7 @@ function BuiltValue({
         else if (next.kind === "literal")
           onChange({ kind: "formula", formula: change({ op: "literal", ...next.literal }) });
       },
+      partType,
     );
   switch (formula.op) {
     case "now":
@@ -140,6 +146,7 @@ function BuiltValue({
           <Input
             id={`${id}-separator`}
             disabled={disabled}
+            maxLength={20}
             value={formula.separator ?? ""}
             onChange={(event) =>
               onChange({ kind: "formula", formula: { ...formula, separator: event.target.value } })
@@ -150,12 +157,27 @@ function BuiltValue({
     case "if":
       return (
         <BuiltParts>
-          {part("condition", "When", formula.condition, (condition) => ({ ...formula, condition }))}
-          {part("then", "Use this when yes", formula.then, (then) => ({ ...formula, then }))}
-          {part("else", "Use this when no", formula.else, (otherwise) => ({
-            ...formula,
-            else: otherwise,
-          }))}
+          {part(
+            "condition",
+            "When",
+            formula.condition,
+            (condition) => ({ ...formula, condition }),
+            "yes_no",
+          )}
+          {part(
+            "then",
+            "Use this when yes",
+            formula.then,
+            (then) => ({ ...formula, then }),
+            valueType,
+          )}
+          {part(
+            "else",
+            "Use this when no",
+            formula.else,
+            (otherwise) => ({ ...formula, else: otherwise }),
+            valueType,
+          )}
         </BuiltParts>
       );
     case "record_id":
@@ -181,8 +203,20 @@ function BuiltValue({
     case "date_add":
       return (
         <BuiltParts>
-          {part("date", "Starting date", formula.date, (date) => ({ ...formula, date }))}
-          {part("amount", "Add this many", formula.amount, (amount) => ({ ...formula, amount }))}
+          {part(
+            "date",
+            "Starting date",
+            formula.date,
+            (date) => ({ ...formula, date }),
+            formula.date.op === "literal" && formula.date.type === "date" ? "date" : "date_time",
+          )}
+          {part(
+            "amount",
+            "Add this many",
+            formula.amount,
+            (amount) => ({ ...formula, amount }),
+            "whole_number",
+          )}
           <Label htmlFor={`${id}-unit`}>Time unit</Label>
           <StudioOptionControl
             id={`${id}-unit`}
@@ -206,9 +240,16 @@ function BuiltValue({
         "Value",
         { kind: "literal", literal: { type: formula.type, value: formula.value } },
         onChange,
+        formula.type,
       );
     case "reference":
-      return child("value", "Value", { kind: "reference", reference: formula.reference }, onChange);
+      return child(
+        "value",
+        "Value",
+        { kind: "reference", reference: formula.reference },
+        onChange,
+        valueType,
+      );
     default:
       return (
         <p className="text-sm">
@@ -465,6 +506,7 @@ export function StudioFlowValueControl({
         <BuiltValue
           id={id}
           value={value.value}
+          valueType={valueType}
           references={references}
           disabled={disabled}
           onChange={(next) => onChange(studioFlowValueSourceOf(next))}

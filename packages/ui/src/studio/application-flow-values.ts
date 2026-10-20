@@ -527,27 +527,36 @@ export const studioFlowValueSourceOf = (value: FlowValue): StudioFlowValueSource
     const reference = parseFlowReference(value);
     return reference === undefined ? { kind: "kept", value } : { kind: "reference", reference };
   }
+  if (value.kind === "reference") {
+    // Authored text such as "{{ inputs.x }}" is the same reference as its typed form.
+    const reference: FlowReference | undefined =
+      typeof value.reference === "string" ? parseFlowReference(value.reference) : value.reference;
+    return reference === undefined ? { kind: "kept", value } : { kind: "reference", reference };
+  }
   return value.kind === "literal"
-    ? { kind: "fixed", literal: value.literal }
-    : value.kind === "reference"
-      ? { kind: "reference", reference: value.reference }
-      : value.kind === "map" ||
-          value.kind === "array" ||
-          (value.kind === "formula" &&
-            [
-              "join",
-              "if",
-              "now",
-              "record_id",
-              "date_add",
-              "is_empty",
-              "is_not_empty",
-              "gt",
-              "literal",
-              "reference",
-            ].includes(value.formula.op))
-        ? { kind: "built", value }
-        : { kind: "kept", value };
+    ? // A literal object or list (other than several choices) has no single field to type it in.
+      value.literal.type !== "several_choices" &&
+      typeof value.literal.value === "object" &&
+      value.literal.value !== null
+      ? { kind: "kept", value }
+      : { kind: "fixed", literal: value.literal }
+    : value.kind === "map" ||
+        value.kind === "array" ||
+        (value.kind === "formula" &&
+          [
+            "join",
+            "if",
+            "now",
+            "record_id",
+            "date_add",
+            "is_empty",
+            "is_not_empty",
+            "gt",
+            "literal",
+            "reference",
+          ].includes(value.formula.op))
+      ? { kind: "built", value }
+      : { kind: "kept", value };
 };
 
 /** The stored value a control's choice writes. */

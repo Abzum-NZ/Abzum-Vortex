@@ -118,16 +118,13 @@ function TriggerEditor({
   disabled: boolean;
   onChange: (trigger: StudioFlowTriggerDraft, setting?: string) => true | string;
 }>) {
+  // The message name is what senders address, so it stays as it was created.
   if (trigger.kind === "incoming_message")
     return (
-      <StartText
-        id={`${id}-message`}
-        label="Incoming message name"
-        value={trigger.messageName}
-        disabled={disabled}
-        maxLength={40}
-        apply={(messageName) => onChange({ ...trigger, messageName }, `${id}-message`)}
-      />
+      <div className="space-y-1 text-sm">
+        <p className="font-medium">When this message arrives</p>
+        <p className="text-muted-foreground">{trigger.messageName}</p>
+      </div>
     );
   if (trigger.kind === "schedule") {
     const recurrence = trigger.recurrence;
@@ -169,12 +166,12 @@ function TriggerEditor({
               ...trigger,
               recurrence: {
                 cadence,
-                interval: 1,
+                interval: recurrence.interval,
                 timeZone: recurrence.timeZone,
                 minute: recurrence.minute,
-                ...(cadence === "hourly" ? {} : { hour: 9 }),
-                ...(cadence === "weekly" ? { weekDay: 1 } : {}),
-                ...(cadence === "monthly" ? { monthDay: 1 } : {}),
+                ...(cadence === "hourly" ? {} : { hour: recurrence.hour ?? 9 }),
+                ...(cadence === "weekly" ? { weekDay: recurrence.weekDay ?? 1 } : {}),
+                ...(cadence === "monthly" ? { monthDay: recurrence.monthDay ?? 1 } : {}),
               },
             });
           }}
@@ -230,7 +227,26 @@ function TriggerEditor({
         disabled={disabled}
         value={trigger.recordType}
         options={recordTypes.map((entry) => ({ value: entry.key, label: entry.label }))}
-        onChange={(next) => onChange({ ...trigger, recordType: next })}
+        onChange={(next) =>
+          // An event or action belongs to one record type, so a new record type drops the old ones.
+          onChange(
+            trigger.kind === "declared_event"
+              ? {
+                  ...trigger,
+                  recordType: next,
+                  eventKey: events.find((event) => event.recordType === next)?.key ?? "",
+                }
+              : trigger.kind === "before_save"
+                ? {
+                    ...trigger,
+                    recordType: next,
+                    actions: trigger.actions.filter((key) =>
+                      actions.some((entry) => entry.key === key && entry.recordType === next),
+                    ),
+                  }
+                : { ...trigger, recordType: next },
+          )
+        }
       />
     </div>
   );

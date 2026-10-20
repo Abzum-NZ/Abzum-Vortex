@@ -394,15 +394,10 @@ export const applyStudioFlowStart = (
         kind: "invalid",
         reason: "How it starts: choose a complete schedule with a valid time and repeat interval.",
       };
-    if (
-      trigger.kind === "incoming_message" &&
-      !builderKeySchema.safeParse(trigger.messageName.trim().toLowerCase().replace(/\s+/g, "_"))
-        .success
-    )
+    if (trigger.kind === "declared_event" && trigger.eventKey === "")
       return {
         kind: "invalid",
-        reason:
-          "How it starts: name the incoming message using at most 40 letters, numbers and spaces.",
+        reason: "How it starts: choose the event of this record type that starts the flow.",
       };
   }
   flow.triggers = (flow.triggers ?? []).map((trigger, index): FlowTrigger => {
@@ -432,11 +427,6 @@ export const applyStudioFlowStart = (
       };
     if (edited.kind === "schedule" && trigger.type === "Schedule")
       return { ...trigger, recurrence: edited.recurrence };
-    if (edited.kind === "incoming_message" && trigger.type === "IncomingMessage")
-      return {
-        ...trigger,
-        messageKey: edited.messageName.trim().toLowerCase().replace(/\s+/g, "_"),
-      };
     return trigger;
   });
   for (const [index, trigger] of (flow.triggers ?? []).entries())
