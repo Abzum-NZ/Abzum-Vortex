@@ -431,7 +431,7 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
         );
       case "value_out_of_range":
         return refused(
-          "Some dates in these records are outside the supported range (years 0001 to 9999). Narrow them with search or filters.",
+          "Some dates in these records fall in a period that reaches past the supported years 0001 to 9999. Narrow them with search or filters, or group the dates by a shorter period.",
         );
       case "field_unbounded":
         return refused("You can't see every field this pivot needs.");
