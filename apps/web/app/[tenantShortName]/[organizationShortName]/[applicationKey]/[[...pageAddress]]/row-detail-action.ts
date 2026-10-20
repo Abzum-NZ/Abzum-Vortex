@@ -21,6 +21,7 @@ const rowDetailRequestSchema = z
     placementId: containedComponentIdSchema,
     recordId: z.string().min(1).max(80),
     continuationToken: z.string().min(1).max(65_536).optional(),
+    pageSize: z.number().int().min(1).max(200).optional(),
   })
   .strict();
 
@@ -76,6 +77,7 @@ export async function readRowDetail(input: unknown): Promise<RowDetailLoadResult
         placementId: request.data.placementId,
         recordId: request.data.recordId,
         installationRevision: request.data.installationRevision,
+        ...(request.data.pageSize === undefined ? {} : { pageSize: request.data.pageSize }),
         ...(request.data.continuationToken === undefined
           ? {}
           : { continuationToken: request.data.continuationToken }),

@@ -90,6 +90,11 @@ export {
   type RecordsTableRequestRefusal,
 } from "./records-table-features";
 export {
+  isTreeTablePlacement,
+  readRecordsTableTreeLevel,
+  type TreeLevelResult,
+} from "./placement-read";
+export {
   createRecordsTableBulkService,
   type RecordsTableBulkAddress,
   type RecordsTableBulkDependencies,

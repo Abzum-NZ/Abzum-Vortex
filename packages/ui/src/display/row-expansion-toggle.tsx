@@ -7,21 +7,25 @@ import { Icon } from "../icons/icon";
 import { cn } from "../lib/utils";
 
 /**
- * The toggle that expands a row to its related records and collapses it again. It says which row
- * it opens and which panel it controls; the chevron turns when the row is open.
+ * The toggle that expands a row to what it holds (its related records or the records beneath it)
+ * and collapses it again. It says which row it opens and which panel it controls; the chevron
+ * turns when the row is open.
  */
 export function RowExpansionToggle({
   name,
+  noun,
   expanded,
   panelId,
   onToggle,
 }: Readonly<{
   name: string;
+  /** What the panel holds, in a sentence: "related records" or "child records". */
+  noun: string;
   expanded: boolean;
   panelId: string;
   onToggle: () => void;
 }>): ReactElement {
-  const label = `${expanded ? "Hide" : "Show"} related records of ${name}`;
+  const label = `${expanded ? "Hide" : "Show"} ${noun} of ${name}`;
   return (
     <Tooltip>
       <TooltipTrigger
@@ -69,7 +73,7 @@ export function RowExpansionToggle({
           )}
         />
       </TooltipTrigger>
-      <TooltipContent>{expanded ? "Hide related records" : "Show related records"}</TooltipContent>
+      <TooltipContent>{expanded ? `Hide ${noun}` : `Show ${noun}`}</TooltipContent>
     </Tooltip>
   );
 }

@@ -323,6 +323,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
   const nameOfRow = useCallback((row: DisplayRow) => rowName(row, headingKey), [headingKey]);
   const expansion = useRowExpansion({
     enabled: gridFeatures.expands && events?.row_expanded !== undefined,
+    kind: gridFeatures.expansionKind,
     placementId,
     rows,
     rowName: nameOfRow,

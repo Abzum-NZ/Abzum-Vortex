@@ -154,6 +154,8 @@ const GridRow = memo(function GridRow({
   onActivate,
   expanded,
   name,
+  noun,
+  tree,
   panelId,
   onToggle,
 }: Readonly<{
@@ -170,6 +172,10 @@ const GridRow = memo(function GridRow({
   onActivate: (recordId: string) => void;
   expanded: boolean;
   name: string;
+  /** What the row's panel holds, for the toggle's label. */
+  noun: string;
+  /** The rows form a tree, so each says its level. */
+  tree: boolean;
   panelId: string | undefined;
   onToggle: (recordId: string) => void;
 }>): ReactElement {
@@ -180,6 +186,7 @@ const GridRow = memo(function GridRow({
       {...(selectable ? { "aria-selected": selected } : {})}
       {...(pending ? { "aria-busy": true } : {})}
       {...(panelId === undefined ? {} : { "aria-expanded": expanded })}
+      {...(tree ? { "aria-level": 1 } : {})}
       id={`record-${row.recordId}`}
       data-vortex-record-id={row.recordId}
       data-state={selected ? "selected" : undefined}
@@ -218,6 +225,7 @@ const GridRow = memo(function GridRow({
             panelId === undefined ? null : (
               <RowExpansionToggle
                 name={name}
+                noun={noun}
                 expanded={expanded}
                 panelId={panelId}
                 onToggle={() => onToggle(row.recordId)}
@@ -245,14 +253,15 @@ const GridRowPanel = ({
   index,
   columnCount,
   panelId,
-  name,
+  label,
   children,
 }: Readonly<{
   row: DisplayRow;
   index: number;
   columnCount: number;
   panelId: string;
-  name: string;
+  /** The accessible name of the panel, for example "Related records of Acme". */
+  label: string;
   children: ReactNode;
 }>): ReactElement => (
   <div role="row" data-vortex-related-of={row.recordId} className="flex w-full border-b bg-card">
@@ -260,7 +269,7 @@ const GridRowPanel = ({
       role="gridcell"
       aria-colspan={columnCount}
       id={panelId}
-      aria-label={`Related records of ${name}`}
+      aria-label={label}
       data-grid-panel=""
       data-row={index}
       className="sticky left-0 w-full min-w-0 bg-muted/40 px-3 py-2"
@@ -704,6 +713,7 @@ export function RecordsGrid({
     if (
       expansion !== undefined &&
       record !== undefined &&
+      expansion.isExpandable(record) &&
       columnId === EXPAND_COLUMN &&
       !event.altKey &&
       !control
@@ -1001,7 +1011,10 @@ export function RecordsGrid({
   // A row and, while it is expanded, the panel of its related records below it.
   const drawRow = (row: DisplayRow, index: number): ReactElement => {
     const expanded = expansion?.isExpanded(row.recordId) === true;
-    const panelId = expansion?.panelId(row.recordId);
+    const panelId =
+      expansion === undefined || !expansion.isExpandable(row)
+        ? undefined
+        : expansion.panelId(row.recordId);
     const name = expansion === undefined ? "" : rowName(row);
     return (
       <Fragment key={row.recordId}>
@@ -1019,6 +1032,8 @@ export function RecordsGrid({
           onActivate={onActivate}
           expanded={expanded}
           name={name}
+          noun={expansion?.noun ?? ""}
+          tree={expansion?.tree === true}
           panelId={panelId}
           onToggle={onToggle}
         />
@@ -1028,7 +1043,7 @@ export function RecordsGrid({
             index={index}
             columnCount={slots.length}
             panelId={panelId}
-            name={name}
+            label={`${expansion.noun.charAt(0).toUpperCase()}${expansion.noun.slice(1)} of ${name}`}
           >
             {expansion.panel(row)}
           </GridRowPanel>
@@ -1059,14 +1074,14 @@ export function RecordsGrid({
           cell, F2 edits them and Escape returns to the cell. Space selects a row.{" "}
           {expansion === undefined
             ? null
-            : "On a row's expand button, the right arrow shows its related records and the left arrow hides them; F2 or Tab moves into them and Escape returns to the row. "}
+            : `On a row's expand button, the right arrow shows its ${expansion.noun} and the left arrow hides them; F2 or Tab moves into them and Escape returns to the row. `}
           On a column heading, Enter or Alt with the down arrow opens the column menu, Shift and
           Enter adds to the sort, Alt with the left or right arrow resizes the column and Alt, Shift
           with the left or right arrow moves it.
         </span>
         <div
           ref={gridRef}
-          role="grid"
+          role={expansion?.tree === true ? "treegrid" : "grid"}
           aria-label={accessibleName}
           aria-describedby={instructionsId}
           aria-rowcount={rows.length + 1}

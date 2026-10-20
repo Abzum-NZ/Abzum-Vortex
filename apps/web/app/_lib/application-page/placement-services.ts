@@ -12,9 +12,15 @@ import {
   runtimeDatabasePoolSize,
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
+  type PlacementReadInput,
   type ProjectedRecordLink,
   type RecordLinkResolver,
 } from "@vortex/platform/server";
+import {
+  applicationLauncherQueryRowsToListValues,
+  parseBoardPayload,
+  parseDisplayData,
+} from "@vortex/ui";
 import type { IdentitySession, OrganizationSelectionCandidate } from "@vortex/platform/schema";
 import { createApplicationPageLinkReader } from "../application-page-link";
 import { humanOrganizationRequests } from "../server-composition";
@@ -142,6 +148,21 @@ export const createPlacementReadServices = (
         ]),
       );
     };
+  // The readers one placement read takes: the page load and a tree level's read share them.
+  const placementServices = (
+    resolveRecordLinks: RecordLinkResolver,
+    readSubject: PlacementReadInput["services"]["readSubject"],
+  ): PlacementReadInput["services"] => ({
+    queries,
+    linkTiles,
+    queryNotices,
+    tables,
+    resolveRecordLinks,
+    readCalendarSettings,
+    readSubject,
+    launcherValues: applicationLauncherQueryRowsToListValues,
+    boardData: (values) => parseDisplayData({ status: "ready", values }, parseBoardPayload),
+  });
   return {
     queries,
     referenceChoices,
@@ -152,5 +173,6 @@ export const createPlacementReadServices = (
     subjects,
     recordLinkResolver,
     readConcurrently,
+    placementServices,
   };
 };

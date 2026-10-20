@@ -107,6 +107,16 @@ export type PlacementReadInput = Readonly<{
     fromAddress?: true;
     request: RecordsTablePageRequest;
   }>;
+  /**
+   * Reads one level of a tree table instead of its roots: the children of one record, a page at a
+   * time. The page's search, filters and sort still apply to the level.
+   */
+  treeLevel?: Readonly<{
+    placementId: string;
+    parentRecordId: string;
+    continuationToken?: string;
+    pageSize?: number;
+  }>;
   gridLayouts: PlacementGridLayouts;
   markSubjectUnreadable: () => void;
 }>;
