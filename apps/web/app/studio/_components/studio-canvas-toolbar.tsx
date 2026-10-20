@@ -40,8 +40,12 @@ export function StudioCanvasToolbar({
   appearance,
   onAppearance,
   viewAs,
+  arrangeGrid,
+  onArrangeGrid,
 }: Readonly<{
   title: string;
+  arrangeGrid: boolean;
+  onArrangeGrid: () => void;
   /** "Who can see this": the roles the canvas and its menu can be previewed as, and the one shown (`null` is the design view). */
   viewAs: Readonly<{
     roles: readonly Readonly<{ key: string; name: string }>[];
@@ -74,6 +78,23 @@ export function StudioCanvasToolbar({
       <div className="ml-auto flex shrink-0 items-center gap-1">
         {showsCanvas && (
           <>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant={arrangeGrid ? "secondary" : "ghost"}
+                    aria-label="Arrange grid columns"
+                    aria-pressed={arrangeGrid}
+                    onClick={onArrangeGrid}
+                  />
+                }
+              >
+                <Icon name="sliders-horizontal" />
+              </TooltipTrigger>
+              <TooltipContent>Arrange grid columns, widths and density</TooltipContent>
+            </Tooltip>
             <label className="flex items-center gap-2 text-sm">
               <span className="sr-only">View as</span>
               <NativeSelect

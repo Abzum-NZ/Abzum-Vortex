@@ -1,4 +1,5 @@
 "use client";
+import { plainSourceSettingValue } from "@vortex/platform/schema";
 import type { StudioCompiledFields } from "../_lib/studio-data-model";
 import {
   StudioField,
@@ -34,6 +35,8 @@ import {
   boardSettingChoices,
   studioBoardPipelines,
   studioGridFeaturesProperty,
+  studioCanvasGridKey,
+  type StudioCanvasGridArrangement,
   type StudioCompositionBreakpoint,
   type StudioCompositionCommand,
   type StudioCompositionContext,
@@ -54,6 +57,7 @@ type Props = Readonly<{
   choices: StudioSettingChoices;
   /** The saved draft's compiled fields by record type, for the typed condition controls. */
   compiledFields: StudioCompiledFields | null;
+  canvasArrangement?: StudioCanvasGridArrangement | undefined;
   /**
    * Opens the query sheet; `use` chooses the query it made as this block's data. It runs after the
    * new query is in the draft, so the block's choices already offer it.
@@ -429,6 +433,20 @@ export function ApplicationCompositionEditor(props: Props) {
           idPrefix={`${settingsId}-features`}
           property={featuresProperty}
           tableSettings={settingsInputs.settings}
+          canvasArrangement={
+            props.canvasArrangement?.key ===
+            studioCanvasGridKey(
+              settingsInputs.query,
+              settingsInputs.settings.columns === undefined
+                ? undefined
+                : plainSourceSettingValue(settingsInputs.settings.columns),
+              settingsInputs.settings.density === undefined
+                ? undefined
+                : plainSourceSettingValue(settingsInputs.settings.density),
+            )
+              ? props.canvasArrangement.state
+              : undefined
+          }
           signedIn={settingsModel.kind === "available" && settingsModel.signedIn}
           value={settingsInputs.settings[featuresProperty.key]}
           presentation={(() => {

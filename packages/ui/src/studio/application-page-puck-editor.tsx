@@ -74,6 +74,7 @@ import {
 } from "./studio-canvas-bridge";
 import { studioPuckStyle } from "./studio-puck-style";
 import { StudioCanvasActions, studioCanvasOverrides } from "./studio-canvas-actions";
+import { StudioCanvasGridContext, type StudioCanvasGridArrangement } from "./studio-canvas-grid";
 import { StudioBlockPalette, type StudioCanvasAddRequest } from "./studio-block-palette";
 import type {
   StudioCompositionAddTargetsModel,
@@ -228,6 +229,9 @@ export type ApplicationPagePuckEditorProps = Readonly<{
   updating?: boolean | undefined;
   /** The role the canvas previews, hiding what it may not see; `null` or absent is the design view. */
   viewer?: StudioCanvasViewer | null | undefined;
+  /** Lets the normal grid controls arrange its live canvas preview. */
+  arrangeGrid?: boolean | undefined;
+  onGridArrangement?: ((arrangement: StudioCanvasGridArrangement) => void) | undefined;
 }>;
 
 /** Edits one content slot of a page; a page with several slots or guided steps lets the person pick. */
@@ -396,6 +400,8 @@ function ApplicationPageSlotPuckEditor({
   readRecords,
   updating,
   viewer,
+  arrangeGrid,
+  onGridArrangement,
 }: ApplicationPagePuckEditorProps & { at: PageSlotAddress }) {
   const well = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -724,53 +730,58 @@ function ApplicationPageSlotPuckEditor({
             <StudioCanvasRecordsProvider records={canvasRecords}>
               <StudioCanvasControlsProvider onValue={chooseControlValue}>
                 <StudioCanvasViewerProvider viewer={viewer ?? null}>
-                  <Puck
-                    config={config}
-                    data={shown}
-                    onChange={change}
-                    onAction={dropped}
-                    iframe={{ enabled: false }}
-                    height="auto"
-                    overrides={studioCanvasOverrides}
-                    metadata={{ breakpoint }}
-                    permissions={{
-                      drag: editable,
-                      duplicate: editable,
-                      delete: editable,
-                      edit: false,
-                      insert: false,
-                    }}
+                  <StudioCanvasGridContext.Provider
+                    value={arrangeGrid ? onGridArrangement : undefined}
                   >
-                    <StudioCanvasActions host={actionsHost} />
-                    {palette?.targets.kind !== "available"
-                      ? paletteNote(
-                          palette?.targets.kind === "unsupported"
-                            ? "Blocks can't be added to this kind of page in Studio yet."
-                            : "This page is not in the current draft.",
-                        )
-                      : inPalette(
-                          palette,
-                          <StudioBlockPalette
-                            targets={placesHere}
-                            editable={editable}
-                            message={palette.message}
-                            onAdd={(request) => {
-                              palette.onAdd(request);
-                            }}
-                          />,
-                        )}
-                    <StudioCanvasBridge
+                    <Puck
+                      config={config}
                       data={shown}
-                      resync={resync}
-                      selectedAlias={selectedPlacementAlias}
-                      onSelect={onSelectPlacement}
-                      frame={frame}
-                      breakpoint={breakpoint}
-                      registry={registry}
-                      fieldInputControlReleases={fieldInputControlReleases}
-                      platformThemeTokens={platformThemeTokens}
-                    />
-                  </Puck>
+                      onChange={change}
+                      onAction={dropped}
+                      iframe={{ enabled: false }}
+                      height="auto"
+                      overrides={studioCanvasOverrides}
+                      metadata={{ breakpoint }}
+                      permissions={{
+                        drag: editable,
+                        duplicate: editable,
+                        delete: editable,
+                        edit: false,
+                        insert: false,
+                      }}
+                    >
+                      <StudioCanvasActions host={actionsHost} />
+                      {palette?.targets.kind !== "available"
+                        ? paletteNote(
+                            palette?.targets.kind === "unsupported"
+                              ? "Blocks can't be added to this kind of page in Studio yet."
+                              : "This page is not in the current draft.",
+                          )
+                        : inPalette(
+                            palette,
+                            <StudioBlockPalette
+                              targets={placesHere}
+                              editable={editable}
+                              message={palette.message}
+                              onAdd={(request) => {
+                                palette.onAdd(request);
+                              }}
+                            />,
+                          )}
+                      <StudioCanvasBridge
+                        arrangeGrid={arrangeGrid === true}
+                        data={shown}
+                        resync={resync}
+                        selectedAlias={selectedPlacementAlias}
+                        onSelect={onSelectPlacement}
+                        frame={frame}
+                        breakpoint={breakpoint}
+                        registry={registry}
+                        fieldInputControlReleases={fieldInputControlReleases}
+                        platformThemeTokens={platformThemeTokens}
+                      />
+                    </Puck>
+                  </StudioCanvasGridContext.Provider>
                 </StudioCanvasViewerProvider>
               </StudioCanvasControlsProvider>
             </StudioCanvasRecordsProvider>

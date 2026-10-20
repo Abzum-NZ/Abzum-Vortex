@@ -14,6 +14,7 @@ import type { createQueryNoticeQueryResolver } from "../notice-query-projection"
 import type { createRecordsTableQueryResolver } from "../records-table-query";
 import type { RecordsTablePageRequest } from "../records-table-state";
 import type { StoredGridViews } from "../grid-views";
+import type { GridLayoutStorage } from "../grid-view-state";
 import type { PageSubjectReadResult } from "../page-subject-read";
 import type { QueryBindingContext } from "../query-binding-resolver";
 import type { RecordsSelectionSealer } from "../records-selection-seal";
@@ -34,8 +35,7 @@ export type LauncherQueryRow = Readonly<{
 
 /** The person's stored layouts of a page's data grids, read once before any grid reads its rows. */
 export type PlacementGridLayouts = Readonly<{
-  /** False in a preview: changes then stay on screen only. */
-  persisted: boolean;
+  storage: GridLayoutStorage;
   stored: StoredGridViews;
   /**
    * The fields the person can read on at least one record, by lower-cased record type identity;
