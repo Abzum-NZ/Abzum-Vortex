@@ -12,7 +12,7 @@ const stageFilterError =
   "Make this pipeline's stage field filterable in Data to use it for board columns.";
 
 /** The refusal when the record type has no room for the query a board reads. */
-export const studioBoardQueryUnavailable =
+const studioBoardQueryUnavailable =
   "This record type has reached its query limit. Remove an unused query in Data before turning Board on.";
 
 /** The Board feature of a table's authored settings while it is on; undefined otherwise. */

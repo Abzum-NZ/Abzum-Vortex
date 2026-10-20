@@ -55,13 +55,7 @@ export {
   type RecordsTableRelatedRecordsFacts,
 } from "./shared";
 export { RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE } from "./master-detail";
-export {
-  boardProblem,
-  recordsTableBoardFactsOf,
-  RECORDS_TABLE_BOARD_MAXIMUM_CARD_FIELDS,
-  RECORDS_TABLE_BOARD_MAXIMUM_COLUMNS,
-  RECORDS_TABLE_BOARD_MAXIMUM_WIP_LIMIT,
-} from "./board";
+export { boardProblem, recordsTableBoardFactsOf } from "./board";
 export {
   conditionalColumnFormatFieldTypes,
   conditionalColumnFormatIssue,

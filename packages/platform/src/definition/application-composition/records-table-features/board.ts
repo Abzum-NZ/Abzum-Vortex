@@ -14,11 +14,11 @@ import {
 } from "./shared";
 
 /** A card shows its title and at most this many more fields. */
-export const RECORDS_TABLE_BOARD_MAXIMUM_CARD_FIELDS = 3;
+const RECORDS_TABLE_BOARD_MAXIMUM_CARD_FIELDS = 3;
 /** The most columns a board shows: the options of its stage field. */
-export const RECORDS_TABLE_BOARD_MAXIMUM_COLUMNS = 12;
+const RECORDS_TABLE_BOARD_MAXIMUM_COLUMNS = 12;
 /** The largest number of cards one column may be limited to. */
-export const RECORDS_TABLE_BOARD_MAXIMUM_WIP_LIMIT = 1_000;
+const RECORDS_TABLE_BOARD_MAXIMUM_WIP_LIMIT = 1_000;
 
 /**
  * Board: the grid shows its records as cards in columns, one column for each stage of a pipeline's
