@@ -1193,6 +1193,9 @@
                       "pinning": {
                         "enabled": true
                       },
+                      "pivot": {
+                        "enabled": false
+                      },
                       "spreadsheet": {
                         "enabled": false
                       }
