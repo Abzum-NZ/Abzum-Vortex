@@ -27,6 +27,7 @@ import { recordsTableSavedViewsFeature, type RecordsTableSavedViewsSettings } fr
 import { recordsTableSearchFeature, type RecordsTableSearchSettings } from "./search";
 import { recordsTablePinningFeature, type RecordsTablePinningSettings } from "./pinning";
 import {
+  featureNotPossible,
   settingGroup,
   type RecordsTableFeatureCheck,
   type RecordsTableFeatureDefinition,
@@ -201,13 +202,26 @@ export const checkRecordsTableFeature = (
   key: RecordsTableFeatureKey,
   state: RecordsTableFeatureState<object>,
   facts: RecordsTableQueryFacts,
-): RecordsTableFeatureCheck =>
-  (registry[key].definition as RecordsTableFeatureDefinition<object>).check(state, facts);
+  presentation: "grid" | "cards",
+): RecordsTableFeatureCheck => {
+  if (presentation === "cards" && key === "inline_edit")
+    return featureNotPossible(
+      "definition_records_table_inline_edit",
+      "Inline editing needs the Table preset. Open a record to edit it from a List.",
+    );
+  if (presentation === "cards" && key === "pinning")
+    return featureNotPossible(
+      "definition_records_table_pinning",
+      "Column pinning needs the Table preset. Lists have no scrolling columns.",
+    );
+  return (registry[key].definition as RecordsTableFeatureDefinition<object>).check(state, facts);
+};
 
 /** Every feature's state and check, in Studio's order. */
 export const checkRecordsTableFeatures = (
   features: RecordsTableFeatures,
   facts: RecordsTableQueryFacts,
+  presentation: "grid" | "cards",
 ): readonly Readonly<{
   key: RecordsTableFeatureKey;
   enabled: boolean;
@@ -215,7 +229,11 @@ export const checkRecordsTableFeatures = (
 }>[] =>
   recordsTableFeatureKeys.map((key) => {
     const state = recordsTableFeatureState(features, key);
-    return { key, enabled: state.enabled, check: checkRecordsTableFeature(key, state, facts) };
+    return {
+      key,
+      enabled: state.enabled,
+      check: checkRecordsTableFeature(key, state, facts, presentation),
+    };
   });
 
 const featureEvents: Readonly<Record<string, RecordsTableFeatureKey>> = {

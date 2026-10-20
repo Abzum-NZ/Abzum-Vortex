@@ -93,7 +93,6 @@ export {
   type DisplayRow,
   type DisplaySemanticEvent,
   type DisplaySemanticEventName,
-  type DisplaySummaryValue,
   type BoardBucketPayload,
   type BoardColumnPayload,
   type BoardData,

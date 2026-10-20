@@ -17,6 +17,12 @@ export const GRID_ROW_HEIGHT: Readonly<Record<RecordsTableDensity, number>> = Ob
   compact: 32,
 });
 
+/** Card spacing follows the same authored or personal density as the table. */
+export const CARD_SPACING: Readonly<Record<RecordsTableDensity, string>> = Object.freeze({
+  comfortable: "gap-2 p-3",
+  compact: "gap-1 p-2",
+});
+
 /** Starting width of a column per its declared relative width, in pixels. */
 const COLUMN_WIDTH: Readonly<Record<RecordsTableColumnContract["width"], number>> = Object.freeze({
   auto: 180,

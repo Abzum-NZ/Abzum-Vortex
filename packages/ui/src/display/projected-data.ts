@@ -109,13 +109,6 @@ export type DisplayColumn = Readonly<{ key: string; label: string }>;
 /** One labelled record-detail field. */
 export type DisplayField = Readonly<{ key: string; label: string; value: DisplayCellValue }>;
 
-/** One labelled summary value. */
-export type DisplaySummaryValue = Readonly<{
-  key: string;
-  label: string;
-  value: DisplayCellValue;
-}>;
-
 /** One summary-block aggregate, which may be unavailable on its own. */
 export type DisplaySummaryMetric = Readonly<{
   key: string;
@@ -135,9 +128,6 @@ export type LauncherRowsPayload = Readonly<{
   rows: readonly DisplayRow[];
   headingKey: string;
   secondaryKey?: string;
-  selectedRecordIds?: readonly string[];
-  page?: number;
-  pageCount?: number;
 }>;
 
 /** The viewer's search and filters one table page was read with. */
@@ -641,7 +631,8 @@ const parseCellValue = (
     case "choice": {
       requireExactKeys(record, ["kind", "key", "label"], location);
       const key = moduleFieldValueSchemas.choice.safeParse(record.key);
-      if (!key.success) return fail("A choice display value requires a valid stored value", location);
+      if (!key.success)
+        return fail("A choice display value requires a valid stored value", location);
       return Object.freeze({
         kind: "choice",
         key: key.data,
@@ -892,29 +883,6 @@ const parseSelection = (
   );
 };
 
-const parsePagination = (
-  page: unknown,
-  pageCount: unknown,
-  location: DefinitionRenderErrorLocation,
-): Readonly<{ page: number; pageCount: number }> | undefined => {
-  if (page === undefined && pageCount === undefined) return undefined;
-  if (page === undefined || pageCount === undefined)
-    fail("Projected pagination requires both page and pageCount", location);
-  const parsedPage = requirePositiveInteger(
-    page,
-    "Projected page must be a positive integer",
-    location,
-  );
-  const parsedCount = requirePositiveInteger(
-    pageCount,
-    "Projected pageCount must be a positive integer",
-    location,
-  );
-  if (parsedPage > parsedCount)
-    fail("Projected page cannot exceed the projected pageCount", location);
-  return Object.freeze({ page: parsedPage, pageCount: parsedCount });
-};
-
 const parseSummaryValue = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
@@ -1041,20 +1009,14 @@ export const parseLauncherRowsPayload = (
       `Expected 'launcher_rows' projected values, got '${String(record.kind)}'`,
       location,
     );
-  requireExactKeys(
-    record,
-    ["kind", "rows", "headingKey", "secondaryKey", "selectedRecordIds", "page", "pageCount"],
-    location,
-  );
+  requireExactKeys(record, ["kind", "rows", "headingKey", "secondaryKey"], location);
   const rows = parseRows(record.rows, location);
-  const selection = parseSelection(record.selectedRecordIds, rows, location);
-  const pagination = parsePagination(record.page, record.pageCount, location);
   return Object.freeze({
     kind: "launcher_rows",
     rows,
     headingKey: requireBuilderKey(
       record.headingKey,
-      "A projected list requires a heading key",
+      "Projected launcher rows require a heading key",
       location,
     ),
     ...(record.secondaryKey === undefined
@@ -1062,12 +1024,10 @@ export const parseLauncherRowsPayload = (
       : {
           secondaryKey: requireBuilderKey(
             record.secondaryKey,
-            "A projected list secondary key is invalid",
+            "The projected launcher secondary key is invalid",
             location,
           ),
         }),
-    ...(selection === undefined ? {} : { selectedRecordIds: selection }),
-    ...(pagination === undefined ? {} : pagination),
   });
 };
 

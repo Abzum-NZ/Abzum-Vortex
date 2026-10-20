@@ -426,6 +426,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     <TableLoadingState
       accessibleName={accessibleName}
       contract={contract}
+      density={layout.density}
       presentation={presentation ?? "grid"}
       selectionColumn={selectable}
       actionsColumn={showActions}
@@ -503,6 +504,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
           renderers={renderers}
           expansion={expansion}
           fill={fullScreen.active}
+          density={layout.density}
         />
       </Suspense>
     ) : (
