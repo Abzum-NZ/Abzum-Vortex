@@ -1,3 +1,4 @@
+import type { AuthoredGridView } from "../definition/application-composition/records-table-features/saved-views";
 import { z } from "zod";
 import {
   RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
@@ -140,7 +141,7 @@ export const gridViewNameSchema = z
   .max(GRID_VIEW_MAXIMUM_NAME_LENGTH)
   .refine((name) => name === name.trim() && name.length > 0, "A view name is trimmed text");
 
-export const gridViewScopes = ["personal", "shared"] as const;
+export const gridViewScopes = ["personal", "shared", "default"] as const;
 export type GridViewScope = (typeof gridViewScopes)[number];
 
 const revisionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
@@ -196,7 +197,7 @@ export const gridViewsStateSchema = z
   .object({
     /** The viewer holds the permission that lets them share table views. */
     canShare: z.boolean(),
-    items: z.array(gridViewItemSchema).max(200),
+    items: z.array(gridViewItemSchema).max(220),
     /** The view the viewer's own stored layout derives from, when it does. */
     basedOnViewId: fieldIdSchema.nullable(),
     selected: selectedGridViewSchema.nullable(),
@@ -424,8 +425,29 @@ export type GridViewShareTargets = Readonly<{
 export type GridViewCommandResult =
   | Readonly<{ outcome: "done"; viewId?: string; revision?: number }>
   | Readonly<{ outcome: "targets"; targets: GridViewShareTargets }>
+  | Readonly<{ outcome: "selected"; selected: SelectedGridView; canShare: boolean }>
   /** Another tab changed or removed the view first; the host has told the person. */
   | Readonly<{ outcome: "conflict" }>
   | Readonly<{ outcome: "forbidden" }>
   | Readonly<{ outcome: "limit" }>
   | Readonly<{ outcome: "unavailable" }>;
+
+/** Default views use the same document and projection as stored views. */
+export const addressedDefaultGridViews = (
+  views: readonly AuthoredGridView[],
+  roleKeys: ReadonlySet<string>,
+) =>
+  views
+    .filter((view) => roleKeys.has(view.role))
+    .map((view) => ({
+      ...view,
+      item: {
+        viewId: view.viewId,
+        name: view.name,
+        scope: "default" as const,
+        mine: false,
+        revision: 1,
+      },
+      document: gridViewDocumentSchema.parse(view.document),
+      sharing: null,
+    }));

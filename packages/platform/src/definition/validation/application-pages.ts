@@ -7,6 +7,7 @@ import {
 import { registeredBlockReleases, type JsonObject } from "./context";
 import {
   readRecordsTableContract,
+  gridViewDocumentSchema,
   readRecordDetailContract,
   readBoardPlacementContract,
   boardBlockSourceIsSupported,
@@ -464,6 +465,33 @@ export function applicationPageRules(scope: ApplicationScope): void {
                 feature.check.reason,
               ),
             );
+      }
+      if (table?.features.savedViews.enabled) {
+        const roles = new Set(array(content.roles).map((role) => String(role.key)));
+        for (const view of table.features.savedViews.defaultViews) {
+          if (!gridViewDocumentSchema.safeParse(view.document).success)
+            failures.push(
+              failure(
+                output,
+                "vortex.definition.application_block_settings",
+                "unsupported_choice",
+                undefined,
+                "definition_records_table_saved_views",
+                `${view.name}: This view needs fixing`,
+              ),
+            );
+          if (!roles.has(view.role))
+            failures.push(
+              failure(
+                output,
+                "vortex.definition.application_block_settings",
+                "unsupported_choice",
+                undefined,
+                "definition_records_table_saved_views",
+                `${view.role} is not a role of this application`,
+              ),
+            );
+        }
       }
       if (release !== undefined) {
         const boundRecord = records.get(String(object(bound.recordType).recordTypeId));

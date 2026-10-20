@@ -10,6 +10,7 @@ import {
 } from "../records-table-state";
 import {
   authoredGridLayout,
+  addressedDefaultGridViews,
   gridViewLayout,
   resolveGridLayout,
   resolveSelectedGridView,
@@ -110,24 +111,39 @@ export const readRecordsTable = async (
     const listed = (gridLayouts.stored.views.get(placementId.toLowerCase()) ?? []).filter(
       (view) => view.queryId === queryId,
     );
-    const view = readRecordsTableView(placementId, addressEntries);
+    const defaults = addressedDefaultGridViews(
+      contract.features.savedViews.defaultViews,
+      gridLayouts.stored.roleKeys,
+    );
+    const addressedView = readRecordsTableView(placementId, addressEntries);
+    const automatic =
+      stored === undefined && addressedView === undefined
+        ? defaults.find((view) => view.isDefault)
+        : undefined;
+    const view =
+      addressedView ??
+      (automatic === undefined ? undefined : { viewId: automatic.viewId, cleared: false });
     const resolvedView =
       view === undefined
         ? { selected: null, notice: null }
         : resolveSelectedGridView(
             authored,
-            addressedGridView(listed, queryId, view.viewId),
+            defaults.find((candidate) => candidate.viewId === view.viewId) ??
+              addressedGridView(listed, queryId, view.viewId),
             readable,
           );
     views = {
       canShare: gridLayouts.stored.shareable.has(placementId.toLowerCase()),
-      items: listed.map(({ viewId: id, name, scope, mine, revision }) => ({
-        viewId: id,
-        name,
-        scope,
-        mine,
-        revision,
-      })),
+      items: [
+        ...defaults.map((view) => view.item),
+        ...listed.map(({ viewId: id, name, scope, mine, revision }) => ({
+          viewId: id,
+          name,
+          scope,
+          mine,
+          revision,
+        })),
+      ],
       basedOnViewId: stored?.basedOnViewId ?? null,
       selected: resolvedView.selected,
       notice: resolvedView.notice,

@@ -24,7 +24,12 @@ export type PageGridLayouts = Readonly<{
   readable: ReadonlyMap<string, ReadonlySet<string>> | undefined;
 }>;
 
-const NONE: StoredGridViews = { shareable: new Set(), layouts: new Map(), views: new Map() };
+const NONE: StoredGridViews = {
+  roleKeys: new Set(),
+  shareable: new Set(),
+  layouts: new Map(),
+  views: new Map(),
+};
 
 /** One data grid of the page whose layout and views are read. */
 export type PageGrid = Readonly<{

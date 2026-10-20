@@ -68,6 +68,7 @@ export function StudioGridFeatures({
   value,
   query,
   compiledFields,
+  tableSettings,
   choices,
   disabled,
   onChange,
@@ -82,6 +83,7 @@ export function StudioGridFeatures({
   /** The saved draft's compiled fields of the record type the query reads; undefined before a save. */
   compiledFields: readonly ModuleField[] | undefined;
   /** The block's choices: the bound query's fields by business name. */
+  tableSettings: StudioSettingValues;
   choices: StudioSettingChoices;
   disabled: boolean;
   onChange: (next: SourceBlockPropertyValueContract) => void;
@@ -196,7 +198,13 @@ export function StudioGridFeatures({
               ) : null}
               {enabled && key === "saved_views" ? (
                 <div className="pb-2">
-                  <StudioSavedViewsEditor />
+                  <StudioSavedViewsEditor
+                    value={current}
+                    tableSettings={tableSettings}
+                    roles={choices.roles}
+                    disabled={disabled}
+                    onChange={(next) => write(key, next)}
+                  />
                 </div>
               ) : null}
               {!enabled || settings.length === 0 || editor.kind !== "settings" ? null : (

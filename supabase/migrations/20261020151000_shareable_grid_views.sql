@@ -687,6 +687,16 @@ begin
   -- The person's current layouts and every named view they may see, for all the page's grids, in
   -- one bounded read. Only the views the address selected carry their document.
   return pg_catalog.jsonb_build_object(
+    'roleKeys', coalesce((
+      select pg_catalog.jsonb_agg(distinct revision.role_key)
+      from vortex_access.organization_roles as role
+      join vortex_access.organization_role_revisions as revision
+        on revision.organization_id = role.organization_id
+        and revision.role_id = role.role_id and revision.revision = role.live_revision
+      where role.organization_id = scope.organization_id
+        and role.application_root_id = scope.application_root_id
+        and role.role_id = any(targets.role_ids)
+    ), '[]'::jsonb),
     'shareablePlacementIds', pg_catalog.to_jsonb(shareable),
     'layouts', coalesce((
       select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(

@@ -171,7 +171,7 @@ export const readRecordsTableFeatures = (
     search,
     pinning,
     columnFilters: columnFilters as RecordsTableFeatures["columnFilters"],
-    savedViews,
+    savedViews: savedViews as RecordsTableFeatures["savedViews"],
     bulkActions: bulkActions as RecordsTableFeatures["bulkActions"],
     inlineEdit: inlineEdit as RecordsTableFeatures["inlineEdit"],
     conditionalFormatting: conditionalFormatting as RecordsTableFeatures["conditionalFormatting"],

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } fr
 import { toast } from "@vortex/ui/components/sonner";
 import type { DisplaySemanticEvent } from "@vortex/ui";
 import {
-  readRecordsTableAddressedQuery,
+  encodeRecordsTableFieldFilter,
+  canonicalJson,
   readRecordsTableView,
   type GridLayout,
   type GridLayoutCommitResult,
@@ -165,7 +166,10 @@ export function useGridLayout({
                     queryId: event.queryId,
                     expectedRevision: event.expectedRevision,
                     // A layout arranged while a view is open derives from that view.
-                    basedOnViewId: layoutOf(placementId)?.views?.selected?.viewId ?? null,
+                    basedOnViewId:
+                      layoutOf(placementId)?.views?.selected?.scope === "default"
+                        ? null
+                        : (layoutOf(placementId)?.views?.selected?.viewId ?? null),
                     layout: event.layout,
                   },
             ).catch((error: unknown) => {
@@ -213,10 +217,19 @@ export function useGridLayout({
   /** The grid as it is now, as a view document: the given layout and the address's query state. */
   const documentOf = useCallback(
     (placementId: string, layout: GridLayout): GridViewDocument | undefined => {
-      const query = readRecordsTableAddressedQuery(placementId, [
-        ...new URLSearchParams(window.location.search),
-      ]);
-      if (query === undefined) return undefined;
+      const key = Object.keys(latestData.current).find(
+        (key) => key.toLowerCase() === placementId.toLowerCase(),
+      );
+      const payload = key === undefined ? undefined : tablePayloadFor(latestData.current[key]);
+      if (payload === undefined) return undefined;
+      const query = {
+        sort: payload.sort?.explicit === true ? payload.sort.keys : [],
+        filters: (payload.narrowing?.filters ?? []).map((filter) => ({
+          fieldId: filter.fieldId,
+          filter: encodeRecordsTableFieldFilter(filter.filter),
+        })),
+        search: payload.narrowing?.search ?? null,
+      };
       return {
         columns: layout.columns,
         ...(layout.density === undefined ? {} : { density: layout.density }),
@@ -281,7 +294,11 @@ export function useGridLayout({
    * copy of the layout's revision current so the grid's next layout write is made from it.
    */
   const adoptOwnLayout = useCallback(
-    async (placementId: string, viewId: string, document: GridViewDocument): Promise<void> => {
+    async (
+      placementId: string,
+      viewId: string | null,
+      document: GridViewDocument,
+    ): Promise<void> => {
       const state = layoutOf(placementId);
       if (state === undefined) return;
       const arranged: GridLayout = {
@@ -363,12 +380,57 @@ export function useGridLayout({
           return VIEW_UNAVAILABLE;
         });
       switch (command.kind) {
-        case "select":
-          // An arrangement made from this view would hide the view's own: it goes first.
-          if (command.viewId !== null && state.views.basedOnViewId === command.viewId)
+        case "select": {
+          if (command.viewId === null) {
             await dropOwnLayout(placementId);
-          openTableView(placementId, command.viewId);
+            openTableView(placementId, null);
+            return { outcome: "done" };
+          }
+          const opened = await send({ kind: "open", viewId: command.viewId });
+          if (opened.outcome !== "selected") {
+            tellOutcome(opened, "");
+            return opened;
+          }
+          const current = documentOf(placementId, state.layout);
+          const selected = opened.selected;
+          const queryKey = (document: GridViewDocument) =>
+            canonicalJson({
+              sort: document.sort ?? [],
+              filters: [...(document.filters ?? [])].sort((a, b) =>
+                a.fieldId.localeCompare(b.fieldId),
+              ),
+              search: document.search ?? null,
+            });
+          const visible = new Set(
+            current?.columns.filter((column) => column.visible).map((column) => column.fieldId),
+          );
+          const layoutOnly =
+            current !== undefined &&
+            queryKey(current) === queryKey(selected.document) &&
+            selected.document.columns.every(
+              (column) => !column.visible || visible.has(column.fieldId),
+            );
+          if (layoutOnly) {
+            await adoptOwnLayout(
+              placementId,
+              selected.scope === "default" ? null : selected.viewId,
+              selected.document,
+            );
+            selectTableViewInPlace(placementId, selected.viewId);
+            patchLayoutState(placementId, (layout) =>
+              layout.views === undefined
+                ? layout
+                : {
+                    ...layout,
+                    views: { ...layout.views, selected, canShare: opened.canShare, notice: null },
+                  },
+            );
+          } else {
+            if (state.views.basedOnViewId === command.viewId) await dropOwnLayout(placementId);
+            openTableView(placementId, command.viewId);
+          }
           return { outcome: "done" };
+        }
         case "reset":
           await dropOwnLayout(placementId);
           openTableView(placementId, null);

@@ -1,6 +1,9 @@
 "use server";
 
 import {
+  addressedDefaultGridViews,
+  authoredGridLayout,
+  resolveSelectedGridView,
   containedComponentIdSchema,
   gridLayoutSchema,
   gridViewDocumentSchema,
@@ -12,6 +15,8 @@ import {
   type GridViewCommandResult,
 } from "@vortex/platform/schema";
 import {
+  addressedGridView,
+  readGridViews,
   createHumanOrganizationRequestService,
   deleteGridView,
   gridViewPlacement,
@@ -24,6 +29,7 @@ import {
   type GridViewOperationOutcome,
 } from "@vortex/platform/server";
 import { z } from "zod";
+import { decideRecordTypeFieldIds } from "../../../../_lib/application-page/form-field-access";
 import { continueSessionOrEnd } from "../../../../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../../../../auth/_lib/session-server";
 import { resolveApplicationAddress } from "../../../../_lib/application-address";
@@ -106,6 +112,13 @@ const gridViewChangeSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
   z.object({ kind: z.literal("share_targets"), placementId: containedComponentIdSchema }).strict(),
+  z
+    .object({
+      kind: z.literal("open"),
+      placementId: containedComponentIdSchema,
+      viewId: viewIdSchema,
+    })
+    .strict(),
 ]);
 
 const unavailable: GridLayoutCommitResult = Object.freeze({ outcome: "unavailable" });
@@ -247,8 +260,49 @@ export async function commitGridView(
   const pageId = String(page.pageId);
   const { queryId } = placement;
 
-  const result = await opened.run(async (transaction): Promise<GridViewCommandResult> => {
+  const result = await opened.run(async (transaction, scope): Promise<GridViewCommandResult> => {
     switch (requested.kind) {
+      case "open": {
+        const query = opened.context.releaseSet.modules
+          .flatMap((module) => module.content.queries)
+          .find((query) => String(query.queryId).toLowerCase() === queryId);
+        if (query?.recordType.state !== "resolved") return { outcome: "unavailable" };
+        const readable = await decideRecordTypeFieldIds(
+          transaction,
+          scope,
+          opened.context,
+          String(query.recordType.recordTypeId),
+          "read",
+        );
+        const authored = authoredGridLayout(placement.contract, readable);
+        if (authored === undefined || !placement.contract.features.savedViews.enabled)
+          return { outcome: "unavailable" };
+        const stored = await readGridViews(
+          transaction,
+          pageId,
+          [requested.placementId],
+          [requested.viewId],
+        );
+        const defaults = addressedDefaultGridViews(
+          placement.contract.features.savedViews.defaultViews,
+          stored.roleKeys,
+        );
+        const addressed =
+          defaults.find((view) => view.viewId === requested.viewId) ??
+          addressedGridView(
+            stored.views.get(requested.placementId.toLowerCase()),
+            queryId,
+            requested.viewId,
+          );
+        const resolved = resolveSelectedGridView(authored, addressed, readable);
+        return resolved.selected === null
+          ? { outcome: "unavailable" }
+          : {
+              outcome: "selected",
+              selected: resolved.selected,
+              canShare: stored.shareable.has(requested.placementId.toLowerCase()),
+            };
+      }
       case "create":
         return viewResult(
           await saveGridView(transaction, {

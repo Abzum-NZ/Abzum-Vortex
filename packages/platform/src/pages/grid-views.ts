@@ -13,7 +13,10 @@ import {
   type GridViewShareTargets,
   type GridViewSharing,
 } from "./grid-view-state";
-import { readRecordsTableContract } from "../definition/application-composition/records-display";
+import {
+  readRecordsTableContract,
+  type RecordsTableContract,
+} from "../definition/application-composition/records-display";
 import { placementSettings } from "../definition/application-composition-catalogue";
 import { walkPageComposition } from "./placement-walk";
 import type { PageDefinition } from "../schema";
@@ -68,6 +71,7 @@ const storedViewRowsSchema = z
 
 const storedReadSchema = z
   .object({
+    roleKeys: z.array(z.string()),
     shareablePlacementIds: z.array(idSchema).max(500),
     layouts: storedLayoutRowsSchema,
     views: storedViewRowsSchema,
@@ -117,6 +121,7 @@ export type StoredNamedGridView = Readonly<{
 
 /** Everything one page read returns of the store: layouts keyed by placement, views by placement. */
 export type StoredGridViews = Readonly<{
+  roleKeys: ReadonlySet<string>;
   /** The placements (lower-cased) whose tables name a share permission the person holds now. */
   shareable: ReadonlySet<string>;
   layouts: ReadonlyMap<string, StoredGridView>;
@@ -217,6 +222,7 @@ export const readGridViews = async (
     views.set(placementId, [...(views.get(placementId) ?? []), named]);
   }
   return {
+    roleKeys: new Set(read.roleKeys),
     shareable: new Set(read.shareablePlacementIds.map((id) => id.toLowerCase())),
     layouts: new Map(
       read.layouts.map((row) => [
@@ -268,8 +274,8 @@ export const addressedGridView = (
 export const gridViewPlacement = (
   page: PageDefinition,
   placementId: string,
-): Readonly<{ queryId: string }> | undefined => {
-  let found: Readonly<{ queryId: string }> | undefined;
+): Readonly<{ queryId: string; contract: RecordsTableContract }> | undefined => {
+  let found: Readonly<{ queryId: string; contract: RecordsTableContract }> | undefined;
   walkPageComposition(page.composition, (placement) => {
     if (placement.placementId.toLowerCase() !== placementId.toLowerCase()) return;
     const contract = readRecordsTableContract(placementSettings(placement.props));
@@ -281,6 +287,7 @@ export const gridViewPlacement = (
       return;
     found = {
       queryId: placement.vortex.queryId.toLowerCase(),
+      contract,
     };
   });
   return found;

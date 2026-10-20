@@ -317,9 +317,9 @@ function ShareDialog({
 }
 
 const viewScopeBadge = (view: GridViewItem): ReactElement | null =>
-  view.scope === "shared" ? (
+  view.scope !== "personal" ? (
     <Badge variant="secondary" className="shrink-0">
-      Shared
+      {view.scope === "default" ? "Default" : "Shared"}
     </Badge>
   ) : null;
 
@@ -342,8 +342,10 @@ function ViewSwitcher({
     (view) => needle === "" || view.name.toLowerCase().includes(needle),
   );
   const personal = shown.filter((view) => view.mine);
-  const shared = shown.filter((view) => !view.mine);
-  const canChange = selected !== null && (selected.mine || views.canShare);
+  const shared = shown.filter((view) => !view.mine && view.scope === "shared");
+  const defaults = shown.filter((view) => view.scope === "default");
+  const canChange =
+    selected !== null && selected.scope !== "default" && (selected.mine || views.canShare);
   const unsaved = selected !== null && differsFrom(context, selected);
   const hidden = selected === null ? undefined : hiddenSentence(selected);
   const label = selected?.name ?? "Views";
@@ -425,6 +427,7 @@ function ViewSwitcher({
                 Default view
                 {selected === null ? <Icon name="check" aria-hidden="true" /> : null}
               </Button>
+              {listOf("Default", defaults)}
               {listOf("Personal", personal)}
               {listOf("Shared with me", shared)}
               {shown.length === 0 && needle !== "" ? (
@@ -480,7 +483,7 @@ function ViewSwitcher({
                   Rename…
                 </Button>
               ) : null}
-              {selected !== null && views.canShare ? (
+              {selected !== null && selected.scope !== "default" && views.canShare ? (
                 <Button
                   size="sm"
                   variant="outline"

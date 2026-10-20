@@ -81,6 +81,7 @@ export type StudioSettingChoices = Readonly<{
   recordTypes: readonly Readonly<{ key: string; label: string }>[];
   actions: readonly StudioActionChoice[];
   relationships: readonly StudioRelationshipChoice[];
+  roles: readonly Readonly<{ key: string; label: string }>[];
   records: StudioRecordReader | null;
 }>;
 
@@ -107,6 +108,7 @@ export const studioDraftChoices = (
     recordTypes: studioSourceRecordTypes(source),
     actions: studioActionChoices(source, borrowed).map(named),
     relationships: studioRelationshipChoices(source, borrowed).map(named),
+    roles: source.body.roles.map((role) => ({ key: role.key, label: role.name })),
     records,
   };
 };

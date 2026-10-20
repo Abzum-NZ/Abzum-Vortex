@@ -399,6 +399,7 @@ export function ApplicationCompositionEditor(props: Props) {
         <StudioGridFeatures
           idPrefix={`${settingsId}-features`}
           property={featuresProperty}
+          tableSettings={settingsInputs.settings}
           value={settingsInputs.settings[featuresProperty.key]}
           query={props.choices.queries.find((query) => query.reference === settingsInputs.query)}
           compiledFields={(() => {

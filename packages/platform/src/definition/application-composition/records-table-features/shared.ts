@@ -177,7 +177,7 @@ export type RecordsTableFeatureDefinition<Settings extends object> = Readonly<{
   label: string;
   /** One short line saying what the feature lets people do. */
   description: string;
-  read(group: SettingsRecord): RecordsTableFeatureState<Settings>;
+  read(group: SettingsRecord): RecordsTableFeatureState<Settings> | undefined;
   check(
     state: RecordsTableFeatureState<Settings>,
     facts: RecordsTableQueryFacts,
