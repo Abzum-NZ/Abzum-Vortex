@@ -33,16 +33,17 @@ export function useGridPinning(
   enabled: boolean,
   selection: boolean,
   actions: boolean,
-): CSSProperties {
+): Readonly<{ variables: CSSProperties; scrollPadding: CSSProperties }> {
   const [viewport, setViewport] = useState(0);
+  // A grid without pinning never observes its width, so a plain table never re-renders on resize.
   useLayoutEffect(() => {
     const element = scroll.current;
-    if (element === null) return;
+    if (!enabled || element === null) return;
     const observer = new ResizeObserver(() => setViewport(element.clientWidth));
     setViewport(element.clientWidth);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [scroll]);
+  }, [scroll, enabled]);
 
   const style: Record<string, string | number> = {};
   const utilityWidth = (Number(selection) + Number(actions)) * GRID_CONTROL_COLUMN_WIDTH;
@@ -96,7 +97,12 @@ export function useGridPinning(
       }
     }
   }
-  style.scrollPaddingInlineStart = edgeWidth.start;
-  style.scrollPaddingInlineEnd = edgeWidth.end;
-  return style as CSSProperties;
+  // The viewport's scroll padding keeps a focused cell clear of the pinned edges.
+  return {
+    variables: style as CSSProperties,
+    scrollPadding: {
+      scrollPaddingInlineStart: edgeWidth.start,
+      scrollPaddingInlineEnd: edgeWidth.end,
+    },
+  };
 }

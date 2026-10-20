@@ -882,10 +882,7 @@ export function RecordsGrid({
     // The frame is the theme's card (its radius, ring and surface); the grid scrolls inside it.
     <Card
       ref={scrollRef}
-      style={{
-        scrollPaddingInlineStart: pinningStyle.scrollPaddingInlineStart,
-        scrollPaddingInlineEnd: pinningStyle.scrollPaddingInlineEnd,
-      }}
+      style={pinningStyle.scrollPadding}
       data-slot="grid-viewport"
       data-vortex-grid-virtualized={virtual ? "" : undefined}
       className={cn(
@@ -909,7 +906,7 @@ export function RecordsGrid({
         aria-colcount={slots.length}
         {...(selection === "multiple" ? { "aria-multiselectable": true } : {})}
         className="text-sm"
-        style={{ ...sizeStyle, ...pinningStyle, width: totalWidth, minWidth: "100%" }}
+        style={{ ...sizeStyle, ...pinningStyle.variables, width: totalWidth, minWidth: "100%" }}
         onKeyDown={onKeyDown}
         onFocus={onFocus}
         onBlur={onBlur}

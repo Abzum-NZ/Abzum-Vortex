@@ -3709,7 +3709,7 @@
         "key": "maximum_size_mb",
         "label": "Maximum size (MiB)",
         "required": true,
-        "minimum": 1e-6,
+        "minimum": 0.000001,
         "maximum": 5000,
         "integer": false
       },
@@ -7434,7 +7434,7 @@
         "key": "maximum_size_mb",
         "label": "Maximum size (MiB)",
         "required": true,
-        "minimum": 1e-6,
+        "minimum": 0.000001,
         "maximum": 5000,
         "integer": false
       },

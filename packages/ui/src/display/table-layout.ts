@@ -188,9 +188,14 @@ export const useGridLayout = ({
       ),
     [layout, shown],
   );
+  // Keyed by the pins alone, so a resize or reorder never hands the grid features a new pin map.
+  const pinSignature = layout.columns.map((entry) => `${entry.fieldId}:${entry.pin}`).join(",");
   const pins = useMemo(
-    () => Object.fromEntries(layout.columns.map((entry) => [entry.fieldId, entry.pin])),
-    [layout],
+    () =>
+      Object.fromEntries(
+        pinSignature.split(",").map((entry) => entry.split(":") as [string, RecordsTableColumnPin]),
+      ),
+    [pinSignature],
   );
   const pinning = contract?.features.pinning.enabled === true;
   const order = useMemo(() => {

@@ -169,14 +169,25 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         : {
             accessibleName,
             features,
-            layout,
+            pins: layout.state.pins,
+            setPin: layout.setPin,
             columns: layout.shown,
             rows,
             selectedRecordIds,
             narrowing,
             events,
           },
-    [accessibleName, features, layout, rows, selectedRecordIds, narrowing, events],
+    [
+      accessibleName,
+      features,
+      layout.state.pins,
+      layout.setPin,
+      layout.shown,
+      rows,
+      selectedRecordIds,
+      narrowing,
+      events,
+    ],
   );
   const gridFeatures = useGridFeatures(featureContext);
   const {

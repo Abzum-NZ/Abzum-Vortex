@@ -33,7 +33,9 @@ export type GridFeatureContext = Readonly<{
   selectedRecordIds: readonly string[];
   narrowing: TableNarrowing | undefined;
   events: DisplayEventHandlers | undefined;
-  layout: GridLayoutControls;
+  /** The person's pin per lower-cased field identity, and the one way to change it. */
+  pins: GridLayoutControls["state"]["pins"];
+  setPin: GridLayoutControls["setPin"];
 }>;
 
 export type GridFeaturePointProps = Readonly<{ context: GridFeatureContext }>;
