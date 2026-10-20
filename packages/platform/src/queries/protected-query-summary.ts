@@ -40,6 +40,7 @@ const readSummary = async (
         search: command.search ?? null,
         searchableFieldIds: command.searchableFieldIds,
         ...(command.grouping === undefined ? {} : { grouping: command.grouping }),
+        ...(command.pivot === undefined ? {} : { pivot: command.pivot }),
         ...(command.groupAfter === undefined ? {} : { groupAfter: command.groupAfter }),
         filterableFieldIds: command.filterableFieldIds,
       })}::text::jsonb
@@ -105,6 +106,18 @@ export const summariseCommand = async (
       result.groupByFieldIds.length !== 1 ||
       result.groupByFieldIds[0]?.toLowerCase() !== command.grouping.fieldId.toLowerCase() ||
       (result.nextGroupKey !== null && result.nextGroupKey !== result.groups.at(-1)?.groupKey))
+  )
+    throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+  if (
+    result.outcome === "completed" &&
+    command.pivot !== undefined &&
+    (result.pivot === undefined ||
+      result.pivot.rows.length > command.pivot.rowLimit ||
+      result.pivot.rowFieldId.toLowerCase() !== command.pivot.rowFieldId.toLowerCase() ||
+      result.pivot.columnFieldId.toLowerCase() !== command.pivot.columnFieldId.toLowerCase() ||
+      (result.nextGroupKey !== null &&
+        result.nextGroupKey !== undefined &&
+        result.nextGroupKey !== JSON.stringify(result.pivot.rows.at(-1)?.value)))
   )
     throw new Error("PROTECTED_QUERY_RESULT_INVALID");
   return result;

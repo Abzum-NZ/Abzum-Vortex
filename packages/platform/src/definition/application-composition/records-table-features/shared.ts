@@ -188,6 +188,7 @@ export type RecordsTableFeatureRefusalCode = Extract<
   | "definition_records_table_master_detail"
   | "definition_records_table_conditional_formatting"
   | "definition_records_table_pinning"
+  | "definition_records_table_pivot"
 >;
 
 /** The outcome of one feature check: available, or not possible with its one business sentence. */

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import {
+  applyRecordsTablePivotView,
   applyRecordsTableQueryChange,
   readRecordsTableQueryState,
   recordsTableAddressKey,
   recordsTableParameterPlacement,
   type RecordsTablePageRequest,
+  type RecordsTablePivotView,
   type RecordsTableQueryChange,
 } from "@vortex/platform/schema";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
@@ -104,6 +106,20 @@ export function useTablePageAddress({
     [clearSelection],
   );
 
+  /**
+   * Keeps the pivot view (open or closed, and its row position) in the address without a history
+   * entry and without reading the table again: the pivot is a view of the same query state.
+   */
+  const commitPivotView = useCallback(
+    (placementId: string, view: RecordsTablePivotView | undefined) => {
+      const parameters = new URLSearchParams(window.location.search);
+      applyRecordsTablePivotView(parameters, placementId, view);
+      const query = parameters.toString();
+      window.history.replaceState(null, "", query === "" ? window.location.pathname : `?${query}`);
+    },
+    [],
+  );
+
   /** Applies a person's sort, filter, search or column change; the address effect rereads the table. */
   const changeTableQuery = useCallback(
     (placementId: string, change: Exclude<RecordsTableQueryChange, { kind: "page" }>) => {
@@ -171,5 +187,5 @@ export function useTablePageAddress({
     }
   }, [clearSelection, currentSearch, model, refreshPlacements]);
 
-  return { commitTablePage, changeTableQuery, tableQueryPending };
+  return { commitTablePage, changeTableQuery, commitPivotView, tableQueryPending };
 }

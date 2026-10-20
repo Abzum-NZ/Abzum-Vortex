@@ -338,7 +338,15 @@ export type DisplaySemanticEventName =
    * A Records table's link filter asks the page for one bounded page of the field's target
    * records. It is the Column filters feature's own read, not a flow event.
    */
-  | "filter_records_requested";
+  | "filter_records_requested"
+  /**
+   * A Records table's pivot asks for one page of its rows, opens the pivot or closes it, or a cell
+   * opens the ordinary grid on the records it counts. These are the Pivot feature's own reads and
+   * address changes, not flow events.
+   */
+  | "pivot_requested"
+  | "pivot_view_changed"
+  | "pivot_drilled";
 
 /**
  * One declared semantic event. Row and item events always carry stable identity;
@@ -380,6 +388,21 @@ export type DisplaySemanticEvent =
       continuationToken?: string;
     }>
   | Readonly<{ event: "search_changed"; query: string }>
+  | Readonly<{
+      event: "pivot_requested";
+      /** The opaque position of the first row of the page; absent reads the first rows. */
+      cursor?: string;
+    }>
+  | Readonly<{
+      event: "pivot_view_changed";
+      /** The view to keep in the address: absent shows the ordinary grid. */
+      view: Readonly<{ cursor?: string }> | undefined;
+    }>
+  | Readonly<{
+      event: "pivot_drilled";
+      /** The typed filters (address spelling) that select the cell's records in the ordinary grid. */
+      filters: readonly Readonly<{ fieldId: string; filter: string }>[];
+    }>
   | Readonly<{
       /** The whole ordered sort a header asked for; an empty list asks for the default order. */
       event: "sort_changed";
@@ -464,6 +487,9 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "selection_changed",
   "filter_changed",
   "filter_records_requested",
+  "pivot_requested",
+  "pivot_view_changed",
+  "pivot_drilled",
   "search_changed",
   "sort_changed",
   "columns_changed",
@@ -926,7 +952,8 @@ const parsePagination = (
   return Object.freeze({ page: parsedPage, pageCount: parsedCount });
 };
 
-const parseSummaryValue = (
+/** @internal Shared with the pivot feature, whose cells are summary values. */
+export const parseSummaryValue = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
 ): DisplaySummaryMetric["value"] => {

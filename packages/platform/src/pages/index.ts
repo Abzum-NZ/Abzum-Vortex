@@ -90,6 +90,15 @@ export {
   type RowDetailResult,
   type RowDetailRow,
 } from "./records-table-features/master-detail";
+export {
+  readRecordsTablePivot,
+  type PivotCell,
+  type PivotDrill,
+  type PivotRequest,
+  type PivotResult,
+  type PivotRow,
+  type RecordsTablePivotQueryRunner,
+} from "./records-table-features/pivot";
 export { readPageSubjectInTransaction } from "./page-subject-read";
 export {
   createPageSubjectReader,

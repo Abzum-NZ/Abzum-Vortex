@@ -55,6 +55,9 @@ export const studioGridFeatureEditors: Readonly<
   inline_edit: { kind: "settings" },
   master_detail: { kind: "settings" },
   conditional_formatting: { kind: "custom" },
+  // The catalogue restricts the row and column pickers to choice and date fields and the measure
+  // picker to number and money fields, so Studio offers only fields a pivot can use.
+  pivot: { kind: "settings" },
 };
 
 /**
@@ -68,6 +71,12 @@ export const studioGridFeatureStartSettings: Readonly<
 > = {
   // Related records read ten at a time unless the builder chooses otherwise.
   master_detail: { child_page_size: { kind: "number", value: 10 } },
+  // A pivot starts as a count of records, 40 rows at a time, with totals.
+  pivot: {
+    measure_function: { kind: "choice", value: "count" },
+    row_page_size: { kind: "number", value: 40 },
+    totals: { kind: "boolean", value: true },
+  },
 };
 
 /**

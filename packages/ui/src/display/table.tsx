@@ -18,7 +18,11 @@ import {
   SelectAllControl,
   SelectionControl,
 } from "./controls";
-import { useGridFeatures, type GridFeatureContext } from "./grid-features/registry";
+import {
+  useGridFeatures,
+  type GridFeatureContext,
+  type GridPivotView,
+} from "./grid-features/registry";
 import { FULL_SCREEN_CLASS, GridToolbar, useGridFullScreen } from "./grid-features/toolbar";
 import { resolveDisplayContext, rowName, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
@@ -162,6 +166,32 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   const [message, announce] = useAnnouncer();
   const [clearCount, setClearCount] = useState(0);
 
+  // The pivot view: the address opened the table in it, or the person opened it here. It is a view
+  // of the same query state, so changing it reads no rows; the host keeps it in the address.
+  const pivotOffered = features?.pivot !== undefined;
+  const addressedPivot = features?.pivot?.view;
+  const addressedPivotKey = addressedPivot === undefined ? "" : `on:${addressedPivot.cursor ?? ""}`;
+  const [pivotView, setPivotView] = useState<GridPivotView["view"]>(addressedPivot);
+  const [seenPivotKey, setSeenPivotKey] = useState(addressedPivotKey);
+  if (seenPivotKey !== addressedPivotKey) {
+    setSeenPivotKey(addressedPivotKey);
+    setPivotView(addressedPivot);
+  }
+  const pivotChanged = events?.pivot_view_changed;
+  const pivot = useMemo(
+    (): GridPivotView | undefined =>
+      pivotOffered
+        ? {
+            view: pivotView,
+            setView: (view) => {
+              setPivotView(view);
+              void pivotChanged?.({ event: "pivot_view_changed", view });
+            },
+          }
+        : undefined,
+    [pivotOffered, pivotView, pivotChanged],
+  );
+
   // The optional grid features draw through their extension points; each feature's code loads only
   // when the projection turns it on.
   const featureContext = useMemo(
@@ -178,6 +208,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
             selectedRecordIds,
             narrowing,
             events,
+            pivot,
           },
     [
       accessibleName,
@@ -189,6 +220,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
       selectedRecordIds,
       narrowing,
       events,
+      pivot,
     ],
   );
   const gridFeatures = useGridFeatures(featureContext);
@@ -421,7 +453,10 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     />
   );
 
+  // While the pivot is open it takes the place of the rows: the grid and its pages are not drawn.
+  const pivotOpen = pivot?.view !== undefined && ready;
   const body = ((): ReactElement => {
+    if (pivotOpen) return <>{gridFeatures.viewBody()}</>;
     if (state.status === "loading") return loading;
     if (state.status === "empty")
       return <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />;
@@ -546,7 +581,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
       ) : (
         body
       )}
-      {!ready || values === undefined ? null : (
+      {!ready || values === undefined || pivotOpen ? null : (
         <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
           <p className="m-0 text-xs text-muted-foreground tabular-nums">
             {values.page === undefined ? "" : `Page ${values.page} · `}
