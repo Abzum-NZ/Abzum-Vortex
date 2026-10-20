@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   canonicalJson,
   componentSettingApplies,
+  plainSourceSettingValue,
+  typedSourceSettingValue,
   validateComponentSettings,
   type ApplicationSourceDocument,
   type BlockPropertySchemaContract,
@@ -1339,7 +1341,17 @@ function SettingFields({
         const set = (next: SettingValue) => {
           const result: Record<string, SourceBlockPropertyValueContract> = { ...values };
           if (next === undefined) delete result[property.key];
-          else result[property.key] = next;
+          // A group's declared defaults are part of its typed value. Materialize them here,
+          // including new list entries, before the composition command checks its round trip.
+          // Incomplete user input stays in the ordinary settings validation path.
+          else
+            result[property.key] =
+              typedSourceSettingValue(
+                plainSourceSettingValue(next),
+                property,
+                [property.key],
+                [],
+              ) ?? next;
           for (const sibling of properties)
             if (!componentSettingApplies(sibling, result)) delete result[sibling.key];
           onChange(result);
