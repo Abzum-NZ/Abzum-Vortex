@@ -947,6 +947,8 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
           (field.type === "calculation" && storedNumericResultType === undefined)
         )
           refuseSummaryField("vortex.definition.module_query_derived_aggregate_source", field);
+        else if (aggregate.operation === "distinct_count" && field.filterable !== true)
+          refuseSummaryField("vortex.definition.module_query_distinct_field_filterable", field);
         else if (
           (aggregate.operation === "sum" || aggregate.operation === "average") &&
           !numericAggregateFieldTypes.has(fieldType)
