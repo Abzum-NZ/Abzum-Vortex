@@ -33,6 +33,8 @@ import {
   type StudioRelatedRecordsChoices,
 } from "./grid-features";
 import { StudioSpreadsheetEditor } from "./grid-features/spreadsheet";
+import { StudioRowEditEditor } from "./grid-features/row-edit";
+import { StudioInlineEditEditor } from "./grid-features/inline-edit";
 import type { StudioBoardPipeline } from "./board-source";
 import { StudioBoardEditor } from "./grid-features/board";
 import { StudioConditionalFormattingEditor } from "./grid-features/conditional-formatting";
@@ -46,6 +48,16 @@ import {
 } from "./studio-setting-controls";
 
 type GroupValue = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
+
+/** The fields a table shows as columns, as its settings name them. */
+const tableColumnFields = (tableSettings: StudioSettingValues): readonly string[] => {
+  const columns = tableSettings["columns"];
+  if (columns?.kind !== "list") return [];
+  return columns.items.flatMap((item) => {
+    const field = item.kind === "group" ? item.properties["field"] : undefined;
+    return field?.kind === "field_reference" ? [field.field] : [];
+  });
+};
 
 /**
  * The Records table's `features` setting group: the group whose entries are exactly the grid
@@ -79,6 +91,7 @@ export function StudioGridFeatures({
   query,
   compiledFields,
   tableSettings,
+  canvasArrangement,
   signedIn,
   choices,
   boardChoices,
@@ -99,6 +112,7 @@ export function StudioGridFeatures({
   compiledFields: readonly ModuleField[] | undefined;
   /** The block's choices: the bound query's fields by business name. */
   tableSettings: StudioSettingValues;
+  canvasArrangement?: GroupValue | undefined;
   signedIn: boolean;
   choices: StudioSettingChoices;
   /** Real fields of the selected pipeline's record type, including fields not yet queried. */
@@ -237,7 +251,11 @@ export function StudioGridFeatures({
                     id={switchId}
                     checked={enabled}
                     disabled={disabled || features === undefined}
-                    onCheckedChange={(on: boolean) =>
+                    onCheckedChange={(on: boolean) => {
+                      // The workflow bound to the feature stays in the draft while it is off, so
+                      // its event identity goes with the feature both ways.
+                      const bound = current.properties["event_id"];
+                      const kept = bound === undefined ? {} : { event_id: bound };
                       write(
                         key,
                         on
@@ -245,6 +263,7 @@ export function StudioGridFeatures({
                               kind: "group",
                               properties: {
                                 ...studioGridFeatureStartSettings[key],
+                                ...kept,
                                 enabled: { kind: "boolean", value: true },
                               },
                             }
@@ -252,16 +271,37 @@ export function StudioGridFeatures({
                               const defaultValue = declaration?.defaultValue;
                               if (defaultValue?.kind !== "group")
                                 throw new Error(`Grid feature ${key} has no catalogue default`);
-                              return defaultValue as GroupValue;
+                              return {
+                                ...(defaultValue as GroupValue),
+                                properties: { ...(defaultValue as GroupValue).properties, ...kept },
+                              };
                             })(),
-                      )
-                    }
+                      );
+                    }}
                   />
                 </ItemActions>
               </Item>
               {enabled && key === "spreadsheet" ? (
                 <StudioSpreadsheetEditor
                   value={current}
+                  disabled={disabled}
+                  onChange={(next) => write(key, next)}
+                />
+              ) : null}
+              {enabled && key === "row_edit" ? (
+                <StudioRowEditEditor
+                  value={current}
+                  facts={facts}
+                  columns={tableColumnFields(tableSettings)}
+                  disabled={disabled}
+                  onChange={(next) => write(key, next)}
+                />
+              ) : null}
+              {enabled && key === "inline_edit" ? (
+                <StudioInlineEditEditor
+                  value={current}
+                  facts={facts}
+                  columns={tableColumnFields(tableSettings)}
                   disabled={disabled}
                   onChange={(next) => write(key, next)}
                 />
@@ -285,6 +325,7 @@ export function StudioGridFeatures({
                   <StudioSavedViewsEditor
                     value={current}
                     tableSettings={tableSettings}
+                    canvasArrangement={canvasArrangement}
                     roles={choices.roles}
                     disabled={disabled}
                     onChange={(next) => write(key, next)}

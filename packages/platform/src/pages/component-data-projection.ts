@@ -23,6 +23,8 @@ import { defaultQueryPageSize } from "../definition/module-query-edit";
 import {
   evaluateConditionalFormatting,
   projectRecordsTableFeatures,
+  rowMayChangeField,
+  type RecordsTableInlineEditor,
   type ConditionalFormattingContext,
   type RecordsTableFeatureProjection,
   type RecordsTableRowFormat,
@@ -133,6 +135,12 @@ export type ProjectedTableRow = Readonly<{
   revision: number;
   capabilities: NonNullable<ProtectedQueryRow["capabilities"]>;
   cells: Readonly<Record<string, ProjectedScalarCellValue>>;
+  /**
+   * The stored value of each inline-editable field this row lets the viewer change (null when
+   * empty), kept apart from the displayed cells: an editor starts from this, never from a display
+   * string. Absent when the row has none.
+   */
+  edit?: Readonly<Record<string, JsonValue>>;
   /** The style keys and measures the table's formatting gives this row; absent when none. */
   format?: RecordsTableRowFormat;
   /** A tree row the viewer may read a child of; absent on every other row. */
@@ -234,6 +242,8 @@ export type ComponentDataProjectionInput = Readonly<{
   fieldTableColumns?: Readonly<Record<string, readonly TableFieldColumn[]>>;
   /** What a Records table's formatting rules are evaluated with; supplied only when they are on. */
   formatting?: ConditionalFormattingContext;
+  /** How a cell edits each field of the installed definition (field identity to editor); supplied only when inline editing is on. */
+  fieldEditors?: Readonly<Record<string, RecordsTableInlineEditor>>;
   /** The pivot view the address opens the table in; absent shows the ordinary grid. */
   pivotView?: Readonly<{ cursor?: string }>;
 }>;
@@ -482,6 +492,25 @@ const isReadable = (field: string, input: ComponentDataProjectionInput): boolean
 const RESTRICTED_CELL: ProjectedScalarCellValue = Object.freeze({ kind: "restricted" });
 
 /**
+ * The stored values of the inline-editable fields of one row, for the shown columns only: a field
+ * this row does not let the viewer change, or the engine withheld, carries no value.
+ */
+const editValuesOf = (
+  row: ListRow,
+  columns: readonly Readonly<{ key: string }>[],
+  editable: readonly Readonly<{ field: string }>[],
+  input: ComponentDataProjectionInput,
+): Pick<ProjectedTableRow, "edit"> => {
+  const entries = editable.flatMap(({ field }): [string, JsonValue][] => {
+    if (!columns.some((column) => sameField(column.key, field))) return [];
+    if (!rowMayChangeField(row, field) || !isReadable(field, input)) return [];
+    const stored = valueOf(row, field);
+    return stored === undefined ? [] : [[field, stored.value]];
+  });
+  return entries.length === 0 ? {} : { edit: Object.fromEntries(entries) };
+};
+
+/**
  * Projects a Records table's query rows into its display payload. Columns and headings come only
  * from the declared contract, narrowed to the columns the person's layout arranges (already
  * resolved against the declared columns and their field policy) and shown by the columns it shows,
@@ -549,9 +578,14 @@ export const projectRecordsTableData = (
     fieldBounds,
     completeRows,
     input.filterFields,
+    input.fieldEditors,
     formatting?.projection,
     input.pivotView,
   );
+  const editableFields = [
+    ...(features?.inlineEdit?.fields ?? []),
+    ...(features?.rowEdit?.fields ?? []),
+  ];
 
   return {
     status: "ready",
@@ -572,6 +606,7 @@ export const projectRecordsTableData = (
               columns.some((column) => sameField(column.key, fieldId)),
             ),
           },
+          ...editValuesOf(row, columns, editableFields, input),
           cells: Object.fromEntries(
             columns.map((column) => {
               const stored = isReadable(column.key, input) ? valueOf(row, column.key) : undefined;

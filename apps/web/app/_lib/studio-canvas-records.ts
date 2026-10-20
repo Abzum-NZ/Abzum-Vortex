@@ -48,8 +48,15 @@ const requestSchema = z
       .max(160)
       .regex(/^[a-z][a-z0-9_]*$/),
     area: z.string().min(1).max(400),
+    /**
+     * The value the builder chose in each control on the canvas, by the control's placement name.
+     * They are candidate values only: each is typed and validated by the one binding resolver
+     * exactly like a running page's address value, and none can carry the viewer's identity.
+     */
+    controlValues: z.record(z.string().min(1).max(160), z.string().max(400)),
   })
-  .strict();
+  .strict()
+  .refine((request) => Object.keys(request.controlValues).length <= 32);
 
 /**
  * The records the data blocks of one content area of a saved draft page show, by block name, for
@@ -233,6 +240,8 @@ export const readStudioCanvasRecords = async (
     const parameters: Record<string, string> = subjectId.success
       ? { [pageSubjectParameter]: subjectId.data }
       : {};
+    // The names the compiled placements go by on the canvas, so a control value finds its control.
+    const compiledOf = new Map([...aliases].map(([compiled, alias]) => [alias, compiled]));
     const settingsOf = (placement: Placement) =>
       placement.settings as Parameters<typeof readRecordDetailContract>[0];
     // The page's own record, shown by a Record detail that reads no query.
@@ -300,9 +309,10 @@ export const readStudioCanvasRecords = async (
       },
       permittedApplicationKeys: undefined,
       permittedApplicationsUnavailable: false,
-      // The Studio canvas shows the authored layout; a person's layout belongs to the running app.
+      // The Studio canvas shows the authored layout and reports arrangements for capture; a
+      // person's layout belongs to the running app.
       gridLayouts: {
-        persisted: false,
+        storage: "canvas",
         stored: {
           roleKeys: new Set(),
           shareable: new Set(),
@@ -315,6 +325,19 @@ export const readStudioCanvasRecords = async (
       adoptSubjectRead: () => {},
       markSubjectUnreadable: () => {},
     };
+    // A control's chosen value becomes the page parameter that control publishes. A name that is
+    // not a control of this area, or that publishes no parameter, is ignored and logged; the
+    // viewer's identity parts never come through here.
+    for (const [alias, text] of Object.entries(request.controlValues)) {
+      const parameter = input.bindings.controls.get(compiledOf.get(alias) ?? "");
+      if (parameter === undefined) {
+        console.error(
+          `[studio] canvas control value ignored: STUDIO_CANVAS_CONTROL_VALUE_REFUSED cause=not_a_control placement=${alias}`,
+        );
+        continue;
+      }
+      if (text !== "") parameters[parameter] = text;
+    }
     signal?.throwIfAborted();
     await Promise.all(placements.map((placement) => readPlacement(input, placement)));
     const records: Record<string, PageDataState> = {};

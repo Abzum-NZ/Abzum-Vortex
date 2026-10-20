@@ -106,6 +106,10 @@ const suppliedByEvent: Readonly<
     { name: "values", label: "The card's new values" },
     { name: "value", label: "The column it was dropped in" },
   ],
+  row_edit: [
+    { name: "record_id", label: "The edited record" },
+    { name: "values", label: "All changed fields of the row" },
+  ],
   inline_edit: [
     { name: "record_id", label: "The edited record" },
     { name: "values", label: "The edited values" },

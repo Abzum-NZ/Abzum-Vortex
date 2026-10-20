@@ -26,6 +26,7 @@ import {
 import {
   fieldChoiceLabelsOf,
   fieldDateTypesOf,
+  fieldEditorsOf,
   fieldFilterTargetsOf,
   fieldLabelsOf,
   fieldLinkTypesOf,
@@ -107,7 +108,7 @@ export const readRecordsTable = async (
   let views: GridViewsState | undefined;
   let selectedQuery: RecordsTableQueryState | undefined;
   let selectedLayout: GridLayoutState["layout"] | undefined;
-  if (contract.features.savedViews.enabled && gridLayouts.persisted) {
+  if (contract.features.savedViews.enabled && gridLayouts.storage === "personal") {
     const listed = (gridLayouts.stored.views.get(placementId.toLowerCase()) ?? []).filter(
       (view) => view.queryId === queryId,
     );
@@ -192,7 +193,7 @@ export const readRecordsTable = async (
           queryId,
         );
   const layout: GridLayoutState = {
-    persisted: gridLayouts.persisted,
+    storage: gridLayouts.storage,
     queryId,
     revision: stored?.revision ?? null,
     layout: resolvedLayout.layout,
@@ -290,6 +291,9 @@ export const readRecordsTable = async (
       fieldDateTypes: fieldDateTypesOf(bound.module),
       fieldLinkTypes: fieldLinkTypesOf(bound.module),
       filterTargets,
+      ...(contract.features.inlineEdit.enabled || contract.features.rowEdit.enabled
+        ? { fieldEditors: fieldEditorsOf(bound.module) }
+        : {}),
       ...(timeZone === undefined ? {} : { timeZone }),
       resolveRecordLinks: read.services.resolveRecordLinks,
       state: { ...effectiveState, page },

@@ -203,18 +203,40 @@ export type RecordsTableQueryFacts = Readonly<{
   unselectedFields?: readonly Readonly<{ field: string; label: string }>[];
 }>;
 
-/** The field types whose stored value people change directly. */
+/**
+ * The field types whose stored value people change directly in a cell: text, numbers, yes/no,
+ * choices, dates and the address types. Calculations, totals, generated numbers, money, formatted
+ * text, several choices, links, tables and attachments are never edited in a cell.
+ */
 export const recordsTableEditableFieldTypes: readonly string[] = Object.freeze([
   "text",
   "long_text",
   "whole_number",
   "decimal_number",
-  "money",
   "yes_no",
+  "choice",
+  "date",
+  "date_time",
   "email_address",
   "phone_number",
   "web_address",
 ]);
+
+/** Why a field of the bound query cannot be edited in a cell, as a business sentence; undefined when it can. */
+export const recordsTableFieldNotEditableReason = (
+  field: RecordsTableFieldFacts,
+): string | undefined => {
+  if (field.editable) return undefined;
+  switch (field.type) {
+    case "calculation":
+    case "total":
+      return `${field.label} is calculated, so it cannot be edited here`;
+    case "reference_number":
+      return `${field.label} is numbered by the system, so it cannot be edited here`;
+    default:
+      return `${field.label} cannot be edited in a cell`;
+  }
+};
 
 /** A feature's codes: each is a validation catalogue entry whose message is the business sentence. */
 export type RecordsTableFeatureRefusalCode = Extract<
@@ -224,6 +246,7 @@ export type RecordsTableFeatureRefusalCode = Extract<
   | "definition_records_table_saved_views"
   | "definition_records_table_bulk_actions"
   | "definition_records_table_inline_edit"
+  | "definition_records_table_row_edit"
   | "definition_records_table_master_detail"
   | "definition_records_table_tree"
   | "definition_records_table_conditional_formatting"

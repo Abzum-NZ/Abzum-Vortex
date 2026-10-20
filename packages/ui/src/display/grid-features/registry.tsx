@@ -3,6 +3,7 @@
 import {
   lazy,
   Suspense,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -77,6 +78,13 @@ export type GridFeatureInteractionProps = Readonly<{
   surface: GridInteractionSurface;
 }>;
 
+export type GridFeatureScopeProps = Readonly<{
+  context: GridFeatureContext;
+  children: ReactNode;
+  retainRow: (recordId: string | undefined) => void;
+}>;
+export type GridFeatureCommandProps = Readonly<{ context: GridFeatureContext; row: DisplayRow }>;
+
 export type GridFeaturePointProps = Readonly<{ context: GridFeatureContext }>;
 export type GridFeatureColumnProps = Readonly<{ context: GridFeatureContext; column: GridColumn }>;
 /**
@@ -137,6 +145,9 @@ export const GridBoardView = lazy(async () => ({
  * and `SelectionBanner` over the selected rows.
  */
 export type GridFeatureModule = Readonly<{
+  Scope?: ComponentType<GridFeatureScopeProps>;
+  RowCommands?: ComponentType<GridFeatureCommandProps>;
+  RowEditor?: ComponentType<GridFeatureCommandProps>;
   GridInteraction?: ComponentType<GridFeatureInteractionProps>;
   ToolbarItems?: ComponentType<GridFeaturePointProps>;
   ColumnMenuItems?: ComponentType<GridFeatureColumnProps>;
@@ -170,6 +181,7 @@ const loaders: Readonly<
   saved_views: () => import("./saved-views"),
   bulk_actions: () => import("./bulk-actions"),
   inline_edit: () => import("./inline-edit"),
+  row_edit: () => import("./row-editor"),
   master_detail: () => import("./master-detail"),
   tree: () => import("./tree"),
   conditional_formatting: () => import("./conditional-format"),
@@ -184,6 +196,7 @@ const projectionKeys: Readonly<Record<keyof RecordsTableFeatureProjection, GridE
   savedViews: "saved_views",
   bulkActions: "bulk_actions",
   inlineEdit: "inline_edit",
+  rowEdit: "row_edit",
   masterDetail: "master_detail",
   tree: "tree",
   conditionalFormatting: "conditional_formatting",
@@ -243,6 +256,7 @@ const featurePoints: Readonly<Record<GridExtensionKey, readonly ComponentPoint[]
   saved_views: ["ToolbarItems"],
   bulk_actions: ["SelectionBanner"],
   inline_edit: ["CellEditor"],
+  row_edit: ["Scope", "CellEditor", "RowCommands", "RowEditor", "ToolbarItems"],
   master_detail: ["RowExpansion"],
   tree: ["RowExpansion"],
   conditional_formatting: ["CellAdornment", "HeaderAdornment"],
@@ -297,6 +311,10 @@ const drawPoint = (
  */
 export function useGridFeatures(context: GridFeatureContext | undefined): Readonly<{
   keys: readonly GridExtensionKey[];
+  scope: (children: ReactNode) => ReactNode;
+  rowCommands: (row: DisplayRow) => ReactNode;
+  rowEditor: (row: DisplayRow) => ReactNode;
+  retainedRecordIds: readonly string[];
   /** A projected feature draws a panel below an expanded row, so rows offer an expand toggle. */
   expands: boolean;
   /** What that panel holds and how many may be open; undefined when no feature draws one. */
@@ -314,6 +332,8 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   decorate: (row: DisplayRow, column: GridColumn, plain: ReactNode) => ReactNode;
   cellClassName: (row: DisplayRow, column: GridColumn) => string | undefined;
 }> {
+  const [retainedRow, setRetainedRow] = useState<string | undefined>(undefined);
+  const retainRow = useCallback((recordId: string | undefined) => setRetainedRow(recordId), []);
   const keys = projectedGridFeatures(context?.features);
   const signature = keys.join(",");
   // Cell decorations are plain functions, not components: their modules are read once loaded.
@@ -397,6 +417,8 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
       return current === undefined ? null : drawPoint(active, point, current, props);
     };
     return {
+      rowCommands: (row: DisplayRow) => drawAt("RowCommands", { row }),
+      rowEditor: (row: DisplayRow) => drawAt("RowEditor", { row }),
       interaction: (surface: GridInteractionSurface) => drawAt("GridInteraction", { surface }),
       headerAdornment: (column: GridColumn) => drawAt("HeaderAdornment", { column }),
       columnMenuItems: (column: GridColumn) => drawAt("ColumnMenuItems", { column }),
@@ -434,6 +456,22 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   const active = activeKeys(signature);
   return {
     keys: active,
+    retainedRecordIds: retainedRow === undefined ? [] : [retainedRow],
+    scope: (children) =>
+      context === undefined
+        ? children
+        : active
+            .filter((key) => featurePoints[key].includes("Scope"))
+            .reduce<ReactNode>((inner, key) => {
+              const Scope = featurePoint<GridFeatureScopeProps>(key, "Scope");
+              return (
+                <Suspense key={key} fallback={inner}>
+                  <Scope context={context} retainRow={retainRow}>
+                    {inner}
+                  </Scope>
+                </Suspense>
+              );
+            }, children),
     expands: active.some((key) => featurePoints[key].includes("RowExpansion")),
     expansionKind: active.map((key) => expansionKinds[key]).find((kind) => kind !== undefined),
     toolbarItems: () =>

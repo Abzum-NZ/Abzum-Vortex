@@ -13,7 +13,12 @@ import type {
   ApplicationPageModel,
   PlacementFlowBinding,
 } from "../../../../../../_lib/application-page";
-import type { Notice, RefreshedPlacementData, TableContinuationTarget } from "./types";
+import type {
+  DispatchOutcome,
+  Notice,
+  RefreshedPlacementData,
+  TableContinuationTarget,
+} from "./types";
 import { asComponentBinding } from "./event-values";
 
 export function usePlacementActions({
@@ -40,7 +45,8 @@ export function usePlacementActions({
     formPlacementId?: string,
     afterAccepted?: () => Promise<Notice | undefined>,
     sourceBindingId?: string,
-  ) => Promise<void>;
+    reportOnControl?: true,
+  ) => Promise<DispatchOutcome>;
   flowRuntime: ReturnType<typeof createFlowRuntime>;
   formOwners: Readonly<Record<string, string>>;
   busy: boolean;
@@ -79,6 +85,10 @@ export function usePlacementActions({
       /** The one record this gesture is about, when it is not the record the page shows. */
       gestureSubject?: Readonly<{ recordId: string; revision: number }>,
       afterAccepted?: () => Promise<Notice | undefined>,
+      /** One identity for this user gesture, so a repeated request is the same run. */
+      clickId?: string,
+      /** The gesture is shown on its own control, which tells the person its outcome. */
+      reportOnControl?: true,
     ) => {
       const callerInputs = { ...supplied };
       for (const selectedReadInput of binding.selectedReadInputs ?? []) {
@@ -101,12 +111,13 @@ export function usePlacementActions({
           Object.fromEntries(
             Object.entries(callerInputs).filter(([name]) => binding.callerInputs.includes(name)),
           ),
-          undefined,
+          clickId,
           gestureSubject,
         ),
         formOwners[placementId],
         afterAccepted,
         binding.bindingId,
+        reportOnControl,
       );
     },
     [applyDispatch, formOwners, flowRuntime],
