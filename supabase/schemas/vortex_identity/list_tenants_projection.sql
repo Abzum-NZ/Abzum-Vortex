@@ -1,6 +1,6 @@
 create or replace function vortex_identity.list_tenants_projection(
   p_record_ids uuid[], p_sort_key text, p_direction text,
-  p_after jsonb, p_limit integer
+  p_after jsonb, p_limit integer, p_predicate jsonb
 )
 returns table (
   organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
@@ -19,6 +19,7 @@ declare
   after_text text;
   after_time timestamptz;
   after_record_id uuid;
+  predicate_plan jsonb;
 begin
   if p_sort_key not in ('record_id', 'short_name', 'display_name', 'state',
       'state_changed_at', 'created_at')
@@ -92,6 +93,15 @@ begin
       then ' collate "C"' else '' end,
     case when p_direction = 'ascending' then 'asc' else 'desc' end,
     case when p_direction = 'ascending' then 'asc' else 'desc' end);
+  predicate_plan := vortex_record.compile_projection_predicate_internal(
+    p_predicate,
+    $declared${
+      "state": {"sql": "tenant.state", "database": "text", "filter": true},
+      "short_name": {"sql": "tenant.short_name", "database": "text", "search": true},
+      "display_name": {"sql": "tenant.display_name", "database": "text", "search": true}
+    }$declared$::jsonb,
+    10
+  );
   return query execute $scan$
     select $1, tenant.tenant_id, tenant.revision,
       pg_catalog.jsonb_build_object(
@@ -112,18 +122,19 @@ begin
           and assignment.starts_at <= $9
           and (assignment.expires_at is null or assignment.expires_at > $9)
       ))
-  $scan$ || keyset_sql || pg_catalog.format(' order by %s limit $6', order_sql)
+  $scan$ || coalesce(' and ' || (predicate_plan ->> 'predicate'), '') || keyset_sql || pg_catalog.format(' order by %s limit $6', order_sql)
   using visible_organization_id, p_record_ids, after_text, after_record_id,
-    after_time, p_limit, is_super_administrator, actor_identity_id, evaluated_at;
+    after_time, p_limit, is_super_administrator, actor_identity_id, evaluated_at,
+    predicate_plan -> 'parameters';
 end
 $function$;
 
 revoke all on function vortex_identity.list_tenants_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_identity.list_tenants_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) to vortex_owner, vortex_record_adapter, postgres;
 alter function vortex_identity.list_tenants_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) owner to vortex_owner;

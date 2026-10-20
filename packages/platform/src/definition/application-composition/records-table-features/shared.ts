@@ -165,8 +165,16 @@ export type RecordsTableBoardFacts = Readonly<{
   }>[];
   selected: readonly string[];
   groupBy: readonly string[];
-  /** The aliases of the query's own totals. */
-  aggregates: readonly string[];
+  /**
+   * The query's own totals: each alias with its operation, the field it is taken of (absent for a
+   * count of records) and the business label it is offered under.
+   */
+  aggregates: readonly Readonly<{
+    alias: string;
+    operation: string;
+    field?: string;
+    label: string;
+  }>[];
   relationshipHops: number;
   pageSize: number;
   stageFields: readonly string[];
@@ -250,6 +258,7 @@ export type RecordsTableFeatureRefusalCode = Extract<
   | "definition_records_table_row_edit"
   | "definition_records_table_master_detail"
   | "definition_records_table_tree"
+  | "definition_records_table_grouping"
   | "definition_records_table_conditional_formatting"
   | "definition_records_table_pinning"
   | "definition_records_table_pivot"
