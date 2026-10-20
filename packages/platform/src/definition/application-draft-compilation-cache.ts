@@ -5,9 +5,9 @@ import type {
   DefinitionDraftCandidate,
   DefinitionPublicationCandidate,
   DefinitionResolution,
-  OwnedModuleRoot,
 } from "./definition-publication-contracts";
 import type { ResolvedDependencies } from "./definition-dependency-resolution";
+import { sameCanonicalValue } from "./canonical-json";
 
 const sameApplicationPublication = (
   retained: ApplicationDraftCompilation,
@@ -16,28 +16,6 @@ const sameApplicationPublication = (
   retained.candidate.draft.rootId === application.draft.rootId &&
   retained.candidate.draft.organizationId === application.draft.organizationId &&
   retained.candidate.draft.publishedRevision === application.draft.publishedRevision;
-
-/** The authenticated inputs of the same immutable staged Module revision, before a history read. */
-export const readRetainedApplicationModuleCandidate = (
-  application: DefinitionCandidateDraft,
-  root: OwnedModuleRoot,
-  sourceFingerprint: string,
-): DefinitionPublicationCandidate | undefined => {
-  if (root.sourceFingerprint !== sourceFingerprint) return undefined;
-  for (const retained of [...applicationDraftCompilations.values()].reverse()) {
-    if (!sameApplicationPublication(retained, application)) continue;
-    const step = retained.releasePlan.moduleCompilations.find(
-      ({ candidate }) =>
-        candidate.draft.rootId === root.rootId &&
-        candidate.draft.key === root.key &&
-        candidate.draft.draftRevision === root.draftRevision &&
-        candidate.draft.sourceFingerprint === sourceFingerprint &&
-        (candidate.draft.publishedRevision ?? null) === root.currentReleaseRevision,
-    );
-    if (step !== undefined) return step.candidate;
-  }
-  return undefined;
-};
 
 /** A possible retained draft; the reader must check its live revision and fingerprints. */
 export const readRetainedApplicationDraftCandidate = (
@@ -115,6 +93,13 @@ export const readRetainedApplicationModule = (
         append.resolutionSnapshot.fingerprint === resolution.fingerprint,
     );
     if (step === undefined) continue;
+    // A builder compile stages inline Modules in memory: its output is the release only when the
+    // stored draft (editor, times, identities) is exactly the one that output was compiled from.
+    if (
+      !sameCanonicalValue(step.candidate.draft, module.draft) ||
+      !sameCanonicalValue(step.candidate.identities, module.identities)
+    )
+      continue;
     if (
       step.dependencies.modules.length === dependencies.modules.length &&
       dependencies.modules.every((release, index) => {

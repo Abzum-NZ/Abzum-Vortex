@@ -11,10 +11,7 @@ import {
 } from "../schema";
 import { applicationValidationContractVersion } from "./application-contract-versions";
 import { applicationModuleSources } from "./application-module-lowering";
-import {
-  readRetainedApplicationModule,
-  readRetainedApplicationModuleCandidate,
-} from "./application-draft-compilation-cache";
+import { readRetainedApplicationModule } from "./application-draft-compilation-cache";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
   assertReleasable,
@@ -211,16 +208,14 @@ const releaseInlineModules = async (
     const root = roots.get(source.key);
     if (root === undefined) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
     const sourceFingerprint = fingerprintCanonicalValue(source);
-    const module =
-      readRetainedApplicationModuleCandidate(candidate, root, sourceFingerprint) ??
-      validateCandidate(
-        context,
-        await transaction.readCandidate(root.rootId),
-        prepareDefinitionPublicationCommandSchema.parse({
-          rootId: root.rootId,
-          expectedDraftRevision: root.draftRevision,
-        }),
-      );
+    const module = validateCandidate(
+      context,
+      await transaction.readCandidate(root.rootId),
+      prepareDefinitionPublicationCommandSchema.parse({
+        rootId: root.rootId,
+        expectedDraftRevision: root.draftRevision,
+      }),
+    );
     if (module.draft.kind !== "module" || module.draft.sourceFingerprint !== sourceFingerprint)
       return refuse("DEFINITION_SOURCE_EVIDENCE_MISMATCH");
     const dependencies = await resolveDependencies(transaction, catalogue, module);
