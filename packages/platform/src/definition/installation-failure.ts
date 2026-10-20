@@ -16,6 +16,8 @@ export const classifyInstallationFailure = (error: unknown): InstallationProblem
     switch (error.code) {
       case "APPLICATION_INSTALLATION_STALE":
         return { kind: "conflict" };
+      case "APPLICATION_INSTALLATION_STORAGE_INCOMPATIBLE":
+        return { kind: "refused", unavailableReason: "storage_incompatible" };
       case "APPLICATION_INSTALLATION_PERMISSION_REFUSED":
       case "APPLICATION_INSTALLATION_REFUSED":
         return { kind: "refused" };
