@@ -1,12 +1,9 @@
 // Launcher List Payload & Binding Contracts
 export {
   applicationLauncherQueryRowsToListValues,
-  linkTilesToListValues,
   parsePermittedApplicationsLauncherProjection,
   permittedApplicationsToListValues,
   type ApplicationLauncherQueryRow,
-  type LinkTileRow,
-  type LinkTilesQueryBinding,
   type PermittedApplicationMetadata,
   type PermittedApplicationsLauncherProjection,
 } from "./bindings";
