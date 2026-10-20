@@ -66,6 +66,8 @@ const requestSchema = z
 export type StudioCanvasRecordsResult =
   | Readonly<{
       kind: "available";
+      /** The builder's preview this was read from; its idle fill names the same preview. */
+      previewInstallationId: string;
       draftRevision: number;
       sourceFingerprint: string;
       pageAlias: string;
@@ -365,6 +367,7 @@ export const readStudioCanvasRecords = async (
     }
     return {
       kind: "available",
+      previewInstallationId: preview.selection.previewInstallationId,
       draftRevision: request.draftRevision,
       sourceFingerprint: request.sourceFingerprint,
       pageAlias: request.pageAlias,

@@ -3,8 +3,10 @@ import { z } from "zod";
 import {
   applicationRootIdSchema,
   organizationIdSchema,
+  previewInstallationIdSchema,
   revisionSchema,
   logRefusal,
+  sameId,
 } from "@vortex/platform/schema";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { getIdentityJourneyConfiguration } from "../../../auth/_lib/authority-configuration";
@@ -23,6 +25,7 @@ const requestSchema = z
     organizationId: organizationIdSchema,
     rootId: applicationRootIdSchema,
     draftRevision: revisionSchema,
+    previewInstallationId: previewInstallationIdSchema,
   })
   .strict();
 
@@ -53,7 +56,7 @@ export async function POST(request: NextRequest) {
     }
     const parsed = requestSchema.safeParse(candidate);
     if (!parsed.success) return privateJsonResponse({ kind: "refused" }, 400);
-    const { organizationId, rootId, draftRevision } = parsed.data;
+    const { organizationId, rootId, draftRevision, previewInstallationId } = parsed.data;
     const state = await readStudioPreviewState(
       identity.session,
       organizationId,
@@ -67,6 +70,9 @@ export async function POST(request: NextRequest) {
       studioPreviewRunsDraft(state.draft, state.preview) !== "ready"
     )
       return privateJsonResponse({ kind: "following" }, 200);
+    // Only the preview the caller is viewing may be filled on its behalf.
+    if (!sameId(state.preview.previewInstallationId, previewInstallationId))
+      return privateJsonResponse({ kind: "conflict" }, 200);
     const result = await fillStudioPreviewWhenIdle(
       identity.session,
       organizationId,

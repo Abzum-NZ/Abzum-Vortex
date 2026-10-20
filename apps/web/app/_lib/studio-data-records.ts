@@ -51,6 +51,8 @@ export type StudioDataTotal = Readonly<{ alias: string; label: string; value: st
 export type StudioDataRecordsResult =
   | Readonly<{
       kind: "available";
+      /** The builder's preview this was read from; its idle fill names the same preview. */
+      previewInstallationId: string;
       /** The query the records were read through, by its label. */
       queryLabel: string;
       columns: readonly StudioDataColumn[];
@@ -63,6 +65,8 @@ export type StudioDataRecordsResult =
   /** A query that groups records or adds totals: its groups, each with its count and totals, and its overall totals. */
   | Readonly<{
       kind: "summary";
+      /** The builder's preview this was read from; its idle fill names the same preview. */
+      previewInstallationId: string;
       queryLabel: string;
       /** The fields the records are grouped by, by label; empty when the query only adds totals. */
       groupColumns: readonly StudioDataColumn[];
@@ -292,6 +296,7 @@ export const readStudioDataRecords = async (
         });
       return {
         kind: "summary",
+        previewInstallationId: preview.selection.previewInstallationId,
         queryLabel: label,
         totalRowCount: completed.totalRowCount,
         totals: totalsOf(completed.aggregates),
@@ -358,6 +363,7 @@ export const readStudioDataRecords = async (
     );
     return {
       kind: "available",
+      previewInstallationId: preview.selection.previewInstallationId,
       queryLabel: label,
       columns: fields.map((field) => ({ key: field.key, label: field.label })),
       ...(title === undefined ? {} : { titleColumn: title.key }),

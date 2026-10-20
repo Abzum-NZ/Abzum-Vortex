@@ -161,7 +161,7 @@ export const readPageProjections = cache(
     const definition = context.releaseSet.application.content.pages.find((page) =>
       sameId(page.pageId, pageId),
     );
-    if (definition === undefined) throw new Error("PREVIEW_PAGE_DEFINITION_MISSING");
+    if (definition === undefined) throw new Error("PAGE_DEFINITION_MISSING");
     // Projection conditions may read the addressed subject; it must exist before projection.
     const subjectReady = prepareRuntimePreviewPage(
       session,
@@ -232,6 +232,7 @@ export const loadApplicationPageInternal = async (
   options?: PageLoadOptions,
 ): Promise<ApplicationPageInternalResult> => {
   const startedReads: Promise<unknown>[] = [];
+  // Demand takes its own lease; this one also keeps idle fill paused through the page's row reads.
   const release =
     address.application.previewInstallationId === undefined
       ? undefined

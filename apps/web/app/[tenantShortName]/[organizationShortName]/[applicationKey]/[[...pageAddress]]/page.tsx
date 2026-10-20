@@ -323,6 +323,7 @@ export default async function ApplicationAddressPage({
           organizationId={resolved.installedContext!.organizationId}
           rootId={resolved.application.applicationRootId}
           draftRevision={preview.draftRevision}
+          previewInstallationId={preview.previewInstallationId}
         />
       )}
       <ApplicationPageView
