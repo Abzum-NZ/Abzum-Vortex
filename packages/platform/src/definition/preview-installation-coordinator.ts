@@ -190,6 +190,7 @@ export const createPreviewInstallationCoordinator = (
       result.kind === "temporarily_unavailable"
         ? "PREVIEW_INSTALLATION_TEMPORARILY_UNAVAILABLE"
         : "PREVIEW_INSTALLATION_REFUSED",
+      { cause: result },
     );
   };
 

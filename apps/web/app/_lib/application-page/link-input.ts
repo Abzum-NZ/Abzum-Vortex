@@ -20,6 +20,7 @@ import {
   type IdentitySession,
 } from "@vortex/platform/schema";
 import { getQueryContinuationKey } from "../query-continuation-key";
+import { prepareRuntimePreviewChoices } from "../runtime-preview-demand";
 import {
   collectPlacements,
   first,
@@ -89,6 +90,8 @@ export const titleLinkInputs = async (
  */
 export const projectInitialLinkInputs = async (
   input: Readonly<{
+    session: IdentitySession;
+    context: InstalledRuntimeContext;
     placements: ReturnType<typeof collectPlacements>;
     parameters: SearchParameters;
     data: Record<string, PageDataState>;
@@ -119,6 +122,14 @@ export const projectInitialLinkInputs = async (
     ];
   });
   if (starts.length === 0) return;
+  if (
+    !(await prepareRuntimePreviewChoices(
+      input.session,
+      input.context,
+      starts.map((start) => start.reference.recordTypeId),
+    ))
+  )
+    throw new Error("PREVIEW_INITIAL_LINK_DEMAND_UNAVAILABLE");
   const links = await input.resolveRecordLinks(starts.map((start) => start.reference));
   for (const { placementId, reference } of starts) {
     const label = links?.get(recordLinkLabelKey(reference));
@@ -255,6 +266,14 @@ export const loadRecordChoicePage = async (
     });
   }
   if (targets.length === 0) return { kind: "refused", cause: "no_targets" };
+  if (
+    !(await prepareRuntimePreviewChoices(
+      session,
+      context,
+      targets.map((target) => target.recordTypeId),
+    ))
+  )
+    return { kind: "temporarily_unavailable" };
 
   const queries = createProtectedQueryService({
     ...dependencies,

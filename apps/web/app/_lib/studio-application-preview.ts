@@ -26,6 +26,7 @@ import {
   type IdentitySession,
   type OrganizationId,
   type PreviewInstallation,
+  type PreviewDemand,
 } from "@vortex/platform/schema";
 import { z } from "zod";
 import { installedReleaseCatalogue } from "./definition-catalogue";
@@ -316,9 +317,6 @@ type Target = Readonly<{
 const keyOf = (target: Target): string =>
   `${target.session.identityId}|${target.organizationId}|${target.rootId}|${target.draftRevision}`.toLowerCase();
 
-/** The most record types one demand names. */
-const demandRecordTypeLimit = 201;
-
 type Seedable = Pick<
   PreviewInstallation,
   | "previewInstallationId"
@@ -328,66 +326,48 @@ type Seedable = Pick<
   | "derivedReadyRecordTypeIds"
 >;
 
-/**
- * Whether the preview holds what its builder reads live: every record type seeded and its derived
- * fields worked out. A preview whose seeding stopped (its last reader left, or the request failed)
- * runs, but is not read until it is seeded.
- */
+/** Whether a current authority-checked snapshot needs any more seed or derived-field work. */
 const materialized = (preview: Seedable): boolean => {
   if (!preview.seedable) return true;
   const ready = new Set(preview.derivedReadyRecordTypeIds);
   return preview.recordTypeIds.every((recordTypeId) => ready.has(recordTypeId));
 };
 
-/**
- * Seeds the preview with every record type it has storage for, so it holds what its builder reads
- * live; an Application with no installation has nothing to seed. Seeded record types are not
- * seeded again, and a pending backfill of derived fields is finished.
- */
-const materializeEveryRecordType = async <Preview extends Seedable>(
-  target: Target,
-  preview: Preview,
-  signal: AbortSignal,
-): Promise<Preview> => {
-  if (materialized(preview)) return preview;
-  for (let start = 0; start < preview.recordTypeIds.length; start += demandRecordTypeLimit)
-    await coordinator().materialize(
-      target.session,
+/** The one demand path, shared by visible readers and the idle fill. SQL decides its closure. */
+export const materializeStudioPreviewDemand = async (
+  session: IdentitySession,
+  organizationId: OrganizationId,
+  rootId: ApplicationRootId,
+  preview: Seedable,
+  demand: PreviewDemand | undefined,
+  signal?: AbortSignal,
+): Promise<Readonly<{ kind: "ready"; readyRecordTypeIds: readonly string[] }> | PreviewFailure> => {
+  signal?.throwIfAborted();
+  // The state was read under current builder authority. A fully worked-out preview needs no
+  // seed request; a partial one always asks SQL to decide this reader's complete closure.
+  if (demand === undefined || materialized(preview))
+    return { kind: "ready", readyRecordTypeIds: preview.derivedReadyRecordTypeIds };
+  try {
+    const seeded = await coordinator().materialize(
+      session,
       {
-        organizationId: target.organizationId,
-        applicationRootId: target.rootId,
+        organizationId,
+        applicationRootId: rootId,
         previewInstallationId: preview.previewInstallationId,
         expectedDraftRevision: preview.draftRevision,
-        demand: {
-          recordTypes: preview.recordTypeIds
-            .slice(start, start + demandRecordTypeLimit)
-            .map((recordTypeId) => ({ recordTypeId, fieldIds: [], relationshipPaths: [] })),
-        },
+        demand,
       },
       signal,
     );
-  return preview;
+    return { kind: "ready", readyRecordTypeIds: seeded.closure };
+  } catch (error) {
+    signal?.throwIfAborted();
+    console.error(
+      `[studio] preview demand failed: preview=${preview.previewInstallationId} recordTypes=${demand.recordTypes.map((item) => item.recordTypeId).join(",")} cause=${describeFailure(error)}`,
+    );
+    return failure(error);
+  }
 };
-
-/** Seeds a current preview that is not seeded yet, joining a provision or move under way. */
-const complete = (
-  target: Target,
-  preview: BuilderPreviewInstallation,
-  signal?: AbortSignal,
-): Promise<StudioPreviewResult> =>
-  once(
-    [`${keyOf(target)}|create`, `${keyOf(target)}|follow`].find((key) => pending.has(key)) ??
-      `${keyOf(target)}|create`,
-    signal,
-    (demand) =>
-      materializeEveryRecordType(target, preview, demand).then(
-        (seeded) => available(seeded, seeded.reconcileDue),
-        (error: unknown) => {
-          demand.throwIfAborted();
-          return failure(error);
-        },
-      ),
-  );
 
 /** A new preview of the draft, replacing the builder's previous one and its records. */
 const provision = (target: Target, signal?: AbortSignal): Promise<StudioPreviewResult> =>
@@ -403,7 +383,6 @@ const provision = (target: Target, signal?: AbortSignal): Promise<StudioPreviewR
         },
         demand,
       )
-      .then((preview) => materializeEveryRecordType(target, preview, demand))
       .then(
         (preview) => {
           // Retired storage is dropped in short background transactions after provisioning commits.
@@ -441,7 +420,6 @@ const follow = (
         },
         demand,
       )
-      .then((preview) => materializeEveryRecordType(target, preview, demand))
       .then(
         (preview) => available(preview, false),
         (error: unknown) => {
@@ -471,7 +449,8 @@ const lasting = (preview: BuilderPreviewInstallation): boolean =>
 
 /**
  * Whether the builder's preview already runs this saved revision's data shape, so its records are
- * this revision's: it is not newer than the revision, has the same shape, is seeded and does not expire soon.
+ * this revision's: it is not newer than the revision, has the same shape and does not expire soon.
+ * Each reader waits on its own demand before reading records.
  */
 export const studioPreviewRunsDraft = (
   draft: StoredApplicationDefinitionDraft,
@@ -482,7 +461,6 @@ export const studioPreviewRunsDraft = (
     : preview.draftRevision > draft.draftRevision
       ? "newer"
       : lasting(preview) &&
-          materialized(preview) &&
           (preview.draftRevision === draft.draftRevision ||
             preview.shapeFingerprint === studioPreviewShapeFingerprint(draft.source))
         ? "ready"
@@ -510,9 +488,7 @@ export async function currentStudioPreview(
     (preview.draftRevision === draft.draftRevision ||
       (purpose === "prepare" && preview.shapeFingerprint === target.shapeFingerprint))
   )
-    return materialized(preview)
-      ? available(preview, preview.reconcileDue)
-      : complete(target, preview, signal);
+    return available(preview, preview.reconcileDue);
   const followed = await follow(target, preview.previewInstallationId, signal);
   return followed.kind === "available" &&
     sameId(followed.previewInstallationId, preview.previewInstallationId)

@@ -43,7 +43,7 @@ import type {
   StudioCanvasFrame,
 } from "@vortex/ui/studio/page-puck-editor";
 import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-empty-state";
-import { readStudioCanvasRecords, readStudioDataRecords } from "../_lib/studio-reads";
+import { readStudioCanvasRecords, readStudioDataRecords } from "../_lib/studio-preview-reader";
 import { readWhenPreviewReady } from "../_lib/studio-preview-gate";
 import { applyStudioItemLabels } from "@vortex/ui/studio";
 import { studioDraftNavigation } from "../_lib/studio-draft-navigation";

@@ -11,9 +11,14 @@ import {
   type ApplicationRootId,
   type IdentitySession,
   type OrganizationId,
+  type PreviewDemand,
 } from "@vortex/platform/schema";
 import { humanOrganizationRequests } from "./server-composition";
-import { readStudioPreviewState, studioPreviewRunsDraft } from "./studio-application-preview";
+import {
+  materializeStudioPreviewDemand,
+  readStudioPreviewState,
+  studioPreviewRunsDraft,
+} from "./studio-application-preview";
 import { loadInstalledContext, requestDependencies } from "./application-page/load";
 import { createPlacementReadServices } from "./application-page/placement-services";
 import { loadOrganizationLauncher } from "./organization-context";
@@ -45,6 +50,9 @@ export type StudioPreviewRead =
       context: InstalledRuntimeContext;
       dependencies: HumanOrganizationRequestDependencies;
       services: ReturnType<typeof createPlacementReadServices>;
+      demand: (
+        demand: PreviewDemand | undefined,
+      ) => ReturnType<typeof materializeStudioPreviewDemand>;
     }>
   /** The builder may not edit or preview this Application, so Studio reads no records of it. */
   | Readonly<{ kind: "refused" }>
@@ -154,5 +162,7 @@ export const openStudioPreviewRead = async (
     context: installed.value,
     dependencies,
     services,
+    demand: (demand) =>
+      materializeStudioPreviewDemand(session, organizationId, rootId, preview, demand, signal),
   };
 };
