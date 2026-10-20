@@ -1189,6 +1189,7 @@
                         "trigger": "button",
                         "fields": [
                           "vortex.crm.opportunities:opportunity.name",
+                          "vortex.crm.opportunities:opportunity.company",
                           "vortex.crm.opportunities:opportunity.expected_close_date",
                           "vortex.crm.opportunities:opportunity.probability"
                         ]
