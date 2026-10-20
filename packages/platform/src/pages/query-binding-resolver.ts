@@ -3,6 +3,7 @@ import {
   defaultAwaitingMessage,
   parseQueryBindingText,
   queryInputValueType,
+  queryBindingTypesFit,
   type QueryBinding,
   type QueryBindings,
   type QueryBindingValueType,
@@ -42,8 +43,8 @@ export type QueryBindingContext = Readonly<{
   subject: (() => Promise<QueryBindingRecordRead>) | undefined;
   /** The parent row of a row's related records, which the server just authorised. */
   row?: QueryBindingRecordRead;
-  /** The person viewing the page, from the verified request scope. */
-  viewerAccountId: string | undefined;
+  /** The directory record of the viewer, derived only from the verified request and installation. */
+  viewerPerson: Readonly<{ recordTypeId: string; recordId: string }> | undefined;
   /** The organisation's time zone, read only when a relative date needs it. */
   timeZone: () => Promise<string | undefined>;
   now: Date;
@@ -168,9 +169,14 @@ const resolveOne = async (
       return fieldValue(held?.[1], type);
     }
     case "current_person":
-      return context.viewerAccountId === undefined
-        ? { kind: "refused", reason: "viewer_unavailable" }
-        : { kind: "value", value: context.viewerAccountId };
+      return context.viewerPerson === undefined
+        ? { kind: "refused", reason: "viewer_person_unavailable" }
+        : !queryBindingTypesFit(type, {
+              kind: "record",
+              recordTypes: [context.viewerPerson.recordTypeId],
+            })
+          ? { kind: "refused", reason: "current_person_type_mismatch" }
+          : { kind: "value", value: context.viewerPerson };
     case "relative_date": {
       const timeZone = await context.timeZone();
       if (timeZone === undefined) return { kind: "refused", reason: "time_zone_unavailable" };

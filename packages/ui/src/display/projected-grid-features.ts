@@ -280,10 +280,20 @@ export const parseTableFeatures = (
   const record = requireRecord(value, "Projected table features are invalid", location);
   requireExactKeys(
     record,
-    ["search", "columnFilters", "savedViews", "bulkActions", "inlineEdit", "conditionalFormatting"],
+    [
+      "search",
+      "columnFilters",
+      "savedViews",
+      "bulkActions",
+      "inlineEdit",
+      "conditionalFormatting",
+      "pinning",
+    ],
     location,
   );
   if (Object.keys(record).length === 0) fail("Projected table features name no feature", location);
+  if (record.pinning !== undefined && record.pinning !== true)
+    fail("A projected pinning feature is only ever on", location);
   if (record.search !== undefined && record.search !== true)
     fail("A projected search feature is only ever on", location);
   if (record.savedViews !== undefined && record.savedViews !== true)
@@ -325,6 +335,7 @@ export const parseTableFeatures = (
     });
   }
   return Object.freeze({
+    ...(record.pinning === true ? { pinning: true as const } : {}),
     ...(record.search === true ? { search: true as const } : {}),
     ...(columnFilters === undefined ? {} : { columnFilters }),
     ...(record.savedViews === true ? { savedViews: true as const } : {}),

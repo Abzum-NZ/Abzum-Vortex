@@ -43,8 +43,6 @@ export function StudioRecordPageForm({
   const [kind, setKind] = useState<StudioRecordPageKind>("list");
   const [shellChoice, setShellChoice] = useState(studioStructureDefaultShell(source) ?? "");
   const [addToMenu, setAddToMenu] = useState(true);
-  // A detail page or edit form opens one record, so it is never a menu entry; a list starts in the menu.
-  const menuAllowed = kind === "list" || kind === "form_create" || kind === "guided";
   const chooseKind = (next: StudioRecordPageKind) => {
     setKind(next);
     setAddToMenu(next === "list");
@@ -52,15 +50,26 @@ export function StudioRecordPageForm({
   const effectiveRecordType = recordTypes.some((entry) => entry.recordType === recordType)
     ? recordType
     : (recordTypes[0]?.recordType ?? "");
+  const availableKinds = studioRecordPageKinds.filter((entry) =>
+    recordTypes
+      .find((record) => record.recordType === effectiveRecordType)
+      ?.kinds.includes(entry.kind),
+  );
+  const effectiveKind = availableKinds.some((entry) => entry.kind === kind)
+    ? kind
+    : availableKinds[0]?.kind;
+  // A detail page or edit form opens one record, so it is never a menu entry.
+  const menuAllowed =
+    effectiveKind === "list" || effectiveKind === "form_create" || effectiveKind === "guided";
   const command = useMemo(
     (): StudioRecordPageCommand => ({
       kind: "add_record_page",
       recordType: effectiveRecordType,
-      type: kind,
+      type: effectiveKind ?? "list",
       shellAlias: shellChoice === "" ? null : shellChoice,
       addToMenu: menuAllowed && addToMenu,
     }),
-    [effectiveRecordType, kind, shellChoice, addToMenu, menuAllowed],
+    [effectiveRecordType, effectiveKind, shellChoice, addToMenu, menuAllowed],
   );
   // The preview runs the generator on the draft a moment after the choices settle (an edited draft
   // is a new source), not on every change, and not on the callback's identity.
@@ -123,16 +132,21 @@ export function StudioRecordPageForm({
       </StudioField>
       <StudioField
         label="Page"
-        hint={studioRecordPageKinds.find((entry) => entry.kind === kind)?.hint}
+        hint={availableKinds.find((entry) => entry.kind === effectiveKind)?.hint}
+        error={
+          availableKinds.length === 0
+            ? "Enable Read under Standard actions in Data before adding pages."
+            : undefined
+        }
       >
         {(control) => (
           <NativeSelect
             {...control}
-            value={kind}
+            value={effectiveKind ?? ""}
             disabled={disabled}
             onChange={(event) => chooseKind(event.target.value as StudioRecordPageKind)}
           >
-            {studioRecordPageKinds.map((entry) => (
+            {availableKinds.map((entry) => (
               <NativeSelectOption key={entry.kind} value={entry.kind}>
                 {entry.label}
               </NativeSelectOption>
@@ -191,7 +205,11 @@ export function StudioRecordPageForm({
         )}
       </section>
       <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={disabled || current?.kind !== "applied"}>
+        <Button
+          type="submit"
+          size="sm"
+          disabled={disabled || effectiveKind === undefined || current?.kind !== "applied"}
+        >
           Add page
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={onClose}>

@@ -66,6 +66,7 @@ import type {
   ResolvableModuleRelease,
 } from "../definition-publication-contracts";
 import { extractStoredSourceIdentityRequirements } from "../source-identities";
+import { identityRetiredFailure } from "../identity-retired";
 import {
   DefinitionError,
   classifyDatabaseError,
@@ -1093,7 +1094,8 @@ class DatabasePublicationTransaction
     root: OwnedModuleRoot,
     source: ModuleSourceDocument,
   ): Promise<OwnedModuleRoot> {
-    const rows = await this.transaction.query`
+    const rows = await safeRepositoryOperation(
+      () => this.transaction.query`
       select root_id, definition_key, draft_revision, current_release_revision, source_fingerprint
       from vortex_definition.stage_owned_module_source(
         ${root.rootId}::uuid,
@@ -1102,7 +1104,9 @@ class DatabasePublicationTransaction
         ${fingerprintCanonicalValue(source)},
         ${JSON.stringify(extractStoredSourceIdentityRequirements(source))}::text::jsonb
       )
-    `;
+    `,
+      source,
+    );
     if (rows.length === 0) throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
     if (rows.length !== 1) return invalidStorage("stageOwnedModuleSource returned several roots");
     return parseOwnedModuleRoot(rows[0]!);
@@ -1167,11 +1171,14 @@ class DatabasePublicationTransaction
 
 const safeRepositoryOperation = async <Result>(
   operation: () => Promise<Result>,
+  source?: StoredDefinitionSource,
 ): Promise<Result> => {
   try {
     return await operation();
   } catch (error) {
     if (error instanceof DefinitionError) throw error;
+    const retired = identityRetiredFailure(error, source);
+    if (retired !== undefined) throw retired;
     switch (classifyDatabaseError(error)) {
       case "conflict":
       case "duplicate":

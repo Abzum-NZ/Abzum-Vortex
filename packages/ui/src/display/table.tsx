@@ -182,6 +182,8 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         : {
             accessibleName,
             features,
+            pins: layout.state.pins,
+            setPin: layout.setPin,
             columns: layout.shown,
             rows,
             selectedRecordIds,
@@ -193,6 +195,8 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     [
       accessibleName,
       features,
+      layout.state.pins,
+      layout.setPin,
       layout.shown,
       rows,
       selectedRecordIds,

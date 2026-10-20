@@ -1,5 +1,4 @@
 import type { DefinitionValidationErrorCode } from "../../catalogue/validation-errors";
-import type { ComponentSettingValue } from "./block-property-schema";
 import { readRecordsTableFeatures, type RecordsTableFeatures } from "./records-table-features";
 import {
   readActionList,
@@ -26,6 +25,8 @@ export const recordsDisplayFormats = [
 export type RecordsDisplayFormat = (typeof recordsDisplayFormats)[number];
 
 export const recordsTableColumnWidths = ["auto", "narrow", "medium", "wide"] as const;
+export const recordsTableColumnPins = ["start", "end", "unpinned"] as const;
+export type RecordsTableColumnPin = (typeof recordsTableColumnPins)[number];
 /**
  * The narrowest and widest a person may resize a column, in pixels. The authored width token is
  * the column's starting width; a resize, and a stored layout, stays within these bounds.
@@ -64,6 +65,7 @@ export type RecordsTableColumnContract = Readonly<{
   alignment: (typeof recordsTableColumnAlignments)[number];
   priority: (typeof recordsTableColumnPriorities)[number];
   visible: boolean;
+  pin: RecordsTableColumnPin;
   /** People may fit the column to the content of the page they see, from its column menu. */
   autoSize: boolean;
 }>;
@@ -112,8 +114,6 @@ export type RecordsTableContract = Readonly<{
   density: RecordsTableDensity;
   /** The header row stays in view while the rows scroll; it applies to the bounded viewport. */
   stickyHeader: boolean;
-  /** The first visible data column (after any selection column) stays in view on a wide scroll. */
-  stickyFirstColumn: boolean;
   /** People may expand the table to fill the screen from its toolbar. */
   allowFullScreen: boolean;
   phonePresentation: RecordsTablePhonePresentation;
@@ -134,15 +134,6 @@ export type RecordDetailContract = Readonly<{
   headingField?: string;
   messages: RecordsDisplayMessages;
 }>;
-
-const settingChoice = <Choice extends string>(
-  value: ComponentSettingValue | undefined,
-  allowed: readonly Choice[],
-  fallback: Choice,
-): Choice =>
-  value?.kind === "choice" && (allowed as readonly string[]).includes(value.value)
-    ? (value.value as Choice)
-    : fallback;
 
 const displayMessages = (settings: SettingsRecord): RecordsDisplayMessages => {
   const empty = settingText(settings["empty_message"]);
@@ -175,9 +166,8 @@ const readRowBehaviours = (settings: SettingsRecord): RecordsTableRowBehaviourCo
 };
 
 /**
- * Reads a Records table placement's declared data contract from its settings, applying the
- * declared defaults. Returns undefined when the settings do not declare a table's `columns`, or a
- * column does not declare its default visibility.
+ * Reads a Records table placement's declared data contract from its settings. Returns undefined
+ * when the settings do not declare a table's `columns`, or a column leaves a setting undeclared.
  * It reads settings that already passed the
  * shared setting validator and never widens what a release declares; the same reader serves the
  * publication rule, the server query request and the renderer.
@@ -187,35 +177,44 @@ export const readRecordsTableContract = (
 ): RecordsTableContract | undefined => {
   const columnItems = settingItems(settings["columns"]);
   if (columnItems === undefined) return undefined;
-  const columns = columnItems.flatMap((item): RecordsTableColumnContract[] => {
+  // Every column declares all of its settings: the catalogue defaults fill them in when a column
+  // is authored, and a column missing one, or naming a value the contract does not offer, makes
+  // the table unreadable, so no renderer chooses a presentation the definition did not.
+  const columns: RecordsTableColumnContract[] = [];
+  for (const item of columnItems) {
     const column = settingGroup(item);
     const field = column === undefined ? undefined : settingField(column["field"]);
-    if (column === undefined || field === undefined) return [];
+    if (column === undefined || field === undefined) continue;
     const label = settingText(column["label"]);
+    const format = settingOptionalChoice(column["format"], recordsDisplayFormats);
+    const width = settingOptionalChoice(column["width"], recordsTableColumnWidths);
+    const alignment = settingOptionalChoice(column["alignment"], recordsTableColumnAlignments);
+    const priority = settingOptionalChoice(column["priority"], recordsTableColumnPriorities);
     const visible = column["visible"];
     const autoSize = column["auto_size"];
-    return [
-      {
-        field,
-        ...(label === undefined ? {} : { label }),
-        format: settingChoice(column["format"], recordsDisplayFormats, "automatic"),
-        width: settingChoice(column["width"], recordsTableColumnWidths, "auto"),
-        alignment: settingChoice(column["alignment"], recordsTableColumnAlignments, "start"),
-        priority: settingChoice(column["priority"], recordsTableColumnPriorities, "medium"),
-        visible: visible?.kind === "boolean" && visible.value,
-        autoSize: autoSize?.kind === "boolean" && autoSize.value,
-      },
-    ];
-  });
-  // Default visibility and auto-size are explicit on every column; a column that does not declare
-  // them is not read.
-  if (
-    columnItems.some((item) => {
-      const column = settingGroup(item);
-      return column?.["visible"]?.kind !== "boolean" || column["auto_size"]?.kind !== "boolean";
-    })
-  )
-    return undefined;
+    const pin = settingOptionalChoice(column["pin"], recordsTableColumnPins);
+    if (
+      format === undefined ||
+      width === undefined ||
+      alignment === undefined ||
+      priority === undefined ||
+      visible?.kind !== "boolean" ||
+      autoSize?.kind !== "boolean" ||
+      pin === undefined
+    )
+      return undefined;
+    columns.push({
+      field,
+      ...(label === undefined ? {} : { label }),
+      format,
+      width,
+      alignment,
+      priority,
+      visible: visible.value,
+      pin,
+      autoSize: autoSize.value,
+    });
+  }
   // Every default sort key declares its field and direction; a key missing either is not read, so
   // the table never runs an order other than the authored one.
   const defaultSort: RecordsTableSortContract[] = [];
@@ -243,7 +242,6 @@ export const readRecordsTableContract = (
   );
   const viewport = settingOptionalChoice(settings["viewport"], recordsTableViewports);
   const stickyHeader = settings["sticky_header"];
-  const stickyFirstColumn = settings["sticky_first_column"];
   const allowFullScreen = settings["allow_full_screen"];
   const features = readRecordsTableFeatures(settings["features"]);
   if (
@@ -252,7 +250,6 @@ export const readRecordsTableContract = (
     phonePresentation === undefined ||
     viewport === undefined ||
     stickyHeader?.kind !== "boolean" ||
-    stickyFirstColumn?.kind !== "boolean" ||
     allowFullScreen?.kind !== "boolean"
   )
     return undefined;
@@ -265,7 +262,6 @@ export const readRecordsTableContract = (
     rowBehaviours: readRowBehaviours(settings),
     density,
     stickyHeader: stickyHeader.value,
-    stickyFirstColumn: stickyFirstColumn.value,
     allowFullScreen: allowFullScreen.value,
     phonePresentation,
     viewport,
@@ -300,19 +296,20 @@ export const readRecordDetailContract = (
   const headingField =
     headingSource.value === "field" ? settingField(settings["heading_field"]) : undefined;
   if (headingSource.value === "field" && headingField === undefined) return undefined;
+  let unreadable = false;
   const fields = items.flatMap((item): RecordDetailFieldContract[] => {
     const entry = settingGroup(item);
     const field = entry === undefined ? undefined : settingField(entry["field"]);
     if (entry === undefined || field === undefined) return [];
     const label = settingText(entry["label"]);
-    return [
-      {
-        field,
-        ...(label === undefined ? {} : { label }),
-        format: settingChoice(entry["format"], recordsDisplayFormats, "automatic"),
-      },
-    ];
+    const format = settingOptionalChoice(entry["format"], recordsDisplayFormats);
+    if (format === undefined) {
+      unreadable = true;
+      return [];
+    }
+    return [{ field, ...(label === undefined ? {} : { label }), format }];
   });
+  if (unreadable) return undefined;
   return {
     fields,
     ...(headingField === undefined ? {} : { headingField }),

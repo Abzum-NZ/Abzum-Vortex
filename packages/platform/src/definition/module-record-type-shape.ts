@@ -4,14 +4,19 @@ import {
   type ApplicationSourceDocument,
 } from "./application-source-contracts";
 import {
-  changeableByPeople,
   deriveFieldKey,
+  isStandardRecordPermission,
   standardPermissionKey,
   standardPermissionKeys,
   standardRecordActions as standardActions,
 } from "./module-field-shape";
 import { applicationUses, type ApplicationUsePlace } from "./application-uses";
-import { fullRecordAccessRoleKeys } from "./module-permission-shape";
+import {
+  fullRecordAccessRoleKeys,
+  standardRecordPermission,
+  standardPermissionLabel as permissionLabel,
+  standardPermissionDescription as permissionDescription,
+} from "./module-permission-shape";
 import { recordTitleFieldEligible } from "./record-title-field";
 import { sourcePageItems } from "./application-composition/source-composition";
 import type { RecordStorageScope } from "./module-record-type-settings";
@@ -20,7 +25,6 @@ import type { ModuleFieldPublication } from "./module-field-edit";
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
 type Field = RecordType["fields"][number];
-type ModulePermission = InlineModule["permissions"][number];
 
 /** The changes a record type edit makes to an Application source, or why it was refused. */
 export type InlineRecordTypeResult =
@@ -193,11 +197,6 @@ export const createOwnedInlineModule = (
   return { kind: "changed", source: parsed.data, moduleKey: added.module.key };
 };
 
-const permissionLabel = (verb: string, name: string): string =>
-  `${verb} ${name.toLowerCase()}`.slice(0, 60);
-const permissionDescription = (action: string, plural: string): string =>
-  `Allows the standard ${action.replaceAll("_", " ")} operation for ${plural.toLowerCase()}.`;
-
 const parsedResult = (
   source: ApplicationSourceDocument,
   moduleKey: string,
@@ -327,26 +326,17 @@ export const createInlineRecordType = (
     relationships: [],
   } as unknown as RecordType;
   module.record_types.push(record);
-  const readable = fields.map((field) => field.key);
-  const changeableFields = fields.filter(changeableByPeople).map((field) => field.key);
   for (const entry of standardActions) {
-    module.permissions.push({
-      id: uniqueAlias(`perm_${key}_${entry.action}`, taken),
-      key: standardPermissionKey(module.key, key, entry.action),
-      label: permissionLabel(entry.verb, name),
-      description: permissionDescription(entry.action, pluralName),
-      record_type: key,
-      action_kind: entry.kind,
-      administrative: false,
-      record_scope: { routes: [{ kind: "all_records" }] },
-      field_policy: {
-        readable_fields: [...readable],
-        changeable_fields:
-          entry.kind === "create" || entry.kind === "update" ? [...changeableFields] : [],
-      },
-    } as unknown as ModulePermission);
+    module.permissions.push(
+      standardRecordPermission(
+        module.key,
+        record,
+        entry.action,
+        uniqueAlias(`perm_${key}_${entry.action}`, taken),
+      ),
+    );
   }
-  const granted = [...standardPermissionKeys(module.key, key)];
+  const granted = [...standardPermissionKeys(module.key, key, record.standard_actions)];
   for (const role of source.body.roles) {
     const entries = role.permissions as string[];
     if (entries.includes("*")) continue;
@@ -373,9 +363,9 @@ export const renameInlineRecordType = (
   const pluralName = change.pluralName.trim();
   if (name === "" || pluralName === "")
     return { kind: "invalid", issues: ["Enter both names of the record type."] };
-  const keys = standardPermissionKeys(module.key, record.key);
+  const keys = standardPermissionKeys(module.key, record.key, record.standard_actions);
   for (const permission of module.permissions) {
-    if (!keys.has(permission.key)) continue;
+    if (!keys.has(permission.key) || !isStandardRecordPermission(module, permission)) continue;
     const entry = standardActions.find(
       (item) => standardPermissionKey(module.key, record.key, item.action) === permission.key,
     );
@@ -495,7 +485,14 @@ export const deleteInlineRecordType = (
       kind: "invalid",
       issues: ["The record type is not in this application's modules any more."],
     };
-  const own = standardPermissionKeys(moduleKey, recordKey);
+  const own = new Set(
+    module.permissions
+      .filter(
+        (permission) =>
+          permission.record_type === recordKey && isStandardRecordPermission(module, permission),
+      )
+      .map((permission) => permission.key),
+  );
   module.record_types = module.record_types.filter((record) => record.key !== recordKey);
   module.permissions = module.permissions.filter((permission) => !own.has(permission.key));
   for (const role of source.body.roles)
