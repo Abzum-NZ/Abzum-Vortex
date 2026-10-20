@@ -16,7 +16,7 @@ declare
   record_type_item jsonb := p_plan -> 'recordType';
   resolved jsonb := p_plan -> 'resolved';
   v_storage_contract_id uuid := (p_plan #>> '{storage,storageContractId}')::uuid;
-  p_module_root_id uuid := (p_plan #>> '{storage,moduleRootId}')::uuid;
+  query_module_root_id uuid := (p_plan ->> 'queryModuleRootId')::uuid;
   record_type_id_value uuid := (p_plan ->> 'recordTypeId')::uuid;
   physical_table_token text := p_plan #>> '{storage,physicalTableToken}';
   user_search text := p_search ->> 'search';
@@ -116,7 +116,7 @@ begin
         from pg_catalog.jsonb_array_elements(%L::jsonb -> 'fields') as field(value)
       ), '{}'::jsonb)
     ) as stored$source$,
-    physical_table_token, p_module_root_id, record_type_id_value,
+    physical_table_token, query_module_root_id, record_type_id_value,
     v_storage_contract_id, (resolved ->> 'moduleReleaseRevision')::bigint,
     record_type_item #>> '{systemProjection,organizationFieldId}',
     record_type_item #>> '{systemProjection,revisionFieldId}',

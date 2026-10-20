@@ -196,7 +196,7 @@ declare
   record_type_item jsonb := p_plan -> 'recordType';
   resolved jsonb := p_plan -> 'resolved';
   v_storage_contract_id uuid := (p_plan #>> '{storage,storageContractId}')::uuid;
-  p_module_root_id uuid := (p_plan #>> '{storage,moduleRootId}')::uuid;
+  query_module_root_id uuid := (p_plan ->> 'queryModuleRootId')::uuid;
   record_type_id_value uuid := (p_plan ->> 'recordTypeId')::uuid;
   physical_table_token text := p_plan #>> '{storage,physicalTableToken}';
   user_search text := p_search ->> 'search';
@@ -296,7 +296,7 @@ begin
         from pg_catalog.jsonb_array_elements(%L::jsonb -> 'fields') as field(value)
       ), '{}'::jsonb)
     ) as stored$source$,
-    physical_table_token, p_module_root_id, record_type_id_value,
+    physical_table_token, query_module_root_id, record_type_id_value,
     v_storage_contract_id, (resolved ->> 'moduleReleaseRevision')::bigint,
     record_type_item #>> '{systemProjection,organizationFieldId}',
     record_type_item #>> '{systemProjection,revisionFieldId}',
@@ -1720,7 +1720,8 @@ begin
       end if;
       projection_after := p_after;
       projection_batch_size := least(p_page_size, scan_limit);
-      projection_plan := vortex_record.prepare_system_projection_scan_internal(prepared_plan, search_plan);
+      projection_plan := vortex_record.prepare_system_projection_scan_internal(
+        prepared_plan || pg_catalog.jsonb_build_object('queryModuleRootId', p_module_root_id), search_plan);
       if projection_plan ->> 'outcome' <> 'prepared' then return projection_plan; end if;
       projection_predicate := projection_plan -> 'predicate';
       scan_source_sql := projection_plan ->> 'sourceSql';

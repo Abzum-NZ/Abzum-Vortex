@@ -805,7 +805,8 @@ begin
       end if;
       projection_after := p_after;
       projection_batch_size := least(p_page_size, scan_limit);
-      projection_plan := vortex_record.prepare_system_projection_scan_internal(prepared_plan, search_plan);
+      projection_plan := vortex_record.prepare_system_projection_scan_internal(
+        prepared_plan || pg_catalog.jsonb_build_object('queryModuleRootId', p_module_root_id), search_plan);
       if projection_plan ->> 'outcome' <> 'prepared' then return projection_plan; end if;
       projection_predicate := projection_plan -> 'predicate';
       scan_source_sql := projection_plan ->> 'sourceSql';
