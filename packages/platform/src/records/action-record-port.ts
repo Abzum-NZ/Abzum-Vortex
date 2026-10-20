@@ -567,49 +567,80 @@ const refusePrecondition = async (
     : { outcome: "refused" };
 };
 
+type CreationPlan = Readonly<{
+  ordinal: number;
+  recordTypeId: string;
+  values: Readonly<Record<string, JsonValue | null>>;
+  finalValues: Readonly<Record<string, JsonValue | null>>;
+}>;
+
+/** One subject's complete plan, ready for the writer: everything its attempt decided before writing. */
+type PlannedApply = Readonly<{
+  kind: "planned";
+  state: NamedActionAttemptState;
+  correlationId: string;
+  composition: NamedActionComposition;
+  finalValues: Readonly<Record<string, unknown>>;
+  creations: readonly CreationPlan[];
+  standardOccurrenceId: string;
+  declaredOccurrenceIds: readonly string[];
+  creationOccurrenceIds: readonly string[];
+  parentMutations: readonly RelationshipTotalParentMutation[];
+}>;
+
 /**
- * The one record-change call of a named action: the subject write, each creation in authored order,
- * the relationship copies, the derived-total updates of the other records the action moves and the
- * declared Event identities, all under the action's own identity so its receipt, fingerprint, field
- * rules, Activity and Events stay the installed action's.
+ * One subject of the writer call: the subject write, each creation in authored order, the
+ * relationship copies, the derived-total updates of the other records the action moves and the
+ * declared Event identities, all under the action's own identity so its receipt, fingerprint,
+ * field rules, Activity and Events stay the installed action's.
  */
-const applyChanges = async (
+const subjectOf = (plan: PlannedApply) => {
+  const { state, composition } = plan;
+  return {
+    commandId: state.command.commandId,
+    recordId: state.command.recordId,
+    expectedConcurrencyNumber: state.command.expectedConcurrencyNumber,
+    submittedValues: composition.submittedValues,
+    mutations: [
+      { kind: "set_fields", values: plan.finalValues },
+      ...plan.creations.map((creation, index) => ({
+        kind: "create_record",
+        ordinal: creation.ordinal,
+        recordTypeId: creation.recordTypeId,
+        values: creation.values,
+        finalValues: creation.finalValues,
+        occurrenceId: plan.creationOccurrenceIds[index],
+      })),
+      ...composition.relationshipCopies.map(() => ({ kind: "copy_relationships", values: {} })),
+      ...plan.parentMutations.map((parent) => ({
+        kind: "set_derived_fields",
+        recordTypeId: parent.recordTypeId,
+        recordId: parent.recordId,
+        expectedConcurrencyNumber: parent.expectedConcurrencyNumber,
+        finalValues: parent.finalValues,
+      })),
+      { kind: "announce_events", occurrenceIds: plan.declaredOccurrenceIds },
+    ],
+    activityId: state.activityId,
+    occurrenceId: plan.standardOccurrenceId,
+  };
+};
+
+/**
+ * The ONE writer call of a named action over one or more subjects of one record type. The
+ * database applies the subjects in record identity order; the first refusal comes back with the
+ * index of its subject in the order given, and the caller owns the rollback.
+ */
+const applySubjects = async (
   transaction: RequestDatabaseTransaction,
-  command: ExecuteNamedActionCommand,
-  composition: NamedActionComposition,
-  finalValues: Readonly<Record<string, unknown>>,
-  creations: readonly Readonly<{
-    ordinal: number;
-    recordTypeId: string;
-    values: Readonly<Record<string, JsonValue | null>>;
-    finalValues: Readonly<Record<string, JsonValue | null>>;
-  }>[],
-  activityId: string,
-  standardOccurrenceId: string,
-  declaredOccurrenceIds: readonly string[],
-  creationOccurrenceIds: readonly string[],
-  parentMutations: readonly RelationshipTotalParentMutation[],
-) => {
-  const mutations = [
-    { kind: "set_fields", values: finalValues },
-    ...creations.map((creation, index) => ({
-      kind: "create_record",
-      ordinal: creation.ordinal,
-      recordTypeId: creation.recordTypeId,
-      values: creation.values,
-      finalValues: creation.finalValues,
-      occurrenceId: creationOccurrenceIds[index],
-    })),
-    ...composition.relationshipCopies.map(() => ({ kind: "copy_relationships", values: {} })),
-    ...parentMutations.map((parent) => ({
-      kind: "set_derived_fields",
-      recordTypeId: parent.recordTypeId,
-      recordId: parent.recordId,
-      expectedConcurrencyNumber: parent.expectedConcurrencyNumber,
-      finalValues: parent.finalValues,
-    })),
-    { kind: "announce_events", occurrenceIds: declaredOccurrenceIds },
-  ];
+  plans: readonly PlannedApply[],
+): Promise<
+  | Readonly<{ kind: "completed"; stored: readonly Record<string, unknown>[] }>
+  | Readonly<{ kind: "refused"; index: number; stored: Record<string, unknown> }>
+> => {
+  const first = plans[0];
+  if (first === undefined) throw new Error("NAMED_ACTION_SUBJECTS_EMPTY");
+  const command = first.state.command;
   const action = {
     ownerKind: command.action.ownerKind,
     ownerId: command.action.ownerId,
@@ -619,18 +650,32 @@ const applyChanges = async (
   };
   const rows = await transaction.query<ResultRow>`
     select vortex_record.apply_action_record_changes(
-      ${command.commandId}::uuid, 'update'::text, ${command.recordTypeId}::uuid,
-      ${command.recordId}::uuid, ${command.expectedConcurrencyNumber}::bigint,
-      ${JSON.stringify(composition.submittedValues)}::text::jsonb,
-      ${JSON.stringify(mutations)}::text::jsonb,
-      ${activityId}::uuid, ${standardOccurrenceId}::uuid,
-      ${JSON.stringify(action)}::text::jsonb
+      ${command.recordTypeId}::uuid, ${JSON.stringify(action)}::text::jsonb,
+      ${JSON.stringify(plans.map(subjectOf))}::text::jsonb
     ) as value
   `;
   const value = one(rows).value;
-  return typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)
-    : { outcome: "refused" };
+  const record =
+    typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+  if (record.outcome === "completed" && Array.isArray(record.results)) {
+    const stored = record.results.map((item) =>
+      typeof item === "object" && item !== null
+        ? (item as Record<string, unknown>)
+        : { outcome: "refused" },
+    );
+    if (stored.length === plans.length) return { kind: "completed", stored };
+  }
+  const subject = record.subject;
+  return {
+    kind: "refused",
+    index: typeof record.index === "number" ? record.index : 0,
+    stored:
+      typeof subject === "object" && subject !== null
+        ? (subject as Record<string, unknown>)
+        : record.outcome === undefined
+          ? { outcome: "refused" }
+          : record,
+  };
 };
 
 export type NamedActionRecordPortDependencies = HumanOrganizationRequestDependencies &
@@ -693,19 +738,22 @@ type NamedActionAttemptState = {
 
 type NamedActionIdentities = Readonly<{ activity: () => string; occurrence: () => string }>;
 
+type AttemptOutcome = ExecuteNamedActionResult | typeof restart | typeof recordedRefusal;
+
 /**
- * One attempt of one named action inside a transaction the caller owns: the preview, the locked
- * preparation, the flow run, the relationship totals, the before-save rules and the one apply
- * record changes call. It returns the result, `restart` when the record moved between the preview
- * and the locked preparation, or `recordedRefusal` when the database recorded the refusal itself.
+ * The first half of one attempt of one named action inside a transaction the caller owns: the
+ * preview, the locked preparation, the flow run, the relationship totals and the before-save
+ * rules, up to everything the writer needs. It returns the plan, a result that needs no write (a
+ * replay), `restart` when the record moved between the preview and the locked preparation, or
+ * `recordedRefusal` when the database recorded the refusal itself.
  */
-const attemptNamedAction = async (
+const planNamedAction = async (
   transaction: RequestDatabaseTransaction,
   issuedAt: string,
   state: NamedActionAttemptState,
   run: ActionFlowRunner,
   ids: NamedActionIdentities,
-): Promise<ExecuteNamedActionResult | typeof restart | typeof recordedRefusal> => {
+): Promise<AttemptOutcome | PlannedApply> => {
   const preview = await prepare(transaction, state.command, state.activityId, true);
   if (preview.outcome === "completed") return preview.result;
   if (preview.outcome === "refused_recorded") return recordedRefusal;
@@ -1087,29 +1135,44 @@ const attemptNamedAction = async (
     throw new Error("NAMED_ACTION_OCCURRENCE_ID_INVALID");
   }
   if (state.creationOccurrenceIds.length !== creations.length) return restart;
-  const stored = await applyChanges(
-    transaction,
-    state.command,
+  return {
+    kind: "planned",
+    state,
+    correlationId: prepared.correlationId,
     composition,
     finalValues,
     creations,
-    state.activityId,
-    state.standardOccurrenceId,
-    state.declaredOccurrenceIds,
-    state.creationOccurrenceIds,
+    standardOccurrenceId: state.standardOccurrenceId,
+    declaredOccurrenceIds: state.declaredOccurrenceIds,
+    creationOccurrenceIds: state.creationOccurrenceIds,
     parentMutations,
-  );
+  };
+};
+
+/**
+ * The second half of one attempt: reads what the writer stored for the subject, then runs the
+ * subject's protected delete when the action deletes it. Any refusal of that delete throws so the
+ * receipt, Activity and Events roll back with it.
+ */
+const finishNamedAction = async (
+  transaction: RequestDatabaseTransaction,
+  issuedAt: string,
+  plan: PlannedApply,
+  stored: Record<string, unknown>,
+  ids: NamedActionIdentities,
+): Promise<AttemptOutcome> => {
+  const { state, composition, correlationId } = plan;
   if (stored.outcome === "restart") return restart;
   if (stored.outcome === "refused_recorded") return recordedRefusal;
   if (stored.outcome === "conflict")
     return safeRefusal(
-      prepared.correlationId,
+      correlationId,
       "conflict",
       "the record changes were refused for a revision conflict",
     );
   if (stored.outcome !== "saved" && stored.outcome !== "completed")
     return safeRefusal(
-      prepared.correlationId,
+      correlationId,
       stored.reasonCode === "command_invalid" ? "invalid_request" : "operation_refused",
       `the record changes were ${String(stored.outcome)} (${String(stored.reasonCode ?? "no reason code")})`,
     );
@@ -1157,6 +1220,86 @@ const attemptNamedAction = async (
     state.deleteSettlement = settleRecordLifecycleError(error);
     throw error;
   }
+};
+
+const isPlanned = (outcome: AttemptOutcome | PlannedApply): outcome is PlannedApply =>
+  typeof outcome === "object" && "kind" in outcome && outcome.kind === "planned";
+
+/** The related records the planned subjects move, keyed by type and record. */
+const movedParentKeys = (plan: PlannedApply): readonly string[] =>
+  plan.parentMutations.map(
+    (parent) => `${parent.recordTypeId.toLowerCase()}:${parent.recordId.toLowerCase()}`,
+  );
+
+/**
+ * One attempt of one named action over one or more subjects inside a transaction the caller owns.
+ * Every subject is planned in record identity order (the same order the writer applies them in,
+ * so overlapping runs lock rows alike), then the ONE writer call applies all of them, then each
+ * finishes. It stops at the first subject that does not complete and reports its index in the
+ * order given; `outcomes` holds the finished subjects in the order given.
+ */
+const attemptNamedActions = async (
+  transaction: RequestDatabaseTransaction,
+  issuedAt: string,
+  states: readonly NamedActionAttemptState[],
+  run: ActionFlowRunner,
+  ids: NamedActionIdentities,
+): Promise<
+  | Readonly<{ kind: "completed"; outcomes: readonly ExecuteNamedActionResult[] }>
+  | Readonly<{ kind: "stopped"; index: number; outcome: AttemptOutcome }>
+> => {
+  const order = states
+    .map((state, index) => ({ state, index }))
+    .sort((left, right) =>
+      left.state.command.recordId
+        .toLowerCase()
+        .localeCompare(right.state.command.recordId.toLowerCase()),
+    );
+  const outcomes: ExecuteNamedActionResult[] = [];
+  const planned: Array<{ index: number; plan: PlannedApply }> = [];
+  const moved = new Set<string>();
+  for (const { state, index } of order) {
+    const outcome = await planNamedAction(transaction, issuedAt, state, run, ids);
+    if (!isPlanned(outcome)) {
+      if (outcome === restart || outcome === recordedRefusal || outcome.outcome !== "completed")
+        return { kind: "stopped", index, outcome };
+      outcomes[index] = outcome;
+      continue;
+    }
+    // Subjects are prepared against the revisions read before any of them writes, so two subjects
+    // that move one related record's totals would collide at the writer: refuse before writing.
+    const parents = movedParentKeys(outcome);
+    if (parents.some((key) => moved.has(key)))
+      return {
+        kind: "stopped",
+        index,
+        outcome: safeRefusal(
+          outcome.correlationId,
+          "operation_refused",
+          "two selected records move the same related record",
+        ),
+      };
+    for (const key of parents) moved.add(key);
+    planned.push({ index, plan: outcome });
+  }
+  if (planned.length > 0) {
+    const applied = await applySubjects(
+      transaction,
+      planned.map((item) => item.plan),
+    );
+    const finishing =
+      applied.kind === "completed"
+        ? planned.map((item, position) => ({ ...item, stored: applied.stored[position]! }))
+        : [{ ...planned[applied.index]!, stored: applied.stored }];
+    for (const { index, plan, stored } of finishing) {
+      const outcome = await finishNamedAction(transaction, issuedAt, plan, stored, ids);
+      if (outcome === restart || outcome === recordedRefusal || outcome.outcome !== "completed")
+        return { kind: "stopped", index, outcome };
+      outcomes[index] = outcome;
+    }
+    if (applied.kind === "refused") throw new Error("NAMED_ACTION_WRITER_REFUSAL_UNHANDLED");
+  }
+  return { kind: "completed", outcomes };
 };
 
 /** One parsed command's attempt state, with fresh per-attempt rule executions. */
@@ -1239,8 +1382,10 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
         const result = await requests.runChange(
           session,
           selection,
-          (transaction, _scope, issuedAt) =>
-            attemptNamedAction(transaction, issuedAt, state, run, ids),
+          async (transaction, _scope, issuedAt): Promise<AttemptOutcome> => {
+            const attempt = await attemptNamedActions(transaction, issuedAt, [state], run, ids);
+            return attempt.kind === "completed" ? attempt.outcomes[0]! : attempt.outcome;
+          },
         );
         // The attempt sets the settlement inside the transaction, after this loop cleared it.
         const settlement = state.deleteSettlement as Settled<unknown> | undefined;
@@ -1288,6 +1433,19 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
         if (command === undefined || activityId === undefined) return { kind: "unavailable" };
         states.push(attemptStateOf(command, activityId));
       }
+      // One writer call serves one record type and one action; the first command names them.
+      const head = states[0]!.command;
+      if (
+        states.some(
+          (state) =>
+            state.command.recordTypeId.toLowerCase() !== head.recordTypeId.toLowerCase() ||
+            JSON.stringify(state.command.action) !== JSON.stringify(head.action) ||
+            JSON.stringify(state.command.inputs) !== JSON.stringify(head.inputs),
+        )
+      ) {
+        console.error("[named-action] refused NAMED_ACTION_BATCH_MIXED");
+        return { kind: "unavailable" };
+      }
       const rollback = new Error("NAMED_ACTION_BATCH_ROLLED_BACK");
       let refused:
         Readonly<{ index: number; result: ExecuteNamedActionResult | undefined }> | undefined;
@@ -1300,22 +1458,19 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
         session,
         selection,
         async (transaction, _scope, issuedAt) => {
-          const results: ExecuteNamedActionResult[] = [];
-          for (const [index, state] of states.entries()) {
-            const outcome = await attemptNamedAction(transaction, issuedAt, state, run, ids);
-            // A record that moved, or refused, throws through the transaction so every record
-            // of the batch rolls back with it.
-            if (outcome === restart) {
-              restarted = true;
-              throw rollback;
-            }
-            if (outcome === recordedRefusal || outcome.outcome !== "completed") {
-              refused = { index, result: outcome === recordedRefusal ? undefined : outcome };
-              throw rollback;
-            }
-            results.push(outcome);
+          const attempt = await attemptNamedActions(transaction, issuedAt, states, run, ids);
+          if (attempt.kind === "completed") return attempt.outcomes;
+          // A record that moved, or refused, throws through the transaction so every record
+          // of the batch rolls back with it.
+          if (attempt.outcome === restart) {
+            restarted = true;
+            throw rollback;
           }
-          return results;
+          refused = {
+            index: attempt.index,
+            result: attempt.outcome === recordedRefusal ? undefined : attempt.outcome,
+          };
+          throw rollback;
         },
       );
       const settled = states.findIndex((state) => state.deleteSettlement !== undefined);
