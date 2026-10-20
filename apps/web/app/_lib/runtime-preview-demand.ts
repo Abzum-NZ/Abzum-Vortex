@@ -11,14 +11,18 @@ import {
 import { studioPreviewDemand } from "./studio-preview-demand";
 import { collectPlacements } from "./application-page/placement-helpers";
 
+export type RuntimePreviewDemandResult = Readonly<{
+  kind: "ready" | "refused" | "conflict" | "temporarily_unavailable";
+}>;
+
 /** A runtime preview uses the same demand path as Studio; ordinary installed reads do no work. */
 const demandRuntimePreview = async (
   session: IdentitySession,
   context: InstalledRuntimeContext,
   demand: ReturnType<typeof studioPreviewDemand>,
-): Promise<boolean> => {
+): Promise<RuntimePreviewDemandResult> => {
   const preview = runtimePreviewOf(context);
-  if (preview === undefined || demand === undefined) return true;
+  if (preview === undefined || demand === undefined) return { kind: "ready" };
   const signal = cacheSignal() ?? undefined;
   const state = await readStudioPreviewState(
     session,
@@ -27,13 +31,13 @@ const demandRuntimePreview = async (
     preview.draftRevision,
   );
   signal?.throwIfAborted();
+  if (state.kind !== "read") return state;
   if (
-    state.kind !== "read" ||
     state.preview === undefined ||
     state.preview.previewInstallationId !== preview.previewInstallationId ||
     studioPreviewRunsDraft(state.draft, state.preview) !== "ready"
   )
-    return false;
+    return { kind: "conflict" };
   const result = await materializeStudioPreviewDemand(
     session,
     context.organizationId,
@@ -42,7 +46,7 @@ const demandRuntimePreview = async (
     demand,
     signal,
   );
-  return result.kind === "ready";
+  return result;
 };
 
 export const prepareRuntimePreviewPage = (
@@ -52,8 +56,8 @@ export const prepareRuntimePreviewPage = (
   readSubject: boolean,
   projected?: Readonly<Record<string, unknown>>,
   selectedPlacementIds?: ReadonlySet<string>,
-): Promise<boolean> => {
-  if (runtimePreviewOf(context) === undefined) return Promise.resolve(true);
+): Promise<RuntimePreviewDemandResult> => {
+  if (runtimePreviewOf(context) === undefined) return Promise.resolve({ kind: "ready" });
   return demandRuntimePreview(
     session,
     context,
@@ -84,8 +88,8 @@ export const prepareRuntimePreviewChoices = (
   session: IdentitySession,
   context: InstalledRuntimeContext,
   recordTypeIds: readonly string[],
-): Promise<boolean> => {
-  if (runtimePreviewOf(context) === undefined) return Promise.resolve(true);
+): Promise<RuntimePreviewDemandResult> => {
+  if (runtimePreviewOf(context) === undefined) return Promise.resolve({ kind: "ready" });
   return demandRuntimePreview(
     session,
     context,

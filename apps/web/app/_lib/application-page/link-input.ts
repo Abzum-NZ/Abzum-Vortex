@@ -20,7 +20,10 @@ import {
   type IdentitySession,
 } from "@vortex/platform/schema";
 import { getQueryContinuationKey } from "../query-continuation-key";
-import { prepareRuntimePreviewChoices } from "../runtime-preview-demand";
+import {
+  prepareRuntimePreviewChoices,
+  type RuntimePreviewDemandResult,
+} from "../runtime-preview-demand";
 import {
   collectPlacements,
   first,
@@ -101,7 +104,7 @@ export const projectInitialLinkInputs = async (
       reason: "link_initial_value_invalid" | "link_initial_value_unavailable",
     ) => void;
   }>,
-): Promise<void> => {
+): Promise<RuntimePreviewDemandResult> => {
   const starts = input.placements.flatMap((placement) => {
     const parameter = placement.settings.publishes_parameter;
     if (!isRecord(parameter) || parameter.kind !== "text" || typeof parameter.value !== "string")
@@ -121,15 +124,13 @@ export const projectInitialLinkInputs = async (
       },
     ];
   });
-  if (starts.length === 0) return;
-  if (
-    !(await prepareRuntimePreviewChoices(
-      input.session,
-      input.context,
-      starts.map((start) => start.reference.recordTypeId),
-    ))
-  )
-    throw new Error("PREVIEW_INITIAL_LINK_DEMAND_UNAVAILABLE");
+  if (starts.length === 0) return { kind: "ready" };
+  const demand = await prepareRuntimePreviewChoices(
+    input.session,
+    input.context,
+    starts.map((start) => start.reference.recordTypeId),
+  );
+  if (demand.kind !== "ready") return demand;
   const links = await input.resolveRecordLinks(starts.map((start) => start.reference));
   for (const { placementId, reference } of starts) {
     const label = links?.get(recordLinkLabelKey(reference));
@@ -142,6 +143,7 @@ export const projectInitialLinkInputs = async (
       values: { kind: "link_input", value: reference, title: label.label },
     };
   }
+  return { kind: "ready" };
 };
 
 /**
@@ -266,14 +268,15 @@ export const loadRecordChoicePage = async (
     });
   }
   if (targets.length === 0) return { kind: "refused", cause: "no_targets" };
-  if (
-    !(await prepareRuntimePreviewChoices(
-      session,
-      context,
-      targets.map((target) => target.recordTypeId),
-    ))
-  )
-    return { kind: "temporarily_unavailable" };
+  const demand = await prepareRuntimePreviewChoices(
+    session,
+    context,
+    targets.map((target) => target.recordTypeId),
+  );
+  if (demand.kind !== "ready")
+    return demand.kind === "temporarily_unavailable"
+      ? { kind: "temporarily_unavailable" }
+      : { kind: "refused", cause: "preview_demand_refused" };
 
   const queries = createProtectedQueryService({
     ...dependencies,

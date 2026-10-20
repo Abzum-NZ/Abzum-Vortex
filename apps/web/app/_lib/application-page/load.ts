@@ -170,7 +170,11 @@ export const readPageProjections = cache(
       subjectRecordId !== undefined,
     );
     const projectedPageRead = subjectReady.then(async (ready) => {
-      if (!ready) return { kind: "temporarily_unavailable" } as const;
+      if (ready.kind !== "ready")
+        return {
+          kind:
+            ready.kind === "temporarily_unavailable" ? "temporarily_unavailable" : "unavailable",
+        } as const;
       const projected = await createStoredPageCapabilityService({
         ...dependencies,
         context,
@@ -178,27 +182,32 @@ export const readPageProjections = cache(
         selection: { pageId, ...(subjectRecordId === undefined ? {} : { subjectRecordId }) },
       }).project(session, selection);
       if (projected.kind !== "available" || projected.value === undefined) return projected;
-      if (
-        !(await prepareRuntimePreviewPage(
-          session,
-          context,
-          definition,
-          false,
-          projected.value,
-          selectedPlacementIds,
-        ))
-      )
-        return { kind: "temporarily_unavailable" } as const;
+      const demand = await prepareRuntimePreviewPage(
+        session,
+        context,
+        definition,
+        false,
+        projected.value,
+        selectedPlacementIds,
+      );
+      if (demand.kind !== "ready")
+        return {
+          kind:
+            demand.kind === "temporarily_unavailable" ? "temporarily_unavailable" : "unavailable",
+        } as const;
       return projected;
     });
     const navigationRead = subjectReady.then((ready) =>
-      ready
+      ready.kind === "ready"
         ? createStoredNavigationProjectionService({
             ...dependencies,
             context,
             permissions: platformPermissionSource,
           }).project(session, selection)
-        : ({ kind: "temporarily_unavailable" } as const),
+        : ({
+            kind:
+              ready.kind === "temporarily_unavailable" ? "temporarily_unavailable" : "unavailable",
+          } as const),
     );
     // A failure is rethrown where its result is consulted, never left unobserved meanwhile, and
     // every reader joins both reads before it returns on any path (early returns included).
@@ -1080,8 +1089,8 @@ const loadApplicationPageJoined = async (
     }
   const linkInputs = placements.filter(isLinkInputPlacement);
   // A new record's link field may start with the record its page address names.
-  if (pageDefinition.type !== "guided_form")
-    await projectInitialLinkInputs({
+  if (pageDefinition.type !== "guided_form") {
+    const initialLinks = await projectInitialLinkInputs({
       session,
       context,
       placements: linkInputs.filter(
@@ -1092,6 +1101,14 @@ const loadApplicationPageJoined = async (
       resolveRecordLinks,
       log: (placementId, reason) => logPlacementFailure(address, placementId, reason),
     });
+    if (initialLinks.kind !== "ready")
+      return {
+        kind:
+          initialLinks.kind === "temporarily_unavailable"
+            ? "temporarily_unavailable"
+            : "unavailable",
+      };
+  }
   if (unshown.size > 0) {
     applyFormFieldAccess(page, { omitted: unshown, readOnly: new Set(), refused: new Map() });
     for (const placementId of Object.keys(data))
