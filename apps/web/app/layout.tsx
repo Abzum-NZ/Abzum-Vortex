@@ -39,6 +39,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           href={documentStylesheetHref(documentTheme.stylesheet)}
           precedence="platform"
         />
+        {/* The one delivery of the shared component styles: a cached asset, never inlined. */}
+        <link rel="stylesheet" href={documentStylesheetHref("components")} precedence="default" />
       </head>
       <body>
         <AppearanceProvider initial={appearance}>

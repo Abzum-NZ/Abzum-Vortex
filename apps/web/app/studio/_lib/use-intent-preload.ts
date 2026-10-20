@@ -44,6 +44,8 @@ export function useIntentPreload(load: () => Promise<unknown>, selector: string)
       else timer = setTimeout(run, 1000);
     };
     const leave = (event: FocusEvent | PointerEvent) => {
+      // A touch ends with pointerout straight after the tap, which is the intent itself.
+      if (event instanceof PointerEvent && event.pointerType === "touch") return;
       if (target === null || !(event.target instanceof Node) || !target.contains(event.target))
         return;
       if (event.relatedTarget instanceof Node && target.contains(event.relatedTarget)) return;

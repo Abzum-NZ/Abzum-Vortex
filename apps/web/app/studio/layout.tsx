@@ -9,7 +9,6 @@ export default function StudioLayout({ children }: Readonly<{ children: ReactNod
   return (
     <VortexStyleRoot documentTheme {...STUDIO_DOCUMENT_THEME}>
       <link rel="stylesheet" href={documentStylesheetHref("studio")} precedence="platform" />
-      <link rel="stylesheet" href={documentStylesheetHref("components")} precedence="default" />
       <TooltipProvider>
         {children}
         <Toaster position="bottom-right" visibleToasts={3} closeButton />

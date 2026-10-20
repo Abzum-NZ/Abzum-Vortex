@@ -14,14 +14,6 @@ import {
 export type ApplicationTheme = ApplicationContent["theme"];
 type ThemeTokenValue = ApplicationTheme["tokens"][string];
 
-export {
-  APPEARANCE_COOKIE,
-  createAppearanceRootProps,
-  parseThemeMode,
-  type AppearanceRootProps,
-  type ThemeMode,
-} from "./appearance";
-
 /** Resolved, validated #594 theme tokens keyed by builder key. */
 type ThemeTokens = Readonly<Record<string, ThemeTokenValue>>;
 export type PlatformThemeTokens = PlatformThemeRelease["tokens"];

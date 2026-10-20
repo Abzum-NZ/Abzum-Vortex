@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { OrganizationLauncherEntry } from "@vortex/platform/schema";
 import {
-  ALL_UI_STYLES_CSS,
   createThemeRootProps,
   type DisplayRow,
   type DisplaySemanticEvent,
@@ -116,9 +115,6 @@ const organizationsUnavailable = (
     className="flex min-h-svh items-center justify-center p-4 bg-background text-foreground"
     {...createThemeRootProps(undefined, DEFAULT_PLATFORM_THEME_RELEASE.tokens)}
   >
-    <style href="vortex-ui-styles" precedence="default">
-      {ALL_UI_STYLES_CSS}
-    </style>
     <Card className="w-full max-w-md border-border bg-card text-card-foreground shadow-sm">
       <CardHeader className="gap-2">
         <Badge variant="secondary" className="w-fit text-xs uppercase">

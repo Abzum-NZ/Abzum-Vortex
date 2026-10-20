@@ -325,12 +325,8 @@ export {
   createPlatformComponentRegistryForReleases,
 } from "./combined-registry";
 
-export { AppearanceProvider, useAppearanceMode } from "./navigation/appearance-provider";
-export { AppearanceToggle } from "./navigation/appearance-toggle";
-
 // Theme variables and shared component styles
 export {
-  ALL_UI_STYLES_CSS,
   APPEARANCE_COOKIE,
   createAppearanceRootProps,
   createThemeRootProps,
