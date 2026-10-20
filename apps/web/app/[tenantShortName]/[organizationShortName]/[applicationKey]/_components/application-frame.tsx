@@ -162,7 +162,11 @@ export function ApplicationFrame({
       window.setTimeout(() => router.refresh(), 0);
     };
     window.addEventListener("popstate", refreshRestoredAddress);
-    return () => window.removeEventListener("popstate", refreshRestoredAddress);
+    // Next can unmount this frame in an earlier listener. Keep ours through that event's dispatch
+    // so it can refresh the destination even when history moves to another application's frame.
+    return () => {
+      window.setTimeout(() => window.removeEventListener("popstate", refreshRestoredAddress), 0);
+    };
   }, [router]);
   // Intent to open a menu page (the pointer rests on its link or focus reaches it) asks the router
   // for an automatic prefetch of that address, never a full one. An automatic prefetch of these
