@@ -118,6 +118,16 @@ export type PlacementReadInput = Readonly<{
     continuationToken?: string;
     pageSize?: number;
   }>;
+  /**
+   * Reads one page of the open group of a grouped table instead of the groups: the members of the
+   * group `groupKey` names, through the table's own sort, filters and search, with no group count.
+   */
+  groupMembers?: Readonly<{
+    placementId: string;
+    groupKey: string;
+    continuationToken?: string;
+    direction?: "forward" | "backward";
+  }>;
   gridLayouts: PlacementGridLayouts;
   markSubjectUnreadable: () => void;
 }>;

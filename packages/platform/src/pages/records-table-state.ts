@@ -47,6 +47,37 @@ export type RecordsTablePageRequest = Readonly<{
  */
 export type RecordsTablePivotView = Readonly<{ cursor?: string }>;
 
+/**
+ * The grouping a table is read in: the choice field its records are grouped by and the one group
+ * that is open, as its group key, or null while every group is collapsed. A group key is the
+ * canonical JSON text of the group's value, a choice value or `null` for the records with none,
+ * so it never holds a display label.
+ */
+export type RecordsTableGroupState = Readonly<{ fieldId: string; expanded: string | null }>;
+
+/** The longest choice value a group key can carry; the Query engine accepts the same bound. */
+const GROUP_VALUE_MAXIMUM_LENGTH = 120;
+
+/** The group key of a group's value: the choice value, or null for records with no value. */
+export const recordsTableGroupKey = (value: string | null): string => JSON.stringify(value);
+
+/** The value a group key names; undefined for text that is not a key this codec writes. */
+export const parseRecordsTableGroupKey = (key: string): string | null | undefined => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(key);
+  } catch {
+    return undefined;
+  }
+  return parsed === null ||
+    (typeof parsed === "string" &&
+      parsed.length >= 1 &&
+      parsed.length <= GROUP_VALUE_MAXIMUM_LENGTH &&
+      recordsTableGroupKey(parsed) === key)
+    ? parsed
+    : undefined;
+};
+
 export type RecordsTableQueryState = Readonly<{
   /** The person's ordered sort; empty uses the authored default sort. */
   sort: readonly RecordsTableSortKey[];
@@ -56,11 +87,13 @@ export type RecordsTableQueryState = Readonly<{
   page: RecordsTablePageRequest | undefined;
   /** Present when the table is shown as a pivot. It is a view, not a query change. */
   pivot?: RecordsTablePivotView | undefined;
+  /** Present when the table is grouped by a field; it carries the open group. */
+  group?: RecordsTableGroupState | undefined;
 }>;
 
 export type RecordsTableQueryStateRead =
   | Readonly<{ kind: "valid"; state: RecordsTableQueryState }>
-  | Readonly<{ kind: "malformed"; part: "sort" | "filter" | "search" }>;
+  | Readonly<{ kind: "malformed"; part: "sort" | "filter" | "search" | "group" }>;
 
 const FIELD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PAGE_PATTERN = /^[1-9][0-9]{0,4}$/;
@@ -72,10 +105,12 @@ const searchParameter = (placementId: string): string => `search.${placementId}`
 const pageParameter = (placementId: string): string => `page.${placementId}`;
 const pivotParameter = (placementId: string): string => `pivot.${placementId}`;
 const viewParameter = (placementId: string): string => `view.${placementId}`;
+const groupParameter = (placementId: string): string => `group.${placementId}`;
+const expandParameter = (placementId: string): string => `expand.${placementId}`;
 
 // The one codec of every `<kind>.<placement>` address prefix: the query state, and the saved view
 // the table was opened with (#3023).
-const QUERY_STATE_PREFIXES = ["sort.", "filter.", "search.", "page.", "view."] as const;
+const QUERY_STATE_PREFIXES = ["sort.", "filter.", "search.", "page.", "view.", "group."] as const;
 
 /**
  * The placement whose table state an address parameter holds, lower-cased, or undefined for a
@@ -143,6 +178,51 @@ const pivotParameterPlacement = (name: string): string | undefined => {
   if (!name.startsWith("pivot.")) return undefined;
   const placementId = name.slice("pivot.".length);
   return FIELD_ID_PATTERN.test(placementId) ? placementId.toLowerCase() : undefined;
+};
+
+const toBase64Url = (text: string): string => {
+  let binary = "";
+  for (const byte of new TextEncoder().encode(text)) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+};
+
+const fromBase64Url = (value: string): string | undefined => {
+  try {
+    const binary = atob(value.replace(/-/g, "+").replace(/_/g, "/"));
+    return new TextDecoder("utf-8", { fatal: true }).decode(
+      Uint8Array.from(binary, (character) => character.charCodeAt(0)),
+    );
+  } catch {
+    return undefined;
+  }
+};
+
+const expandParameterPlacement = (name: string): string | undefined => {
+  if (!name.startsWith("expand.")) return undefined;
+  const placementId = name.slice("expand.".length);
+  return FIELD_ID_PATTERN.test(placementId) ? placementId.toLowerCase() : undefined;
+};
+
+/**
+ * Opens one group of a grouped table in the address, or closes it (null). The open group is a view
+ * of the same query state, so it is not part of the query-state prefixes: opening, closing or
+ * paging a group never reads the groups again.
+ */
+export const applyRecordsTableGroupExpansion = (
+  parameters: URLSearchParams,
+  placementId: string,
+  expanded: string | null,
+): void => {
+  for (const held of [...parameters.keys()])
+    if (held.toLowerCase() === expandParameter(placementId).toLowerCase()) parameters.delete(held);
+  if (expanded !== null) parameters.set(expandParameter(placementId), toBase64Url(expanded));
+};
+
+const decodeGroupExpansion = (value: string | undefined): string | null | undefined => {
+  if (value === undefined) return null;
+  if (!/^[A-Za-z0-9_-]{1,400}$/.test(value)) return undefined;
+  const key = fromBase64Url(value);
+  return key === undefined || parseRecordsTableGroupKey(key) === undefined ? undefined : key;
 };
 
 /** The address value of a page request, or undefined for the first page. */
@@ -239,6 +319,15 @@ export const readRecordsTableQueryState = (
       return { kind: "malformed", part: "filter" };
     filters.push({ fieldId: fieldId.toLowerCase(), filter });
   }
+  const groupField = owned.get(groupParameter(placementId));
+  if (groupField !== undefined && !FIELD_ID_PATTERN.test(groupField))
+    return { kind: "malformed", part: "group" };
+  const expanded = decodeGroupExpansion(
+    addressed.find(
+      ([name]) => name.toLowerCase() === expandParameter(placementId).toLowerCase(),
+    )?.[1],
+  );
+  if (expanded === undefined) return { kind: "malformed", part: "group" };
   return {
     kind: "valid",
     state: {
@@ -251,6 +340,7 @@ export const readRecordsTableQueryState = (
           ([name]) => name.toLowerCase() === pivotParameter(placementId).toLowerCase(),
         )?.[1],
       ),
+      group: groupField === undefined ? undefined : { fieldId: groupField.toLowerCase(), expanded },
     },
   };
 };
@@ -318,6 +408,8 @@ export type RecordsTableQueryChange =
   /** `filter` is the address spelling of the field's typed filter; empty clears the field's filter. */
   | Readonly<{ kind: "filter"; fieldId: string; filter: string }>
   | Readonly<{ kind: "search"; text: string }>
+  /** Groups the table by a field (null leaves the grouping); every group starts closed. */
+  | Readonly<{ kind: "group"; fieldId: string | null }>
   /**
    * A pivot cell opens the ordinary grid on the records it counts: every filter is set at once and
    * the pivot view is closed, so the one address change reads one bounded page.
@@ -397,6 +489,11 @@ export const applyRecordsTableQueryChange = (
     case "view":
       set(viewParameter(placementId), change.viewId ?? undefined);
       return;
+    case "group":
+      set(groupParameter(placementId), change.fieldId ?? undefined);
+      applyRecordsTableGroupExpansion(parameters, placementId, null);
+      settleView();
+      return;
   }
 };
 
@@ -449,7 +546,8 @@ export const searchWithoutRecordsTableState = (search: string): string => {
   for (const name of [...parameters.keys()])
     if (
       recordsTableParameterPlacement(name) !== undefined ||
-      pivotParameterPlacement(name) !== undefined
+      pivotParameterPlacement(name) !== undefined ||
+      expandParameterPlacement(name) !== undefined
     )
       parameters.delete(name);
   return parameters.toString();
