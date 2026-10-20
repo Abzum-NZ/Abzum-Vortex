@@ -70,6 +70,77 @@ export type FieldInputSourceField = Readonly<{
   }>[];
 }>;
 
+type FieldInputJson = Readonly<Record<string, unknown>>;
+
+/**
+ * The automatic field input metadata of one canonical module field, read by the compiler for a
+ * bound release and by the runtime for a contributed field. Undefined when a link field names a
+ * target that is not resolved: an automatic input never invents a record type identity.
+ */
+export const fieldInputSourceField = (field: FieldInputJson): FieldInputSourceField | undefined => {
+  const type = String(field.type);
+  const settings: FieldInputJson =
+    typeof field.settings === "object" && field.settings !== null
+      ? (field.settings as FieldInputJson)
+      : {};
+  const resolvedRecordType = (value: unknown): FieldInputSourceField["recordTypes"][number] | undefined => {
+    const recordType = (typeof value === "object" && value !== null ? value : {}) as FieldInputJson;
+    return recordType.state === "resolved"
+      ? {
+          state: "resolved",
+          moduleRootId: String(recordType.moduleRootId),
+          recordTypeId: String(recordType.recordTypeId),
+        }
+      : undefined;
+  };
+  const choices =
+    (type === "choice" || type === "several_choices") && Array.isArray(settings.options)
+      ? (settings.options as FieldInputJson[]).map((option) => ({
+          key: String(option.value),
+          label: String(option.label),
+        }))
+      : [];
+  const targets: unknown[] =
+    type === "link" && settings.target !== undefined
+      ? [settings.target]
+      : type === "link_to_one_of_several" && Array.isArray(settings.targets)
+        ? (settings.targets as unknown[])
+        : [];
+  const recordTypes = targets.map(resolvedRecordType);
+  if (recordTypes.some((recordType) => recordType === undefined)) return undefined;
+  return {
+    key: String(field.key),
+    label: String(field.label),
+    required: field.required === true,
+    type,
+    ...(type === "date_time" &&
+    (settings.displayTimeZone === "person" ||
+      settings.displayTimeZone === "organization" ||
+      settings.displayTimeZone === "utc")
+      ? { displayTimeZone: settings.displayTimeZone }
+      : {}),
+    ...(type === "several_choices" && typeof settings.maximumSelections === "number"
+      ? { maximumSelections: settings.maximumSelections }
+      : {}),
+    ...(type === "attachment"
+      ? {
+          attachmentSettings: settings as unknown as NonNullable<
+            FieldInputSourceField["attachmentSettings"]
+          >,
+        }
+      : {}),
+    ...(type === "table"
+      ? {
+          tableSettings: settings as unknown as NonNullable<
+            FieldInputSourceField["tableSettings"]
+          >,
+        }
+      : {}),
+    choices,
+    recordTypes: recordTypes as FieldInputSourceField["recordTypes"],
+  };
+};
+
 /** Publication can select only existing indexable fields, including safe derived inputs. */
 export const applicationSearchFieldIsSelectable = (
   fields: readonly ModuleField[],

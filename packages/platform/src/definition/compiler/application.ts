@@ -29,8 +29,8 @@ import {
 } from "../application-materialisation";
 import {
   type ApplicationCompositionResolution,
-  type FieldInputSourceField,
   applicationSearchFieldIsSelectable,
+  fieldInputSourceField,
 } from "../application-resolution";
 import { validateApplicationSourceCatalogue } from "../application-catalogue-validation";
 import { settleDefinitionRuleFailures } from "../rule-failure-order";
@@ -611,66 +611,7 @@ const applicationCompositionResolution = (
     fieldInput: (fieldId) => {
       const pair = valueIndex.fieldById(fieldId);
       // Only a field of an exactly bound module release can drive an automatic field input.
-      if (pair === undefined) return undefined;
-      const field = pair.field;
-      const type = String(field.type);
-      const settings = field.settings === undefined ? {} : asObject(field.settings);
-      const resolvedRecordType = (value: unknown): FieldInputSourceField["recordTypes"][number] => {
-        const recordType = asObject(value);
-        // A canonical module field resolves every link target; anything else is refused rather
-        // than derived, so an automatic field input never invents a record type identity.
-        if (recordType.state !== "resolved")
-          fail("vortex.definition.module_field_references", "broken_reference");
-        return {
-          state: "resolved",
-          moduleRootId: String(recordType.moduleRootId),
-          recordTypeId: String(recordType.recordTypeId),
-        };
-      };
-      const choices =
-        (type === "choice" || type === "several_choices") && Array.isArray(settings.options)
-          ? (settings.options as JsonObject[]).map((option) => ({
-              key: String(option.value),
-              label: String(option.label),
-            }))
-          : [];
-      const recordTypes: FieldInputSourceField["recordTypes"] =
-        type === "link" && settings.target !== undefined
-          ? [resolvedRecordType(settings.target)]
-          : type === "link_to_one_of_several" && Array.isArray(settings.targets)
-            ? (settings.targets as unknown[]).map(resolvedRecordType)
-            : [];
-      return {
-        key: String(field.key),
-        label: String(field.label),
-        required: field.required === true,
-        type,
-        ...(type === "date_time" &&
-        (settings.displayTimeZone === "person" ||
-          settings.displayTimeZone === "organization" ||
-          settings.displayTimeZone === "utc")
-          ? { displayTimeZone: settings.displayTimeZone }
-          : {}),
-        ...(type === "several_choices" && typeof settings.maximumSelections === "number"
-          ? { maximumSelections: settings.maximumSelections }
-          : {}),
-        ...(type === "attachment"
-          ? {
-              attachmentSettings: settings as unknown as NonNullable<
-                FieldInputSourceField["attachmentSettings"]
-              >,
-            }
-          : {}),
-        ...(type === "table"
-          ? {
-              tableSettings: settings as unknown as NonNullable<
-                FieldInputSourceField["tableSettings"]
-              >,
-            }
-          : {}),
-        choices,
-        recordTypes,
-      };
+      return pair === undefined ? undefined : fieldInputSourceField(pair.field);
     },
     relationship: (reference) => {
       const [recordType, alias] = splitMember(
