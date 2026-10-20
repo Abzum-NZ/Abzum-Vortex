@@ -87,6 +87,12 @@ const sourceFacts = (source: QueryBindingSource, facts: QueryBindingPageFacts): 
   switch (source.kind) {
     case "fixed":
       return { kind: "fixed", value: source.value };
+    case "fixed_record":
+      return {
+        kind: "typed",
+        type: { kind: "record", recordTypes: [source.recordType] },
+        description: facts.recordTypeLabel(source.recordType),
+      };
     case "page_parameter": {
       const parameter = facts.parameters.find((candidate) => candidate.name === source.name);
       if (parameter === undefined)
@@ -118,6 +124,8 @@ const sourceFacts = (source: QueryBindingSource, facts: QueryBindingPageFacts): 
         : { kind: "typed", type: field.type, description: field.label, field: field.label };
     }
     case "current_person":
+      if (source.part === "organisation")
+        return { kind: "typed", type: { kind: "text" }, description: "the current organisation" };
       return facts.currentPersonRecordType === undefined
         ? { kind: "problem", sentence: "Current person needs the people directory." }
         : {
@@ -160,11 +168,13 @@ const bindingProblem = (
   const source = sourceFacts(binding.source, facts);
   if (source.kind === "problem") return source.sentence;
   if (source.kind === "fixed")
-    return source.value.trim() === ""
-      ? `Write a value for ${input.label}.`
-      : parseQueryBindingText(source.value, input.type) === undefined
-        ? `${source.value} is not a valid ${name(input.type)} for ${input.label}.`
-        : undefined;
+    return input.type.kind === "record"
+      ? `Choose a record for ${input.label}.`
+      : source.value.trim() === ""
+        ? `Write a value for ${input.label}.`
+        : parseQueryBindingText(source.value, input.type) === undefined
+          ? `${source.value} is not a valid ${name(input.type)} for ${input.label}.`
+          : undefined;
   if (source.type === undefined)
     return `${input.label} needs ${withArticle(name(input.type))}; ${source.description} gives no value a query can use.`;
   if (queryBindingTypesFit(input.type, source.type, binding.source.kind === "relative_date"))
