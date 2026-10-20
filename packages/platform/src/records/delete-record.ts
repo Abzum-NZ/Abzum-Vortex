@@ -18,7 +18,7 @@ import {
   beforeSaveRuleRefusedIssueCode,
   beforeSaveRuleUnavailableIssueCode,
   beginBeforeSaveRuleExecution,
-  parseBeforeSaveRuleSet,
+  parseBeforeSaveFlowSet,
   type BeforeSaveRuleExecution,
 } from "./before-save-rules";
 
@@ -287,7 +287,7 @@ const calculateGeneratedValues = (
   const rules = new Map<string, BeforeSaveRuleExecution>();
   for (const record of preparation.records) {
     if (record.recordKey === "root") continue;
-    const ruleSet = parseBeforeSaveRuleSet(record.beforeSaveRules, record.recordType.recordTypeId);
+    const ruleSet = parseBeforeSaveFlowSet(record.beforeSaveFlows, record.recordType.recordTypeId);
     if (ruleSet === undefined)
       return {
         success: false,

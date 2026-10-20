@@ -103,35 +103,8 @@ const release = (definition: { blockId: string; releaseVersion: string }): Platf
     }),
   );
 
-/** Exact immutable metadata release for the plain text display block. */
-export const TEXT_BLOCK_RELEASE: PlatformBlockRelease = release(sources.TEXT_BLOCK_RELEASE);
-
-/** Exact immutable metadata release for the structured rich text display block. */
-export const RICH_TEXT_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.RICH_TEXT_BLOCK_RELEASE,
-);
-
-/** Exact immutable metadata release for the record detail display block. */
-export const RECORD_DETAIL_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.RECORD_DETAIL_BLOCK_RELEASE,
-);
-
-/** Exact immutable metadata release for the summary values display block. */
-export const SUMMARY_VALUES_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.SUMMARY_VALUES_BLOCK_RELEASE,
-);
-
-/** Exact immutable metadata release for the authored Notice display block. */
+/** The one Notice release: it declares the authored defaults (information severity, one text part). */
 export const NOTICE_BLOCK_RELEASE: PlatformBlockRelease = release(sources.NOTICE_BLOCK_RELEASE);
-
-/**
- * Release 1.1.0 of the Notice declares the authored defaults (information severity, one text
- * part) a block dropped from the palette starts with. The 1.0.0 release stays published
- * unchanged, so an application pinned to it keeps its exact published behaviour.
- */
-export const NOTICE_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
-  sources.NOTICE_BLOCK_RELEASE_1_1_0,
-);
 
 /** Exact immutable metadata release for the protected read-only attachment list. */
 export const ATTACHMENT_LIST_BLOCK_RELEASE: PlatformBlockRelease = release(
@@ -146,25 +119,15 @@ export const QUERY_NOTICE_BLOCK_RELEASE: PlatformBlockRelease = release(
   sources.QUERY_NOTICE_BLOCK_RELEASE,
 );
 
-/**
- * Release 1.1.0 of each display block adds an optional authored `empty_message` shown in place of
- * the block family's fixed neutral empty text. The 1.0.0 releases stay published unchanged, so an
- * application pinned to them keeps its exact published behaviour.
- */
-export const TEXT_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
-  sources.TEXT_BLOCK_RELEASE_1_1_0,
+/** The one release of each text display block: an optional authored `empty_message` replaces the fixed neutral empty text. */
+export const TEXT_BLOCK_RELEASE: PlatformBlockRelease = release(sources.TEXT_BLOCK_RELEASE);
+
+export const RICH_TEXT_BLOCK_RELEASE: PlatformBlockRelease = release(
+  sources.RICH_TEXT_BLOCK_RELEASE,
 );
 
-export const RICH_TEXT_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
-  sources.RICH_TEXT_BLOCK_RELEASE_1_1_0,
-);
-
-export const RECORD_DETAIL_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
-  sources.RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
-);
-
-export const SUMMARY_VALUES_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
-  sources.SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
+export const SUMMARY_VALUES_BLOCK_RELEASE: PlatformBlockRelease = release(
+  sources.SUMMARY_VALUES_BLOCK_RELEASE,
 );
 
 /**
@@ -176,12 +139,9 @@ export const SUMMARY_VALUES_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
  */
 export const TABLE_BLOCK_RELEASE: PlatformBlockRelease = release(sources.TABLE_BLOCK_RELEASE);
 
-/**
- * Release 1.2.0 of the record detail block declares its data contract as settings (decision 5):
- * the detail fields it maps to its bound query.
- */
-export const RECORD_DETAIL_BLOCK_RELEASE_1_2_0: PlatformBlockRelease = release(
-  sources.RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
+/** The one record detail release: it declares the detail fields it maps to its bound query as settings. */
+export const RECORD_DETAIL_BLOCK_RELEASE: PlatformBlockRelease = release(
+  sources.RECORD_DETAIL_BLOCK_RELEASE,
 );
 
 /** Exact immutable metadata release for the query-bound calendar display block. */
@@ -207,19 +167,9 @@ export const DATE_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(
   sources.DATE_INPUT_BLOCK_RELEASE,
 );
 
-/** Exact immutable metadata release for the choice input block. */
+/** The one choice input release: authored options or a published-query source, optionally dependent on another Choice. */
 export const CHOICE_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(
   sources.CHOICE_INPUT_BLOCK_RELEASE,
-);
-
-/** Release 1.1.0 adds a published-query source while preserving the authored-option release. */
-export const CHOICE_INPUT_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
-  sources.CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
-);
-
-/** Release 1.2.0 binds one record Choice to the sole text input of another Choice's query. */
-export const CHOICE_INPUT_BLOCK_RELEASE_1_2_0: PlatformBlockRelease = release(
-  sources.CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
 );
 
 /** Exact immutable metadata release for the validation message block. */
@@ -230,18 +180,11 @@ export const VALIDATION_MESSAGE_BLOCK_RELEASE: PlatformBlockRelease = release(
 /** Exact immutable metadata release for the button block. */
 export const BUTTON_BLOCK_RELEASE: PlatformBlockRelease = release(sources.BUTTON_BLOCK_RELEASE);
 
-/** Exact immutable metadata release for the tabs block. */
-export const TABS_BLOCK_RELEASE: PlatformBlockRelease = release(sources.TABS_BLOCK_RELEASE);
-
 /**
- * Release 2.0.0 of the tabs block replaces its four fixed child slots with repeatable items: an
- * authored `items` list, each item keyed by a stable identity that names one child slot, so a tab
- * set may hold any number of tabs. The 1.0.0 release stays published unchanged, so an application
- * pinned to it keeps its exact four-slot behaviour.
+ * The one tabs release: an authored `items` list, each item keyed by a stable identity that names
+ * one child slot, so a tab set may hold any number of tabs.
  */
-export const TABS_BLOCK_RELEASE_2_0_0: PlatformBlockRelease = release(
-  sources.TABS_BLOCK_RELEASE_2_0_0,
-);
+export const TABS_BLOCK_RELEASE: PlatformBlockRelease = release(sources.TABS_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the dialog block. */
 export const DIALOG_BLOCK_RELEASE: PlatformBlockRelease = release(sources.DIALOG_BLOCK_RELEASE);
@@ -249,33 +192,13 @@ export const DIALOG_BLOCK_RELEASE: PlatformBlockRelease = release(sources.DIALOG
 /** Exact immutable metadata release for the drawer block. */
 export const DRAWER_BLOCK_RELEASE: PlatformBlockRelease = release(sources.DRAWER_BLOCK_RELEASE);
 
-/** Exact immutable metadata release for the general container block. */
+/** The one container release: menu sizing and placement, breakpoint overrides, landmark, padding and readable frame. */
 export const CONTAINER_BLOCK_RELEASE: PlatformBlockRelease = release(
   sources.CONTAINER_BLOCK_RELEASE,
 );
 
-/** Menu sizing, placement and breakpoint overrides for a definition-owned shell. */
-export const CONTAINER_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
-  sources.CONTAINER_BLOCK_RELEASE_1_1_0,
-);
-
-/** Adds an optional main landmark to a container's content region. */
-export const CONTAINER_BLOCK_RELEASE_1_2_0: PlatformBlockRelease = release(
-  sources.CONTAINER_BLOCK_RELEASE_1_2_0,
-);
-
-/** Adds declared surface padding and an optional readable frame without changing older releases. */
-export const CONTAINER_BLOCK_RELEASE_1_3_0: PlatformBlockRelease = release(
-  sources.CONTAINER_BLOCK_RELEASE_1_3_0,
-);
-
-/** Exact immutable metadata release for the heading block. */
+/** The one heading release; it declares the authored default text. */
 export const HEADING_BLOCK_RELEASE: PlatformBlockRelease = release(sources.HEADING_BLOCK_RELEASE);
-
-/** Release 1.1.0 of the heading block declares the authored default text; 1.0.0 is unchanged. */
-export const HEADING_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
-  sources.HEADING_BLOCK_RELEASE_1_1_0,
-);
 
 /**
  * Exact immutable metadata release for the application navigation block. Its renderer draws the
@@ -394,29 +317,17 @@ export const APPLICATION_LAUNCHER_BLOCK_RELEASE: PlatformBlockRelease = release(
 export const LINK_TILES_BLOCK_RELEASE: PlatformBlockRelease = release(
   sources.LINK_TILES_BLOCK_RELEASE,
 );
-export const RECORD_PIN_LINK_TILES_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
-);
-export const APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
-);
 
 /** All immutable display block releases, including calendar and query-bound board releases. */
 export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
-  TEXT_BLOCK_RELEASE,
-  RICH_TEXT_BLOCK_RELEASE,
-  RECORD_DETAIL_BLOCK_RELEASE,
-  SUMMARY_VALUES_BLOCK_RELEASE,
   NOTICE_BLOCK_RELEASE,
-  NOTICE_BLOCK_RELEASE_1_1_0,
   ATTACHMENT_LIST_BLOCK_RELEASE,
   QUERY_NOTICE_BLOCK_RELEASE,
-  TEXT_BLOCK_RELEASE_1_1_0,
-  RICH_TEXT_BLOCK_RELEASE_1_1_0,
-  RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
-  SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
+  TEXT_BLOCK_RELEASE,
+  RICH_TEXT_BLOCK_RELEASE,
+  SUMMARY_VALUES_BLOCK_RELEASE,
   TABLE_BLOCK_RELEASE,
-  RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
+  RECORD_DETAIL_BLOCK_RELEASE,
   CALENDAR_BLOCK_RELEASE,
   CHART_BLOCK_RELEASE,
 ]);
@@ -433,12 +344,9 @@ export const CONTROL_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.fr
   BOOLEAN_INPUT_BLOCK_RELEASE,
   DATE_INPUT_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE,
-  CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
-  CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
   VALIDATION_MESSAGE_BLOCK_RELEASE,
   BUTTON_BLOCK_RELEASE,
   TABS_BLOCK_RELEASE,
-  TABS_BLOCK_RELEASE_2_0_0,
   DIALOG_BLOCK_RELEASE,
   DRAWER_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
@@ -448,18 +356,12 @@ export const CONTROL_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.fr
 export const LAUNCHER_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
   LINK_TILES_BLOCK_RELEASE,
-  RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
-  APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
 ]);
 
 /** All immutable general layout block releases. */
 export const LAYOUT_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
   CONTAINER_BLOCK_RELEASE,
-  CONTAINER_BLOCK_RELEASE_1_1_0,
-  CONTAINER_BLOCK_RELEASE_1_2_0,
-  CONTAINER_BLOCK_RELEASE_1_3_0,
   HEADING_BLOCK_RELEASE,
-  HEADING_BLOCK_RELEASE_1_1_0,
 ]);
 
 /** Immutable application navigation and search releases, placed in a shell's layout. */

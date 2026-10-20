@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { JsonValue } from "../../schema";
-import { placementReleaseVersion, placementSettingsOf, type PlacementReadEntry } from "./shared";
+import { placementSettingsOf, type PlacementReadEntry } from "./shared";
 import type { PlacementReadInput } from "./types";
 
 /** A link tiles placement: the tiles its bound query returns for its resolved inputs. */
@@ -18,7 +18,6 @@ export const readLinkTiles = async (
     queryId,
     placementSettingsOf(placement),
     inputValues,
-    placementReleaseVersion(placement),
   );
   read.data[placement.placementId] =
     result.status === "ready" && result.values.rows.length === 0 ? { status: "empty" } : result;
