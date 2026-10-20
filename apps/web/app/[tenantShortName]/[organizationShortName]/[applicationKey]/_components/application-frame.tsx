@@ -154,6 +154,20 @@ export function ApplicationFrame({
     (navigate) => startPageTransition(navigate),
     [],
   );
+  // Next restores history entries regardless of staleTimes.dynamic. Their page and frame may
+  // predate an installed release or access change, so revalidate the restored address. A new browser
+  // task lets every history listener finish first; a microtask can run before Next's listener.
+  useEffect(() => {
+    const refreshRestoredAddress = () => {
+      window.setTimeout(() => router.refresh(), 0);
+    };
+    window.addEventListener("popstate", refreshRestoredAddress);
+    // Next can unmount this frame in an earlier listener. Keep ours through that event's dispatch
+    // so it can refresh the destination even when history moves to another application's frame.
+    return () => {
+      window.setTimeout(() => window.removeEventListener("popstate", refreshRestoredAddress), 0);
+    };
+  }, [router]);
   // Intent to open a menu page (the pointer rests on its link or focus reaches it) asks the router
   // for an automatic prefetch of that address, never a full one. An automatic prefetch of these
   // dynamic pages carries only the route tree and what lies above the nearest loading boundary
