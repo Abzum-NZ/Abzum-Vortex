@@ -61,6 +61,8 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_bulk_actions",
   "definition_records_table_inline_edit",
   "definition_records_table_row_edit",
+  "definition_records_table_row_actions",
+  "definition_records_table_row_action_limit",
   "definition_records_table_master_detail",
   "definition_records_table_tree",
   "definition_records_table_grouping",
@@ -69,6 +71,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_pivot",
   "definition_records_table_spreadsheet",
   "definition_records_table_board",
+  "definition_records_table_export",
   "definition_query_binding",
   "definition_unknown_property",
   "definition_too_few_items",
@@ -151,11 +154,27 @@ const definitionValidationErrorCatalogueSource = {
     guidance:
       "Add a named action of the bound record type that needs no input typed for one record, with a limit of at most 5,000 records, or turn Bulk actions off.",
   },
+  definition_records_table_export: {
+    order: 39,
+    message: "Export needs the export action on the record type.",
+    guidance:
+      "Turn on the export action for the bound record type in Data and set a row limit of at most 100,000, or turn Export off.",
+  },
   definition_records_table_row_edit: {
     order: 39,
     message: "Row editing needs at least one stored field that people may change.",
     guidance:
       "Choose editable columns and name the action that saves the row, or turn Row editing off.",
+  },
+  definition_records_table_row_action_limit: {
+    order: 39,
+    message: "At most three actions can sit beside the row; move the rest to the menu",
+    guidance: "Choose Row menu for the remaining actions.",
+  },
+  definition_records_table_row_actions: {
+    order: 39,
+    message: "Row actions need a query that returns individual records",
+    guidance: "Choose a query that lists records rather than totals or groups.",
   },
   definition_records_table_inline_edit: {
     order: 39,

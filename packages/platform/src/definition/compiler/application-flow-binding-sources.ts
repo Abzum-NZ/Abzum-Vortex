@@ -37,7 +37,7 @@ const sourcePlacementProps = (
 
 /**
  * The authored flow bindings that compile. A binding of a Records table event that a grid feature
- * owns (bulk action, inline edit) compiles only while that feature is on: a feature that is off
+ * owns (row action, inline edit, row edit) compiles only while that feature is on: a feature that is off
  * compiles to nothing, so its flows can never be started from the table.
  */
 export const compiledSourceFlowBindings = (body: JsonObject): JsonObject[] =>

@@ -1,14 +1,16 @@
+import {
+  readRecordsTableRowActions,
+  type RecordsTableActionContract,
+} from "./records-table-features/row-actions";
 import type { DefinitionValidationErrorCode } from "../../catalogue/validation-errors";
 import { readRecordsTableFeatures, type RecordsTableFeatures } from "./records-table-features";
 import {
-  readActionList,
   settingField,
   settingGroup,
   settingItems,
   settingOptionalChoice,
   settingText,
   fieldList,
-  type RecordsTableActionContract,
   type SettingsRecord,
 } from "./records-table-features/shared";
 
@@ -153,7 +155,11 @@ const displayMessages = (settings: SettingsRecord): RecordsDisplayMessages => {
  * behaviour appears only when it carries the event identity that names its flow binding, so a
  * partially authored setting never invents a control.
  */
-const readRowBehaviours = (settings: SettingsRecord): RecordsTableRowBehaviourContract => {
+const readRowBehaviours = (
+  settings: SettingsRecord,
+): RecordsTableRowBehaviourContract | undefined => {
+  const rowActions = readRecordsTableRowActions(settings["row_actions"]);
+  if (rowActions === undefined) return undefined;
   const click = settingGroup(settings["row_click"]);
   const mode = click?.["mode"]?.kind === "choice" ? click["mode"].value : undefined;
   const clickEventId = mode === "flow" ? settingText(click?.["event_id"]) : undefined;
@@ -163,7 +169,7 @@ const readRowBehaviours = (settings: SettingsRecord): RecordsTableRowBehaviourCo
       : clickEventId === undefined
         ? {}
         : { rowClick: { eventId: clickEventId, selectsRecord: false } }),
-    rowActions: readActionList(settings["row_actions"]),
+    rowActions,
   };
 };
 
@@ -250,7 +256,9 @@ export const readRecordsTableContract = (
   const stickyHeader = settings["sticky_header"];
   const allowFullScreen = settings["allow_full_screen"];
   const features = readRecordsTableFeatures(settings["features"]);
+  const rowBehaviours = readRowBehaviours(settings);
   if (
+    rowBehaviours === undefined ||
     features === undefined ||
     density === undefined ||
     presentation === undefined ||
@@ -266,7 +274,7 @@ export const readRecordsTableContract = (
     sortableFields: fieldList(settings["sortable_fields"]),
     pageSize: pageSize.value,
     messages: displayMessages(settings),
-    rowBehaviours: readRowBehaviours(settings),
+    rowBehaviours,
     density,
     stickyHeader: stickyHeader.value,
     allowFullScreen: allowFullScreen.value,
@@ -286,11 +294,18 @@ export const readRecordsTableContract = (
 export const recordsTableContractRefusal = (
   contract: RecordsTableContract,
 ):
-  | Extract<DefinitionValidationErrorCode, "definition_records_table_bounded_scrolling">
+  | Extract<
+      DefinitionValidationErrorCode,
+      "definition_records_table_bounded_scrolling" | "definition_records_table_row_action_limit"
+    >
   | undefined =>
   contract.viewport === "page" && contract.pageSize > RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT
     ? "definition_records_table_bounded_scrolling"
-    : undefined;
+    : contract.features.rowActions.enabled &&
+        contract.rowBehaviours.rowActions.filter((action) => action.placement === "inline").length >
+          3
+      ? "definition_records_table_row_action_limit"
+      : undefined;
 
 /** Reads a Record detail placement's declared detail fields; undefined for earlier releases. */
 export const readRecordDetailContract = (

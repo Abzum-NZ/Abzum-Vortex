@@ -15,6 +15,7 @@ import {
   placementSettings,
   TABLE_BLOCK_RELEASE,
 } from "../../definition/application-composition-catalogue";
+import { projectRowActionAvailability } from "./row-actions";
 import { fieldEditorsOf } from "../placement-read/shared";
 import { pageSubjectFromRead } from "../page-subject-read";
 import {
@@ -95,6 +96,8 @@ export const recordsTableBindingRefusal = async (
     event === "row_action"
       ? contract.rowBehaviours.rowActions.find((action) => sameId(action.eventId, binding.eventId))
       : undefined;
+  if (event === "row_action" && !contract.features.rowActions.enabled)
+    return recordsTableRequestRefusal(event, "feature_off");
   if (event === "row_action" && command === undefined)
     return recordsTableRequestRefusal(event, "command_not_declared");
   if (
@@ -157,7 +160,7 @@ export const recordsTableBindingRefusal = async (
   const revision = inputs.revision;
   if (revision !== undefined && typeof revision !== "number")
     return recordsTableRequestRefusal(event, "revision_invalid");
-  // Only an inline edit's subject is its row; another row gesture's subject is the page's record.
+  // Edits and row commands carry their displayed row as the subject; opening a row keeps page context.
   if (
     editing &&
     subject !== undefined &&
@@ -187,6 +190,46 @@ export const recordsTableBindingRefusal = async (
         !row.capabilities?.actions.includes(command.capability)
       )
         return recordsTableRequestRefusal(event, "command_not_permitted");
+      if (event === "row_action") {
+        if (
+          row.revision === undefined ||
+          subject === undefined ||
+          !sameId(subject.recordId, row.recordId) ||
+          subject.revision !== row.revision
+        )
+          return recordsTableRequestRefusal(event, "displayed_revision_not_current");
+        const projected = projectRecordsTableFeatures(
+          contract,
+          { readableFieldIds: [], searchable: false },
+          [row],
+          undefined,
+          undefined,
+        )?.rowActions;
+        if (projected === undefined || installation.namedActions === undefined)
+          return recordsTableRequestRefusal(event, "feature_not_projected");
+        // Only the invoked command is re-decided; the row's other commands are not this request's.
+        const invoked = <Decision extends { action: string }>(actions: readonly Decision[]) =>
+          actions.filter((action) => sameId(action.action, binding.eventId));
+        const current = await projectRowActionAvailability(
+          transaction,
+          { ...installation, namedActions: installation.namedActions },
+          binding.controlId,
+          recordTypeId,
+          {
+            actions: projected.actions.filter((action) => sameId(action.eventId, binding.eventId)),
+            availability: projected.availability.map((entry) => ({
+              ...entry,
+              actions: invoked(entry.actions),
+            })),
+          },
+          new Date().toISOString(),
+        );
+        const decision = current.availability[0]?.actions.find((action) =>
+          sameId(action.action, binding.eventId),
+        );
+        if (decision?.eligible !== true)
+          return recordsTableRequestRefusal(event, decision?.reason ?? "command_not_projected");
+      }
       if (editing) {
         const module = installation.modules?.find((entry) => entry.content.queries.includes(query));
         if (module === undefined) return recordsTableRequestRefusal(event, "query_module_missing");

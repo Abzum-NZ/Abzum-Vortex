@@ -151,7 +151,7 @@ export const guardRules = {
     owner: "lead",
     reviewBy: "2027-01-15",
     description:
-      "A Records table grid feature missing from its contract/check, Studio editor, UI lazy chunk, projection mapping or extension points/whole-grid views (direct TypeScript entries only), or a feature chunk imported outside the UI registry",
+      "A Records table grid feature missing from its contract/check, Studio editor, UI lazy chunk, projection mapping or extension points/whole-grid views (direct TypeScript entries only), a row-action binding without its compiler gate, an eager row-command renderer, or a feature chunk imported outside the UI registry",
   },
   "invalid-guard-allow": {
     tier: "blocking",

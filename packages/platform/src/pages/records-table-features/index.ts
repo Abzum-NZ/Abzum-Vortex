@@ -1,4 +1,6 @@
 import type {
+  NamedActionAvailability,
+  RecordsTableActionContract,
   RecordsTableBulkActionContract,
   RecordsTableContract,
   RecordsTableFilterField,
@@ -48,6 +50,10 @@ export type RecordsTableFeatureProjection = Readonly<{
    * permission and precondition for the visible selection; execution rechecks current authority.
    */
   bulkActions?: readonly RecordsTableBulkActionContract[];
+  rowActions?: Readonly<{
+    actions: readonly RecordsTableActionContract[];
+    availability: NamedActionAvailability;
+  }>;
   /**
    * The fields the viewer may change on at least one row, each with how a cell edits it, and the
    * flow binding that commits a change.
@@ -74,6 +80,12 @@ export type RecordsTableFeatureProjection = Readonly<{
    * `view` is present when the address opens the table as a pivot, with its row position.
    */
   pivot?: Readonly<{ rowPageSize: number; totals: boolean; view?: Readonly<{ cursor?: string }> }>;
+  /**
+   * The viewer may export the records they see: the most records one export holds. Present only
+   * when the feature is on and the viewer's export permission allowed it in this read; the export
+   * route decides both again on every request.
+   */
+  export?: Readonly<{ maxRows: number }>;
 }>;
 
 /**
@@ -224,6 +236,8 @@ export const projectRecordsTableFeatures = (
   conditionalFormatting?: ConditionalFormattingProjection,
   pivotView?: Readonly<{ cursor?: string }>,
   fieldLabels?: Readonly<Record<string, string>>,
+  /** The viewer holds an export permission that reaches every record, decided in this read. */
+  exportAllowed?: boolean,
 ): RecordsTableFeatureProjection | undefined => {
   const { features } = contract;
   const readable = (field: string): boolean =>
@@ -283,7 +297,15 @@ export const projectRecordsTableFeatures = (
           unassignedLabel: groupingSettings.unassignedLabel,
         }
       : undefined;
+  const exportSettings = features.export;
   const projection: RecordsTableFeatureProjection = {
+    ...(exportSettings.enabled &&
+    exportAllowed === true &&
+    exportSettings.maxRows !== undefined &&
+    exportSettings.formats.includes("csv") &&
+    contract.columns.some((column) => readable(column.field))
+      ? { export: { maxRows: exportSettings.maxRows } }
+      : {}),
     ...(rowEdit.enabled &&
     rowEdit.eventId !== undefined &&
     rowEdit.trigger === "button" &&
@@ -298,6 +320,33 @@ export const projectRecordsTableFeatures = (
           spreadsheet: {
             rangeSelect: features.spreadsheet.rangeSelect,
             find: features.spreadsheet.find,
+          },
+        }
+      : {}),
+    ...(features.rowActions.enabled && contract.rowBehaviours.rowActions.length > 0
+      ? {
+          rowActions: {
+            actions: contract.rowBehaviours.rowActions,
+            availability: rows.flatMap((row) =>
+              row.revision === undefined
+                ? []
+                : [
+                    {
+                      recordId: row.recordId,
+                      revision: row.revision,
+                      actions: contract.rowBehaviours.rowActions.map((action) =>
+                        action.capability === undefined ||
+                        row.capabilities?.actions.includes(action.capability) === true
+                          ? { action: action.eventId, eligible: true as const }
+                          : {
+                              action: action.eventId,
+                              eligible: false as const,
+                              reason: "not_permitted" as const,
+                            },
+                      ),
+                    },
+                  ],
+            ),
           },
         }
       : {}),

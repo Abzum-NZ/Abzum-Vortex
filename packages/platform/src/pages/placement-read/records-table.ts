@@ -336,6 +336,12 @@ export const readRecordsTable = async (
           membersOnly: groupMembers !== undefined,
         }
       : undefined;
+  // Export is projected only for a viewer whose export permission reaches every record; the
+  // permission is decided in this read and again by the export route on every request.
+  const exportAllowed =
+    contract.features.export.enabled && recordType.state === "resolved"
+      ? await read.services.exportAllowed(read.context, String(recordType.recordTypeId))
+      : undefined;
   const effectiveState = selectedQuery ?? addressed.state;
   const continuation = read.tableContinuation;
   const explicitRequest =
@@ -357,6 +363,7 @@ export const readRecordsTable = async (
       ...(contract.features.inlineEdit.enabled || contract.features.rowEdit.enabled
         ? { fieldEditors: fieldEditorsOf(bound.module, read.context.releaseSet.modules) }
         : {}),
+      ...(exportAllowed === undefined ? {} : { exportAllowed }),
       ...(timeZone === undefined ? {} : { timeZone }),
       resolveRecordLinks: read.services.resolveRecordLinks,
       state: { ...effectiveState, page },
@@ -414,12 +421,24 @@ export const readRecordsTable = async (
     data[placementId] = { status: "refused", reason: "not_permitted" };
   } else if (resolved.display.status === "empty") data[placementId] = { status: "empty" };
   else {
-    const values = resolved.display.values;
+    let values = resolved.display.values;
+    if (values.features?.rowActions !== undefined) {
+      if (bound.query.recordType.state !== "resolved")
+        throw new Error("ROW_ACTION_RECORD_TYPE_UNRESOLVED");
+      const rowActions = await read.services.tables.projectRowActions(
+        read.context,
+        placementId,
+        String(bound.query.recordType.recordTypeId),
+        values.features.rowActions,
+      );
+      values = { ...values, features: { ...values.features, rowActions } };
+    }
     // Bulk actions may run over every matching record: the read seals what it matched (release,
     // resolved inputs and query state minus the page) for this viewer, with no extra read.
     const seal = read.services.tables.sealSelection;
     const selectionToken =
-      seal === undefined || values.features?.bulkActions === undefined
+      seal === undefined ||
+      (values.features?.bulkActions === undefined && values.features?.export === undefined)
         ? undefined
         : seal({
             installationRevision: read.context.applicationReleaseRevision,

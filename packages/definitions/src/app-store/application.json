@@ -317,11 +317,15 @@
                     "row_actions": [
                       {
                         "event_id": "event_install_or_upgrade",
-                        "label": "Install or upgrade"
+                        "label": "Install or upgrade",
+                        "icon": "plus",
+                        "placement": "inline"
                       },
                       {
                         "event_id": "event_remove_application",
-                        "label": "Remove"
+                        "label": "Remove",
+                        "icon": "minus",
+                        "placement": "menu"
                       }
                     ],
                     "vortex": {
@@ -352,6 +356,9 @@
                       },
                       "spreadsheet": {
                         "enabled": false
+                      },
+                      "row_actions": {
+                        "enabled": true
                       }
                     }
                   }

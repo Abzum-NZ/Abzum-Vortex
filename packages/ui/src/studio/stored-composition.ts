@@ -533,8 +533,15 @@ export const withCopiedFlowBindings = <Binding extends SourceFlowBinding>(
 export const removeFlowBindingsOf = (body: ApplicationSourceDocument["body"], removed: ReadonlySet<string>): void => {
   const unbound = new Set(body.flow_bindings.filter((binding) => removed.has(binding.control)).map((binding) => binding.event_id));
   body.flow_bindings = body.flow_bindings.filter((binding) => !removed.has(binding.control));
-  // An event declared only for the bindings that left goes with them; one that another binding or
-  // a remaining block's setting still names stays.
+  pruneUnboundEvents(body, unbound);
+};
+
+/**
+ * An event declared only for bindings that left goes with them; one that another binding or a
+ * remaining block's setting still names stays.
+ */
+export const pruneUnboundEvents = (body: ApplicationSourceDocument["body"], candidates: ReadonlySet<string>): void => {
+  const unbound = new Set(candidates);
   for (const binding of body.flow_bindings) unbound.delete(binding.event_id);
   if (unbound.size === 0) return;
   const named = JSON.stringify([...body.pages.map((page) => page.composition), ...body.shells.map((shell) => shell.layout)]);

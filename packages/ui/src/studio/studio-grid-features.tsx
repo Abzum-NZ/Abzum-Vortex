@@ -39,6 +39,7 @@ import type { StudioBoardPipeline } from "./board-source";
 import { StudioBoardEditor } from "./grid-features/board";
 import { StudioConditionalFormattingEditor } from "./grid-features/conditional-formatting";
 import { StudioSavedViewsEditor } from "./grid-features/saved-views";
+import { StudioExportEditor } from "./grid-features/export";
 import { StudioInspectorGroup } from "./studio-inspector-group";
 import { StudioQueryBindings } from "./studio-query-bindings";
 import {
@@ -325,6 +326,13 @@ export function StudioGridFeatures({
                     onChange={(next) => write(key, next)}
                   />
                 </div>
+              ) : null}
+              {enabled && key === "export" ? (
+                <StudioExportEditor
+                  value={current}
+                  disabled={disabled}
+                  onChange={(next) => write(key, next)}
+                />
               ) : null}
               {enabled && key === "board" ? (
                 <StudioBoardEditor
