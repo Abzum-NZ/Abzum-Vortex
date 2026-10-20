@@ -22,7 +22,7 @@ declare
   measure_alias constant text := 'pivot_measure';
   aggregate jsonb;
 begin
-  -- A pivot crosses two selected, filterable choice or date dimensions with one measure. Both
+  -- A pivot crosses two selected, filterable choice, link or date dimensions with one measure. Both
   -- dimensions are checked by the grouping validator, so they follow exactly its rules.
   if pg_catalog.jsonb_typeof(p_pivot) is distinct from 'object'
     or p_pivot - array['rowFieldId', 'rowDateBucket', 'columnFieldId', 'columnDateBucket', 'measure', 'rowLimit']::text[] <> '{}'::jsonb
@@ -98,4 +98,4 @@ grant execute on function vortex_record.pivot_query_internal(jsonb,jsonb,jsonb)
   to vortex_record_adapter;
 
 comment on function vortex_record.pivot_query_internal(jsonb,jsonb,jsonb) is
-  'Owner-only validation of one pivot: two distinct selected, filterable choice or date dimensions checked by the grouping validator, and one count, or a sum, average, minimum or maximum over a selected numeric or currency field. Returns the query with its grouping and aggregates replaced by the pivot, or null. The summary checks live field policy before disclosure.';
+  'Owner-only validation of one pivot: two distinct selected, filterable choice, link or date dimensions checked by the grouping validator, and one count, or a sum, average, minimum or maximum over a selected numeric or currency field. Returns the query with its grouping and aggregates replaced by the pivot, or null. The summary checks live field policy before disclosure.';

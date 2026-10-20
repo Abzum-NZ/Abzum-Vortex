@@ -61,7 +61,7 @@ export const studioGridFeatureEditors: Readonly<
   inline_edit: { kind: "settings" },
   master_detail: { kind: "settings" },
   conditional_formatting: { kind: "custom" },
-  // The catalogue restricts the row and column pickers to choice and date fields and the measure
+  // The catalogue restricts the row and column pickers to choice, link and date fields and the measure
   // picker to number and money fields, so Studio offers only fields a pivot can use.
   pivot: { kind: "settings" },
   board: { kind: "custom" },

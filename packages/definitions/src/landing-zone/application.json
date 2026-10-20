@@ -1794,9 +1794,7 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": [
-              "vortex.landing_zone:tile"
-            ],
+            "recordTypeIds": ["vortex.landing_zone:tile"],
             "value": {
               "kind": "reference",
               "reference": {
@@ -1824,9 +1822,7 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.landing_zone:tile"
-            ]
+            "recordTypeIds": ["vortex.landing_zone:tile"]
           }
         },
         "variables": {},
@@ -1870,9 +1866,7 @@
           "record": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.landing_zone:tile"
-            ]
+            "recordTypeIds": ["vortex.landing_zone:tile"]
           },
           "is_favourite": {
             "type": "yes_no",
@@ -1958,9 +1952,7 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": [
-              "vortex.landing_zone:tile"
-            ],
+            "recordTypeIds": ["vortex.landing_zone:tile"],
             "value": {
               "kind": "reference",
               "reference": {
@@ -1988,9 +1980,7 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.landing_zone:tile"
-            ]
+            "recordTypeIds": ["vortex.landing_zone:tile"]
           }
         },
         "variables": {},
@@ -2034,9 +2024,7 @@
           "record": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.landing_zone:tile"
-            ]
+            "recordTypeIds": ["vortex.landing_zone:tile"]
           }
         },
         "variables": {},

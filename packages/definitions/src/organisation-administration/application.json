@@ -1885,9 +1885,7 @@
           "organization_account_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:person"
-            ]
+            "recordTypeIds": ["vortex.system_directory:person"]
           },
           "expected_revision": {
             "type": "whole_number",
@@ -1943,9 +1941,7 @@
           "organization_account_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:person"
-            ]
+            "recordTypeIds": ["vortex.system_directory:person"]
           },
           "expected_revision": {
             "type": "whole_number",
@@ -2001,9 +1997,7 @@
           "organization_account_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:person"
-            ]
+            "recordTypeIds": ["vortex.system_directory:person"]
           },
           "expected_revision": {
             "type": "whole_number",
@@ -2114,9 +2108,7 @@
           "invitation_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:organization_invitation"
-            ]
+            "recordTypeIds": ["vortex.system_directory:organization_invitation"]
           },
           "expected_revision": {
             "type": "whole_number",
@@ -2172,9 +2164,7 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.organisation_administration:organization_settings"
-            ]
+            "recordTypeIds": ["vortex.organisation_administration:organization_settings"]
           }
         },
         "variables": {},
@@ -2220,9 +2210,7 @@
           "record": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.organisation_administration:organization_settings"
-            ]
+            "recordTypeIds": ["vortex.organisation_administration:organization_settings"]
           },
           "values": {
             "type": "json",
@@ -2264,9 +2252,7 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": [
-              "vortex.organisation_administration:organization_settings"
-            ],
+            "recordTypeIds": ["vortex.organisation_administration:organization_settings"],
             "value": {
               "kind": "reference",
               "reference": {

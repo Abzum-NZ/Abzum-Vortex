@@ -73,4 +73,4 @@ grant execute on function vortex_record.grouping_query_internal(jsonb,jsonb,json
   to vortex_record_adapter;
 
 comment on function vortex_record.grouping_query_internal(jsonb,jsonb,jsonb,integer) is
-  'Owner-only validation of one selected filterable choice or date dimension, an explicit group page cap and an authored date bucket/time zone. Returns the query with its grouping defaults replaced, or null. Each reader checks live field policy before disclosure.';
+  'Owner-only validation of one selected filterable choice, link or date dimension, an explicit group page cap and an authored date bucket/time zone. Returns the query with its grouping defaults replaced, or null. Each reader checks live field policy before disclosure.';

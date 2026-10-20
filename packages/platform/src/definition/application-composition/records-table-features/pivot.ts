@@ -34,7 +34,7 @@ export const recordsTablePivotMeasureFieldTypes: readonly string[] = Object.free
 
 /**
  * Pivot: the table shows its filtered records as rows crossed with columns, each cell one measure.
- * `rowField` and `columnField` are choice or date fields people can filter by (a date needs its
+ * `rowField` and `columnField` are choice, link or date fields people can filter by (a date needs its
  * calendar unit); `measureFunction` counts the records or totals a number or money field
  * (`measureField`); `totals` adds the row, column and grand totals; `rowPageSize` is how many
  * rows one page shows. Each part is absent until the builder names it, which the check refuses.
@@ -116,9 +116,10 @@ export const recordsTablePivotFeature: RecordsTableFeatureDefinition<RecordsTabl
       ...(rowPageSize?.kind === "number" ? { rowPageSize: rowPageSize.value } : {}),
     };
   },
-  // A pivot needs two different dimensions the bound query selects: a choice field with at most 50
-  // choices or a date field, each one people can filter by. When on, the rows, the columns, what
-  // the cells total and the page size must all fit; each refusal names the part that does not.
+  // A pivot needs two different dimensions the bound query selects: a choice field (at most 50
+  // choices as columns), a link or a date field, each one people can filter by. When on, the rows,
+  // the columns, what the cells total and the page size must all fit; each refusal names the part
+  // that does not.
   check: (state, facts) => {
     if (facts.grouped)
       return featureNotPossible(code, "A query that totals records cannot be pivoted.");

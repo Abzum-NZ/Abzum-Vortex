@@ -184,7 +184,7 @@ const definitionValidationErrorCatalogueSource = {
   // message is what a reader without that sentence sees.
   definition_records_table_pivot: {
     order: 39,
-    message: "A pivot needs two choice or date fields and a number to total.",
+    message: "A pivot needs two choice, link or date fields and what each cell shows.",
     guidance:
       "Choose the field for the rows, the field for the columns (at most 50 values) and what to total, or turn Pivot off.",
   },

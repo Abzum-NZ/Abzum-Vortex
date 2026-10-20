@@ -980,6 +980,107 @@
                     "presentation": "grid",
                     "id": "content_4",
                     "features": {
+                      "saved_views": {
+                        "enabled": true,
+                        "default_views": [
+                          {
+                            "view_id": "d4266be5-35f9-46cf-9614-75b46a6d0673",
+                            "name": "Team pipeline",
+                            "role": "crm_contributor",
+                            "is_default": true,
+                            "state": {
+                              "columns": [
+                                {
+                                  "field": "vortex.crm.opportunities:opportunity.opportunity_number",
+                                  "visible": true,
+                                  "pin": "start"
+                                },
+                                {
+                                  "field": "vortex.crm.opportunities:opportunity.name",
+                                  "visible": true,
+                                  "pin": "unpinned"
+                                },
+                                {
+                                  "field": "vortex.crm.opportunities:opportunity.company",
+                                  "visible": true,
+                                  "pin": "unpinned"
+                                },
+                                {
+                                  "field": "vortex.crm.opportunities:opportunity.value",
+                                  "visible": true,
+                                  "pin": "unpinned"
+                                },
+                                {
+                                  "field": "vortex.crm.opportunities:opportunity.net_value",
+                                  "visible": true,
+                                  "pin": "unpinned"
+                                },
+                                {
+                                  "field": "vortex.crm.opportunities:opportunity.stage",
+                                  "visible": true,
+                                  "pin": "unpinned"
+                                },
+                                {
+                                  "field": "vortex.crm.opportunities:opportunity.expected_close_date",
+                                  "visible": true,
+                                  "pin": "unpinned"
+                                }
+                              ],
+                              "density": "comfortable",
+                              "sort": [],
+                              "filters": []
+                            }
+                          },
+                          {
+                            "view_id": "784dd1d7-3acd-454c-a371-1d93d83d2241",
+                            "name": "Pipeline",
+                            "role": "*",
+                            "is_default": true,
+                            "state": {
+                              "columns": [
+                                {
+                                  "field": "vortex.crm.opportunities:opportunity.opportunity_number",
+                                  "visible": true,
+                                  "pin": "start"
+                                },
+                                {
+                                  "field": "vortex.crm.opportunities:opportunity.name",
+                                  "visible": true,
+                                  "pin": "unpinned"
+                                },
+                                {
+                                  "field": "vortex.crm.opportunities:opportunity.company",
+                                  "visible": true,
+                                  "pin": "unpinned"
+                                },
+                                {
+                                  "field": "vortex.crm.opportunities:opportunity.value",
+                                  "visible": true,
+                                  "pin": "unpinned"
+                                },
+                                {
+                                  "field": "vortex.crm.opportunities:opportunity.net_value",
+                                  "visible": true,
+                                  "pin": "unpinned"
+                                },
+                                {
+                                  "field": "vortex.crm.opportunities:opportunity.stage",
+                                  "visible": true,
+                                  "pin": "unpinned"
+                                },
+                                {
+                                  "field": "vortex.crm.opportunities:opportunity.expected_close_date",
+                                  "visible": true,
+                                  "pin": "unpinned"
+                                }
+                              ],
+                              "density": "comfortable",
+                              "sort": [],
+                              "filters": []
+                            }
+                          }
+                        ]
+                      },
                       "bulk_actions": {
                         "enabled": true,
                         "actions": [
@@ -1084,107 +1185,6 @@
                       },
                       "pivot": {
                         "enabled": false
-                      },
-                      "saved_views": {
-                        "enabled": true,
-                        "default_views": [
-                          {
-                            "view_id": "d4266be5-35f9-46cf-9614-75b46a6d0673",
-                            "name": "Team pipeline",
-                            "role": "crm_contributor",
-                            "is_default": true,
-                            "state": {
-                              "columns": [
-                                {
-                                  "field": "vortex.crm.opportunities:opportunity.opportunity_number",
-                                  "visible": true,
-                                  "pin": "start"
-                                },
-                                {
-                                  "field": "vortex.crm.opportunities:opportunity.name",
-                                  "visible": true,
-                                  "pin": "unpinned"
-                                },
-                                {
-                                  "field": "vortex.crm.opportunities:opportunity.company",
-                                  "visible": true,
-                                  "pin": "unpinned"
-                                },
-                                {
-                                  "field": "vortex.crm.opportunities:opportunity.value",
-                                  "visible": true,
-                                  "pin": "unpinned"
-                                },
-                                {
-                                  "field": "vortex.crm.opportunities:opportunity.net_value",
-                                  "visible": true,
-                                  "pin": "unpinned"
-                                },
-                                {
-                                  "field": "vortex.crm.opportunities:opportunity.stage",
-                                  "visible": true,
-                                  "pin": "unpinned"
-                                },
-                                {
-                                  "field": "vortex.crm.opportunities:opportunity.expected_close_date",
-                                  "visible": true,
-                                  "pin": "unpinned"
-                                }
-                              ],
-                              "density": "comfortable",
-                              "sort": [],
-                              "filters": []
-                            }
-                          },
-                          {
-                            "view_id": "784dd1d7-3acd-454c-a371-1d93d83d2241",
-                            "name": "Pipeline",
-                            "role": "*",
-                            "is_default": true,
-                            "state": {
-                              "columns": [
-                                {
-                                  "field": "vortex.crm.opportunities:opportunity.opportunity_number",
-                                  "visible": true,
-                                  "pin": "start"
-                                },
-                                {
-                                  "field": "vortex.crm.opportunities:opportunity.name",
-                                  "visible": true,
-                                  "pin": "unpinned"
-                                },
-                                {
-                                  "field": "vortex.crm.opportunities:opportunity.company",
-                                  "visible": true,
-                                  "pin": "unpinned"
-                                },
-                                {
-                                  "field": "vortex.crm.opportunities:opportunity.value",
-                                  "visible": true,
-                                  "pin": "unpinned"
-                                },
-                                {
-                                  "field": "vortex.crm.opportunities:opportunity.net_value",
-                                  "visible": true,
-                                  "pin": "unpinned"
-                                },
-                                {
-                                  "field": "vortex.crm.opportunities:opportunity.stage",
-                                  "visible": true,
-                                  "pin": "unpinned"
-                                },
-                                {
-                                  "field": "vortex.crm.opportunities:opportunity.expected_close_date",
-                                  "visible": true,
-                                  "pin": "unpinned"
-                                }
-                              ],
-                              "density": "comfortable",
-                              "sort": [],
-                              "filters": []
-                            }
-                          }
-                        ]
                       },
                       "spreadsheet": {
                         "enabled": false

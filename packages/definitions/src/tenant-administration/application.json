@@ -1255,9 +1255,7 @@
           "organization_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:organization"
-            ]
+            "recordTypeIds": ["vortex.system_directory:organization"]
           },
           "expected_revision": {
             "type": "whole_number",
@@ -1313,9 +1311,7 @@
           "organization_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:organization"
-            ]
+            "recordTypeIds": ["vortex.system_directory:organization"]
           },
           "expected_revision": {
             "type": "whole_number",
@@ -1371,9 +1367,7 @@
           "organization_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:organization"
-            ]
+            "recordTypeIds": ["vortex.system_directory:organization"]
           },
           "expected_revision": {
             "type": "whole_number",
@@ -1444,9 +1438,7 @@
                       "source": "task_output",
                       "task": "form",
                       "key": "values",
-                      "path": [
-                        "display_name"
-                      ]
+                      "path": ["display_name"]
                     }
                   }
                 }
@@ -1485,9 +1477,7 @@
           "parent_organization_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:organization"
-            ]
+            "recordTypeIds": ["vortex.system_directory:organization"]
           }
         },
         "variables": {},
@@ -1596,9 +1586,7 @@
                       "source": "task_output",
                       "task": "form",
                       "key": "values",
-                      "path": [
-                        "short_name"
-                      ]
+                      "path": ["short_name"]
                     }
                   },
                   "display_name": {
@@ -1607,9 +1595,7 @@
                       "source": "task_output",
                       "task": "form",
                       "key": "values",
-                      "path": [
-                        "display_name"
-                      ]
+                      "path": ["display_name"]
                     }
                   },
                   "steward_display_name": {
@@ -1618,9 +1604,7 @@
                       "source": "task_output",
                       "task": "form",
                       "key": "values",
-                      "path": [
-                        "steward_display_name"
-                      ]
+                      "path": ["steward_display_name"]
                     }
                   },
                   "language": {
@@ -1629,9 +1613,7 @@
                       "source": "task_output",
                       "task": "form",
                       "key": "values",
-                      "path": [
-                        "language"
-                      ]
+                      "path": ["language"]
                     }
                   },
                   "time_zone": {
@@ -1640,9 +1622,7 @@
                       "source": "task_output",
                       "task": "form",
                       "key": "values",
-                      "path": [
-                        "time_zone"
-                      ]
+                      "path": ["time_zone"]
                     }
                   },
                   "currency": {
@@ -1651,9 +1631,7 @@
                       "source": "task_output",
                       "task": "form",
                       "key": "values",
-                      "path": [
-                        "currency"
-                      ]
+                      "path": ["currency"]
                     }
                   },
                   "date_format": {
@@ -1662,9 +1640,7 @@
                       "source": "task_output",
                       "task": "form",
                       "key": "values",
-                      "path": [
-                        "date_format"
-                      ]
+                      "path": ["date_format"]
                     }
                   },
                   "number_format": {
@@ -1673,9 +1649,7 @@
                       "source": "task_output",
                       "task": "form",
                       "key": "values",
-                      "path": [
-                        "number_format"
-                      ]
+                      "path": ["number_format"]
                     }
                   }
                 }
@@ -1715,9 +1689,7 @@
           "organization_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:organization"
-            ]
+            "recordTypeIds": ["vortex.system_directory:organization"]
           },
           "revision": {
             "type": "whole_number",
@@ -1857,9 +1829,7 @@
                           "source": "task_output",
                           "task": "parent_form",
                           "key": "values",
-                          "path": [
-                            "parent_organization_id"
-                          ]
+                          "path": ["parent_organization_id"]
                         }
                       }
                     }
@@ -2023,9 +1993,7 @@
           "organization_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:organization"
-            ]
+            "recordTypeIds": ["vortex.system_directory:organization"]
           }
         },
         "variables": {},
@@ -2071,9 +2039,7 @@
           "tenant_administrator_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:tenant_administrator"
-            ]
+            "recordTypeIds": ["vortex.system_directory:tenant_administrator"]
           }
         },
         "variables": {},

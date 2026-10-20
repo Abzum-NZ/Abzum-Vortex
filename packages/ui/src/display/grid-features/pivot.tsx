@@ -238,6 +238,10 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
   const [state, setState] = useState<BodyState>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
   const trail = useRef<(string | undefined)[]>([]);
+  // Whether the trail of earlier pages starts at the first rows; an address that opens a later
+  // page directly does not say how many rows come before it.
+  const anchored = useRef(cursor === undefined);
+  if (cursor === undefined) anchored.current = true;
   const narrowingSeen = useRef(narrowingKey);
   const latestPivot = useRef(pivot);
   latestPivot.current = pivot;
@@ -328,6 +332,9 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
   const totals = settings.totals;
   const first = trail.current.length * settings.rowPageSize + 1;
   const last = first + page.rows.length - 1;
+  const shown = anchored.current
+    ? `rows ${first}–${last} of ${page.rowGroupCount}`
+    : `${page.rows.length} of ${page.rowGroupCount} rows`;
   const open2 = (filters: readonly Drill[]) => (): void => {
     void drill?.({ event: "pivot_drilled", filters });
   };
@@ -427,7 +434,7 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
       </Table>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="m-0 text-xs text-muted-foreground tabular-nums" role="status">
-          {`${page.measureLabel} · rows ${first}–${last} of ${page.rowGroupCount} · ${page.totalRecords} ${page.totalRecords === 1 ? "record" : "records"}`}
+          {`${page.measureLabel} · ${shown} · ${page.totalRecords} ${page.totalRecords === 1 ? "record" : "records"}`}
         </p>
         <div className="flex items-center gap-1">
           <Button
