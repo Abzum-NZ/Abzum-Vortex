@@ -33,8 +33,13 @@ begin
   if pg_catalog.jsonb_typeof(p_user_inputs) <> 'object'
     or exists (
       select 1 from pg_catalog.jsonb_object_keys(p_user_inputs) as supplied(key)
-      where supplied.key not in ('filter', 'filterableFieldIds', 'boardSummary')
+      where supplied.key not in ('filter', 'filterableFieldIds', 'boardSummary', 'groupingFieldId', 'search', 'searchableFieldIds')
     ) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+  if (p_user_inputs ? 'groupingFieldId' and board_summary_mode)
+    or (p_user_inputs ? 'search' and pg_catalog.jsonb_typeof(p_user_inputs -> 'search') not in ('string', 'null'))
+    or pg_catalog.length(pg_catalog.btrim(p_user_inputs ->> 'search')) > 200 then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
   if board_summary_mode then

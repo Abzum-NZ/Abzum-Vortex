@@ -37,6 +37,11 @@ const readSummary = async (
       ${JSON.stringify(inputValues)}::text::jsonb,
       ${JSON.stringify({
         filter: command.filter ?? null,
+        search: command.search ?? null,
+        searchableFieldIds: command.searchableFieldIds,
+        ...(command.groupingFieldId === undefined
+          ? {}
+          : { groupingFieldId: command.groupingFieldId }),
         filterableFieldIds: command.filterableFieldIds,
       })}::text::jsonb
     ) as result
