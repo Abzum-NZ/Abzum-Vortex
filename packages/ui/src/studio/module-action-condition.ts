@@ -183,7 +183,7 @@ export const studioActionConditionSource = (
       side.source === "parameter"
         ? operands.find((entry) => entry.key === side.key)?.source
         : side.source === "value"
-          ? { source: "value", value: side.value }
+          ? { source: "value" as const, value: side.value }
           : undefined;
     const left = operand(node.left);
     if (node.operator === "is_empty" || node.operator === "is_not_empty")
