@@ -56,7 +56,7 @@ begin
         select projected.* from vortex_record.read_system_projection_rows_internal(
           (meta ->> 'storageContractId')::uuid, null, 'record_id', 'ascending',
           case when after_id is null then null else
-            pg_catalog.jsonb_build_object('recordId', after_id) end, 40
+            pg_catalog.jsonb_build_object('recordId', after_id) end, 40, null::jsonb
         ) as projected
       loop
         candidate_ids := pg_catalog.array_append(candidate_ids, candidate.record_id);
