@@ -1,0 +1,100 @@
+import { useEffect, type RefObject } from "react";
+import { isRecord } from "@vortex/platform/schema";
+import type { ApplicationPageModel, PageDataState } from "../../../../../../_lib/application-page";
+
+const onScreen = (element: Element | null): boolean => {
+  if (element === null || !element.checkVisibility({ checkVisibilityCSS: true })) return false;
+  const bounds = element.getBoundingClientRect();
+  return (
+    bounds.width > 0 &&
+    bounds.height > 0 &&
+    bounds.bottom > 0 &&
+    bounds.right > 0 &&
+    bounds.top < window.innerHeight &&
+    bounds.left < window.innerWidth
+  );
+};
+
+/** A projected choice retains its key; labels never decide whether background work is pending. */
+const pendingChoice = (cell: unknown, values: readonly string[]): boolean =>
+  isRecord(cell) &&
+  cell.kind === "choice" &&
+  typeof cell.key === "string" &&
+  values.includes(cell.key);
+
+/** Rereads only a mounted projection displaying one of its definition's pending states. */
+export function useProjectionRefresh(
+  policies: ApplicationPageModel["refreshWhileByPlacement"],
+  data: Readonly<Record<string, PageDataState>>,
+  root: RefObject<HTMLDivElement | null>,
+  refresh: (ids: readonly string[]) => Promise<void>,
+): void {
+  useEffect(() => {
+    const timers = new Map<string, ReturnType<typeof setTimeout>>();
+    let disposed = false;
+    for (const [placementId, policy] of Object.entries(policies)) {
+      const state = Object.entries(data).find(([id]) => id.toLowerCase() === placementId)?.[1];
+      if (state?.status !== "ready" || !isRecord(state.values)) continue;
+      const payload = state.values;
+      const pendingRows =
+        payload.kind === "table" && Array.isArray(payload.rows)
+          ? payload.rows.filter(
+              (row): row is Record<string, unknown> =>
+                isRecord(row) &&
+                isRecord(row.cells) &&
+                pendingChoice(row.cells[policy.fieldId], policy.values),
+            )
+          : [];
+      const pendingDetail =
+        payload.kind === "record_detail" &&
+        Array.isArray(payload.fields) &&
+        payload.fields.some(
+          (field) =>
+            isRecord(field) &&
+            field.key === policy.fieldId &&
+            pendingChoice(field.value, policy.values),
+        );
+      if (pendingRows.length === 0 && !pendingDetail) continue;
+      const tick = async (): Promise<void> => {
+        if (disposed) return;
+        const placement =
+          root.current?.querySelector(`[data-vortex-placement-id="${CSS.escape(placementId)}"]`) ??
+          null;
+        if (
+          document.visibilityState === "visible" &&
+          onScreen(placement) &&
+          (pendingDetail ||
+            pendingRows.some(
+              (row) =>
+                typeof row.recordId === "string" &&
+                onScreen(
+                  placement?.querySelector(
+                    `[data-vortex-record-id="${CSS.escape(row.recordId)}"]`,
+                  ) ?? null,
+                ),
+            ))
+        ) {
+          await refresh([placementId]);
+        }
+        // Serial reads: a slow response never builds a queue. A new payload or navigation
+        // disposes this policy, and a terminal state schedules no further work.
+        if (!disposed) schedule();
+      };
+      const schedule = (): void => {
+        timers.set(
+          placementId,
+          setTimeout(() => {
+            void tick().catch((error: unknown) => {
+              console.error("[page] projection refresh failed", { placementId, cause: error });
+            });
+          }, policy.intervalMilliseconds),
+        );
+      };
+      schedule();
+    }
+    return () => {
+      disposed = true;
+      for (const timer of timers.values()) clearTimeout(timer);
+    };
+  }, [policies, data, root, refresh]);
+}

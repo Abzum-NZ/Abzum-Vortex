@@ -716,6 +716,17 @@ const loadApplicationPageJoined = async (
     editFormDataPlacementIds,
   });
 
+  const refreshWhileByPlacement: ApplicationPageModel["refreshWhileByPlacement"] =
+    Object.fromEntries(
+      [...recordTypeByPlacement].flatMap(([placementId, recordTypeId]) => {
+        const recordType = context.releaseSet.modules
+          .flatMap((module) => module.content.recordTypes)
+          .find((type) => sameId(String(type.recordTypeId), recordTypeId));
+        const policy = recordType?.systemProjection?.refreshWhile;
+        return policy === undefined ? [] : [[placementId, policy]];
+      }),
+    );
+
   const data: Record<string, PageDataState> = {};
   // Set when the record a detail or public page addresses cannot be shown to this viewer: it is
   // missing, malformed, of another type or organisation, or not readable. The page then does not
@@ -1172,6 +1183,7 @@ const loadApplicationPageJoined = async (
     ),
     bindings,
     refreshPlacementsByBinding,
+    refreshWhileByPlacement,
     pageParameters: {
       tableIds: allPlacements.filter(isTablePlacement).map((placement) => placement.placementId),
       controlKinds: Object.fromEntries(

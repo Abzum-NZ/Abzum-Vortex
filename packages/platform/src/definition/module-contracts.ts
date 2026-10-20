@@ -1016,6 +1016,14 @@ export const moduleSystemProjectionSchema = z
     protectedView: protectedReadModelKeySchema,
     organizationFieldId: fieldIdSchema,
     revisionFieldId: fieldIdSchema,
+    refreshWhile: z
+      .object({
+        fieldId: fieldIdSchema,
+        values: z.array(z.string().min(1).max(200)).min(1).max(100),
+        intervalMilliseconds: z.number().int().min(1_000).max(60_000),
+      })
+      .strict()
+      .optional(),
     filterableFieldIds: z.array(fieldIdSchema).max(500),
     sortableFieldIds: z.array(fieldIdSchema).max(500),
   })
@@ -1185,6 +1193,18 @@ export const recordTypeDefinitionSchema = z
         "organizationFieldId",
       ]);
     const revision = fields.get(String(projection.revisionFieldId));
+    if (projection.refreshWhile !== undefined) {
+      const refresh = projection.refreshWhile;
+      const field = fields.get(String(refresh.fieldId));
+      if (
+        field?.type !== "choice" ||
+        refresh.values.some((key) => !field.settings.options.some((option) => option.value === key))
+      )
+        invalid("Refresh states must be choices of a field of the record type", [
+          "systemProjection",
+          "refreshWhile",
+        ]);
+    }
     if (revision === undefined || revision.type !== "whole_number" || !revision.required)
       invalid("The revision field must be a required whole-number field of the record type", [
         "systemProjection",

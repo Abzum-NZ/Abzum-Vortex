@@ -26,6 +26,7 @@ import {
 } from "../../../../../../_lib/mounted-record-pin-watch-client";
 import type { RefreshedPlacementData, TableContinuationTarget, EditFormBaseline } from "./types";
 import type { TableNextPage } from "./use-table-next-page";
+import { useProjectionRefresh } from "./use-projection-refresh";
 
 const subscribeToNothing = (): (() => void) => () => undefined;
 const afterHydration = (): boolean => true;
@@ -400,6 +401,12 @@ export function usePlacementRefresh({
   const currentTileDataRef = useRef(currentData);
   currentTileDataRef.current = currentData;
   const compositionRootRef = useRef<HTMLDivElement>(null);
+  useProjectionRefresh(
+    model.refreshWhileByPlacement,
+    currentData,
+    compositionRootRef,
+    refreshPlacements,
+  );
   const pinWatchClientRef = useRef<
     ReturnType<typeof createMountedRecordPinWatchClient> | undefined
   >(undefined);
