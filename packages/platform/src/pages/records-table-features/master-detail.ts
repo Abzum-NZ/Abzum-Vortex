@@ -206,7 +206,10 @@ export const readRecordsTableRowDetail = async (
       kind: "list",
       items: command.data.requestedFieldIds.map((fieldId) => ({
         kind: "group",
-        properties: { field: { kind: "field_reference", fieldId } },
+        properties: {
+          field: { kind: "field_reference", fieldId },
+          format: { kind: "choice", value: "automatic" },
+        },
       })),
     },
     heading_source: { kind: "choice", value: "title" },
