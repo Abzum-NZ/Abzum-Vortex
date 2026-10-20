@@ -6,6 +6,7 @@ import { Input } from "../../components/input";
 import { Icon } from "../../icons/icon";
 import { cellValueToText } from "../cell";
 import { useDateFormatOptions } from "../date-format-context";
+import { GRID_ROOT } from "../table-interaction";
 import type { GridFeatureInteractionProps } from "./registry";
 
 type Match = Readonly<{ row: number; field: string }>;
@@ -33,9 +34,10 @@ export default function Find({ context, surface }: GridFeatureInteractionProps):
   const matches = useMemo<readonly Match[]>(() => {
     const term = query.toLocaleLowerCase();
     if (!open || term.length === 0) return [];
-    return context.rows.flatMap((row, index) =>
+    return context.lines.flatMap((line, index) =>
       context.columns.flatMap((column) => {
-        const cell = row.cells[column.key];
+        if (line.kind !== "row") return [];
+        const cell = line.row.cells[column.key];
         if (cell === undefined || ["restricted", "unavailable", "empty"].includes(cell.kind))
           return [];
         return cellValueToText(cell, dateFormat).toLocaleLowerCase().includes(term)
@@ -43,7 +45,7 @@ export default function Find({ context, surface }: GridFeatureInteractionProps):
           : [];
       }),
     );
-  }, [context.rows, context.columns, query, open, dateFormat]);
+  }, [context.lines, context.columns, query, open, dateFormat]);
   const current = matches.length === 0 ? undefined : matches[index % matches.length];
   useEffect(() => {
     if (current !== undefined) latest.current.focusCell(current.row, current.field, false);
@@ -59,8 +61,7 @@ export default function Find({ context, surface }: GridFeatureInteractionProps):
         event.key.toLowerCase() !== "f"
       )
         return;
-      if (!(event.target instanceof Element) || event.target.closest("[role='grid']") !== root)
-        return;
+      if (!(event.target instanceof Element) || event.target.closest(GRID_ROOT) !== root) return;
       event.preventDefault();
       event.stopPropagation();
       const cell = event.target.closest<HTMLElement>("[data-grid-cell]");
@@ -82,7 +83,7 @@ export default function Find({ context, surface }: GridFeatureInteractionProps):
     const keys = new Set(matches.map((match) => `${match.row}:${match.field}`));
     const paint = (): void => {
       for (const cell of root.querySelectorAll<HTMLElement>("[data-grid-cell]")) {
-        if (cell.closest("[role='grid']") !== root) continue;
+        if (cell.closest(GRID_ROOT) !== root) continue;
         const matching = keys.has(`${cell.dataset.row}:${cell.dataset.col}`);
         const active =
           current !== undefined &&
@@ -98,7 +99,7 @@ export default function Find({ context, surface }: GridFeatureInteractionProps):
     return () => {
       observer.disconnect();
       for (const cell of root.querySelectorAll<HTMLElement>("[data-grid-cell]"))
-        if (cell.closest("[role='grid']") === root)
+        if (cell.closest(GRID_ROOT) === root)
           cell.classList.remove(...matchClasses, ...currentClasses);
     };
   }, [matches, current, surface.rootRef]);

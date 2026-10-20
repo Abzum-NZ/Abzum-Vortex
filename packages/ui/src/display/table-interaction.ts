@@ -10,3 +10,6 @@ export const isInteractiveGridTarget = (
   const control = target.closest(INTERACTIVE_IN_GRID);
   return control !== null && control !== container && container.contains(control);
 };
+
+/** The Records grid's own root: a grid, or a tree grid while it draws sub-rows. */
+export const GRID_ROOT = "[role='grid'],[role='treegrid']";
