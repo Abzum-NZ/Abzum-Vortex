@@ -201,6 +201,8 @@ export type RecordsTableQueryFacts = Readonly<{
   actions: readonly Readonly<{ key: string; label: string; acceptsSelection: boolean }>[];
   /** The query groups or aggregates its rows, so rows are not records a person can act on. */
   grouped: boolean;
+  /** The record type declares the standard export action, so its records can be exported. */
+  exportable: boolean;
   relatedRecords: RecordsTableRelatedRecordsFacts;
   /** What a Board needs; undefined when the query's record type is judged only at publication. */
   board: RecordsTableBoardFacts | undefined;
@@ -264,6 +266,7 @@ export type RecordsTableFeatureRefusalCode = Extract<
   | "definition_records_table_pivot"
   | "definition_records_table_spreadsheet"
   | "definition_records_table_board"
+  | "definition_records_table_export"
 >;
 
 /** The outcome of one feature check: available, or not possible with its one business sentence. */

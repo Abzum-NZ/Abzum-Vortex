@@ -21,7 +21,6 @@ import {
 } from "@vortex/platform/schema";
 import { z } from "zod";
 import { pageCompiledSlotsFor } from "./studio-application-draft";
-import { compiledDraftContent } from "./studio-compiled-drafts";
 import { collectPlacements, pageSubjectParameter } from "./application-page/placement-helpers";
 import { findModuleQuery, pageQueryBindingContext } from "@vortex/platform/server";
 import { applicationLauncherQueryRowsToListValues } from "@vortex/ui/launcher/bindings";
@@ -188,14 +187,13 @@ export const readStudioCanvasRecords = async (
       request.rootId,
       request.draftRevision,
       signal,
+      true,
     );
     if (preview.kind !== "available") return preview;
-    const { draft, context, services, selection, dependencies } = preview;
+    const { draft, content, context, services, selection, dependencies } = preview;
     if (draft.sourceFingerprint !== request.sourceFingerprint) return { kind: "conflict" };
     signal?.throwIfAborted();
-    const content = await compiledDraftContent(session, organization.data, draft);
-    signal?.throwIfAborted();
-    if (typeof content === "string") return { kind: content };
+    if (content === undefined) throw new Error("STUDIO_CANVAS_COMPILATION_MISSING");
     const pageIndex = draft.source.body.pages.findIndex((page) => page.id === request.pageAlias);
     const page = draft.source.body.pages[pageIndex];
     const compiledPage = content.pages[pageIndex] as PageDefinition | undefined;
@@ -300,6 +298,8 @@ export const readStudioCanvasRecords = async (
         queryNotices: services.queryNotices,
         tables: services.tables,
         resolveRecordLinks: services.recordLinkResolver(context),
+        // The canvas designs the table; downloading records belongs to the running app.
+        exportAllowed: async () => false,
         readCalendarSettings: services.readCalendarSettings,
         readSubject,
         launcherValues: applicationLauncherQueryRowsToListValues,

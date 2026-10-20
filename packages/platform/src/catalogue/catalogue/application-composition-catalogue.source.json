@@ -4775,6 +4775,66 @@
           },
           {
             "kind": "group",
+            "key": "export",
+            "label": "Export",
+            "help": "Download the selected rows, the current view or every matching record as a file",
+            "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "properties": [
+              {
+                "kind": "boolean",
+                "key": "enabled",
+                "label": "On",
+                "help": "Let people download the records they see as a file",
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              },
+              {
+                "kind": "list",
+                "key": "formats",
+                "label": "File formats",
+                "help": "The file formats people can download",
+                "required": false,
+                "minimumItems": 1,
+                "maximumItems": 1,
+                "item": {
+                  "kind": "choice",
+                  "key": "format",
+                  "label": "File format",
+                  "required": true,
+                  "options": [
+                    {
+                      "key": "csv",
+                      "label": "CSV"
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "number",
+                "key": "max_rows",
+                "label": "Most records in one export",
+                "help": "The most records one export holds, up to 100,000; a larger selection is refused",
+                "required": false,
+                "integer": true,
+                "minimum": 1,
+                "maximum": 100000
+              }
+            ]
+          },
+          {
+            "kind": "group",
             "key": "spreadsheet",
             "label": "Spreadsheet controls",
             "help": "Select ranges and find values within the loaded page",
@@ -4919,6 +4979,15 @@
               }
             },
             "pivot": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "export": {
               "kind": "group",
               "properties": {
                 "enabled": {

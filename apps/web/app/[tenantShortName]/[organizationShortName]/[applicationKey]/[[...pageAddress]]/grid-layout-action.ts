@@ -30,9 +30,9 @@ import {
   writeGridView,
   type GridViewConflict,
   type GridViewOperationOutcome,
+  decideRecordTypeFieldIds,
 } from "@vortex/platform/server";
 import { z } from "zod";
-import { decideRecordTypeFieldIds } from "../../../../_lib/application-page/form-field-access";
 import { continueSessionOrEnd } from "../../../../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../../../../auth/_lib/session-server";
 import { resolveApplicationAddress } from "../../../../_lib/application-address";
