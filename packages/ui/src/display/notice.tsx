@@ -13,11 +13,7 @@ import type { DisplayRenderProps } from "./context";
 const NOTICE_SEVERITIES =
   ["info", "success", "warning", "critical"] as const satisfies readonly NoticeSeverity[];
 const NOTICE_CONTENT_KINDS = ["text", "link"] as const;
-/** Release 1.1.0 adds authored defaults only, so one renderer serves both Notice releases. */
-const NOTICE_RELEASES = [
-  PLATFORM_BLOCK_RELEASE_IDENTITIES.NOTICE_BLOCK_RELEASE,
-  PLATFORM_BLOCK_RELEASE_IDENTITIES.NOTICE_BLOCK_RELEASE_1_1_0,
-];
+const NOTICE_RELEASE = PLATFORM_BLOCK_RELEASE_IDENTITIES.NOTICE_BLOCK_RELEASE;
 
 type NoticeSettings = Readonly<Record<string, BlockPropertyValueContract>>;
 
@@ -130,9 +126,8 @@ export function NoticeBlock(props: DisplayRenderProps<never>): ReactElement {
   const location = noticeLocation(props);
   const metadata = props.metadata;
   if (
-    !NOTICE_RELEASES.some(
-      (notice) => notice.key === metadata.key && notice.releaseVersion === metadata.releaseVersion,
-    ) ||
+    NOTICE_RELEASE.key !== metadata.key ||
+    NOTICE_RELEASE.releaseVersion !== metadata.releaseVersion ||
     metadata.rendererKey !== "platform.renderer.notice"
   )
     throw new DefinitionRenderError(

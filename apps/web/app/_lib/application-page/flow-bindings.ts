@@ -4,8 +4,6 @@ import {
   FORM_CONTAINER_BLOCK_RELEASE,
   QUERY_NOTICE_BLOCK_RELEASE,
   LINK_TILES_BLOCK_RELEASE,
-  RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
-  APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
 } from "@vortex/platform/server";
 import {
   type BlockPropertyValueContract,
@@ -80,9 +78,7 @@ export const projectPlacementRecordTypes = (input: {
       isRecord(block) &&
       typeof block.blockId === "string" &&
       sameId(block.blockId, LINK_TILES_BLOCK_RELEASE.blockId) &&
-      (block.releaseVersion === LINK_TILES_BLOCK_RELEASE.releaseVersion ||
-        block.releaseVersion === RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion ||
-        block.releaseVersion === APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion);
+      block.releaseVersion === LINK_TILES_BLOCK_RELEASE.releaseVersion;
     if (
       tableContract === undefined &&
       detailContract === undefined &&
@@ -99,15 +95,7 @@ export const projectPlacementRecordTypes = (input: {
           ? undefined
           : pageSubjectRecordTypeId
         : isLinkTilesBlock
-          ? buildLinkTilesQueryBinding(
-              context,
-              queryId,
-              settings,
-              {},
-              isRecord(block) && typeof block.releaseVersion === "string"
-                ? block.releaseVersion
-                : "",
-            )?.recordTypeId
+          ? buildLinkTilesQueryBinding(context, queryId, settings, {})?.recordTypeId
           : resolvedQueryRecordTypeId(context, queryId);
     if (recordTypeId === undefined) continue;
     recordTypeByPlacement.set(placementId.toLowerCase(), recordTypeId);
