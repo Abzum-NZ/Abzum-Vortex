@@ -93,7 +93,12 @@
           ]
         },
         "field_policy": {
-          "readable_fields": ["display_name", "state", "language", "time_zone"],
+          "readable_fields": [
+            "display_name",
+            "state",
+            "language",
+            "time_zone"
+          ],
           "changeable_fields": []
         }
       },
@@ -142,7 +147,11 @@
           ]
         },
         "field_policy": {
-          "readable_fields": ["key", "label", "state"],
+          "readable_fields": [
+            "key",
+            "label",
+            "state"
+          ],
           "changeable_fields": []
         }
       },
@@ -278,7 +287,11 @@
           ]
         },
         "field_policy": {
-          "readable_fields": ["key", "release_revision", "is_default"],
+          "readable_fields": [
+            "key",
+            "release_revision",
+            "is_default"
+          ],
           "changeable_fields": []
         }
       },
@@ -332,7 +345,9 @@
         "key": "iam_reviewer",
         "name": "IAM reviewer",
         "home_page": "iam_access_requests",
-        "permissions": ["application.iam.open"]
+        "permissions": [
+          "application.iam.open"
+        ]
       },
       {
         "id": "role_iam_administrator",
@@ -1127,6 +1142,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "grouping": {
+                        "enabled": false
                       }
                     }
                   }
@@ -1335,6 +1353,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "grouping": {
+                        "enabled": false
                       }
                     }
                   }
@@ -1408,6 +1429,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "grouping": {
+                        "enabled": false
                       }
                     }
                   }
@@ -1476,6 +1500,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "grouping": {
+                        "enabled": false
                       }
                     }
                   }
@@ -2220,6 +2247,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "grouping": {
+                        "enabled": false
                       }
                     }
                   }
@@ -2288,6 +2318,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "grouping": {
+                        "enabled": false
                       }
                     }
                   }
@@ -2736,6 +2769,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "grouping": {
+                        "enabled": false
                       }
                     }
                   }
@@ -2830,6 +2866,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "grouping": {
+                        "enabled": false
                       }
                     }
                   }
@@ -3636,7 +3675,9 @@
                       "source": "task_output",
                       "task": "read",
                       "key": "result",
-                      "path": ["display_name"]
+                      "path": [
+                        "display_name"
+                      ]
                     }
                   },
                   "language": {
@@ -3645,7 +3686,9 @@
                       "source": "task_output",
                       "task": "read",
                       "key": "result",
-                      "path": ["language"]
+                      "path": [
+                        "language"
+                      ]
                     }
                   },
                   "time_zone": {
@@ -3654,7 +3697,9 @@
                       "source": "task_output",
                       "task": "read",
                       "key": "result",
-                      "path": ["time_zone"]
+                      "path": [
+                        "time_zone"
+                      ]
                     }
                   }
                 }
@@ -3682,7 +3727,9 @@
                       "source": "task_output",
                       "task": "read",
                       "key": "result",
-                      "path": ["organization_account_id"]
+                      "path": [
+                        "organization_account_id"
+                      ]
                     }
                   },
                   "expected_revision": {
@@ -3691,7 +3738,9 @@
                       "source": "task_output",
                       "task": "read",
                       "key": "result",
-                      "path": ["revision"]
+                      "path": [
+                        "revision"
+                      ]
                     }
                   },
                   "display_name": {
@@ -3700,7 +3749,9 @@
                       "source": "task_output",
                       "task": "form",
                       "key": "values",
-                      "path": ["display_name"]
+                      "path": [
+                        "display_name"
+                      ]
                     }
                   },
                   "language": {
@@ -3709,7 +3760,9 @@
                       "source": "task_output",
                       "task": "form",
                       "key": "values",
-                      "path": ["language"]
+                      "path": [
+                        "language"
+                      ]
                     }
                   },
                   "time_zone": {
@@ -3718,7 +3771,9 @@
                       "source": "task_output",
                       "task": "form",
                       "key": "values",
-                      "path": ["time_zone"]
+                      "path": [
+                        "time_zone"
+                      ]
                     }
                   }
                 }
@@ -3743,7 +3798,9 @@
           "role_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.system_directory:role"]
+            "recordTypeIds": [
+              "vortex.system_directory:role"
+            ]
           },
           "expected_role_revision": {
             "type": "whole_number",
@@ -3819,7 +3876,9 @@
                       "source": "task_output",
                       "task": "form",
                       "key": "values",
-                      "path": ["label"]
+                      "path": [
+                        "label"
+                      ]
                     }
                   },
                   "description": {
@@ -3828,7 +3887,9 @@
                       "source": "task_output",
                       "task": "form",
                       "key": "values",
-                      "path": ["description"]
+                      "path": [
+                        "description"
+                      ]
                     }
                   }
                 }
@@ -3865,7 +3926,9 @@
           "role_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.system_directory:role"]
+            "recordTypeIds": [
+              "vortex.system_directory:role"
+            ]
           },
           "expected_role_revision": {
             "type": "whole_number",
@@ -3968,7 +4031,9 @@
           "group_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.system_directory:group"]
+            "recordTypeIds": [
+              "vortex.system_directory:group"
+            ]
           },
           "expected_group_revision": {
             "type": "whole_number",
@@ -4037,7 +4102,9 @@
                       "source": "task_output",
                       "task": "form",
                       "key": "values",
-                      "path": ["label"]
+                      "path": [
+                        "label"
+                      ]
                     }
                   }
                 }
@@ -4074,7 +4141,9 @@
           "group_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.system_directory:group"]
+            "recordTypeIds": [
+              "vortex.system_directory:group"
+            ]
           },
           "expected_group_revision": {
             "type": "whole_number",
@@ -4126,7 +4195,9 @@
           "membership_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.system_directory:group_membership"]
+            "recordTypeIds": [
+              "vortex.system_directory:group_membership"
+            ]
           },
           "expected_membership_revision": {
             "type": "whole_number",
@@ -4179,7 +4250,9 @@
           "target_account_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.system_directory:person"]
+            "recordTypeIds": [
+              "vortex.system_directory:person"
+            ]
           },
           "revision": {
             "type": "whole_number",
@@ -4289,7 +4362,9 @@
                                 "source": "task_output",
                                 "task": "call",
                                 "key": "result",
-                                "path": ["appointment_outcome"]
+                                "path": [
+                                  "appointment_outcome"
+                                ]
                               }
                             },
                             "cases": [
@@ -4475,7 +4550,9 @@
           "role_assignment_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.system_directory:role_assignment"]
+            "recordTypeIds": [
+              "vortex.system_directory:role_assignment"
+            ]
           },
           "expected_assignment_revision": {
             "type": "whole_number",
@@ -4527,7 +4604,9 @@
           "role_activation_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.system_directory:role_activation"]
+            "recordTypeIds": [
+              "vortex.system_directory:role_activation"
+            ]
           },
           "expected_activation_revision": {
             "type": "whole_number",
@@ -4579,7 +4658,9 @@
           "delegation_authority_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.system_directory:delegation"]
+            "recordTypeIds": [
+              "vortex.system_directory:delegation"
+            ]
           },
           "expected_delegation_revision": {
             "type": "whole_number",
@@ -4631,7 +4712,9 @@
           "group_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.system_directory:group"]
+            "recordTypeIds": [
+              "vortex.system_directory:group"
+            ]
           }
         },
         "tasks": [
@@ -4772,7 +4855,9 @@
                           "source": "task_output",
                           "task": "person_form",
                           "key": "values",
-                          "path": ["organization_account_id"]
+                          "path": [
+                            "organization_account_id"
+                          ]
                         }
                       }
                     }
@@ -4783,7 +4868,9 @@
                       "source": "task_output",
                       "task": "person_form",
                       "key": "values",
-                      "path": ["starts_at"]
+                      "path": [
+                        "starts_at"
+                      ]
                     }
                   },
                   "expires_at": {
@@ -4792,7 +4879,9 @@
                       "source": "task_output",
                       "task": "person_form",
                       "key": "values",
-                      "path": ["expires_at"]
+                      "path": [
+                        "expires_at"
+                      ]
                     }
                   }
                 }
@@ -4817,7 +4906,9 @@
           "role_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.system_directory:role"]
+            "recordTypeIds": [
+              "vortex.system_directory:role"
+            ]
           },
           "expected_role_revision": {
             "type": "whole_number",
@@ -4882,7 +4973,9 @@
                 "source": "task_output",
                 "task": "kind_form",
                 "key": "values",
-                "path": ["assignee_kind"]
+                "path": [
+                  "assignee_kind"
+                ]
               }
             },
             "cases": [
@@ -5096,7 +5189,9 @@
                                   "source": "task_output",
                                   "task": "person_form",
                                   "key": "values",
-                                  "path": ["organization_account_id"]
+                                  "path": [
+                                    "organization_account_id"
+                                  ]
                                 }
                               }
                             }
@@ -5107,7 +5202,9 @@
                               "source": "task_output",
                               "task": "person_form",
                               "key": "values",
-                              "path": ["assignment_kind"]
+                              "path": [
+                                "assignment_kind"
+                              ]
                             }
                           },
                           "starts_at": {
@@ -5116,7 +5213,9 @@
                               "source": "task_output",
                               "task": "person_form",
                               "key": "values",
-                              "path": ["starts_at"]
+                              "path": [
+                                "starts_at"
+                              ]
                             }
                           },
                           "expires_at": {
@@ -5125,7 +5224,9 @@
                               "source": "task_output",
                               "task": "person_form",
                               "key": "values",
-                              "path": ["expires_at"]
+                              "path": [
+                                "expires_at"
+                              ]
                             }
                           }
                         }
@@ -5344,7 +5445,9 @@
                                   "source": "task_output",
                                   "task": "group_form",
                                   "key": "values",
-                                  "path": ["group_id"]
+                                  "path": [
+                                    "group_id"
+                                  ]
                                 }
                               }
                             }
@@ -5355,7 +5458,9 @@
                               "source": "task_output",
                               "task": "group_form",
                               "key": "values",
-                              "path": ["assignment_kind"]
+                              "path": [
+                                "assignment_kind"
+                              ]
                             }
                           },
                           "starts_at": {
@@ -5364,7 +5469,9 @@
                               "source": "task_output",
                               "task": "group_form",
                               "key": "values",
-                              "path": ["starts_at"]
+                              "path": [
+                                "starts_at"
+                              ]
                             }
                           },
                           "expires_at": {
@@ -5373,7 +5480,9 @@
                               "source": "task_output",
                               "task": "group_form",
                               "key": "values",
-                              "path": ["expires_at"]
+                              "path": [
+                                "expires_at"
+                              ]
                             }
                           }
                         }
@@ -5439,7 +5548,9 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.iam.core:access_request"],
+            "recordTypeIds": [
+              "vortex.iam.core:access_request"
+            ],
             "value": {
               "kind": "reference",
               "reference": {
@@ -5467,7 +5578,9 @@
         "inputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.iam.core:access_request"],
+            "recordTypeIds": [
+              "vortex.iam.core:access_request"
+            ],
             "required": true
           },
           "values": {
@@ -5530,7 +5643,9 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": ["vortex.iam.core:access_request"],
+            "recordTypeIds": [
+              "vortex.iam.core:access_request"
+            ],
             "value": {
               "kind": "reference",
               "reference": {
@@ -5726,7 +5841,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.iam.core:access_request"]
+            "recordTypeIds": [
+              "vortex.iam.core:access_request"
+            ]
           }
         },
         "tasks": [
@@ -5769,7 +5886,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.system_directory:person"]
+            "recordTypeIds": [
+              "vortex.system_directory:person"
+            ]
           }
         },
         "tasks": [
@@ -5843,7 +5962,9 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.iam.core:access_request"]
+            "recordTypeIds": [
+              "vortex.iam.core:access_request"
+            ]
           }
         },
         "tasks": [
@@ -5885,7 +6006,9 @@
           "holder_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.system_directory:person"]
+            "recordTypeIds": [
+              "vortex.system_directory:person"
+            ]
           },
           "expected_holder_revision": {
             "type": "whole_number",
@@ -6125,7 +6248,9 @@
           "holder_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": ["vortex.system_directory:group"]
+            "recordTypeIds": [
+              "vortex.system_directory:group"
+            ]
           },
           "expected_holder_revision": {
             "type": "whole_number",

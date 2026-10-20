@@ -63,6 +63,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_master_detail",
   "definition_records_table_conditional_formatting",
   "definition_records_table_pinning",
+  "definition_records_table_grouping",
   "definition_query_binding",
   "definition_unknown_property",
   "definition_too_few_items",
@@ -164,6 +165,11 @@ const definitionValidationErrorCatalogueSource = {
     message: "Formatting needs rules over fields of the bound query.",
     guidance:
       "Build each rule's condition from fields of the bound query, give a status an icon or a label, or turn Formatting off.",
+  },
+  definition_records_table_grouping: {
+    order: 39,
+    message: "Grouping needs a filterable choice or date from the bound query.",
+    guidance: "Choose a grouping field, calendar settings for dates and a group page size of at most 200.",
   },
   definition_records_table_pinning: {
     order: 39,

@@ -1459,6 +1459,7 @@ begin
       'moduleReleaseVersion', resolved -> 'moduleReleaseVersion',
       'groupByFieldIds', pg_catalog.to_jsonb(group_by_ids),
       'groupValues', group_selector_values,
+      'fieldBounds', pg_catalog.jsonb_build_object('readableFieldIds', pg_catalog.to_jsonb(bound_field_ids), 'searchable', search_field_ids && bound_field_ids),
       'rows', rows_value,
       'next', next_value,
       'opposite', opposite_value

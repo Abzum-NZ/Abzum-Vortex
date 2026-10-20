@@ -78,6 +78,7 @@ export const pageReadSchema = z.discriminatedUnion("outcome", [
 export const groupedMemberPageReadSchema = z.discriminatedUnion("outcome", [
   z
     .object({
+      fieldBounds: protectedQueryFieldBoundsSchema,
       outcome: z.literal("completed"),
       moduleReleaseRevision: revisionSchema,
       moduleReleaseVersion: stableDefinitionReleaseVersionSchema,

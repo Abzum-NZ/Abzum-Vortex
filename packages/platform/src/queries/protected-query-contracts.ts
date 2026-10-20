@@ -397,6 +397,7 @@ export type ProtectedQueryPage = z.infer<typeof protectedQueryPageSchema>;
 
 export const protectedQueryGroupedMembersCompletedSchema = z
   .object({
+    fieldBounds: protectedQueryFieldBoundsSchema,
     outcome: z.literal("completed"),
     moduleRootId: moduleRootIdSchema,
     moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
@@ -515,6 +516,7 @@ export const protectedQuerySummaryGroupSchema = z
 
 export const protectedQuerySummaryCompletedSchema = z
   .object({
+    fieldBounds: protectedQueryFieldBoundsSchema,
     outcome: z.literal("completed"),
     moduleRootId: moduleRootIdSchema,
     moduleReleaseVersion: stableDefinitionReleaseVersionSchema,

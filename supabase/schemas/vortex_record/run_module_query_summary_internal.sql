@@ -980,6 +980,7 @@ begin
            ''moduleRootId'', %L,
            ''moduleReleaseVersion'', %L,
            ''queryId'', %L,
+           ''fieldBounds'', %L::jsonb,
            ''groupByFieldIds'', %L::jsonb,
            ''totalRowCount'', selected_count.value,
            ''groups'', %s,
@@ -1001,6 +1002,7 @@ begin
       p_module_root_id::text,
       resolved ->> 'moduleReleaseVersion',
       p_query_id::text,
+      pg_catalog.jsonb_build_object('readableFieldIds', pg_catalog.to_jsonb(readable_field_ids), 'searchable', search_field_ids && readable_field_ids)::text,
       pg_catalog.to_jsonb(group_ids)::text,
       groups_json_sql,
       group_page_limit
@@ -1019,6 +1021,7 @@ begin
            ''moduleRootId'', %L,
            ''moduleReleaseVersion'', %L,
            ''queryId'', %L,
+           ''fieldBounds'', %L::jsonb,
            ''groupByFieldIds'', %L::jsonb,
            ''totalRowCount'', selected_count.value,
            ''groups'', ''[]''::jsonb,
@@ -1032,6 +1035,7 @@ begin
       p_module_root_id::text,
       resolved ->> 'moduleReleaseVersion',
       p_query_id::text,
+      pg_catalog.jsonb_build_object('readableFieldIds', pg_catalog.to_jsonb(readable_field_ids), 'searchable', search_field_ids && readable_field_ids)::text,
       pg_catalog.to_jsonb(group_ids)::text
     );
   end if;

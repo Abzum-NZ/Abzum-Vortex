@@ -346,6 +346,7 @@ export type DisplaySemanticEventName =
    * records, and its Bulk actions widen or clear the selection; neither is a flow event.
    */
   | "filter_records_requested"
+  | "group_changed"
   | "selection_scope_changed";
 
 /**
@@ -363,6 +364,7 @@ export type DisplaySemanticEventName =
  * and the server still refuses a stale one. The value is never typed by the person.
  */
 export type DisplaySemanticEvent =
+  | Readonly<{ event: "group_changed"; kind: "group" | "groups"; key: string | undefined }>
   | Readonly<{ event: "refresh" }>
   | Readonly<{ event: "row_clicked"; eventId: string; recordId: string }>
   | Readonly<{
@@ -469,6 +471,7 @@ const DISPLAY_REFUSAL_REASONS: readonly DisplayRefusalReason[] = [
 
 /** Every event name a display block accepts; each block further narrows this to its own binding. */
 export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.freeze([
+  "group_changed",
   "refresh",
   "row_clicked",
   "row_action",

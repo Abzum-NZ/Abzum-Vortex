@@ -8,6 +8,7 @@ import type {
   ProtectedQueryRow,
 } from "../../queries/protected-query-contracts";
 import type { ConditionalFormattingProjection } from "./conditional-formatting";
+import type { RecordsTableGroupingProjection } from "./grouping";
 
 export {
   conditionalFormattingFieldIds,
@@ -31,6 +32,7 @@ export {
  * feature off carries no projection at all.
  */
 export type RecordsTableFeatureProjection = Readonly<{
+  grouping?: RecordsTableGroupingProjection;
   pinning?: true;
   /** Present when the viewer can read some field the record type marks searchable. */
   search?: true;

@@ -1,4 +1,6 @@
 import type { ComponentSettingValue } from "../block-property-schema";
+import { recordsTableGroupingFeature, type RecordsTableGroupingSettings } from "./grouping";
+export { recordsTableFieldGroupable, recordsTableDateGroupUnits, type RecordsTableGroupingSettings } from "./grouping";
 import {
   recordsTableBulkActionsFeature,
   type RecordsTableBulkActionsSettings,
@@ -93,6 +95,7 @@ export type {
  * Studio editor (`@vortex/ui/studio` grid features) and a UI chunk (`display/grid-features`).
  */
 export type RecordsTableFeatures = Readonly<{
+  grouping: RecordsTableFeatureState<RecordsTableGroupingSettings>;
   search: RecordsTableFeatureState<RecordsTableSearchSettings>;
   columnFilters: RecordsTableFeatureState<RecordsTableColumnFiltersSettings>;
   savedViews: RecordsTableFeatureState<RecordsTableSavedViewsSettings>;
@@ -104,6 +107,7 @@ export type RecordsTableFeatures = Readonly<{
 }>;
 
 const registry = {
+  grouping: { property: "grouping", definition: recordsTableGroupingFeature },
   pinning: { property: "pinning", definition: recordsTablePinningFeature },
   search: { property: "search", definition: recordsTableSearchFeature },
   column_filters: { property: "columnFilters", definition: recordsTableColumnFiltersFeature },
@@ -125,6 +129,7 @@ const registry = {
 
 /** The feature keys in the order Studio lists them; each is a key of the `features` setting group. */
 export const recordsTableFeatureKeys = [
+  "grouping",
   "pinning",
   "search",
   "column_filters",
@@ -167,6 +172,7 @@ export const readRecordsTableFeatures = (
       : registry[key].definition.read(feature);
   };
   const search = read("search");
+  const grouping = read("grouping");
   const columnFilters = read("column_filters");
   const savedViews = read("saved_views");
   const bulkActions = read("bulk_actions");
@@ -175,6 +181,7 @@ export const readRecordsTableFeatures = (
   const conditionalFormatting = read("conditional_formatting");
   const pinning = read("pinning");
   if (
+    grouping === undefined ||
     search === undefined ||
     columnFilters === undefined ||
     savedViews === undefined ||
@@ -186,6 +193,7 @@ export const readRecordsTableFeatures = (
   )
     return undefined;
   return {
+    grouping,
     search,
     pinning,
     columnFilters: columnFilters as RecordsTableFeatures["columnFilters"],

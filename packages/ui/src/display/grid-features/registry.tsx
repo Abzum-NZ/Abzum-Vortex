@@ -103,6 +103,7 @@ type ComponentPoint = Exclude<keyof GridFeatureModule, "cellDecoration">;
 const loaders: Readonly<
   Record<RecordsTableFeatureKey, () => Promise<{ gridFeature: GridFeatureModule }>>
 > = {
+  grouping: () => import("./grouping"),
   pinning: () => import("./pinning"),
   search: () => import("./search"),
   column_filters: () => import("./column-filters"),
@@ -116,6 +117,7 @@ const loaders: Readonly<
 const projectionKeys: Readonly<
   Record<keyof RecordsTableFeatureProjection, RecordsTableFeatureKey>
 > = {
+  grouping: "grouping",
   pinning: "pinning",
   search: "search",
   columnFilters: "column_filters",
@@ -172,6 +174,7 @@ const lazyPoint = <Props,>(
 
 /** Which points each feature fills, so the table never draws a boundary for an empty point. */
 const featurePoints: Readonly<Record<RecordsTableFeatureKey, readonly ComponentPoint[]>> = {
+  grouping: ["ToolbarItems"],
   pinning: ["ColumnMenuItems"],
   search: ["ToolbarItems"],
   column_filters: ["ToolbarItems", "HeaderAdornment"],

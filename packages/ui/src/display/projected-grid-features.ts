@@ -11,6 +11,7 @@ import {
   RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
 } from "@vortex/platform/schema";
 import { parseConditionalFormatting } from "./projected-format";
+import { parseTableGrouping } from "./projected-grouping";
 import type { DefinitionRenderErrorLocation } from "../definition-error";
 import {
   fail,
@@ -290,6 +291,7 @@ export const parseTableFeatures = (
       "masterDetail",
       "conditionalFormatting",
       "pinning",
+      "grouping",
     ],
     location,
   );
@@ -353,6 +355,7 @@ export const parseTableFeatures = (
     });
   }
   return Object.freeze({
+    ...(record.grouping === undefined ? {} : { grouping: parseTableGrouping(record.grouping, location) }),
     ...(record.pinning === true ? { pinning: true as const } : {}),
     ...(record.search === true ? { search: true as const } : {}),
     ...(columnFilters === undefined ? {} : { columnFilters }),

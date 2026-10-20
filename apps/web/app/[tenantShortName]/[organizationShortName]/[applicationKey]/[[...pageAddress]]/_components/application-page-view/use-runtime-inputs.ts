@@ -391,6 +391,11 @@ export function useRuntimeInputs({
           };
         // Sort, filter and search change the table's query state in the address; that table alone
         // is read again from page one, on the server, and nothing is applied to the shown rows.
+        if (tableData?.features?.grouping !== undefined)
+          events.group_changed = (event: DisplaySemanticEvent) => {
+            if (event.event !== "group_changed") return;
+            changeTableQuery(placementId, event.kind === "group" ? { kind: "group", active: event.key } : { kind: "groups", after: event.key });
+          };
         if (supportsEvent("sort_changed"))
           events.sort_changed = (event: DisplaySemanticEvent) => {
             if (event.event !== "sort_changed") return;

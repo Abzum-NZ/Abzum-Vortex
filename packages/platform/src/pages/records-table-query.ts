@@ -28,6 +28,10 @@ import {
   type ProtectedQueryRefusalReasonCode,
   type ProtectedQueryResult,
   type ProtectedQueryRow,
+  type ProtectedQuerySummaryCommand,
+  type ProtectedQuerySummaryResult,
+  type ProtectedQueryGroupedMembersCommand,
+  type ProtectedQueryGroupedMembersResult,
 } from "../queries/index";
 import {
   collectRecordLinks,
@@ -47,6 +51,7 @@ import {
   type RecordsTableRequestRefusal,
 } from "./records-table-features";
 import { calendarAddDays, calendarStartOfDay } from "./calendar-query";
+import { readRecordsTableGroups, type RecordsTableGroupingProjection } from "./records-table-features/grouping";
 import { recordLinkLabelKey } from "../definition/app-index";
 
 /**
@@ -55,6 +60,8 @@ import { recordLinkLabelKey } from "../definition/app-index";
  * this module adds no authority and reads no tables.
  */
 export type RecordsTableQueryRunner = Readonly<{
+  summarise(session: IdentitySession, selection: OrganizationSelectionCandidate, command: ProtectedQuerySummaryCommand): Promise<HumanOrganizationRequestResult<ProtectedQuerySummaryResult>>;
+  groupedMembers(session: IdentitySession, selection: OrganizationSelectionCandidate, command: ProtectedQueryGroupedMembersCommand): Promise<HumanOrganizationRequestResult<ProtectedQueryGroupedMembersResult>>;
   run(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
@@ -323,6 +330,10 @@ export const buildRecordsTableQueryCommand = (
   if (contract === undefined || contract.columns.length === 0)
     return recordsTableRequestRefusal("contract", "contract_unreadable");
   const { state } = request;
+  if (state.grouping !== undefined && !contract.features.grouping.enabled)
+    return recordsTableRequestRefusal("command", "grouping_feature_off");
+  if (contract.features.grouping.enabled && state.grouping?.active === undefined && state.page !== undefined)
+    return recordsTableRequestRefusal("command", "group_member_not_selected");
   const declaredFieldIds = [
     ...new Set(contract.columns.map((column) => column.field.toLowerCase())),
   ];
@@ -464,7 +475,16 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
       return refused;
     }
     try {
-      const result = await runner.run(session, selection, built.command);
+      const grouped = readRecordsTableContract(request.settings)?.features.grouping.enabled === true;
+      let grouping: RecordsTableGroupingProjection | undefined;
+      const result = await (async () => {
+        if (!grouped) return runner.run(session, selection, built.command);
+        const read = await readRecordsTableGroups(runner, session, selection, request, built);
+        if (read.kind === "unavailable") return { kind: "temporarily_unavailable" as const };
+        if (read.kind === "refused") return { kind: "available" as const, value: { outcome: "refused" as const, reasonCode: read.reasonCode ?? "request_invalid" as const } };
+        grouping = read.grouping;
+        return { kind: "available" as const, value: read.page };
+      })();
       if (result.kind === "temporarily_unavailable") return unavailableResult;
       if (result.kind !== "available") return refused;
       if (result.value.outcome === "refused")
@@ -539,6 +559,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
               status: "ready",
               values: {
                 ...projected.values,
+                ...(grouping === undefined ? {} : { features: { ...projected.values.features, grouping } }),
                 ...(built.sort === undefined ? {} : { sort: built.sort }),
                 narrowing,
                 page,

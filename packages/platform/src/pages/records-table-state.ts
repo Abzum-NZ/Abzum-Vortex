@@ -42,6 +42,8 @@ export type RecordsTablePageRequest = Readonly<{
 }>;
 
 export type RecordsTableQueryState = Readonly<{
+  /** One summary page and at most one open group. Null is a real group value. */
+  grouping?: Readonly<{ after?: string; active?: string }>;
   /** The person's ordered sort; empty uses the authored default sort. */
   sort: readonly RecordsTableSortKey[];
   filters: readonly RecordsTableFilterValue[];
@@ -52,7 +54,7 @@ export type RecordsTableQueryState = Readonly<{
 
 export type RecordsTableQueryStateRead =
   | Readonly<{ kind: "valid"; state: RecordsTableQueryState }>
-  | Readonly<{ kind: "malformed"; part: "sort" | "filter" | "search" }>;
+  | Readonly<{ kind: "malformed"; part: "sort" | "filter" | "search" | "grouping" }>;
 
 const FIELD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PAGE_PATTERN = /^[1-9][0-9]{0,4}$/;
@@ -63,7 +65,7 @@ const filterPrefix = (placementId: string): string => `filter.${placementId}.`;
 const searchParameter = (placementId: string): string => `search.${placementId}`;
 const pageParameter = (placementId: string): string => `page.${placementId}`;
 
-const QUERY_STATE_PREFIXES = ["sort.", "filter.", "search.", "page."] as const;
+const QUERY_STATE_PREFIXES = ["sort.", "filter.", "search.", "page.", "group.", "groups."] as const;
 
 /**
  * The placement whose table state an address parameter holds, lower-cased, or undefined for a
@@ -171,6 +173,10 @@ export const readRecordsTableQueryState = (
     filtersSeen.add(key);
   }
   const owned = placementEntries(placementId, addressed);
+  const active = owned.get(`group.${placementId}`);
+  const after = owned.get(`groups.${placementId}`);
+  if ([active, after].some((value) => value !== undefined && (value.length === 0 || value.length > 4096)))
+    return { kind: "malformed", part: "grouping" };
   const sortText = owned.get(sortParameter(placementId));
   const sort = sortText === undefined ? [] : parseSort(sortText);
   if (sort === undefined) return { kind: "malformed", part: "sort" };
@@ -194,6 +200,7 @@ export const readRecordsTableQueryState = (
   return {
     kind: "valid",
     state: {
+      ...(active === undefined && after === undefined ? {} : { grouping: { ...(active === undefined ? {} : { active }), ...(after === undefined ? {} : { after }) } }),
       sort,
       filters,
       search: searchText === undefined || searchText === "" ? null : searchText,
@@ -204,6 +211,8 @@ export const readRecordsTableQueryState = (
 
 /** One change a person makes to a table's query state from its controls. */
 export type RecordsTableQueryChange =
+  | Readonly<{ kind: "group"; active: string | undefined }>
+  | Readonly<{ kind: "groups"; after: string | undefined }>
   | Readonly<{ kind: "sort"; keys: readonly RecordsTableSortKey[] }>
   /** `filter` is the address spelling of the field's typed filter; empty clears the field's filter. */
   | Readonly<{ kind: "filter"; fieldId: string; filter: string }>
@@ -230,7 +239,15 @@ export const applyRecordsTableQueryChange = (
     return;
   }
   set(pageParameter(placementId), undefined);
+  if (change.kind !== "group") set(`group.${placementId}`, undefined);
+  if (change.kind !== "group" && change.kind !== "groups") set(`groups.${placementId}`, undefined);
   switch (change.kind) {
+    case "group":
+      set(`group.${placementId}`, change.active);
+      return;
+    case "groups":
+      set(`groups.${placementId}`, change.after);
+      return;
     case "sort":
       set(
         sortParameter(placementId),

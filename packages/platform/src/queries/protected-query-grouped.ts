@@ -203,6 +203,7 @@ export const groupedMembersCommand = async (
   }
 
   const result = protectedQueryGroupedMembersResultSchema.parse({
+    fieldBounds: page.fieldBounds,
     outcome: "completed",
     moduleRootId: command.moduleRootId,
     moduleReleaseVersion: page.moduleReleaseVersion,

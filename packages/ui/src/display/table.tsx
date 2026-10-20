@@ -473,6 +473,8 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
         </div>
       );
     if (values === undefined) return loading;
+    if (values.features?.grouping !== undefined && values.features.grouping.active === null)
+      return <p role="status" className="py-4 text-sm text-muted-foreground">{values.features.grouping.groups.length === 0 ? "No groups to show" : "Open a group to show its records"}</p>;
     if (rows.length === 0)
       return (
         <Empty
@@ -569,7 +571,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
       ) : (
         body
       )}
-      {!ready || values === undefined ? null : (
+      {!ready || values === undefined || (values.features?.grouping !== undefined && values.features.grouping.active === null) ? null : (
         <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
           <p className="m-0 text-xs text-muted-foreground tabular-nums">
             {values.page === undefined ? "" : `Page ${values.page} · `}

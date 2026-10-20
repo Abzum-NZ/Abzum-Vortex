@@ -2,6 +2,7 @@ import {
   queryInputValueType,
   recordsTableEditableFieldTypes,
   recordsTableFieldFilterable,
+  recordsTableFieldGroupable,
   type QueryBindingField,
   type QueryBindingPageFacts,
   type RecordsTableFeatureKey,
@@ -39,6 +40,14 @@ export type StudioGridFeatureEditor =
 export const studioGridFeatureEditors: Readonly<
   Record<RecordsTableFeatureKey, StudioGridFeatureEditor>
 > = {
+  grouping: {
+    kind: "settings",
+    offers: (field) => recordsTableFieldGroupable({
+      field: field.reference, label: field.label, type: field.type,
+      sortable: field.sortable, filterable: field.filterable, searchable: field.searchable,
+      editable: false, ...(field.choiceCount === undefined ? {} : { choiceCount: field.choiceCount }),
+    }),
+  },
   pinning: { kind: "settings" },
   search: { kind: "settings" },
   // Only fields people can filter by: stored, filterable and of a type a filter fits.
@@ -73,6 +82,7 @@ export const studioGridFeatureStartSettings: Readonly<
 > = {
   // Related records read ten at a time unless the builder chooses otherwise.
   master_detail: { child_page_size: { kind: "number", value: 10 } },
+  grouping: { limit: { kind: "number", value: 40 }, unit: { kind: "choice", value: "month" } },
 };
 
 /**
