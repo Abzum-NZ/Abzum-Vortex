@@ -34,6 +34,8 @@ import {
   recordsTableParameterPlacement,
 } from "@vortex/platform/schema";
 import { createPlacementReadServices } from "./placement-services";
+import { prepareRuntimePreviewPage } from "../runtime-preview-demand";
+import { beginStudioPreviewRead } from "../studio-preview-work";
 import { readApplicationReleaseAdoption } from "../application-release-adoption";
 import { getQueryContinuationKey } from "../query-continuation-key";
 import { loadPermittedApplicationsAtAddress } from "../organization-context";
@@ -152,20 +154,61 @@ export const readPageProjections = cache(
     context: InstalledRuntimeContext,
     pageId: string,
     subjectRecordId: string | undefined,
+    selectedPlacementIds?: ReadonlySet<string>,
   ) => {
     const dependencies = requestDependencies();
     const selection: OrganizationSelectionCandidate = runtimeContextSelection(context);
-    const projectedPageRead = createStoredPageCapabilityService({
-      ...dependencies,
+    const definition = context.releaseSet.application.content.pages.find((page) =>
+      sameId(page.pageId, pageId),
+    );
+    if (definition === undefined) throw new Error("PREVIEW_PAGE_DEFINITION_MISSING");
+    // Projection conditions may read the addressed subject; it must exist before projection.
+    const subjectReady = prepareRuntimePreviewPage(
+      session,
       context,
-      permissions: platformPermissionSource,
-      selection: { pageId, ...(subjectRecordId === undefined ? {} : { subjectRecordId }) },
-    }).project(session, selection);
-    const navigationRead = createStoredNavigationProjectionService({
-      ...dependencies,
-      context,
-      permissions: platformPermissionSource,
-    }).project(session, selection);
+      definition,
+      subjectRecordId !== undefined,
+    );
+    const projectedPageRead = subjectReady.then(async (ready) => {
+      if (ready.kind !== "ready")
+        return {
+          kind:
+            ready.kind === "temporarily_unavailable" ? "temporarily_unavailable" : "unavailable",
+        } as const;
+      const projected = await createStoredPageCapabilityService({
+        ...dependencies,
+        context,
+        permissions: platformPermissionSource,
+        selection: { pageId, ...(subjectRecordId === undefined ? {} : { subjectRecordId }) },
+      }).project(session, selection);
+      if (projected.kind !== "available" || projected.value === undefined) return projected;
+      const demand = await prepareRuntimePreviewPage(
+        session,
+        context,
+        definition,
+        false,
+        projected.value,
+        selectedPlacementIds,
+      );
+      if (demand.kind !== "ready")
+        return {
+          kind:
+            demand.kind === "temporarily_unavailable" ? "temporarily_unavailable" : "unavailable",
+        } as const;
+      return projected;
+    });
+    const navigationRead = subjectReady.then((ready) =>
+      ready.kind === "ready"
+        ? createStoredNavigationProjectionService({
+            ...dependencies,
+            context,
+            permissions: platformPermissionSource,
+          }).project(session, selection)
+        : ({
+            kind:
+              ready.kind === "temporarily_unavailable" ? "temporarily_unavailable" : "unavailable",
+          } as const),
+    );
     // A failure is rethrown where its result is consulted, never left unobserved meanwhile, and
     // every reader joins both reads before it returns on any path (early returns included).
     void projectedPageRead.catch(() => undefined);
@@ -189,6 +232,14 @@ export const loadApplicationPageInternal = async (
   options?: PageLoadOptions,
 ): Promise<ApplicationPageInternalResult> => {
   const startedReads: Promise<unknown>[] = [];
+  const release =
+    address.application.previewInstallationId === undefined
+      ? undefined
+      : beginStudioPreviewRead(
+          session,
+          address.read.organizationId,
+          address.application.applicationRootId,
+        );
   try {
     return await loadApplicationPageJoined(
       startedReads,
@@ -199,10 +250,11 @@ export const loadApplicationPageInternal = async (
       boardReads,
       expectedInstallationRevision,
       tableContinuation,
-      options,
+      release === undefined ? options : { ...options, streamPlacementReads: false },
     );
   } finally {
     await Promise.allSettled(startedReads);
+    release?.();
   }
 };
 
@@ -281,6 +333,7 @@ const loadApplicationPageJoined = async (
     context,
     pageDefinition.pageId,
     conditionSubjectId,
+    selectedPlacementIds,
   );
   startedReads.push(projectedPageRead, navigationRead);
   const adoptionTarget = await adoptionRead;
@@ -1035,8 +1088,10 @@ const loadApplicationPageJoined = async (
     }
   const linkInputs = placements.filter(isLinkInputPlacement);
   // A new record's link field may start with the record its page address names.
-  if (pageDefinition.type !== "guided_form")
-    await projectInitialLinkInputs({
+  if (pageDefinition.type !== "guided_form") {
+    const initialLinks = await projectInitialLinkInputs({
+      session,
+      context,
       placements: linkInputs.filter(
         (entry) => entry.formId === undefined || !Object.hasOwn(editFormBaselines, entry.formId),
       ),
@@ -1045,6 +1100,14 @@ const loadApplicationPageJoined = async (
       resolveRecordLinks,
       log: (placementId, reason) => logPlacementFailure(address, placementId, reason),
     });
+    if (initialLinks.kind !== "ready")
+      return {
+        kind:
+          initialLinks.kind === "temporarily_unavailable"
+            ? "temporarily_unavailable"
+            : "unavailable",
+      };
+  }
   if (unshown.size > 0) {
     applyFormFieldAccess(page, { omitted: unshown, readOnly: new Set(), refused: new Map() });
     for (const placementId of Object.keys(data))
