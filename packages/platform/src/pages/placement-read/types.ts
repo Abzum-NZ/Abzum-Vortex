@@ -103,7 +103,6 @@ export type PlacementReadInput = Readonly<{
   permittedApplicationsUnavailable: boolean;
   /** The columns each named board shows, or the one column it continues; other boards read their first columns. */
   boardReads?: readonly Readonly<{ placementId: string; request: BoardColumnReadRequest }>[];
-  /** How many leading stages a board's first read covers: one on a narrow screen, more on a wide one. */
   tableContinuation?: Readonly<{
     placementId: string;
     fromAddress?: true;
