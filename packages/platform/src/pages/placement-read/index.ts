@@ -23,7 +23,6 @@ import { readRecordsTable } from "./records-table";
 import {
   findModuleQuery,
   isApplicationLauncherPlacement,
-  isBoardPlacement,
   logPlacementFailure,
   placementBlockIs,
   placementReleaseVersion,
@@ -60,8 +59,7 @@ export const isStreamableQueryPlacement = (placement: PlacementReadEntry): boole
     placementBlockIs(placement, LINK_TILES_BLOCK_RELEASE) ||
     placementBlockIs(placement, SUMMARY_VALUES_BLOCK_RELEASE) ||
     placementBlockIs(placement, CHART_BLOCK_RELEASE) ||
-    isApplicationLauncherPlacement(placement) ||
-    isBoardPlacement(placement)
+    isApplicationLauncherPlacement(placement)
   );
 };
 
@@ -102,14 +100,13 @@ export const readQueryPlacement = async (
   const isSummary = placementBlockIs(placement, SUMMARY_VALUES_BLOCK_RELEASE);
   const isChart = placementBlockIs(placement, CHART_BLOCK_RELEASE);
   const isLauncher = isApplicationLauncherPlacement(placement);
-  const isBoard = isBoardPlacement(placement);
   if (
     tableContract === undefined &&
     detailContract === undefined &&
     !isCalendar &&
     !isNotice &&
     !isLinkTiles &&
-    (queryId === undefined || !(isLauncher || isSummary || isChart || isBoard))
+    (queryId === undefined || !(isLauncher || isSummary || isChart))
   )
     return;
   if (detailContract !== undefined && queryId === undefined) {
@@ -126,12 +123,13 @@ export const readQueryPlacement = async (
   if (inputValues === undefined) return;
   if (isLinkTiles) await readLinkTiles(read, placement, queryId, inputValues);
   else if (isNotice) await readQueryNotice(read, placement, queryId, inputValues);
-  else if (isBoard) await readBoard(read, placement, inputValues);
   else if (isLauncher) await readLauncher(read, placement, bound, inputValues);
   else if (isSummary || isChart)
     await readSummaryOrChart(read, placement, bound, inputValues, isChart);
   else if (calendarContract !== undefined)
     await readCalendar(read, placement, bound, calendarContract, inputValues);
+  else if (tableContract !== undefined && tableContract.features.board.enabled)
+    await readBoard(read, placement, tableContract.features.board, inputValues);
   else if (tableContract !== undefined)
     await readRecordsTable(read, placement, bound, tableContract, inputValues);
   else await readQueryDetail(read, placement, bound, inputValues);

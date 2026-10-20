@@ -1,5 +1,10 @@
 export * from "./contextual-palette";
-export { studioBoardPipelines } from "./board-source";
+export {
+  boardModeOf,
+  boardSettingChoices,
+  studioBoardPipelines,
+  type StudioBoardPipeline,
+} from "./board-source";
 export * from "./discovery-adapter";
 export * from "./semantic-selection";
 export * from "./application-draft-history";
