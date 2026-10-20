@@ -32,6 +32,9 @@ import {
   isRecord,
   compiledPageShellId,
   recordsTableParameterPlacement,
+  readRecordsTableContract,
+  readRecordsTableViewId,
+  type BlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import { createPlacementReadServices } from "./placement-services";
 import { readApplicationReleaseAdoption } from "../application-release-adoption";
@@ -88,6 +91,7 @@ import {
   pageQueryBindingContext,
   placementParameterDependencies,
   resolvedQueryRecordTypeId,
+  gridViewSharePermissionOf,
 } from "@vortex/platform/server";
 import {
   applicationLauncherQueryRowsToListValues,
@@ -669,12 +673,35 @@ const loadApplicationPageJoined = async (
     selection,
     context,
     String(pageDefinition.pageId),
-    placements.filter(isTablePlacement).flatMap(({ placementId, vortex }) => {
+    placements.filter(isTablePlacement).flatMap(({ placementId, vortex, settings }) => {
       const recordTypeId =
         typeof vortex.queryId === "string"
           ? resolvedQueryRecordTypeId(context, vortex.queryId)
           : undefined;
-      return recordTypeId === undefined ? [] : [{ placementId, recordTypeId }];
+      if (recordTypeId === undefined) return [];
+      // Saved views are read only for a grid that turns them on.
+      const savedViews = readRecordsTableContract(
+        settings as Readonly<Record<string, BlockPropertyValueContract>>,
+      )?.features.savedViews;
+      const viewsOn = savedViews?.enabled === true;
+      return [
+        {
+          placementId,
+          recordTypeId,
+          selectedViewId: viewsOn
+            ? readRecordsTableViewId(
+                placementId,
+                Object.entries(parameters).flatMap(([name, value]): [string, string][] => {
+                  const text = first(value);
+                  return text === undefined ? [] : [[name, text]];
+                }),
+              )
+            : undefined,
+          sharePermission: viewsOn
+            ? gridViewSharePermissionOf(context, savedViews.sharePermission)
+            : undefined,
+        },
+      ];
     }),
   );
   startedReads.push(gridLayoutsRead);

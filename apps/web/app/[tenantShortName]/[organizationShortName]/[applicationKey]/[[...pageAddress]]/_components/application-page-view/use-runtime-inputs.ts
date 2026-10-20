@@ -17,6 +17,8 @@ import {
   type ReferenceChoiceSelectionEvidenceMap,
   type ComponentRequestGeneration,
   type GridLayoutCommitResult,
+  type GridViewCommand,
+  type GridViewCommandResult,
 } from "@vortex/platform/schema";
 import type {
   ApplicationPageModel,
@@ -59,6 +61,7 @@ export function useRuntimeInputs({
   setSelection,
   changeTableQuery,
   commitLayout,
+  runViewCommand,
   requestChoicePageRef,
   changeChoiceField,
   subject,
@@ -128,6 +131,10 @@ export function useRuntimeInputs({
     placementId: string,
     event: DisplaySemanticEvent,
   ) => Promise<GridLayoutCommitResult>;
+  runViewCommand: (
+    placementId: string,
+    command: GridViewCommand,
+  ) => Promise<GridViewCommandResult>;
   requestChoicePageRef: RefObject<
     (
       placementId: string,
@@ -402,6 +409,13 @@ export function useRuntimeInputs({
         if (supportsEvent("columns_changed") && tableData !== undefined)
           events.columns_changed = (event: DisplaySemanticEvent) =>
             commitLayout(placementId, event);
+        // Saved views change the address and store a view; like the layout they are the person's
+        // own and need no flow, so the same declared event gates them.
+        if (supportsEvent("columns_changed") && tableData !== undefined)
+          events.grid_view_requested = (event: DisplaySemanticEvent) => {
+            if (event.event !== "grid_view_requested") return;
+            return runViewCommand(placementId, event.command);
+          };
       }
       if (model.referenceChoiceInputs.some((field) => field.placementId === placementId))
         events.choices_requested = (event: ControlSemanticEvent) => {
@@ -802,6 +816,7 @@ export function useRuntimeInputs({
     selection,
     changeTableQuery,
     commitLayout,
+    runViewCommand,
     subject,
     onOpenApplication,
     unsavedWork,

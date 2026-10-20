@@ -4850,7 +4850,7 @@
             "kind": "group",
             "key": "saved_views",
             "label": "Saved views",
-            "help": "Let people save and reopen sort and filter combinations",
+            "help": "Let people save, reopen and share views of the table",
             "required": false,
             "defaultValue": {
               "kind": "group",
@@ -4872,6 +4872,15 @@
                   "kind": "boolean",
                   "value": false
                 }
+              },
+              {
+                "kind": "text",
+                "key": "share_permission",
+                "label": "Who may share views",
+                "help": "The permission that lets people share views and change shared views; without it views stay personal",
+                "required": false,
+                "minLength": 1,
+                "maxLength": 120
               }
             ]
           },

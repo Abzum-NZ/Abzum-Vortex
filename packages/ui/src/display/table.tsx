@@ -173,9 +173,23 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
             rows,
             selectedRecordIds,
             narrowing,
+            sort: values?.sort,
+            arrangement: layout.arrangement,
+            views: values?.layout.views,
             events,
           },
-    [accessibleName, features, layout.shown, rows, selectedRecordIds, narrowing, events],
+    [
+      accessibleName,
+      features,
+      layout.shown,
+      layout.arrangement,
+      rows,
+      selectedRecordIds,
+      narrowing,
+      values?.sort,
+      values?.layout.views,
+      events,
+    ],
   );
   const gridFeatures = useGridFeatures(featureContext);
   const {

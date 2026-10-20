@@ -45,7 +45,7 @@ export const studioGridFeatureEditors: Readonly<
         editable: false,
       }),
   },
-  saved_views: { kind: "settings" },
+  saved_views: { kind: "custom" },
   bulk_actions: { kind: "settings" },
   inline_edit: { kind: "settings" },
   conditional_formatting: { kind: "custom" },

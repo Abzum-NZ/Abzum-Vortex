@@ -28,6 +28,7 @@ import { Switch } from "../components/switch";
 import type { StudioQueryChoice } from "./contextual-palette";
 import { studioGridFeatureEditors, studioRecordsTableQueryFacts } from "./grid-features";
 import { StudioConditionalFormattingEditor } from "./grid-features/conditional-formatting";
+import { StudioSavedViewsEditor } from "./grid-features/saved-views";
 import { StudioInspectorGroup } from "./studio-inspector-group";
 import {
   StudioSettingFields,
@@ -188,6 +189,16 @@ export function StudioGridFeatures({
                     query={query}
                     facts={facts}
                     compiledFields={compiledFields}
+                    disabled={disabled}
+                    onChange={(next) => write(key, next)}
+                  />
+                </div>
+              ) : null}
+              {enabled && key === "saved_views" ? (
+                <div className="pb-2">
+                  <StudioSavedViewsEditor
+                    value={current}
+                    permissions={choices.permissions}
                     disabled={disabled}
                     onChange={(next) => write(key, next)}
                   />

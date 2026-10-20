@@ -2,17 +2,29 @@ import "server-only";
 
 import { z } from "zod";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
-import { gridLayoutSchema, type GridLayout } from "./grid-view-state";
+import {
+  gridLayoutSchema,
+  gridViewDocumentSchema,
+  gridViewNameSchema,
+  gridViewScopes,
+  type AddressedGridView,
+  type GridLayout,
+  type GridViewDocument,
+  type GridViewShareTargets,
+  type GridViewSharing,
+} from "./grid-view-state";
 import { readRecordsTableContract } from "../definition/application-composition/records-display";
 import { placementSettings } from "../definition/application-composition-catalogue";
+import type { InstalledRuntimeContext } from "../definition/app-index";
 import { walkPageComposition } from "./placement-walk";
 import type { PageDefinition } from "../schema";
 
 /**
- * The stored grid layouts of the current person. Each operation runs inside the caller's protected
- * request transaction; the database takes the person, organisation and application from the
- * validated request context, never from these arguments, so another account, organisation or
- * installation can neither read nor write a layout here.
+ * The stored grid layouts and named views of the current person. Each operation runs inside the
+ * caller's protected request transaction; the database takes the person, organisation and
+ * application from the validated request context, never from these arguments, so another
+ * account, organisation or installation can neither read nor write a layout or a view here.
+ * Sharing is decided in the database against the person's live access, never by this module.
  */
 
 type ResultRow = DatabaseRow & { readonly result: unknown };
@@ -21,18 +33,47 @@ const ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 const idSchema = z.string().regex(ID_PATTERN);
 const revisionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 
-const storedRowsSchema = z
+const storedLayoutRowsSchema = z
   .array(
     z
       .object({
         placementId: idSchema,
         queryId: idSchema,
         revision: revisionSchema,
+        basedOnViewId: idSchema.nullable(),
         layout: z.unknown(),
       })
       .strict(),
   )
   .max(500);
+
+const storedViewRowsSchema = z
+  .array(
+    z
+      .object({
+        viewId: idSchema,
+        placementId: idSchema,
+        queryId: idSchema,
+        name: gridViewNameSchema,
+        scope: z.enum(gridViewScopes),
+        mine: z.boolean(),
+        revision: revisionSchema,
+        shareOrganization: z.boolean(),
+        shareRoleIds: z.array(idSchema),
+        shareGroupIds: z.array(idSchema),
+        document: z.unknown().optional(),
+      })
+      .strict(),
+  )
+  .max(100_000);
+
+const storedReadSchema = z
+  .object({
+    shareablePlacementIds: z.array(idSchema).max(500),
+    layouts: storedLayoutRowsSchema,
+    views: storedViewRowsSchema,
+  })
+  .strict();
 
 const conflictSchema = z
   .object({
@@ -52,18 +93,45 @@ const resetResultSchema = z.discriminatedUnion("outcome", [
   conflictSchema,
 ]);
 
-/** One stored layout, validated against the platform's storage contract. */
+/** One stored current layout, validated against the platform's storage contract. */
 export type StoredGridView = Readonly<{
   placementId: string;
   queryId: string;
   revision: number;
+  /** The named view this layout was arranged from, when it was. */
+  basedOnViewId: string | null;
   layout: GridLayout;
+}>;
+
+/** One named view the person may see, with its document only when the address selected it. */
+export type StoredNamedGridView = Readonly<{
+  viewId: string;
+  placementId: string;
+  queryId: string;
+  name: string;
+  scope: (typeof gridViewScopes)[number];
+  mine: boolean;
+  revision: number;
+  sharing: GridViewSharing;
+  document: GridViewDocument | undefined;
+}>;
+
+/** Everything one page read returns of the store: layouts keyed by placement, views by placement. */
+export type StoredGridViews = Readonly<{
+  /** The placements (lower-cased) whose tables name a share permission the person holds now. */
+  shareable: ReadonlySet<string>;
+  layouts: ReadonlyMap<string, StoredGridView>;
+  views: ReadonlyMap<string, readonly StoredNamedGridView[]>;
 }>;
 
 /** The layout another tab stored after this one read it, or null when none is stored now. */
 export type GridViewConflict = Readonly<{
   outcome: "conflict";
-  stored: StoredGridView | null;
+  stored: Readonly<{
+    revision: number;
+    queryId: string;
+    layout: GridLayout;
+  }> | null;
 }>;
 
 export type GridViewWriteOutcome =
@@ -75,65 +143,220 @@ const only = (rows: readonly ResultRow[]): unknown => {
   return rows[0].result;
 };
 
-/** A stored layout as the platform wrote it; anything else is logged and refused, never converted. */
-const storedLayout = (placementId: string, layout: unknown): GridLayout => {
-  const parsed = gridLayoutSchema.safeParse(layout);
+/** A stored layout or view as the platform wrote it; anything else is logged and refused. */
+const stored = <Parsed>(
+  kind: string,
+  subject: string,
+  schema: z.ZodType<Parsed>,
+  value: unknown,
+): Parsed => {
+  const parsed = schema.safeParse(value);
   if (parsed.success) return parsed.data;
   console.error(
-    `[grid-views] stored layout refused code=GRID_LAYOUT_MALFORMED placement=${placementId.toLowerCase()}`,
+    `[grid-views] stored ${kind} refused code=GRID_VIEW_MALFORMED subject=${subject.toLowerCase()}`,
     parsed.error.issues.map(({ code, path, message }) => ({ code, path, message })),
   );
-  throw new Error("GRID_LAYOUT_MALFORMED", { cause: parsed.error });
+  throw new Error("GRID_VIEW_MALFORMED", { cause: parsed.error });
 };
 
-const conflictOf = (
-  result: z.infer<typeof conflictSchema>,
-  placementId: string,
-): GridViewConflict => ({
+const conflictOf = (result: z.infer<typeof conflictSchema>, placementId: string): GridViewConflict => ({
   outcome: "conflict",
   stored:
     result.revision === null || result.queryId === null
       ? null
       : {
-          placementId: placementId.toLowerCase(),
-          queryId: result.queryId.toLowerCase(),
           revision: result.revision,
-          layout: storedLayout(placementId, result.layout),
+          queryId: result.queryId.toLowerCase(),
+          layout: stored("layout", placementId, gridLayoutSchema, result.layout),
         },
 });
 
+/** The application permission that lets a person share table views, as the database decides it. */
+export type GridViewSharePermission = Readonly<{
+  applicationRootId: string;
+  ownerKind: "application" | "module";
+  ownerId: string;
+  permissionId: string;
+  actionKind: string;
+  namedAction?: string;
+}>;
+
 /**
- * Reads the person's current layouts of the named placements of one page in one call, keyed by
- * lower-cased placement identity. A placement without a stored layout has no entry.
+ * The share permission a Saved views setting names, from the installed release's prepared
+ * permission registration; undefined when the table names none or the release does not declare it
+ * (publication refuses the latter, so a missing one only means views stay personal).
+ */
+export const gridViewSharePermissionOf = (
+  context: InstalledRuntimeContext,
+  permissionKey: string | undefined,
+): GridViewSharePermission | undefined => {
+  if (permissionKey === undefined) return undefined;
+  const matches = context.permissionRegistration.entries.filter(
+    (entry) => entry.permission.key === permissionKey,
+  );
+  const entry = matches.length === 1 ? matches[0] : undefined;
+  if (entry === undefined) return undefined;
+  return {
+    applicationRootId: String(entry.applicationRootId),
+    ownerKind: entry.ownerKind,
+    ownerId: String(entry.ownerId),
+    permissionId: String(entry.permission.permissionId),
+    actionKind: entry.permission.actionKind,
+    ...(entry.permission.namedAction === undefined
+      ? {}
+      : { namedAction: entry.permission.namedAction }),
+  };
+};
+
+const permissionJson = (permission: GridViewSharePermission | undefined): string | null =>
+  permission === undefined ? null : JSON.stringify(permission);
+
+/**
+ * Reads the person's current layouts and every named view they may see for the named placements of
+ * one page in one call, keyed by lower-cased placement identity. Only the views named in
+ * `selectedViewIds` (the page address) carry their document. `sharePermissions` names, per
+ * placement, the permission its table gives for sharing; the database says which the person holds.
  */
 export const readGridViews = async (
   transaction: RequestDatabaseTransaction,
   pageId: string,
   placementIds: readonly string[],
-): Promise<ReadonlyMap<string, StoredGridView>> => {
+  selectedViewIds: readonly string[],
+  sharePermissions: Readonly<Record<string, GridViewSharePermission>>,
+): Promise<StoredGridViews> => {
   const rows = await transaction.query<ResultRow>`
     select vortex_platform.read_grid_views(
       ${pageId}::uuid,
-      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(placementIds)}::text::jsonb)::uuid)
+      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(placementIds)}::text::jsonb)::uuid),
+      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(selectedViewIds)}::text::jsonb)::uuid),
+      ${JSON.stringify(sharePermissions)}::text::jsonb
     ) as result
   `;
-  const stored = storedRowsSchema.parse(only(rows));
-  return new Map(
-    stored.map((row) => [
-      row.placementId.toLowerCase(),
-      {
-        placementId: row.placementId.toLowerCase(),
-        queryId: row.queryId.toLowerCase(),
-        revision: row.revision,
-        layout: storedLayout(row.placementId, row.layout),
+  const read = stored("read", pageId, storedReadSchema, only(rows));
+  const views = new Map<string, StoredNamedGridView[]>();
+  for (const row of read.views) {
+    const placementId = row.placementId.toLowerCase();
+    const named: StoredNamedGridView = {
+      viewId: row.viewId.toLowerCase(),
+      placementId,
+      queryId: row.queryId.toLowerCase(),
+      name: row.name,
+      scope: row.scope,
+      mine: row.mine,
+      revision: row.revision,
+      sharing: {
+        organization: row.shareOrganization,
+        roleIds: row.shareRoleIds.map((id) => id.toLowerCase()),
+        groupIds: row.shareGroupIds.map((id) => id.toLowerCase()),
       },
-    ]),
+      document:
+        row.document === undefined
+          ? undefined
+          : stored("view", row.viewId, gridViewDocumentSchema, row.document),
+    };
+    views.set(placementId, [...(views.get(placementId) ?? []), named]);
+  }
+  return {
+    shareable: new Set(read.shareablePlacementIds.map((id) => id.toLowerCase())),
+    layouts: new Map(
+      read.layouts.map((row) => [
+        row.placementId.toLowerCase(),
+        {
+          placementId: row.placementId.toLowerCase(),
+          queryId: row.queryId.toLowerCase(),
+          revision: row.revision,
+          basedOnViewId: row.basedOnViewId?.toLowerCase() ?? null,
+          layout: stored("layout", row.placementId, gridLayoutSchema, row.layout),
+        },
+      ]),
+    ),
+    views,
+  };
+};
+
+/** The listed view the address selected, with its document, in the form the resolver takes. */
+export const addressedGridView = (
+  views: readonly StoredNamedGridView[] | undefined,
+  queryId: string,
+  viewId: string | undefined,
+): AddressedGridView | undefined => {
+  const view = views?.find(
+    (candidate) =>
+      candidate.viewId === viewId?.toLowerCase() &&
+      candidate.queryId === queryId.toLowerCase() &&
+      candidate.document !== undefined,
   );
+  if (view?.document === undefined) return undefined;
+  return {
+    item: {
+      viewId: view.viewId,
+      name: view.name,
+      scope: view.scope,
+      mine: view.mine,
+      revision: view.revision,
+    },
+    document: view.document,
+    sharing: view.sharing,
+  };
+};
+
+/**
+ * The query a grid placement reads and the share permission its Saved views setting names, read
+ * from the installed page; undefined when the page has no such grid with Saved views on. Every
+ * view operation takes these from here, never from the request.
+ */
+export const gridViewPlacement = (
+  page: PageDefinition,
+  context: InstalledRuntimeContext,
+  placementId: string,
+): Readonly<{ queryId: string; sharePermission: GridViewSharePermission | undefined }> | undefined => {
+  let found:
+    | Readonly<{ queryId: string; sharePermission: GridViewSharePermission | undefined }>
+    | undefined;
+  walkPageComposition(page.composition, (placement) => {
+    if (placement.placementId.toLowerCase() !== placementId.toLowerCase()) return;
+    const contract = readRecordsTableContract(placementSettings(placement.props));
+    if (
+      contract === undefined ||
+      !contract.features.savedViews.enabled ||
+      typeof placement.vortex.queryId !== "string"
+    )
+      return;
+    found = {
+      queryId: placement.vortex.queryId.toLowerCase(),
+      sharePermission: gridViewSharePermissionOf(context, contract.features.savedViews.sharePermission),
+    };
+  });
+  return found;
+};
+
+/** True when the page declares the placement's bound query and every column of the layout. */
+const layoutFitsPlacement = (
+  page: PageDefinition,
+  placementId: string,
+  queryId: string,
+  fieldIds: readonly string[],
+): boolean => {
+  let permitted = false;
+  walkPageComposition(page.composition, (placement) => {
+    if (placement.placementId.toLowerCase() !== placementId.toLowerCase()) return;
+    const contract = readRecordsTableContract(placementSettings(placement.props));
+    if (
+      contract === undefined ||
+      typeof placement.vortex.queryId !== "string" ||
+      placement.vortex.queryId.toLowerCase() !== queryId.toLowerCase()
+    )
+      return;
+    const fields = new Set(contract.columns.map((column) => column.field.toLowerCase()));
+    permitted = fieldIds.every((fieldId) => fields.has(fieldId));
+  });
+  return permitted;
 };
 
 /**
  * Stores the person's layout of one placement at the revision it was made from (null for a first
- * layout). A newer layout stored meanwhile, by another tab, is returned as the conflict.
+ * layout), noting the view it was arranged from. A newer layout stored meanwhile, by another tab,
+ * is returned as the conflict.
  */
 export const writeGridView = async (
   transaction: RequestDatabaseTransaction,
@@ -142,32 +365,29 @@ export const writeGridView = async (
     placementId: string;
     queryId: string;
     expectedRevision: number | null;
+    basedOnViewId: string | null;
     layout: GridLayout;
   }>,
 ): Promise<GridViewWriteOutcome> => {
   const layout = gridLayoutSchema.parse(write.layout);
   // The page is resolved from the installed release by the server. A forged client cannot
   // invent a placement, switch its query or persist undeclared columns.
-  let permitted = false;
-  walkPageComposition(write.page.composition, ({ placementId, props, vortex }) => {
-    if (placementId.toLowerCase() !== write.placementId.toLowerCase()) return;
-    const contract = readRecordsTableContract(placementSettings(props));
-    if (
-      contract === undefined ||
-      typeof vortex.queryId !== "string" ||
-      vortex.queryId.toLowerCase() !== write.queryId.toLowerCase()
+  if (
+    !layoutFitsPlacement(
+      write.page,
+      write.placementId,
+      write.queryId,
+      layout.columns.map((column) => column.fieldId),
     )
-      return;
-    const fields = new Set(contract.columns.map((column) => column.field.toLowerCase()));
-    permitted = layout.columns.every((column) => fields.has(column.fieldId));
-  });
-  if (!permitted) throw new Error("GRID_LAYOUT_PLACEMENT_INVALID");
+  )
+    throw new Error("GRID_LAYOUT_PLACEMENT_INVALID");
   const rows = await transaction.query<ResultRow>`
     select vortex_platform.write_grid_view(
       ${write.page.pageId}::uuid,
       ${write.placementId}::uuid,
       ${write.queryId}::uuid,
       ${write.expectedRevision}::bigint,
+      ${write.basedOnViewId}::uuid,
       ${JSON.stringify(layout)}::text::jsonb
     ) as result
   `;
@@ -189,4 +409,156 @@ export const resetGridView = async (
   `;
   const result = resetResultSchema.parse(only(rows));
   return result.outcome === "reset" ? result : conflictOf(result, reset.placementId);
+};
+
+const viewResultSchema = z.discriminatedUnion("outcome", [
+  z.object({ outcome: z.literal("saved"), viewId: idSchema, revision: revisionSchema }).strict(),
+  z.object({ outcome: z.literal("deleted") }).strict(),
+  z
+    .object({
+      outcome: z.literal("conflict"),
+      revision: revisionSchema,
+      name: z.string(),
+      queryId: idSchema,
+    })
+    .strict(),
+  z.object({ outcome: z.enum(["not_found", "forbidden", "limit", "target_unknown"]) }).strict(),
+]);
+
+/** What a view operation came to; every refusal is a closed outcome, never a database message. */
+export type GridViewOperationOutcome =
+  | Readonly<{ outcome: "saved"; viewId: string; revision: number }>
+  | Readonly<{ outcome: "deleted" }>
+  | Readonly<{ outcome: "conflict" }>
+  | Readonly<{ outcome: "not_found" | "forbidden" | "limit" | "target_unknown" }>;
+
+const viewOutcome = (rows: readonly ResultRow[]): GridViewOperationOutcome => {
+  const result = viewResultSchema.parse(only(rows));
+  if (result.outcome === "saved")
+    return { outcome: "saved", viewId: result.viewId.toLowerCase(), revision: result.revision };
+  return result.outcome === "conflict" ? { outcome: "conflict" } : result;
+};
+
+/**
+ * Creates a personal view (no `viewId`), or renames and/or replaces the document of one at its
+ * revision. Only its owner, or someone who holds the share permission, may change a view; the
+ * database decides that now, for the person of this request.
+ */
+export const saveGridView = async (
+  transaction: RequestDatabaseTransaction,
+  save: Readonly<{
+    page: PageDefinition;
+    placementId: string;
+    queryId: string;
+    viewId: string | null;
+    expectedRevision: number | null;
+    name: string | null;
+    document: GridViewDocument | null;
+    sharePermission: GridViewSharePermission | undefined;
+  }>,
+): Promise<GridViewOperationOutcome> => {
+  const document = save.document === null ? null : gridViewDocumentSchema.parse(save.document);
+  const name = save.name === null ? null : gridViewNameSchema.parse(save.name);
+  if (
+    document !== null &&
+    !layoutFitsPlacement(
+      save.page,
+      save.placementId,
+      save.queryId,
+      document.columns.map((column) => column.fieldId),
+    )
+  )
+    throw new Error("GRID_VIEW_PLACEMENT_INVALID");
+  const rows = await transaction.query<ResultRow>`
+    select vortex_platform.save_grid_view(
+      ${save.page.pageId}::uuid,
+      ${save.placementId}::uuid,
+      ${save.queryId}::uuid,
+      ${save.viewId}::uuid,
+      ${save.expectedRevision}::bigint,
+      ${name}::text,
+      ${document === null ? null : JSON.stringify(document)}::text::jsonb,
+      ${permissionJson(save.sharePermission)}::text::jsonb
+    ) as result
+  `;
+  return viewOutcome(rows);
+};
+
+/** Shares a view with the organisation, roles or groups (or makes it personal again). */
+export const shareGridView = async (
+  transaction: RequestDatabaseTransaction,
+  share: Readonly<{
+    pageId: string;
+    placementId: string;
+    viewId: string;
+    expectedRevision: number;
+    sharing: GridViewSharing;
+    sharePermission: GridViewSharePermission | undefined;
+  }>,
+): Promise<GridViewOperationOutcome> => {
+  const rows = await transaction.query<ResultRow>`
+    select vortex_platform.share_grid_view(
+      ${share.pageId}::uuid,
+      ${share.placementId}::uuid,
+      ${share.viewId}::uuid,
+      ${share.expectedRevision}::bigint,
+      ${share.sharing.organization}::boolean,
+      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(share.sharing.roleIds)}::text::jsonb)::uuid),
+      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(share.sharing.groupIds)}::text::jsonb)::uuid),
+      ${permissionJson(share.sharePermission)}::text::jsonb
+    ) as result
+  `;
+  return viewOutcome(rows);
+};
+
+/** Deletes a view at its revision; only its owner or someone who may share can. */
+export const deleteGridView = async (
+  transaction: RequestDatabaseTransaction,
+  remove: Readonly<{
+    pageId: string;
+    placementId: string;
+    viewId: string;
+    expectedRevision: number;
+    sharePermission: GridViewSharePermission | undefined;
+  }>,
+): Promise<GridViewOperationOutcome> => {
+  const rows = await transaction.query<ResultRow>`
+    select vortex_platform.delete_grid_view(
+      ${remove.pageId}::uuid,
+      ${remove.placementId}::uuid,
+      ${remove.viewId}::uuid,
+      ${remove.expectedRevision}::bigint,
+      ${permissionJson(remove.sharePermission)}::text::jsonb
+    ) as result
+  `;
+  return viewOutcome(rows);
+};
+
+const shareTargetsSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.literal("listed"),
+      roles: z.array(z.object({ roleId: idSchema, label: z.string() }).strict()),
+      groups: z.array(z.object({ groupId: idSchema, label: z.string() }).strict()),
+    })
+    .strict(),
+  z.object({ outcome: z.literal("forbidden") }).strict(),
+]);
+
+/** The roles and groups a view can be shared with; null for someone who may not share. */
+export const listGridViewShareTargets = async (
+  transaction: RequestDatabaseTransaction,
+  sharePermission: GridViewSharePermission | undefined,
+): Promise<GridViewShareTargets | null> => {
+  const rows = await transaction.query<ResultRow>`
+    select vortex_platform.list_grid_view_share_targets(
+      ${permissionJson(sharePermission)}::text::jsonb
+    ) as result
+  `;
+  const result = shareTargetsSchema.parse(only(rows));
+  if (result.outcome === "forbidden") return null;
+  return {
+    roles: result.roles.map((role) => ({ id: role.roleId.toLowerCase(), label: role.label })),
+    groups: result.groups.map((group) => ({ id: group.groupId.toLowerCase(), label: group.label })),
+  };
 };

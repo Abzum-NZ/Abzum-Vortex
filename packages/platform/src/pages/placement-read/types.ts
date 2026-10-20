@@ -12,7 +12,7 @@ import type { createLinkTilesQueryResolver } from "../link-tiles-query";
 import type { createQueryNoticeQueryResolver } from "../notice-query-projection";
 import type { createRecordsTableQueryResolver } from "../records-table-query";
 import type { RecordsTablePageRequest } from "../records-table-state";
-import type { StoredGridView } from "../grid-views";
+import type { StoredGridViews } from "../grid-views";
 import type { PageSubjectReadResult } from "../page-subject-read";
 import type { QueryBindingContext } from "../query-binding-resolver";
 import type {
@@ -34,7 +34,7 @@ export type LauncherQueryRow = Readonly<{
 export type PlacementGridLayouts = Readonly<{
   /** False in a preview: changes then stay on screen only. */
   persisted: boolean;
-  stored: ReadonlyMap<string, StoredGridView>;
+  stored: StoredGridViews;
   /**
    * The fields the person can read on at least one record, by lower-cased record type identity;
    * undefined in a preview, whose builder sees every field.

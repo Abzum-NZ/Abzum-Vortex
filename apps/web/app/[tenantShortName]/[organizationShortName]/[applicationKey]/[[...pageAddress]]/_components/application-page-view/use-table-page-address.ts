@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import {
   applyRecordsTableQueryChange,
+  applyRecordsTableView,
   readRecordsTableQueryState,
+  readRecordsTableView,
   recordsTableAddressKey,
   recordsTableParameterPlacement,
   type RecordsTablePageRequest,
   type RecordsTableQueryChange,
 } from "@vortex/platform/schema";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
+import { tablePayloadFor } from "./placement-helpers";
 import type { TableContinuationTarget } from "./types";
 
 type Entries = readonly (readonly [string, string])[];
@@ -41,10 +44,12 @@ const CHANGED = Symbol("changed");
 export function useTablePageAddress({
   model,
   currentSearch,
+  currentData,
   refreshPlacements,
   setSelection,
 }: Readonly<{
   model: ApplicationPageModel;
+  currentData: ApplicationPageModel["data"];
   currentSearch: string;
   refreshPlacements: (
     placementIds: readonly string[],
@@ -118,6 +123,70 @@ export function useTablePageAddress({
     [clearSelection],
   );
 
+  /**
+   * Opens a saved view (null leaves it): the placement's own address state is replaced by the
+   * view, and the table rereads once. The view brings its own sort, filters and search from the
+   * server; they join the address when that read lands.
+   */
+  const openTableView = useCallback(
+    (placementId: string, viewId: string | null) => {
+      const parameters = new URLSearchParams(window.location.search);
+      const before = recordsTableAddressKey(placementId, [...parameters]);
+      applyRecordsTableView(
+        parameters,
+        placementId,
+        viewId === null ? null : { viewId, sort: [], filters: [], search: null },
+      );
+      if (recordsTableAddressKey(placementId, [...parameters]) === before) return;
+      pendingRef.current.set(placementId.toLowerCase(), CHANGED);
+      clearSelection(placementId);
+      push(parameters);
+    },
+    [clearSelection],
+  );
+
+  // A view opened by its address alone (a shared link, or a view just chosen) shows its own sort,
+  // filters and search from the server. Once the page lands they are written into the address,
+  // replacing the entry, so every control, a copied link and Back agree with what is shown. The
+  // table is not read again: the address now names exactly what was read.
+  useEffect(() => {
+    const parameters = new URLSearchParams(currentSearch);
+    const entries = [...parameters];
+    let changed = false;
+    for (const placementId of model.pageParameters.tableIds) {
+      const view = readRecordsTableView(placementId, entries);
+      if (view === undefined || view.cleared) continue;
+      const key = recordsTableAddressKey(placementId, entries);
+      const queried = entries.some(
+        ([name]) =>
+          recordsTableParameterPlacement(name) === placementId.toLowerCase() &&
+          !/^(view|page)./i.test(name),
+      );
+      if (queried) continue;
+      const held = Object.keys(currentData).find(
+        (candidate) => candidate.toLowerCase() === placementId.toLowerCase(),
+      );
+      if (held === undefined || (shownRef.current.keys.get(placementId.toLowerCase()) ?? "") !== key)
+        continue;
+      const selected = tablePayloadFor(currentData[held])?.layout.views?.selected;
+      if (selected === null || selected === undefined || selected.viewId !== view.viewId) continue;
+      const { sort, filters, search } = selected.document;
+      if (sort === undefined && filters === undefined && search === undefined) continue;
+      applyRecordsTableView(parameters, placementId, {
+        viewId: view.viewId,
+        sort: sort ?? [],
+        filters: filters ?? [],
+        search: search ?? null,
+      });
+      shownRef.current.keys.set(
+        placementId.toLowerCase(),
+        recordsTableAddressKey(placementId, [...parameters]),
+      );
+      changed = true;
+    }
+    if (changed) window.history.replaceState(null, "", `?${parameters.toString()}`);
+  }, [currentData, currentSearch, model]);
+
   // The address the shown page parameters were read for; a new server model read its own address.
   const parameterSearch = useRef({ owner: model, search: currentSearch });
   useEffect(() => {
@@ -171,5 +240,5 @@ export function useTablePageAddress({
     }
   }, [clearSelection, currentSearch, model, refreshPlacements]);
 
-  return { commitTablePage, changeTableQuery, tableQueryPending };
+  return { commitTablePage, changeTableQuery, openTableView, tableQueryPending };
 }

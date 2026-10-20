@@ -62,8 +62,11 @@ const sortParameter = (placementId: string): string => `sort.${placementId}`;
 const filterPrefix = (placementId: string): string => `filter.${placementId}.`;
 const searchParameter = (placementId: string): string => `search.${placementId}`;
 const pageParameter = (placementId: string): string => `page.${placementId}`;
+const viewParameter = (placementId: string): string => `view.${placementId}`;
 
-const QUERY_STATE_PREFIXES = ["sort.", "filter.", "search.", "page."] as const;
+// The one codec of every `<kind>.<placement>` address prefix: the query state, and the saved view
+// the table was opened with (#3023).
+const QUERY_STATE_PREFIXES = ["sort.", "filter.", "search.", "page.", "view."] as const;
 
 /**
  * The placement whose table state an address parameter holds, lower-cased, or undefined for a
@@ -202,12 +205,71 @@ export const readRecordsTableQueryState = (
   };
 };
 
+const VIEW_CLEARED_SUFFIX = ".cleared";
+
+/**
+ * The saved view a placement's address selects, lower-cased, and whether the person has since
+ * cleared the view's own sort, filters and search (`<id>.cleared`): a cleared view no longer
+ * brings its query state, so an address that names none really means none. Undefined when the
+ * address selects no view.
+ */
+export const readRecordsTableView = (
+  placementId: string,
+  entries: Iterable<readonly [string, string]>,
+): Readonly<{ viewId: string; cleared: boolean }> | undefined => {
+  const value = placementEntries(placementId, entries).get(viewParameter(placementId));
+  if (value === undefined) return undefined;
+  const cleared = value.toLowerCase().endsWith(VIEW_CLEARED_SUFFIX);
+  const viewId = cleared ? value.slice(0, -VIEW_CLEARED_SUFFIX.length) : value;
+  return FIELD_ID_PATTERN.test(viewId) ? { viewId: viewId.toLowerCase(), cleared } : undefined;
+};
+
+/** The saved view a placement's address selects, lower-cased; undefined when it selects none. */
+export const readRecordsTableViewId = (
+  placementId: string,
+  entries: Iterable<readonly [string, string]>,
+): string | undefined => readRecordsTableView(placementId, entries)?.viewId;
+
+/**
+ * The sort, filters and search a placement's address holds, with each filter in its address
+ * spelling, so a saved view stores exactly what the address names. Undefined when the address
+ * names a malformed part, which the server refuses to read.
+ */
+export const readRecordsTableAddressedQuery = (
+  placementId: string,
+  entries: Iterable<readonly [string, string]>,
+):
+  | Readonly<{
+      sort: readonly RecordsTableSortKey[];
+      filters: readonly Readonly<{ fieldId: string; filter: string }>[];
+      search: string | null;
+    }>
+  | undefined => {
+  const addressed = [...entries];
+  const read = readRecordsTableQueryState(placementId, addressed);
+  if (read.kind !== "valid") return undefined;
+  const owned = placementEntries(placementId, addressed);
+  const prefix = filterPrefix(placementId);
+  return {
+    sort: read.state.sort,
+    filters: read.state.filters.flatMap(({ fieldId }) => {
+      const spelled = [...owned].find(
+        ([name]) => name.startsWith(prefix) && sameId(name.slice(prefix.length), fieldId),
+      );
+      return spelled === undefined ? [] : [{ fieldId, filter: spelled[1] }];
+    }),
+    search: read.state.search,
+  };
+};
+
 /** One change a person makes to a table's query state from its controls. */
 export type RecordsTableQueryChange =
   | Readonly<{ kind: "sort"; keys: readonly RecordsTableSortKey[] }>
   /** `filter` is the address spelling of the field's typed filter; empty clears the field's filter. */
   | Readonly<{ kind: "filter"; fieldId: string; filter: string }>
   | Readonly<{ kind: "search"; text: string }>
+  /** Opens a saved view (null leaves it) without touching the other parts of the query state. */
+  | Readonly<{ kind: "view"; viewId: string | null }>
   | Readonly<{ kind: "page"; request: RecordsTablePageRequest }>;
 
 /**
@@ -230,23 +292,70 @@ export const applyRecordsTableQueryChange = (
     return;
   }
   set(pageParameter(placementId), undefined);
+  const settleView = (): void => {
+    // A selected view brings its own query state only while the address names none: once the
+    // person has cleared it all, the address says so explicitly.
+    const view = readRecordsTableView(placementId, parameters);
+    if (view === undefined) return;
+    const queried = [...parameters.keys()].some(
+      (name) =>
+        recordsTableParameterPlacement(name) === placementId.toLowerCase() &&
+        !name.toLowerCase().startsWith("view.") &&
+        !name.toLowerCase().startsWith("page."),
+    );
+    set(viewParameter(placementId), queried ? view.viewId : `${view.viewId}${VIEW_CLEARED_SUFFIX}`);
+  };
   switch (change.kind) {
     case "sort":
       set(
         sortParameter(placementId),
         change.keys.length === 0 ? undefined : encodeSort(change.keys),
       );
+      settleView();
       return;
     case "filter":
       set(
         `${filterPrefix(placementId)}${change.fieldId}`,
         change.filter === "" ? undefined : change.filter,
       );
+      settleView();
       return;
     case "search":
       set(searchParameter(placementId), change.text.trim() === "" ? undefined : change.text);
+      settleView();
+      return;
+    case "view":
+      set(viewParameter(placementId), change.viewId ?? undefined);
       return;
   }
+};
+
+/**
+ * Opens a saved view in the address, or leaves it: every part of the placement's own state is
+ * replaced by the view's, so the address alone names what the grid shows and a copied link opens
+ * the same view for anyone who may see it. A null view clears the placement's state.
+ */
+export const applyRecordsTableView = (
+  parameters: URLSearchParams,
+  placementId: string,
+  view: Readonly<{
+    viewId: string;
+    sort: readonly RecordsTableSortKey[];
+    filters: readonly Readonly<{ fieldId: string; filter: string }>[];
+    search: string | null;
+  }> | null,
+): void => {
+  for (const name of [...parameters.keys()])
+    if (recordsTableParameterPlacement(name) === placementId.toLowerCase())
+      parameters.delete(name);
+  if (view === null) return;
+  applyRecordsTableQueryChange(parameters, placementId, { kind: "view", viewId: view.viewId });
+  if (view.sort.length > 0)
+    applyRecordsTableQueryChange(parameters, placementId, { kind: "sort", keys: view.sort });
+  for (const { fieldId, filter } of view.filters)
+    applyRecordsTableQueryChange(parameters, placementId, { kind: "filter", fieldId, filter });
+  if (view.search !== null)
+    applyRecordsTableQueryChange(parameters, placementId, { kind: "search", text: view.search });
 };
 
 /**

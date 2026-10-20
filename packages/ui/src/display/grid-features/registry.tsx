@@ -13,8 +13,11 @@ import {
   type ReactNode,
 } from "react";
 import type {
+  GridLayout,
+  GridViewsState,
   RecordsTableFeatureKey,
   RecordsTableFeatureProjection,
+  RecordsTableSortState,
 } from "@vortex/platform/schema";
 import type { DisplayEventHandlers, DisplayRow, TableNarrowing } from "../projected-data";
 import type { GridColumn } from "../table-layout";
@@ -32,6 +35,12 @@ export type GridFeatureContext = Readonly<{
   rows: readonly DisplayRow[];
   selectedRecordIds: readonly string[];
   narrowing: TableNarrowing | undefined;
+  /** The order the page was read in, when it is the viewer's own or the authored default. */
+  sort: RecordsTableSortState | undefined;
+  /** The layout as the person has it now, including a change not yet stored. */
+  arrangement: GridLayout;
+  /** The saved views of this grid; absent when the grid is not stored for the person. */
+  views: GridViewsState | undefined;
   events: DisplayEventHandlers | undefined;
 }>;
 
@@ -160,8 +169,7 @@ const lazyPoint = <Props,>(
 const featurePoints: Readonly<Record<RecordsTableFeatureKey, readonly ComponentPoint[]>> = {
   search: ["ToolbarItems"],
   column_filters: ["ToolbarItems", "HeaderAdornment"],
-  // Saved views add their toolbar menu with the views store (#3020); the switch already gates them.
-  saved_views: [],
+  saved_views: ["ToolbarItems"],
   bulk_actions: ["SelectionBanner"],
   inline_edit: ["CellEditor"],
   conditional_formatting: ["CellAdornment", "HeaderAdornment"],

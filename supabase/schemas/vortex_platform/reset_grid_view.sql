@@ -54,7 +54,7 @@ begin
     'outcome', 'conflict',
     'revision', case when found then stored.revision end,
     'queryId', case when found then stored.query_id end,
-    'layout', case when found then stored.layout end
+    'layout', case when found then stored.document end
   );
 end
 $function$;

@@ -456,6 +456,21 @@ export function applicationPageRules(scope: ApplicationScope): void {
                 feature.check.reason,
               ),
             );
+        // The permission that lets people share views must be one the application declares.
+        const sharePermission = table.features.savedViews.enabled
+          ? table.features.savedViews.sharePermission
+          : undefined;
+        if (sharePermission !== undefined && !pageNavigationPermissionKnown(sharePermission))
+          failures.push(
+            failure(
+              output,
+              "vortex.definition.application_block_settings",
+              "unsupported_choice",
+              undefined,
+              "definition_records_table_saved_views",
+              `Saved views name the permission "${sharePermission}", which this application does not declare.`,
+            ),
+          );
       }
       if (release !== undefined) {
         const boundRecord = records.get(String(object(bound.recordType).recordTypeId));
